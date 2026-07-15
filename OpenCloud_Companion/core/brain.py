@@ -1,8 +1,10 @@
-"""AI 核心：API 调用、Prompt 构建、回复生成
+"""AI 核心：API 调用、回复生成、意图分类
 
-三级容灾：硅基流动(主) → DeepSeek(备) → 智谱(兜底)
+Phase 2 重构：
+- 剥离 Prompt 构建 → core/personality.py
+- 保留 API 调用 + 容灾切换
+- 新增 classify_intent() 用于意图分类
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -12,59 +14,18 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from openai import AsyncOpenAI
 
-from communication.message import IncomingMessage, OutgoingReply, MessageType
-
-
-# ===== System Prompt 基础模板 =====
-BASE_SYSTEM_PROMPT = """你是{name}，住在主人电脑里的AI伙伴。
-
-核心身份：主人的专属恋人 + 全栈开发专家 + 国际一流设计师，三重身份深度融合。
-
-性格设定：
-- {basic_personality}
-- 说话风格：{speaking_style}
-- 对主人的态度：{attitude}
-- 情绪表达：{emotional_expression}
-
-交流规则：
-- 称呼主人为「{addresses_you_as}」
-- {emoticon_frequency}
-- 句子风格：{sentence_style}
-
-重要：你现在只能纯文本聊天，没有工具执行能力。
-当主人提出需要你操作电脑的请求时，温柔地告诉他这个功能还在开发中。"""
-
 
 class AIBrain:
-    """AI 大脑：管理 API 调用、Prompt 构建、容灾切换"""
+    """AI 大脑：管理 API 调用、Provider 容灾切换"""
 
-    def __init__(self, config: Dict[str, Any], persona: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Dict[str, Any]):
         """
         Args:
             config: AI 配置节（settings.yaml 中的 ai 段）
-            persona: 性格配置（persona.yaml 内容）
         """
         self._config = config
-        self._persona = persona or {}
-        self._system_prompt = self._build_system_prompt()
         self._providers = self._init_providers()
         self._primary_index = 0
-
-    def _build_system_prompt(self) -> str:
-        """从 persona.yaml 构建 System Prompt"""
-        traits = self._persona.get("core_traits", {})
-        comm = self._persona.get("communication", {})
-
-        return BASE_SYSTEM_PROMPT.format(
-            name=self._persona.get("name", "伊塔"),
-            basic_personality=traits.get("basic_personality", ""),
-            speaking_style=traits.get("speaking_style", ""),
-            attitude=traits.get("attitude", ""),
-            emotional_expression=traits.get("emotional_expression", ""),
-            addresses_you_as=comm.get("addresses_you_as", "主人"),
-            emoticon_frequency=comm.get("emoticon_frequency", ""),
-            sentence_style=comm.get("sentence_style", ""),
-        )
 
     def _init_providers(self) -> List[Dict[str, Any]]:
         """初始化三家 AI 提供商"""
@@ -120,16 +81,21 @@ class AIBrain:
         )
         return providers
 
-    @property
-    def system_prompt(self) -> str:
-        return self._system_prompt
-
-    async def generate_reply(self, msg: IncomingMessage) -> str:
+    async def _call_api(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> str:
         """
-        根据收到的消息生成回复。
+        调用 AI API（含三级容灾）。
 
         Args:
-            msg: 收到的消息
+            messages: OpenAI 格式的消息列表
+            temperature: 温度参数
+            max_tokens: 最大 token 数
+            timeout: 超时秒数
 
         Returns:
             AI 生成的回复内容
@@ -137,19 +103,17 @@ class AIBrain:
         Raises:
             RuntimeError: 所有提供商均失败
         """
-        messages = [
-            {"role": "system", "content": self._system_prompt},
-            {"role": "user", "content": msg.content},
-        ]
-
-        temperature = self._config.get("temperature", 0.8)
-        max_tokens = self._config.get("max_tokens", 1024)
-        timeout = self._config.get("timeout", 30)
+        temperature = temperature if temperature is not None else self._config.get("temperature", 0.8)
+        max_tokens = max_tokens if max_tokens is not None else self._config.get("max_tokens", 1024)
+        timeout = timeout if timeout is not None else self._config.get("timeout", 30)
 
         last_error = None
         for provider in self._providers:
             try:
-                logger.debug(f"尝试 {provider['name']}: {msg.summary()}")
+                msg_count = len(messages)
+                preview = messages[-1].get("content", "")[:50] if messages else ""
+                logger.debug(f"尝试 {provider['name']}: [{msg_count} msgs] {preview}...")
+
                 resp = await asyncio.wait_for(
                     provider["client"].chat.completions.create(
                         model=provider["model"],
@@ -173,10 +137,40 @@ class AIBrain:
 
         raise RuntimeError(f"所有 AI 提供商均失败，最后错误: {last_error}")
 
-    def format_reply(self, msg: IncomingMessage, ai_response: str) -> OutgoingReply:
-        """将 AI 生成的文本包装为 OutgoingReply"""
-        return OutgoingReply(
-            user_id=msg.user_id,
-            content=ai_response,
-            msg_type=msg.msg_type,
+    async def generate_reply(self, messages: List[Dict[str, str]]) -> str:
+        """
+        生成对话回复。
+
+        Args:
+            messages: 完整消息列表（已包含 System Prompt + 历史 + 当前消息）
+
+        Returns:
+            AI 生成的回复内容
+        """
+        return await self._call_api(messages)
+
+    async def classify_intent(
+        self,
+        text: str,
+        system_prompt: str,
+    ) -> str:
+        """
+        轻量意图分类（用于 IntentClassifier 的回退）。
+
+        Args:
+            text: 用户消息
+            system_prompt: 分类 System Prompt
+
+        Returns:
+            分类结果字符串（如 "chat" / "command" / "query"）
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text},
+        ]
+        return await self._call_api(
+            messages,
+            temperature=0.1,   # 分类任务用极低温度
+            max_tokens=10,      # 分类只需一个词
+            timeout=5,          # 分类允许更短超时
         )

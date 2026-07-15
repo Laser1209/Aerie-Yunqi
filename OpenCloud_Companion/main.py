@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-OpenCloud Companion - Phase 1 入口
+OpenCloud Companion - Phase 2 入口
 
-功能：连接 NapCatQQ → 接收 QQ 私聊消息 → AI 生成回复 → QQ 返回
+新增功能：
+- 性格引擎（动态 System Prompt + 记忆注入）
+- 对话意图分类器（闲聊 / 命令 / 查询）
+- 聊天日志存储（SQLite 异步读写）
+- 长期记忆检索（回退 chat_log + Phase 3 Mem0 就绪）
+- 上下文构建器（性格 + 记忆 + 历史 + 当前消息 统一编排）
 
 启动前请确认：
-1. NapCatQQ 已运行且登录了 QQ 号 B
+1. NapCatQQ 已运行且登录了 QQ 号 B（伊塔 3998874040）
 2. .env 文件中已配置至少一个 API Key
 3. OneBot11 WebSocket 地址正确（默认 ws://localhost:3001）
 
@@ -29,6 +34,11 @@ from loguru import logger
 from communication.message import IncomingMessage, OutgoingReply
 from communication.qq_client import QQClient
 from core.brain import AIBrain
+from core.personality import PersonalityEngine
+from core.classifier import IntentClassifier
+from memory.chat_log import ChatLogger
+from memory.mem0_store import MemoryStore
+from memory.context_builder import ContextBuilder
 
 # ===== 项目根目录 =====
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -54,7 +64,6 @@ def load_yaml(path: Path) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 替换 ${VAR:default} 模式
     def replace_env(match):
         var = match.group(1)
         default = match.group(2) if match.group(2) else ""
@@ -67,17 +76,15 @@ def load_yaml(path: Path) -> Dict[str, Any]:
 def init_logging(config: Dict[str, Any]) -> None:
     """初始化日志系统"""
     log_config = config.get("logging", {})
-    logger.remove()  # 移除默认 handler
+    logger.remove()
 
     level = log_config.get("level", "INFO")
     log_file = PROJECT_ROOT / log_config.get("file", "logs/companion.log")
     rotation = log_config.get("rotation", "10 MB")
     retention = log_config.get("retention", "7 days")
 
-    # 确保日志目录存在
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # 文件输出（带轮转）
     logger.add(
         log_file,
         rotation=rotation,
@@ -87,7 +94,6 @@ def init_logging(config: Dict[str, Any]) -> None:
         format="{time:YYYY-MM-DD HH:mm:ss} [{level}] {message}",
     )
 
-    # 控制台输出
     logger.add(
         sys.stderr,
         level=level,
@@ -124,50 +130,116 @@ def load_persona() -> Dict[str, Any]:
 
 
 class Companion:
-    """OpenCloud Companion 主应用"""
+    """OpenCloud Companion - Phase 2 主应用"""
 
     def __init__(self):
+        # ===== 加载配置 =====
         load_env()
         self.config = load_config()
         init_logging(self.config)
-        self.persona = load_persona()
+        self.persona_config = load_persona()
 
-        # 初始化模块
+        # ===== 初始化模块（按依赖拓扑顺序）=====
+        # 1. AI 提供商（无依赖）
+        ai_config = self.config.get("ai", {})
+        self.brain = AIBrain(ai_config)
+
+        # 2. 性格引擎（无依赖）
+        self.personality = PersonalityEngine(self.persona_config)
+
+        # 3. 聊天日志（无依赖）
+        memory_config = self.config.get("memory", {})
+        chat_log_path = memory_config.get("chat_log_path", "data/chat_log.db")
+        self.chat_log = ChatLogger(chat_log_path)
+
+        # 4. 记忆存储（依赖 chat_log）
+        self.memory_store = MemoryStore(self.chat_log, memory_config)
+
+        # 5. 上下文构建器（依赖 personality + chat_log + memory_store）
+        self.context_builder = ContextBuilder(
+            personality=self.personality,
+            chat_log=self.chat_log,
+            memory_store=self.memory_store,
+            config=memory_config,
+        )
+
+        # 6. 意图分类器（依赖 brain）
+        self.classifier = IntentClassifier(self.brain)
+
+        # 7. QQ 通信（无依赖）
         napcat_config = self.config.get("napcat", {})
         ws_uri = napcat_config.get("ws_uri", "ws://localhost:3001")
-
-        ai_config = self.config.get("ai", {})
-        self.brain = AIBrain(ai_config, self.persona)
         self.qq_client = QQClient(uri=ws_uri)
 
+        # ===== 状态 =====
         self._running = False
+        self._msg_count = 0
 
     async def handle_message(self, msg: IncomingMessage) -> OutgoingReply | None:
         """
-        处理收到的 QQ 消息：交给 AI 生成回复。
-
-        Args:
-            msg: 收到的消息
-
-        Returns:
-            要发送的回复，如果 AI 失败则返回错误提示
+        Phase 2 消息处理流水线：
+        1. 分类意图
+        2. 存储到聊天日志
+        3. 构建上下文（性格 + 记忆 + 历史 + 当前消息）
+        4. AI 生成回复
+        5. 存储回复到聊天日志
+        6. 返回回复
         """
+        self._msg_count += 1
+        logger.info(f"[#{self._msg_count}] 收到: {msg.summary()}")
+
+        # Step 1: 意图分类
+        intent_result = await self.classifier.classify(msg.content)
+        intent_label = intent_result.intent.value
+
+        # Step 2: 存储收到的消息
+        await self.chat_log.log_incoming(msg, intent=intent_label)
+
+        # Step 3: 构建上下文
         try:
-            ai_reply = await self.brain.generate_reply(msg)
-            return self.brain.format_reply(msg, ai_reply)
+            messages = await self.context_builder.build(msg)
+        except Exception as e:
+            logger.exception(f"上下文构建失败: {e}")
+            messages = self.context_builder.personality.build_system_message()
+            messages.append({"role": "user", "content": msg.content})
+
+        # Step 4: AI 生成回复
+        try:
+            ai_reply = await self.brain.generate_reply(messages)
         except RuntimeError as e:
             logger.exception(f"AI 调用失败: {e}")
-            return OutgoingReply(
-                user_id=msg.user_id,
-                content="主人对不起...我现在脑子有点转不动了，稍等一下再找我好不好 (´;ω;`)",
-            )
+            ai_reply = "主人对不起...我现在脑子有点转不动了，稍等一下再找我好不好 (´;ω;`)"
+
+        # Step 5: 包装回复 & 存储
+        reply = OutgoingReply(
+            user_id=msg.user_id, content=ai_reply, msg_type=msg.msg_type
+        )
+        await self.chat_log.log_outgoing(reply)
+
+        return reply
 
     async def start(self) -> None:
-        """启动 Companion"""
+        """启动 Companion（Phase 2）"""
         self._running = True
+        persona_name = self.persona_config.get("name", "伊塔")
 
-        persona_name = self.persona.get("name", "伊塔")
-        logger.info(f"✨ {persona_name} 正在启动...")
+        logger.info(f"✨ {persona_name} 正在启动 (Phase 2)...")
+
+        # 初始化聊天日志数据库
+        await self.chat_log.initialize()
+
+        # 打印启动统计
+        stats = await self.chat_log.get_stats()
+        if stats and stats.get("user_msgs", 0) > 0:
+            logger.info(
+                f"聊天记录: {stats.get('user_msgs', 0)} 条用户消息, "
+                f"{stats.get('assistant_msgs', 0)} 条 Assistant 回复"
+            )
+
+        logger.info(f"分类器已就绪（规则引擎 + LLM 辅助）")
+        logger.info(
+            f"记忆模式: {'Mem0 向量检索' if self.config.get('memory', {}).get('mem0_enabled') else 'chat_log 代理'}"
+        )
 
         try:
             await self.qq_client.listen(self.handle_message)
@@ -177,19 +249,20 @@ class Companion:
             logger.exception(f"运行异常: {e}")
         finally:
             await self.qq_client.stop()
+            await self.chat_log.close()
             logger.info(f"{persona_name} 已下线")
 
     async def stop(self) -> None:
         """停止 Companion"""
         self._running = False
         await self.qq_client.stop()
+        await self.chat_log.close()
 
 
 async def main() -> None:
     """主函数"""
     companion = Companion()
 
-    # 注册 Ctrl+C 信号处理
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
 
@@ -203,10 +276,8 @@ async def main() -> None:
         loop.add_signal_handler(signal.SIGINT, signal_handler)
         loop.add_signal_handler(signal.SIGTERM, signal_handler)
 
-    # 启动
     start_task = asyncio.create_task(companion.start())
 
-    # 等待停止信号
     await stop_event.wait()
     start_task.cancel()
     try:

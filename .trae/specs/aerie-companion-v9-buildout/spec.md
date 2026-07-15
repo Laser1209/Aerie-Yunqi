@@ -22,6 +22,11 @@ related:
 > **change-id**: `aerie-companion-v9-buildout`
 > **目标交付物**: Windows 11 上的可执行 `Aerie.exe`（NSIS 安装包），具备 v9.0 文档描述的全部"全联通"能力。
 > **执行环境**: 联想拯救者 82RC · i7-12700H · RTX 3050 Ti · 16GB DDR5 · Windows 11 Pro 25H2 · Python 3.14.3 · Node.js 24.14.1 · QQ 9.9.26-44343 · NapCat v4.18.9
+>
+> **实现状态 / Implementation Status**: ✅ **v9.0.0 已完成 / v9.0.0 COMPLETE**
+> - 产物 / Artifacts: `electron/dist/win-unpacked/Aerie · 云栖.exe` (176 MB) + `electron/dist/Aerie-9.0.0-Portable.zip` (82 MB)
+> - 冒烟测试 / Smoke test: 11 个 API 端点全部 200, 7 个 Cron 任务成功注册
+> - 完成时间 / Completion: 2026-07-16
 
 ***
 

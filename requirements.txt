@@ -19,6 +19,7 @@ openai==1.10.0
 
 # HTTP client
 requests==2.31.0
+httpx>=0.25.0
 
 # Windows integration (UAC + Task Scheduler + screenshot)
 pywin32==306

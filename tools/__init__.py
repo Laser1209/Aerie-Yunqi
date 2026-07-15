@@ -162,6 +162,50 @@ async def _tool_send_proactive_msg(scene: str = "morning_brief", **_: Any) -> st
         return f"主动消息失败: {e}"
 
 
+async def _tool_poke_user(user_id: int = 0, **_: Any) -> str:
+    """Send a poke (戳一戳) to the user via QQ."""
+    from core.companion import get_companion
+    comp = get_companion()
+    if not comp or not comp.qq:
+        return "QQ 未连接。"
+    ok = await comp.qq.send_poke(user_id)
+    return "已发送戳一戳。" if ok else "戳一戳发送失败。"
+
+
+async def _tool_send_voice(text: str = "", user_id: int = 0, **_: Any) -> str:
+    """Generate TTS audio and send as voice message via QQ."""
+    if not text.strip():
+        return "请提供要转语音的文字内容。"
+    from core.companion import get_companion
+    comp = get_companion()
+    if not comp or not comp.qq:
+        return "QQ 未连接。"
+
+    from voice.tts_engine import TTSEngine
+    from voice.silk_encoder import wav_to_silk
+    from pathlib import Path
+    import time
+
+    tts = TTSEngine()
+    wav_path = await tts.synthesize(text)
+    if not wav_path:
+        return "语音合成失败（请检查 MiniMax TTS API Key 是否可用）。"
+
+    # Encode to Silk for NapCat
+    silk_path = wav_to_silk(wav_path)
+    file_to_send = silk_path or wav_path
+
+    ok = await comp.qq.send_voice(user_id, str(file_to_send))
+    if ok:
+        import shutil
+        try:
+            shutil.move(str(file_to_send), f"data/tts/sent_{int(time.time())}.silk")
+        except Exception:
+            pass
+        return "已发送语音。"
+    return "语音发送失败。"
+
+
 def register_all_tools(registry: ToolRegistry) -> None:
     """Register all 14 tools into the given registry."""
     registry.register(
@@ -256,4 +300,16 @@ def register_all_tools(registry: ToolRegistry) -> None:
         schema={"type": "object", "properties": {"scene": {"type": "string"}}, "required": []},
         category="proactive",
         description="触发一次主动推送",
+    )
+    registry.register(
+        "poke_user", _tool_poke_user,
+        schema={"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": []},
+        category="interaction",
+        description="发送戳一戳（QQ poke）给用户",
+    )
+    registry.register(
+        "send_voice", _tool_send_voice,
+        schema={"type": "object", "properties": {"text": {"type": "string"}, "user_id": {"type": "integer"}}, "required": ["text"]},
+        category="media",
+        description="将文字转为语音并发送（伊塔声线）",
     )

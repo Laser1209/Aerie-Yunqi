@@ -142,7 +142,7 @@ class Companion:
 
     async def _send_to_qq(self, reply: OutgoingReply) -> bool:
         try:
-            ok = await self.qq.send_message(reply.user_id, reply.content)
+            ok = await self.qq.send_message(reply.user_id, reply.content, render_mode=reply.render_mode)
             if ok and self.recall:
                 self.recall.on_message_sent(reply.user_id, reply.content)
             return ok

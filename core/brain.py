@@ -1,7 +1,7 @@
 """Aerie · 云栖 v9.0 — Brain: multi-provider LLM dispatcher with fallback chain.
 
-Order: Qwen → DeepSeek → Gemini. If primary fails, automatically
-fall back to the next provider.
+Order: Qwen → DeepSeek → MiniMax → BigModel (GLM) → SiliconFlow → Gemini → OpenAI-Proxy.
+If primary fails, automatically fall back to the next provider.
 """
 
 from __future__ import annotations
@@ -13,7 +13,11 @@ from typing import Any, Optional
 from core.providers.base import LLMResponse, Provider
 from core.providers.qwen import QwenProvider
 from core.providers.deepseek import DeepSeekProvider
+from core.providers.minimax import MiniMaxProvider
+from core.providers.bigmodel import BigModelProvider
+from core.providers.siliconflow import SiliconFlowProvider
 from core.providers.gemini import GeminiProvider
+from core.providers.openai_proxy import OpenAIProxyProvider
 from core.token_tracker import TokenTracker
 from communication.message import OutgoingReply
 
@@ -41,7 +45,23 @@ class Brain:
         except Exception:
             pass
         try:
+            providers.append(MiniMaxProvider())
+        except Exception:
+            pass
+        try:
+            providers.append(BigModelProvider())
+        except Exception:
+            pass
+        try:
+            providers.append(SiliconFlowProvider())
+        except Exception:
+            pass
+        try:
             providers.append(GeminiProvider())
+        except Exception:
+            pass
+        try:
+            providers.append(OpenAIProxyProvider())
         except Exception:
             pass
         return providers

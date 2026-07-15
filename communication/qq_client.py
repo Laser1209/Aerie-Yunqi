@@ -116,14 +116,15 @@ class QQClient:
         except Exception as e:
             return {"retcode": -1, "errmsg": str(e)[:200]}
 
-    async def send_message(self, user_id: int, content: str) -> bool:
-        """Send a private message to a user."""
+    async def send_message(self, user_id: int, content: str, render_mode: str = "text") -> bool:
+        """Send a private message to a user. Supports text and markdown render modes."""
+        msg_type = "markdown" if render_mode == "markdown" else "text"
         result = await self._send_action(
             "send_msg",
             {
                 "message_type": "private",
                 "user_id": int(user_id),
-                "message": [{"type": "text", "data": {"text": content}}],
+                "message": [{"type": msg_type, "data": {"text": content if msg_type == "text" else "", "content": content}}],
             },
         )
         return result.get("retcode") == 0
@@ -156,6 +157,29 @@ class QQClient:
                         "data": {"file": f"file:///{image_path.replace(chr(92), '/')}"},
                     }
                 ],
+            },
+        )
+        return result.get("retcode") == 0
+
+    async def send_poke(self, user_id: int) -> bool:
+        """Send a poke (戳一戳) to a user via NapCat OneBot11 friend_poke action."""
+        result = await self._send_action(
+            "friend_poke",
+            {"user_id": int(user_id)},
+        )
+        return result.get("retcode") == 0
+
+    async def send_voice(self, user_id: int, file_path: str) -> bool:
+        """Send a voice (record) message to a user.
+
+        The file should be in a format NapCat supports (Silk v3 recommended).
+        """
+        result = await self._send_action(
+            "send_record",
+            {
+                "message_type": "private",
+                "user_id": int(user_id),
+                "file": file_path.replace("\\", "/"),
             },
         )
         return result.get("retcode") == 0

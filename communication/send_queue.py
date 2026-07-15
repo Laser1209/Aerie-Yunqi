@@ -103,6 +103,8 @@ class SendQueue:
                 recall_eligible=reply.recall_eligible,
                 auto_recall_after_seconds=reply.auto_recall_after_seconds,
                 related_message_id=reply.related_message_id,
+                render_mode=reply.render_mode,
+                content_type=reply.content_type,
                 metadata={**reply.metadata, "segment_index": i},
             )
             self._sequence += 1

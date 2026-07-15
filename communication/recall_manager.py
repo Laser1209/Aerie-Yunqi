@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 NEGATIVE_KEYWORDS = ["别这样", "不要", "闭嘴", "停下", "够了", "烦", "滚", "stop", "shut up"]
 RECALL_WINDOW_SECONDS = 120
+POKE_SILENCE_SECONDS = 300  # 5 minutes without response triggers poke
 APOLOGY_TEMPLATE = "……我刚才说重了。"
 
 
@@ -78,3 +79,24 @@ class RecallManager:
         # Clear last sent to avoid double-trigger
         self._last_sent.pop(user_id, None)
         return True
+
+    async def maybe_poke_on_silence(self, user_id: int) -> bool:
+        """If user hasn't responded for >5 minutes, send a poke.
+
+        Returns True if a poke was triggered.
+        """
+        user_id = int(user_id)
+        last = self._last_sent.get(user_id)
+        if not last:
+            return False
+        elapsed = time.time() - last.timestamp
+        if elapsed < POKE_SILENCE_SECONDS:
+            return False
+        try:
+            ok = await self.qq.send_poke(user_id)
+            if ok:
+                logger.info("poke sent to user %d after %.0fs silence", user_id, elapsed)
+            return ok
+        except Exception as e:
+            logger.warning("poke failed: %s", e)
+            return False

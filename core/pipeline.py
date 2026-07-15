@@ -229,10 +229,15 @@ class Pipeline:
     def _color_reply(self, user_id: int, content: str, mood: str) -> OutgoingReply:
         # Trim overly long output (>2000 chars split will handle it)
         scene = "emotional" if mood in ("sad", "anger", "fear") else "daily"
+        # Detect system/status query intent for MarkDown rendering
+        render_mode = "text"
+        if content and any(kw in content for kw in ("CPU", "内存", "磁盘", "状态", "系统")):
+            render_mode = "markdown"
         return OutgoingReply(
             user_id=user_id,
             content=content,
             scene=scene,
             mood=mood,
+            render_mode=render_mode,
             msg_type=MessageType.PRIVATE,
         )

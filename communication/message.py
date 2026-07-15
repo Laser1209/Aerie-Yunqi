@@ -156,6 +156,8 @@ class OutgoingReply:
     recall_eligible: bool = False
     auto_recall_after_seconds: int = 0
     related_message_id: Optional[int] = None
+    render_mode: str = "text"       # text | markdown
+    content_type: str = "text"      # text | voice
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:

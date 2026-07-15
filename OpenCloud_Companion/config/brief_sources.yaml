@@ -1,0 +1,33 @@
+# 每日简报数据源配置
+
+greeting:
+  morning: "早上好，主人～ ☀️"
+  noon: "中午好，主人～"
+  afternoon: "下午好，主人～ 🌤"
+  evening: "晚上好，主人～ 🌙"
+  night: "夜深了，主人还在忙呀 🌙"
+
+news:
+  enabled: false            # 新闻聚合（初期关闭，需要额外 API）
+  sources:
+    - name: "36氪快讯"
+    - name: "知乎热榜"
+
+weather:
+  enabled: true
+  provider: "wttr.in"       # 免费天气 API
+
+system_status:
+  enabled: true
+  show_cpu: true
+  show_memory: true
+  show_disk: true
+
+todos:
+  enabled: true
+  max_items: 5
+
+schedule:
+  brief_time: "08:00"       # 每日简报推送时间
+  goodnight_time: "23:00"   # 晚安问候时间
+  weather_interval: 60      # 天气更新间隔（分钟）

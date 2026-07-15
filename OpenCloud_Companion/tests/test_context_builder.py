@@ -147,3 +147,25 @@ class TestContextBuilder:
         user_messages = [m for m in messages if m["role"] == "user"]
         # 至少应该有 1 条 user message（当前消息）
         assert len(user_messages) >= 1
+
+    @pytest.mark.asyncio
+    async def test_build_without_knowledge(self, personality, sample_msg):
+        """无知识库时正常构建（向后兼容）"""
+        from memory.context_builder import ContextBuilder
+
+        builder = ContextBuilder(personality)
+        messages = await builder.build(sample_msg, capability_level="phase4")
+        assert len(messages) >= 2
+        assert messages[-1]["role"] == "user"
+        assert messages[0]["role"] == "system"
+
+    @pytest.mark.asyncio
+    async def test_build_phase4_capability(self, personality, sample_msg):
+        """Phase 4 能力级别注入"""
+        from memory.context_builder import ContextBuilder
+
+        builder = ContextBuilder(personality)
+        messages = await builder.build(sample_msg, capability_level="phase4")
+        system_content = messages[0]["content"]
+        # Phase 4 system prompt should mention expanded capabilities
+        assert "技能" in system_content or "知识" in system_content

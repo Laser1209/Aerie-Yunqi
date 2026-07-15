@@ -50,6 +50,19 @@ CAPABILITY_PHASE3 = """你拥有以下能力：
 - 待办事项管理
 当主人提出操作请求时，你会主动判断能否完成并执行。"""
 
+CAPABILITY_PHASE4 = """你拥有以下能力：
+- 纯文本聊天的自然对话能力
+- 文件操作能力（读/写/搜索文件）
+- 系统操作能力（打开软件、查看状态）
+- 网页搜索和天气查询
+- 待办事项管理
+- 文档处理能力（Word/PDF/Excel 转换和分析）
+- 技能扩展能力（发现缺少技能时自动搜索安装）
+- 知识检索能力（从你的知识库中查事实和过往经验）
+
+当主人提出操作请求时，你会主动判断能否完成并执行。
+如果遇到超出内置工具的能力需求，你可以建议搜索技能市场来扩展能力。"""
+
 
 class PersonalityEngine:
     """性格引擎：管理 System Prompt 构建与记忆注入"""
@@ -94,13 +107,15 @@ class PersonalityEngine:
         self,
         memories: Optional[List[Dict[str, str]]] = None,
         capability_level: str = "phase1",
+        knowledge_entries: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """
         构建完整的 System Prompt。
 
         Args:
             memories: 记忆条目列表 [{"role": "user/assistant", "content": "..."}, ...]
-            capability_level: 能力等级 "phase1" | "phase3"
+            capability_level: 能力等级 "phase1" | "phase3" | "phase4"
+            knowledge_entries: 知识库检索结果（Phase 4+）
 
         Returns:
             完整的 System Prompt 字符串
@@ -120,12 +135,35 @@ class PersonalityEngine:
                     memories="\n".join(memory_lines)
                 )
 
+        # Phase 4: 知识库段
+        knowledge_section = ""
+        if knowledge_entries:
+            kb_lines = []
+            for entry in knowledge_entries:
+                content = entry.get("content", "")
+                sim = entry.get("similarity", 0)
+                kb_lines.append(f"- [相关度:{sim:.0%}] {content}")
+            if kb_lines:
+                knowledge_section = (
+                    "相关知识库条目（可作为回答参考）：\n"
+                    + "\n".join(kb_lines)
+                )
+
         # 能力段
-        capability_section = (
-            CAPABILITY_PHASE3
-            if capability_level == "phase3"
-            else CAPABILITY_PHASE1
-        )
+        if capability_level == "phase4":
+            capability_section = CAPABILITY_PHASE4
+        elif capability_level == "phase3":
+            capability_section = CAPABILITY_PHASE3
+        else:
+            capability_section = CAPABILITY_PHASE1
+
+        # 组合：记忆 + 知识库 + 能力
+        combined_memory = memory_section
+        if knowledge_section:
+            if combined_memory:
+                combined_memory += "\n\n" + knowledge_section
+            else:
+                combined_memory = knowledge_section
 
         return SYSTEM_PROMPT_TEMPLATE.format(
             name=self._persona.get("name", "伊塔"),
@@ -136,7 +174,7 @@ class PersonalityEngine:
             addresses_you_as=comm.get("addresses_you_as", "主人"),
             emoticon_frequency=comm.get("emoticon_frequency", ""),
             sentence_style=comm.get("sentence_style", ""),
-            memory_section=memory_section,
+            memory_section=combined_memory,
             capability_section=capability_section,
         )
 
@@ -144,6 +182,7 @@ class PersonalityEngine:
         self,
         memories: Optional[List[Dict[str, str]]] = None,
         capability_level: str = "phase1",
+        knowledge_entries: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, str]:
         """
         构建 OpenAI API 格式的 System Message。
@@ -153,5 +192,7 @@ class PersonalityEngine:
         """
         return {
             "role": "system",
-            "content": self.build_system_prompt(memories, capability_level),
+            "content": self.build_system_prompt(
+                memories, capability_level, knowledge_entries
+            ),
         }

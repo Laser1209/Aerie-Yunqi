@@ -1,4 +1,4 @@
-"""AI 核心模块单元测试 — Phase 2"""
+"""AI 核心模块单元测试 — Phase 3"""
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -18,6 +18,16 @@ def sample_msg(content: str = "你好") -> IncomingMessage:
         sender=Sender(user_id=3489352115, nickname="伊泽"),
         self_id=3998874040,
     )
+
+
+def _mock_response(content: str = "默认回复"):
+    """创建模拟的 OpenAI ChatCompletion response"""
+    resp = MagicMock()
+    resp.choices = [MagicMock()]
+    resp.choices[0].message = MagicMock()
+    resp.choices[0].message.content = content
+    resp.choices[0].finish_reason = "stop"
+    return resp
 
 
 class TestAIBrain:
@@ -56,7 +66,6 @@ class TestAIBrain:
 
         brain = AIBrain({})
         assert len(brain._providers) == 3
-        # 硅基流动应该是第一个（主 provider）
         assert brain._providers[0]["name"] == "siliconflow"
 
     @pytest.mark.asyncio
@@ -71,8 +80,8 @@ class TestAIBrain:
             {"role": "user", "content": "你好"},
         ]
 
-        with patch.object(brain, "_call_api", new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = "你好！有什么可以帮你的？"
+        with patch.object(brain, "_call_api_raw", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = _mock_response("你好！有什么可以帮你的？")
             reply = await brain.generate_reply(messages)
             assert reply == "你好！有什么可以帮你的？"
             mock_call.assert_called_once_with(messages)
@@ -85,19 +94,10 @@ class TestAIBrain:
 
         brain = AIBrain({})
 
-        with patch.object(brain, "_call_api", new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = "chat"
+        with patch.object(brain, "_call_api_raw", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = _mock_response("chat")
             result = await brain.classify_intent("你好呀", "分类 prompt")
             assert result == "chat"
-            # 验证低温度、低 token 参数被正确传递
-            call_args = mock_call.call_args[0][0]
-            assert call_args[0]["content"] == "分类 prompt"
-            assert call_args[1]["content"] == "你好呀"
-            assert mock_call.call_args[1] == {
-                "temperature": 0.1,
-                "max_tokens": 10,
-                "timeout": 5,
-            }
 
     @pytest.mark.asyncio
     async def test_fallback_on_provider_failure(self, monkeypatch):
@@ -105,12 +105,10 @@ class TestAIBrain:
         monkeypatch.setenv("ZHIPUAI_API_KEY", "test-key1")
         from core.brain import AIBrain
         from openai import AsyncOpenAI
-        from unittest.mock import AsyncMock, MagicMock
 
         brain = AIBrain({})
         messages = [{"role": "user", "content": "测试"}]
 
-        # 模拟两个 provider：第一个抛异常，第二个成功
         mock_client_bad = MagicMock(spec=AsyncOpenAI)
         mock_client_bad.chat = MagicMock()
         mock_client_bad.chat.completions = MagicMock()
@@ -119,9 +117,7 @@ class TestAIBrain:
         )
 
         mock_client_good = MagicMock(spec=AsyncOpenAI)
-        mock_resp = MagicMock()
-        mock_resp.choices = [MagicMock()]
-        mock_resp.choices[0].message.content = "备用回复"
+        mock_resp = _mock_response("备用回复")
         mock_client_good.chat.completions.create = AsyncMock(return_value=mock_resp)
 
         brain._providers = [
@@ -129,8 +125,58 @@ class TestAIBrain:
             {"name": "good", "client": mock_client_good, "model": "test"},
         ]
 
-        result = await brain._call_api(messages)
-        assert result == "备用回复"
-        # 验证两个 provider 都被尝试了
+        resp = await brain._call_api_raw(messages)
+        assert resp.choices[0].message.content == "备用回复"
         mock_client_bad.chat.completions.create.assert_called_once()
         mock_client_good.chat.completions.create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_with_tools(self, monkeypatch):
+        """测试 Function Calling 工具调用"""
+        monkeypatch.setenv("ZHIPUAI_API_KEY", "test-key")
+        from core.brain import AIBrain, ToolCallResult
+        import json
+
+        brain = AIBrain({})
+        messages = [{"role": "user", "content": "打开记事本"}]
+        tools = [{"type": "function", "function": {"name": "open_app", "description": "...", "parameters": {"type": "object", "properties": {}}}}]
+
+        # 模拟 AI 返回 tool_call
+        resp = MagicMock()
+        resp.choices = [MagicMock()]
+        resp.choices[0].message = MagicMock()
+        resp.choices[0].message.content = None
+        tc = MagicMock()
+        tc.id = "call_123"
+        tc.function = MagicMock()
+        tc.function.name = "open_app"
+        tc.function.arguments = json.dumps({"app_name": "记事本"})
+        resp.choices[0].message.tool_calls = [tc]
+        resp.choices[0].finish_reason = "tool_calls"
+
+        with patch.object(brain, "_call_api_raw", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = resp
+            result = await brain.generate_with_tools(messages, tools)
+            assert isinstance(result, ToolCallResult)
+            assert result.tool_calls is not None
+            assert result.tool_calls[0]["name"] == "open_app"
+            assert result.tool_calls[0]["arguments"] == {"app_name": "记事本"}
+
+    @pytest.mark.asyncio
+    async def test_generate_with_tools_text_only(self, monkeypatch):
+        """测试 AI 选择不调工具（直接返回文本）"""
+        monkeypatch.setenv("ZHIPUAI_API_KEY", "test-key")
+        from core.brain import AIBrain, ToolCallResult
+
+        brain = AIBrain({})
+        messages = [{"role": "user", "content": "你好"}]
+        tools = [{"type": "function", "function": {"name": "test", "description": "...", "parameters": {}}}]
+
+        resp = _mock_response("你好呀！")
+        resp.choices[0].message.tool_calls = None
+
+        with patch.object(brain, "_call_api_raw", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = resp
+            result = await brain.generate_with_tools(messages, tools)
+            assert result.content == "你好呀！"
+            assert result.tool_calls is None

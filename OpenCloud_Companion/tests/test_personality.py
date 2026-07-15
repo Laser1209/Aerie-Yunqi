@@ -5,6 +5,9 @@ from core.personality import PersonalityEngine
 
 
 class TestPersonalityEngine:
+    def setup_method(self):
+        self.engine = PersonalityEngine({"core_traits": {}, "communication": {}})
+
     def test_default_persona(self):
         """测试使用空配置的默认行为"""
         engine = PersonalityEngine({})
@@ -67,6 +70,35 @@ class TestPersonalityEngine:
         assert "文件操作能力" in prompt
         assert "系统操作能力" in prompt
         assert "网页搜索" in prompt
+
+    def test_capability_phase4(self):
+        """Phase 4 能力描述包含技能和知识库"""
+        prompt = self.engine.build_system_prompt(capability_level="phase4")
+        assert "技能扩展" in prompt
+        assert "知识检索" in prompt
+        assert "文档处理" in prompt
+
+    def test_with_knowledge_entries(self):
+        """Phase 4 知识库条目注入 System Prompt"""
+        entries = [
+            {"content": "主人喜欢喝美式咖啡", "similarity": 0.95},
+            {"content": "主人公司在用 Python + Django", "similarity": 0.82},
+        ]
+        prompt = self.engine.build_system_prompt(
+            capability_level="phase4",
+            knowledge_entries=entries,
+        )
+        assert "相关知识库条目" in prompt
+        assert "美式咖啡" in prompt
+        assert "相关度:95%" in prompt
+
+    def test_knowledge_entries_none(self):
+        """None 知识库条目不崩溃"""
+        prompt = self.engine.build_system_prompt(
+            capability_level="phase4",
+            knowledge_entries=None,
+        )
+        assert "相关知识库条目" not in prompt
 
     def test_build_system_message(self):
         """测试 build_system_message 返回正确的 OpenAI 格式"""

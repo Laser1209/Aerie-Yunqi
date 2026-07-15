@@ -7,15 +7,23 @@ napcat:
 ai:
   primary:
     provider: "siliconflow"
-    model: "google/gemma-4-31B-it"
+    # 修正：原 google/gemma-4-31B-it 在 siliconflow 不存在（401）
+    # 改用 Qwen2.5-72B-Instruct（中文旗舰，OpenAI 协议兼容）
+    # ⚠️ 启动期校验发现：当前 SILICONFLOW_API_KEY 失效！需要主人更新 key
+    # Gemini 保留作为"专项 provider"（图像生成/文件撰写），由 brain.py 单独接入
+    model: "Qwen/Qwen2.5-72B-Instruct"
   fallback:
     - provider: "deepseek"
-      model: "deepseek-chat"
+      # 启动期校验发现：实际可用为 deepseek-v4-flash / deepseek-v4-pro
+      model: "deepseek-v4-flash"
     - provider: "zhipu"
-      model: "glm-4-flash"
+      # 启动期校验发现：glm-4-flash 已过时（实际为 glm-4.5 / glm-4.5-air / glm-4.6 / glm-4.7 / glm-5）
+      model: "glm-4.5-air"
   temperature: 0.8
   max_tokens: 1024
   timeout: 30
+  # Phase 7: 启动期模型校验开关（false 关闭）
+  startup_ping: true
 
 personality:
   config_file: "config/persona.yaml"
@@ -24,6 +32,7 @@ memory:
   mem0_enabled: false
   chat_log_enabled: true
   chat_log_path: "data/chat_log.db"
+  max_knowledge: 4
 
 logging:
   level: "${LOG_LEVEL:INFO}"
@@ -34,3 +43,24 @@ logging:
 rate_limit:
   max_per_minute: 20
   cooldown_seconds: 3
+
+tools:
+  enabled: true
+  max_tokens: 1024
+  timeout: 30
+
+# Phase 4: 知识库配置
+knowledge:
+  db_path: "data/knowledge.db"
+  embedding_dim: 1024
+  embedding_model: "BAAI/bge-large-zh-v1.5"
+  auto_classify: true          # 是否自动分类新知识条目
+  auto_reorganize: true        # 是否定期自动重组
+  filesystem_discovery: false  # 文件系统发现（默认关闭，保护隐私）
+  max_entries: 10000           # 最大知识条目数
+
+# Phase 4: 技能市场配置
+skills:
+  dir: "skills"                # 技能包安装目录
+  auto_approve_trusted: true   # 受信来源自动批准
+  approval_timeout: 30         # QQ 审批超时（秒）

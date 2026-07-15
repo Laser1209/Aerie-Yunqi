@@ -76,9 +76,13 @@ class TestIntentClassifier:
         brain = AIBrain({})
         classifier = IntentClassifier(brain)
 
-        # Mock AI 返回 "command"
-        with patch.object(brain, "_call_api", new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = "command"
+        # Mock AI（规则优先匹配，LLM 路径不会被真正调用）
+        mock_resp = AsyncMock()
+        mock_resp.choices = [AsyncMock()]
+        mock_resp.choices[0].message.content = "command"
+
+        with patch.object(brain, "_call_api_raw", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = mock_resp
             result = await classifier.classify("启动浏览器打开B站")
             assert result.intent == Intent.COMMAND
             assert result.method == "rule"  # 规则先匹配到 "打开"
@@ -93,8 +97,12 @@ class TestIntentClassifier:
         brain = AIBrain({})
         classifier = IntentClassifier(brain)
 
-        with patch.object(brain, "_call_api", new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = "chat"
+        mock_resp = AsyncMock()
+        mock_resp.choices = [AsyncMock()]
+        mock_resp.choices[0].message.content = "chat"
+
+        with patch.object(brain, "_call_api_raw", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = mock_resp
             result = await classifier.classify("嗯")
             # 规则不匹配 → LLM 回退
             assert result.intent in (Intent.CHAT, Intent.COMMAND, Intent.QUERY)

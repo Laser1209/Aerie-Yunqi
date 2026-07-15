@@ -1,11 +1,12 @@
 """上下文构建器
 
-统一编排：性格(System Prompt) + 长期记忆 + 近期对话 + 当前消息
+统一编排：性格(System Prompt) + 长期记忆 + 知识库 + 近期对话 + 当前消息
 输出：OpenAI API 格式的 messages 列表
 
 数据流：
-  人格引擎 → System Prompt (含记忆注入)
+  人格引擎 → System Prompt (含记忆注入 + 知识库条目)
   + MemoryStore → 长期记忆条目
+  + KnowledgeBase → 知识库语义检索结果（Phase 4+）
   + ChatLogger → 最近 N 条对话
   + 当前消息 → user message
   = 完整 messages 列表 → AIBrain.generate_reply()
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 from loguru import logger
 
 from core.personality import PersonalityEngine
@@ -23,7 +25,7 @@ from communication.message import IncomingMessage
 
 class ContextBuilder:
     """
-    上下文构建器：编排 System Prompt + 记忆 + 历史 → messages 列表
+    上下文构建器：编排 System Prompt + 记忆 + 知识库 + 历史 → messages 列表
     """
 
     def __init__(
@@ -31,6 +33,8 @@ class ContextBuilder:
         personality: PersonalityEngine,
         chat_log=None,
         memory_store=None,
+        knowledge_base=None,  # Phase 4: KnowledgeBase 实例
+        embedder=None,        # Phase 4: 嵌入函数
         config: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -38,14 +42,19 @@ class ContextBuilder:
             personality: PersonalityEngine 实例
             chat_log: ChatLogger 实例
             memory_store: MemoryStore 实例
+            knowledge_base: KnowledgeBase 实例（Phase 4+）
+            embedder: 嵌入函数 async (text: str) -> np.ndarray（Phase 4+）
             config: 上下文配置
         """
         self._personality = personality
         self._chat_log = chat_log
         self._memory = memory_store
+        self._knowledge_base = knowledge_base
+        self._embedder = embedder
         self._config = config or {}
         self._max_history = self._config.get("max_history", 8)
         self._max_memories = self._config.get("max_memories", 6)
+        self._max_knowledge = self._config.get("max_knowledge", 4)
 
     async def build(
         self,
@@ -53,15 +62,17 @@ class ContextBuilder:
         capability_level: str = "phase1",
         include_memories: bool = True,
         include_history: bool = True,
+        include_knowledge: bool = False,
     ) -> List[Dict[str, str]]:
         """
         构建完整的 messages 列表。
 
         Args:
             msg: 当前收到的消息
-            capability_level: 能力等级 "phase1" | "phase3"
+            capability_level: 能力等级 "phase1" | "phase3" | "phase4"
             include_memories: 是否包含长期记忆
             include_history: 是否包含近期对话历史
+            include_knowledge: 是否包含知识库检索（Phase 4+）
 
         Returns:
             [{"role": "system", "content": "..."},
@@ -72,7 +83,7 @@ class ContextBuilder:
         """
         messages: List[Dict[str, str]] = []
 
-        # 1. System Prompt（含记忆注入）
+        # 1. System Prompt（含记忆注入 + 知识库条目）
         memories_list: Optional[List[Dict[str, str]]] = None
         if include_memories and self._memory:
             try:
@@ -84,8 +95,23 @@ class ContextBuilder:
             except Exception as e:
                 logger.warning(f"记忆检索失败，跳过注入: {e}")
 
+        # Phase 4: 知识库检索
+        knowledge_entries: Optional[List[Dict[str, Any]]] = None
+        if include_knowledge and self._knowledge_base and self._embedder:
+            try:
+                query_emb = await self._embedder(msg.content)
+                knowledge_entries = await self._knowledge_base.search(
+                    query_emb, top_k=self._max_knowledge, min_similarity=0.5,
+                )
+                if knowledge_entries:
+                    logger.debug(f"注入 {len(knowledge_entries)} 条知识库结果")
+            except Exception as e:
+                logger.warning(f"知识库检索失败: {e}")
+
         system_msg = self._personality.build_system_message(
-            memories=memories_list, capability_level=capability_level
+            memories=memories_list,
+            capability_level=capability_level,
+            knowledge_entries=knowledge_entries,
         )
         messages.append(system_msg)
 

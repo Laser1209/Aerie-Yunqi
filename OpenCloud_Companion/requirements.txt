@@ -16,3 +16,26 @@ pydantic>=2.0.0
 
 # 日志
 loguru>=0.7.0
+
+# HTTP 客户端（网页工具）
+aiohttp>=3.9
+
+# 系统信息（系统状态工具）
+psutil>=5.9
+
+# 桌面 UI（悬浮球 + 对话窗口）
+PyQt6>=6.6
+
+# Phase 4: 文档处理管道
+markitdown>=0.0.1
+
+# Phase 4: 知识库向量检索
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Phase 5: 定时任务
+APScheduler>=3.10.0
+
+# Phase 5: 语音输入/输出（可选）
+# SpeechRecognition>=3.10.0  # 取消注释以启用语音输入
+# pyttsx3>=2.98              # 取消注释以启用语音输出

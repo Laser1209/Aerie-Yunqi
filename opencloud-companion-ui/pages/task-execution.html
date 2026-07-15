@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务执行与PowerShell融入</title>
+    <style id="theme-vars">
+/*
+ * Pinguo design tokens
+ * Brand: Pinguo
+ * Domain: Consumer imaging product
+ * Style: Restrained, elegant, Apple-inspired
+ * Theme mode: light-dark
+ * Source language: zh
+ * Output language: en
+ *
+ * Color architecture (two layers):
+ *   1. Primitive palette - six categories. brand / background / text / icon
+ *      are each a 10-step scale (50 lightest to 900 darkest). state-success and
+ *      state-error are functional colors anchored on Apple system colors.
+ *      Anchors follow Apple Human Interface Guidelines system colors
+ *      (System Blue #007AFF, System Green #34C759, System Red #FF3B30,
+ *      system grays / label / background colors).
+ *   2. Semantic tokens - :root (light) and .dark map roles onto primitives.
+ *      Components and UI kits must only consume the semantic tokens below.
+ */
+
+/* @group-priority: brand, background, text, icon, state-success, state-error */
+
+:root {
+  /* ===== PRIMITIVE PALETTE ===== */
+
+  /* brand */
+  --brand-50: #e8f2ff;
+  --brand-100: #cfe5ff;
+  --brand-200: #9fcbff;
+  --brand-300: #66abff;
+  --brand-400: #2e8dff;
+  --brand-500: #007aff; /* @primary */
+  --brand-600: #0064d6;
+  --brand-700: #004fad;
+  --brand-800: #003b82;
+  --brand-900: #00275a;
+
+  /* background */
+  --background-50: #ffffff;
+  --background-100: #f7f7fa;
+  --background-200: #f2f2f7;
+  --background-300: #e5e5ea;
+  --background-400: #d1d1d6;
+  --background-500: #aeaeb2;
+  --background-600: #8e8e93;
+  --background-700: #3a3a3c;
+  --background-800: #1c1c1e;
+  --background-900: #000000;
+
+  /* text */
+  --text-50: #f5f5f7;
+  --text-100: #e3e3e8;
+  --text-200: #c7c7cc;
+  --text-300: #aeaeb2;
+  --text-400: #8e8e93;
+  --text-500: #6e6e73;
+  --text-600: #48484a;
+  --text-700: #3c3c43;
+  --text-800: #1d1d1f;
+  --text-900: #000000;
+
+  /* icon */
+  --icon-50: #f5f5f7;
+  --icon-100: #e5e5ea;
+  --icon-200: #d1d1d6;
+  --icon-300: #c7c7cc;
+  --icon-400: #aeaeb2;
+  --icon-500: #8e8e93;
+  --icon-600: #6e6e73;
+  --icon-700: #48484a;
+  --icon-800: #2c2c2e;
+  --icon-900: #1d1d1f;
+
+  /* state-success */
+  --state-success: #34c759; /* @primary */
+  --state-success-dark: #30d158;
+  --state-success-surface: #e9f9ee;
+  --state-success-foreground: #ffffff;
+
+  /* state-error */
+  --state-error: #ff3b30; /* @primary */
+  --state-error-dark: #ff453a;
+  --state-error-surface: #ffecea;
+  --state-error-foreground: #ffffff;
+
+  /* ===== SEMANTIC ROLES ===== */
+
+  /* semantic */
+  --background: var(--background-50);
+  --foreground: var(--text-800);
+  --card: var(--background-50);
+  --card-foreground: var(--text-800);
+  --popover: var(--background-50);
+  --popover-foreground: var(--text-900);
+
+  --primary: var(--brand-500);
+  --primary-foreground: var(--background-50);
+  --secondary: var(--background-200);
+  --secondary-foreground: var(--text-800);
+  --muted: var(--background-200);
+  --muted-foreground: var(--text-400);
+  --accent: var(--background-100);
+  --accent-foreground: var(--text-800);
+  --destructive: var(--state-error);
+  --destructive-foreground: var(--state-error-foreground);
+  --success: var(--state-success);
+  --success-foreground: var(--state-success-foreground);
+  --border: var(--background-300);
+  --input: var(--background-400);
+  --ring: var(--brand-500);
+
+  --icon: var(--icon-900);
+  --icon-muted: var(--icon-500);
+
+  /* chart */
+  --chart-1: var(--state-success);
+  --chart-2: var(--brand-500);
+  --chart-3: #ff9500;
+  --chart-4: #5856d6;
+  --chart-5: #af52de;
+
+  /* sidebar */
+  --sidebar: var(--background-200);
+  --sidebar-foreground: var(--text-800);
+  --sidebar-primary: var(--brand-500);
+  --sidebar-primary-foreground: var(--background-50);
+  --sidebar-accent: var(--background-300);
+  --sidebar-accent-foreground: var(--text-800);
+  --sidebar-border: var(--background-300);
+  --sidebar-ring: var(--brand-500);
+
+  /* TYPOGRAPHY */
+  --font-sans: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: JetBrains Mono, monospace;
+  --tracking-normal: 0em;
+
+  /* RADIUS */
+  --radius: 1.2rem;
+
+  /* SHADOWS */
+  --shadow-2xs: 0 1px 2px -1px rgba(0, 0, 0, 0.04); /* Hairline */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04); /* Subtle */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 1px 3px -1px rgba(0, 0, 0, 0.05); /* Card */
+  --shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.05); /* Raised */
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.05); /* Card Hover */
+  --shadow-lg: 0 8px 24px -8px rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.05); /* Float */
+  --shadow-xl: 0 16px 40px -10px rgba(0, 0, 0, 0.10), 0 8px 16px -8px rgba(0, 0, 0, 0.06); /* Overlay */
+  --shadow-2xl: 0 24px 64px -12px rgba(0, 0, 0, 0.12); /* Modal */
+
+  /* SPACING */
+  --spacing: 0.24rem;
+}
+
+/* ===== SEMANTIC ROLES - dark (primitive palette inherited) ===== */
+.dark {
+  --background: var(--background-900);
+  --foreground: var(--text-50);
+  --card: var(--background-800);
+  --card-foreground: var(--text-50);
+  --popover: var(--background-700);
+  --popover-foreground: var(--text-50);
+
+  --primary: var(--brand-400);
+  --primary-foreground: var(--background-900);
+  --secondary: var(--background-800);
+  --secondary-foreground: var(--text-50);
+  --muted: var(--background-800);
+  --muted-foreground: var(--text-400);
+  --accent: var(--background-700);
+  --accent-foreground: var(--text-50);
+  --destructive: var(--state-error-dark);
+  --destructive-foreground: var(--state-error-foreground);
+  --success: var(--state-success-dark);
+  --success-foreground: var(--state-success-foreground);
+  --border: var(--background-700);
+  --input: var(--background-700);
+  --ring: var(--brand-400);
+
+  --icon: var(--icon-50);
+  --icon-muted: var(--icon-500);
+
+  --chart-1: var(--state-success-dark);
+  --chart-2: var(--brand-400);
+  --chart-3: #ff9f0a;
+  --chart-4: #5e5ce6;
+  --chart-5: #bf5af2;
+
+  --sidebar: var(--background-800);
+  --sidebar-foreground: var(--text-50);
+  --sidebar-primary: var(--brand-400);
+  --sidebar-primary-foreground: var(--background-900);
+  --sidebar-accent: var(--background-700);
+  --sidebar-accent-foreground: var(--text-50);
+  --sidebar-border: var(--background-700);
+  --sidebar-ring: var(--brand-400);
+
+  --shadow-2xs: 0 1px 2px -1px rgba(0, 0, 0, 0.30);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.36), 0 1px 3px -1px rgba(0, 0, 0, 0.36);
+  --shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.40), 0 1px 2px -1px rgba(0, 0, 0, 0.36);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.44), 0 2px 4px -2px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 8px 24px -8px rgba(0, 0, 0, 0.50), 0 4px 8px -4px rgba(0, 0, 0, 0.40);
+  --shadow-xl: 0 16px 40px -10px rgba(0, 0, 0, 0.55), 0 8px 16px -8px rgba(0, 0, 0, 0.44);
+  --shadow-2xl: 0 24px 64px -12px rgba(0, 0, 0, 0.60);
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-foreground: var(--card-foreground);
+  }
+  @layer base {
+    body { background: var(--card-background); color: var(--card-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+    <main>
+      <!-- ===== DESKTOP SCENE ===== -->
+      <div class="desktop-scene">
+
+        <!-- Desktop icons column (left) -->
+        <div style="position:absolute; top:20px; left:20px; display:flex; flex-direction:column; gap:8px; z-index:5;">
+          <!-- This PC -->
+          <div class="desktop-icon">
+            <div class="desktop-icon-icon app-icon-bg">
+              <span data-icon style="width:22px;height:22px;color:rgba(255,255,255,0.9);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/box.svg');mask-image:url('../assets/icons/dl_builtin_apple/box.svg');"></span>
+            </div>
+            <span class="desktop-icon-label">此电脑</span>
+          </div>
+          <!-- Recycle Bin -->
+          <div class="desktop-icon">
+            <div class="desktop-icon-icon recycle-icon-bg">
+              <span data-icon style="width:20px;height:20px;color:rgba(255,255,255,0.9);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/trash-2.svg');mask-image:url('../assets/icons/dl_builtin_apple/trash-2.svg');"></span>
+            </div>
+            <span class="desktop-icon-label">回收站</span>
+          </div>
+          <!-- Folder: 文档 -->
+          <div class="desktop-icon">
+            <div class="desktop-icon-icon folder-icon-bg">
+              <span data-icon style="width:22px;height:22px;color:rgba(255,255,255,0.95);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');"></span>
+            </div>
+            <span class="desktop-icon-label">文档</span>
+          </div>
+          <!-- Folder: 图片 -->
+          <div class="desktop-icon">
+            <div class="desktop-icon-icon folder-icon-bg">
+              <span data-icon style="width:22px;height:22px;color:rgba(255,255,255,0.95);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');"></span>
+            </div>
+            <span class="desktop-icon-label">图片</span>
+          </div>
+          <!-- File -->
+          <div class="desktop-icon">
+            <div class="desktop-icon-icon file-icon-bg">
+              <span data-icon style="width:18px;height:18px;color:rgba(255,255,255,0.95);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/file.svg');mask-image:url('../assets/icons/dl_builtin_apple/file.svg');"></span>
+            </div>
+            <span class="desktop-icon-label">备忘录.txt</span>
+          </div>
+          <!-- Folder: 其他 -->
+          <div class="desktop-icon">
+            <div class="desktop-icon-icon folder-icon-bg">
+              <span data-icon style="width:22px;height:22px;color:rgba(255,255,255,0.95);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');"></span>
+            </div>
+            <span class="desktop-icon-label">其他</span>
+          </div>
+        </div>
+
+        <!-- ===== FLOATING BALL (dimmed, panel is open) ===== -->
+        <div class="floating-ball" aria-label="小满悬浮球">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="8" r="4" fill="white" opacity="0.9"/>
+            <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+          </svg>
+        </div>
+
+        <!-- ===== CHAT PANEL ===== -->
+        <div class="chat-panel">
+          <!-- Header -->
+          <div class="panel-header">
+            <div style="position:relative;">
+              <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--brand-100),var(--brand-300));display:flex;align-items:center;justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" fill="var(--brand-600)"/>
+                  <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="var(--brand-600)" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="online-dot" style="position:absolute;bottom:-1px;right:-1px;"></div>
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:14.5px;font-weight:600;color:var(--text-800);">小满</div>
+              <div style="font-size:11px;color:var(--state-success);margin-top:-1px;">在线</div>
+            </div>
+            <!-- Minimize button -->
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--background-200);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <span data-icon style="width:14px;height:14px;color:var(--text-400);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/circle-minus.svg');mask-image:url('../assets/icons/dl_builtin_apple/circle-minus.svg');"></span>
+            </div>
+          </div>
+
+          <!-- Messages -->
+          <div class="messages-area no-scrollbar">
+
+            <!-- Message 1: User -->
+            <div class="msg-row user">
+              <div class="msg-avatar user-av">
+                <span data-icon style="width:16px;height:16px;-webkit-mask-image:url('../assets/icons/dl_builtin_apple/user.svg');mask-image:url('../assets/icons/dl_builtin_apple/user.svg');"></span>
+              </div>
+              <div class="msg-content">
+                <div class="msg-bubble user-bubble">帮我把桌面文件整理一下</div>
+              </div>
+            </div>
+
+            <!-- Message 2: 小满 thinking -->
+            <div class="msg-row">
+              <div class="msg-avatar assistant">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" fill="currentColor"/>
+                  <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="msg-content">
+                <div class="msg-bubble assistant-bubble">让我看看桌面有什么...</div>
+                <div class="thinking-dots">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Message 3: 小满 result with personality wrapper + collapsible code -->
+            <div class="msg-row">
+              <div class="msg-avatar assistant">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" fill="currentColor"/>
+                  <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="msg-content">
+                <!-- Personality summary -->
+                <div class="msg-bubble assistant-bubble summary-bubble" id="summary-bubble">
+                  <div style="font-weight:500;margin-bottom:4px;">桌面整理完毕！</div>
+                  <div style="line-height:1.7;">
+                    <span style="display:inline-flex;align-items:center;gap:4px;">
+                      <span data-icon style="width:14px;height:14px;color:var(--chart-3);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');"></span>
+                      文档 <span style="color:var(--text-400);">(8个)</span>
+                    </span>
+                    &nbsp;&nbsp;
+                    <span style="display:inline-flex;align-items:center;gap:4px;">
+                      <span data-icon style="width:14px;height:14px;color:var(--state-success);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');"></span>
+                      图片 <span style="color:var(--text-400);">(10个)</span>
+                    </span>
+                    &nbsp;&nbsp;
+                    <span style="display:inline-flex;align-items:center;gap:4px;">
+                      <span data-icon style="width:14px;height:14px;color:var(--chart-5);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');mask-image:url('../assets/icons/dl_builtin_apple/folder.svg');"></span>
+                      其他 <span style="color:var(--text-400);">(5个)</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Collapsible toggle (expanded state) -->
+                <div class="tech-toggle expanded" id="tech-toggle" onclick="this.classList.toggle('expanded'); document.getElementById('code-block').style.display = this.classList.contains('expanded') ? 'block' : 'none';">
+                  <span data-icon style="-webkit-mask-image:url('../assets/icons/dl_builtin_apple/chevron-down.svg');mask-image:url('../assets/icons/dl_builtin_apple/chevron-down.svg');"></span>
+                  <span id="toggle-text">收起技术细节</span>
+                </div>
+
+                <!-- Code block (expanded for this design) -->
+                <div class="code-block" id="code-block">
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Get-ChildItem</span> <span class="cmd-string">~\Desktop</span> <span class="cmd-param">|</span> <span class="cmd-cmdlet">Group-Object</span> <span class="cmd-param">Extension</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">New-Item</span> <span class="cmd-param">-ItemType</span> <span class="cmd-string">Directory</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\文档"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">New-Item</span> <span class="cmd-param">-ItemType</span> <span class="cmd-string">Directory</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\图片"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">New-Item</span> <span class="cmd-param">-ItemType</span> <span class="cmd-string">Directory</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\其他"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Move-Item</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\*.docx"</span> <span class="cmd-param">-Destination</span> <span class="cmd-string">"~\Desktop\文档\"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Move-Item</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\*.png"</span> <span class="cmd-param">-Destination</span> <span class="cmd-string">"~\Desktop\图片\"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Move-Item</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\*.jpg"</span> <span class="cmd-param">-Destination</span> <span class="cmd-string">"~\Desktop\图片\"</span></div>
+                  <div class="code-label">小满执行了 3 条命令</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Message 4: 小满 personality follow-up -->
+            <div class="msg-row">
+              <div class="msg-avatar assistant">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" fill="currentColor"/>
+                  <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="msg-content">
+                <div class="msg-bubble assistant-bubble">干干净净的～要不要奖励人家一个摸摸头？(◕‿◕)ﾉ</div>
+              </div>
+            </div>
+
+            <!-- Message 5: User asks for details -->
+            <div class="msg-row user">
+              <div class="msg-avatar user-av">
+                <span data-icon style="width:16px;height:16px;-webkit-mask-image:url('../assets/icons/dl_builtin_apple/user.svg');mask-image:url('../assets/icons/dl_builtin_apple/user.svg');"></span>
+              </div>
+              <div class="msg-content">
+                <div class="msg-bubble user-bubble">查看技术细节</div>
+              </div>
+            </div>
+
+            <!-- Message 6: 小满 responds with code block -->
+            <div class="msg-row">
+              <div class="msg-avatar assistant">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" fill="currentColor"/>
+                  <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="msg-content">
+                <div class="msg-bubble assistant-bubble">好的主人，这是刚才的执行过程～</div>
+                <div class="code-block">
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Get-ChildItem</span> <span class="cmd-string">~\Desktop</span> <span class="cmd-param">|</span> <span class="cmd-cmdlet">Group-Object</span> <span class="cmd-param">Extension</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">New-Item</span> <span class="cmd-param">-ItemType</span> <span class="cmd-string">Directory</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\文档"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">New-Item</span> <span class="cmd-param">-ItemType</span> <span class="cmd-string">Directory</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\图片"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">New-Item</span> <span class="cmd-param">-ItemType</span> <span class="cmd-string">Directory</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\其他"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Move-Item</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\*.docx"</span> <span class="cmd-param">-Destination</span> <span class="cmd-string">"~\Desktop\文档\"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Move-Item</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\*.png"</span> <span class="cmd-param">-Destination</span> <span class="cmd-string">"~\Desktop\图片\"</span></div>
+                  <div><span class="ps-prompt">PS&gt; </span><span class="cmd-cmdlet">Move-Item</span> <span class="cmd-param">-Path</span> <span class="cmd-string">"~\Desktop\*.jpg"</span> <span class="cmd-param">-Destination</span> <span class="cmd-string">"~\Desktop\图片\"</span></div>
+                  <div class="code-label">小满执行了 3 条命令</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Input bar -->
+          <div class="input-bar">
+            <div class="input-bar-inner">
+              <input type="text" placeholder="对小满说点什么..." readonly>
+              <div class="send-btn">
+                <span data-icon style="-webkit-mask-image:url('../assets/icons/dl_builtin_apple/send-horizontal.svg');mask-image:url('../assets/icons/dl_builtin_apple/send-horizontal.svg');"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== DESIGN ANNOTATIONS ===== -->
+
+        <!-- Big principle badge (bottom-left) -->
+        <div class="principle-badge">
+          <div class="principle-badge-inner">
+            <div class="principle-dot"></div>
+            <div class="principle-text">核心设计理念：人格优先，技术可选</div>
+          </div>
+        </div>
+
+        <!-- Annotation: arrow to summary bubble -->
+        <div class="annotation" style="top:228px; left:560px;">
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div class="annotation-label">小满用她的语气告诉主人结果</div>
+            <div class="annotation-sub">人格化摘要，温暖自然</div>
+          </div>
+          <!-- Arrow line -->
+          <svg width="120" height="2" style="position:absolute;right:-124px;top:12px;">
+            <line x1="0" y1="1" x2="116" y2="1" stroke="var(--brand-500)" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+            <polygon points="116,-4 124,1 116,6" fill="var(--brand-500)" opacity="0.6"/>
+          </svg>
+        </div>
+
+        <!-- Annotation: arrow to code block -->
+        <div class="annotation" style="top:398px; left:520px;">
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div class="annotation-label">技术细节按需查看</div>
+            <div class="annotation-sub">不打扰对话氛围</div>
+          </div>
+          <!-- Arrow line -->
+          <svg width="160" height="2" style="position:absolute;right:-164px;top:12px;">
+            <line x1="0" y1="1" x2="156" y2="1" stroke="var(--brand-500)" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+            <polygon points="156,-4 164,1 156,6" fill="var(--brand-500)" opacity="0.6"/>
+          </svg>
+        </div>
+
+        <!-- Annotation: arrow to collapsible toggle -->
+        <div class="annotation" style="top:366px; left:556px;">
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div class="annotation-sub">点击展开/折叠</div>
+          </div>
+          <!-- Arrow line -->
+          <svg width="124" height="2" style="position:absolute;right:-128px;top:6px;">
+            <line x1="0" y1="1" x2="120" y2="1" stroke="var(--text-400)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+            <polygon points="120,-3 128,1 120,5" fill="var(--text-400)" opacity="0.5"/>
+          </svg>
+        </div>
+
+        <!-- Annotation: "默认折叠" state label near toggle area -->
+        <div class="collapsed-annotation" style="top:352px; left:574px;">
+          <div class="ann-line"></div>
+          <div class="ann-text">默认折叠 — 人格化摘要</div>
+        </div>
+        <div class="collapsed-annotation" style="top:400px; left:574px;">
+          <div class="ann-line"></div>
+          <div class="ann-text">点击展开 — 查看 PowerShell 原始命令</div>
+        </div>
+
+        <!-- Taskbar -->
+        <div class="taskbar">
+          <!-- Start button -->
+          <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin-right:8px;cursor:pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)">
+              <rect x="2" y="2" width="9" height="9" rx="1.5"/>
+              <rect x="13" y="2" width="9" height="9" rx="1.5"/>
+              <rect x="2" y="13" width="9" height="9" rx="1.5"/>
+              <rect x="13" y="13" width="9" height="9" rx="1.5"/>
+            </svg>
+          </div>
+          <!-- Search -->
+          <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin-right:8px;cursor:pointer;">
+            <span data-icon style="width:18px;height:18px;color:rgba(255,255,255,0.7);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/circle-question-mark.svg');mask-image:url('../assets/icons/dl_builtin_apple/circle-question-mark.svg');"></span>
+          </div>
+          <!-- Separator -->
+          <div style="width:1px;height:24px;background:rgba(255,255,255,0.1);margin:0 4px;"></div>
+          <!-- File Explorer -->
+          <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:0 4px;cursor:pointer;border-radius:4px;">
+            <span data-icon style="width:18px;height:18px;color:rgba(255,255,255,0.75);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/folder-open.svg');mask-image:url('../assets/icons/dl_builtin_apple/folder-open.svg');"></span>
+          </div>
+          <!-- Browser -->
+          <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:0 4px;cursor:pointer;border-radius:4px;">
+            <span data-icon style="width:18px;height:18px;color:rgba(255,255,255,0.75);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/external-link.svg');mask-image:url('../assets/icons/dl_builtin_apple/external-link.svg');"></span>
+          </div>
+          <!-- Terminal -->
+          <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:0 4px;cursor:pointer;border-radius:4px;background:rgba(255,255,255,0.08);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+          </div>
+          <!-- Spacer -->
+          <div style="flex:1;"></div>
+          <!-- System tray -->
+          <div style="display:flex;align-items:center;gap:12px;padding-right:8px;">
+            <div style="font-size:11px;color:rgba(255,255,255,0.75);font-variant-numeric:tabular-nums;">10:24</div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0" stroke-linecap="round"/>
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0" stroke-linecap="round"/>
+              <circle cx="12" cy="20" r="1" fill="rgba(255,255,255,0.7)"/>
+            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5">
+              <rect x="2" y="7" width="16" height="10" rx="2" stroke-linecap="round"/>
+              <path d="M22 11v2" stroke-linecap="round"/>
+              <rect x="4" y="9" width="7" height="6" rx="0.5" fill="rgba(255,255,255,0.7)"/>
+            </svg>
+          </div>
+          <!-- Notification -->
+          <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <span data-icon style="width:16px;height:16px;color:rgba(255,255,255,0.7);-webkit-mask-image:url('../assets/icons/dl_builtin_apple/message-circle-more.svg');mask-image:url('../assets/icons/dl_builtin_apple/message-circle-more.svg');"></span>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <script>
+      // Toggle collapsible code block
+      document.getElementById('tech-toggle').addEventListener('click', function() {
+        const codeBlock = document.getElementById('code-block');
+        const toggleText = document.getElementById('toggle-text');
+        if (this.classList.contains('expanded')) {
+          codeBlock.style.maxHeight = codeBlock.scrollHeight + 'px';
+          codeBlock.style.opacity = '1';
+          toggleText.textContent = '收起技术细节';
+        } else {
+          codeBlock.style.maxHeight = '0';
+          codeBlock.style.opacity = '0';
+          toggleText.textContent = '查看技术细节 ▾';
+        }
+      });
+      // Initialize expanded state
+      document.getElementById('code-block').style.maxHeight = 'none';
+      document.getElementById('code-block').style.opacity = '1';
+      document.getElementById('code-block').style.transition = 'max-height 0.3s ease, opacity 0.2s ease';
+      document.getElementById('code-block').style.overflow = 'hidden';
+    </script>
+
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+
+      /* Desktop scene */
+      .desktop-scene {
+        width: 1440px;
+        height: 900px;
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(135deg, var(--background-900) 0%, var(--background-800) 50%, var(--background-700) 100%);
+        font-family: var(--font-sans);
+      }
+
+      /* Desktop wallpaper subtle glow */
+      .desktop-scene::before {
+        content: '';
+        position: absolute;
+        top: 20%;
+        left: 30%;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(ellipse, rgba(100, 140, 255, 0.08) 0%, transparent 70%);
+        pointer-events: none;
+      }
+      .desktop-scene::after {
+        content: '';
+        position: absolute;
+        bottom: 10%;
+        right: 35%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(ellipse, rgba(160, 120, 255, 0.06) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      /* Taskbar */
+      .taskbar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        background: rgba(30, 30, 30, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        z-index: 10;
+      }
+
+      /* Desktop icons */
+      .desktop-icon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 76px;
+        padding: 6px 4px;
+        border-radius: 6px;
+        cursor: default;
+        transition: background 0.15s;
+      }
+      .desktop-icon:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .desktop-icon-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .desktop-icon-label {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.9);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+        text-align: center;
+        line-height: 1.2;
+        max-width: 72px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Floating ball (dimmed) */
+      .floating-ball {
+        position: absolute;
+        top: 32px;
+        right: 472px;
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--brand-400), var(--brand-600));
+        box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.35;
+        z-index: 15;
+        transition: opacity 0.3s;
+      }
+
+      /* Chat panel */
+      .chat-panel {
+        position: absolute;
+        top: 20px;
+        right: 24px;
+        width: 440px;
+        height: 660px;
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border-radius: 20px;
+        box-shadow: var(--shadow-xl), 0 0 0 0.5px rgba(255, 255, 255, 0.3);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 20;
+      }
+
+      /* Panel header */
+      .panel-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
+      /* Messages area */
+      .messages-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 16px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      /* Message row */
+      .msg-row {
+        display: flex;
+        gap: 8px;
+        max-width: 100%;
+      }
+      .msg-row.user {
+        flex-direction: row-reverse;
+      }
+      .msg-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+      }
+      .msg-avatar.assistant {
+        background: linear-gradient(135deg, var(--brand-100), var(--brand-300));
+        color: var(--brand-700);
+      }
+      .msg-avatar.user-av {
+        background: var(--background-300);
+        color: var(--text-600);
+      }
+      .msg-content {
+        max-width: calc(100% - 48px);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .msg-row.user .msg-content {
+        align-items: flex-end;
+      }
+      .msg-bubble {
+        padding: 10px 14px;
+        border-radius: 16px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--text-800);
+      }
+      .msg-bubble.assistant-bubble {
+        background: var(--background-200);
+        border-bottom-left-radius: 4px;
+      }
+      .msg-bubble.user-bubble {
+        background: var(--brand-500);
+        color: white;
+        border-bottom-right-radius: 4px;
+      }
+
+      /* Summary bubble */
+      .summary-bubble {
+        background: var(--brand-50) !important;
+        border: 1px solid rgba(0, 122, 255, 0.1);
+      }
+
+      /* Thinking dots */
+      .thinking-dots {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        padding: 4px 0;
+      }
+      .thinking-dots span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--brand-500);
+        animation: bounce-dot 1.4s ease-in-out infinite;
+      }
+      .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+      .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes bounce-dot {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+        30% { transform: translateY(-6px); opacity: 1; }
+      }
+
+      /* Collapsible toggle */
+      .tech-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--text-400);
+        cursor: pointer;
+        padding: 4px 0;
+        transition: color 0.15s;
+        user-select: none;
+      }
+      .tech-toggle:hover {
+        color: var(--text-600);
+      }
+      .tech-toggle [data-icon] {
+        width: 14px;
+        height: 14px;
+        transition: transform 0.2s ease;
+      }
+      .tech-toggle.expanded [data-icon] {
+        transform: rotate(180deg);
+      }
+
+      /* Code block */
+      .code-block {
+        background: var(--background-800);
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        line-height: 1.7;
+        color: var(--text-200);
+        overflow-x: auto;
+        margin-top: 6px;
+        position: relative;
+      }
+      .code-block .ps-prompt {
+        color: var(--state-success);
+        user-select: none;
+      }
+      .code-block .cmd-text {
+        color: var(--text-100);
+      }
+      .code-block .cmd-cmdlet {
+        color: var(--brand-300);
+      }
+      .code-block .cmd-param {
+        color: var(--chart-5);
+      }
+      .code-block .cmd-string {
+        color: var(--chart-3);
+      }
+      .code-block .cmd-comment {
+        color: var(--text-400);
+        font-style: italic;
+      }
+      .code-label {
+        font-family: var(--font-sans);
+        font-size: 11px;
+        color: var(--text-400);
+        text-align: center;
+        margin-top: 8px;
+      }
+
+      /* Input bar */
+      .input-bar {
+        padding: 12px 16px 14px;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        flex-shrink: 0;
+      }
+      .input-bar-inner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--background-200);
+        border-radius: 20px;
+        padding: 8px 12px 8px 16px;
+      }
+      .input-bar-inner input {
+        flex: 1;
+        background: none;
+        border: none;
+        outline: none;
+        font-size: 13.5px;
+        font-family: var(--font-sans);
+        color: var(--text-800);
+      }
+      .input-bar-inner input::placeholder {
+        color: var(--text-400);
+      }
+      .send-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--brand-500);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        cursor: pointer;
+      }
+      .send-btn [data-icon] {
+        width: 16px;
+        height: 16px;
+        color: white;
+      }
+
+      /* Annotations */
+      .annotation {
+        position: absolute;
+        z-index: 30;
+        pointer-events: none;
+      }
+      .annotation-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-800);
+        white-space: nowrap;
+      }
+      .annotation-sub {
+        font-size: 11.5px;
+        color: var(--text-500);
+        white-space: nowrap;
+        margin-top: 2px;
+      }
+      .annotation-line {
+        position: absolute;
+        background: var(--brand-500);
+        opacity: 0.5;
+      }
+
+      /* Big principle annotation */
+      .principle-badge {
+        position: absolute;
+        bottom: 64px;
+        left: 48px;
+        z-index: 30;
+        pointer-events: none;
+      }
+      .principle-badge-inner {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(0, 122, 255, 0.15);
+        border-radius: 12px;
+        padding: 12px 20px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+      .principle-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--brand-500);
+        flex-shrink: 0;
+      }
+      .principle-text {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-800);
+      }
+
+      /* Collapsed state annotation */
+      .collapsed-annotation {
+        position: absolute;
+        z-index: 30;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .collapsed-annotation .ann-line {
+        width: 48px;
+        height: 1.5px;
+        background: var(--brand-500);
+        opacity: 0.5;
+      }
+      .collapsed-annotation .ann-text {
+        font-size: 11px;
+        color: var(--text-500);
+        white-space: nowrap;
+        background: rgba(255, 255, 255, 0.85);
+        padding: 2px 8px;
+        border-radius: 4px;
+      }
+
+      /* Online status */
+      .online-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--state-success);
+        box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2);
+      }
+
+      /* Folder icon for desktop */
+      .folder-icon-bg {
+        background: linear-gradient(135deg, var(--chart-3), var(--chart-1));
+        border-radius: 6px;
+      }
+      .file-icon-bg {
+        background: linear-gradient(135deg, var(--brand-300), var(--brand-400));
+        border-radius: 4px;
+      }
+      .app-icon-bg {
+        background: linear-gradient(135deg, var(--chart-5), var(--chart-4));
+        border-radius: 8px;
+      }
+      .recycle-icon-bg {
+        background: linear-gradient(135deg, var(--background-400), var(--background-500));
+        border-radius: 6px;
+      }
+    </style>
+</body>
+</html>

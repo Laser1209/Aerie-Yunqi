@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+*.env.local
+
+# Logs
+logs/
+*.log
+
+# Data
+data/*.db
+data/*.sqlite
+
+# OS
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/

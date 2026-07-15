@@ -1,0 +1,36 @@
+# OpenCloud Companion 主配置文件
+
+napcat:
+  ws_uri: "${NAPCAT_WS_URI:ws://localhost:3001}"
+  self_qq: "${SELF_QQ:3998874040}"
+
+ai:
+  primary:
+    provider: "siliconflow"
+    model: "google/gemma-4-31B-it"
+  fallback:
+    - provider: "deepseek"
+      model: "deepseek-chat"
+    - provider: "zhipu"
+      model: "glm-4-flash"
+  temperature: 0.8
+  max_tokens: 1024
+  timeout: 30
+
+personality:
+  config_file: "config/persona.yaml"
+
+memory:
+  mem0_enabled: false
+  chat_log_enabled: true
+  chat_log_path: "data/chat_log.db"
+
+logging:
+  level: "${LOG_LEVEL:INFO}"
+  file: "logs/companion.log"
+  rotation: "10 MB"
+  retention: "7 days"
+
+rate_limit:
+  max_per_minute: 20
+  cooldown_seconds: 3

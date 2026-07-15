@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>桌面悬浮球与每日简报</title>
+    <style id="theme-vars">
+/*
+ * Pinguo design tokens
+ * Brand: Pinguo
+ * Domain: Consumer imaging product
+ * Style: Restrained, elegant, Apple-inspired
+ * Theme mode: light-dark
+ * Source language: zh
+ * Output language: en
+ *
+ * Color architecture (two layers):
+ *   1. Primitive palette - six categories. brand / background / text / icon
+ *      are each a 10-step scale (50 lightest to 900 darkest). state-success and
+ *      state-error are functional colors anchored on Apple system colors.
+ *      Anchors follow Apple Human Interface Guidelines system colors
+ *      (System Blue #007AFF, System Green #34C759, System Red #FF3B30,
+ *      system grays / label / background colors).
+ *   2. Semantic tokens - :root (light) and .dark map roles onto primitives.
+ *      Components and UI kits must only consume the semantic tokens below.
+ */
+
+/* @group-priority: brand, background, text, icon, state-success, state-error */
+
+:root {
+  /* ===== PRIMITIVE PALETTE ===== */
+
+  /* brand */
+  --brand-50: #e8f2ff;
+  --brand-100: #cfe5ff;
+  --brand-200: #9fcbff;
+  --brand-300: #66abff;
+  --brand-400: #2e8dff;
+  --brand-500: #007aff; /* @primary */
+  --brand-600: #0064d6;
+  --brand-700: #004fad;
+  --brand-800: #003b82;
+  --brand-900: #00275a;
+
+  /* background */
+  --background-50: #ffffff;
+  --background-100: #f7f7fa;
+  --background-200: #f2f2f7;
+  --background-300: #e5e5ea;
+  --background-400: #d1d1d6;
+  --background-500: #aeaeb2;
+  --background-600: #8e8e93;
+  --background-700: #3a3a3c;
+  --background-800: #1c1c1e;
+  --background-900: #000000;
+
+  /* text */
+  --text-50: #f5f5f7;
+  --text-100: #e3e3e8;
+  --text-200: #c7c7cc;
+  --text-300: #aeaeb2;
+  --text-400: #8e8e93;
+  --text-500: #6e6e73;
+  --text-600: #48484a;
+  --text-700: #3c3c43;
+  --text-800: #1d1d1f;
+  --text-900: #000000;
+
+  /* icon */
+  --icon-50: #f5f5f7;
+  --icon-100: #e5e5ea;
+  --icon-200: #d1d1d6;
+  --icon-300: #c7c7cc;
+  --icon-400: #aeaeb2;
+  --icon-500: #8e8e93;
+  --icon-600: #6e6e73;
+  --icon-700: #48484a;
+  --icon-800: #2c2c2e;
+  --icon-900: #1d1d1f;
+
+  /* state-success */
+  --state-success: #34c759; /* @primary */
+  --state-success-dark: #30d158;
+  --state-success-surface: #e9f9ee;
+  --state-success-foreground: #ffffff;
+
+  /* state-error */
+  --state-error: #ff3b30; /* @primary */
+  --state-error-dark: #ff453a;
+  --state-error-surface: #ffecea;
+  --state-error-foreground: #ffffff;
+
+  /* ===== SEMANTIC ROLES ===== */
+
+  /* semantic */
+  --background: var(--background-50);
+  --foreground: var(--text-800);
+  --card: var(--background-50);
+  --card-foreground: var(--text-800);
+  --popover: var(--background-50);
+  --popover-foreground: var(--text-900);
+
+  --primary: var(--brand-500);
+  --primary-foreground: var(--background-50);
+  --secondary: var(--background-200);
+  --secondary-foreground: var(--text-800);
+  --muted: var(--background-200);
+  --muted-foreground: var(--text-400);
+  --accent: var(--background-100);
+  --accent-foreground: var(--text-800);
+  --destructive: var(--state-error);
+  --destructive-foreground: var(--state-error-foreground);
+  --success: var(--state-success);
+  --success-foreground: var(--state-success-foreground);
+  --border: var(--background-300);
+  --input: var(--background-400);
+  --ring: var(--brand-500);
+
+  --icon: var(--icon-900);
+  --icon-muted: var(--icon-500);
+
+  /* chart */
+  --chart-1: var(--state-success);
+  --chart-2: var(--brand-500);
+  --chart-3: #ff9500;
+  --chart-4: #5856d6;
+  --chart-5: #af52de;
+
+  /* sidebar */
+  --sidebar: var(--background-200);
+  --sidebar-foreground: var(--text-800);
+  --sidebar-primary: var(--brand-500);
+  --sidebar-primary-foreground: var(--background-50);
+  --sidebar-accent: var(--background-300);
+  --sidebar-accent-foreground: var(--text-800);
+  --sidebar-border: var(--background-300);
+  --sidebar-ring: var(--brand-500);
+
+  /* TYPOGRAPHY */
+  --font-sans: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: JetBrains Mono, monospace;
+  --tracking-normal: 0em;
+
+  /* RADIUS */
+  --radius: 1.2rem;
+
+  /* SHADOWS */
+  --shadow-2xs: 0 1px 2px -1px rgba(0, 0, 0, 0.04); /* Hairline */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04); /* Subtle */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 1px 3px -1px rgba(0, 0, 0, 0.05); /* Card */
+  --shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.05); /* Raised */
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.05); /* Card Hover */
+  --shadow-lg: 0 8px 24px -8px rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.05); /* Float */
+  --shadow-xl: 0 16px 40px -10px rgba(0, 0, 0, 0.10), 0 8px 16px -8px rgba(0, 0, 0, 0.06); /* Overlay */
+  --shadow-2xl: 0 24px 64px -12px rgba(0, 0, 0, 0.12); /* Modal */
+
+  /* SPACING */
+  --spacing: 0.24rem;
+}
+
+/* ===== SEMANTIC ROLES - dark (primitive palette inherited) ===== */
+.dark {
+  --background: var(--background-900);
+  --foreground: var(--text-50);
+  --card: var(--background-800);
+  --card-foreground: var(--text-50);
+  --popover: var(--background-700);
+  --popover-foreground: var(--text-50);
+
+  --primary: var(--brand-400);
+  --primary-foreground: var(--background-900);
+  --secondary: var(--background-800);
+  --secondary-foreground: var(--text-50);
+  --muted: var(--background-800);
+  --muted-foreground: var(--text-400);
+  --accent: var(--background-700);
+  --accent-foreground: var(--text-50);
+  --destructive: var(--state-error-dark);
+  --destructive-foreground: var(--state-error-foreground);
+  --success: var(--state-success-dark);
+  --success-foreground: var(--state-success-foreground);
+  --border: var(--background-700);
+  --input: var(--background-700);
+  --ring: var(--brand-400);
+
+  --icon: var(--icon-50);
+  --icon-muted: var(--icon-500);
+
+  --chart-1: var(--state-success-dark);
+  --chart-2: var(--brand-400);
+  --chart-3: #ff9f0a;
+  --chart-4: #5e5ce6;
+  --chart-5: #bf5af2;
+
+  --sidebar: var(--background-800);
+  --sidebar-foreground: var(--text-50);
+  --sidebar-primary: var(--brand-400);
+  --sidebar-primary-foreground: var(--background-900);
+  --sidebar-accent: var(--background-700);
+  --sidebar-accent-foreground: var(--text-50);
+  --sidebar-border: var(--background-700);
+  --sidebar-ring: var(--brand-400);
+
+  --shadow-2xs: 0 1px 2px -1px rgba(0, 0, 0, 0.30);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.36), 0 1px 3px -1px rgba(0, 0, 0, 0.36);
+  --shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.40), 0 1px 2px -1px rgba(0, 0, 0, 0.36);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.44), 0 2px 4px -2px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 8px 24px -8px rgba(0, 0, 0, 0.50), 0 4px 8px -4px rgba(0, 0, 0, 0.40);
+  --shadow-xl: 0 16px 40px -10px rgba(0, 0, 0, 0.55), 0 8px 16px -8px rgba(0, 0, 0, 0.44);
+  --shadow-2xl: 0 24px 64px -12px rgba(0, 0, 0, 0.60);
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-foreground: var(--card-foreground);
+  }
+  @layer base {
+    body { background: var(--card-background); color: var(--card-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+    <main>
+      <style>
+        /* ===== Desktop Scene ===== */
+        .desktop-scene {
+          position: relative;
+          width: 1440px;
+          height: 900px;
+          margin: 0 auto;
+          background:
+            radial-gradient(ellipse at 20% 50%, rgba(120, 140, 180, 0.15) 0%, transparent 60%),
+            radial-gradient(ellipse at 80% 30%, rgba(100, 130, 200, 0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 80%, rgba(90, 110, 160, 0.10) 0%, transparent 60%),
+            linear-gradient(160deg, #e8ecf4 0%, #d5dce8 40%, #c8d0e0 70%, #bfc8d8 100%);
+          overflow: hidden;
+          font-family: var(--font-sans);
+          border-radius: var(--radius);
+        }
+
+        /* ===== Windows Taskbar ===== */
+        .taskbar {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 48px;
+          background: rgba(255, 255, 255, 0.85);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border-top: 1px solid rgba(0, 0, 0, 0.06);
+          display: flex;
+          align-items: center;
+          padding: 0 16px;
+          z-index: 10;
+        }
+        .taskbar-start {
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 6px;
+          color: var(--brand-500);
+        }
+        .taskbar-search {
+          width: 220px;
+          height: 32px;
+          margin-left: 8px;
+          background: var(--background-200);
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          padding: 0 10px;
+          font-size: 12px;
+          color: var(--text-400);
+        }
+        .taskbar-apps {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          margin-left: 12px;
+        }
+        .taskbar-app {
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          background: var(--background-200);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-500);
+        }
+        .taskbar-app.active {
+          background: var(--background-300);
+          color: var(--brand-500);
+        }
+        .taskbar-right {
+          margin-left: auto;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: var(--text-600);
+        }
+        .taskbar-clock {
+          font-size: 12px;
+          color: var(--text-800);
+          font-weight: 500;
+        }
+
+        /* ===== Desktop Icons ===== */
+        .desktop-icons {
+          position: absolute;
+          top: 24px;
+          left: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          z-index: 1;
+        }
+        .desktop-icon {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          width: 72px;
+          padding: 8px 4px;
+          border-radius: 8px;
+          cursor: default;
+          transition: background 0.15s ease;
+        }
+        .desktop-icon:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+        .desktop-icon-img {
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          background: var(--background-200);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-400);
+          border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .desktop-icon-label {
+          font-size: 11px;
+          color: var(--text-800);
+          text-align: center;
+          text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
+          line-height: 1.3;
+          max-width: 64px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        /* ===== Floating Ball ===== */
+        .floating-ball {
+          position: absolute;
+          top: 40px;
+          right: 48px;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--brand-500), var(--brand-400));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 100;
+          box-shadow:
+            0 4px 16px -2px rgba(0, 122, 255, 0.35),
+            0 2px 6px -1px rgba(0, 122, 255, 0.20);
+          transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+                      box-shadow 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+          animation: ball-glow 3s ease-in-out infinite;
+        }
+        .floating-ball:hover {
+          transform: scale(1.08);
+          box-shadow:
+            0 6px 24px -2px rgba(0, 122, 255, 0.45),
+            0 3px 10px -1px rgba(0, 122, 255, 0.30);
+        }
+        .floating-ball:active {
+          transform: scale(0.96);
+        }
+
+        @keyframes ball-glow {
+          0%, 100% {
+            box-shadow:
+              0 4px 16px -2px rgba(0, 122, 255, 0.35),
+              0 2px 6px -1px rgba(0, 122, 255, 0.20),
+              0 0 0 0 rgba(0, 122, 255, 0);
+          }
+          50% {
+            box-shadow:
+              0 4px 16px -2px rgba(0, 122, 255, 0.35),
+              0 2px 6px -1px rgba(0, 122, 255, 0.20),
+              0 0 0 10px rgba(0, 122, 255, 0.06);
+          }
+        }
+
+        .ball-avatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.20);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 18px;
+          font-weight: 600;
+          letter-spacing: -0.02em;
+        }
+
+        .ball-badge {
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: var(--state-error);
+          color: white;
+          font-size: 11px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2.5px solid white;
+          line-height: 1;
+          animation: badge-pop 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.6s both;
+        }
+
+        @keyframes badge-pop {
+          0% { transform: scale(0); }
+          100% { transform: scale(1); }
+        }
+
+        /* ===== Daily Brief Card ===== */
+        .daily-brief {
+          position: absolute;
+          top: 108px;
+          right: 32px;
+          width: 360px;
+          border-radius: var(--radius);
+          background: rgba(255, 255, 255, 0.72);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          box-shadow: var(--shadow-xl);
+          z-index: 90;
+          overflow: hidden;
+          animation: brief-enter 0.55s cubic-bezier(0.32, 0.72, 0, 1) 0.3s both;
+        }
+
+        @keyframes brief-enter {
+          0% {
+            opacity: 0;
+            transform: translateY(-16px) scale(0.96);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        .brief-header {
+          padding: 18px 20px 14px;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+        }
+        .brief-greeting {
+          font-size: 17px;
+          font-weight: 600;
+          color: var(--text-800);
+          line-height: 1.35;
+        }
+        .brief-date {
+          font-size: 13px;
+          color: var(--text-400);
+          margin-top: 3px;
+          font-weight: 400;
+        }
+        .brief-close {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: var(--background-200);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-400);
+          cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease;
+          flex-shrink: 0;
+          margin-top: 1px;
+          margin-left: 12px;
+        }
+        .brief-close:hover {
+          background: var(--background-300);
+          color: var(--text-600);
+        }
+
+        .brief-divider {
+          height: 1px;
+          background: rgba(0, 0, 0, 0.06);
+          margin: 0 20px;
+        }
+
+        .brief-section {
+          padding: 14px 20px;
+        }
+        .brief-section-title {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-400);
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          margin-bottom: 10px;
+        }
+
+        .news-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 6px 0;
+        }
+        .news-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--brand-500);
+          flex-shrink: 0;
+          margin-top: 7px;
+        }
+        .news-text {
+          font-size: 13px;
+          color: var(--text-700);
+          line-height: 1.45;
+        }
+        .news-source {
+          font-size: 11px;
+          color: var(--text-400);
+          margin-top: 1px;
+        }
+
+        .todo-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 7px 0;
+        }
+        .todo-checkbox {
+          width: 18px;
+          height: 18px;
+          border-radius: 5px;
+          border: 2px solid var(--background-400);
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          cursor: pointer;
+        }
+        .todo-checkbox.checked {
+          background: var(--brand-500);
+          border-color: var(--brand-500);
+        }
+        .todo-checkbox.checked svg {
+          opacity: 1;
+        }
+        .todo-checkbox svg {
+          width: 11px;
+          height: 11px;
+          color: white;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .todo-text {
+          font-size: 13px;
+          color: var(--text-700);
+          line-height: 1.35;
+        }
+        .todo-text.done {
+          text-decoration: line-through;
+          color: var(--text-400);
+        }
+
+        .weather-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 0;
+        }
+        .weather-icon {
+          font-size: 18px;
+          line-height: 1;
+        }
+        .weather-text {
+          font-size: 13px;
+          color: var(--text-700);
+        }
+        .weather-temp {
+          font-weight: 600;
+          color: var(--text-800);
+        }
+
+        .brief-footer {
+          padding: 12px 20px 16px;
+          font-size: 13px;
+          color: var(--text-400);
+          text-align: center;
+        }
+        .brief-footer-link {
+          color: var(--brand-500);
+          font-weight: 500;
+          cursor: pointer;
+          transition: opacity 0.2s ease;
+        }
+        .brief-footer-link:hover {
+          opacity: 0.7;
+        }
+
+        /* ===== Annotation Tooltips (design presentation only) ===== */
+        .annotation {
+          position: absolute;
+          z-index: 200;
+          pointer-events: none;
+        }
+        .annotation-ball {
+          top: 68px;
+          right: 116px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          animation: annotation-fade 0.5s cubic-bezier(0.32, 0.72, 0, 1) 1.2s both;
+        }
+        .annotation-brief {
+          top: 320px;
+          right: 400px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          animation: annotation-fade 0.5s cubic-bezier(0.32, 0.72, 0, 1) 1.4s both;
+        }
+        .annotation-label {
+          font-size: 12px;
+          color: var(--text-600);
+          background: rgba(255, 255, 255, 0.85);
+          backdrop-filter: blur(8px);
+          padding: 6px 12px;
+          border-radius: 8px;
+          white-space: nowrap;
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          font-weight: 500;
+          letter-spacing: 0.01em;
+        }
+        .annotation-line {
+          width: 48px;
+          height: 1px;
+          background: var(--text-400);
+          position: relative;
+          flex-shrink: 0;
+        }
+        .annotation-line::after {
+          content: '';
+          position: absolute;
+          right: -3px;
+          top: -3px;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--text-400);
+        }
+        .annotation-ball .annotation-line::after {
+          right: -3px;
+        }
+        .annotation-brief .annotation-line::before {
+          content: '';
+          position: absolute;
+          left: -3px;
+          top: -3px;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--text-400);
+        }
+
+        @keyframes annotation-fade {
+          0% {
+            opacity: 0;
+            transform: translateX(-8px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        /* ===== SVG icon helper inside todo ===== */
+        .check-icon-inline {
+          display: block;
+        }
+      </style>
+
+      <!-- Desktop Scene Container -->
+      <div class="desktop-scene">
+
+        <!-- Fake Desktop Icons (top-left) -->
+        <div class="desktop-icons">
+          <div class="desktop-icon">
+            <div class="desktop-icon-img">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            </div>
+            <span class="desktop-icon-label">我的文档</span>
+          </div>
+          <div class="desktop-icon">
+            <div class="desktop-icon-img">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>
+            </div>
+            <span class="desktop-icon-label">浏览器</span>
+          </div>
+          <div class="desktop-icon">
+            <div class="desktop-icon-img">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+            </div>
+            <span class="desktop-icon-label">终端</span>
+          </div>
+          <div class="desktop-icon">
+            <div class="desktop-icon-img">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            </div>
+            <span class="desktop-icon-label">回收站</span>
+          </div>
+        </div>
+
+        <!-- Floating Ball -->
+        <div class="floating-ball" id="floatingBall">
+          <div class="ball-avatar">小</div>
+          <div class="ball-badge">2</div>
+        </div>
+
+        <!-- Daily Brief Notification Card -->
+        <div class="daily-brief" id="dailyBrief">
+          <div class="brief-header">
+            <div>
+              <div class="brief-greeting">早上好，主人～ ☀️</div>
+              <div class="brief-date">2026年7月15日 周三</div>
+            </div>
+            <div class="brief-close" id="briefClose">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </div>
+          </div>
+
+          <div class="brief-divider"></div>
+
+          <!-- News Section -->
+          <div class="brief-section">
+            <div class="brief-section-title">今日资讯</div>
+            <div class="news-item">
+              <div class="news-dot"></div>
+              <div>
+                <div class="news-text">OpenAI 发布 GPT-5 Turbo，推理速度提升 3 倍</div>
+                <div class="news-source">36氪 · 2 小时前</div>
+              </div>
+            </div>
+            <div class="news-item">
+              <div class="news-dot"></div>
+              <div>
+                <div class="news-text">苹果 WWDC 2026 宣布 macOS 全新 AI 集成框架</div>
+                <div class="news-source">少数派 · 4 小时前</div>
+              </div>
+            </div>
+            <div class="news-item">
+              <div class="news-dot"></div>
+              <div>
+                <div class="news-text">Anthropic Claude 4 获得多模态长上下文能力</div>
+                <div class="news-source">机器之心 · 5 小时前</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="brief-divider"></div>
+
+          <!-- Todo Section -->
+          <div class="brief-section">
+            <div class="brief-section-title">待办事项</div>
+            <div class="todo-item">
+              <div class="todo-checkbox" onclick="this.classList.toggle('checked'); this.nextElementSibling.classList.toggle('done');">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <span class="todo-text">完成 OpenCloud 接口文档 review</span>
+            </div>
+            <div class="todo-item">
+              <div class="todo-checkbox checked" onclick="this.classList.toggle('checked'); this.nextElementSibling.classList.toggle('done');">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <span class="todo-text done">回复王总的邮件</span>
+            </div>
+          </div>
+
+          <div class="brief-divider"></div>
+
+          <!-- Weather Section -->
+          <div class="brief-section">
+            <div class="brief-section-title">今日天气</div>
+            <div class="weather-row">
+              <span class="weather-icon">⛅</span>
+              <span class="weather-text"><span class="weather-temp">多云 24°C ~ 32°C</span> · 湿度 62%</span>
+            </div>
+          </div>
+
+          <div class="brief-divider"></div>
+
+          <!-- Footer -->
+          <div class="brief-footer">
+            有什么需要我帮忙的吗？ <span class="brief-footer-link">打开对话</span>
+          </div>
+        </div>
+
+        <!-- Annotation Tooltips (design presentation) -->
+        <div class="annotation annotation-ball">
+          <div class="annotation-label">悬浮球 — 点击展开对话</div>
+          <div class="annotation-line"></div>
+        </div>
+        <div class="annotation annotation-brief">
+          <div class="annotation-line"></div>
+          <div class="annotation-label">每日简报 — 开机自动推送</div>
+        </div>
+
+        <!-- Windows Taskbar -->
+        <div class="taskbar">
+          <div class="taskbar-start">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8.5v8.5H3V3zm9.5 0H21v8.5h-8.5V3zM3 12.5h8.5V21H3v-8.5zm9.5 0H21V21h-8.5v-8.5z"/></svg>
+          </div>
+          <div class="taskbar-search">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:8px;color:var(--text-400)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            搜索
+          </div>
+          <div class="taskbar-apps">
+            <div class="taskbar-app active">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            </div>
+            <div class="taskbar-app">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>
+            </div>
+            <div class="taskbar-app">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+            </div>
+          </div>
+          <div class="taskbar-right">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/></svg>
+            <span class="taskbar-clock">08:32</span>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <script>
+      // Close button for daily brief
+      document.getElementById('briefClose').addEventListener('click', function() {
+        const brief = document.getElementById('dailyBrief');
+        brief.style.transition = 'opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1), transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
+        brief.style.opacity = '0';
+        brief.style.transform = 'translateY(-12px) scale(0.96)';
+        setTimeout(() => {
+          brief.style.display = 'none';
+        }, 300);
+      });
+
+      // Floating ball click: toggle daily brief
+      document.getElementById('floatingBall').addEventListener('click', function() {
+        const brief = document.getElementById('dailyBrief');
+        if (brief.style.display === 'none') {
+          brief.style.display = '';
+          requestAnimationFrame(() => {
+            brief.style.transition = 'opacity 0.35s cubic-bezier(0.32, 0.72, 0, 1), transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)';
+            brief.style.opacity = '1';
+            brief.style.transform = 'translateY(0) scale(1)';
+          });
+        }
+      });
+    </script>
+</body>
+</html>

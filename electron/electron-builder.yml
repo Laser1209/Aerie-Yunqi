@@ -1,0 +1,69 @@
+# Aerie · 云栖 v9.0 — electron-builder configuration
+# This file is the source of truth for Windows packaging.
+# `package.json` mirrors the same settings under `build` for npm run build:win.
+appId: com.laser.aerie
+productName: Aerie · 云栖
+copyright: Copyright © 2026 Laser
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+directories:
+  output: dist
+  buildResources: builder
+  outputResources: resources
+
+files:
+  - "src/**/*"
+  - "builder/icon.ico"
+  - "package.json"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*.d.ts"
+  - "!**/node_modules/.bin"
+  - "!**/{__pycache__,*.pyc,*.pyo,*.pyd,*.egg-info}"
+  - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}"
+  - "!**/{.idea,.vscode,.editorconfig,.travis.yml,.npmrc}"
+  - "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+
+# Windows-specific target: NSIS installer
+win:
+  icon: builder/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  requestedExecutionLevel: requireAdministrator
+  artifactName: ${productName}-${version}-Setup.${ext}
+  publisherName: Laser
+  signAndEditExecutable: false
+  verifyUpdateCodeSignature: false
+
+# NSIS installer options
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Aerie · 云栖
+  deleteAppDataOnUninstall: false
+  include: builder/installer.nsh
+  displayLanguageSelector: false
+  installerLanguages:
+    - simpchinese
+    - enus
+  language: "2052"
+
+# Additional metadata
+extraMetadata:
+  main: src/main.js
+  author:
+    name: Laser
+    email: laser@local
+
+# Publish (no auto-update server; user manually reinstalls)
+publish: null

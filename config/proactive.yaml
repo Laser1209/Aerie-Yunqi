@@ -1,0 +1,79 @@
+# Aerie · 云栖 v9.0 — Proactive Push (Auto-Wake) Configuration
+# All comments are in English. This file is the source of truth for
+# PushPolicy + CronScheduler.
+
+proactive:
+  enabled: true                            # Global kill-switch
+  max_per_day: 5                           # Daily cap across all scenes
+  min_interval_min: 30                     # Min minutes between any two pushes
+  quiet_start: "23:30"                     # Quiet period start (HH:MM)
+  quiet_end: "07:00"                       # Quiet period end (HH:MM)
+  exempt_scenes:                           # Scenes that bypass quiet period
+    - morning_brief
+    - goodnight
+    - anniversary
+  timezone: "Asia/Shanghai"
+
+# Each scene defines a Cron schedule (or event trigger), a template,
+# and a mood_aware flag for Brain.generate_push.
+scenes:
+  morning_brief:
+    template: "早安。{weather}今天{date}。"
+    cron: "30 6,7 * * *"
+    mood_aware: true
+    exempt_quiet: true
+
+  weather_push:
+    template: "{city}今天{weather}，{temp}度。{suggestion}。"
+    cron: "0 7 * * *"
+    mood_aware: false
+    exempt_quiet: false
+
+  lunch_remind:
+    template: "吃饭。"
+    cron: "30 11,12 * * *"
+    mood_aware: true
+    exempt_quiet: false
+
+  evening_check:
+    template: "今天怎么样。"
+    cron: "30 17,18 * * *"
+    mood_aware: true
+    exempt_quiet: false
+
+  goodnight:
+    template: "睡吧。"
+    cron: "30 22,23 * * *"
+    mood_aware: true
+    exempt_quiet: true
+
+  todo_remind:
+    template: "{todo_count}件事没做。"
+    cron: "0 9-21 * * *"
+    mood_aware: false
+    exempt_quiet: false
+
+  anniversary:
+    template: "今天{anniversary_name}。{days}天了。"
+    cron: "0 0 * * *"
+    mood_aware: true
+    exempt_quiet: true
+
+  idle_care:
+    template: "在干嘛。"
+    trigger: "user_idle_4h"
+    mood_aware: true
+    exempt_quiet: false
+
+  emotion_comfort:
+    template: "……{comfort_word}。"
+    trigger: "cumulative_threshold_break"
+    mood_aware: true
+    exempt_quiet: false
+
+# Cumulative emotion thresholds (linked to auto-wake triggers).
+emotion_links:
+  desire_threshold: 80
+  patience_threshold: 70
+  tenderness_threshold: 60
+  idle_hours_threshold: 4

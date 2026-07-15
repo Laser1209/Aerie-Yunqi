@@ -1,0 +1,48 @@
+# Aerie · 云栖 v9.0 — General Settings
+# All code-level elements (keys) are in pure English.
+# User-facing display strings (description) are bilingual.
+
+app:
+  name: "Aerie · 云栖"
+  version: "9.0.0"
+  description: "Aerie · 云栖 — Local-first AI companion with auto-wake proactive messenger / 本地优先 AI 桌面伴侣，支持主动唤醒"
+
+qq:
+  self_qq: 123456789                    # Main account QQ (replace with real)
+  friends_qq: []                        # Friend list (AUTO mode)
+  napcat_ws_url: "ws://127.0.0.1:3001"  # NapCat OneBot11 WebSocket
+
+http_api:
+  host: "127.0.0.1"
+  port: 7890
+  cors_allowed_origins: []              # Local-only, no CORS needed
+
+paths:
+  data_dir: "data"
+  logs_dir: "logs"
+  backups_dir: "data/backups"
+  user_data_dir: "userData"             # Electron userData (config.json)
+
+theme:
+  current: "yita-pink"                  # Default: yita-pink
+  available:
+    - yita-pink        # 伊塔粉（默认）
+    - midnight-purple  # 深夜紫
+    - sakura-white     # 樱白
+    - ocean-blue       # 海蓝
+    - forest-green     # 森绿
+
+window:
+  main_width: 1280
+  main_height: 800
+  chat_width: 380
+  chat_height: 480
+  ball_size: 64
+  ball_margin: 30
+  ball_opacity_idle: 0.3
+  ball_opacity_active: 1.0
+  ball_idle_seconds: 5
+
+startup:
+  auto_start: false                     # Auto start at login
+  start_minimized: true                 # Start as floating ball only

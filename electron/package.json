@@ -1,0 +1,51 @@
+{
+  "name": "aerie-companion",
+  "productName": "Aerie · 云栖",
+  "version": "9.0.0",
+  "description": "Aerie · 云栖 — Local-first AI companion with auto-wake proactive messenger / 本地优先 AI 桌面伴侣",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "lint": "echo 'No JS lint configured'"
+  },
+  "author": "Laser",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0",
+    "sharp": "^0.32.6"
+  },
+  "build": {
+    "appId": "com.laser.aerie",
+    "productName": "Aerie · 云栖",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "builder/icon.ico",
+      "package.json"
+    ],
+    "win": {
+      "icon": "builder/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Aerie · 云栖",
+      "include": "builder/installer.nsh"
+    }
+  }
+}

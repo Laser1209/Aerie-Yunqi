@@ -6,105 +6,105 @@
 
 ---
 
-## 阶段 0 · 项目脚手架（基础）
+## 阶段 0 · 项目脚手架（基础） ✅
 
-### Task 0.1: 创建项目目录结构与初始化文件
-- [ ] SubTask 0.1.1: 创建 `electron/` `core/` `communication/` `proactive/` `scheduler/` `persona/` `config/` `data/` `logs/` `tools/` `memory/` `knowledge/` `emotion/` 目录
-- [ ] SubTask 0.1.2: 创建 `requirements.txt`（aiohttp / websockets / loguru / psutil / pyyaml / apscheduler / openai / requests / pywin32）
-- [ ] SubTask 0.1.3: 创建 `.env.example`（OPENAI_API_KEY / DEEPSEEK_API_KEY / GEMINI_API_KEY / SELF_QQ / HTTP_API_PORT / NAPCAT_WS_URL / LOG_LEVEL）
-- [ ] SubTask 0.1.4: 创建 `config/settings.yaml`（self_qq / friends / proactive / theme / paths）
-- [ ] SubTask 0.1.5: 创建 `config/persona.yaml`（伊塔 v8.0 完整人设）
-- [ ] SubTask 0.1.6: 创建 `config/proactive.yaml`（9 类主动推送场景定义）
+### Task 0.1: 创建项目目录结构与初始化文件 ✅
+- [x] SubTask 0.1.1: 创建 `electron/` `core/` `communication/` `proactive/` `scheduler/` `persona/` `config/` `data/` `logs/` `tools/` `memory/` `knowledge/` `emotion/` 目录
+- [x] SubTask 0.1.2: 创建 `requirements.txt`（aiohttp / websockets / loguru / psutil / pyyaml / apscheduler / openai / requests / pywin32）
+- [x] SubTask 0.1.3: 创建 `.env.example`（OPENAI_API_KEY / DEEPSEEK_API_KEY / GEMINI_API_KEY / SELF_QQ / HTTP_API_PORT / NAPCAT_WS_URL / LOG_LEVEL）
+- [x] SubTask 0.1.4: 创建 `config/settings.yaml`（self_qq / friends / proactive / theme / paths）
+- [x] SubTask 0.1.5: 创建 `config/persona.yaml`（伊塔 v8.0 完整人设）
+- [x] SubTask 0.1.6: 创建 `config/proactive.yaml`（9 类主动推送场景定义）
 
-### Task 0.2: 初始化 Git 与 .gitignore
-- [ ] SubTask 0.2.1: `git init` （如未初始化）
-- [ ] SubTask 0.2.2: 创建 `.gitignore`（`__pycache__/` `*.pyc` `data/*.db` `logs/*.log` `userData/` `dist/` `node_modules/` `.env` `*.egg-info/`）
-
----
-
-## 阶段 1 · Python 后端基础（无依赖，可并行 1-5）
-
-### Task 1.1: 数据库层 `core/database.py`
-- [ ] SubTask 1.1.1: 实现 `Database` 单例类（sqlite3 + 上下文管理）
-- [ ] SubTask 1.1.2: 实现 7 张表的建表语句（chat_log / long_term_memory / knowledge_base / todo / emotion_log / push_log / feedback_log / token_usage）
-- [ ] SubTask 1.1.3: 实现通用 `insert/update/query/execute` 方法
-- [ ] SubTask 1.1.4: ✅ 单元测试：建表 + 增删改查
-
-### Task 1.2: 消息 DTO `communication/message.py`
-- [ ] SubTask 1.2.1: 定义 `MessageType` / `Intent` 枚举
-- [ ] SubTask 1.2.2: 定义 `IncomingMessage` / `OutgoingReply` dataclass
-- [ ] SubTask 1.2.3: 实现 `from_onebot_event(event)` 工厂方法
-- [ ] SubTask 1.2.4: 实现 `is_private` / `is_empty` 属性
-- [ ] SubTask 1.2.5: ✅ 单元测试：解析 + 字段验证
-
-### Task 1.3: 路由层 `communication/router.py`
-- [ ] SubTask 1.3.1: 实现 `RouteMode` 枚举（FULL/AUTO/BASIC）
-- [ ] SubTask 1.3.2: 实现 `Router.is_master/is_friend/is_stranger`
-- [ ] SubTask 1.3.3: 实现 `Router.route(user_id) -> RouteMode`
-- [ ] SubTask 1.3.4: ✅ 单元测试：三种账号类型路由
-
-### Task 1.4: 拟人化分段 `communication/splitter.py`
-- [ ] SubTask 1.4.1: 实现 `SemanticMessageSplitter` 类
-- [ ] SubTask 1.4.2: 实现 8 种分割模式（段落/句末/列表项/项目符号/过渡/引号/分号/逗号）
-- [ ] SubTask 1.4.3: 实现 `split(text, msg_type)` 主方法
-- [ ] SubTask 1.4.4: ✅ 单元测试：长文本分多段 + 句末补全
-
-### Task 1.5: 拟人化发送队列 `communication/send_queue.py`
-- [ ] SubTask 1.5.1: 实现 `QueuedMessage` dataclass
-- [ ] SubTask 1.5.2: 实现 `SendQueue` 基于 `asyncio.PriorityQueue`
-- [ ] SubTask 1.5.3: 实现 5 类消息的间隔范围（daily/emotional/report/urgent/proactive）
-- [ ] SubTask 1.5.4: 实现 `enqueue/process/start/stop` 方法
-- [ ] SubTask 1.5.5: ✅ 单元测试：入队 → 处理 → 节奏
+### Task 0.2: 初始化 Git 与 .gitignore ✅
+- [x] SubTask 0.2.1: `git init` （如未初始化）
+- [x] SubTask 0.2.2: 创建 `.gitignore`（`__pycache__/` `*.pyc` `data/*.db` `logs/*.log` `userData/` `dist/` `node_modules/` `.env` `*.egg-info/`）
 
 ---
 
-## 阶段 2 · AI 核心与人格（依赖 1.1-1.5）
+## 阶段 1 · Python 后端基础（无依赖，可并行 1-5） ✅
 
-### Task 2.1: 多 Provider 抽象 `core/providers/base.py`
-- [ ] SubTask 2.1.1: 定义 `Provider` 抽象基类
-- [ ] SubTask 2.1.2: 定义 `LLMResponse` dataclass
-- [ ] SubTask 2.1.3: 实现 `complete(prompt, **kwargs)` 抽象方法
+### Task 1.1: 数据库层 `core/database.py` ✅
+- [x] SubTask 1.1.1: 实现 `Database` 单例类（sqlite3 + 上下文管理）
+- [x] SubTask 1.1.2: 实现 9 张表的建表语句（chat_log / long_term_memory / knowledge_base / todo / emotion_log / push_log / feedback_log / token_usage / tool_usage）
+- [x] SubTask 1.1.3: 实现通用 `insert/update/query/execute` 方法
+- [x] SubTask 1.1.4: 单元测试：建表 + 增删改查
 
-### Task 2.2: Qwen Provider `core/providers/qwen.py`
-- [ ] SubTask 2.2.1: 实现 `QwenProvider`，基于 `openai` 兼容 SDK
-- [ ] SubTask 2.2.2: 配置 `base_url=https://dashscope.aliyuncs.com/compatible-mode/v1`
-- [ ] SubTask 2.2.3: 解析响应中的 `usage` 字段
+### Task 1.2: 消息 DTO `communication/message.py` ✅
+- [x] SubTask 1.2.1: 定义 `MessageType` / `Intent` 枚举
+- [x] SubTask 1.2.2: 定义 `IncomingMessage` / `OutgoingReply` dataclass
+- [x] SubTask 1.2.3: 实现 `from_onebot_event(event)` 工厂方法
+- [x] SubTask 1.2.4: 实现 `is_private` / `is_empty` 属性
+- [x] SubTask 1.2.5: 单元测试：解析 + 字段验证
 
-### Task 2.3: DeepSeek Provider `core/providers/deepseek.py`
-- [ ] SubTask 2.3.1: 实现 `DeepSeekProvider`
-- [ ] SubTask 2.3.2: 配置 `base_url=https://api.deepseek.com/v1`
+### Task 1.3: 路由层 `communication/router.py` ✅
+- [x] SubTask 1.3.1: 实现 `RouteMode` 枚举（FULL/AUTO/BASIC）
+- [x] SubTask 1.3.2: 实现 `Router.is_master/is_friend/is_stranger`
+- [x] SubTask 1.3.3: 实现 `Router.route(user_id) -> RouteMode`
+- [x] SubTask 1.3.4: 单元测试：三种账号类型路由
 
-### Task 2.4: Gemini Provider `core/providers/gemini.py`
-- [ ] SubTask 2.4.1: 实现 `GeminiProvider`，基于 `openai` 兼容 SDK
-- [ ] SubTask 2.4.2: 配置 `base_url=https://generativelanguage.googleapis.com/v1beta/openai/`
+### Task 1.4: 拟人化分段 `communication/splitter.py` ✅
+- [x] SubTask 1.4.1: 实现 `SemanticMessageSplitter` 类
+- [x] SubTask 1.4.2: 实现 8 种分割模式（段落/句末/列表项/项目符号/过渡/引号/分号/逗号）
+- [x] SubTask 1.4.3: 实现 `split(text, msg_type)` 主方法
+- [x] SubTask 1.4.4: 单元测试：长文本分多段 + 句末补全
 
-### Task 2.5: Brain 调度 `core/brain.py`
-- [ ] SubTask 2.5.1: 实现 `Brain` 类，注入 providers 列表
-- [ ] SubTask 2.5.2: 实现 `think(prompt, scene, user_id)` 主方法（Fallback 链）
-- [ ] SubTask 2.5.3: 实现 `generate_push(template, mood, **kwargs)`
-- [ ] SubTask 2.5.4: 集成 `TokenTracker` 记录每次调用
-- [ ] SubTask 2.5.5: ✅ 单元测试：Provider 失败时降级到下一级
+### Task 1.5: 拟人化发送队列 `communication/send_queue.py` ✅
+- [x] SubTask 1.5.1: 实现 `QueuedMessage` dataclass
+- [x] SubTask 1.5.2: 实现 `SendQueue` 基于 `asyncio.PriorityQueue`
+- [x] SubTask 1.5.3: 实现 5 类消息的间隔范围（daily/emotional/report/urgent/proactive）
+- [x] SubTask 1.5.4: 实现 `enqueue/process/start/stop` 方法
+- [x] SubTask 1.5.5: 单元测试：入队 → 处理 → 节奏
 
-### Task 2.6: Token 统计 `core/token_tracker.py`
-- [ ] SubTask 2.6.1: 实现 `TokenTracker` 类
-- [ ] SubTask 2.6.2: 实现 `record(user_id, provider, model, scene, prompt_tokens, completion_tokens, duration_ms, success)`
-- [ ] SubTask 2.6.3: 实现 `get_today_stats(user_id)` / `get_by_model(user_id, days)`
+---
 
-### Task 2.7: 人格决策 `persona/decision.py`
-- [ ] SubTask 2.7.1: 实现 `DecisionLayer` 枚举（L1/L2/L3/L4）
-- [ ] SubTask 2.7.2: 实现 `PersonaDecision.decide(candidates, context)`
-- [ ] SubTask 2.7.3: ✅ 单元测试：四级权重（0.5/0.3/0.15/0.05）
+## 阶段 2 · AI 核心与人格（依赖 1.1-1.5） ✅
 
-### Task 2.8: 人格随机 `persona/brain_random.py`
-- [ ] SubTask 2.8.1: 实现 `BrainRandom` 类
-- [ ] SubTask 2.8.2: 实现 Markov 转移矩阵构建
-- [ ] SubTask 2.8.3: 实现 `think(current_state, history)` softmax 采样
+### Task 2.1: 多 Provider 抽象 `core/providers/base.py` ✅
+- [x] SubTask 2.1.1: 定义 `Provider` 抽象基类
+- [x] SubTask 2.1.2: 定义 `LLMResponse` dataclass
+- [x] SubTask 2.1.3: 实现 `complete(prompt, **kwargs)` 抽象方法
 
-### Task 2.9: 上下文构建 `core/context_builder.py`
-- [ ] SubTask 2.9.1: 实现 `ContextBuilder` 类
-- [ ] SubTask 2.9.2: 实现 `build(user_id, user_msg, route_mode)`
-- [ ] SubTask 2.9.3: 集成 System Prompt（含情绪状态 / 称呼规则）
-- [ ] SubTask 2.9.4: 注入长期记忆 Top 5 + 知识库 Top 3 + 最近 8 条历史
+### Task 2.2: Qwen Provider `core/providers/qwen.py` ✅
+- [x] SubTask 2.2.1: 实现 `QwenProvider`，基于 `openai` 兼容 SDK
+- [x] SubTask 2.2.2: 配置 `base_url=https://dashscope.aliyuncs.com/compatible-mode/v1`
+- [x] SubTask 2.2.3: 解析响应中的 `usage` 字段
+
+### Task 2.3: DeepSeek Provider `core/providers/deepseek.py` ✅
+- [x] SubTask 2.3.1: 实现 `DeepSeekProvider`
+- [x] SubTask 2.3.2: 配置 `base_url=https://api.deepseek.com/v1`
+
+### Task 2.4: Gemini Provider `core/providers/gemini.py` ✅
+- [x] SubTask 2.4.1: 实现 `GeminiProvider`，基于 `openai` 兼容 SDK
+- [x] SubTask 2.4.2: 配置 `base_url=https://generativelanguage.googleapis.com/v1beta/openai/`
+
+### Task 2.5: Brain 调度 `core/brain.py` ✅
+- [x] SubTask 2.5.1: 实现 `Brain` 类，注入 providers 列表
+- [x] SubTask 2.5.2: 实现 `think(prompt, scene, user_id)` 主方法（Fallback 链）
+- [x] SubTask 2.5.3: 实现 `generate_push(template, mood, **kwargs)`
+- [x] SubTask 2.5.4: 集成 `TokenTracker` 记录每次调用
+- [x] SubTask 2.5.5: 单元测试：Provider 失败时降级到下一级
+
+### Task 2.6: Token 统计 `core/token_tracker.py` ✅
+- [x] SubTask 2.6.1: 实现 `TokenTracker` 类
+- [x] SubTask 2.6.2: 实现 `record(user_id, provider, model, scene, prompt_tokens, completion_tokens, duration_ms, success)`
+- [x] SubTask 2.6.3: 实现 `get_today_stats(user_id)` / `get_by_model(user_id, days)`
+
+### Task 2.7: 人格决策 `persona/decision.py` ✅
+- [x] SubTask 2.7.1: 实现 `DecisionLayer` 枚举（L1/L2/L3/L4）
+- [x] SubTask 2.7.2: 实现 `PersonaDecision.decide(candidates, context)`
+- [x] SubTask 2.7.3: 单元测试：四级权重（0.5/0.3/0.15/0.05）
+
+### Task 2.8: 人格随机 `persona/brain_random.py` ✅
+- [x] SubTask 2.8.1: 实现 `BrainRandom` 类
+- [x] SubTask 2.8.2: 实现 Markov 转移矩阵构建
+- [x] SubTask 2.8.3: 实现 `think(current_state, history)` softmax 采样
+
+### Task 2.9: 上下文构建 `core/context_builder.py` ✅
+- [x] SubTask 2.9.1: 实现 `ContextBuilder` 类
+- [x] SubTask 2.9.2: 实现 `build(user_id, user_msg, route_mode)`
+- [x] SubTask 2.9.3: 集成 System Prompt（含情绪状态 / 称呼规则）
+- [x] SubTask 2.9.4: 注入长期记忆 Top 5 + 知识库 Top 3 + 最近 8 条历史
 
 ---
 

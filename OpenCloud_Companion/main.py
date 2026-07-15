@@ -403,6 +403,14 @@ class Companion:
                 on_send=on_send,
             )
             window.show()
+            # ===== 强制浮到最前 =====
+            # FramelessWindowHint + WA_ShowWithoutActivating 会让窗口
+            # 在 (0,0) 显示但不抢焦点，主人看不到——手动 raise+activate
+            try:
+                window.raise_()
+                window.activateWindow()
+            except Exception:
+                pass
             self._chat_window = window
             logger.info("对话窗口已打开")
         except Exception as e:

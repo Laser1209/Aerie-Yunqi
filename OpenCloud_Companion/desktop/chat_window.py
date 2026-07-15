@@ -652,6 +652,15 @@ class ChatWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
+        # ===== 定位到屏幕右下角（紧邻系统托盘）=====
+        # FramelessWindowHint 窗口默认在 (0,0)，主人可能看不到
+        from PyQt6.QtGui import QGuiApplication
+        screen_geo = QGuiApplication.primaryScreen().availableGeometry()
+        margin = 20
+        x = screen_geo.right() - self.WINDOW_W - margin
+        y = screen_geo.bottom() - self.WINDOW_H - margin
+        self.move(x, y)
+
         # QGraphicsDropShadowEffect 替代原 8 层 paintEvent 阴影（GPU 加速）
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(40)
@@ -685,17 +694,18 @@ class ChatWindow(QWidget):
         root.setSpacing(0)
 
         # ── 主面板容器 ──
+        # ⚠️ PyQt6 坑：单独对子 QFrame 设 stylesheet 时，ID 选择器（#chatPanel）
+        # 会静默忽略；必须直接写属性，否则 _panel 背景透明 → 子控件全部看不见
         self._panel = QFrame(self)
         self._panel.setObjectName("chatPanel")
         self._panel.setStyleSheet(
-            f"""
-            #chatPanel {{
-                background-color: rgba(255, 255, 255, 0.78);
-                border-radius: 20px;
-                border: 1px solid rgba(255, 255, 255, 0.50);
-            }}
+            """
+            background-color: rgba(248, 250, 252, 250);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 180);
             """
         )
+        self._panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         panel_layout = QVBoxLayout(self._panel)
         panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)

@@ -21,6 +21,7 @@ from core.context_builder import ContextBuilder
 from core.database import Database
 from core.emotion_engine import EmotionEngine
 from core.emotion_threshold import CumulativeEmotionEngine
+from core.napcat_launcher import get_launcher
 from core.pipeline import Pipeline
 from core.tool_registry import ToolRegistry
 from config.persona_loader import load_proactive, load_settings
@@ -115,10 +116,33 @@ class Companion:
             master_id=int(self.settings.get("qq", {}).get("self_qq", 0)),
         )
         self.scheduler.start()
-        # QQ WS
-        asyncio.create_task(self.qq.connect())
+        # Auto-bootstrap NapCat (best-effort, non-blocking on failure)
+        napcat_cfg = self.settings.get("napcat", {}) if isinstance(self.settings, dict) else {}
+        if napcat_cfg.get("auto_start", True):
+            asyncio.create_task(self._bootstrap_napcat(napcat_cfg))
+        else:
+            asyncio.create_task(self.qq.connect())
         self._started = True
         logger.info("Companion started")
+
+    async def _bootstrap_napcat(self, napcat_cfg: dict) -> None:
+        """Ensure NapCat is running, then connect the QQ WebSocket client."""
+        try:
+            launcher = get_launcher(self.settings)
+            launcher.refresh_status()
+            if not launcher._status.ws_port_open:
+                logger.info("NapCat not running, attempting to start launcher")
+                prefer_user = bool(napcat_cfg.get("prefer_user_launcher", True))
+                result = await launcher.start(prefer_user=prefer_user, wait_port=True)
+                if not result.get("port_open"):
+                    logger.warning(
+                        "NapCat launcher started but WS port %s is not yet open: %s",
+                        launcher.ws_port, result.get("message"),
+                    )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("NapCat bootstrap failed: %s", e)
+        # Either way, attempt to connect the QQ WS — it will retry.
+        await self.qq.connect()
 
     async def stop(self) -> None:
         if not self._started:

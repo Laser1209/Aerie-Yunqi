@@ -15,6 +15,7 @@ from communication.router import Router
 from core.brain import Brain
 from core.companion import Companion, get_companion
 from core.database import Database
+from core.napcat_launcher import get_launcher
 from core.token_tracker import TokenTracker
 from core.system_monitor import SystemMonitor
 from config.persona_loader import load_proactive, load_settings
@@ -75,6 +76,62 @@ async def qq_status(request: web.Request) -> web.Response:
         s = await comp.qq.get_status()
         return _json(s)
     return _json({"connected": False, "self_qq": 0})
+
+
+# ----- NapCat launcher endpoints -----
+async def napcat_status(request: web.Request) -> web.Response:
+    try:
+        launcher = get_launcher()
+        launcher.refresh_status()
+        return _json(launcher._status.to_dict())
+    except Exception as e:  # noqa: BLE001
+        return _json({"installed": False, "running": False, "error": str(e)[:200]}, status=500)
+
+
+async def napcat_start(request: web.Request) -> web.Response:
+    body = await request.json() if request.body_exists else {}
+    prefer_user = bool(body.get("prefer_user", True))
+    wait_port = bool(body.get("wait_port", True))
+    try:
+        launcher = get_launcher()
+        result = await launcher.start(prefer_user=prefer_user, wait_port=wait_port)
+        return _json(result)
+    except Exception as e:  # noqa: BLE001
+        return _json({"started": False, "error": str(e)[:200]}, status=500)
+
+
+async def napcat_stop(request: web.Request) -> web.Response:
+    try:
+        launcher = get_launcher()
+        result = await launcher.stop()
+        return _json(result)
+    except Exception as e:  # noqa: BLE001
+        return _json({"stopped": False, "error": str(e)[:200]}, status=500)
+
+
+async def napcat_bootstrap(request: web.Request) -> web.Response:
+    """Auto-connect: ensure NapCat is up, then verify the QQ WS is reachable.
+
+    Called at app startup. Returns a summary suitable for the Electron UI.
+    """
+    body = await request.json() if request.body_exists else {}
+    prefer_user = bool(body.get("prefer_user", True))
+    try:
+        launcher = get_launcher()
+        launcher.refresh_status()
+        if launcher._status.ws_port_open:
+            return _json({"status": "already_ready", "port_open": True, "installed": launcher._status.installed})
+        if not launcher._status.installed:
+            return _json({"status": "not_installed", "installed": False, "port_open": False}, status=404)
+        result = await launcher.start(prefer_user=prefer_user, wait_port=True)
+        return _json({
+            "status": "ok" if result.get("port_open") else "starting",
+            "installed": True,
+            "port_open": result.get("port_open", False),
+            "message": result.get("message", ""),
+        })
+    except Exception as e:  # noqa: BLE001
+        return _json({"status": "error", "error": str(e)[:200]}, status=500)
 
 
 async def scheduler_jobs(request: web.Request) -> web.Response:
@@ -308,6 +365,10 @@ def build_app() -> web.Application:
     app.router.add_get("/api/capabilities", capabilities)
     app.router.add_get("/api/llm/providers", llm_providers)
     app.router.add_get("/api/qq/status", qq_status)
+    app.router.add_get("/api/napcat/status", napcat_status)
+    app.router.add_post("/api/napcat/start", napcat_start)
+    app.router.add_post("/api/napcat/stop", napcat_stop)
+    app.router.add_post("/api/napcat/bootstrap", napcat_bootstrap)
     app.router.add_get("/api/scheduler/jobs", scheduler_jobs)
     app.router.add_get("/api/tools", list_tools)
     app.router.add_get("/api/knowledge/stats", knowledge_stats)

@@ -6,6 +6,20 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('aerie', {
+  on: (channel, callback) => {
+    const validChannels = [
+      'backend:ready',
+      'backend:timeout',
+      'backend:error',
+      'backend:progress',
+      'backend:exit',
+      'qq:status',
+      'napcat:bootstrap',
+    ];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.on(channel, (_e, ...args) => callback(...args));
+    }
+  },
   config: {
     get: () => ipcRenderer.invoke('config:get'),
     set: (patch) => ipcRenderer.invoke('config:set', patch),
@@ -20,6 +34,16 @@ contextBridge.exposeInMainWorld('aerie', {
   },
   ball: {
     expand: () => ipcRenderer.invoke('ball:expand'),
+    showMain: (wideSidebar = false) => ipcRenderer.invoke('ball:showMain', { wideSidebar }),
+    move: (dx, dy) => ipcRenderer.invoke('ball:move', { dx, dy }),
+    snapToEdge: (axis = 'both') => ipcRenderer.invoke('ball:snapToEdge', axis),
+    getBounds: () => ipcRenderer.invoke('ball:getBounds'),
+  },
+  napcat: {
+    status: () => ipcRenderer.invoke('napcat:status'),
+    start: (opts) => ipcRenderer.invoke('napcat:start', opts || {}),
+    stop: () => ipcRenderer.invoke('napcat:stop'),
+    bootstrap: (opts) => ipcRenderer.invoke('napcat:bootstrap', opts || {}),
   },
   system: {
     openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),

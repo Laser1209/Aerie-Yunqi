@@ -12,6 +12,14 @@ qq:
   friends_qq: []                        # Friend list (AUTO mode)
   napcat_ws_url: "ws://127.0.0.1:3001"  # NapCat OneBot11 WebSocket
 
+napcat:
+  auto_start: true                      # Auto-launch NapCat at app startup
+  prefer_user_launcher: true            # Use launcher-user.bat (no admin) first
+  ws_port: 3001                         # NapCat OneBot11 WS port
+  port_ready_timeout: 45                # Seconds to wait for the WS port to come up
+  shell_dir: "NapCat/NapCat.Shell"      # Relative to project root
+  log_path: "logs/napcat_launcher.log"  # Launcher stdout/stderr capture path
+
 http_api:
   host: "127.0.0.1"
   port: 7890

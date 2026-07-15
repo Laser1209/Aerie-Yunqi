@@ -175,18 +175,18 @@
     try {
       const data = await API.get('/api/qq/status');
       if (data && data.connected) {
-        qqDotEl.classList.add('on');
-        qqDotEl.classList.remove('off');
+        qqDotEl.classList.add('connected');
+        qqDotEl.classList.remove('disconnected');
         qqStatusEl.textContent = '已连接' + (data.self_qq ? ' · ' + data.self_qq : '');
       } else {
-        qqDotEl.classList.add('off');
-        qqDotEl.classList.remove('on');
+        qqDotEl.classList.add('disconnected');
+        qqDotEl.classList.remove('connected');
         qqStatusEl.textContent = '未连接';
       }
     } catch (e) {
-      qqDotEl.classList.add('off');
-      qqDotEl.classList.remove('on');
-      qqStatusEl.textContent = '服务不可用';
+      qqDotEl.classList.add('disconnected');
+      qqDotEl.classList.remove('connected');
+      qqStatusEl.textContent = '后端未启动';
     }
   }
 
@@ -215,6 +215,33 @@
 
   // Initial bootstrap (deferred to app.js for coordination)
   document.addEventListener('DOMContentLoaded', () => {
+    // Show "starting" state
+    qqDotEl.classList.add('disconnected');
+    qqStatusEl.textContent = '正在启动后端…';
+
+    // Listen for backend startup events
+    if (window.aerie && window.aerie.on) {
+      window.aerie.on('backend:ready', () => {
+        qqStatusEl.textContent = '后端就绪，正在连接QQ…';
+        refreshQQStatus();
+      });
+      window.aerie.on('backend:progress', (info) => {
+        qqStatusEl.textContent = info.hint + '（已等 ' + info.secondsElapsed + ' 秒）';
+      });
+      window.aerie.on('backend:timeout', () => {
+        qqDotEl.classList.add('disconnected');
+        qqStatusEl.textContent = '后端启动超时（>60s）— 请查看 logs/python_stderr.log';
+      });
+      window.aerie.on('backend:error', (err) => {
+        qqDotEl.classList.add('disconnected');
+        qqStatusEl.textContent = '后端启动失败：' + (err || '未知');
+      });
+      window.aerie.on('backend:exit', (code) => {
+        qqDotEl.classList.add('disconnected');
+        qqStatusEl.textContent = '后端已退出（code=' + code + '）';
+      });
+    }
+
     loadHistory();
     startPolling(5000);
     refreshQQStatus();

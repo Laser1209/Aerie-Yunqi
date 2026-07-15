@@ -1,31 +1,119 @@
-/* Floating ball */
+/* Floating ball — relative-positioned, overflow-visible, fixed size */
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Scene spans the full screen so the ball can travel anywhere.
+   The BrowserWindow itself is 80×80 but we let the body overflow. */
 html, body {
-  width: 100%; height: 100%;
+  width: 100vw;
+  height: 100vh;
   background: transparent;
-  -webkit-app-region: drag;
   user-select: none;
-  overflow: hidden;
+  overflow: hidden; /* hide scrollbars; we do positioning via window-move IPC */
+  -webkit-app-region: drag;
 }
+
+/* Ball scene is sized to match body. The actual .ball element
+   is anchored at its real window position; we keep it relative-positioned. */
+.ball-scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
 .ball {
-  width: 64px; height: 64px;
+  /* Fixed size, never grows */
+  width: 64px !important;
+  height: 64px !important;
+  position: absolute;
+  /* Anchor so the ball sits at its window position.
+     Window is 80×80 with 8px padding on each side. */
+  top: 8px;
+  left: 8px;
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #FFB6D1 0%, #FF6B9D 60%, #C71585 100%);
   color: #fff;
-  font-family: 'Helvetica Neue', sans-serif;
+  font-family: 'Helvetica Neue', 'PingFang SC', sans-serif;
   font-weight: 700;
   font-size: 28px;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 8px 24px rgba(199, 21, 133, 0.45);
-  cursor: pointer;
-  transition: transform .2s ease, opacity .3s ease, box-shadow .2s ease;
+  cursor: grab;
+  transition: transform 0.18s ease, opacity 0.3s ease, box-shadow 0.18s ease;
   -webkit-app-region: no-drag;
+  user-select: none;
+  overflow: hidden; /* prevent any inner element from enlarging the ball */
 }
-.ball:hover { transform: scale(1.08); box-shadow: 0 12px 32px rgba(199, 21, 133, 0.6); }
-.ball.dragging { transform: scale(1.12); cursor: grabbing; }
-.ball.idle { opacity: 0.3; }
-.ball.urgent { animation: pulse 1.2s infinite; }
+
+.ball:active { cursor: grabbing; }
+
+/* Hover: gentle scale, never grow the box. */
+.ball:hover {
+  transform: scale(1.08);
+  box-shadow: 0 12px 32px rgba(199, 21, 133, 0.65);
+}
+
+.ball.dragging {
+  transform: scale(1.04);
+  box-shadow: 0 6px 16px rgba(199, 21, 133, 0.4);
+}
+
+.ball.urgent {
+  animation: pulse 1.2s infinite;
+}
+
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(199, 21, 133, 0.6); }
-  50% { box-shadow: 0 0 0 16px rgba(199, 21, 133, 0); }
+  50% { box-shadow: 0 0 0 14px rgba(199, 21, 133, 0); }
 }
+
+/* ===== Long-bar dialog (240 × 120) above the ball ===== */
+.ball-dialog {
+  position: absolute;
+  /* Anchor above the ball */
+  bottom: calc(8px + 64px + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  min-height: 80px;
+  max-height: 120px;
+  padding: 12px;
+  background: rgba(34, 34, 38, 0.95);
+  border: 1px solid rgba(199, 21, 133, 0.45);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+  color: #fff;
+  -webkit-app-region: no-drag;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.ball-dialog.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.ball-dialog:not(.show) { transform: translateX(-50%) translateY(8px); }
+.ball-dialog-title { font-size: 12px; color: #FFB6D1; }
+.ball-dialog-actions { display: flex; gap: 6px; justify-content: center; }
+.ball-dialog-btn {
+  background: linear-gradient(135deg, #FF6B9D 0%, #C71585 100%);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.ball-dialog-btn:hover { transform: translateY(-1px); }
+.ball-dialog-btn.ghost { background: transparent; border: 1px solid #FF6B9D; color: #FFB6D1; }
+

@@ -86,11 +86,34 @@
     });
 
     console.log('[Aerie] app ready');
+
+    // Listen for sidebar-wide request from floating ball
+    if (window.aerie && window.aerie.on) {
+      window.aerie.on('sidebar:wide', (wantWide) => {
+        toggleSidebarWide(wantWide === true);
+        // Switch to data tab when widening
+        const dataTab = document.querySelector('.tab[data-tab="data"]');
+        if (dataTab && wantWide) dataTab.click();
+      });
+      window.aerie.on('main:showBall', () => {
+        // hide dialog if any
+      });
+    }
   });
+
+  // ---- Sidebar wide mode (toggle between 280px and 480px) ----
+  function toggleSidebarWide(forceState) {
+    const shell = document.querySelector('.app-shell');
+    if (!shell) return false;
+    const want = typeof forceState === 'boolean' ? forceState : !shell.classList.contains('wide');
+    if (want) shell.classList.add('wide'); else shell.classList.remove('wide');
+    return want;
+  }
 
   // ---- Bridge exposure for other renderer scripts ----
   window.AerieApp = {
     showToast,
     pollProactive,
+    toggleSidebarWide,
   };
 })();

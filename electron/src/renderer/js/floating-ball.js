@@ -1,11 +1,10 @@
 /* Aerie · 云栖 v9.0 — Floating ball renderer
  *
  * Responsibilities:
- *  - Drag the ball across the screen
- *  - Smart edge吸附 (stick to nearest edge when released)
- *  - Single-click expand → request main window
- *  - Double-click → open main window
- *  - Idle semi-transparent (5s without interaction)
+ *  - Drag the ball across the screen via IPC (window-move, not CSS transform inside window)
+ *  - Smart edge吸附 (stick to nearest edge when released) with screen bounds clamping
+ *  - Single-click expand → dialog → choose to open main window or wide sidebar
+ *  - Idle semi-transparent (3s without interaction)
  */
 
 (function () {
@@ -17,132 +16,131 @@
     return;
   }
 
+  const bridge = window.aerie;
+  if (!bridge || !bridge.ball) {
+    console.warn('aerie bridge not ready in floating ball');
+    return;
+  }
+
   // ---- State ----
   let dragging = false;
-  let dragStartX = 0;
-  let dragStartY = 0;
-  let ballStartX = 0;
-  let ballStartY = 0;
-  let lastInteractionAt = Date.now();
+  let dragMoved = false;
+  let lastX = 0;
+  let lastY = 0;
+  let originX = 0;     // where ball sits at mousedown (px relative to window)
+  let originY = 0;
   let idleTimer = null;
   let clickGuardUntil = 0;
 
-  // ---- Idle detection ----
-  const IDLE_AFTER_MS = 5000;
+  const DRAG_THRESHOLD = 4; // px before we treat movement as a drag
+  const IDLE_AFTER_MS = 3000;
   const IDLE_OPACITY = 0.3;
   const ACTIVE_OPACITY = 1.0;
 
+  // ---- Opacity helpers ----
+  function setOpacity(v) {
+    ball.style.opacity = String(v);
+  }
+
   function markActive() {
-    lastInteractionAt = Date.now();
-    ball.style.opacity = String(ACTIVE_OPACITY);
+    setOpacity(ACTIVE_OPACITY);
   }
 
-  function startIdleWatcher() {
-    if (idleTimer) clearInterval(idleTimer);
-    idleTimer = setInterval(() => {
-      const idleFor = Date.now() - lastInteractionAt;
-      if (idleFor >= IDLE_AFTER_MS) {
-        ball.style.opacity = String(IDLE_OPACITY);
-      }
-    }, 1000);
+  function goIdle() {
+    setOpacity(IDLE_OPACITY);
   }
 
-  // ---- Dragging ----
-  function getCurrentPos() {
-    const rect = ball.getBoundingClientRect();
-    return { x: rect.left, y: rect.top };
+  function resetIdleTimer() {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(goIdle, IDLE_AFTER_MS);
   }
 
+  // ---- Drag (IPC-window level, with bounds clamp on main side) ----
   function onMouseDown(e) {
     e.preventDefault();
     dragging = true;
+    dragMoved = false;
     clickGuardUntil = Date.now() + 250;
-    const pos = getCurrentPos();
-    ballStartX = pos.x;
-    ballStartY = pos.y;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
+    lastX = e.screenX;
+    lastY = e.screenY;
     markActive();
-    document.body.style.userSelect = 'none';
+    ball.classList.add('dragging');
   }
 
   function onMouseMove(e) {
     if (!dragging) return;
-    const dx = e.clientX - dragStartX;
-    const dy = e.clientY - dragStartY;
-    const newX = ballStartX + dx;
-    const newY = ballStartY + dy;
-    // Clamp to viewport
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const bw = ball.offsetWidth;
-    const bh = ball.offsetHeight;
-    const clampedX = Math.max(0, Math.min(vw - bw, newX));
-    const clampedY = Math.max(0, Math.min(vh - bh, newY));
-    ball.style.left = clampedX + 'px';
-    ball.style.top = clampedY + 'px';
-    ball.style.right = 'auto';
-    ball.style.bottom = 'auto';
+    const dx = e.screenX - lastX;
+    const dy = e.screenY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) >= DRAG_THRESHOLD) dragMoved = true;
+    lastX = e.screenX;
+    lastY = e.screenY;
+    // Move the entire BrowserWindow via IPC. Main process clamps to screen.
+    bridge.ball.move(dx, dy);
   }
 
-  function onMouseUp() {
+  async function onMouseUp() {
     if (!dragging) return;
     dragging = false;
-    document.body.style.userSelect = '';
-    snapToEdge();
+    ball.classList.remove('dragging');
+    // Get current bounds + screen size in one call
+    const info = await bridge.ball.getBounds();
+    if (!info) return;
+    const cx = info.x + info.size / 2;
+    const cy = info.y + info.size / 2;
+    const snapToLeft = cx < info.screenW / 2;
+    const snapTop = cy < info.screenH / 2;
+    const m = info.margin;
+    const s = info.size;
+    const finalX = snapToLeft ? m : info.screenW - s - m;
+    const finalY = snapTop ? m : info.screenH - s - m;
+    // Tell main to set absolute position
+    bridge.ball.move(finalX - info.x, finalY - info.y);
+    // Then axis-snap for confirmation
+    await bridge.ball.snapToEdge('both');
+    resetIdleTimer();
   }
 
-  function snapToEdge() {
-    const rect = ball.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const bw = rect.width;
-    const bh = rect.height;
-    const centerX = rect.left + bw / 2;
-    const centerY = rect.top + bh / 2;
-    const margin = 16;
-    // Snap X to nearest edge
-    const snapLeft = centerX < vw / 2;
-    const snapX = snapLeft ? margin : vw - bw - margin;
-    // Snap Y to nearest edge
-    const snapTop = centerY < vh / 2;
-    const snapY = snapTop ? margin : vh - bh - margin;
-    ball.style.transition = 'left 200ms ease-out, top 200ms ease-out';
-    ball.style.left = snapX + 'px';
-    ball.style.top = snapY + 'px';
-    setTimeout(() => {
-      ball.style.transition = '';
-    }, 220);
-  }
-
-  // ---- Click / double-click ----
+  // ---- Click (after drag release) ----
   function onClick() {
-    // Suppress click immediately after drag-release
     if (Date.now() < clickGuardUntil) return;
-    if (window.aerie && window.aerie.ball && window.aerie.ball.expand) {
-      window.aerie.ball.expand();
-    }
+    if (dragMoved) return;
+    // Toggle the long-bar dialog
+    const dlg = document.getElementById('ball-dialog');
+    if (!dlg) return;
+    dlg.classList.toggle('show');
+    resetIdleTimer();
   }
 
-  function onDoubleClick() {
-    if (Date.now() < clickGuardUntil) return;
-    // Same as expand — main process will show main window.
-    if (window.aerie && window.aerie.ball && window.aerie.ball.expand) {
-      window.aerie.ball.expand();
-    }
+  // ---- Dialog actions ----
+  function setupDialog() {
+    const dlg = document.getElementById('ball-dialog');
+    if (!dlg) return;
+    dlg.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'close') {
+        dlg.classList.remove('show');
+      } else if (action === 'open-main') {
+        dlg.classList.remove('show');
+        bridge.ball.showMain(false);
+      } else if (action === 'open-wide') {
+        dlg.classList.remove('show');
+        bridge.ball.showMain(true);
+      }
+    });
   }
+
+  // ---- Hover / idle ----
+  ball.addEventListener('mouseenter', () => { markActive(); });
+  ball.addEventListener('mouseleave', () => { resetIdleTimer(); });
 
   // ---- Wire up ----
   ball.addEventListener('mousedown', onMouseDown);
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('mouseup', onMouseUp);
   ball.addEventListener('click', onClick);
-  ball.addEventListener('dblclick', onDoubleClick);
-  ball.addEventListener('mouseenter', markActive);
-  ball.addEventListener('mouseleave', () => {
-    // Reset last interaction so the idle watcher can fade again.
-    lastInteractionAt = Date.now() - IDLE_AFTER_MS + 1000;
-  });
 
   // Keyboard accessibility: Space / Enter triggers expand
   ball.setAttribute('tabindex', '0');
@@ -153,10 +151,7 @@
     }
   });
 
-  // Initial: set default position via CSS to bottom-right; let snapToEdge align.
-  // Wait for layout, then snap to right-bottom edge.
-  requestAnimationFrame(() => {
-    snapToEdge();
-    startIdleWatcher();
-  });
+  // Initial position is set by main.js (bottom-right). Start idle watcher.
+  setupDialog();
+  resetIdleTimer();
 })();

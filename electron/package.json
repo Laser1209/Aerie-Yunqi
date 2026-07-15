@@ -6,7 +6,8 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win --x64",
+    "build:win": "electron-builder --win --x64 && node scripts/post-build-rcedit.js",
+    "build:win:alt": "electron-builder --win --x64 --config.directories.output=dist-final && node scripts/post-build-rcedit.js",
     "lint": "echo 'No JS lint configured'"
   },
   "author": "Laser",

@@ -1,6 +1,6 @@
 ---
 title: 计算机完整配置报告 - Laserの电脑
-date: 2026-07-15
+date: 2026-07-16
 tags:
   - system-config
   - hardware
@@ -19,7 +19,7 @@ status: complete
 # 计算机完整配置报告 — Laserの电脑
 
 > [!abstract] 文档概述
-> 本文档为 Lenovo 82RC（联想拯救者系列）笔记本的完整硬件、软件及开发环境配置报告。生成日期：2026-07-15。
+> 本文档为 Lenovo 82RC（联想拯救者系列）笔记本的完整硬件、软件及开发环境配置报告。生成日期：2026-07-16。
 
 ---
 
@@ -81,16 +81,16 @@ status: complete
 
 | 盘符 | 物理型号 | 容量 | 已用 | 可用 | 文件系统 | 接口 |
 |------|----------|------|------|------|----------|------|
-| **C:** | Samsung MZVLB512HBJQ-000L2 | 256.40 GB | 222.39 GB | ==34.01 GB== | NTFS | NVMe PCIe |
-| **D:** | Samsung MZVLB512HBJQ-000L2 | 280.58 GB | 220.98 GB | 59.60 GB | NTFS | NVMe PCIe |
-| **E:** | SKHynix HFS512GEJ9X115N | 174.65 GB | 150.46 GB | ==24.19 GB== | NTFS | NVMe PCIe |
-| **F:** | SKHynix HFS512GEJ9X115N | 218.32 GB | 215.94 GB | ==2.38 GB== | NTFS | NVMe PCIe |
+| **C:** | Samsung MZVLB512HBJQ-000L2 | 256.40 GB | 231.29 GB | ==25.10 GB== | NTFS | NVMe PCIe |
+| **D:** | Samsung MZVLB512HBJQ-000L2 | 280.58 GB | 173.00 GB | 107.58 GB | NTFS | NVMe PCIe |
+| **E:** | SKHynix HFS512GEJ9X115N | 174.65 GB | 132.30 GB | 42.35 GB | NTFS | NVMe PCIe |
+| **F:** | SKHynix HFS512GEJ9X115N | 218.32 GB | 215.98 GB | ==2.34 GB== | NTFS | NVMe PCIe |
 
 > [!warning] 存储空间告急
 > - **物理盘 1**: Samsung PM991a 512 GB NVMe SSD
 > - **物理盘 2**: SK Hynix 512 GB NVMe SSD
-> - **总容量**: ~954 GB | **总可用**: ~120 GB
-> - C 盘仅剩 34 GB，E 盘仅剩 24 GB，F 盘仅剩 2.38 GB —— **建议尽快清理或扩容！**
+> - **总容量**: ~954 GB | **总可用**: ~177.37 GB
+> - C 盘仅剩 25.10 GB，F 盘仅剩 2.34 GB —— **C/F 盘空间紧张，建议继续清理！**（较上期 D/E 盘有所改善，F 盘持续告急）
 
 ### 1.6 显示器
 
@@ -123,6 +123,7 @@ status: complete
 | TAP-Windows Adapter V9 | — | 虚拟 VPN | — | 00-FF-FB-DB-5E-F3 | 已断开 |
 | VMware Virtual Adapter VMnet1 | VMware | 虚拟网络 | 100 Mbps | 00-50-56-C0-00-01 | 已连接 |
 | VMware Virtual Adapter VMnet8 | VMware | 虚拟网络 | 100 Mbps | 00-50-56-C0-00-08 | 已连接 |
+| Radmin VPN | Famatech | 虚拟 VPN | — | — | 未连接 |
 
 ---
 
@@ -139,6 +140,7 @@ status: complete
 | **用户语言** | zh-CN |
 | **时区** | (UTC+08:00) 北京，重庆，香港特别行政区，乌鲁木齐 |
 | **主机名** | Laserの电脑 |
+| **安装日期** | 2024-12-16 |
 
 ---
 
@@ -154,7 +156,7 @@ status: complete
 | **DHCP 服务器** | 192.168.10.1 |
 | **DNS 服务器** | 192.168.10.1 |
 | **DNS 后缀** | wifi |
-| **DHCP 租约** | 2026-07-15 05:26 ~ 2026-07-16 05:26 |
+| **DHCP 租约** | 2026-07-15 05:26 ~ 2026-07-16 17:26 |
 | **节点类型** | 混合 |
 | **IP 路由** | 已禁用 |
 | **WINS 代理** | 已禁用 |
@@ -163,11 +165,12 @@ status: complete
 
 | 适配器 | IPv4 地址 | 子网掩码 | 网关 | 说明 |
 |--------|-----------|----------|------|------|
-| VMware VMnet1 | 169.254.49.79 (APIPA) | 255.255.0.0 | — | 仅主机模式 |
-| VMware VMnet8 | 169.254.121.24 (APIPA) | 255.255.0.0 | — | NAT 模式 |
+| VMware VMnet1 | APIPA | 255.255.0.0 | — | 仅主机模式 (Up) |
+| VMware VMnet8 | APIPA | 255.255.0.0 | — | NAT 模式 (Up) |
+| Radmin VPN | — | — | — | 已安装但未连接 |
 
-> [!bug] VMware 虚拟网卡警告
-> VMnet1 和 VMnet8 均使用 APIPA 自动配置地址（169.254.x.x），说明 VMware DHCP 服务可能未正常启动或虚拟网络未正确配置。
+> [!warning] VMware 虚拟网卡
+> VMnet1 和 VMnet8 均已启用 (Up) 但使用 APIPA 自动配置地址（169.254.x.x），说明 VMware DHCP 服务可能未正常启动或虚拟网络未正确配置。
 
 ---
 
@@ -206,7 +209,7 @@ status: complete
 | **.NET SDK** | 未安装 | — | ❌ 未找到 |
 
 > [!warning] 缺少 .NET SDK
-> 系统安装了多个 .NET Runtime（3.1/6.0/8.0/10.0），但未安装 .NET SDK。如需进行 .NET 开发，请安装对应 SDK。
+> 系统安装了多个 .NET Runtime（3.1.32/6.0.33/8.0.6/10.0.2），但未安装 .NET SDK。如需进行 .NET 开发，请安装对应 SDK。
 
 > [!warning] Docker Desktop 未启动
 > Docker 29.4.3 已安装但守护进程未运行。启动 Docker Desktop 后方可使用。
@@ -229,6 +232,7 @@ status: complete
   C:\WINDOWS\System32\Wbem
   C:\WINDOWS\System32\WindowsPowerShell\v1.0\
   C:\WINDOWS\System32\OpenSSH\
+  C:\WINDOWS\system32\downlevel
 
 优先级 4 (三方工具):
   C:\ProgramData\chocolatey\bin (Chocolatey)
@@ -256,6 +260,11 @@ status: complete
 > [!warning] 路径冲突风险
 > `C:\Program Files\Common Files\Oracle\Java\javapath` 在 PATH 中优先级高于 `C:\Program Files\Microsoft\jdk-17.0.8.101-hotspot\bin`，意味着 CLI 中使用 `java` 命令时默认调用 Oracle JDK 17.0.1（而非较新的 Microsoft OpenJDK 17.0.8.1）。
 
+> [!bug] PATH 新增项与异常
+> - 新增 `C:\WINDOWS\system32\downlevel`（系统目录）
+> - 新增 Trae CN 内部路径：Python debugpy、ripgrep
+> - 存在疑似损坏的 Intel 编译器路径：`%I TEL_DEV_REDIST%redist\intel64\compiler`
+
 ### 5.3 Node.js 全局包
 
 | 包名 | 版本 | 用途 |
@@ -274,14 +283,18 @@ status: complete
 
 ### 5.4 Python 环境
 
-**已安装的主要包（前 30 项）:**
+**已安装的主要包（前 35 项）:**
 
 | 包名 | 版本 | 用途 |
 |------|------|------|
 | Flask | 2.3.3 | Web 框架 |
 | Flask-Cors | 4.0.0 | 跨域支持 |
+| Flask-Session | 0.8.0 | 服务端 Session |
 | anthropic | 0.86.0 | AI SDK |
+| aiohttp | 3.14.1 | 异步 HTTP 客户端 |
 | altair | 6.1.0 | 数据可视化 |
+| APScheduler | 3.11.3 | 定时任务调度 |
+| beautifulsoup4 | 4.15.0 | HTML 解析 |
 | coverage | 7.14.1 | 代码覆盖率 |
 | cryptography | 48.0.0 | 加密库 |
 | flatbuffers | 25.12.19 | 序列化 |
@@ -292,16 +305,22 @@ status: complete
 | annotated-types | 0.7.0 | 类型注解 |
 | anyio | 4.13.0 | 异步 I/O |
 | attrs | 26.1.0 | 类装饰器 |
+| cachetools | 7.1.1 | 缓存工具 |
 | certifi | 2026.2.25 | SSL 证书 |
 | cffi | 2.0.0 | C 外部函数接口 |
 | charset-normalizer | 3.4.6 | 字符编码检测 |
 | click | 8.4.1 | CLI 工具 |
+| colorama | 0.4.6 | 终端色彩 |
 | contourpy | 1.3.3 | 等值线计算 |
 | cycler | 0.12.1 | 循环样式 |
+| defusedxml | 0.7.1 | XML 安全解析 |
 | distro | 1.9.0 | Linux 发行版信息 |
 | docstring_parser | 0.17.0 | 文档字符串解析 |
 | blinker | 1.9.0 | 信号库 |
 | cachelib | 0.13.0 | 缓存库 |
+
+> [!note] 变更记录
+> 较上期新增：aiohttp、aiohappyeyeballs、aiosignal、annotated-doc、APScheduler、beautifulsoup4、cachetools、colorama、defusedxml、Flask-Session、frozenlist 等包。
 
 ### 5.5 Git 全局配置
 
@@ -363,7 +382,17 @@ status: complete
 | WinSCP | 6.5.6 | SFTP/FTP 客户端 |
 | WinRAR | 7.12 | 压缩工具 |
 
-### 6.2 设计 & 创意
+### 6.2 效率 & 办公
+
+| 软件 | 版本 |
+|------|------|
+| Microsoft Office LTSC 2024 | 16.0.17932.20842 |
+| Microsoft OneDrive | 26.119.0622.0003 |
+| Office Raccoon | 0.7.45 |
+| Marvis | 1.60.11.12 |
+| 小云雀 | 1.0.53 |
+
+### 6.3 设计 & 创意
 
 | 软件 | 版本 |
 |------|------|
@@ -374,7 +403,7 @@ status: complete
 | FontCreator | 15.0.0.2927 |
 | FL Studio | 21.0.3 |
 
-### 6.3 社交通讯
+### 6.4 社交通讯
 
 | 软件 | 版本 |
 |------|------|
@@ -383,7 +412,7 @@ status: complete
 | 腾讯会议 | 3.43.21.403 |
 | 网易云音乐 | 3.1.35.205293 |
 
-### 6.4 游戏 & 游戏平台
+### 6.5 游戏 & 游戏平台
 
 | 软件 | 版本 |
 |------|------|
@@ -391,25 +420,31 @@ status: complete
 | EA App | 13.566.0.6079 |
 | Epic Online Services | 4.1.0 |
 | WeGame | — |
+| Paradox Launcher | 2.4.0 |
+| REDlauncher | 4.2.0.4 |
 | 完美世界竞技平台 | 1.0.26070912 |
+| 5EClient | 8.2.6 |
 
-### 6.5 系统工具 & 驱动
+> [!note] 新增游戏
+> Ready or Not、WorldBox - God Simulator、GN - The Playing Room、BOMBANANA! Demo、雀魂麻将
+
+### 6.6 系统工具 & 驱动
 
 | 软件 | 版本 |
 |------|------|
 | Google Chrome | 150.0.7871.115 |
 | Microsoft Edge | 150.0.4078.65 |
-| Microsoft Office LTSC 2024 | 16.0.17932.20842 |
 | Legion Zone | 2.0.26.6085 |
 | 联想电脑管家 | 5.1.190.5202 |
 | NVIDIA App | 11.0.7.247 |
 | Logitech G502 Driver | 1.0.0.40 |
 | SteelSeries GG | 110.0.0 |
+| Microsoft Xbox 360 Accessories | 1.20.146.0 |
+| Microsoft GameInput | 3.3.221.0 |
 | Clash Verge | 2.4.9 |
 | Watt Toolkit | 3.0.1620.0 |
 | 雷神加速器 | 11.99.0.9 |
 | Radmin VPN | 2.0.9 |
-| 5EClient | 8.2.6 |
 | 阿里云客户端 | 2.3.0 |
 | 百度网盘 | 8.5.5 |
 | EV录屏 | 4.2.4 |
@@ -420,7 +455,7 @@ status: complete
 ## 七、当前项目结构
 
 ```
-E:\WeChat_Agent_Smart_Auto_reply\
+E:\Agent_reply\
 ├── documents/                          (文档目录)
 │   └── 计算机完整配置报告_Laser电脑.md  (本文件)
 ├── .uploads/                           (上传文件)
@@ -440,10 +475,10 @@ E:\WeChat_Agent_Smart_Auto_reply\
 | 操作系统激活 | ✅ | Windows 11 Pro 25H2 正常 |
 | 显卡驱动 | ✅ | NVIDIA 595.79，日期较新 |
 | 内存双通道 | ✅ | 2×8GB DDR5 @ 4800MHz 正常 |
-| 存储剩余空间 | ❌ | C/E/F 盘均严重不足 |
+| 存储剩余空间 | ⚠️ | C 盘 25.10 GB / F 盘 2.34 GB 紧张 |
 | 网络连通性 | ✅ | 以太网正常，DHCP 正常 |
-| Wi-Fi 连接 | ⚠️ | Wi-Fi 6E 适配器已断开 |
-| VMware 网络 | ⚠️ | VMnet 使用 APIPA，DHCP 可能异常 |
+| Wi-Fi 连接 | ⚠️ | Wi-Fi 6E 适配器已断开（APIPA 地址） |
+| VMware 网络 | ⚠️ | VMnet 已启用但使用 APIPA，DHCP 可能异常 |
 | Java 开发环境 | ⚠️ | 双 JDK 共存，JAVA_HOME 未设 |
 | Node.js 开发环境 | ✅ | v24.14.1 + npm 11.11.0 正常 |
 | Python 开发环境 | ✅ | 3.14.3 + pip 26.1.2 正常 |
@@ -456,20 +491,22 @@ E:\WeChat_Agent_Smart_Auto_reply\
 ### 8.2 风险与建议
 
 > [!danger] 高优先级
-> - **磁盘空间严重不足**: C 盘仅剩 34 GB，F 盘仅剩 2.38 GB —— 随时可能影响系统运行和软件安装。建议清理临时文件、移动大文件到外置存储。
+> - **F 盘空间极其紧张**: F 盘仅剩 2.34 GB，随时可能触发写入异常。建议将大型文件/游戏迁移到 D 盘（现有 107 GB 可用）。
+> - **C 盘空间紧张**: C 盘仅剩 25.10 GB，Windows 更新和临时文件可能快速消耗剩余空间。
 > - **JAVA_HOME 未设置**: 部分 Java 构建工具可能无法正常工作。
 
 > [!warning] 中优先级
 > - **VMware 虚拟网络异常**: VMnet1/8 使用 APIPA 地址，虚拟机可能无法正常上网。
 > - **Docker 未启动**: 容器化开发和测试无法进行。
 > - **PATH 中双 JDK 冲突**: Oracle JDK 17.0.1 优先级高于 Microsoft OpenJDK 17.0.8.1。
+> - **PATH 中疑似损坏条目**: Intel 编译器路径不完整。
 
 > [!tip] 建议改进
+> - 将部分 Steam 游戏库迁移到 D 盘以释放 F 盘空间
 > - 安装 Go（如需 Go 开发）
 > - 安装 .NET SDK（与现有 Runtime 配套）
 > - 设置 ANDROID_HOME（如需移动端开发）
 > - 设置 JAVA_HOME 指向主用 JDK
-> - 清理磁盘空间或添加外置存储
 > - 启动 Docker Desktop（如需使用）
 
 ---
@@ -481,7 +518,7 @@ E:\WeChat_Agent_Smart_Auto_reply\
 | **CPU 性能** | ★★★★★ | i7-12700H 14核20线程，性能强劲 |
 | **内存容量** | ★★★☆☆ | 16GB DDR5 日常够用，大型项目偏紧 |
 | **GPU 性能** | ★★★★☆ | RTX 3050 Ti 4GB，入门光追 + CUDA |
-| **存储空间** | ★★☆☆☆ | 总可用仅 ~120 GB，急需清理 |
+| **存储空间** | ★★★☆☆ | 总可用 ~177 GB，F 盘持续告急需关注 |
 | **显示素质** | ★★★★★ | 2K 165Hz 高刷屏，色彩优秀 |
 | **网络配置** | ★★★★☆ | 千兆有线 + Wi-Fi 6E 齐全 |
 | **系统版本** | ★★★★★ | Windows 11 25H2，非常前沿 |
@@ -491,6 +528,6 @@ E:\WeChat_Agent_Smart_Auto_reply\
 ---
 
 > [!quote] 总结
-> 这台拯救者 82RC 配置均衡 —— i7-12700H + RTX 3050 Ti + 2K 165Hz 屏，开发与游戏兼顾。开发环境覆盖了 Java、Python、Node.js、C++、微信小程序、鸿蒙等多条技术栈，工具链较完整。主要短板是存储空间告急（总可用仅约 120 GB），以及部分开发环境变量和 SDK 缺失。建议优先清理磁盘空间并补全环境变量配置。
+> 这台拯救者 82RC 配置均衡 —— i7-12700H + RTX 3050 Ti + 2K 165Hz 屏，开发与游戏兼顾。开发环境覆盖了 Java、Python、Node.js、C++、微信小程序、鸿蒙等多条技术栈，工具链较完整。D/E 盘空间较上期有所改善（总可用 ~177 GB vs 上期 ~120 GB），但 F 盘仅剩 2.34 GB 持续告急，建议迁移游戏库到 D 盘。部分开发环境变量和 SDK 缺失仍需补全。
 >
-> — 报告自动生成于 2026-07-15，Trae AI Agent
+> — 报告自动生成于 2026-07-16，Trae AI Agent

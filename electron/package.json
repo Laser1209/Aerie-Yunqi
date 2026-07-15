@@ -20,7 +20,8 @@
     "appId": "com.laser.aerie",
     "productName": "Aerie · 云栖",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "builder"
     },
     "files": [
       "src/**/*",

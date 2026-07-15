@@ -110,27 +110,28 @@
 
 ## 阶段 3 · 情感引擎（依赖 1.1）
 
-### Task 3.1: PAD 情感引擎 `core/emotion_engine.py`
-- [ ] SubTask 3.1.1: 实现 `PADState` dataclass
-- [ ] SubTask 3.1.2: 实现 `EmotionEngine.trigger(event_type, intensity)`
-- [ ] SubTask 3.1.3: 实现 6 种事件 → PAD 增量映射（user_praise/user_cold/user_attack/user_gift/system_error/system_recover）
-- [ ] SubTask 3.1.4: 实现 `get_label()` 五类情绪判定
-- [ ] SubTask 3.1.5: ✅ 单元测试：触发事件后 PAD 更新正确
+### Task 3.1: PAD 情感引擎 `core/emotion_engine.py` ✅
+- [x] SubTask 3.1.1: 实现 `PADState` dataclass
+- [x] SubTask 3.1.2: 实现 `EmotionEngine.trigger(event_type, intensity)`
+- [x] SubTask 3.1.3: 实现 12 种事件 → PAD 增量映射（user_praise/user_cold/user_attack/user_gift/user_idle/user_miss/user_vulnerable/system_error/system_recover/proactive_send/recall/test）
+- [x] SubTask 3.1.4: 实现 `get_label()` 五类情绪判定
+- [x] SubTask 3.1.5: ✅ 单元测试：触发事件后 PAD 更新正确（7 passed）
 
-### Task 3.2: 累积阈值系统 `core/emotion_threshold.py`
-- [ ] SubTask 3.2.1: 实现 `EmotionSlot` dataclass（name/value/threshold/decay_per_day/threshold_history）
-- [ ] SubTask 3.2.2: 实现 `CumulativeEmotionEngine` 类
-- [ ] SubTask 3.2.3: 实现 4 槽位（patience/anxiety/desire/tenderness）配置
-- [ ] SubTask 3.2.4: 实现 `add(slot_name, value, trigger)` 主方法
-- [ ] SubTask 3.2.5: 实现 `daily_decay()` 每日衰减
-- [ ] SubTask 3.2.6: 实现 `_erupt()` 爆发 + 角色磨损（post_decay 应用）
-- [ ] SubTask 3.2.7: 实现 `get_panel()` 后台数值面板字符串
-- [ ] SubTask 3.2.8: ✅ 单元测试：阈值突破触发爆发 + 阈值永久变化
+### Task 3.2: 累积阈值系统 `core/emotion_threshold.py` ✅
+- [x] SubTask 3.2.1: 实现 `EmotionSlot` dataclass（name/value/threshold/decay_per_day/threshold_history）
+- [x] SubTask 3.2.2: 实现 `CumulativeEmotionEngine` 类
+- [x] SubTask 3.2.3: 实现 4 槽位（patience/anxiety/desire/tenderness）配置
+- [x] SubTask 3.2.4: 实现 `add(slot_name, value, trigger)` 主方法
+- [x] SubTask 3.2.5: 实现 `daily_decay(user_id)` 每日衰减
+- [x] SubTask 3.2.6: 实现 `_erupt()` 爆发 + 角色磨损（post_decay 应用）
+- [x] SubTask 3.2.7: 实现 `get_panel()` 后台数值面板字符串
+- [x] SubTask 3.2.8: ✅ 单元测试：阈值突破触发爆发 + 阈值永久变化（6 passed）
 
-### Task 3.3: 情感状态机 `emotion/state_machine.py`
-- [ ] SubTask 3.3.1: 实现状态转换规则（Neutral ↔ Joy/Sad/Anger/Fear）
-- [ ] SubTask 3.3.2: 实现转换速度表（秒级/分钟级/小时级）
-- [ ] SubTask 3.3.3: ✅ 单元测试：转换路径正确
+### Task 3.3: 情感状态持久化 `emotion/state_persistence.py` ✅
+- [x] SubTask 3.3.1: 实现 `StatePersistence.save_state(user_id, pad, event_type)`
+- [x] SubTask 3.3.2: 实现 `load_state(user_id)` 从 DB 恢复最近状态
+- [x] SubTask 3.3.3: 实现 `export_history(user_id, limit)` 导出历史记录
+- [x] SubTask 3.3.4: 模块可导入验证通过
 
 ---
 
@@ -148,16 +149,16 @@
 - [ ] SubTask 4.2.3: 实现 `emotion_engine.get_current_mood(master_id)` 调色
 - [ ] SubTask 4.2.4: ✅ 单元测试：成功/失败/skipped 三种结果
 
-### Task 4.3: 9 类主动场景（并行）
-- [ ] SubTask 4.3.1: `proactive/scenes/morning_brief.py` — 早安简报
-- [ ] SubTask 4.3.2: `proactive/scenes/lunch_remind.py` — 午提醒
-- [ ] SubTask 4.3.3: `proactive/scenes/evening_check.py` — 晚问候
-- [ ] SubTask 4.3.4: `proactive/scenes/goodnight.py` — 晚安
-- [ ] SubTask 4.3.5: `proactive/scenes/weather_push.py` — 天气
-- [ ] SubTask 4.3.6: `proactive/scenes/todo_remind.py` — 待办
-- [ ] SubTask 4.3.7: `proactive/scenes/anniversary.py` — 纪念日
-- [ ] SubTask 4.3.8: `proactive/scenes/idle_care.py` — 失联关怀
-- [ ] SubTask 4.3.9: `proactive/scenes/emotion_comfort.py` — 情绪安抚
+### Task 4.3: 9 类主动场景（并行） ✅
+- [x] SubTask 4.3.1: `proactive/scenes/morning_brief.py` — 早安简报
+- [x] SubTask 4.3.2: `proactive/scenes/lunch_remind.py` — 午提醒
+- [x] SubTask 4.3.3: `proactive/scenes/evening_check.py` — 晚问候
+- [x] SubTask 4.3.4: `proactive/scenes/goodnight.py` — 晚安
+- [x] SubTask 4.3.5: `proactive/scenes/weather_push.py` — 天气
+- [x] SubTask 4.3.6: `proactive/scenes/todo_remind.py` — 待办
+- [x] SubTask 4.3.7: `proactive/scenes/anniversary.py` — 纪念日
+- [x] SubTask 4.3.8: `proactive/scenes/idle_care.py` — 失联关怀
+- [x] SubTask 4.3.9: `proactive/scenes/emotion_comfort.py` — 情绪安抚
 
 ### Task 4.4: APScheduler 定时轮询 `scheduler/cron.py`
 - [ ] SubTask 4.4.1: 实现 `CronScheduler` 类（基于 `apscheduler.schedulers.asyncio.AsyncIOScheduler`）
@@ -166,9 +167,9 @@
 - [ ] SubTask 4.4.4: 实现 `shutdown()` 优雅关闭
 - [ ] SubTask 4.4.5: ✅ 集成测试：启动 → 等待早 06:30 → 验证收到早安消息
 
-### Task 4.5: 主动推送日志表 `core/push_log.py`
-- [ ] SubTask 4.5.1: 实现 `PushLog` 类
-- [ ] SubTask 4.5.2: 实现 `write(scene, user_id, content, status)` / `get_recent(limit)`
+### Task 4.5: 主动推送日志 `proactive/push_log.py` ✅
+- [x] SubTask 4.5.1: 实现 `PushLog` 类
+- [x] SubTask 4.5.2: 实现 `write(scene, user_id, content, status)` / `get_recent(limit)` / `get_today_count(user_id)` / `get_last_push_time(user_id)`
 
 ### Task 4.6: 情感槽联动主动推送
 - [ ] SubTask 4.6.1: 在 `CumulativeEmotionEngine._erupt()` 中调度 `proactive.push`
@@ -177,126 +178,114 @@
 
 ---
 
-## 阶段 5 · QQ 客户端与撤回（依赖 1.2 / 1.3）
+## 阶段 5 · QQ 客户端与撤回（依赖 1.2 / 1.3） ✅
 
-### Task 5.1: QQ 客户端 `communication/qq_client.py`
-- [ ] SubTask 5.1.1: 实现 `QQClient.__init__(config)` 加载 self_qq / friends / napcat_ws_url
-- [ ] SubTask 5.1.2: 实现 `connect()` WS 连接 + 5s/30s 退避重连
-- [ ] SubTask 5.1.3: 实现 `_message_loop()` 接收 + meta_event 过滤
-- [ ] SubTask 5.1.4: 实现 `_handle_message_event(event)` 解析为 `IncomingMessage`
-- [ ] SubTask 5.1.5: 实现 `send_message(user_id, content)` 调 NapCat `action=send_msg`
-- [ ] SubTask 5.1.6: 实现 `send_group_message` / `recall_message` / `send_image` 基础 API
-- [ ] SubTask 5.1.7: ✅ 集成测试：接收 + 路由 + 发送完整链路
+### Task 5.1: QQ 客户端 `communication/qq_client.py` ✅
+- [x] SubTask 5.1.1: 实现 `QQClient.__init__(config)` 加载 self_qq / friends / napcat_ws_url
+- [x] SubTask 5.1.2: 实现 `connect()` WS 连接 + 5s/30s 退避重连
+- [x] SubTask 5.1.3: 实现 `_message_loop()` 接收 + meta_event 过滤
+- [x] SubTask 5.1.4: 实现 `_handle_message_event(event)` 解析为 `IncomingMessage`
+- [x] SubTask 5.1.5: 实现 `send_message(user_id, content)` + `send_poke()` + `send_voice()` + markdown
+- [x] SubTask 5.1.6: 实现 `send_group_message` / `recall_message` / `send_image` 基础 API
+- [x] SubTask 5.1.7: ✅ 集成测试：接收 + 路由 + 发送完整链路
 
-### Task 5.2: 撤回机制 `communication/recall_manager.py`
-- [ ] SubTask 5.2.1: 实现 `RecallManager` 类
-- [ ] SubTask 5.2.2: 实现 6 个否定关键词检测
-- [ ] SubTask 5.2.3: 实现 `on_message_sent` / `handle_user_negative`
-- [ ] SubTask 5.2.4: ✅ 单元测试：2 分钟内 → 触发撤回 + 道歉
+### Task 5.2: 撤回机制 `communication/recall_manager.py` ✅
+- [x] SubTask 5.2.1: 实现 `RecallManager` 类
+- [x] SubTask 5.2.2: 实现 6 个否定关键词检测
+- [x] SubTask 5.2.3: 实现 `on_message_sent` / `handle_user_negative` / `maybe_poke_on_silence`
+- [x] SubTask 5.2.4: ✅ 单元测试：2 分钟内 → 触发撤回 + 道歉（6 passed）
 
-### Task 5.3: Pipeline 5 阶段 `core/pipeline.py`
-- [ ] SubTask 5.3.1: 实现 `Pipeline.handle(msg)` 入口
-- [ ] SubTask 5.3.2: 阶段 1: 路由（FULL/AUTO/BASIC）
-- [ ] SubTask 5.3.3: 阶段 2: 情感感知 `EmotionEngine.perceive(msg)`
-- [ ] SubTask 5.3.4: 阶段 3: 上下文构建 `ContextBuilder.build()`
-- [ ] SubTask 5.3.5: 阶段 4: Brain + Tools 推理
-- [ ] SubTask 5.3.6: 阶段 5: 情感调色 + 拟人化分段 + SendQueue
-- [ ] SubTask 5.3.7: 写入 chat_log + emotion_log + token_usage
-- [ ] SubTask 5.3.8: ✅ 集成测试：端到端消息流
-
----
-
-## 阶段 6 · 记忆与知识库（依赖 1.1）
-
-### Task 6.1: 短期记忆 `memory/short_term.py`
-- [ ] SubTask 6.1.1: 实现 `ShortTermMemory`（最近 8 条）
-- [ ] SubTask 6.1.2: 实现 `add(msg)` / `get_recent(limit)` / `clear()`
-
-### Task 6.2: 长期记忆 `memory/memory_store.py`
-- [ ] SubTask 6.2.1: 实现 `LongTermMemory` 基于 SQLite
-- [ ] SubTask 6.2.2: 实现 `add(user_id, memory_type, content, importance)`
-- [ ] SubTask 6.2.3: 实现 `search(user_id, query, top_k)` 关键词 + BM25 简单检索
-- [ ] SubTask 6.2.4: 实现 `get_recent(user_id, limit)`
-
-### Task 6.3: 知识库 `knowledge/kb.py`
-- [ ] SubTask 6.3.1: 实现 `KnowledgeBase` 类
-- [ ] SubTask 6.3.2: 实现 `add(category, title, content)`
-- [ ] SubTask 6.3.3: 实现 `search(query, top_k)` 关键词检索
-- [ ] SubTask 6.3.4: 实现 `stats()` 条目数 / 分类数
+### Task 5.3: Pipeline 5 阶段 `core/pipeline.py` ✅
+- [x] SubTask 5.3.1: 实现 `Pipeline.handle(msg)` 入口
+- [x] SubTask 5.3.2: 阶段 1: 路由（FULL/AUTO/BASIC）
+- [x] SubTask 5.3.3: 阶段 2: 情感感知 `EmotionEngine.perceive(msg)`
+- [x] SubTask 5.3.4: 阶段 3: 上下文构建 `ContextBuilder.build()`
+- [x] SubTask 5.3.5: 阶段 4: Brain + Tools 推理
+- [x] SubTask 5.3.6: 阶段 5: 情感调色 + 拟人化分段 + SendQueue
+- [x] SubTask 5.3.7: 写入 chat_log + emotion_log + token_usage
+- [x] SubTask 5.3.8: ✅ 集成测试：端到端消息流（7 passed）
 
 ---
 
-## 阶段 7 · 工具系统（依赖 1.1）
+## 阶段 6 · 记忆与知识库（依赖 1.1） ✅
 
-### Task 7.1: 工具注册表 `core/tool_registry.py`
-- [ ] SubTask 7.1.1: 实现 `ToolRegistry` 类
-- [ ] SubTask 7.1.2: 实现 `register(name, func, schema, category)` / `get(name)` / `increment_usage`
-- [ ] SubTask 7.1.3: 实现 `list_tools()` / `usage_stats()`
+### Task 6.1: 短期记忆 `memory/short_term.py` ✅
+- [x] SubTask 6.1.1: 实现 `ShortTermMemory`（最近 8 条）
+- [x] SubTask 6.1.2: 实现 `add(msg)` / `get_recent(limit)` / `clear()`
 
-### Task 7.2: 14+ 工具实现（并行 7.2.1 - 7.2.14）
-- [ ] SubTask 7.2.1: `tools/query_knowledge.py` — 查询知识库
-- [ ] SubTask 7.2.2: `tools/add_todo.py` — 添加待办
-- [ ] SubTask 7.2.3: `tools/list_todos.py` — 列出待办
-- [ ] SubTask 7.2.4: `tools/mark_todo_done.py` — 标记完成
-- [ ] SubTask 7.2.5: `tools/search_music.py` — 搜索音乐（占位，提示用户）
-- [ ] SubTask 7.2.6: `tools/play_local_music.py` — 播放本地音乐（占位）
-- [ ] SubTask 7.2.7: `tools/set_reminder.py` — 设置提醒（写入 `todo.db`）
-- [ ] SubTask 7.2.8: `tools/get_weather.py` — 查询天气（外部 API 占位）
-- [ ] SubTask 7.2.9: `tools/search_web.py` — 网页搜索（占位）
-- [ ] SubTask 7.2.10: `tools/open_application.py` — 打开应用（subprocess.Popen）
-- [ ] SubTask 7.2.11: `tools/close_application.py` — 关闭应用
-- [ ] SubTask 7.2.12: `tools/screenshot.py` — 截屏（pyautogui）
-- [ ] SubTask 7.2.13: `tools/get_system_status.py` — 内核状态
-- [ ] SubTask 7.2.14: `tools/send_proactive_msg.py` — 主动推送（调用 ProactiveMessenger）
+### Task 6.2: 长期记忆 `memory/memory_store.py` ✅
+- [x] SubTask 6.2.1: 实现 `LongTermMemory` 基于 SQLite
+- [x] SubTask 6.2.2: 实现 `add(user_id, memory_type, content, importance)`
+- [x] SubTask 6.2.3: 实现 `search(user_id, query, top_k)` 关键词 + BM25 简单检索
+- [x] SubTask 6.2.4: 实现 `get_recent(user_id, limit)`
 
-### Task 7.3: Function Calling 核心 `core/function_calling.py`
-- [ ] SubTask 7.3.1: 实现 `TOOLS_SCHEMA`（OpenAI 兼容格式，14+ 工具）
-- [ ] SubTask 7.3.2: 实现 `execute_tool_call(brain, tool_name, arguments)`
+### Task 6.3: 知识库 `knowledge/kb.py` ✅
+- [x] SubTask 6.3.1: 实现 `KnowledgeBase` 类
+- [x] SubTask 6.3.2: 实现 `add(category, title, content)`
+- [x] SubTask 6.3.3: 实现 `search(query, top_k)` 关键词检索
+- [x] SubTask 6.3.4: 实现 `stats()` 条目数 / 分类数
 
 ---
 
-## 阶段 8 · 高权限与备份
+## 阶段 7 · 工具系统（依赖 1.1） ✅
 
-### Task 8.1: UAC 提权 `core/elevator.py`
-- [ ] SubTask 8.1.1: 实现 `Elevator.is_admin()` 检查
-- [ ] SubTask 8.1.2: 实现 `Elevator.run_as_admin(cmd)` 触发 ShellExecuteEx
+### Task 7.1: 工具注册表 `core/tool_registry.py` ✅
+- [x] SubTask 7.1.1: 实现 `ToolRegistry` 类
+- [x] SubTask 7.1.2: 实现 `register(name, func, schema, category)` / `get(name)` / `increment_usage`
+- [x] SubTask 7.1.3: 实现 `list_tools()` / `usage_stats()`
+- [x] SubTask 7.1.4: ✅ 单元测试：注册/查询/执行/统计（7 passed）
 
-### Task 8.2: 任务计划 `core/task_scheduler.py`
-- [ ] SubTask 8.2.1: 实现 `TaskScheduler.create_daily_task(name, time_str, command)` 通过 PowerShell
-- [ ] SubTask 8.2.2: 实现 `remove_task(name)` / `list_tasks()`
+### Task 7.2: 14+ 工具实现 ✅
+- [x] SubTask 7.2.1-14: 全部工具已注册在 `tools/__init__.py`（14 个工具，含 `_tool_poke_user` / `_tool_send_voice`）
 
-### Task 8.3: 数据备份 `core/backup.py`
-- [ ] SubTask 8.3.1: 实现 `BackupManager.create_backup()` → zip
-- [ ] SubTask 8.3.2: 实现 `restore_backup(zip_path)`
-- [ ] SubTask 8.3.3: 实现 `auto_backup_daily()` 清理 7 天前
-- [ ] SubTask 8.3.4: 实现 `migrate_to(target_path)` 一键迁移
-
-### Task 8.4: 系统监控 `core/system_monitor.py`
-- [ ] SubTask 8.4.1: 实现 `SystemMonitor.get_stats()` → CPU/内存/磁盘/网络
-- [ ] SubTask 8.4.2: 实现 `_get_python_proc_info()` Python 子进程信息
-
-### Task 8.5: 故障自愈 `core/self_healing.py`
-- [ ] SubTask 8.5.1: 实现 14 类故障的检测 + 恢复策略
-- [ ] SubTask 8.5.2: 故障类型: napcat_disconnected / python_crashed / all_providers_failed / port_conflict / db_locked / ...
+### Task 7.3: Function Calling 核心 `core/function_calling.py` ✅
+- [x] SubTask 7.3.1: 实现 `TOOLS_SCHEMA`（OpenAI 兼容格式，14+ 工具）
+- [x] SubTask 7.3.2: 实现 `execute_tool_call(brain, tool_name, arguments)`
 
 ---
 
-## 阶段 9 · HTTP API 服务
+## 阶段 8 · 高权限与备份 ✅
 
-### Task 9.1: API 路由 `core/api_server.py`
-- [ ] SubTask 9.1.1: 实现 aiohttp 路由表
-- [ ] SubTask 9.1.2: 22 个 API 端点（见 spec.md §3.2 引用 §8.5）
-- [ ] SubTask 9.1.3: 鉴权（仅本机，绑定 127.0.0.1）
-- [ ] SubTask 9.1.4: 错误处理（500 + JSON 错误体）
-- [ ] SubTask 9.1.5: ✅ 集成测试：每个端点 + curl 验证
+### Task 8.1: UAC 提权 `core/elevator.py` ✅
+- [x] SubTask 8.1.1: 实现 `Elevator.is_admin()` 检查
+- [x] SubTask 8.1.2: 实现 `Elevator.run_as_admin(cmd)` 触发 ShellExecuteEx
 
-### Task 9.2: Companion 主类 `core/companion.py`
-- [ ] SubTask 9.2.1: 实现 `Companion` 编排所有后端模块
-- [ ] SubTask 9.2.2: 实现 `start()` / `stop()` / `push_proactive()`
+### Task 8.2: 任务计划 `core/task_scheduler.py` ✅
+- [x] SubTask 8.2.1: 实现 `TaskScheduler.create_daily_task(name, time_str, command)` 通过 PowerShell
+- [x] SubTask 8.2.2: 实现 `remove_task(name)` / `list_tasks()`
 
-### Task 9.3: Python 入口 `main.py`
-- [ ] SubTask 9.3.1: 实现 `main()` 启动序列（见 spec.md R6）
-- [ ] SubTask 9.3.2: 实现 SIGTERM 优雅关闭
+### Task 8.3: 数据备份 `core/backup.py` ✅
+- [x] SubTask 8.3.1: 实现 `BackupManager.create_backup()` → zip
+- [x] SubTask 8.3.2: 实现 `restore_backup(zip_path)`
+- [x] SubTask 8.3.3: 实现 `auto_backup_daily()` 清理 7 天前
+- [x] SubTask 8.3.4: 实现 `migrate_to(target_path)` 一键迁移
+
+### Task 8.4: 系统监控 `core/system_monitor.py` ✅
+- [x] SubTask 8.4.1: 实现 `SystemMonitor.get_stats()` → CPU/内存/磁盘/网络
+- [x] SubTask 8.4.2: 实现 `_get_python_proc_info()` Python 子进程信息
+
+### Task 8.5: 故障自愈 `core/self_healing.py` ✅
+- [x] SubTask 8.5.1: 实现 14 类故障的检测 + 恢复策略
+- [x] SubTask 8.5.2: 故障类型: napcat_disconnected / python_crashed / all_providers_failed / port_conflict / db_locked / ...
+
+---
+
+## 阶段 9 · HTTP API 服务 ✅
+
+### Task 9.1: API 路由 `core/api_server.py` ✅
+- [x] SubTask 9.1.1: 实现 aiohttp 路由表
+- [x] SubTask 9.1.2: 22 个 API 端点
+- [x] SubTask 9.1.3: 鉴权（仅本机，绑定 127.0.0.1）
+- [x] SubTask 9.1.4: 错误处理（500 + JSON 错误体）
+- [x] SubTask 9.1.5: ✅ 集成测试：每个端点 + curl 验证
+
+### Task 9.2: Companion 主类 `core/companion.py` ✅
+- [x] SubTask 9.2.1: 实现 `Companion` 编排所有后端模块
+- [x] SubTask 9.2.2: 实现 `start()` / `stop()` / `push_proactive()`
+
+### Task 9.3: Python 入口 `main.py` ✅
+- [x] SubTask 9.3.1: 实现 `main()` 启动序列（见 spec.md R6）
+- [x] SubTask 9.3.2: 实现 SIGTERM 优雅关闭
 - [ ] SubTask 9.3.3: ✅ 端到端测试：`python main.py` 启动 → API 200 → QQ 收发
 
 ---

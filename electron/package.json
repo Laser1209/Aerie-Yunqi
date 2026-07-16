@@ -8,6 +8,9 @@
     "start": "electron .",
     "build:win": "electron-builder --win --x64 && node scripts/post-build-rcedit.js",
     "build:win:alt": "electron-builder --win --x64 --config.directories.output=dist-final && node scripts/post-build-rcedit.js",
+    "build:icons": "node scripts/build-icon-sprite.js",
+    "check:emojis": "node scripts/check-emojis.js",
+    "prebuild": "npm run check:emojis && npm run build:icons",
     "lint": "echo 'No JS lint configured'"
   },
   "author": "Laser",

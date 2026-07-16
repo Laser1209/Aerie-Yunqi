@@ -64,6 +64,55 @@ window.addEventListener("DOMContentLoaded", () => {
     window.aerie.electron.getHealth().then((data) => updateStatus(data.ready));
   }
 
+  // ── Window controls (min / max / close) ─────────
+  const winApi = (window.aerie && window.aerie.electron && window.aerie.electron.window) || null;
+  const btnMin = document.getElementById("btn-minimize");
+  const btnMax = document.getElementById("btn-maximize");
+  const btnClose = document.getElementById("btn-close");
+
+  if (btnMin && winApi) {
+    btnMin.addEventListener("click", (e) => {
+      e.stopPropagation();
+      winApi.minimize();
+    });
+  }
+  if (btnMax && winApi) {
+    btnMax.addEventListener("click", (e) => {
+      e.stopPropagation();
+      winApi.toggleMaximize().then((isMax) => {
+        btnMax.classList.toggle("titlebar-btn--maximized", !!isMax);
+        btnMax.title = isMax ? "还原" : "最大化";
+      });
+    });
+    if (winApi.onMaximize) {
+      winApi.onMaximize((isMax) => {
+        btnMax.classList.toggle("titlebar-btn--maximized", !!isMax);
+        btnMax.title = isMax ? "还原" : "最大化";
+      });
+    }
+  }
+  if (btnClose && winApi) {
+    btnClose.addEventListener("click", (e) => {
+      e.stopPropagation();
+      winApi.close();
+    });
+  }
+
+  // Double-click titlebar to toggle maximize (Windows convention)
+  const titlebar = document.getElementById("titlebar");
+  if (titlebar && winApi) {
+    titlebar.addEventListener("dblclick", (e) => {
+      // Ignore double-clicks on the buttons themselves
+      if (e.target.closest(".titlebar-btn")) return;
+      winApi.toggleMaximize().then((isMax) => {
+        if (btnMax) {
+          btnMax.classList.toggle("titlebar-btn--maximized", !!isMax);
+          btnMax.title = isMax ? "还原" : "最大化";
+        }
+      });
+    });
+  }
+
   // Status panel poll
   setInterval(async () => {
     try {

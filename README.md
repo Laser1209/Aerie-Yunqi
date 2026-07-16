@@ -15,7 +15,7 @@
 | --- | --- |
 | **🪟 Electron 桌面壳 / Electron Shell** | 悬浮球 + 聊天窗 + 侧边栏 + 托盘图标 / Floating ball + chat window + sidebar + tray |
 | **🧠 Python 智能内核 / Python Brain** | 多 Provider AI 调度（Qwen / DeepSeek / Gemini）/ Multi-provider LLM orchestration |
-| **👤 伊塔人格 / Yita Persona** | 22 岁女 · 四爱 · 闷骚+病娇 · ≤15 字符短句 / 22yo female, four-love, yandere, short sentences |
+| **👤 伊塔人格 / Yita Persona** | 26 岁女 · 184cm · 四爱 · 温柔大姐姐+病娇 · 调情式长句 / 26yo female, 184cm, four-love, gentle big-sister + yandere, flirtatious |
 | **💓 情感引擎 / Emotion Engine** | PAD 三维模型 + 4 槽累积阈值系统（角色磨损）/ PAD model + 4-slot cumulative threshold |
 | **⏰ 主动唤醒（auto-wake）/ Proactive Messenger** | 9 类场景 + APScheduler 定时轮询 + 频控 + 静默时段 / 9 scenes + cron + rate-limit + quiet hours |
 | **🤖 QQ 接入 / QQ Bridge** | NapCat OneBot11 WebSocket / NapCat OneBot11 WebSocket |
@@ -229,7 +229,7 @@ LOG_LEVEL=INFO
 ## 📚 文档 / Documentation
 
 * `OpenCloud_Companion_System_Features.md` v9.0 — 系统设计总纲
-* `Ita.md` v3.1 — 伊塔人设
+* `Ita.md` v9.0 Hybrid Edition — 伊塔人设（对齐 `Ita_Aerie_Companion_Spec.md`）
 * `.trae/specs/aerie-companion-v9-buildout/spec.md` — 实施规范
 * `.trae/specs/aerie-companion-v9-buildout/tasks.md` — 任务分解
 * `.trae/specs/aerie-companion-v9-buildout/checklist.md` — 验证清单

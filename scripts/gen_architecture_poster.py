@@ -89,7 +89,7 @@ card(col[3], y0, cw, ch, "PIPELINE · 流水线",
      "路由→情感→上下文→Brain→着色入队 | MarkDown 自动检测",
      "core/pipeline.py · core/context_builder.py")
 card(col[4], y0, cw, ch, "PERSONA · 人格引擎",
-     "伊塔 v3.1 · 四级决策权重 | Markov 转移矩阵 · 闷骚病娇四爱",
+     "伊塔 v9.0 · 四级决策权重 | Markov 转移矩阵 · 温柔大姐姐病娇四爱",
      "persona/decision.py · persona/brain_random.py")
 card(col[5], y0, cw, ch, "API · 服务层",
      "28 HTTP 端点 · aiohttp | 127.0.0.1:7890 · 仅本地",

@@ -202,7 +202,7 @@ class ChatManager {
         引用 ${this._quotedMsg.role === "user" ? "你" : "伊塔"}：
         <span class="chat-quote-bar__preview">${this._escapeHtml((this._quotedMsg.content || "").slice(0, 60))}</span>
       </div>
-      <button class="chat-quote-bar__cancel" id="chat-quote-cancel">✕</button>
+      <button class="chat-quote-bar__cancel" id="chat-quote-cancel" title="取消引用"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-close"/></svg></button>
     `;
     const cancelBtn = document.getElementById("chat-quote-cancel");
     if (cancelBtn) cancelBtn.addEventListener("click", () => this._cancelQuote());
@@ -227,7 +227,7 @@ class ChatManager {
       .map((a, i) =>
         a.type === "image"
           ? `<div class="chat-attach-thumb" data-i="${i}"><img src="/uploads/${a.url}" alt=""></div>`
-          : `<div class="chat-attach-thumb" data-i="${i}"><span>📎 ${this._escapeHtml(a.name)}</span></div>`,
+          : `<div class="chat-attach-thumb" data-i="${i}"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-attach"/></svg>${this._escapeHtml(a.name)}</div>`,
       )
       .join("");
   }
@@ -246,9 +246,9 @@ class ChatManager {
     const canRecall = ageSec < 120 && !msg.is_recalled;
 
     menu.innerHTML = `
-      <button class="chat-action-menu__item" data-act="copy">📋 复制</button>
-      <button class="chat-action-menu__item" data-act="quote">↩ 引用</button>
-      ${canRecall ? '<button class="chat-action-menu__item" data-act="recall">↶ 撤回</button>' : ""}
+      <button class="chat-action-menu__item" data-act="copy"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-copy"/></svg>复制</button>
+      <button class="chat-action-menu__item" data-act="quote"><svg class="icon icon--14" aria-hidden="true" style="transform: scaleX(-1) rotate(180deg)"><use href="#icon-ui-attach"/></svg>引用</button>
+      ${canRecall ? '<button class="chat-action-menu__item" data-act="recall"><svg class="icon icon--14" aria-hidden="true" style="transform: scaleX(-1)"><use href="#icon-ui-attach"/></svg>撤回</button>' : ""}
     `;
     const rect = anchorEl.getBoundingClientRect();
     menu.style.position = "fixed";
@@ -344,7 +344,7 @@ class ChatManager {
         if (att.type === "image") {
           html += `<div class="chat-attach-card" data-type="image"><img src="/uploads/${this._escapeHtml(att.url)}" alt=""></div>`;
         } else {
-          html += `<div class="chat-attach-card" data-type="file">📎 ${this._escapeHtml(att.name || "文件")}</div>`;
+          html += `<div class="chat-attach-card" data-type="file"><svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>${this._escapeHtml(att.name || "文件")}</div>`;
         }
       }
       html += "</div>";

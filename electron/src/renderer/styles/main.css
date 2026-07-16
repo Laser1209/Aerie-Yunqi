@@ -420,6 +420,10 @@ body {
 .emotion-label--anger  { background: var(--error-surface); color: var(--error); }
 .emotion-label--fear   { background: #fff3e0; color: var(--warning); }
 .emotion-label--neutral { background: var(--color-surface); color: var(--color-text-muted); }
+.emotion-label__icon {
+  margin-right: 6px;
+  vertical-align: -2px;
+}
 
 /* PAD cards */
 .emotion-pad-cards {
@@ -436,17 +440,18 @@ body {
   width: 72px; height: 72px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
+  --ring-color: var(--color-primary);
   background: conic-gradient(
-    var(--color-primary) calc(var(--pad-pct, 50%)),
+    var(--ring-color) calc(var(--pad-pct, 50%)),
     var(--color-border) calc(var(--pad-pct, 50%))
   );
   --mask-size: 56px;
   mask: radial-gradient(circle, transparent var(--mask-size), black var(--mask-size));
   -webkit-mask: radial-gradient(circle, transparent var(--mask-size), black var(--mask-size));
 }
-.pad-card-ring--p { background-color: var(--brand-500); }
-.pad-card-ring--a { background-color: var(--warning); }
-.pad-card-ring--d { background-color: var(--error); }
+.pad-card-ring--p { --ring-color: var(--brand-500); }
+.pad-card-ring--a { --ring-color: var(--warning); }
+.pad-card-ring--d { --ring-color: var(--error); }
 .pad-card-value { font-size: 16px; font-weight: 700; color: var(--color-text); }
 .pad-card-label { font-size: 11px; color: var(--color-text-muted); }
 
@@ -762,7 +767,7 @@ body {
   object-fit: cover;
 }
 
-/* ===== Phase 5: Chat input toolbar (📎 button) ===== */
+/* Phase 5: Chat input toolbar (attach button) */
 .chat-input-toolbar {
   display: flex;
   align-items: center;

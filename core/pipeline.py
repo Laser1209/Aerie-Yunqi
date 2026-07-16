@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from communication.message import IncomingMessage, OutgoingReply
+from communication.splitter import SemanticMessageSplitter
 from core.chat_events import emit
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class Pipeline:
         self.tool_registry = tool_registry
         self.db = db
         self.recall_manager = recall_manager
+        self._splitter = SemanticMessageSplitter()
 
     async def handle(
         self, msg: IncomingMessage, force_full: bool = False
@@ -170,38 +172,44 @@ class Pipeline:
             pass
 
         # ══════════════════════════════════════════════
-        # 8. Persist AI reply
+        # 8. Persist AI reply — split into segments, one row per segment
         # ══════════════════════════════════════════════
-        ai_row_id = 0
+        segments = self._splitter.split(reply_text) or [reply_text]
+        ai_row_ids: list[int] = []
         try:
-            ai_row_id = self.db.insert("chat_log", {
-                "user_id": msg.user_id,
-                "role": "assistant",
-                "content": reply_text,
-                "msg_type": msg.msg_type,
-                "route_mode": route_mode,
-            })
+            for seg in segments:
+                rid = self.db.insert("chat_log", {
+                    "user_id": msg.user_id,
+                    "role": "assistant",
+                    "content": seg,
+                    "msg_type": msg.msg_type,
+                    "route_mode": route_mode,
+                })
+                ai_row_ids.append(rid)
         except Exception:
             logger.exception("db insert ai msg error")
 
         # ══════════════════════════════════════════════
-        # 9. Emit assistant event (with emotion label)
+        # 9. Emit assistant event for each segment (UI gets one bubble per segment)
         # ══════════════════════════════════════════════
-        try:
-            emit_kwargs = {
-                "role": "assistant",
-                "id": ai_row_id,
-                "user_id": msg.user_id,
-                "content": reply_text,
-                "source": msg.source,
-            }
-            if emotion_info:
-                emit_kwargs["emotion"] = emotion_info["label"]
-            if eruption_info:
-                emit_kwargs["eruption"] = eruption_info["mode"]
-            emit("assistant", **emit_kwargs)
-        except Exception:
-            pass
+        for idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
+            try:
+                emit_kwargs = {
+                    "role": "assistant",
+                    "id": rid,
+                    "user_id": msg.user_id,
+                    "content": seg,
+                    "source": msg.source,
+                }
+                # Attach emotion / eruption labels to the first segment only
+                if idx == 0:
+                    if emotion_info:
+                        emit_kwargs["emotion"] = emotion_info["label"]
+                    if eruption_info:
+                        emit_kwargs["eruption"] = eruption_info["mode"]
+                emit("assistant", **emit_kwargs)
+            except Exception:
+                pass
 
         # ══════════════════════════════════════════════
         # 10. QQ messages → SendQueue; local → skip
@@ -223,7 +231,7 @@ class Pipeline:
             reply = OutgoingReply(
                 user_id=msg.user_id,
                 content=reply_text,
-                msg_id=ai_row_id,
+                msg_id=ai_row_ids[0] if ai_row_ids else 0,
                 reply_to_qq_message_id=reply_to_qq_mid,
             )
             self.send_queue.enqueue(reply)
@@ -231,7 +239,9 @@ class Pipeline:
         return {
             "reply": reply_text,
             "user_msg_id": user_row_id,
-            "ai_msg_id": ai_row_id,
+            "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
+            "ai_msg_ids": ai_row_ids,
+            "segments": segments,
             "route_mode": route_mode,
             "emotion": emotion_info.get("label") if emotion_info else "unknown",
         }

@@ -165,6 +165,19 @@ function createMainWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   mainWindow.on("closed", () => { mainWindow = null; });
+
+  // Broadcast maximize state changes to renderer so the button glyph can update
+  mainWindow.on("maximize", () => broadcastMaximizeState(true));
+  mainWindow.on("unmaximize", () => broadcastMaximizeState(false));
+}
+
+function broadcastMaximizeState(isMax) {
+  const wins = BrowserWindow.getAllWindows();
+  for (const w of wins) {
+    if (w && !w.isDestroyed()) {
+      w.webContents.send("window:maximized", isMax);
+    }
+  }
 }
 
 // ── Tray ───────────────────────────────────────────
@@ -191,6 +204,39 @@ ipcMain.handle("api:request", async (_event, opts) => {
   } catch (err) {
     return { status: 0, data: { error: err.message } };
   }
+});
+
+// ── Window controls ───────────────────────────────
+function getSenderWindow(event) {
+  return BrowserWindow.fromWebContents(event.sender);
+}
+
+ipcMain.handle("window:minimize", (event) => {
+  const win = getSenderWindow(event);
+  if (win) win.minimize();
+  return true;
+});
+
+ipcMain.handle("window:toggle-maximize", (event) => {
+  const win = getSenderWindow(event);
+  if (!win) return false;
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+  return win.isMaximized();
+});
+
+ipcMain.handle("window:is-maximized", (event) => {
+  const win = getSenderWindow(event);
+  return win ? win.isMaximized() : false;
+});
+
+ipcMain.handle("window:close", (event) => {
+  const win = getSenderWindow(event);
+  if (win) win.close();
+  return true;
 });
 
 ipcMain.handle("get-health", async () => {

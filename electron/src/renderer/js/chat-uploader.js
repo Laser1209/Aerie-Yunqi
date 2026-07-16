@@ -34,12 +34,12 @@ class ChatUploader {
   }
 
   _init() {
-    // Add 📎 button to input area
+    // Add attach button to input area (Phase 7: paperclip SVG icon)
     const inputArea = document.querySelector(".chat-input-area");
     if (inputArea && !document.getElementById("chat-attach-btn")) {
       const toolbar = document.createElement("div");
       toolbar.className = "chat-input-toolbar";
-      toolbar.innerHTML = `<button class="chat-input-toolbar__btn" id="chat-attach-btn" title="发送附件">📎</button>`;
+      toolbar.innerHTML = `<button class="chat-input-toolbar__btn" id="chat-attach-btn" title="发送附件"><svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-attach"/></svg></button>`;
       inputArea.parentNode.insertBefore(toolbar, inputArea);
 
       const btn = document.getElementById("chat-attach-btn");

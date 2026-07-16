@@ -21,6 +21,15 @@ contextBridge.exposeInMainWorld("aerie", {
       ipcRenderer.on("backend:health", (_event, data) => cb(data));
     },
     getHealth: () => ipcRenderer.invoke("get-health"),
+    window: {
+      minimize: () => ipcRenderer.invoke("window:minimize"),
+      toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
+      isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
+      close: () => ipcRenderer.invoke("window:close"),
+      onMaximize: (cb) => {
+        ipcRenderer.on("window:maximized", (_event, isMax) => cb(isMax));
+      },
+    },
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

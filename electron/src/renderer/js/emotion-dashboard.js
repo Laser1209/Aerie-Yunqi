@@ -43,11 +43,18 @@ class EmotionDashboard {
     this._setPADCard("pad-a", pad.A || 0, "唤醒度");
     this._setPADCard("pad-d", pad.D || 0, "支配度");
 
-    // Emotion label
+    // Emotion label — split icon + text (Phase 7: SVG)
     const labelEl = document.getElementById("emotion-label");
+    const labelText = data.label || "neutral";
     if (labelEl) {
-      labelEl.textContent = this._labelToEmoji(data.label || "neutral") + " " + (data.label || "neutral");
-      labelEl.className = "emotion-label emotion-label--" + (data.label || "neutral");
+      labelEl.className = "emotion-label emotion-label--" + labelText;
+      const iconEl = document.getElementById("emotion-label-icon");
+      if (iconEl) {
+        const use = iconEl.querySelector("use");
+        if (use) use.setAttribute("href", this._labelToIconId(labelText));
+      }
+      const textEl = document.getElementById("emotion-label-text");
+      if (textEl) textEl.textContent = labelText;
     }
 
     // Threshold bars
@@ -60,10 +67,16 @@ class EmotionDashboard {
       }
     }
 
-    // Eruption banner
+    // Eruption banner (Phase 7: SVG warning icon, not emoji)
     const banner = document.getElementById("emotion-eruption-banner");
     if (banner && data.eruption) {
-      banner.textContent = "⚠ " + data.eruption.mode + " — " + (data.eruption.description || "");
+      banner.innerHTML =
+        '<svg class="icon icon--16 banner__icon" aria-hidden="true"><use href="#icon-ui-warning"/></svg>' +
+        '<span class="banner__text">' +
+        this._escape(data.eruption.mode) +
+        " — " +
+        this._escape(data.eruption.description || "") +
+        "</span>";
       banner.classList.remove("hidden");
       banner.className = "emotion-eruption-banner emotion-eruption-banner--" + (data.eruption.slot || "patience");
     } else if (banner) {

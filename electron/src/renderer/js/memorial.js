@@ -15,9 +15,12 @@ class MemorialPanel {
   async load() {
     try {
       const r = await window.aerie.api.request({ method: "GET", path: "/api/anniversary/list" });
-      this.render(r.data || []);
+      const items = (r.data && Array.isArray(r.data.items)) ? r.data.items
+        : (Array.isArray(r.data) ? r.data : []);
+      this.render(items);
     } catch (e) {
-      document.getElementById("memorial-list").innerHTML = "<p style='color:var(--color-text-muted);'>加载失败</p>";
+      const el = document.getElementById("memorial-list");
+      if (el) el.innerHTML = "<p style='color:var(--color-text-muted);padding:16px 0;'>还没有纪念日，点击下方按钮添加～</p>";
     }
   }
 

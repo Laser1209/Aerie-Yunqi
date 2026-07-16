@@ -158,7 +158,9 @@ class CognitionPanel {
       pause.addEventListener("click", () => {
         this._paused = !this._paused;
         pause.setAttribute("data-paused", this._paused ? "true" : "false");
-        pause.textContent = this._paused ? "▶ 继续" : "⏸ 暂停";
+        pause.innerHTML = this._paused
+          ? '<svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-play"/></svg> 继续'
+          : '<svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-pause"/></svg> 暂停';
       });
     }
 
@@ -523,7 +525,11 @@ class CognitionPanel {
           const active = Object.entries(slots || {})
             .filter(([, v]) => v && v.active)
             .map(([k]) => k).join(",");
-          s = active ? "⚡ " + active : "idle";
+          if (active) {
+            s = '<svg class="icon icon--10" aria-hidden="true"><use href="#icon-ui-bolt"/></svg> ' + active;
+          } else {
+            s = "idle";
+          }
           break;
         }
         case "context":
@@ -623,7 +629,7 @@ class CognitionPanel {
       return (
         '<div class="cog-race-row' + (isChosen ? " cog-race-row--chosen" : "") + '">'
         + '<div class="cog-race-label">'
-        + (isChosen ? '<span class="cog-race-crown">★</span>' : '<span class="cog-race-crown">·</span>')
+        + (isChosen ? '<svg class="icon icon--10 cog-race-crown" aria-hidden="true"><use href="#icon-crown"/></svg>' : '<span class="cog-race-crown">·</span>')
         + '<span class="cog-race-name">' + this._escape(DECISION_LABELS_ZH[c] || c) + "</span>"
         + '<span class="cog-race-name-en">' + this._escape(c) + "</span>"
         + "</div>"

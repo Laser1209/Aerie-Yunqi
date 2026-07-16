@@ -10,6 +10,9 @@
     "build:win:alt": "electron-builder --win --x64 --config.directories.output=dist-final && node scripts/post-build-rcedit.js",
     "build:icons": "node scripts/build-icon-sprite.js",
     "check:emojis": "node scripts/check-emojis.js",
+    "check:forbidden": "python ../tools/check_forbidden.py",
+    "check:tokens": "python ../tools/check_tokens.py",
+    "check:all": "npm run check:emojis && npm run check:forbidden && npm run check:tokens",
     "prebuild": "npm run check:emojis && npm run build:icons",
     "lint": "echo 'No JS lint configured'"
   },

@@ -41,6 +41,33 @@
   --error-surface: #ffecea;
   --warning: #ff9500;
 
+  /* Block-5E R6.1: Aerie persona & gradient stops (tokenised so
+     themes can opt into their own palette without touching CSS).
+     The patch_theme_tokens tool masks :root { ... } so the
+     definitions here are never rewritten on subsequent runs. */
+  /* PAD channels — used by cognition panel, emotion dashboard. */
+  --color-pad-pleasure:  #ff5b9c;
+  --color-pad-arousal:   #7e6bff;
+  --color-pad-dominance: #3acfd5;
+  /* Threshold axis accent. */
+  --color-threshold-anxiety: #ffb74d;
+  /* Persona accent pinks. */
+  --color-accent-pink: #ff7eb6;
+  --color-accent-warm: #ff9500;
+  /* Stage tags (cognition timeline). */
+  --color-stage-cognition: #b39ddb;
+  --color-stage-committed: #80cbc4;
+  --color-stage-decision:  #ff8a65;
+  /* Eruption gradient end-stop (paired with --color-pad-pleasure). */
+  --color-eruption-grad-2:       #9c27b0;
+  /* Threshold warning/danger strong ends. */
+  --color-accent-warning-strong: #ff6d00;
+  --color-accent-danger-strong:  #d50000;
+  /* Floating-ball shell + badge. */
+  --color-floating-ball-grad-1: #66abff;
+  --color-floating-ball-grad-2: #007aff;
+  --color-ball-badge:           #ff3b30;
+
   /* semantic */
   --color-bg: var(--bg-50);
   --color-surface: var(--bg-100);
@@ -476,8 +503,8 @@ body {
   background: linear-gradient(90deg, var(--brand-400), var(--brand-500));
   transition: width .6s ease;
 }
-.threshold-bar-fill--warning { background: linear-gradient(90deg, var(--warning), #ff6d00); }
-.threshold-bar-fill--danger { background: linear-gradient(90deg, var(--error), #d50000); }
+.threshold-bar-fill--warning { background: linear-gradient(90deg, var(--warning), var(--color-accent-warning-strong, #ff6d00)); }
+.threshold-bar-fill--danger { background: linear-gradient(90deg, var(--error), var(--color-accent-danger-strong, #d50000)); }
 
 /* ===== Settings Panel ===== */
 .settings-panel { padding: 24px; }
@@ -579,6 +606,8 @@ body {
   opacity: 0; transition: opacity .2s;
   z-index: 10;
 }
+/* User messages: action button goes on the LEFT (away from right-side avatar). */
+.chat-msg--user .chat-msg-actions { right: auto; left: 8px; }
 .chat-msg:hover .chat-msg-actions { opacity: 1; }
 .chat-msg-actions__btn {
   background: var(--color-bg-secondary);
@@ -790,17 +819,10 @@ body {
   border: none;
 }
 
-/* Block-2 A1: chat avatar + name meta row */
-.chat-msg__meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-  font-size: 12px;
-  color: var(--text-muted, #888);
-}
-.chat-msg--assistant .chat-msg__meta { justify-content: flex-start; }
-.chat-msg--user .chat-msg__meta { justify-content: flex-end; }
+/* Block-2 A1 + R6.4: chat avatar + name layout.
+ * Avatar sits on the outer side (left for assistant, right for user via
+ * row-reverse on .chat-msg--user). Name is a small label above the bubble,
+ * aligned to the bubble's leading edge. */
 .chat-msg__avatar {
   width: 28px;
   height: 28px;
@@ -820,7 +842,11 @@ body {
   /* visible letter inside a circle */
 }
 .chat-msg__name {
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  margin: 0 4px 2px 4px;
   letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 
 /* Block-2 A2: persona block in settings */
@@ -859,7 +885,7 @@ body {
   height: 64px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--color-primary, #ff5b9c);
+  border: 2px solid var(--color-primary, var(--color-pad-pleasure, #ff5b9c));
   background: var(--bg-200);
 }
 .persona-fields {

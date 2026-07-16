@@ -1,0 +1,17 @@
+{
+  "date": "2026-07-17",
+  "ai_news": [],
+  "it_news": [],
+  "intl_news": [],
+  "cn_news": [],
+  "weather": {
+    "city": "上海",
+    "temp": "—",
+    "desc": "暂无 / unavailable",
+    "suggestion": "穿合适的衣服。",
+    "ts": 1784238579,
+    "stub": true
+  },
+  "errors": {},
+  "ts": 1784238579
+}

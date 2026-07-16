@@ -17,15 +17,22 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STYLES_DIR = PROJECT_ROOT / "electron" / "src" / "renderer" / "styles"
 
 # Files to patch
+# Block-5E R6.1: added floating-ball.css (shell + badge literals) and
+# main.css (threshold warning/danger bar end-stops).
 TARGETS = [
     STYLES_DIR / "emotion-history.css",
     STYLES_DIR / "cognition-panel.css",
     STYLES_DIR / "daily-brief.css",
     STYLES_DIR / "daily-brief-detail.css",
+    STYLES_DIR / "floating-ball.css",
+    STYLES_DIR / "main.css",
 ]
 
 # Mapping of hex literal -> (token, fallback).
 # Token is the canonical name we will introduce to each theme.
+# Block-5E R6.1: extended to cover the literal values that lived inside
+# linear-gradient() / radial-gradient() lines (cognition-bar, eruption
+# banner, threshold warning/danger ends, floating-ball shell).
 SUBSTITUTIONS: dict[str, tuple[str, str]] = {
     # PAD channels
     "#ff5b9c": ("--color-pad-pleasure",  "#ff5b9c"),
@@ -41,6 +48,13 @@ SUBSTITUTIONS: dict[str, tuple[str, str]] = {
     "#ff7eb6": ("--color-accent-pink",     "#ff7eb6"),
     # Brief primary action accent
     "#ff9500": ("--color-accent-warm",     "#ff9500"),
+    # Block-5E R6.1: gradient stop / shell / badge literal values
+    "#9c27b0": ("--color-eruption-grad-2",        "#9c27b0"),
+    "#ff6d00": ("--color-accent-warning-strong",  "#ff6d00"),
+    "#d50000": ("--color-accent-danger-strong",   "#d50000"),
+    "#66abff": ("--color-floating-ball-grad-1",   "#66abff"),
+    "#007aff": ("--color-floating-ball-grad-2",   "#007aff"),
+    "#ff3b30": ("--color-ball-badge",             "#ff3b30"),
 }
 
 # Pairs we keep as a literal gradient because tokenizing a gradient is
@@ -54,48 +68,98 @@ PLACEHOLDER_PREFIX = "__AERIE_TOK_PH_"
 def _patch_text(text: str) -> tuple[str, int]:
     """Apply the substitution table. Returns (new_text, hits).
 
-    Strategy: 3 phases to keep things idempotent on re-runs.
-      1. Replace each bare hex literal with a unique placeholder
-         ``__AERIE_TOK_PH_<token>__`` (no var() involved yet).
-      2. Flatten any pre-existing nested var() chains so re-runs
-         collapse to a single var(--token, <hex>).
-      3. Expand each placeholder back to ``var(--token, <hex>)``.
+    Strategy: 5 phases to keep things idempotent on re-runs and to
+    avoid corrupting the design-token definition block.
+      0a. Mask every existing var(...) body so substitution can never
+          reach inside an already-tokenised fallback (prevents
+          ``var(--t, var(--t, #hex))`` nesting on re-runs).
+      0b. Mask every top-level ``:root { ... }`` block so the design
+          token definitions are not rewritten (prevents
+          ``--color-x: var(--color-x, #hex)`` self-reference loops).
+      1. Replace each remaining bare hex literal with a unique
+         placeholder ``__AERIE_TOK_PH_<token>__``.
+      2. Restore the masked var(...) bodies (their internals are
+         already either tokenised or fallbacks).
+      3. Restore the masked :root blocks.
+      4. Expand each placeholder back to ``var(--token, <hex>)``.
     """
     hits = 0
+    var_mask: dict[str, str] = {}
+    root_mask: dict[str, str] = {}
 
-    # Phase 1: bare hex → placeholder
+    def _mask_var(match: re.Match) -> str:
+        sentinel = f"__AERIE_TOK_VAR_{len(var_mask)}__"
+        var_mask[sentinel] = match.group(0)
+        return sentinel
+
+    def _mask_root(match: re.Match) -> str:
+        sentinel = f"__AERIE_TOK_ROOT_{len(root_mask)}__"
+        root_mask[sentinel] = match.group(0)
+        return sentinel
+
+    masked = text
+    # Phase 0b FIRST: mask every top-level :root { ... } block (so
+    # design-token definitions are never rewritten). After this, the
+    # masked text contains __AERIE_TOK_ROOT_*__ sentinels.
+    def _root_scan(s: str) -> str:
+        out = []
+        i = 0
+        while i < len(s):
+            m = re.search(r":root\s*\{", s[i:])
+            if not m:
+                out.append(s[i:])
+                break
+            start = i + m.start()
+            out.append(s[i:start])
+            # Find the matching closing brace.
+            j = i + m.end()
+            depth = 1
+            while j < len(s) and depth > 0:
+                if s[j] == "{":
+                    depth += 1
+                elif s[j] == "}":
+                    depth -= 1
+                j += 1
+            block = s[start:j]
+            sentinel = f"__AERIE_TOK_ROOT_{len(root_mask)}__"
+            root_mask[sentinel] = block
+            out.append(sentinel)
+            i = j
+        return "".join(out)
+
+    masked = _root_scan(masked)
+
+    # Phase 0a SECOND: mask every existing var(...) body outside the
+    # already-masked :root blocks. This protects already-tokenised
+    # fallbacks from being re-wrapped.
+    masked = re.sub(r"var\([^()]*(?:\([^()]*\)[^()]*)*\)", _mask_var, masked)
+
+    # Phase 1: bare hex → placeholder (in masked text).
     for literal, (token, _fallback) in SUBSTITUTIONS.items():
         ph = f"{PLACEHOLDER_PREFIX}{token}__"
-        # Bare: not preceded by alphanumeric / open paren, not already a placeholder
         pattern = re.compile(
             r"(?<![\w\(])" + re.escape(literal) + r"(?!__)",
             re.IGNORECASE,
         )
-        new_text, n = pattern.subn(ph, text)
+        new_text, n = pattern.subn(ph, masked)
         if n:
             hits += n
-            text = new_text
+            masked = new_text
 
-    # Phase 2: flatten any nested var() chains.
-    # A chain "var(--t, var(--t, ... PH ...))"  →  just the inner PH (one level up).
-    for _token, _fb in SUBSTITUTIONS.values():
-        ph = f"{PLACEHOLDER_PREFIX}{_token}__"
-        flat_re = re.compile(
-            r"var\(\s*" + re.escape(_token) + r",\s*"
-            r"(?:var\(\s*" + re.escape(_token) + r",\s*)*"  # any inner wraps
-            + re.escape(ph) + r"\s*\)+\s*"  # closing parens
-        )
-        prev = None
-        while prev != text:
-            prev = text
-            text = flat_re.sub(ph, text)  # strip the wrapping var(...)
+    # Phase 2: restore masked var(...) bodies.
+    for sentinel, original in var_mask.items():
+        masked = masked.replace(sentinel, original)
 
-    # Phase 3: placeholder → final var() form
+    # Phase 3: restore masked :root blocks.
+    for sentinel, original in root_mask.items():
+        masked = masked.replace(sentinel, original)
+
+    # Phase 4: placeholder → final var() form
     for _literal, (token, fallback) in SUBSTITUTIONS.items():
         ph = f"{PLACEHOLDER_PREFIX}{token}__"
-        text = text.replace(ph, f"var({token}, {fallback})")
+        masked = masked.replace(ph, f"var({token}, {fallback})")
 
-    return text, hits
+    return masked, hits
 
 
 def _is_already_tokenized(text: str) -> bool:
@@ -120,23 +184,13 @@ def _is_already_tokenized(text: str) -> bool:
 
 def patch_file(path: Path) -> tuple[bool, int]:
     original = path.read_text(encoding="utf-8")
-    # Skip if already tokenized: presence of all token names.
-    if all(f"var({tok}," in original for tok, _ in SUBSTITUTIONS.values()):
-        return False, 0
-    # Don't touch gradient lines (keep the literal gradient intact).
-    # We approximate by skipping lines containing "linear-gradient".
-    out_lines: list[str] = []
-    hits = 0
-    for line in original.splitlines(keepends=True):
-        if "linear-gradient" in line:
-            out_lines.append(line)
-            continue
-        new_line, n = _patch_text(line)
-        if n:
-            hits += n
-        out_lines.append(new_line)
-    new_text = "".join(out_lines)
-    if new_text == original:
+    # Block-5E R6.1: process the WHOLE file in one call so :root { ... }
+    # blocks (which may span many lines) are masked as a single unit.
+    # Idempotency is decided by _patch_text itself: if it returns hits=0
+    # (no bare literals left to convert) the file is already in a clean
+    # state and we skip writing.
+    new_text, hits = _patch_text(original)
+    if hits == 0 or new_text == original:
         return False, 0
     path.write_text(new_text, encoding="utf-8")
     return True, hits

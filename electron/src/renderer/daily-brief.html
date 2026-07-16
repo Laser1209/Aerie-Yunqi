@@ -7,7 +7,43 @@
   <link rel="stylesheet" href="styles/daily-brief.css" />
 </head>
 <body>
-  <div class="brief-card-wrap" id="brief-wrap">
+<!-- Block-5E R6.2: shared icon sprite (inlined because the brief popup
+     is a standalone BrowserWindow and cannot reuse the main window's
+     inline sprite). -->
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute; width:0; height:0; overflow:hidden;" aria-hidden="true">
+  <defs>
+    <symbol id="icon-ui-thumb-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 10v12"/>
+      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/>
+    </symbol>
+    <symbol id="icon-ui-thumb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 14V2"/>
+      <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22h0a3.13 3.13 0 0 1-3-3.88Z"/>
+    </symbol>
+    <symbol id="icon-brief-ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
+      <circle cx="12" cy="12" r="3.5"/>
+    </symbol>
+    <symbol id="icon-brief-tech" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2"/>
+      <rect x="9" y="9" width="6" height="6"/>
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>
+    </symbol>
+    <symbol id="icon-brief-intl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="icon-brief-cn" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="m12 2 2.9 6.5 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.7L12 2z"/>
+    </symbol>
+    <symbol id="icon-brief-weather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+    </symbol>
+  </defs>
+</svg>
+<div class="brief-card-wrap" id="brief-wrap">
     <div class="brief-card" id="brief-card">
       <div class="brief-header">
         <div class="brief-header__left">
@@ -32,59 +68,59 @@
       <!-- 5 sections, populated by daily-brief.js -->
       <div class="brief-section" data-section="ai_news">
         <div class="brief-section-title">
-          <span class="brief-section-icon" aria-hidden="true">✦</span>
+          <span class="brief-section-icon" aria-hidden="true"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-brief-ai"/></svg></span>
           <span>AI 动向 / AI Trends</span>
         </div>
         <ul class="brief-list" id="brief-ai-news"><li class="brief-empty">（暂无）</li></ul>
         <div class="brief-feedback" data-section="ai_news">
-          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">👍</button>
-          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">👎</button>
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-up"/></svg></button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-down"/></svg></button>
           <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
         </div>
       </div>
 
       <div class="brief-section" data-section="it_news">
         <div class="brief-section-title">
-          <span class="brief-section-icon" aria-hidden="true">⌬</span>
+          <span class="brief-section-icon" aria-hidden="true"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-brief-tech"/></svg></span>
           <span>IT 行业 / Tech Industry</span>
         </div>
         <ul class="brief-list" id="brief-it-news"><li class="brief-empty">（暂无）</li></ul>
         <div class="brief-feedback" data-section="it_news">
-          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">👍</button>
-          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">👎</button>
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-up"/></svg></button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-down"/></svg></button>
           <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
         </div>
       </div>
 
       <div class="brief-section" data-section="intl_news">
         <div class="brief-section-title">
-          <span class="brief-section-icon" aria-hidden="true">◐</span>
+          <span class="brief-section-icon" aria-hidden="true"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-brief-intl"/></svg></span>
           <span>国际 / International</span>
         </div>
         <ul class="brief-list" id="brief-intl-news"><li class="brief-empty">（暂无）</li></ul>
         <div class="brief-feedback" data-section="intl_news">
-          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">👍</button>
-          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">👎</button>
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-up"/></svg></button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-down"/></svg></button>
           <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
         </div>
       </div>
 
       <div class="brief-section" data-section="cn_news">
         <div class="brief-section-title">
-          <span class="brief-section-icon" aria-hidden="true">★</span>
+          <span class="brief-section-icon" aria-hidden="true"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-brief-cn"/></svg></span>
           <span>国家 / National</span>
         </div>
         <ul class="brief-list" id="brief-cn-news"><li class="brief-empty">（暂无）</li></ul>
         <div class="brief-feedback" data-section="cn_news">
-          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">👍</button>
-          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">👎</button>
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-up"/></svg></button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-down"/></svg></button>
           <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
         </div>
       </div>
 
       <div class="brief-section brief-section--weather" data-section="weather">
         <div class="brief-section-title">
-          <span class="brief-section-icon" aria-hidden="true">◉</span>
+          <span class="brief-section-icon" aria-hidden="true"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-brief-weather"/></svg></span>
           <span>天气 / Weather</span>
         </div>
         <div class="brief-weather" id="brief-weather">
@@ -92,8 +128,8 @@
           <span class="brief-weather__desc" id="brief-weather-desc">（暂无）</span>
         </div>
         <div class="brief-feedback" data-section="weather">
-          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">👍</button>
-          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">👎</button>
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-up"/></svg></button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-thumb-down"/></svg></button>
           <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
         </div>
       </div>

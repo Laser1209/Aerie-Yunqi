@@ -245,7 +245,7 @@ class ChatManager {
     }
     bar.style.display = "flex";
     bar.innerHTML = `
-      <span class="chat-quote-bar__icon">↩</span>
+      <span class="chat-quote-bar__icon"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-reply"/></svg></span>
       <div class="chat-quote-bar__text">
         引用 ${this._quotedMsg.role === "user" ? "你" : "伊塔"}：
         <span class="chat-quote-bar__preview">${this._escapeHtml((this._quotedMsg.content || "").slice(0, 60))}</span>
@@ -394,11 +394,14 @@ class ChatManager {
       : this._masterAvatar || "";
 
     let html = "";
-    // Block-2 A1: meta row
+    // Block-2 A1 + R6.4: avatar on outer side, name (small) above bubble,
+    // bubble below name. Outer-side flip via flex-direction: row-reverse.
     const avatarContent = avatarUrl
       ? `<img class="chat-msg__avatar" src="${this._escapeHtml(avatarUrl)}" alt="" onerror="this.style.visibility='hidden'">`
       : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${isAssistant ? "伊" : "你"}</span>`;
-    html += `<div class="chat-msg__meta">${avatarContent}<span class="chat-msg__name">${this._escapeHtml(displayName)}</span></div>`;
+    html += `<div class="chat-msg__avatar-wrap">${avatarContent}</div>`;
+    html += `<div class="chat-msg__body">`;
+    html += `<div class="chat-msg__name">${this._escapeHtml(displayName)}</div>`;
     // Phase 4: quote overlay (above bubble)
     if (msg.reply_to_id && msg.reply_to_content) {
       const role = msg.reply_to_role === "user" ? "你" : "伊塔";
@@ -423,6 +426,7 @@ class ChatManager {
       html += "</div>";
     }
     html += `<div class="chat-bubble">${this._escapeHtml(msg.content || "")}</div>`;
+    html += `</div>`;  // close .chat-msg__body
     // Action menu trigger
     if (msg.id && !String(msg.id).startsWith("temp_")) {
       html += `<div class="chat-msg-actions"><button class="chat-msg-actions__btn" data-msg-actions="${msg.id}">⋮</button></div>`;

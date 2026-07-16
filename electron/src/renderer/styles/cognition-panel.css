@@ -17,7 +17,7 @@
   --cog-glass-text: #f3e6f0;
   --cog-glass-muted: #b29ab4;
   --cog-bar-track: rgba(255, 105, 180, 0.10);
-  --cog-bar-fill: linear-gradient(90deg, #ff5b9c 0%, #9c27b0 100%);
+  --cog-bar-fill: linear-gradient(90deg, var(--color-pad-pleasure, #ff5b9c)0%, var(--color-eruption-grad-2, #9c27b0)100%);
   --cog-pulse: var(--color-pad-pleasure, #ff5b9c);
   --cog-row-hover: rgba(255, 105, 180, 0.08);
   --cog-row-border: rgba(255, 105, 180, 0.18);

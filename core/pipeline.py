@@ -1,6 +1,7 @@
 """Aerie · 云栖 v9.0 — Message pipeline.
 
-Processes incoming messages through: route → context → LLM → emotion → persist → emit → reply.
+Processes incoming messages through:
+  route → emotion(text scan + cumulative trigger check) → history → context(with emotion+eruption) → LLM → emotion tune → persist → emit → reply.
 """
 
 from __future__ import annotations
@@ -45,13 +46,17 @@ class Pipeline:
             logger.debug("BASIC skip for user %s", msg.user_id)
             return None
 
-        # Update emotion
+        # ══════════════════════════════════════════════
+        # 1. Emotion: PAD analysis + cumulative threshold scan
+        # ══════════════════════════════════════════════
         try:
             self.emotion.update_trajectory(msg.user_id, msg.content)
         except Exception:
-            pass
+            logger.exception("emotion update error")
 
-        # Get history from DB
+        # ══════════════════════════════════════════════
+        # 2. Get history from DB
+        # ══════════════════════════════════════════════
         history = []
         try:
             history = self.db.query(
@@ -62,17 +67,44 @@ class Pipeline:
         except Exception:
             pass
 
-        # Build context for LLM
+        # ══════════════════════════════════════════════
+        # 3. Gather emotion info for context injection
+        # ══════════════════════════════════════════════
+        emotion_info = None
+        eruption_info = None
+        try:
+            state = self.emotion.get_state(msg.user_id)
+            emotion_info = {
+                "label": state.get("label", "neutral"),
+                "pad": state.get("pad", {}),
+                "thresholds": state.get("thresholds", {}),
+            }
+            eruption_info = state.get("eruption")
+        except Exception:
+            pass
+
+        # ══════════════════════════════════════════════
+        # 4. Build context for LLM
+        # ══════════════════════════════════════════════
         ctx_messages = self.ctx_builder.build(
-            msg.user_id, msg.content, route_mode, history,
+            msg.user_id,
+            msg.content,
+            route_mode,
+            history_msgs=history,
+            emotion_info=emotion_info,
+            eruption_info=eruption_info,
         )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
-        # Call LLM
+        # ══════════════════════════════════════════════
+        # 5. Call LLM
+        # ══════════════════════════════════════════════
         response = await self.brain.chat(ctx_messages, tools=tools)
         reply_text = self.emotion.tune(response.text)
 
-        # Persist user message
+        # ══════════════════════════════════════════════
+        # 6. Persist user message
+        # ══════════════════════════════════════════════
         user_row_id = 0
         try:
             user_row_id = self.db.insert("chat_log", {
@@ -85,7 +117,9 @@ class Pipeline:
         except Exception:
             logger.exception("db insert user msg error")
 
-        # Emit user event
+        # ══════════════════════════════════════════════
+        # 7. Emit user event
+        # ══════════════════════════════════════════════
         try:
             emit(
                 "user",
@@ -98,7 +132,9 @@ class Pipeline:
         except Exception:
             pass
 
-        # Persist AI reply
+        # ══════════════════════════════════════════════
+        # 8. Persist AI reply
+        # ══════════════════════════════════════════════
         ai_row_id = 0
         try:
             ai_row_id = self.db.insert("chat_log", {
@@ -111,20 +147,28 @@ class Pipeline:
         except Exception:
             logger.exception("db insert ai msg error")
 
-        # Emit assistant event
+        # ══════════════════════════════════════════════
+        # 9. Emit assistant event (with emotion label)
+        # ══════════════════════════════════════════════
         try:
-            emit(
-                "assistant",
-                role="assistant",
-                id=ai_row_id,
-                user_id=msg.user_id,
-                content=reply_text,
-                source=msg.source,
-            )
+            emit_kwargs = {
+                "role": "assistant",
+                "id": ai_row_id,
+                "user_id": msg.user_id,
+                "content": reply_text,
+                "source": msg.source,
+            }
+            if emotion_info:
+                emit_kwargs["emotion"] = emotion_info["label"]
+            if eruption_info:
+                emit_kwargs["eruption"] = eruption_info["mode"]
+            emit("assistant", **emit_kwargs)
         except Exception:
             pass
 
-        # QQ messages → SendQueue; local messages → skip
+        # ══════════════════════════════════════════════
+        # 10. QQ messages → SendQueue; local → skip
+        # ══════════════════════════════════════════════
         if msg.source == "qq":
             reply = OutgoingReply(
                 user_id=msg.user_id,
@@ -138,4 +182,5 @@ class Pipeline:
             "user_msg_id": user_row_id,
             "ai_msg_id": ai_row_id,
             "route_mode": route_mode,
+            "emotion": emotion_info.get("label") if emotion_info else "unknown",
         }

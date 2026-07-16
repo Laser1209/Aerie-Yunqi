@@ -23,9 +23,8 @@ class Router:
             return RouteMode.AUTO_REPLY
         return RouteMode.BASIC
 
-    def get_role_label(self, user_id: int) -> str:
-        if user_id == self.master:
-            return "[MASTER]"
-        if user_id in self.friends:
-            return "[FRIEND]"
-        return "[STRANGER]"
+    def is_master(self, user_id: int) -> bool:
+        return user_id == self.master
+
+    def is_friend(self, user_id: int) -> bool:
+        return user_id in self.friends

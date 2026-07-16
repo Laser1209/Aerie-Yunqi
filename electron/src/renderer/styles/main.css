@@ -377,3 +377,99 @@ body {
 .btn-secondary { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); }
 .btn-secondary:hover { background: var(--color-border); }
 .btn-sm { padding: 4px 12px; font-size: 12px; }
+
+/* ===== Emotion Dashboard ===== */
+.emotion-dashboard { padding: 24px; }
+.emotion-dashboard h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.emotion-dashboard h3 { font-size: 14px; font-weight: 600; margin: 20px 0 12px; color: var(--color-text-muted); }
+
+/* Eruption banner */
+.emotion-eruption-banner {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  animation: fadeIn .3s ease;
+}
+.emotion-eruption-banner.hidden { display: none; }
+.emotion-eruption-banner--patience {
+  background: #1c1c1e; color: #aeaeb2; border: 1px solid #3a3a3c;
+}
+.emotion-eruption-banner--anxiety {
+  background: var(--error-surface); color: var(--error); border: 1px solid var(--error);
+}
+.emotion-eruption-banner--desire {
+  background: #fff0e6; color: var(--warning); border: 1px solid var(--warning);
+}
+.emotion-eruption-banner--tenderness {
+  background: #fce4ec; color: #e91e63; border: 1px solid #e91e63;
+}
+
+/* Emotion label */
+.emotion-label-section {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 20px;
+  font-size: 16px;
+}
+.emotion-label {
+  font-weight: 600; font-size: 18px;
+  padding: 2px 12px; border-radius: 999px;
+}
+.emotion-label--joy    { background: #e9f9ee; color: var(--success); }
+.emotion-label--sad    { background: #e8f2ff; color: var(--brand-500); }
+.emotion-label--anger  { background: var(--error-surface); color: var(--error); }
+.emotion-label--fear   { background: #fff3e0; color: var(--warning); }
+.emotion-label--neutral { background: var(--color-surface); color: var(--color-text-muted); }
+
+/* PAD cards */
+.emotion-pad-cards {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 8px;
+}
+.pad-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 20px 12px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+.pad-card-ring {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: conic-gradient(
+    var(--color-primary) calc(var(--pad-pct, 50%)),
+    var(--color-border) calc(var(--pad-pct, 50%))
+  );
+  --mask-size: 56px;
+  mask: radial-gradient(circle, transparent var(--mask-size), black var(--mask-size));
+  -webkit-mask: radial-gradient(circle, transparent var(--mask-size), black var(--mask-size));
+}
+.pad-card-ring--p { background-color: var(--brand-500); }
+.pad-card-ring--a { background-color: var(--warning); }
+.pad-card-ring--d { background-color: var(--error); }
+.pad-card-value { font-size: 16px; font-weight: 700; color: var(--color-text); }
+.pad-card-label { font-size: 11px; color: var(--color-text-muted); }
+
+/* Threshold bars */
+.threshold-bars { display: flex; flex-direction: column; gap: 12px; }
+.threshold-bar-item { }
+.threshold-bar-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 4px;
+}
+.threshold-bar-label { font-size: 13px; font-weight: 500; }
+.threshold-bar-value { font-size: 12px; color: var(--color-text-muted); font-family: var(--font-mono); }
+.threshold-bar-track {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+.threshold-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--brand-400), var(--brand-500));
+  transition: width .6s ease;
+}
+.threshold-bar-fill--warning { background: linear-gradient(90deg, var(--warning), #ff6d00); }
+.threshold-bar-fill--danger { background: linear-gradient(90deg, var(--error), #d50000); }

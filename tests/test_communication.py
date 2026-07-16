@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from communication.message import RouteMode
+from communication.router import RouteMode
 from communication.router import Router
 from communication.splitter import SemanticMessageSplitter
 from communication.recall_manager import RecallManager

@@ -41,6 +41,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         <span>QQ</span>
       </button>
+      <button class="sidebar-tab" data-tab="emotion">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span>情绪</span>
+      </button>
       <button class="sidebar-tab" data-tab="status">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
         <span>状态</span>
@@ -94,6 +98,85 @@
         </div>
       </section>
 
+      <!-- Emotion panel -->
+      <section id="panel-emotion" class="tab-panel">
+        <div class="emotion-dashboard">
+          <h2>伊塔 · 情绪仪表盘</h2>
+
+          <!-- Eruption banner -->
+          <div id="emotion-eruption-banner" class="emotion-eruption-banner hidden"></div>
+
+          <!-- Current emotion -->
+          <div class="emotion-label-section">
+            <span>当前情绪：</span>
+            <span id="emotion-label" class="emotion-label emotion-label--neutral">😐 neutral</span>
+          </div>
+
+          <!-- PAD cards -->
+          <div class="emotion-pad-cards">
+            <div id="pad-p" class="pad-card">
+              <div class="pad-card-ring pad-card-ring--p">
+                <span class="pad-card-value">0.00</span>
+              </div>
+              <span class="pad-card-label">愉悦度</span>
+            </div>
+            <div id="pad-a" class="pad-card">
+              <div class="pad-card-ring pad-card-ring--a">
+                <span class="pad-card-value">0.00</span>
+              </div>
+              <span class="pad-card-label">唤醒度</span>
+            </div>
+            <div id="pad-d" class="pad-card">
+              <div class="pad-card-ring pad-card-ring--d">
+                <span class="pad-card-value">0.00</span>
+              </div>
+              <span class="pad-card-label">支配度</span>
+            </div>
+          </div>
+
+          <!-- Threshold bars -->
+          <h3>隐藏槽位</h3>
+          <div class="threshold-bars">
+            <div id="threshold-patience" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">忍耐值</span>
+                <span class="threshold-bar-value">0 / 100</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div id="threshold-anxiety" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">不安值</span>
+                <span class="threshold-bar-value">0 / 100</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div id="threshold-desire" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">渴望值</span>
+                <span class="threshold-bar-value">0 / 80</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div id="threshold-tenderness" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">温柔透支值</span>
+                <span class="threshold-bar-value">0 / 60</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Status panel -->
       <section id="panel-status" class="tab-panel">
         <div class="status-panel">
@@ -137,6 +220,7 @@
 
 <script src="js/chat.js"></script>
 <script src="js/napcat-panel.js"></script>
+<script src="js/emotion-dashboard.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

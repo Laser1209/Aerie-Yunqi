@@ -3,6 +3,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 from communication.message import IncomingMessage, OutgoingReply
@@ -14,6 +15,7 @@ from core.brain import Brain
 from core.context_builder import ContextBuilder
 from core.database import Database
 from core.emotion_engine import EmotionEngine
+from core.emotion_threshold import get_threshold_engine, CumulativeEmotionEngine
 from core.pipeline import Pipeline
 from core.tool_registry import ToolRegistry
 from config.persona_loader import load_settings
@@ -44,6 +46,9 @@ class Companion:
         self.memory = LongTermMemory(self.db)
         self.knowledge = KnowledgeBase(self.db)
 
+        # Cumulative threshold engine (shared singleton)
+        self.threshold_engine = get_threshold_engine()
+
         # Tool registry
         self.tool_registry = ToolRegistry(self.db)
         register_all_tools(self.tool_registry)
@@ -70,6 +75,7 @@ class Companion:
         )
 
         self._started = False
+        self._daily_decay_task: asyncio.Task | None = None
         _COMPANION = self
 
     async def start(self) -> None:
@@ -79,12 +85,20 @@ class Companion:
         self.qq.set_message_handler(self._on_qq_message)
         # Connect to NapCat WS (passive — won't start NapCat)
         asyncio.create_task(self.qq.connect())
+        # Start daily emotion decay scheduler
+        self._daily_decay_task = asyncio.create_task(self._run_daily_decay())
         self._started = True
         logger.info("Companion started")
 
     async def stop(self) -> None:
         if not self._started:
             return
+        if self._daily_decay_task:
+            self._daily_decay_task.cancel()
+            try:
+                await self._daily_decay_task
+            except asyncio.CancelledError:
+                pass
         try:
             await self.queue.stop()
         except Exception:
@@ -105,3 +119,32 @@ class Companion:
                 await self.pipeline.handle(msg)
             except Exception:
                 logger.exception("pipeline.handle error")
+
+    async def _run_daily_decay(self) -> None:
+        """Background task: apply daily emotion decay at midnight."""
+        while True:
+            # Sleep until next midnight
+            now = datetime.now()
+            next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            wait_seconds = (next_midnight - now).total_seconds()
+            if wait_seconds > 0:
+                try:
+                    await asyncio.sleep(wait_seconds)
+                except asyncio.CancelledError:
+                    return
+
+            # Apply decay
+            try:
+                self.threshold_engine.daily_decay()
+                logger.info("Daily emotion decay applied")
+            except Exception:
+                logger.exception("daily decay error")
+
+            # Also decay long-term memory importance
+            try:
+                self.memory.decay()
+            except Exception:
+                pass
+
+            # Small pause to avoid double-fire
+            await asyncio.sleep(60)

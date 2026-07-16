@@ -1,7 +1,11 @@
 "use strict";
-/* App shell: tab switching, window controls, health monitoring */
+/* App shell: tab switching, window controls, health monitoring, emotion dashboard */
 
 window.addEventListener("DOMContentLoaded", () => {
+  // ── Emotion dashboard ──────────────────────────
+  const emotionDashboard = new EmotionDashboard();
+  emotionDashboard.init();
+
   // ── Tab switching ──────────────────────────────
   document.querySelectorAll(".sidebar-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -11,6 +15,9 @@ window.addEventListener("DOMContentLoaded", () => {
       const tab = btn.getAttribute("data-tab");
       const panel = document.getElementById("panel-" + tab);
       if (panel) panel.classList.add("active");
+
+      // Notify emotion dashboard of visibility
+      emotionDashboard.setVisible(tab === "emotion");
     });
   });
 
@@ -47,9 +54,10 @@ window.addEventListener("DOMContentLoaded", () => {
           if (statsQQ) statsQQ.textContent = r.data.qq_connected ? "已连接" : "未连接";
         }
         const t = await window.aerie.api.request({ method: "GET", path: "/api/stats/tokens" });
-        if (t.data) {
-          if (statsTokens) statsTokens.textContent = (t.data.total_tokens || 0).toLocaleString();
-          if (statsCalls) statsCalls.textContent = t.data.total_calls || 0;
+        if (t.data && !t.data.error) {
+          const today = t.data.today || {};
+          if (statsTokens) statsTokens.textContent = (today.total || 0).toLocaleString();
+          if (statsCalls) statsCalls.textContent = today.calls || 0;
         }
       }
     } catch (_) {}

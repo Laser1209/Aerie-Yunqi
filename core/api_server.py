@@ -30,6 +30,7 @@ from core.companion import get_companion
 from core.database import Database
 from core.napcat_launcher import get_launcher
 from core.chat_events import emit
+from core.token_tracker import get_token_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -180,18 +181,31 @@ async def tools_list() -> dict:
 
 # ── Stats ───────────────────────────────────────────
 
+@app.get("/api/emotion/thresholds")
+async def emotion_thresholds() -> dict:
+    """Return 4-slot cumulative threshold values."""
+    comp = get_companion()
+    if not comp:
+        return {"error": "backend not ready"}
+    return {
+        "thresholds": comp.emotion.threshold_engine.get_slots_summary(),
+        "panel": comp.emotion.threshold_engine.get_panel_text(),
+    }
+
+
 @app.get("/api/stats/tokens")
 async def stats_tokens(user_id: int = Query(default=None)) -> dict:
     if user_id is None:
         user_id = get_master_qq()
+    tracker = get_token_tracker()
     try:
-        total = _db.query_one(
-            "SELECT SUM(total_tokens) as total, COUNT(*) as count FROM token_usage WHERE user_id = ?",
-            (user_id,),
-        )
+        today = tracker.get_today(user_id)
+        week = tracker.get_week(user_id)
+        by_provider = tracker.get_by_provider(user_id)
         return {
-            "total_tokens": total.get("total", 0) if total else 0,
-            "total_calls": total.get("count", 0) if total else 0,
+            "today": today,
+            "week": week,
+            "by_provider": by_provider,
             "user_id": user_id,
         }
     except Exception as e:

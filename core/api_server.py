@@ -29,11 +29,20 @@ from typing import Any
 
 import uvicorn
 import yaml
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, UploadFile, File
 from fastapi.responses import JSONResponse, Response, FileResponse, StreamingResponse
 
 from communication.message import IncomingMessage
-from config.persona_loader import get_master_qq, load_settings, save_settings, reset_settings
+from config.persona_loader import (
+    get_master_qq,
+    load_settings,
+    save_settings,
+    reset_settings,
+    get_persona_summary,
+    save_persona,
+    save_avatar_bytes,
+    load_avatar_bytes,
+)
 from core.companion import get_companion
 from core.database import Database
 from core.napcat_launcher import get_launcher
@@ -1053,6 +1062,72 @@ async def system_stats() -> dict:
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# ── Block-2 A2: Persona (name / english_name / avatar) ──────
+
+_PERSONA_AVATAR_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
+_PERSONA_AVATAR_TYPES = {"image/png", "image/jpeg"}
+
+
+@app.get("/api/persona")
+async def persona_get() -> dict:
+    """Return persona summary: name / english_name / avatar_url."""
+    try:
+        return get_persona_summary()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.put("/api/persona")
+async def persona_put(request: Request) -> dict:
+    """Update persona name / english_name. Atomic write + backup + validation."""
+    try:
+        body = await request.json()
+    except Exception as e:
+        return JSONResponse({"error": f"invalid json: {e}"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a dict"}, status_code=400)
+    try:
+        persona = save_persona(body)
+        return {"status": "ok", "persona": persona}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/persona/avatar")
+async def persona_avatar_upload(file: UploadFile = File(...)) -> dict:
+    """Upload persona avatar. PNG/JPG only, ≤2 MB. Auto-backs up previous."""
+    if file.content_type not in _PERSONA_AVATAR_TYPES:
+        return JSONResponse(
+            {"error": f"unsupported type: {file.content_type}"},
+            status_code=415,
+        )
+    data = await file.read()
+    if len(data) > _PERSONA_AVATAR_MAX_BYTES:
+        return JSONResponse(
+            {"error": f"file too large (>{_PERSONA_AVATAR_MAX_BYTES} bytes)"},
+            status_code=413,
+        )
+    if not data:
+        return JSONResponse({"error": "empty file"}, status_code=400)
+    ext = "png" if file.content_type == "image/png" else "jpg"
+    try:
+        url = save_avatar_bytes(data, ext=ext)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return {"status": "ok", "url": url, "size": len(data)}
+
+
+@app.get("/api/persona/avatar")
+async def persona_avatar_get() -> Response:
+    """Serve persona avatar bytes (or 404 if not set)."""
+    pair = load_avatar_bytes()
+    if not pair:
+        return JSONResponse({"error": "not set"}, status_code=404)
+    data, ct = pair
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "no-cache"})
+
 
 async def start_api(host: str = "127.0.0.1", port: int = 7890) -> Any:
     config = uvicorn.Config(app, host=host, port=port, log_level="info")

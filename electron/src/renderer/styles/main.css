@@ -760,6 +760,100 @@ body {
   background: transparent;
   border: none;
 }
+
+/* Block-2 A1: chat avatar + name meta row */
+.chat-msg__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+.chat-msg--assistant .chat-msg__meta { justify-content: flex-start; }
+.chat-msg--user .chat-msg__meta { justify-content: flex-end; }
+.chat-msg__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15));
+  background: var(--bg-200);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--color-text-muted, #888);
+  font-size: 13px;
+}
+.chat-msg__avatar--placeholder {
+  /* visible letter inside a circle */
+}
+.chat-msg__name {
+  letter-spacing: 0.02em;
+}
+
+/* Block-2 A2: persona block in settings */
+.settings-group--persona {
+  background: var(--bg-100);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.settings-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: var(--color-text);
+}
+.settings-hint {
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+.persona-edit {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.persona-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.persona-avatar img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-primary, #ff5b9c);
+  background: var(--bg-200);
+}
+.persona-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.persona-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+}
+.persona-fields input {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--bg-50);
+  color: var(--color-text);
+  font-size: 13px;
+}
 .chat-attach-card img {
   max-width: 220px;
   max-height: 220px;

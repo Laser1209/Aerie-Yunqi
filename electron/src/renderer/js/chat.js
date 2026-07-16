@@ -15,14 +15,22 @@ class ChatManager {
     this._quotedMsg = null;            // Phase 4: currently quoted message
     this._pendingAttachments = [];     // Phase 5: file attachments awaiting send
 
+    // Block-2 A1: persona + master avatar cache
+    this._personaCache = { name: "伊塔", english_name: "Ita", avatar_url: "" };
+    this._masterAvatar = "";
+
     this._bindEvents();
     this._listenIPC();
+    this._listenOpenTab();
     this._startPoll();
     this.loadHistory();
     // Phase 5: file uploader
     if (window.ChatUploader) {
       this._uploader = new window.ChatUploader(this);
     }
+    // Block-2 A1: load persona + master avatar (best-effort, fail-soft)
+    this._loadPersona();
+    this._loadMasterAvatar();
   }
 
   _bindEvents() {
@@ -59,6 +67,42 @@ class ChatManager {
       this._seenIds.add(msg.id);
       this._render(msg);
     });
+  }
+
+  // Block-2 T1 bridge: tray "设置" click → switch to settings tab
+  _listenOpenTab() {
+    if (window.aerie && window.aerie.electron && window.aerie.electron.onOpenTab) {
+      window.aerie.electron.onOpenTab((tab) => {
+        const btn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+        if (btn) btn.click();
+      });
+    }
+  }
+
+  // Block-2 A1: best-effort persona + master avatar fetch
+  async _loadPersona() {
+    try {
+      const r = await this._request({ method: "GET", path: "/api/persona" });
+      if (r && r.data && !r.data.error && typeof r.data === "object") {
+        this._personaCache = {
+          name: r.data.name || this._personaCache.name,
+          english_name: r.data.english_name || this._personaCache.english_name,
+          avatar_url: r.data.avatar_url || this._personaCache.avatar_url,
+        };
+      }
+    } catch (_) { /* fail-soft: keep defaults */ }
+  }
+
+  async _loadMasterAvatar() {
+    try {
+      const r = await this._request({
+        method: "GET",
+        path: "/api/qq/avatar?user_id=" + this._masterQQ,
+      });
+      if (r && r.data && !r.data.error && typeof r.data.url === "string") {
+        this._masterAvatar = r.data.url;
+      }
+    } catch (_) { /* fail-soft: keep empty */ }
   }
 
   _markRecalled(msgId) {
@@ -325,7 +369,21 @@ class ChatManager {
     if (msg.id) div.setAttribute("data-msg-id", msg.id);
     if (msg.id) div.setAttribute("data-temp-text", msg.content);
 
+    // Block-2 A1: avatar + name meta (above bubble)
+    const isAssistant = msg.role === "assistant";
+    const displayName = isAssistant
+      ? (this._personaCache && this._personaCache.name) || "伊塔"
+      : "你";
+    const avatarUrl = isAssistant
+      ? (this._personaCache && this._personaCache.avatar_url) || ""
+      : this._masterAvatar || "";
+
     let html = "";
+    // Block-2 A1: meta row
+    const avatarContent = avatarUrl
+      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(avatarUrl)}" alt="" onerror="this.style.visibility='hidden'">`
+      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${isAssistant ? "伊" : "你"}</span>`;
+    html += `<div class="chat-msg__meta">${avatarContent}<span class="chat-msg__name">${this._escapeHtml(displayName)}</span></div>`;
     // Phase 4: quote overlay (above bubble)
     if (msg.reply_to_id && msg.reply_to_content) {
       const role = msg.reply_to_role === "user" ? "你" : "伊塔";

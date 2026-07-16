@@ -386,6 +386,26 @@
 
           <!-- 常用 form 视图 -->
           <div id="settings-form-view">
+            <!-- Block-2 A2: persona 头像 + 中英名 -->
+            <div class="settings-group settings-group--persona">
+              <h3 class="settings-section-title">她的样子 · Her Appearance</h3>
+              <p class="settings-hint">这是她在你眼中的样子。改完她就是这个人。/ This is who she is to you.</p>
+              <div class="persona-edit">
+                <div class="persona-avatar">
+                  <img id="persona-avatar-preview" src="/assets/avatar_ita_default.png" alt="" data-default-src="/assets/avatar_ita_default.png">
+                  <input type="file" id="persona-avatar-file" accept="image/png,image/jpeg" hidden>
+                  <button id="persona-avatar-upload" class="btn btn-secondary" type="button">换头像 · Change</button>
+                </div>
+                <div class="persona-fields">
+                  <label>名字 · Name <input type="text" id="persona-name" maxlength="20" placeholder="伊塔"></label>
+                  <label>English Name <input type="text" id="persona-english-name" maxlength="20" placeholder="Ita"></label>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button id="persona-save-btn" class="btn btn-primary" type="button">保存她 · Save</button>
+              </div>
+              <div id="persona-status" class="settings-status" style="font-size:12px;color:var(--success);margin-top:6px;"></div>
+            </div>
             <div class="settings-group">
               <label>主题</label>
               <select id="setting-theme">

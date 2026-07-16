@@ -1,5 +1,5 @@
 "use strict";
-const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen } = require("electron");
+const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen, Menu, dialog } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -203,6 +203,61 @@ function createTray() {
   const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   tray = new Tray(icon);
   tray.setToolTip("Aerie · 云栖");
+  // Block-2 T1: right-click context menu
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "显示 / 隐藏窗口",
+      click: () => {
+        if (!mainWindow) return;
+        if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
+          mainWindow.hide();
+        } else {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    {
+      label: "设置",
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+        BrowserWindow.getAllWindows().forEach((w) => {
+          if (w && !w.isDestroyed()) {
+            try { w.webContents.send("ui:open-tab", "settings"); } catch (_) {}
+          }
+        });
+      },
+    },
+    {
+      label: "关于",
+      click: () => {
+        dialog.showMessageBox({
+          type: "info",
+          title: "Aerie · 云栖",
+          message: "Aerie · 云栖",
+          detail:
+            "伊塔在你身边。/ Ita is with you.\n" +
+            "版本 v9.0 Hybrid\n" +
+            "© 2026",
+          buttons: ["好 / OK"],
+          defaultId: 0,
+        });
+      },
+    },
+    { type: "separator" },
+    {
+      label: "退出",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(menu);
   tray.on("click", () => {
     if (mainWindow) {
       mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();

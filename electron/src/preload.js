@@ -44,6 +44,10 @@ contextBridge.exposeInMainWorld("aerie", {
         ipcRenderer.on("window:maximized", (_event, isMax) => cb(isMax));
       },
     },
+    // Block-2 T1 bridge: tray "设置" click → settings tab
+    onOpenTab: (cb) => {
+      ipcRenderer.on("ui:open-tab", (_event, tab) => cb(tab));
+    },
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

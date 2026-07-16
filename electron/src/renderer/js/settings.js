@@ -21,6 +21,9 @@ class SettingsPanel {
       });
     }
 
+    // Block-2 A2: persona block controls
+    this._initPersonaControls();
+
     // Mode tabs
     document.querySelectorAll(".settings-mode-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -210,6 +213,115 @@ class SettingsPanel {
         st.textContent = "备份失败: " + e.message;
         st.style.color = "var(--error)";
       }
+    }
+  }
+
+  // ── Block-2 A2: Persona (avatar + name) ──────────────
+
+  _initPersonaControls() {
+    const uploadBtn = document.getElementById("persona-avatar-upload");
+    const fileInput = document.getElementById("persona-avatar-file");
+    const saveBtn = document.getElementById("persona-save-btn");
+    if (uploadBtn && fileInput) {
+      uploadBtn.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", (e) => this._onAvatarPick(e));
+    }
+    if (saveBtn) saveBtn.addEventListener("click", () => this.savePersona());
+    this.loadPersona();
+  }
+
+  _setPersonaStatus(text, ok = true) {
+    const st = document.getElementById("persona-status");
+    if (!st) return;
+    st.textContent = text;
+    st.style.color = ok ? "var(--success)" : "var(--error)";
+    if (text) setTimeout(() => { if (st.textContent === text) st.textContent = ""; }, 4000);
+  }
+
+  async loadPersona() {
+    try {
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/persona" });
+      const s = (r.data && !r.data.error) ? r.data : {};
+      const nameEl = document.getElementById("persona-name");
+      const enEl = document.getElementById("persona-english-name");
+      if (nameEl) nameEl.value = s.name || "伊塔";
+      if (enEl) enEl.value = s.english_name || "Ita";
+      const img = document.getElementById("persona-avatar-preview");
+      if (img) {
+        if (s.avatar_url) {
+          // append a cache-buster so re-uploads show
+          img.src = s.avatar_url + (s.avatar_url.indexOf("?") >= 0 ? "&_t=" : "?_t=") + Date.now();
+        } else {
+          const fallback = img.getAttribute("data-default-src") || "/assets/avatar_ita_default.png";
+          img.src = fallback;
+        }
+      }
+    } catch (e) {
+      this._setPersonaStatus("加载失败: " + e.message, false);
+    }
+  }
+
+  async _onAvatarPick(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    // Client-side cap (2 MB) — matches server
+    if (file.size > 2 * 1024 * 1024) {
+      this._setPersonaStatus("文件过大（>2MB）", false);
+      e.target.value = "";
+      return;
+    }
+    if (!/^image\/(png|jpeg)$/.test(file.type)) {
+      this._setPersonaStatus("只支持 PNG / JPG", false);
+      e.target.value = "";
+      return;
+    }
+    this._setPersonaStatus("上传中… / Uploading…", true);
+    try {
+      // Upload as multipart using fetch directly (window.aerie.api.request only does JSON)
+      const form = new FormData();
+      form.append("file", file);
+      const r = await fetch("http://127.0.0.1:7890/api/persona/avatar", {
+        method: "POST",
+        body: form,
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data && data.status === "ok") {
+        const img = document.getElementById("persona-avatar-preview");
+        if (img) img.src = data.url + (data.url.indexOf("?") >= 0 ? "&_t=" : "?_t=") + Date.now();
+        this._setPersonaStatus("头像已更新 · Avatar updated", true);
+      } else {
+        this._setPersonaStatus("上传失败: " + (data && (data.error || data.detail)) || ("HTTP " + r.status), false);
+      }
+    } catch (err) {
+      this._setPersonaStatus("上传失败: " + err.message, false);
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  async savePersona() {
+    const nameEl = document.getElementById("persona-name");
+    const enEl = document.getElementById("persona-english-name");
+    const body = {
+      name: (nameEl && nameEl.value || "").trim() || "伊塔",
+      english_name: (enEl && enEl.value || "").trim() || "Ita",
+    };
+    this._setPersonaStatus("保存中… / Saving…", true);
+    try {
+      const r = await window.aerie.api.request({
+        method: "PUT", path: "/api/persona", body,
+      });
+      if (r.data && r.data.status === "ok") {
+        this._setPersonaStatus("她记住了 · She remembers now", true);
+        // Notify chat to refresh persona cache
+        if (window._chat && typeof window._chat._loadPersona === "function") {
+          window._chat._loadPersona();
+        }
+      } else {
+        this._setPersonaStatus("保存失败: " + (r.data && (r.data.error || r.data.detail) || "unknown"), false);
+      }
+    } catch (e) {
+      this._setPersonaStatus("保存失败: " + e.message, false);
     }
   }
 }

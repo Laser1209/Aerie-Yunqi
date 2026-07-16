@@ -137,8 +137,23 @@ class ContextBuilder:
         if route_mode == "FULL" and attachments:
             att_lines = []
             for att in attachments:
-                att_lines.append(f"- {att.get('name','?')}（{att.get('type','?')}，{att.get('size',0)} bytes，路径 {att.get('url','?')}）")
-            system += "\n\n**附件**：\n你发送了附件：\n" + "\n".join(att_lines) + "\n请基于这些附件回应。如果是图片且你具备视觉能力，请描述/分析它；如果是文档请确认收到。"
+                name = att.get("name", "?")
+                # Block-3 R0.4: prefer extracted markdown (markitdown) over metadata
+                md = att.get("markdown")
+                if md:
+                    att_lines.append(f"### {name}\n\n{md}\n")
+                else:
+                    att_lines.append(
+                        f"- {name}（{att.get('type', '?')}, "
+                        f"{att.get('size', 0)} bytes, path {att.get('url', '?')}）"
+                    )
+            system += (
+                "\n\n**附件 / Attachments**：\n"
+                "你收到了附件。优先基于附件内文回答用户（如果已转成 markdown）。\n"
+                "She sent an attachment. Read the embedded markdown first; "
+                "otherwise note its metadata.\n\n"
+                + "\n".join(att_lines)
+            )
 
         # L3 · 情绪状态注入（FULL only）
         if route_mode == "FULL" and emotion_info:

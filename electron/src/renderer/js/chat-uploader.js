@@ -34,17 +34,10 @@ class ChatUploader {
   }
 
   _init() {
-    // Add attach button to input area (Phase 7: paperclip SVG icon)
-    const inputArea = document.querySelector(".chat-input-area");
-    if (inputArea && !document.getElementById("chat-attach-btn")) {
-      const toolbar = document.createElement("div");
-      toolbar.className = "chat-input-toolbar";
-      toolbar.innerHTML = `<button class="chat-input-toolbar__btn" id="chat-attach-btn" title="发送附件"><svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-attach"/></svg></button>`;
-      inputArea.parentNode.insertBefore(toolbar, inputArea);
-
-      const btn = document.getElementById("chat-attach-btn");
-      btn.addEventListener("click", () => this._openPicker());
-    }
+    // Block-3 R0.2: toolbar buttons are now static in index.html,
+    // we only need to bind the click and keep the hidden file input.
+    const btn = document.getElementById("chat-attach-btn");
+    if (btn) btn.addEventListener("click", () => this._openPicker());
 
     // Hidden file input
     if (!document.getElementById("chat-file-input")) {
@@ -129,12 +122,15 @@ class ChatUploader {
         return;
       }
       // Append to pending attachments
+      const isDoc = (classifyType(ext) === "file") && (ext !== "zip" && ext !== "rar" && ext !== "7z" && ext !== "exe" && ext !== "apk");
       this._chat._pendingAttachments.push({
         name: file.name,
         size: file.size,
         type: classifyType(ext),
         url: respData.url.replace(/^\//, ""),   // strip leading slash
         content_type: file.type || "",
+        is_doc: isDoc,
+        state: isDoc ? "converting" : "ready",  // Block-3 R0.2: 4 态
       });
       this._chat._renderAttachmentPreviews();
       if (this._input) this._input.focus();

@@ -140,11 +140,24 @@
             <div class="chat-empty">Aerie · 云栖 已就绪，开始对话吧～</div>
           </div>
           <div class="chat-input-area">
+            <div class="chat-input-toolbar" id="chat-input-toolbar">
+              <button id="chat-attach-btn" class="chat-input-toolbar__btn" type="button" title="附件 / Attach">
+                <svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-attach"/></svg>
+              </button>
+              <button id="chat-mic-btn" class="chat-input-toolbar__btn" type="button" title="语音输入 / Voice (需联网)" aria-pressed="false">
+                <svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-mic"/></svg>
+              </button>
+            </div>
             <div class="chat-input-row">
               <input id="chat-input" type="text" placeholder="和伊塔说点什么..." autofocus>
               <button id="chat-send-btn" class="btn-send">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
+            </div>
+            <div id="chat-mic-status" class="chat-mic-status" hidden>
+              <span class="chat-mic-status__pulse" aria-hidden="true"></span>
+              <span class="chat-mic-status__text">正在听… / Listening…</span>
+              <span class="chat-mic-status__net">需联网 / Online required</span>
             </div>
           </div>
         </div>
@@ -602,6 +615,7 @@
 </div>
 
 <script src="js/chat.js"></script>
+<script src="js/chat-voice.js"></script>
 <script src="js/chat-uploader.js"></script>
 <script src="js/napcat-panel.js"></script>
 <script src="js/emotion-dashboard.js"></script>

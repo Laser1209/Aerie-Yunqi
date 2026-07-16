@@ -99,6 +99,28 @@ async def chat_send(request: Request) -> dict:
     reply_to_id = int(body.get("reply_to_id", 0) or 0)
     attachments = body.get("attachments") or []
 
+    # Block-3 R0.3: enrich attachments with extracted markdown (best-effort)
+    if attachments:
+        try:
+            from core.attachment_handler import extract_markdown
+            for att in attachments:
+                if not isinstance(att, dict):
+                    continue
+                url = att.get("url") or ""
+                fname = url.lstrip("/").split("/")[-1]
+                if not fname or "/" in fname or ".." in fname:
+                    continue
+                # Block-3: path-traversal guard
+                from pathlib import Path as _Path
+                upload_path = _Path(UPLOAD_DIR) / fname
+                if not upload_path.exists() or not upload_path.is_file():
+                    continue
+                md = extract_markdown(upload_path, upload_base=UPLOAD_DIR)
+                if md:
+                    att["markdown"] = md
+        except Exception as _e:
+            logger.debug("attachment md extraction failed: %s", _e)
+
     msg = IncomingMessage.from_local(
         text, user_id, reply_to_id=reply_to_id, attachments=attachments
     )
@@ -225,7 +247,23 @@ async def serve_upload(filename: str):
 # ── Upload ───────────────────────────────────────────
 
 UPLOAD_DIR = "uploads"
-ALLOWED_TYPES = {"image/png", "image/jpeg", "image/gif", "text/plain", "application/json"}
+ALLOWED_TYPES = {
+    # Block-3 R0.3: full office + document coverage
+    # images
+    "image/png", "image/jpeg", "image/gif",
+    # plain text / data
+    "text/plain", "text/html", "text/csv", "text/xml", "application/json", "application/xml",
+    # pdf + office (markitdown covers all of these)
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",        # .xlsx
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    "application/msword",                                                          # .doc
+    "application/vnd.ms-excel",                                                    # .xls
+    "application/vnd.ms-powerpoint",                                               # .ppt
+    "application/epub+zip",                                                        # .epub
+    "application/rtf", "application/vnd.oasis.opendocument.text",                  # .odt (markitdown via)
+}
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB
 
 

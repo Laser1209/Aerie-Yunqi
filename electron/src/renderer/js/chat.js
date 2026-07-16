@@ -28,6 +28,10 @@ class ChatManager {
     if (window.ChatUploader) {
       this._uploader = new window.ChatUploader(this);
     }
+    // Block-3 R0.2: voice input
+    if (window.ChatVoice) {
+      this._voice = new window.ChatVoice(this);
+    }
     // Block-2 A1: load persona + master avatar (best-effort, fail-soft)
     this._loadPersona();
     this._loadMasterAvatar();
@@ -267,12 +271,23 @@ class ChatManager {
       return;
     }
     preview.style.display = "flex";
+    // Block-3 R0.2: 4 态状态机 (uploading / converting / ready / failed)
     preview.innerHTML = this._pendingAttachments
-      .map((a, i) =>
-        a.type === "image"
-          ? `<div class="chat-attach-thumb" data-i="${i}"><img src="/uploads/${a.url}" alt=""></div>`
-          : `<div class="chat-attach-thumb" data-i="${i}"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-attach"/></svg>${this._escapeHtml(a.name)}</div>`,
-      )
+      .map((a, i) => {
+        const isDoc = a.is_doc === true;
+        const state = a.state || "ready";   // uploading | converting | ready | failed
+        const stateLabel = {
+          uploading:  "上传中… / Uploading…",
+          converting: "转 markdown 中… / Converting…",
+          ready:      "",
+          failed:     "她读不了这个 / She can't read this",
+        }[state] || "";
+        const stateClass = "chat-attach-thumb--state-" + state;
+        if (a.type === "image") {
+          return `<div class="chat-attach-thumb ${stateClass}" data-i="${i}"><img src="/uploads/${this._escapeHtml(a.url)}" alt=""><span class="chat-attach-thumb__state">${this._escapeHtml(stateLabel)}</span></div>`;
+        }
+        return `<div class="chat-attach-thumb ${stateClass}" data-i="${i}"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-attach"/></svg><span class="chat-attach-thumb__name">${this._escapeHtml(a.name)}</span><span class="chat-attach-thumb__state">${this._escapeHtml(stateLabel)}</span></div>`;
+      })
       .join("");
   }
 

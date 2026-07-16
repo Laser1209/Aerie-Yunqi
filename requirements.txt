@@ -27,6 +27,10 @@ apscheduler>=3.10
 # AI / LLM (multi-provider)
 openai>=1.10
 
+# Document → Markdown conversion (office / pdf / html / csv)
+# Block-3: attachments uploaded to chat go through markitdown before LLM sees them
+markitdown[all]>=0.0.1
+
 # HTTP client
 requests>=2.31
 httpx>=0.25

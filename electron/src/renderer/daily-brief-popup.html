@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>每日简报 / Daily Brief</title>
+  <link rel="stylesheet" href="styles/daily-brief.css" />
+</head>
+<body>
+  <div class="brief-card-wrap" id="brief-wrap">
+    <div class="brief-card" id="brief-card">
+      <div class="brief-header">
+        <div class="brief-header__left">
+          <span class="brief-greeting" id="brief-greeting">早上好，傻瓜</span>
+          <span class="brief-sun" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+          </span>
+        </div>
+        <button class="brief-close" id="brief-close" aria-label="关闭 / Close">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="brief-date" id="brief-date">—</div>
+
+      <!-- 5 sections, populated by daily-brief-popup.js -->
+      <div class="brief-section" data-section="ai_news">
+        <div class="brief-section-title">
+          <span class="brief-section-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 L15 9 L22 9 L16 14 L18 21 L12 17 L6 21 L8 14 L2 9 L9 9 Z"/></svg>
+          </span>
+          <span>AI 动向 / AI Trends</span>
+        </div>
+        <ul class="brief-list" id="brief-ai-news"><li class="brief-empty">（暂无）</li></ul>
+        <div class="brief-feedback" data-section="ai_news">
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/><path d="M7 11l4-8a2 2 0 0 1 2 1.5V10h5a2 2 0 0 1 2 2.2l-1.5 6A2 2 0 0 1 16.5 20H7"/></svg>
+          </button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3"/><path d="M17 13l-4 8a2 2 0 0 1-2-1.5V14H6a2 2 0 0 1-2-2.2L5.5 5.8A2 2 0 0 1 7.5 4H17"/></svg>
+          </button>
+          <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
+        </div>
+      </div>
+
+      <div class="brief-section" data-section="it_news">
+        <div class="brief-section-title">
+          <span class="brief-section-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          </span>
+          <span>IT 行业 / Tech Industry</span>
+        </div>
+        <ul class="brief-list" id="brief-it-news"><li class="brief-empty">（暂无）</li></ul>
+        <div class="brief-feedback" data-section="it_news">
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/><path d="M7 11l4-8a2 2 0 0 1 2 1.5V10h5a2 2 0 0 1 2 2.2l-1.5 6A2 2 0 0 1 16.5 20H7"/></svg>
+          </button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3"/><path d="M17 13l-4 8a2 2 0 0 1-2-1.5V14H6a2 2 0 0 1-2-2.2L5.5 5.8A2 2 0 0 1 7.5 4H17"/></svg>
+          </button>
+          <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
+        </div>
+      </div>
+
+      <div class="brief-section" data-section="intl_news">
+        <div class="brief-section-title">
+          <span class="brief-section-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          </span>
+          <span>国际 / International</span>
+        </div>
+        <ul class="brief-list" id="brief-intl-news"><li class="brief-empty">（暂无）</li></ul>
+        <div class="brief-feedback" data-section="intl_news">
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/><path d="M7 11l4-8a2 2 0 0 1 2 1.5V10h5a2 2 0 0 1 2 2.2l-1.5 6A2 2 0 0 1 16.5 20H7"/></svg>
+          </button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3"/><path d="M17 13l-4 8a2 2 0 0 1-2-1.5V14H6a2 2 0 0 1-2-2.2L5.5 5.8A2 2 0 0 1 7.5 4H17"/></svg>
+          </button>
+          <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
+        </div>
+      </div>
+
+      <div class="brief-section" data-section="cn_news">
+        <div class="brief-section-title">
+          <span class="brief-section-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21V12h6v9"/></svg>
+          </span>
+          <span>国家 / National</span>
+        </div>
+        <ul class="brief-list" id="brief-cn-news"><li class="brief-empty">（暂无）</li></ul>
+        <div class="brief-feedback" data-section="cn_news">
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/><path d="M7 11l4-8a2 2 0 0 1 2 1.5V10h5a2 2 0 0 1 2 2.2l-1.5 6A2 2 0 0 1 16.5 20H7"/></svg>
+          </button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3"/><path d="M17 13l-4 8a2 2 0 0 1-2-1.5V14H6a2 2 0 0 1-2-2.2L5.5 5.8A2 2 0 0 1 7.5 4H17"/></svg>
+          </button>
+          <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
+        </div>
+      </div>
+
+      <div class="brief-section brief-section--weather" data-section="weather">
+        <div class="brief-section-title">
+          <span class="brief-section-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2"/></svg>
+          </span>
+          <span>天气 / Weather</span>
+        </div>
+        <div class="brief-weather" id="brief-weather">
+          <span class="brief-weather__city" id="brief-weather-city">—</span>
+          <span class="brief-weather__desc" id="brief-weather-desc">（暂无）</span>
+        </div>
+        <div class="brief-feedback" data-section="weather">
+          <button class="brief-thumb brief-thumb--up"   data-thumb="up"        aria-label="喜欢 / Like">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/><path d="M7 11l4-8a2 2 0 0 1 2 1.5V10h5a2 2 0 0 1 2 2.2l-1.5 6A2 2 0 0 1 16.5 20H7"/></svg>
+          </button>
+          <button class="brief-thumb brief-thumb--down" data-thumb="down"      aria-label="不喜欢 / Dislike">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3"/><path d="M17 13l-4 8a2 2 0 0 1-2-1.5V14H6a2 2 0 0 1-2-2.2L5.5 5.8A2 2 0 0 1 7.5 4H17"/></svg>
+          </button>
+          <input class="brief-comment" type="text" placeholder="想说点什么 / Comment..." maxlength="120" />
+        </div>
+      </div>
+
+      <div class="brief-footer">
+        <span class="brief-footer__text">有什么需要我帮忙的吗？</span>
+        <div class="brief-footer__actions">
+          <a href="#" class="brief-link" id="brief-link-expand">展开完整日报 ↗</a>
+          <a href="#" class="brief-link" id="brief-link-chat">和她聊聊 →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="daily-brief-popup.js"></script>
+</body>
+</html>

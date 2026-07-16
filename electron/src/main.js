@@ -17,6 +17,8 @@ const PY_MAIN = path.join(PROJECT_ROOT, "main.py");
 let pythonProc = null;
 let mainWindow = null;
 let tray = null;
+let briefPopupWindow = null;        // Block-5A: 360px 弹窗
+let briefDetailWindow = null;       // Block-5A: 1280×800 详情页
 let _chatEventBuf = "";
 const CHAT_EVENT_PREFIX = "[CHAT_EVENT]";
 let _backendReady = false;
@@ -219,6 +221,18 @@ function createTray() {
       },
     },
     {
+      // Block-5A: 打开独立 360px 简报弹窗
+      label: "打开今日简报 / Open Brief",
+      click: () => showBriefPopup(),
+    },
+    {
+      label: "展开完整日报 / Full Brief",
+      click: () => {
+        const d = new Date().toISOString().slice(0, 10);
+        createBriefDetailWindow(d);
+      },
+    },
+    {
       label: "设置",
       click: () => {
         if (mainWindow) {
@@ -263,6 +277,89 @@ function createTray() {
       mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
     }
   });
+}
+
+// ── Brief Windows (Block-5A) ──────────────────────
+function createBriefPopupWindow() {
+  if (briefPopupWindow && !briefPopupWindow.isDestroyed()) {
+    if (briefPopupWindow.isMinimized()) briefPopupWindow.restore();
+    briefPopupWindow.show();
+    briefPopupWindow.focus();
+    return briefPopupWindow;
+  }
+  briefPopupWindow = new BrowserWindow({
+    width: 360,
+    height: 640,
+    alwaysOnTop: false,
+    frame: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    title: "每日简报 / Daily Brief",
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  briefPopupWindow.setMenuBarVisibility(false);
+  briefPopupWindow.loadFile(path.join(__dirname, "renderer", "daily-brief-popup.html"));
+  briefPopupWindow.once("ready-to-show", () => {
+    briefPopupWindow.show();
+    briefPopupWindow.focus();
+  });
+  briefPopupWindow.on("closed", () => { briefPopupWindow = null; });
+  return briefPopupWindow;
+}
+
+function createBriefDetailWindow(dateStr) {
+  const d = dateStr || new Date().toISOString().slice(0, 10);
+  // 同一日期的 detail 窗口已开 → 聚焦，不重复
+  if (briefDetailWindow && !briefDetailWindow.isDestroyed()) {
+    if (briefDetailWindow.isMinimized()) briefDetailWindow.restore();
+    briefDetailWindow.show();
+    briefDetailWindow.focus();
+    return briefDetailWindow;
+  }
+  briefDetailWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 960,
+    minHeight: 600,
+    frame: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    fullscreenable: true,
+    show: false,
+    title: `日报详情 · ${d} / Daily Brief Detail`,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  briefDetailWindow.setMenuBarVisibility(false);
+  briefDetailWindow.loadFile(
+    path.join(__dirname, "renderer", "daily-brief-detail.html"),
+    { query: { date: d } }
+  );
+  briefDetailWindow.once("ready-to-show", () => {
+    briefDetailWindow.show();
+    briefDetailWindow.focus();
+  });
+  briefDetailWindow.on("closed", () => { briefDetailWindow = null; });
+  return briefDetailWindow;
+}
+
+function showBriefPopup() {
+  createBriefPopupWindow();
 }
 
 // ── IPC Handlers ───────────────────────────────────
@@ -489,12 +586,97 @@ ipcMain.handle("settings:reset", async () => {
   }
 });
 
+// ── Brief IPC (Block-5A) ──────────────────────────
+// 弹窗里点"展开完整日报" → 主进程开 1280×800 详情窗
+ipcMain.handle("brief:open-detail", async (_event, data) => {
+  const dateStr = (data && data.date) || new Date().toISOString().slice(0, 10);
+  createBriefDetailWindow(dateStr);
+  return { ok: true };
+});
+
+// 弹窗通知关闭（点 X）
+ipcMain.handle("brief:hide", async () => {
+  if (briefPopupWindow && !briefPopupWindow.isDestroyed()) briefPopupWindow.close();
+  return { ok: true };
+});
+
+// 详情窗通知关闭
+ipcMain.handle("brief:detail-close", async () => {
+  if (briefDetailWindow && !briefDetailWindow.isDestroyed()) briefDetailWindow.close();
+  return { ok: true };
+});
+
+// 详情窗"导出 HTML" → 通知后端渲染并落盘，弹成功提示
+ipcMain.handle("brief:export", async (_event, data) => {
+  try {
+    const r = await apiRequest({
+      method: "POST",
+      path: "/api/brief/export",
+      body: data || {},
+    });
+    if (r.status === 200 && r.data && r.data.ok) {
+      dialog.showMessageBox({
+        type: "info",
+        title: "导出成功 / Export OK",
+        message: "完整日报已导出",
+        detail: r.data.path || "(未指定路径)",
+        buttons: ["好 / OK"],
+        defaultId: 0,
+      });
+    } else {
+      dialog.showMessageBox({
+        type: "warning",
+        title: "导出失败 / Export Failed",
+        message: "导出失败",
+        detail: (r.data && r.data.error) || `HTTP ${r.status}`,
+        buttons: ["好 / OK"],
+        defaultId: 0,
+      });
+    }
+    return r.data;
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+// 弹窗通知打开主窗口 chat tab
+ipcMain.handle("brief:chat", async () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  BrowserWindow.getAllWindows().forEach((w) => {
+    if (w && !w.isDestroyed()) {
+      try { w.webContents.send("ui:open-tab", "chat"); } catch (_) {}
+    }
+  });
+  if (briefPopupWindow && !briefPopupWindow.isDestroyed()) briefPopupWindow.close();
+  return { ok: true };
+});
+
 // ── Lifecycle ──────────────────────────────────────
 app.whenReady().then(() => {
   startPythonBackend();
   createMainWindow();
   // Delay tray creation to avoid flash
   setTimeout(createTray, 2000);
+  // Block-5A: 后端就绪后 8s 弹简报（开机钩子）；只在第一次成功 health check 后触发一次
+  let _bootBriefShown = false;
+  const _bootBriefTimer = setInterval(async () => {
+    if (_bootBriefShown) {
+      clearInterval(_bootBriefTimer);
+      return;
+    }
+    if (_backendReady) {
+      _bootBriefShown = true;
+      clearInterval(_bootBriefTimer);
+      // 8s 延迟，让主窗口先把 UI 拉起来
+      setTimeout(() => {
+        try { showBriefPopup(); } catch (e) { console.warn("[main] brief popup failed:", e); }
+      }, 8000);
+    }
+  }, 1000);
 });
 
 app.on("window-all-closed", () => {

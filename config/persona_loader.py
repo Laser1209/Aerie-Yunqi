@@ -46,6 +46,79 @@ def load_proactive_config() -> dict[str, Any]:
     return _load_yaml("proactive.yaml")
 
 
+# R0.3.2: centralized behavior config (emotion / desire / decision / cognition)
+def load_behavior_config() -> dict[str, Any]:
+    """Load persona behavior config from config/persona_behavior.yaml.
+
+    Single source of truth for emotion thresholds, desire variables,
+    decision weights, cognition visibility, and AI provider options.
+    All modules MUST read from here; no hardcoded constants.
+
+    Returns deep-merged dict (file overrides defaults).
+    """
+    file_cfg = _load_yaml("persona_behavior.yaml")
+    merged = _deep_merge(_DEFAULT_BEHAVIOR_CONFIG, file_cfg)
+    return merged
+
+
+_DEFAULT_BEHAVIOR_CONFIG: dict[str, Any] = {
+    "version": "1.0",
+    "emotion": {
+        "baseline": {"pleasure": 0.10, "arousal": 0.20, "dominance": 0.80, "label": "neutral"},
+        "tree": {
+            "default": "Neutral",
+            "stackable": True,
+            "states": {
+                "joy":     {"P": 0.6,  "A": 0.5,  "D": 0.3},
+                "anger":   {"P": -0.5, "A": 0.7,  "D": 0.6},
+                "sad":     {"P": -0.6, "A": -0.3, "D": -0.4},
+                "fear":    {"P": -0.7, "A": 0.6,  "D": -0.5},
+                "neutral": {"P": 0.0,  "A": 0.0,  "D": 0.0},
+            },
+        },
+        "thresholds": {
+            "patience":   {"label": "忍耐值",       "threshold": 100, "decay_per_day": 5,  "eruption_label": "冷暴模式", "post_decay": -15, "description": ""},
+            "anxiety":    {"label": "不安值",       "threshold": 100, "decay_per_day": 3,  "eruption_label": "坍塌模式", "post_decay": 20,  "description": ""},
+            "desire":     {"label": "渴望值",       "threshold": 80,  "decay_per_day": 8,  "eruption_label": "索求模式", "post_decay": 0,   "description": ""},
+            "tenderness": {"label": "温柔透支值",   "threshold": 60,  "decay_per_day": 10, "eruption_label": "反扑模式", "post_decay": 0,   "description": ""},
+        },
+    },
+    "desire": {
+        "tick_seconds": 300,
+        "variables": {
+            "user_absence_hours": {"max": 12,  "weight": 1.0, "label": "用户缺位小时"},
+            "emotion_overdraft":  {"max": 60,  "weight": 0.8, "label": "温柔透支"},
+            "patience_loss":      {"max": 100, "weight": 1.0, "label": "累积忍耐消耗"},
+            "weather_impact":     {"max": 10,  "weight": 0.5, "label": "天气影响"},
+            "time_of_day_boost":  {"max": 15,  "weight": 0.7, "label": "时段加成"},
+            "anniversary_boost":  {"max": 30,  "weight": 1.5, "label": "纪念日加成"},
+        },
+        "triggers": {"care": 50, "voice": 80, "cooldown_hours": 12},
+        "persistence": "data/desire_state.json",
+    },
+    "decision": {
+        "weights": {"emotion": 0.35, "context": 0.30, "persona": 0.20, "user_history": 0.15},
+    },
+    "cognition": {
+        "trace_visibility": {
+            "route": True, "emotion": True, "threshold": True, "context": False,
+            "brain": True, "tools": True, "split": False, "postprocess": True, "output": True,
+        },
+        "decision_visibility": True,
+        "react_visibility": True,
+        "max_recent_in_panel": 20,
+    },
+    "ai_options": [
+        {"id": "main_llm",     "label": "主对话 / Main Chat",     "model": "deepseek-chat"},
+        {"id": "image_sdxl",   "label": "图像生成 / Image Gen",   "model": "sdxl"},
+        {"id": "voice_tts",    "label": "语音合成 / TTS",         "model": "qwen3-tts"},
+        {"id": "vision_llava", "label": "视觉理解 / Vision QA",   "model": "llava"},
+        {"id": "shell_safe",   "label": "受限 shell / Safe",      "model": "internal"},
+    ],
+    "default": "main_llm",
+}
+
+
 def save_settings(data: dict[str, Any]) -> bool:
     """Atomically save partial settings to config/settings.yaml.
 

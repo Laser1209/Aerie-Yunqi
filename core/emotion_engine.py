@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════
 # 5 basic emotions — PAD centers (Ita.md §8.1)
+# DEPRECATED: 旧硬编码 EMOTION_CENTERS，保留作 fallback
+# 实际配置请改 config/persona_behavior.yaml → emotion.tree.states
 # ══════════════════════════════════════════════════
 EMOTION_CENTERS = {
     "joy":     {"P": 0.6, "A": 0.5, "D": 0.3},
@@ -79,12 +81,34 @@ KEYWORD_DELTAS = [
 
 
 class EmotionEngine:
-    def __init__(self, db: Any = None, state_store: Any = None) -> None:
+    def __init__(self, db: Any = None, state_store: Any = None, behavior_cfg: dict | None = None) -> None:
         self.db = db
         self.state_store = state_store
-        self._state: dict[str, float] = {"P": 0.0, "A": 0.0, "D": 0.0}
+        self.behavior_cfg = behavior_cfg or {}
+        # R0.3.4: PAD centers now loaded from behavior_cfg; fallback to deprecated EMOTION_CENTERS.
+        states_cfg = self.behavior_cfg.get("emotion", {}).get("tree", {}).get("states")
+        if states_cfg:
+            self._emotion_centers: dict[str, dict] = {
+                name: {"P": float(v.get("P", 0)), "A": float(v.get("A", 0)), "D": float(v.get("D", 0))}
+                for name, v in states_cfg.items()
+            }
+            self._cfg_source = "persona_behavior.yaml"
+        else:
+            self._emotion_centers = EMOTION_CENTERS
+            self._cfg_source = "EMOTION_CENTERS (deprecated)"
+
+        # R0.3.4: baseline PAD from config (default neutral).
+        baseline_cfg = self.behavior_cfg.get("emotion", {}).get("baseline", {})
+        self._baseline: dict[str, float] = {
+            "P": float(baseline_cfg.get("pleasure", 0.0)),
+            "A": float(baseline_cfg.get("arousal", 0.0)),
+            "D": float(baseline_cfg.get("dominance", 0.0)),
+        }
+        self._state: dict[str, float] = dict(self._baseline)
         self._history: list[dict] = []
-        self.threshold_engine: CumulativeEmotionEngine = get_threshold_engine()
+        # Pass behavior_cfg through to threshold engine so the same source
+        # is used for both emotion and threshold configuration.
+        self.threshold_engine: CumulativeEmotionEngine = get_threshold_engine(behavior_cfg)
 
     # ── PAD Analysis ───────────────────────────────
 
@@ -95,7 +119,7 @@ class EmotionEngine:
         for keywords, emotion, weight in KEYWORD_DELTAS:
             for kw in keywords:
                 if kw in text:
-                    center = EMOTION_CENTERS[emotion]
+                    center = self._emotion_centers.get(emotion, {"P": 0, "A": 0, "D": 0})
                     p += center["P"] * weight * 0.15
                     a += center["A"] * weight * 0.15
                     d += center["D"] * weight * 0.15

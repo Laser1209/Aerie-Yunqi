@@ -48,6 +48,30 @@ contextBridge.exposeInMainWorld("aerie", {
     onOpenTab: (cb) => {
       ipcRenderer.on("ui:open-tab", (_event, tab) => cb(tab));
     },
+    // Block-4A R1.6 bridge: tray "打开今日简报" or boot 8s later → pop brief iframe
+    onBriefShow: (cb) => {
+      ipcRenderer.on("brief:show", (_event, data) => cb(data || {}));
+    },
+    // Block-5A: brief popup/detail window IPC bridge
+    brief: {
+      openDetail: (data) => ipcRenderer.invoke("brief:open-detail", data || {}),
+      hide: () => ipcRenderer.invoke("brief:hide"),
+      detailClose: () => ipcRenderer.invoke("brief:detail-close"),
+      export: (data) => ipcRenderer.invoke("brief:export", data || {}),
+      chat: () => ipcRenderer.invoke("brief:chat"),
+    },
+    notify: (channel, payload) => {
+      // 弹窗/详情页用：旧 IPC 兼容通道
+      const map = {
+        "brief:open-detail":   () => ipcRenderer.invoke("brief:open-detail", payload || {}),
+        "brief:hide":          () => ipcRenderer.invoke("brief:hide"),
+        "brief:detail-close":  () => ipcRenderer.invoke("brief:detail-close"),
+        "brief:export":        () => ipcRenderer.invoke("brief:export", payload || {}),
+        "brief:chat":          () => ipcRenderer.invoke("brief:chat"),
+      };
+      const fn = map[channel];
+      if (fn) { try { fn(); } catch (_) {} }
+    },
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

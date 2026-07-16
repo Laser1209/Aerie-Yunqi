@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════
 # Slot configuration
+# DEPRECATED: 旧硬编码 SLOTS_CONFIG，保留作 fallback
+# 实际配置请改 config/persona_behavior.yaml → emotion.thresholds
 # ══════════════════════════════════════════════════
 SLOTS_CONFIG: dict[str, dict] = {
     "patience": {
@@ -141,23 +143,52 @@ class CumulativeEmotionEngine:
 
     Tracks 4 hidden slots. Each slot accumulates value from triggers,
     decays daily, and erupts when threshold is reached.
+
+    R0.3.3: configuration is now loaded from behavior_cfg (single source
+    of truth in config/persona_behavior.yaml). Old hardcoded SLOTS_CONFIG
+    is kept as a deprecated fallback for backward compatibility.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, behavior_cfg: dict | None = None) -> None:
         self.slots: dict[str, EmotionSlot] = {}
         self._eruptions: list[dict] = []
-        self._init_slots()
+        self._cfg_source: str = "fallback"
+        self._init_slots(behavior_cfg)
 
-    def _init_slots(self) -> None:
-        for name, cfg in SLOTS_CONFIG.items():
-            self.slots[name] = EmotionSlot(
-                name=name,
-                label=cfg["label"],
-                threshold=cfg["threshold"],
-                decay_per_day=cfg["decay_per_day"],
-                eruption_label=cfg["eruption_label"],
-                post_decay=cfg["post_decay"],
-                description=cfg["description"],
+    def _init_slots(self, behavior_cfg: dict | None) -> None:
+        # Prefer behavior_cfg; fall back to deprecated SLOTS_CONFIG.
+        cfg_map: dict[str, dict] | None = None
+        if behavior_cfg:
+            cfg_map = behavior_cfg.get("emotion", {}).get("thresholds")
+        if cfg_map:
+            self._cfg_source = "persona_behavior.yaml"
+            for name, cfg in cfg_map.items():
+                self.slots[name] = EmotionSlot(
+                    name=name,
+                    label=cfg.get("label", name),
+                    threshold=float(cfg.get("threshold", 100)),
+                    decay_per_day=float(cfg.get("decay_per_day", 5)),
+                    eruption_label=cfg.get("eruption_label", ""),
+                    post_decay=float(cfg.get("post_decay", 0)),
+                    description=cfg.get("description", ""),
+                )
+            logger.info("emotion thresholds loaded from %s", self._cfg_source)
+        else:
+            # deprecated fallback path
+            self._cfg_source = "SLOTS_CONFIG (deprecated)"
+            for name, cfg in SLOTS_CONFIG.items():
+                self.slots[name] = EmotionSlot(
+                    name=name,
+                    label=cfg["label"],
+                    threshold=cfg["threshold"],
+                    decay_per_day=cfg["decay_per_day"],
+                    eruption_label=cfg["eruption_label"],
+                    post_decay=cfg["post_decay"],
+                    description=cfg.get("description", ""),
+                )
+            logger.warning(
+                "emotion thresholds loaded from deprecated SLOTS_CONFIG; "
+                "please migrate to config/persona_behavior.yaml"
             )
 
     def add(
@@ -276,8 +307,20 @@ class CumulativeEmotionEngine:
 _THRESHOLD_ENGINE: CumulativeEmotionEngine | None = None
 
 
-def get_threshold_engine() -> CumulativeEmotionEngine:
+def get_threshold_engine(behavior_cfg: dict | None = None) -> CumulativeEmotionEngine:
+    """Get the singleton threshold engine.
+
+    R0.3.3: behavior_cfg is passed on first call to initialize from
+    config/persona_behavior.yaml. Subsequent calls return the same
+    instance. Pass None on later calls (safe; config already bound).
+    """
     global _THRESHOLD_ENGINE
     if _THRESHOLD_ENGINE is None:
-        _THRESHOLD_ENGINE = CumulativeEmotionEngine()
+        _THRESHOLD_ENGINE = CumulativeEmotionEngine(behavior_cfg)
     return _THRESHOLD_ENGINE
+
+
+def reset_threshold_engine() -> None:
+    """Reset the singleton (test-only)."""
+    global _THRESHOLD_ENGINE
+    _THRESHOLD_ENGINE = None

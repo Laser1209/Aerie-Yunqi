@@ -912,9 +912,61 @@ body {
   background: var(--bg-100);
 }
 
+/* Block-3 R0.2: voice input — recording state + status bar pulse */
+.chat-input-toolbar__btn.is-recording {
+  color: var(--color-primary);
+  background: var(--bg-100);
+  animation: mic-record-pulse 1.2s ease-in-out infinite;
+}
+@keyframes mic-record-pulse {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.45); }
+  50%      { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(0, 122, 255, 0); }
+}
+.chat-mic-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.chat-mic-status[hidden] { display: none; }
+.chat-mic-status__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: mic-record-pulse 1.2s ease-in-out infinite;
+}
+.chat-mic-status__net {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 /* ===== Phase 5: Drag-and-drop visual feedback ===== */
 .chat-messages--drag {
   outline: 2px dashed var(--color-primary);
   outline-offset: -8px;
   background: var(--bg-100);
+}
+
+/* ===== Block-4A R1.6: daily brief iframe (full-screen overlay) ===== */
+.brief-frame {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  z-index: 9999;
+  background: transparent;
+  animation: briefFadeIn 0.3s ease-out;
+}
+.brief-frame[hidden] { display: none; }
+@keyframes briefFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

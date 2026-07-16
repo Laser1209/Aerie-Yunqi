@@ -145,4 +145,27 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     } catch (_) {}
   }, 5000);
+
+  // ── Block-4A R1.6: daily brief iframe toggle ─────────
+  const briefFrame = document.getElementById("brief-frame");
+  if (briefFrame && window.aerie && window.aerie.electron && window.aerie.electron.onBriefShow) {
+    window.aerie.electron.onBriefShow((_data) => {
+      // Re-load the iframe to refresh today's content, then reveal with fade-in.
+      try {
+        const src = briefFrame.getAttribute("src") || "daily-brief.html";
+        briefFrame.setAttribute("src", src + (src.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now());
+      } catch (_) {}
+      briefFrame.hidden = false;
+    });
+    // Click on the iframe backdrop area (very top 4px strip) to close.
+    briefFrame.addEventListener("click", (ev) => {
+      // The iframe inner page has its own close button; here we close on
+      // Escape key as a safety net.
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !briefFrame.hidden) {
+        briefFrame.hidden = true;
+      }
+    });
+  }
 });

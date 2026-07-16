@@ -79,9 +79,9 @@
   font-family: var(--font-mono, monospace);
   margin-left: 6px;
 }
-.emh-pad-p { color: #ff5b9c; }
-.emh-pad-a { color: #7e6bff; }
-.emh-pad-d { color: #3acfd5; }
+.emh-pad-p { color: var(--color-pad-pleasure, #ff5b9c); }
+.emh-pad-a { color: var(--color-pad-arousal, #7e6bff); }
+.emh-pad-d { color: var(--color-pad-dominance, #3acfd5); }
 
 .emh-chart {
   width: 100%;
@@ -122,17 +122,17 @@
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.emh-line--pleasure  { stroke: #ff5b9c; }
-.emh-line--arousal   { stroke: #7e6bff; }
-.emh-line--dominance { stroke: #3acfd5; }
-.emh-line--patience_value   { stroke: #ff5b9c; }
-.emh-line--anxiety_value    { stroke: #ffb74d; }
-.emh-line--desire_value     { stroke: #7e6bff; }
-.emh-line--tenderness_value { stroke: #3acfd5; }
+.emh-line--pleasure  { stroke: var(--color-pad-pleasure, #ff5b9c); }
+.emh-line--arousal   { stroke: var(--color-pad-arousal, #7e6bff); }
+.emh-line--dominance { stroke: var(--color-pad-dominance, #3acfd5); }
+.emh-line--patience_value   { stroke: var(--color-pad-pleasure, #ff5b9c); }
+.emh-line--anxiety_value    { stroke: var(--color-threshold-anxiety, #ffb74d); }
+.emh-line--desire_value     { stroke: var(--color-pad-arousal, #7e6bff); }
+.emh-line--tenderness_value { stroke: var(--color-pad-dominance, #3acfd5); }
 
-.emh-dot--pleasure  { fill: #ff5b9c; }
-.emh-dot--arousal   { fill: #7e6bff; }
-.emh-dot--dominance { fill: #3acfd5; }
+.emh-dot--pleasure  { fill: var(--color-pad-pleasure, #ff5b9c); }
+.emh-dot--arousal   { fill: var(--color-pad-arousal, #7e6bff); }
+.emh-dot--dominance { fill: var(--color-pad-dominance, #3acfd5); }
 
 .emh-area {
   stroke: none;
@@ -161,7 +161,7 @@
   .emh-axis-text { fill: rgba(243, 230, 240, 0.55); }
   .emh-radar-label { fill: rgba(243, 230, 240, 0.85); }
   .emh-cell-text { fill: rgba(255, 255, 255, 0.85); }
-  .emh-card-name { color: #ff7eb6; }
+  .emh-card-name { color: var(--color-accent-pink, #ff7eb6); }
 }
 
 /* Eruption banner enhancement (B5.4) */
@@ -175,7 +175,7 @@
     rgba(255, 91, 156, 0.16) 0%,
     rgba(156, 39, 176, 0.10) 100%);
   border: 1px solid rgba(255, 91, 156, 0.45);
-  color: #ff7eb6;
+  color: var(--color-accent-pink, #ff7eb6);
   font-size: 12px;
   margin: 8px 0 12px;
   animation: eru-pulse 2.4s ease-in-out infinite;

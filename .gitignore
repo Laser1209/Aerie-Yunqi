@@ -24,6 +24,9 @@ logs/*.log
 logs/*.log.*
 !logs/.gitkeep
 
+# Temporary files (Block-5D R4) — entire tree is git-ignored
+tmp/
+
 # User data (Electron)
 userData/
 dist/

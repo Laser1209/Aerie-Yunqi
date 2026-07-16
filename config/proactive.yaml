@@ -23,6 +23,31 @@ scenes:
     mood_aware: true
     exempt_quiet: true
 
+  # Block-4A R1.5: 9am dedicated daily brief (custom_dispatcher=brief).
+  # Runs brief_fetcher + compose_brief, emits "brief:show" SSE event.
+  morning_brief_9am:
+    custom_dispatcher: "brief"
+    cron: "0 9 * * *"
+    mood_aware: false
+    exempt_quiet: true
+
+  # Block-4B R2.2: desire-driven short text triggers (24h polling).
+  # Reroute idle_care to use the desire engine when a desire instance
+  # is alive; falls back to old trigger-based path otherwise.
+  idle_care:
+    template: "在干嘛。"
+    trigger: "user_idle_4h"
+    custom_dispatcher: "desire_care"
+    mood_aware: true
+    exempt_quiet: false
+
+  voice_miss:
+    template: "想听你声音。"
+    trigger: "desire_voice"
+    custom_dispatcher: "desire_voice"
+    mood_aware: true
+    exempt_quiet: false
+
   weather_push:
     template: "{city}今天{weather}，{temp}度。{suggestion}。"
     cron: "0 7 * * *"
@@ -72,8 +97,10 @@ scenes:
     exempt_quiet: false
 
 # Cumulative emotion thresholds (linked to auto-wake triggers).
-emotion_links:
-  desire_threshold: 80
-  patience_threshold: 70
-  tenderness_threshold: 60
-  idle_hours_threshold: 4
+# R0.3.6: emotion_links moved to config/persona_behavior.yaml
+# (single source of truth for behavior tuning).
+# emotion_links:
+#   desire_threshold: 80
+#   patience_threshold: 70
+#   tenderness_threshold: 60
+#   idle_hours_threshold: 4

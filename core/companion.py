@@ -12,6 +12,7 @@ from communication.recall_manager import RecallManager
 from communication.router import Router
 from communication.send_queue import SendQueue
 from communication.splitter import SemanticMessageSplitter
+from config.persona_loader import load_behavior_config
 from core.brain import Brain
 from core.cognition import CognitionEngine
 from core.context_builder import ContextBuilder
@@ -42,6 +43,9 @@ class Companion:
         global _COMPANION
         self.settings = settings or load_settings()
 
+        # R0.3.7: load centralized behavior config (single source of truth).
+        self.behavior_cfg = load_behavior_config()
+
         # Data layer
         self.db = Database()
 
@@ -49,7 +53,9 @@ class Companion:
         # Phase 9 Batch 1: emotion state store persists PAD + thresholds
         # so the dashboard can show 24h/7d/30d history curves.
         self.state_store = EmotionStateStore(self.db)
-        self.emotion = EmotionEngine(self.db, state_store=self.state_store)
+        # R0.3.7: pass behavior_cfg so EmotionEngine reads PAD centers
+        # and threshold slots from config/persona_behavior.yaml.
+        self.emotion = EmotionEngine(self.db, state_store=self.state_store, behavior_cfg=self.behavior_cfg)
         self.brain = Brain()
         self.memory = LongTermMemory(self.db)
         self.knowledge = KnowledgeBase(self.db)
@@ -60,8 +66,10 @@ class Companion:
         # local-path write and the QQ-path write target the same row.
         self.cognition = CognitionEngine(self.db)
 
-        # Cumulative threshold engine (shared singleton)
-        self.threshold_engine = get_threshold_engine()
+        # Cumulative threshold engine — driven by the same behavior_cfg
+        # so the engine picks up persona_behavior.yaml thresholds on
+        # first call (R0.3.7).
+        self.threshold_engine = get_threshold_engine(self.behavior_cfg)
 
         # Tool registry
         self.tool_registry = ToolRegistry(self.db)
@@ -118,6 +126,11 @@ class Companion:
         self._started = False
         self._daily_decay_task: asyncio.Task | None = None
         self._push_task: asyncio.Task | None = None
+        self._boot_brief_task: asyncio.Task | None = None
+        # Block-4B R2.2: 24h desire engine (lazy-created on first start()).
+        self.desire: Any = None
+        # Block-4C R3.4: skill loader (lazy-created on first start()).
+        self.skill_loader: Any = None
         _COMPANION = self
 
     async def start(self) -> None:
@@ -131,6 +144,28 @@ class Companion:
         self._daily_decay_task = asyncio.create_task(self._run_daily_decay())
         # Start push scheduler
         self._push_task = asyncio.create_task(self.push_scheduler.start())
+        # Block-4A R1.5: 8s boot delay then run brief once + emit show event
+        self._boot_brief_task = asyncio.create_task(self._boot_brief())
+        # Block-4B R2.2: start 24h desire engine (24h polling, not cron)
+        try:
+            from core.desire_engine import DesireEngine
+            self.desire = DesireEngine(self, self.behavior_cfg)
+            await self.desire.start()
+        except Exception:
+            logger.exception("desire engine start failed; continuing without it")
+            self.desire = None
+        # Block-4C R3.4: discover + register all 17 skills (local + data).
+        try:
+            from core.skill_loader import SkillLoader
+            from core.skill_router import SkillRouter
+            self.skill_router = SkillRouter(self.behavior_cfg)
+            self.skill_loader = SkillLoader(self.tool_registry, self.skill_router)
+            n_disc = self.skill_loader.discover()
+            n_reg = self.skill_loader.register_all()
+            logger.info("skills: %d discovered, %d registered", n_disc, n_reg)
+        except Exception:
+            logger.exception("skill loader init failed; continuing without skills")
+            self.skill_loader = None
         self._started = True
         logger.info("Companion started")
 
@@ -149,6 +184,17 @@ class Companion:
                 await self._daily_decay_task
             except asyncio.CancelledError:
                 pass
+        if self._boot_brief_task:
+            self._boot_brief_task.cancel()
+            try:
+                await self._boot_brief_task
+            except asyncio.CancelledError:
+                pass
+        if self.desire:
+            try:
+                await self.desire.stop()
+            except Exception:
+                logger.exception("desire stop error")
         try:
             await self.queue.stop()
         except Exception:
@@ -159,6 +205,40 @@ class Companion:
             pass
         self._started = False
         logger.info("Companion stopped")
+
+    # ── Block-4A R1.5: boot brief hook ───────────────────────────
+    async def _boot_brief(self) -> None:
+        """Block-4A R1.5: 8s after start, lazily generate today's brief.
+
+        If today's brief already exists, skip (preserves morning_brief_9am
+        cron idempotency). After generation, dispatch via the morning_brief_9am
+        scene (uses custom_dispatcher="brief" path) and emit a chat event so
+        the Electron renderer can pop the iframe.
+        """
+        try:
+            await asyncio.sleep(8)
+            from core import brief_fetcher
+            today = datetime.now().strftime("%Y-%m-%d")
+            if brief_fetcher.load_brief(today):
+                logger.info("boot_brief: today's brief exists, skip")
+                return
+            logger.info("boot_brief: generating brief for %s", today)
+            sections = await brief_fetcher.run_all()
+            try:
+                md = await Brain().compose_brief(sections)
+            except Exception as e:
+                logger.warning("boot_brief: compose_brief failed: %s", e)
+                md = ""
+            brief_fetcher.save_brief(today, sections, html=md)
+            # Dispatch via push scheduler (uses custom_dispatcher=brief branch).
+            try:
+                await self.push_scheduler.trigger_scene("morning_brief_9am")
+            except Exception:
+                logger.exception("boot_brief: push dispatch failed")
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("boot_brief failed")
 
     async def _send_to_qq(self, reply: OutgoingReply) -> bool:
         return await self.qq.send_message(reply.user_id, reply.content)
@@ -220,6 +300,12 @@ class Companion:
                 await self.pipeline.handle(msg)
             except Exception:
                 logger.exception("pipeline.handle error")
+        # Block-4B R2.2: reset user-absence clock on inbound message.
+        if self.desire:
+            try:
+                self.desire.mark_user_active()
+            except Exception:
+                logger.debug("desire.mark_user_active failed")
 
     async def _run_daily_decay(self) -> None:
         """Background task: apply daily emotion decay at midnight."""

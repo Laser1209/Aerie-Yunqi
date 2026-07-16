@@ -1,0 +1,238 @@
+/* Aerie · 云栖 v9.0 — Daily Brief detail window (Block-5A · 1280×800)
+ * 与 daily-brief.css 共享主题色变量；本文件只覆盖大屏布局
+ */
+
+body.detail-body {
+  margin: 0;
+  background: var(--bg-100, #fafafa);
+  color: var(--color-text, #1a1a1a);
+}
+
+.detail-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--bg-300, rgba(0, 0, 0, 0.08));
+  background: var(--bg-200, rgba(0, 0, 0, 0.02));
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.detail-header__left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.detail-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.01em;
+  color: var(--color-text, #1a1a1a);
+}
+.detail-date {
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+}
+.detail-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--bg-300, rgba(0, 0, 0, 0.08));
+  background: var(--bg-100, #fff);
+  color: var(--color-text, #1a1a1a);
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+.detail-btn:hover {
+  background: var(--bg-200, rgba(0, 0, 0, 0.04));
+  border-color: var(--color-primary, #007aff);
+}
+.detail-btn--primary {
+  background: var(--color-primary, #007aff);
+  color: #fff;
+  border-color: var(--color-primary, #007aff);
+}
+.detail-btn--primary:hover {
+  filter: brightness(1.05);
+}
+.detail-btn--close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.detail-main {
+  flex: 1;
+  padding: 28px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-content: start;
+  transition: opacity 200ms ease;
+}
+.detail-main.is-loading {
+  opacity: 0.4;
+}
+.detail-main.is-loading::after {
+  content: "加载中 / Loading…";
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  color: var(--color-text-muted, #888);
+}
+
+.detail-section {
+  background: var(--bg-100, #fff);
+  border: 1px solid var(--bg-300, rgba(0, 0, 0, 0.06));
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.detail-section--weather {
+  grid-column: span 2;
+}
+.detail-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--bg-300, rgba(0, 0, 0, 0.08));
+  padding-bottom: 8px;
+}
+.detail-section__header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text, #1a1a1a);
+  letter-spacing: 0.02em;
+}
+.detail-section__count {
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  background: var(--bg-200, rgba(0, 0, 0, 0.04));
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.detail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.detail-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.detail-item__index {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary, #007aff);
+  background: var(--color-primary-bg-soft, rgba(0, 122, 255, 0.08));
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
+  flex-shrink: 0;
+  min-width: 22px;
+  text-align: center;
+}
+.detail-item__body {
+  flex: 1;
+  min-width: 0;
+}
+.detail-item__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+  color: var(--color-text, #1a1a1a);
+}
+.detail-item__title a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--color-text-muted, #aaa);
+  transition: color 200ms ease;
+}
+.detail-item__title a:hover {
+  color: var(--color-primary, #007aff);
+}
+.detail-item__summary {
+  font-size: 12px;
+  color: var(--color-text-secondary, #555);
+  margin: 0 0 4px 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.detail-item__source {
+  font-size: 10.5px;
+  color: var(--color-text-muted, #aaa);
+  letter-spacing: 0.02em;
+}
+.detail-empty {
+  font-size: 12.5px;
+  color: var(--color-text-muted, #aaa);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.detail-section--weather .detail-weather {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.detail-weather__city {
+  font-weight: 600;
+  color: var(--color-text, #1a1a1a);
+}
+.detail-weather__desc {
+  color: var(--color-text-secondary, #555);
+}
+.detail-weather__hint {
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  flex: 1 0 100%;
+  margin-top: 6px;
+}
+
+.detail-footer {
+  padding: 14px 28px;
+  border-top: 1px dashed var(--bg-300, rgba(0, 0, 0, 0.08));
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  text-align: center;
+}
+
+@media (max-width: 1024px) {
+  .detail-main { grid-template-columns: 1fr; }
+  .detail-section--weather { grid-column: span 1; }
+}

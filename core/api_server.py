@@ -1167,6 +1167,291 @@ async def persona_avatar_get() -> Response:
     return Response(content=data, media_type=ct, headers={"Cache-Control": "no-cache"})
 
 
+# ── Daily Brief (Block-4A R1.4) ────────────────────────
+@app.get("/api/brief/today")
+async def brief_today() -> dict:
+    """Return today's brief JSON. If missing, lazily generate."""
+    from datetime import datetime
+    from core import brief_fetcher
+    from core.brain import Brain
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    cached = brief_fetcher.load_brief(today)
+    if cached and cached.get("ai_news") is not None:
+        return {"date": today, "brief": cached}
+
+    # Lazy generate
+    try:
+        sections = await brief_fetcher.run_all()
+    except Exception as e:
+        logger.warning("brief_today: run_all failed: %s", e)
+        return JSONResponse({"error": "fetch_failed", "detail": str(e)}, status_code=500)
+
+    # Compose Markdown
+    try:
+        brain = Brain()
+        md = await brain.compose_brief(sections)
+    except Exception as e:
+        logger.warning("brief_today: compose_brief failed: %s", e)
+        md = ""
+
+    # Persist (no HTML for now — renderer renders JSON to DOM)
+    brief_fetcher.save_brief(today, sections, html=md)
+    return {"date": today, "brief": sections, "markdown": md}
+
+
+@app.post("/api/brief/feedback")
+async def brief_feedback(request: Request) -> dict:
+    """Save user feedback for today's brief."""
+    from datetime import datetime
+    from core import brief_fetcher
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        path = brief_fetcher.save_feedback(today, body or {})
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return {"status": "ok", "path": str(path)}
+
+
+# ── Block-5A: Export full brief HTML for the 1280x800 detail window ──
+@app.post("/api/brief/export")
+async def brief_export(request: Request) -> dict:
+    """Render the brief payload to standalone HTML and persist to data/briefs/.
+
+    Body: {"date": "YYYY-MM-DD", "payload": {...}}
+    Returns: {"ok": true, "path": "..."} on success.
+    """
+    from core import brief_fetcher
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+    body = body or {}
+    date_str = body.get("date") or ""
+    payload = body.get("payload") or {}
+    if not date_str or not isinstance(payload, dict):
+        return JSONResponse(
+            {"error": "missing date or payload"}, status_code=400
+        )
+    try:
+        path = brief_fetcher.export_brief_html(date_str, payload)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return {"ok": True, "path": path, "date": date_str}
+
+
+# ── Block-5A: Return full brief HTML directly (read-only) ──
+@app.get("/api/brief/full")
+async def brief_full(date: str = "") -> dict:
+    """Return rendered full HTML for ?date=YYYY-MM-DD (defaults to today)."""
+    from datetime import datetime
+    from core import brief_fetcher
+    date_str = date or datetime.now().strftime("%Y-%m-%d")
+    import re
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        return JSONResponse({"error": "invalid date"}, status_code=400)
+    sections = brief_fetcher.load_brief(date_str)
+    if not sections:
+        # 没缓存就现场拉一次
+        try:
+            sections = await brief_fetcher.run_all()
+        except Exception as e:
+            return JSONResponse({"error": f"run_all failed: {e}"}, status_code=500)
+    try:
+        html = brief_fetcher.render_html(sections)
+    except Exception as e:
+        return JSONResponse({"error": f"render failed: {e}"}, status_code=500)
+    return {"date": date_str, "html": html}
+
+
+@app.post("/api/brief/run")
+async def brief_run() -> dict:
+    """Force re-run the brief (manual refresh)."""
+    from datetime import datetime
+    from core import brief_fetcher
+    from core.brain import Brain
+
+    try:
+        sections = await brief_fetcher.run_all()
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    try:
+        brain = Brain()
+        md = await brain.compose_brief(sections)
+    except Exception as e:
+        md = ""
+    today = sections.get("date") or datetime.now().strftime("%Y-%m-%d")
+    brief_fetcher.save_brief(today, sections, html=md)
+    return {"status": "ok", "date": today, "markdown": md, "brief": sections}
+
+
+# ── Block-5C: AI Provider options + safe shell ──────────────
+@app.get("/api/brain/ai-options")
+async def brain_ai_options() -> dict:
+    """Return the 11 ai_options (id/label/model) from persona_behavior.yaml.
+
+    Plus the default provider id.
+    """
+    try:
+        from core.brain import Brain
+        opts = Brain().get_ai_options()
+        default = Brain().get_default_provider()
+        return {
+            "default": default,
+            "count": len(opts),
+            "options": opts,
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e), "options": []}, status_code=500)
+
+
+@app.post("/api/brain/shell")
+async def brain_shell(request: Request) -> dict:
+    """Whitelisted shell exec: dir / echo / type / where / python / py.
+
+    Body: {"command": "dir", "args": ["uploads"]}
+    """
+    try:
+        from core.brain import Brain
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        body = body or {}
+        cmd = (body.get("command") or "").strip()
+        args = body.get("args") or []
+        if not cmd:
+            return JSONResponse({"error": "missing command"}, status_code=400)
+        result = Brain().safe_shell(cmd, args)
+        return result
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Block-4B R2.2: Desire engine endpoints ──────────────────
+
+@app.get("/api/desire/state")
+async def desire_state() -> dict:
+    """Return the desire engine's current state, score, and 5 variables."""
+    comp = get_companion()
+    if not comp or not comp.desire:
+        return {"error": "desire engine not ready"}
+    return comp.desire.get_state()
+
+
+@app.post("/api/desire/cooldown")
+async def desire_cooldown(request: Request) -> dict:
+    """Set a manual cooldown window (default 12h)."""
+    comp = get_companion()
+    if not comp or not comp.desire:
+        return JSONResponse({"error": "desire engine not ready"}, status_code=503)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    hours = float((body or {}).get("hours", 12))
+    if hours < 0 or hours > 168:
+        return JSONResponse({"error": "hours must be 0..168"}, status_code=400)
+    comp.desire.set_cooldown(hours)
+    return {"status": "ok", "cooldown_hours": hours}
+
+
+@app.post("/api/desire/reject")
+async def desire_reject() -> dict:
+    """Mark a desire push as rejected. After 3 rejections, auto-cooldown kicks in."""
+    comp = get_companion()
+    if not comp or not comp.desire:
+        return JSONResponse({"error": "desire engine not ready"}, status_code=503)
+    comp.desire.mark_rejected()
+    return {"status": "ok", "reject_count": comp.desire.state.get("reject_count", 0)}
+
+
+# ── Block-4C R3.4: Skills endpoints ──────────────────
+
+@app.get("/api/skills/list")
+async def skills_list() -> dict:
+    """Return discovered skills + provider_hint + read_only flag."""
+    comp = get_companion()
+    if not comp or not comp.skill_loader:
+        return {"skills": [], "count": 0, "error": "skill loader not ready"}
+    out = []
+    for name, meta in comp.skill_loader.discovered.items():
+        out.append({
+            "name": name,
+            "provider_hint": meta.get("hint", "text"),
+            "read_only": meta.get("read_only", False),
+            "description": meta.get("desc", ""),
+        })
+    return {"skills": out, "count": len(out)}
+
+
+@app.get("/api/skills/{name}")
+async def skills_get(name: str) -> Response:
+    """Return the SKILL.md content for a given skill."""
+    comp = get_companion()
+    if not comp or not comp.skill_loader:
+        return JSONResponse({"error": "skill loader not ready"}, status_code=503)
+    meta = comp.skill_loader.discovered.get(name)
+    if not meta:
+        return JSONResponse({"error": "skill not found", "name": name}, status_code=404)
+    skill_md = meta["path"] / "SKILL.md"
+    if not skill_md.exists():
+        return JSONResponse({"error": "SKILL.md missing"}, status_code=404)
+    try:
+        text = skill_md.read_text(encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"error": f"read failed: {e}"}, status_code=500)
+    return Response(content=text, media_type="text/markdown; charset=utf-8")
+
+
+@app.post("/api/skills/{name}/call")
+async def skills_call(name: str, request: Request) -> dict:
+    """Invoke a skill by name. Body: {args: dict}.
+
+    The skill is dynamic-imported fresh on each call so a code change in
+    ``run.py`` is picked up after backend restart. The response is the
+    raw dict returned by ``run()`` plus a status envelope.
+    """
+    import importlib.util
+    comp = get_companion()
+    if not comp or not comp.skill_loader:
+        return JSONResponse({"error": "skill loader not ready"}, status_code=503)
+    meta = comp.skill_loader.discovered.get(name)
+    if not meta:
+        return JSONResponse({"error": "skill not found", "name": name}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    args = (body or {}).get("args") or {}
+    run_py = meta["path"] / "run.py"
+    if not run_py.exists():
+        return JSONResponse({"error": "run.py missing", "name": name}, status_code=500)
+    try:
+        # Always import fresh so dev iteration works without restart.
+        spec = importlib.util.spec_from_file_location(f"skill_runtime_{name}", run_py)
+        if spec is None or spec.loader is None:
+            return JSONResponse({"error": "spec failed", "name": name}, status_code=500)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        if not hasattr(mod, "run"):
+            return JSONResponse({"error": "run() not found in run.py", "name": name}, status_code=500)
+        result = mod.run(args)
+        return {"status": "ok", "name": name, "provider_hint": meta.get("hint", "text"), "result": result}
+    except Exception as e:
+        logger.exception("skill_call %s failed", name)
+        return JSONResponse({"status": "error", "name": name, "error": str(e)}, status_code=500)
+
+
 async def start_api(host: str = "127.0.0.1", port: int = 7890) -> Any:
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)

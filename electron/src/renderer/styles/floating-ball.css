@@ -1,0 +1,80 @@
+/* Aerie · 云栖 v9.0 — Floating Ball Styles */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.floating-ball {
+  position: fixed;
+  right: 30px;
+  top: 30px;
+  width: 56px;
+  height: 56px;
+  cursor: pointer;
+  z-index: 9999;
+}
+
+.ball-inner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #66abff, #007aff);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.18) inset,
+    0 6px 14px -4px rgba(0,122,255,.45),
+    0 2px 4px rgba(0,0,0,.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform .3s cubic-bezier(.32,.72,0,1);
+}
+.ball-inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(120% 80% at 30% 18%, rgba(255,255,255,.45), transparent 55%);
+  pointer-events: none;
+}
+.floating-ball:hover .ball-inner {
+  transform: scale(1.08);
+}
+
+.ball-glyph {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  font-family: "DM Sans", "PingFang SC", sans-serif;
+  text-shadow: 0 1px 1px rgba(0,0,0,.18);
+  position: relative;
+  z-index: 1;
+}
+
+.ball-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.18);
+  font-family: "DM Sans", sans-serif;
+}
+
+.hidden { display: none !important; }

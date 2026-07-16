@@ -139,6 +139,91 @@ SCHEMA_SQL: list[str] = [
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
     """,
+    # ── Phase 9: brain center cognition trace ──
+    """
+    CREATE TABLE IF NOT EXISTS cognition_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        user_id INTEGER,
+        user_message TEXT,
+        route_mode TEXT,
+        stage_route TEXT,
+        stage_emotion TEXT,
+        stage_threshold TEXT,
+        stage_context TEXT,
+        stage_brain TEXT,
+        stage_tools TEXT,
+        stage_split TEXT,
+        stage_postprocess TEXT,
+        stage_output TEXT,
+        decision_trace TEXT,
+        react_trace TEXT,
+        is_command INTEGER DEFAULT 0,
+        duration_ms INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
+    # ── Phase 9: emotion state snapshots for history chart ──
+    """
+    CREATE TABLE IF NOT EXISTS emotion_state_snapshot (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        pleasure REAL,
+        arousal REAL,
+        dominance REAL,
+        label TEXT,
+        patience_value REAL,
+        anxiety_value REAL,
+        desire_value REAL,
+        tenderness_value REAL,
+        active_eruption TEXT,
+        trigger_event TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
+    # ── Phase 9: per-tool call trace linked to cognition ──
+    """
+    CREATE TABLE IF NOT EXISTS tool_call_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        user_id INTEGER,
+        tool_name TEXT NOT NULL,
+        arguments TEXT,
+        result TEXT,
+        success INTEGER DEFAULT 1,
+        duration_ms INTEGER DEFAULT 0,
+        cognition_id INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
+    # ── Phase 9: self-evolution log for capability gap detection ──
+    """
+    CREATE TABLE IF NOT EXISTS self_evolve_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        user_id INTEGER,
+        trigger_kind TEXT NOT NULL,
+        description TEXT,
+        proposed_tool_schema TEXT,
+        safety_check TEXT,
+        user_decision TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
+]
+
+
+INDEX_SQL: list[str] = [
+    # Phase 4: indexes for chat_log lookups
+    "CREATE INDEX IF NOT EXISTS idx_chat_reply_to ON chat_log(reply_to_id);",
+    "CREATE INDEX IF NOT EXISTS idx_chat_recalled ON chat_log(is_recalled);",
+    # Phase 9: cognition log lookups
+    "CREATE INDEX IF NOT EXISTS idx_cognition_user_ts ON cognition_log(user_id, ts DESC);",
+    # Phase 9: emotion snapshot lookups
+    "CREATE INDEX IF NOT EXISTS idx_emotion_user_ts ON emotion_state_snapshot(user_id, ts DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_emotion_label_ts ON emotion_state_snapshot(label, ts DESC);",
 ]
 
 
@@ -192,13 +277,9 @@ class Database:
                 conn.execute(stmt)
             # Phase 4: idempotent migrations for chat_log extensions
             self._migrate_chat_log(conn)
-            # Phase 4: indexes for performance
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_chat_reply_to ON chat_log(reply_to_id)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_chat_recalled ON chat_log(is_recalled)"
-            )
+            # Phase 4 + Phase 9: indexes (centralized for idempotency)
+            for stmt in INDEX_SQL:
+                conn.execute(stmt)
 
     def _migrate_chat_log(self, conn: sqlite3.Connection) -> None:
         """Add Phase 4 columns to chat_log if they don't exist yet."""

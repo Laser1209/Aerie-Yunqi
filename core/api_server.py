@@ -13,6 +13,11 @@ Routes:
   GET  /api/emotion/state   — emotion engine state
   GET  /api/tools/list      — registered tools
   GET  /api/stats/tokens    — token usage stats
+  GET  /api/events/stream   — Phase 9: SSE real-time event stream
+  GET  /api/cognition/recent   — Phase 9: recent cognition traces
+  GET  /api/cognition/{id}     — Phase 9: single trace detail
+  GET  /api/cognition/stats    — Phase 9: stats
+  GET  /api/emotion/history    — Phase 9: 24h/7d/30d emotion series
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import JSONResponse, Response, FileResponse
+from fastapi.responses import JSONResponse, Response, FileResponse, StreamingResponse
 
 from communication.message import IncomingMessage
 from config.persona_loader import get_master_qq, load_settings, save_settings, reset_settings
@@ -31,6 +36,8 @@ from core.database import Database
 from core.napcat_launcher import get_launcher
 from core.chat_events import emit
 from core.token_tracker import get_token_tracker
+from core.cognition import CognitionEngine
+from core.event_stream import stream as event_stream_generator
 
 logger = logging.getLogger(__name__)
 
@@ -363,6 +370,95 @@ async def emotion_thresholds() -> dict:
         "panel": comp.emotion.threshold_engine.get_panel_text(),
     }
 
+
+# ── Phase 9: SSE + cognition + emotion history ────
+
+@app.get("/api/events/stream")
+async def events_stream(request: Request):
+    """Server-Sent Events stream of all chat events.
+
+    Yields lines of ``data: {json}\\n\\n`` for every event emitted by
+    the pipeline (user / assistant / recall / cognition_stage /
+    cognition_committed / decision_made). Includes a 15s heartbeat
+    comment to keep the connection alive through proxies.
+    """
+    async def gen():
+        async for line in event_stream_generator():
+            if await request.is_disconnected():
+                break
+            yield line
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.get("/api/cognition/recent")
+async def cognition_recent(
+    user_id: int | None = None,
+    source: str | None = None,
+    limit: int = Query(default=20, ge=1, le=200),
+) -> dict:
+    """Recent cognition traces (lightweight summary list)."""
+    eng = CognitionEngine(_db)
+    return {"traces": eng.recent(user_id=user_id, source=source, limit=limit)}
+
+
+@app.get("/api/cognition/stats")
+async def cognition_stats() -> dict:
+    """Cognition log aggregate stats."""
+    eng = CognitionEngine(_db)
+    return eng.stats()
+
+
+@app.get("/api/cognition/{row_id}")
+async def cognition_detail(row_id: int) -> dict:
+    """Full cognition_log row, all stages + decision_trace + react_trace."""
+    eng = CognitionEngine(_db)
+    row = eng.get(row_id)
+    if not row:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return row
+
+
+@app.get("/api/emotion/history")
+async def emotion_history(
+    user_id: int | None = None,
+    window: str = Query(default="24h", pattern="^(1h|24h|7d|30d)$"),
+) -> dict:
+    """Emotion state snapshot history. Window: 1h / 24h / 7d / 30d."""
+    if user_id is None:
+        user_id = get_master_qq()
+    window_ms = {
+        "1h": 3600 * 1000,
+        "24h": 24 * 3600 * 1000,
+        "7d": 7 * 24 * 3600 * 1000,
+        "30d": 30 * 24 * 3600 * 1000,
+    }[window]
+    since = int(time.time() * 1000) - window_ms
+    rows = _db.query(
+        "SELECT ts, pleasure, arousal, dominance, label, "
+        "patience_value, anxiety_value, desire_value, tenderness_value, "
+        "active_eruption, trigger_event "
+        "FROM emotion_state_snapshot WHERE user_id = ? AND ts >= ? "
+        "ORDER BY ts ASC LIMIT 2000",
+        (user_id, since),
+    )
+    return {
+        "user_id": user_id,
+        "window": window,
+        "since_ts": since,
+        "count": len(rows),
+        "items": rows,
+    }
+
+
+# ── Stats ───────────────────────────────────────────
 
 @app.get("/api/stats/tokens")
 async def stats_tokens(user_id: int = Query(default=None)) -> dict:

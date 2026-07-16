@@ -23,6 +23,10 @@ class BrainResponse:
     tokens_prompt: int = 0
     tokens_completion: int = 0
     duration_ms: int = 0
+    # Phase 9 Batch 6: ReAct trace (model-emitted or synthesized downstream).
+    # Shape: {"thought": str|None, "action": str, "observation": str|None, "react_source": str}
+    # react_source in {"model", "synthesized", "model-no-think"}
+    react_trace: dict | None = None
 
 
 class Brain:
@@ -175,14 +179,22 @@ class Brain:
             choice = data["choices"][0]
             message = choice.get("message", {})
 
+            # Phase 9 Batch 6: detect tool_calls so we can mark the react action
+            tool_calls_present = bool(message.get("tool_calls"))
+
             # Handle tool calls
-            if message.get("tool_calls"):
+            if tool_calls_present:
                 text = json.dumps(message["tool_calls"], ensure_ascii=False)
             else:
                 text = message.get("content", "") or ""
 
             usage = data.get("usage", {})
             duration = int((time.monotonic() - t0) * 1000)
+
+            # Phase 9 Batch 6: extract <think> block + classify action for react_trace.
+            # Tags: "model" = LLM emitted a real <think> block;
+            #       "model-no-think" = LLM responded without a <think> block (downstream synthesis).
+            react_trace = _build_react_from_text(text, tool_calls_present)
 
             return BrainResponse(
                 text=text.strip(),
@@ -191,6 +203,7 @@ class Brain:
                 tokens_prompt=usage.get("prompt_tokens", 0),
                 tokens_completion=usage.get("completion_tokens", 0),
                 duration_ms=duration,
+                react_trace=react_trace,
             )
 
     async def generate_push(
@@ -231,3 +244,69 @@ class Brain:
             return template.format(**kwargs)
         except (KeyError, ValueError):
             return template
+
+
+# ── ReAct trace extraction (Phase 9 Batch 6) ─────────────────
+import re as _re
+
+_THINK_PATTERN = _re.compile(r"<think>(.*?)</think>", flags=_re.DOTALL)
+
+
+def _classify_action(thought: str | None, tool_calls_present: bool) -> str:
+    """Map a (possibly empty) thought + tool-call presence to a ReAct action."""
+    if tool_calls_present:
+        return "tool_call"
+    if not thought:
+        return "reply"
+    low = thought.lower()
+    if "tool" in low or "调用" in thought:
+        return "tool_call"
+    if "silent" in low or "沉默" in thought or "不说话" in thought or "撤回" in thought:
+        return "silence"
+    if "recall" in low or "撤回消息" in thought:
+        return "recall"
+    return "reply"
+
+
+def _build_react_from_text(text: str, tool_calls_present: bool) -> dict:
+    """Build react_trace dict from raw LLM output.
+
+    Tags:
+      - "model"           : LLM emitted a real <think>…</think> block; thought is preserved.
+      - "model-no-think"  : LLM responded but did not emit <think>; thought is None.
+                            Downstream pipeline will synthesize a thought from stage data.
+
+    Always returns a dict so the brain contract is uniform; no-op reactions
+    (e.g. fallback "(伊塔暂时无法连接大脑...)") are tagged with react_source="fallback".
+    """
+    if not text:
+        return {
+            "thought": None,
+            "action": "silence",
+            "observation": "empty_response",
+            "react_source": "fallback",
+        }
+    # Skip react extraction on provider fallback markers — those aren't real model output.
+    if text.startswith("(连接") or text.startswith("(思考") or text.startswith("(伊塔暂时"):
+        return {
+            "thought": None,
+            "action": "silence",
+            "observation": text[:200],
+            "react_source": "fallback",
+        }
+    m = _THINK_PATTERN.search(text)
+    thought = m.group(1).strip() if m else None
+    action = _classify_action(thought, tool_calls_present)
+    if thought:
+        return {
+            "thought": thought,
+            "action": action,
+            "observation": f"text_chars={len(text)}, thought_chars={len(thought)}",
+            "react_source": "model",
+        }
+    return {
+        "thought": None,
+        "action": action,
+        "observation": f"text_chars={len(text)}, no_think_block",
+        "react_source": "model-no-think",
+    }

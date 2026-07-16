@@ -26,10 +26,16 @@ class SendQueue:
         sender: SenderFn,
         splitter: SemanticMessageSplitter | None = None,
         min_interval: float = _DEFAULT_MIN_INTERVAL,
+        recall_manager: Any = None,
+        db: Any = None,
+        qq_with_segments: Any = None,
     ) -> None:
         self._sender = sender
         self._splitter = splitter or SemanticMessageSplitter()
         self._min_interval = min_interval
+        self._recall_manager = recall_manager
+        self._db = db
+        self._qq_segments = qq_with_segments
         self._queue: deque[OutgoingReply] = deque()
         self._task: asyncio.Task | None = None
         self._running = False
@@ -54,13 +60,37 @@ class SendQueue:
 
             reply = self._queue.popleft()
             segments = self._splitter.split(reply.content)
-
+            first_in_batch = True
+            use_segments_sender = (
+                reply.reply_to_qq_message_id
+                and self._qq_segments is not None
+            )
             for seg in segments:
                 reply.content = seg
+                ok = False
                 try:
-                    ok = await self._sender(reply)
+                    if first_in_batch and use_segments_sender:
+                        ok = await self._qq_segments(
+                            reply.user_id,
+                            seg,
+                            reply.reply_to_qq_message_id,
+                        )
+                    else:
+                        ok = await self._sender(reply)
                     if not ok:
                         logger.warning("QQ send failed for user %s", reply.user_id)
+                    # Phase 4: hook into recall manager on first segment
+                    if first_in_batch and ok and self._recall_manager:
+                        try:
+                            self._recall_manager.record_sent(
+                                user_id=reply.user_id,
+                                content=reply.content,
+                                msg_id=reply.msg_id,
+                                segments=segments,
+                            )
+                        except Exception:
+                            pass
+                    first_in_batch = False
                 except Exception:
                     logger.exception("send worker error")
                 await asyncio.sleep(self._min_interval)

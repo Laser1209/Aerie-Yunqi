@@ -224,6 +224,33 @@ ipcMain.handle("napcat:stop", async () => {
   }
 });
 
+ipcMain.handle("settings:get", async () => {
+  try {
+    const r = await apiRequest({ path: "/api/settings" });
+    return r.data;
+  } catch (_) {
+    return { error: "backend unreachable" };
+  }
+});
+
+ipcMain.handle("settings:set", async (_event, data) => {
+  try {
+    const r = await apiRequest({ method: "PUT", path: "/api/settings", body: data });
+    return r.data;
+  } catch (_) {
+    return { error: "backend unreachable" };
+  }
+});
+
+ipcMain.handle("settings:reset", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/settings/reset" });
+    return r.data;
+  } catch (_) {
+    return { error: "backend unreachable" };
+  }
+});
+
 // ── Lifecycle ──────────────────────────────────────
 app.whenReady().then(() => {
   startPythonBackend();

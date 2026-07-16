@@ -2,9 +2,29 @@
 /* App shell: tab switching, window controls, health monitoring, emotion dashboard */
 
 window.addEventListener("DOMContentLoaded", () => {
+  // ── Theme switcher ──────────────────────────────
+  if (window.themeSwitcher) {
+    window.themeSwitcher.init();
+  }
+
   // ── Emotion dashboard ──────────────────────────
   const emotionDashboard = new EmotionDashboard();
   emotionDashboard.init();
+
+  // ── Memorial panel ──────────────────────────────
+  if (window.memorialPanel) {
+    window.memorialPanel.init();
+  }
+
+  // ── Settings panel ──────────────────────────────
+  if (window.settingsPanel) {
+    window.settingsPanel.init();
+  }
+
+  // ── Data viewer ─────────────────────────────────
+  if (window.dataViewer) {
+    window.dataViewer.init();
+  }
 
   // ── Tab switching ──────────────────────────────
   document.querySelectorAll(".sidebar-tab").forEach((btn) => {

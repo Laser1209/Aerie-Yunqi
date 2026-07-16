@@ -22,10 +22,10 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
 
 from communication.message import IncomingMessage
-from config.persona_loader import get_master_qq
+from config.persona_loader import get_master_qq, load_settings, save_settings, reset_settings
 from core.companion import get_companion
 from core.database import Database
 from core.napcat_launcher import get_launcher
@@ -75,7 +75,13 @@ async def chat_send(request: Request) -> dict:
     if not comp or not comp.pipeline:
         return JSONResponse({"error": "backend not ready"}, status_code=503)
 
-    msg = IncomingMessage.from_local(text, user_id)
+    # Phase 4: quote + attachments
+    reply_to_id = int(body.get("reply_to_id", 0) or 0)
+    attachments = body.get("attachments") or []
+
+    msg = IncomingMessage.from_local(
+        text, user_id, reply_to_id=reply_to_id, attachments=attachments
+    )
     result = await comp.pipeline.handle(msg, force_full=True)
     if not result:
         return {"reply": "(已收到)", "status": "ok"}
@@ -84,6 +90,7 @@ async def chat_send(request: Request) -> dict:
         "reply": result.get("reply", ""),
         "user_msg_id": result.get("user_msg_id", 0),
         "ai_msg_id": result.get("ai_msg_id", 0),
+        "reply_to_id": reply_to_id,
         "status": "ok",
     }
 
@@ -101,6 +108,16 @@ async def chat_history(
             (user_id, limit),
         )
         rows.reverse()
+        # Parse attachments JSON
+        import json as _json
+        for r in rows:
+            if r.get("attachments"):
+                try:
+                    r["attachments"] = _json.loads(r["attachments"])
+                except Exception:
+                    r["attachments"] = []
+            else:
+                r["attachments"] = []
         return {"history": rows, "user_id": user_id}
     except Exception as e:
         return {"history": [], "error": str(e)}
@@ -168,6 +185,160 @@ async def emotion_state(user_id: int = Query(default=0)) -> dict:
     return comp.emotion.get_state(user_id)
 
 
+# ── Phase 4: Static file serving for uploads ────────────────
+
+@app.get("/uploads/{filename}")
+async def serve_upload(filename: str):
+    """Serve uploaded files. Restricts to uploads/ directory (no traversal)."""
+    from pathlib import Path
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return JSONResponse({"error": "invalid filename"}, status_code=400)
+    target = Path(UPLOAD_DIR) / filename
+    if not target.exists() or not target.is_file():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(str(target))
+
+
+# ── Phase 4: Recall ─────────────────────────────────────────
+
+
+# ── Upload ───────────────────────────────────────────
+
+UPLOAD_DIR = "uploads"
+ALLOWED_TYPES = {"image/png", "image/jpeg", "image/gif", "text/plain", "application/json"}
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+@app.post("/api/upload")
+async def upload_file(request: Request) -> dict:
+    """Upload a file to the uploads directory.
+
+    Returns metadata (filename, size, content_type, url) on success.
+    Enforces an allow-list of content types and a max size cap.
+    """
+    try:
+        form = await request.form()
+        file = form.get("file")
+        if not file or not file.filename:
+            return JSONResponse({"error": "no file provided"}, status_code=400)
+        if file.content_type not in ALLOWED_TYPES:
+            return JSONResponse(
+                {"error": f"unsupported type: {file.content_type}"},
+                status_code=415,
+            )
+
+        content = await file.read()
+        if len(content) > MAX_UPLOAD_SIZE:
+            return JSONResponse(
+                {"error": f"file too large (>{MAX_UPLOAD_SIZE} bytes)"},
+                status_code=413,
+            )
+
+        import uuid
+        from pathlib import Path
+
+        upload_path = Path(UPLOAD_DIR)
+        upload_path.mkdir(parents=True, exist_ok=True)
+
+        ext = Path(file.filename).suffix.lower()
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        dest = upload_path / unique_name
+        dest.write_bytes(content)
+
+        return {
+            "status": "ok",
+            "filename": file.filename,
+            "saved_as": unique_name,
+            "size": len(content),
+            "content_type": file.content_type,
+            "url": f"/uploads/{unique_name}",
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/upload/types")
+async def upload_types() -> dict:
+    """Return upload configuration (directory + allowed types + size cap)."""
+    return {
+        "upload_dir": UPLOAD_DIR,
+        "allowed_types": sorted(ALLOWED_TYPES),
+        "max_size_bytes": MAX_UPLOAD_SIZE,
+    }
+
+@app.post("/api/chat/recall/{msg_id}")
+async def chat_recall(msg_id: int) -> dict:
+    """Recall a chat message. Marks DB + syncs to QQ via NapCat delete_msg.
+
+    Rules:
+      - User can recall own messages within recall window
+      - Assistant messages go through RecallManager (which enforces persona limits)
+    """
+    comp = get_companion()
+    if not comp:
+        return JSONResponse({"error": "backend not ready"}, status_code=503)
+
+    row = _db.query_one(
+        "SELECT id, user_id, role, created_at, is_recalled, msg_type, qq_message_id FROM chat_log WHERE id = ?",
+        (msg_id,),
+    )
+    if not row:
+        return JSONResponse({"error": "message not found"}, status_code=404)
+    if row["is_recalled"]:
+        return {"status": "already_recalled", "id": msg_id}
+
+    # Check recall window (2 minutes default)
+    from datetime import datetime as _dt
+    try:
+        created = _dt.fromisoformat(row["created_at"])
+        age = (_dt.now() - created).total_seconds()
+    except Exception:
+        age = 0
+    if age > 120:
+        return JSONResponse({"error": "recall window expired"}, status_code=400)
+
+    # Update DB
+    _db.update(
+        "chat_log",
+        {
+            "is_recalled": 1,
+            "recalled_at": _dt.now().isoformat(timespec="seconds"),
+            "msg_state": "recalled",
+        },
+        "id = ?",
+        (msg_id,),
+    )
+
+    # If assistant message and has QQ id, recall via QQ
+    qq_recalled = False
+    if row["role"] == "assistant" and row.get("qq_message_id"):
+        try:
+            qq_recalled = await comp.qq.recall_message(int(row["qq_message_id"]))
+        except Exception:
+            pass
+
+    # Emit IPC event
+    emit("recall", id=msg_id, user_id=row["user_id"], role=row["role"])
+
+    return {"status": "ok", "id": msg_id, "qq_recalled": qq_recalled}
+
+
+@app.get("/api/chat/recall_status/{msg_id}")
+async def chat_recall_status(msg_id: int) -> dict:
+    """Check whether a message has been recalled."""
+    row = _db.query_one(
+        "SELECT id, is_recalled, recalled_at FROM chat_log WHERE id = ?",
+        (msg_id,),
+    )
+    if not row:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return {
+        "id": row["id"],
+        "is_recalled": bool(row["is_recalled"]),
+        "recalled_at": row.get("recalled_at"),
+    }
+
+
 # ── Tools ───────────────────────────────────────────
 
 @app.get("/api/tools/list")
@@ -212,7 +383,171 @@ async def stats_tokens(user_id: int = Query(default=None)) -> dict:
         return {"error": str(e)}
 
 
-# ── Startup ─────────────────────────────────────────
+# ── Settings ─────────────────────────────────────────
+
+@app.get("/api/settings")
+async def settings_get() -> dict:
+    """Return current merged settings (YAML + defaults)."""
+    try:
+        return load_settings()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.put("/api/settings")
+async def settings_put(request: Request) -> dict:
+    """Update settings (partial merge)."""
+    try:
+        body = await request.json()
+        save_settings(body)
+        return {"status": "ok", "saved": list(body.keys())}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/settings/reset")
+async def settings_reset() -> dict:
+    """Reset settings to defaults."""
+    try:
+        settings = reset_settings()
+        return {"status": "ok", "settings": settings}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Anniversary ──────────────────────────────────────
+
+@app.get("/api/anniversary/list")
+async def anniversary_list() -> dict:
+    """List all anniversaries with days_since calculated."""
+    try:
+        rows = _db.query("SELECT * FROM anniversary ORDER BY date")
+        from datetime import datetime as dt
+        for row in rows:
+            d = dt.strptime(row["date"], "%Y-%m-%d")
+            row["days_since"] = (dt.now() - d).days
+        return {"items": rows, "count": len(rows)}
+    except Exception as e:
+        return {"items": [], "error": str(e)}
+
+
+@app.post("/api/anniversary/add")
+async def anniversary_add(request: Request) -> dict:
+    """Add a new anniversary."""
+    try:
+        body = await request.json()
+        aid = _db.insert("anniversary", {
+            "name": body.get("name", ""),
+            "date": body.get("date", ""),
+            "type": body.get("type", "custom"),
+            "description": body.get("description", ""),
+        })
+        return {"status": "ok", "id": aid}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.put("/api/anniversary/update/{item_id}")
+async def anniversary_update(item_id: int, request: Request) -> dict:
+    """Update an anniversary."""
+    try:
+        body = await request.json()
+        data = {}
+        for field in ["name", "date", "type", "description"]:
+            if field in body:
+                data[field] = body[field]
+        if data:
+            _db.update("anniversary", data, "id = ?", (item_id,))
+        return {"status": "ok", "id": item_id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.delete("/api/anniversary/delete/{item_id}")
+async def anniversary_delete(item_id: int) -> dict:
+    """Delete an anniversary."""
+    try:
+        _db.delete("anniversary", "id = ?", (item_id,))
+        return {"status": "ok", "id": item_id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/anniversary/upcoming")
+async def anniversary_upcoming(days: int = Query(default=7)) -> dict:
+    """List anniversaries within the next N days."""
+    try:
+        from datetime import datetime as dt, timedelta
+        now = dt.now()
+        cutoff = now + timedelta(days=days)
+        rows = _db.query("SELECT * FROM anniversary WHERE date >= ? AND date <= ? ORDER BY date",
+                         (now.strftime("%Y-%m-%d"), cutoff.strftime("%Y-%m-%d")))
+        return {"items": rows, "count": len(rows)}
+    except Exception as e:
+        return {"items": [], "error": str(e)}
+
+
+# ── Knowledge ─────────────────────────────────────────
+
+@app.get("/api/knowledge/list")
+async def knowledge_list(
+    category: str = Query(default=""),
+    search: str = Query(default=""),
+) -> dict:
+    """List knowledge base entries with optional filters."""
+    try:
+        sql = "SELECT id, category, title, tags, created_at FROM knowledge_base WHERE 1=1"
+        params = []
+        if category:
+            sql += " AND category = ?"
+            params.append(category)
+        if search:
+            sql += " AND (title LIKE ? OR content LIKE ?)"
+            params.extend([f"%{search}%", f"%{search}%"])
+        sql += " ORDER BY updated_at DESC LIMIT 100"
+        rows = _db.query(sql, tuple(params))
+        return {"items": rows, "count": len(rows)}
+    except Exception as e:
+        return {"items": [], "error": str(e)}
+
+
+# ── System Stats ──────────────────────────────────────
+
+@app.get("/api/stats/system")
+async def system_stats() -> dict:
+    """Return system-level stats."""
+    try:
+        uptime_seconds = int(time.time() - _START_TIME)
+        hours = uptime_seconds // 3600
+        mins = (uptime_seconds % 3600) // 60
+        uptime_str = f"{hours}h {mins}m"
+
+        # Count total messages
+        msg_count = _db.query_one(
+            "SELECT COUNT(*) as cnt FROM chat_log"
+        )
+        message_count = msg_count["cnt"] if msg_count else 0
+
+        # Try to get CPU and memory (platform-specific)
+        cpu_str = "N/A"
+        memory_str = "N/A"
+        try:
+            import psutil
+            cpu_str = f"{psutil.cpu_percent(interval=0.1):.1f}%"
+            mem = psutil.virtual_memory()
+            memory_str = f"{mem.percent:.1f}% ({mem.used // 1048576}MB)"
+        except ImportError:
+            pass
+
+        return {
+            "uptime": uptime_str,
+            "uptime_seconds": uptime_seconds,
+            "cpu": cpu_str,
+            "memory": memory_str,
+            "message_count": message_count,
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 async def start_api(host: str = "127.0.0.1", port: int = 7890) -> Any:
     config = uvicorn.Config(app, host=host, port=port, log_level="info")

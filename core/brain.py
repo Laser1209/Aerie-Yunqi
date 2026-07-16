@@ -75,6 +75,16 @@ class Brain:
                 "model": sf_free_model,
             })
 
+        # Tertiary fallback: Qwen (DashScope)
+        qw_key = os.getenv("DASHSCOPE_API_KEY", "")
+        if qw_key:
+            providers.append({
+                "name": "qwen",
+                "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "key": qw_key,
+                "model": "qwen-plus",
+            })
+
         if not providers:
             logger.warning("No LLM providers configured! Set OPENAI_API_KEY or DEEPSEEK_API_KEY.")
 
@@ -182,3 +192,42 @@ class Brain:
                 tokens_completion=usage.get("completion_tokens", 0),
                 duration_ms=duration,
             )
+
+    async def generate_push(
+        self,
+        template: str,
+        mood: str = "neutral",
+        **kwargs,
+    ) -> str:
+        """Generate a proactive push message using a template with mood awareness.
+
+        Sends a lightweight system prompt to the LLM asking it to fill the
+        template in a mood-appropriate style. Falls back to raw template
+        filling on provider failure.
+        """
+        system_msg = (
+            f"You are writing a short push notification. "
+            f"Current mood: {mood}. "
+            f"Keep it under 60 characters. Be natural and warm. "
+            f"Do NOT add greeting prefixes or explanations. "
+            f"Just output the message text directly."
+        )
+        user_msg = template.format(**kwargs) if kwargs else template
+
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ]
+
+        try:
+            resp = await self.chat(messages)
+            if resp.text and not resp.text.startswith("(伊塔"):
+                return resp.text.strip()
+        except Exception:
+            pass
+
+        # Fallback: plain template fill
+        try:
+            return template.format(**kwargs)
+        except (KeyError, ValueError):
+            return template

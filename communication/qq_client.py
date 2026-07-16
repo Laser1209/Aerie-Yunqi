@@ -147,6 +147,99 @@ class QQClient:
             logger.warning("QQ send error: %s", e)
             return False
 
+    async def recall_message(self, message_id: int) -> bool:
+        """Recall a previously sent message via NapCat OneBot11 delete_msg.
+
+        Args:
+            message_id: OneBot11 message_id (NOT chat_log.id)
+        Returns:
+            True if recall succeeded
+        """
+        if not self.is_connected:
+            logger.warning("Cannot recall: QQ WS not connected")
+            return False
+
+        payload = {
+            "action": "delete_msg",
+            "params": {"message_id": int(message_id)},
+        }
+        url = f"ws://{self.host}:{self.port}"
+        try:
+            async with websockets.connect(url, ping_interval=None, close_timeout=2) as ws:
+                await ws.send(json.dumps(payload))
+                try:
+                    resp = await asyncio.wait_for(ws.recv(), timeout=5)
+                    data = json.loads(resp)
+                    if data.get("status") == "ok":
+                        logger.info("QQ recalled message_id=%s", message_id)
+                        return True
+                    logger.warning("QQ recall failed: %s", data)
+                    return False
+                except asyncio.TimeoutError:
+                    logger.warning("QQ recall timeout for message_id=%s", message_id)
+                    return False
+        except Exception as e:
+            logger.warning("QQ recall error: %s", e)
+            return False
+
+    async def send_poke(self, user_id: int) -> bool:
+        """Send a poke (戳一戳) to a user via NapCat OneBot11."""
+        if not self.is_connected:
+            return False
+        payload = {
+            "action": "send_poke",
+            "params": {"user_id": int(user_id), "type": "私人"},
+        }
+        url = f"ws://{self.host}:{self.port}"
+        try:
+            async with websockets.connect(url, ping_interval=None, close_timeout=2) as ws:
+                await ws.send(json.dumps(payload))
+                try:
+                    resp = await asyncio.wait_for(ws.recv(), timeout=3)
+                    data = json.loads(resp)
+                    return data.get("status") == "ok"
+                except asyncio.TimeoutError:
+                    return False
+        except Exception:
+            return False
+
+    async def send_message_with_segments(
+        self,
+        user_id: int,
+        segments: list[dict],
+        render_mode: str = "array",
+    ) -> bool:
+        """Send a private message composed of message segments (OneBot11 message array).
+
+        Example segments:
+          [{"type": "reply", "data": {"id": 12345}},
+           {"type": "text", "data": {"text": "我也在想你"}}]
+        """
+        if not self.is_connected:
+            return False
+
+        payload = {
+            "action": "send_private_msg",
+            "params": {"user_id": int(user_id), "message": segments},
+        }
+        url = f"ws://{self.host}:{self.port}"
+        try:
+            async with websockets.connect(url, ping_interval=None, close_timeout=2) as ws:
+                await ws.send(json.dumps(payload))
+                try:
+                    resp = await asyncio.wait_for(ws.recv(), timeout=5)
+                    data = json.loads(resp)
+                    if data.get("status") == "ok":
+                        # data.data.message_id is the new OneBot11 message_id
+                        msg_id = (data.get("data") or {}).get("message_id")
+                        return True
+                    return False
+                except asyncio.TimeoutError:
+                    return False
+        except Exception as e:
+            logger.warning("QQ segments send error: %s", e)
+            return False
+
     async def stop(self) -> None:
         self._running = False
         self._connected = False

@@ -6,6 +6,7 @@ Processes incoming messages through:
 
 from __future__ import annotations
 import asyncio
+import json
 import logging
 from typing import Any
 
@@ -25,6 +26,7 @@ class Pipeline:
         send_queue: Any,
         tool_registry: Any,
         db: Any,
+        recall_manager: Any = None,
     ) -> None:
         self.router = router
         self.emotion = emotion_engine
@@ -33,6 +35,7 @@ class Pipeline:
         self.send_queue = send_queue
         self.tool_registry = tool_registry
         self.db = db
+        self.recall_manager = recall_manager
 
     async def handle(
         self, msg: IncomingMessage, force_full: bool = False
@@ -45,6 +48,15 @@ class Pipeline:
         if route_mode == "BASIC" and not force_full:
             logger.debug("BASIC skip for user %s", msg.user_id)
             return None
+
+        # ══════════════════════════════════════════════
+        # Phase 4: Auto-recall if user said something negative
+        # ══════════════════════════════════════════════
+        if self.recall_manager and msg.source == "qq":
+            try:
+                await self.recall_manager.handle_user_negative(msg.user_id, msg.content)
+            except Exception:
+                logger.exception("handle_user_negative error")
 
         # ══════════════════════════════════════════════
         # 1. Emotion: PAD analysis + cumulative threshold scan
@@ -84,6 +96,25 @@ class Pipeline:
             pass
 
         # ══════════════════════════════════════════════
+        # 3.5 Phase 4: Resolve reply_to context
+        # ══════════════════════════════════════════════
+        reply_to_data = None
+        if msg.reply_to_id:
+            try:
+                quoted = self.db.query_one(
+                    "SELECT id, role, content FROM chat_log WHERE id = ?",
+                    (msg.reply_to_id,),
+                )
+                if quoted:
+                    reply_to_data = {
+                        "id": quoted["id"],
+                        "role": quoted["role"],
+                        "content": quoted["content"],
+                    }
+            except Exception:
+                pass
+
+        # ══════════════════════════════════════════════
         # 4. Build context for LLM
         # ══════════════════════════════════════════════
         ctx_messages = self.ctx_builder.build(
@@ -93,6 +124,8 @@ class Pipeline:
             history_msgs=history,
             emotion_info=emotion_info,
             eruption_info=eruption_info,
+            reply_to=reply_to_data,
+            attachments=msg.attachments if msg.attachments else None,
         )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
@@ -113,6 +146,10 @@ class Pipeline:
                 "content": msg.content,
                 "msg_type": msg.msg_type,
                 "route_mode": route_mode,
+                "reply_to_id": reply_to_data["id"] if reply_to_data else None,
+                "reply_to_content": reply_to_data["content"] if reply_to_data else None,
+                "reply_to_role": reply_to_data["role"] if reply_to_data else None,
+                "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
             })
         except Exception:
             logger.exception("db insert user msg error")
@@ -170,10 +207,24 @@ class Pipeline:
         # 10. QQ messages → SendQueue; local → skip
         # ══════════════════════════════════════════════
         if msg.source == "qq":
+            # Phase 4: if user message had a reply_to_id, look up the qq_message_id
+            reply_to_qq_mid = 0
+            if msg.reply_to_id:
+                try:
+                    q = self.db.query_one(
+                        "SELECT qq_message_id FROM chat_log WHERE id = ?",
+                        (msg.reply_to_id,),
+                    )
+                    if q and q.get("qq_message_id"):
+                        reply_to_qq_mid = int(q["qq_message_id"])
+                except Exception:
+                    pass
+
             reply = OutgoingReply(
                 user_id=msg.user_id,
                 content=reply_text,
                 msg_id=ai_row_id,
+                reply_to_qq_message_id=reply_to_qq_mid,
             )
             self.send_queue.enqueue(reply)
 

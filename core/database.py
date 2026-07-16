@@ -128,6 +128,17 @@ SCHEMA_SQL: list[str] = [
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
     """,
+    """
+    CREATE TABLE IF NOT EXISTS anniversary (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        date TEXT NOT NULL,
+        type TEXT DEFAULT 'custom',
+        description TEXT DEFAULT '',
+        remind_before_days INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
 ]
 
 
@@ -179,6 +190,34 @@ class Database:
         with self.connection() as conn:
             for stmt in SCHEMA_SQL:
                 conn.execute(stmt)
+            # Phase 4: idempotent migrations for chat_log extensions
+            self._migrate_chat_log(conn)
+            # Phase 4: indexes for performance
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chat_reply_to ON chat_log(reply_to_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chat_recalled ON chat_log(is_recalled)"
+            )
+
+    def _migrate_chat_log(self, conn: sqlite3.Connection) -> None:
+        """Add Phase 4 columns to chat_log if they don't exist yet."""
+        existing = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(chat_log)").fetchall()
+        }
+        migrations = [
+            ("reply_to_id", "INTEGER DEFAULT NULL"),
+            ("reply_to_content", "TEXT DEFAULT NULL"),
+            ("reply_to_role", "TEXT DEFAULT NULL"),
+            ("is_recalled", "INTEGER DEFAULT 0"),
+            ("recalled_at", "TEXT DEFAULT NULL"),
+            ("attachments", "TEXT DEFAULT NULL"),
+            ("msg_state", "TEXT DEFAULT 'normal'"),
+        ]
+        for col, decl in migrations:
+            if col not in existing:
+                conn.execute(f"ALTER TABLE chat_log ADD COLUMN {col} {decl}")
 
     # ===== CRUD helpers =====
     def execute(self, sql: str, params: tuple | dict = ()) -> sqlite3.Cursor:

@@ -1,0 +1,31 @@
+/* Aerie · 云栖 — Theme: 深夜紫 (midnight-purple) */
+:root {
+  --brand-500: #9370DB;
+  --brand-600: #7B5EA7;
+  --color-bg: #1A0033;
+  --color-surface: #220044;
+  --color-border: #3A1A6E;
+  --color-text: #E0D5F0;
+  --color-text-muted: #9988BB;
+  --color-primary: #9370DB;
+  --color-primary-hover: #7B5EA7;
+  --color-primary-fg: #FFFFFF;
+  --shadow-sm: 0 1px 2px rgba(147, 112, 219, 0.15);
+  --shadow: 0 2px 8px rgba(147, 112, 219, 0.20);
+  --shadow-lg: 0 8px 24px rgba(147, 112, 219, 0.25);
+  --bg-50: #3A1A6E;
+  --bg-100: #1A0033;
+  --bg-200: #220044;
+  --bg-300: #3A1A6E;
+  --bg-400: #5B2A99;
+  --bg-700: #5B2A99;
+  --bg-800: #220044;
+  --bg-900: #0D001A;
+  --text-50: #E0D5F0;
+  --text-100: #C8A8E8;
+  --text-300: #9988BB;
+  --text-400: #9988BB;
+  --text-500: #7766AA;
+  --text-700: #C8A8E8;
+  --text-800: #E0D5F0;
+}

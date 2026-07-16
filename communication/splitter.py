@@ -23,9 +23,13 @@ class SemanticMessageSplitter:
         self.max_len = max_len
 
     def split(self, text: str) -> list[str]:
-        if len(text) <= self.max_len:
-            return [text]
+        """Split text at sentence boundaries for natural multi-message delivery.
 
+        Unlike v9.0 which only split >max_len, v9.1 always splits at
+        sentence terminators (。！？ .!?\n) so multi-sentence replies
+        arrive as separate messages with natural pacing.
+        """
+        # Always try sentence-level split
         for pattern in _SPLIT_PATTERNS:
             parts = pattern.split(text)
             if len(parts) > 1:
@@ -34,15 +38,20 @@ class SemanticMessageSplitter:
                     p = p.strip()
                     if not p:
                         continue
-                    if merged and len(merged[-1] + p) <= self.max_len:
+                    # Merge tiny fragments (< 8 chars) that aren't sentence-complete
+                    if merged and (len(p) < 8 or not _is_sentence_end(p)) and len(merged[-1] + p) <= self.max_len:
+                        merged[-1] += p
+                    elif merged and not _is_sentence_end(merged[-1]) and len(merged[-1] + p) <= self.max_len:
                         merged[-1] += p
                     else:
                         merged.append(p)
-                if len(merged) > 1:
+                if merged:
                     return merged
 
-        # Force-split by max_len
-        chunks = []
-        for i in range(0, len(text), self.max_len):
-            chunks.append(text[i : i + self.max_len])
-        return chunks
+        # Fallback: return as-is
+        return [text]
+
+
+def _is_sentence_end(text: str) -> bool:
+    """Check if text ends with a sentence terminator."""
+    return text and text[-1] in "。！？.!?\n"

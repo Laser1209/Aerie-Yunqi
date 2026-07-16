@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aerie · 云栖</title>
 <link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" id="theme-css" href="styles/themes/yita-pink.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
@@ -20,7 +21,7 @@
   <!-- Status bar -->
   <div id="statusbar" class="statusbar">
     <div class="statusbar-left">
-      <img src="../../Aerie · 云栖.svg" alt="" class="statusbar-logo">
+      <img src="../../../Aerie · 云栖.svg" alt="" class="statusbar-logo">
       <span class="statusbar-title">Aerie · 云栖</span>
     </div>
     <div class="statusbar-right">
@@ -33,21 +34,37 @@
   <div class="main-layout">
     <!-- Sidebar -->
     <nav id="sidebar" class="sidebar">
+      <!-- 核心交互 -->
       <button class="sidebar-tab active" data-tab="chat">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span>聊天</span>
-      </button>
-      <button class="sidebar-tab" data-tab="qq">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        <span>QQ</span>
       </button>
       <button class="sidebar-tab" data-tab="emotion">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         <span>情绪</span>
       </button>
+      <!-- 管理查看 -->
+      <button class="sidebar-tab" data-tab="memorial">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>纪念</span>
+      </button>
+      <button class="sidebar-tab" data-tab="data">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>数据</span>
+      </button>
+      <!-- 运维连接 -->
+      <button class="sidebar-tab" data-tab="qq">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <span>QQ</span>
+      </button>
       <button class="sidebar-tab" data-tab="status">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
         <span>状态</span>
+      </button>
+      <!-- 配置信息 -->
+      <button class="sidebar-tab" data-tab="settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>设置</span>
       </button>
       <button class="sidebar-tab" data-tab="about">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -206,11 +223,106 @@
       <section id="panel-about" class="tab-panel">
         <div class="about-panel">
           <div class="about-hero">
-            <img src="../../Aerie · 云栖.svg" alt="" class="about-logo">
+            <img src="../../../Aerie · 云栖.svg" alt="" class="about-logo">
             <h1>Aerie · 云栖</h1>
             <p class="about-version">v9.0.0</p>
             <p class="about-desc">「云端栖身，身心皆有归处」</p>
             <p class="about-desc-sub">本地优先 AI 桌面伴侣 · 专属伊塔一人</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Memorial panel -->
+      <section id="panel-memorial" class="tab-panel">
+        <div id="memorial-content" class="settings-panel">
+          <h2>纪念日</h2>
+          <div id="memorial-list"></div>
+          <div id="memorial-form" style="display:none; margin-top:16px;">
+            <h3 id="memorial-form-title">添加纪念日</h3>
+            <div class="settings-group">
+              <label>名称</label>
+              <input type="text" id="mem-name" placeholder="例：第一次见面">
+              <label>日期</label>
+              <input type="date" id="mem-date">
+              <label>类型</label>
+              <select id="mem-type">
+                <option value="custom">自定义</option>
+                <option value="first_meet">初次相遇</option>
+                <option value="birthday">生日</option>
+              </select>
+              <label>描述</label>
+              <input type="text" id="mem-desc" placeholder="可选">
+            </div>
+            <div class="settings-actions">
+              <button id="mem-save-btn" class="btn btn-primary">保存</button>
+              <button id="mem-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+          </div>
+          <button id="mem-add-btn" class="btn btn-primary" style="margin-top:12px;">+ 添加纪念日</button>
+        </div>
+      </section>
+
+      <!-- Settings panel -->
+      <section id="panel-settings" class="tab-panel">
+        <div id="settings-content" class="settings-panel">
+          <h2>系统设置</h2>
+          <div class="settings-group">
+            <label>主题</label>
+            <select id="setting-theme">
+              <option value="yita-pink">伊塔粉</option>
+              <option value="midnight-purple">深夜紫</option>
+              <option value="sakura-white">樱白</option>
+              <option value="ocean-blue">海蓝</option>
+              <option value="forest-green">森绿</option>
+            </select>
+          </div>
+          <div class="settings-group">
+            <label>开机自启</label>
+            <input type="checkbox" id="setting-auto-start">
+          </div>
+          <div class="settings-group">
+            <label>启动时最小化</label>
+            <input type="checkbox" id="setting-start-minimized">
+          </div>
+          <div class="settings-group">
+            <label>主动推送</label>
+            <input type="checkbox" id="setting-proactive" checked>
+          </div>
+          <div class="settings-actions">
+            <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
+            <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>
+          </div>
+          <div id="settings-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
+        </div>
+      </section>
+
+      <!-- Data panel -->
+      <section id="panel-data" class="tab-panel">
+        <div id="data-content" class="settings-panel">
+          <h2>后台数据</h2>
+          <div class="data-subtabs">
+            <button class="data-subtab active" data-sub="chat">聊天记录</button>
+            <button class="data-subtab" data-sub="knowledge">知识库</button>
+            <button class="data-subtab" data-sub="system">系统状态</button>
+          </div>
+          <div id="data-chat-view" class="data-view">
+            <div id="chat-log-list" style="max-height:400px;overflow-y:auto;"></div>
+            <div class="data-pagination" style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+              <button id="data-prev-btn" class="btn btn-secondary btn-sm" disabled>上一页</button>
+              <span id="data-page-info" style="font-size:12px;">第 1 页</span>
+              <button id="data-next-btn" class="btn btn-secondary btn-sm">下一页</button>
+            </div>
+          </div>
+          <div id="data-knowledge-view" class="data-view" style="display:none;">
+            <div id="knowledge-list"></div>
+          </div>
+          <div id="data-system-view" class="data-view" style="display:none;">
+            <div class="status-grid">
+              <div class="status-card"><div class="status-card-label">运行时间</div><div class="status-card-value" id="ds-uptime">--</div></div>
+              <div class="status-card"><div class="status-card-label">CPU</div><div class="status-card-value" id="ds-cpu">--</div></div>
+              <div class="status-card"><div class="status-card-label">内存</div><div class="status-card-value" id="ds-memory">--</div></div>
+              <div class="status-card"><div class="status-card-label">消息总数</div><div class="status-card-value" id="ds-messages">--</div></div>
+            </div>
           </div>
         </div>
       </section>
@@ -219,8 +331,13 @@
 </div>
 
 <script src="js/chat.js"></script>
+<script src="js/chat-uploader.js"></script>
 <script src="js/napcat-panel.js"></script>
 <script src="js/emotion-dashboard.js"></script>
+<script src="js/theme-switcher.js"></script>
+<script src="js/memorial.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/data-viewer.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

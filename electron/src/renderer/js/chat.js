@@ -1,5 +1,5 @@
 "use strict";
-/* Chat manager: shared between main window and floating chat bar */
+/* Chat manager: Phase 4 — recall + quote + attachment support */
 
 class ChatManager {
   constructor(opts = {}) {
@@ -12,11 +12,17 @@ class ChatManager {
     this._loading = false;
     this._masterQQ = opts.masterQQ || 3998874040;
     this._sinceId = 0;
+    this._quotedMsg = null;            // Phase 4: currently quoted message
+    this._pendingAttachments = [];     // Phase 5: file attachments awaiting send
 
     this._bindEvents();
     this._listenIPC();
     this._startPoll();
     this.loadHistory();
+    // Phase 5: file uploader
+    if (window.ChatUploader) {
+      this._uploader = new window.ChatUploader(this);
+    }
   }
 
   _bindEvents() {
@@ -28,18 +34,38 @@ class ChatManager {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           this.send();
+        } else if (e.key === "Escape" && this._quotedMsg) {
+          this._cancelQuote();
         }
       });
     }
+    // Global click outside menu to close
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".chat-msg-actions") && !e.target.closest(".chat-action-menu")) {
+        this._closeAllActionMenus();
+      }
+    });
   }
 
   _listenIPC() {
     if (!window.aerie) return;
     window.aerie.api.onMessage((msg) => {
+      // msg can be either a normal chat message or a recall event
+      if (msg && msg.type === "recall") {
+        this._markRecalled(msg.id);
+        return;
+      }
       if (this._seenIds.has(msg.id)) return;
       this._seenIds.add(msg.id);
       this._render(msg);
     });
+  }
+
+  _markRecalled(msgId) {
+    const el = this._el.messages.querySelector(`[data-id="${msgId}"]`);
+    if (!el) return;
+    el.classList.add("chat-msg--recalled");
+    el.innerHTML = `<div class="chat-bubble chat-bubble--recalled">（消息已撤回）</div>`;
   }
 
   _startPoll() {
@@ -51,6 +77,10 @@ class ChatManager {
         });
         if (resp.data && resp.data.items) {
           for (const item of resp.data.items) {
+            if (item.is_recalled) {
+              this._markRecalled(item.id);
+              continue;
+            }
             if (this._seenIds.has(item.id)) continue;
             this._seenIds.add(item.id);
             this._render(item);
@@ -71,6 +101,10 @@ class ChatManager {
         const empty = this._el.messages.querySelector(".chat-empty");
         if (empty) empty.remove();
         for (const item of resp.data.history) {
+          if (item.is_recalled) {
+            this._renderRecalledStub(item);
+            continue;
+          }
           if (this._seenIds.has(item.id)) continue;
           this._seenIds.add(item.id);
           this._render(item);
@@ -80,26 +114,55 @@ class ChatManager {
     } catch (_) {}
   }
 
+  _renderRecalledStub(item) {
+    if (!this._el.messages) return;
+    const div = document.createElement("div");
+    div.className = "chat-msg chat-msg--recalled";
+    div.setAttribute("data-id", item.id);
+    div.innerHTML = `<div class="chat-bubble chat-bubble--recalled">（消息已撤回）</div>`;
+    this._el.messages.appendChild(div);
+  }
+
   async send() {
     if (this._loading) return;
     const text = this._el.input.value.trim();
-    if (!text) return;
+    if (!text && this._pendingAttachments.length === 0) return;
     this._el.input.value = "";
     this._loading = true;
 
+    const replyToId = this._quotedMsg ? this._quotedMsg.id : 0;
+    const attachments = this._pendingAttachments.slice();
+
     // Optimistic render
     const tempId = "temp_" + Date.now();
-    this._render({ id: tempId, role: "user", content: text });
+    this._render({
+      id: tempId,
+      role: "user",
+      content: text,
+      reply_to_id: replyToId,
+      reply_to_content: this._quotedMsg?.content || "",
+      reply_to_role: this._quotedMsg?.role || "",
+      attachments,
+    });
+
+    // Clear quote and attachments
+    this._cancelQuote();
+    this._pendingAttachments = [];
+    this._renderAttachmentPreviews();
 
     try {
       const resp = await this._request({
         method: "POST",
         path: "/api/chat/send",
-        body: { text, user_id: this._masterQQ },
+        body: {
+          text,
+          user_id: this._masterQQ,
+          reply_to_id: replyToId,
+          attachments,
+        },
       });
-      // IPC already delivers the assistant reply — just confirm
       if (resp.data && resp.data.reply) {
-        this._render({ id: tempId + "_r", role: "assistant", content: resp.data.reply });
+        // Server reply already pushed via IPC; this is a fallback
       }
     } catch (err) {
       this._render({ id: tempId + "_err", role: "assistant", content: "发送失败: " + err.message });
@@ -108,27 +171,216 @@ class ChatManager {
     }
   }
 
+  // ── Phase 4: Quote helpers ──────────────────────────
+  _quoteMessage(msg) {
+    this._quotedMsg = msg;
+    this._renderQuoteBar();
+  }
+
+  _cancelQuote() {
+    this._quotedMsg = null;
+    this._renderQuoteBar();
+  }
+
+  _renderQuoteBar() {
+    let bar = document.getElementById("chat-quote-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "chat-quote-bar";
+      bar.className = "chat-quote-bar";
+      const inputArea = document.querySelector(".chat-input-area");
+      if (inputArea) inputArea.parentNode.insertBefore(bar, inputArea);
+    }
+    if (!this._quotedMsg) {
+      bar.style.display = "none";
+      return;
+    }
+    bar.style.display = "flex";
+    bar.innerHTML = `
+      <span class="chat-quote-bar__icon">↩</span>
+      <div class="chat-quote-bar__text">
+        引用 ${this._quotedMsg.role === "user" ? "你" : "伊塔"}：
+        <span class="chat-quote-bar__preview">${this._escapeHtml((this._quotedMsg.content || "").slice(0, 60))}</span>
+      </div>
+      <button class="chat-quote-bar__cancel" id="chat-quote-cancel">✕</button>
+    `;
+    const cancelBtn = document.getElementById("chat-quote-cancel");
+    if (cancelBtn) cancelBtn.addEventListener("click", () => this._cancelQuote());
+  }
+
+  _renderAttachmentPreviews() {
+    let preview = document.getElementById("chat-attach-preview");
+    if (!preview) {
+      preview = document.createElement("div");
+      preview.id = "chat-attach-preview";
+      preview.className = "chat-attach-preview";
+      const inputArea = document.querySelector(".chat-input-area");
+      if (inputArea) inputArea.parentNode.insertBefore(preview, inputArea);
+    }
+    if (this._pendingAttachments.length === 0) {
+      preview.style.display = "none";
+      preview.innerHTML = "";
+      return;
+    }
+    preview.style.display = "flex";
+    preview.innerHTML = this._pendingAttachments
+      .map((a, i) =>
+        a.type === "image"
+          ? `<div class="chat-attach-thumb" data-i="${i}"><img src="/uploads/${a.url}" alt=""></div>`
+          : `<div class="chat-attach-thumb" data-i="${i}"><span>📎 ${this._escapeHtml(a.name)}</span></div>`,
+      )
+      .join("");
+  }
+
+  // ── Phase 4: Action menu (recall / quote / copy) ──
+  _closeAllActionMenus() {
+    document.querySelectorAll(".chat-action-menu").forEach((m) => m.remove());
+  }
+
+  _showActionMenu(msg, anchorEl) {
+    this._closeAllActionMenus();
+    const menu = document.createElement("div");
+    menu.className = "chat-action-menu";
+
+    const ageSec = (Date.now() - new Date(msg.created_at || Date.now()).getTime()) / 1000;
+    const canRecall = ageSec < 120 && !msg.is_recalled;
+
+    menu.innerHTML = `
+      <button class="chat-action-menu__item" data-act="copy">📋 复制</button>
+      <button class="chat-action-menu__item" data-act="quote">↩ 引用</button>
+      ${canRecall ? '<button class="chat-action-menu__item" data-act="recall">↶ 撤回</button>' : ""}
+    `;
+    const rect = anchorEl.getBoundingClientRect();
+    menu.style.position = "fixed";
+    menu.style.top = rect.top + "px";
+    menu.style.right = window.innerWidth - rect.left + "px";
+    document.body.appendChild(menu);
+
+    menu.querySelectorAll(".chat-action-menu__item").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const act = btn.getAttribute("data-act");
+        this._closeAllActionMenus();
+        if (act === "copy") {
+          try {
+            await navigator.clipboard.writeText(msg.content || "");
+          } catch (_) {}
+        } else if (act === "quote") {
+          this._quoteMessage(msg);
+          if (this._el.input) this._el.input.focus();
+        } else if (act === "recall") {
+          await this._recallMessage(msg);
+        }
+      });
+    });
+  }
+
+  async _recallMessage(msg) {
+    if (!confirm("确定撤回这条消息吗？")) return;
+    try {
+      const resp = await this._request({
+        method: "POST",
+        path: "/api/chat/recall/" + msg.id,
+      });
+      if (resp.data && resp.data.status === "ok") {
+        this._markRecalled(msg.id);
+      } else if (resp.data && resp.data.error) {
+        alert("撤回失败: " + resp.data.error);
+      }
+    } catch (err) {
+      alert("撤回失败: " + err.message);
+    }
+  }
+
+  // ── Render ──
   _render(msg) {
     if (!this._el.messages) return;
     const empty = this._el.messages.querySelector(".chat-empty");
     if (empty) empty.remove();
 
-    // Remove temp optimistic bubble
-    const oldTemp = this._el.messages.querySelector('[data-id^="temp_"]');
-    if (msg.id && !String(msg.id).startsWith("temp_") && oldTemp) {
-      oldTemp.remove();
+    // Remove temp optimistic bubble if a real one is arriving
+    if (msg.id && !String(msg.id).startsWith("temp_")) {
+      const oldTemps = this._el.messages.querySelectorAll('[data-id^="temp_"]');
+      oldTemps.forEach((t) => {
+        if (t.getAttribute("data-temp-text") === msg.content) t.remove();
+      });
     }
 
     // Don't re-render duplicate real messages
-    if (!String(msg.id).startsWith("temp_") && this._el.messages.querySelector(`[data-id="${msg.id}"]`)) {
+    if (
+      msg.id &&
+      !String(msg.id).startsWith("temp_") &&
+      this._el.messages.querySelector(`[data-id="${msg.id}"]`)
+    ) {
+      return;
+    }
+
+    if (msg.is_recalled) {
+      this._renderRecalledStub(msg);
       return;
     }
 
     const div = document.createElement("div");
     div.className = "chat-msg chat-msg--" + msg.role;
     div.setAttribute("data-id", msg.id);
-    div.innerHTML = `<div class="chat-bubble">${this._escapeHtml(msg.content)}</div>`;
+    if (msg.id) div.setAttribute("data-msg-id", msg.id);
+    if (msg.id) div.setAttribute("data-temp-text", msg.content);
+
+    let html = "";
+    // Phase 4: quote overlay (above bubble)
+    if (msg.reply_to_id && msg.reply_to_content) {
+      const role = msg.reply_to_role === "user" ? "你" : "伊塔";
+      html += `<div class="chat-quote-overlay" data-reply-to="${msg.reply_to_id}">
+        <span class="chat-quote-overlay__bar"></span>
+        <div class="chat-quote-overlay__text">
+          <span class="chat-quote-overlay__author">引用 ${role}</span>
+          <span class="chat-quote-overlay__preview">${this._escapeHtml((msg.reply_to_content || "").slice(0, 60))}</span>
+        </div>
+      </div>`;
+    }
+    // Phase 5: attachments
+    if (msg.attachments && msg.attachments.length > 0) {
+      html += '<div class="chat-attachments">';
+      for (const att of msg.attachments) {
+        if (att.type === "image") {
+          html += `<div class="chat-attach-card" data-type="image"><img src="/uploads/${this._escapeHtml(att.url)}" alt=""></div>`;
+        } else {
+          html += `<div class="chat-attach-card" data-type="file">📎 ${this._escapeHtml(att.name || "文件")}</div>`;
+        }
+      }
+      html += "</div>";
+    }
+    html += `<div class="chat-bubble">${this._escapeHtml(msg.content || "")}</div>`;
+    // Action menu trigger
+    if (msg.id && !String(msg.id).startsWith("temp_")) {
+      html += `<div class="chat-msg-actions"><button class="chat-msg-actions__btn" data-msg-actions="${msg.id}">⋮</button></div>`;
+    }
+
+    div.innerHTML = html;
     this._el.messages.appendChild(div);
+
+    // Bind action button
+    const actionsBtn = div.querySelector("[data-msg-actions]");
+    if (actionsBtn) {
+      actionsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._showActionMenu(msg, actionsBtn);
+      });
+    }
+
+    // Bind quote overlay click → jump to original
+    const quoteOverlay = div.querySelector(".chat-quote-overlay");
+    if (quoteOverlay) {
+      quoteOverlay.addEventListener("click", () => {
+        const targetId = quoteOverlay.getAttribute("data-reply-to");
+        const target = this._el.messages.querySelector(`[data-msg-id="${targetId}"]`);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.classList.add("chat-msg--highlight");
+          setTimeout(() => target.classList.remove("chat-msg--highlight"), 1500);
+        }
+      });
+    }
+
     this._el.messages.scrollTop = this._el.messages.scrollHeight;
   }
 
@@ -144,9 +396,11 @@ class ChatManager {
         return await window.aerie.api.request(opts);
       } catch (_) {}
     }
-    // Fallback: direct HTTP
     const url = "http://127.0.0.1:7890" + opts.path;
-    const init = { method: opts.method || "GET", headers: { "Content-Type": "application/json" } };
+    const init = {
+      method: opts.method || "GET",
+      headers: { "Content-Type": "application/json" },
+    };
     if (opts.body) init.body = JSON.stringify(opts.body);
     const r = await fetch(url, init);
     const data = await r.json();

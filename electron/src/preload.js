@@ -22,4 +22,9 @@ contextBridge.exposeInMainWorld("aerie", {
     },
     getHealth: () => ipcRenderer.invoke("get-health"),
   },
+  settings: {
+    get: () => ipcRenderer.invoke("settings:get"),
+    set: (data) => ipcRenderer.invoke("settings:set", data),
+    reset: () => ipcRenderer.invoke("settings:reset"),
+  },
 });

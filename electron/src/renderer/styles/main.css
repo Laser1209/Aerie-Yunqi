@@ -473,3 +473,320 @@ body {
 }
 .threshold-bar-fill--warning { background: linear-gradient(90deg, var(--warning), #ff6d00); }
 .threshold-bar-fill--danger { background: linear-gradient(90deg, var(--error), #d50000); }
+
+/* ===== Settings Panel ===== */
+.settings-panel { padding: 24px; }
+.settings-panel h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+.settings-panel h3 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; color: var(--color-text-muted); }
+.settings-group {
+  margin-bottom: 16px;
+}
+.settings-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: 6px;
+}
+.settings-group input[type="text"],
+.settings-group input[type="date"],
+.settings-group select {
+  width: 100%;
+  max-width: 360px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  outline: none;
+}
+.settings-group input:focus,
+.settings-group select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+.settings-group input[type="checkbox"] {
+  width: 18px; height: 18px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.settings-actions {
+  display: flex; gap: 8px; margin-top: 20px;
+}
+
+/* ===== Memorial Cards ===== */
+.memorial-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  margin-bottom: 8px;
+}
+.memorial-info {}
+.memorial-name { font-size: 15px; font-weight: 600; }
+.memorial-date { font-size: 13px; color: var(--color-text-muted); margin-top: 2px; }
+.memorial-desc { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
+.memorial-actions { display: flex; gap: 6px; }
+
+/* ===== Data Viewer ===== */
+.data-subtabs {
+  display: flex; gap: 4px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border); padding-bottom: 8px;
+}
+.data-subtab {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all .15s;
+}
+.data-subtab:hover { color: var(--color-text); background: var(--color-border); }
+.data-subtab.active { background: var(--color-primary); color: var(--color-primary-fg); }
+
+.chat-log-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.chat-log-item:last-child { border-bottom: none; }
+.log-role {
+  font-weight: 600; min-width: 32px; color: var(--color-primary);
+}
+.log-content {
+  flex: 1; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.log-time { font-size: 11px; color: var(--color-text-muted); min-width: 140px; text-align: right; }
+
+/* ===== Phase 4: Chat Action Menu (Recall / Quote / Copy) ===== */
+.chat-msg { position: relative; }
+.chat-msg-actions {
+  position: absolute; top: 4px; right: 8px;
+  opacity: 0; transition: opacity .2s;
+  z-index: 10;
+}
+.chat-msg:hover .chat-msg-actions { opacity: 1; }
+.chat-msg-actions__btn {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 14px; color: var(--color-text);
+  transition: all .15s;
+}
+.chat-msg-actions__btn:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border-color: var(--color-primary);
+}
+.chat-action-menu {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: 100;
+  min-width: 120px;
+  animation: menuFadeIn .15s ease;
+}
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.chat-action-menu__item {
+  display: block; width: 100%;
+  padding: 8px 12px;
+  border: none; background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  transition: background .15s;
+}
+.chat-action-menu__item:hover {
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+/* ===== Phase 4: Recalled message bubble ===== */
+.chat-msg--recalled .chat-bubble {
+  background: var(--bg-100) !important;
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+.chat-bubble--recalled {
+  background: var(--bg-100) !important;
+  color: var(--color-text-muted) !important;
+  font-style: italic;
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+}
+
+/* ===== Phase 4: Quote bar (input area) ===== */
+.chat-quote-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-100);
+  border-left: 3px solid var(--color-primary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-text);
+}
+.chat-quote-bar__icon { color: var(--color-primary); font-size: 16px; }
+.chat-quote-bar__text { flex: 1; }
+.chat-quote-bar__preview {
+  color: var(--color-text-muted);
+  margin-left: 4px;
+  font-size: 12px;
+}
+.chat-quote-bar__cancel {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 6px;
+}
+.chat-quote-bar__cancel:hover { color: var(--color-primary); }
+
+/* ===== Phase 4: Quote overlay (inside bubble area) ===== */
+.chat-quote-overlay {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  background: var(--bg-100);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  max-width: 280px;
+  transition: background .15s;
+}
+.chat-quote-overlay:hover { background: var(--bg-200); }
+.chat-quote-overlay__bar {
+  width: 3px;
+  background: var(--color-primary);
+  border-radius: 2px;
+}
+.chat-quote-overlay__text { display: flex; flex-direction: column; gap: 2px; }
+.chat-quote-overlay__author {
+  font-weight: 600;
+  color: var(--color-primary);
+  font-size: 11px;
+}
+.chat-quote-overlay__preview {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== Phase 4: Message highlight (quote jump target) ===== */
+.chat-msg--highlight {
+  animation: highlightPulse 1.5s ease;
+}
+@keyframes highlightPulse {
+  0%   { box-shadow: 0 0 0 2px var(--color-primary); }
+  50%  { box-shadow: 0 0 0 4px var(--color-primary); }
+  100% { box-shadow: 0 0 0 2px var(--color-primary); }
+}
+
+/* ===== Phase 5: Attachment previews (in input area) ===== */
+.chat-attach-preview {
+  display: none;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-100);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.chat-attach-thumb {
+  width: 60px; height: 60px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-200);
+  border: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  padding: 4px;
+  text-align: center;
+}
+.chat-attach-thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+/* ===== Phase 5: Attachment cards (in chat bubble) ===== */
+.chat-attachments {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.chat-attach-card {
+  border-radius: var(--radius-sm);
+  background: var(--bg-200);
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  max-width: 220px;
+}
+.chat-attach-card[data-type="image"] {
+  padding: 4px;
+  background: transparent;
+  border: none;
+}
+.chat-attach-card img {
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+/* ===== Phase 5: Chat input toolbar (📎 button) ===== */
+.chat-input-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px 0;
+}
+.chat-input-toolbar__btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all .15s;
+}
+.chat-input-toolbar__btn:hover {
+  color: var(--color-primary);
+  background: var(--bg-100);
+}
+
+/* ===== Phase 5: Drag-and-drop visual feedback ===== */
+.chat-messages--drag {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -8px;
+  background: var(--bg-100);
+}

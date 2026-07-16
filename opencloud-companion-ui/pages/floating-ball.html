@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>桌面悬浮球与每日简报</title>
+    <style id="theme-vars">
+/*
+ * Pinguo design tokens
+ * Brand: Pinguo
+ * Domain: Consumer imaging product
+ * Style: Restrained, elegant, Apple-inspired
+ * Theme mode: light-dark
+ * Source language: zh
+ * Output language: en
+ *
+ * Color architecture (two layers):
+ *   1. Primitive palette - six categories. brand / background / text / icon
+ *      are each a 10-step scale (50 lightest to 900 darkest). state-success and
+ *      state-error are functional colors anchored on Apple system colors.
+ *      Anchors follow Apple Human Interface Guidelines system colors
+ *      (System Blue #007AFF, System Green #34C759, System Red #FF3B30,
+ *      system grays / label / background colors).
+ *   2. Semantic tokens - :root (light) and .dark map roles onto primitives.
+ *      Components and UI kits must only consume the semantic tokens below.
+ */
+
+/* @group-priority: brand, background, text, icon, state-success, state-error */
+
+:root {
+  /* ===== PRIMITIVE PALETTE ===== */
+
+  /* brand */
+  --brand-50: #e8f2ff;
+  --brand-100: #cfe5ff;
+  --brand-200: #9fcbff;
+  --brand-300: #66abff;
+  --brand-400: #2e8dff;
+  --brand-500: #007aff; /* @primary */
+  --brand-600: #0064d6;
+  --brand-700: #004fad;
+  --brand-800: #003b82;
+  --brand-900: #00275a;
+
+  /* background */
+  --background-50: #ffffff;
+  --background-100: #f7f7fa;
+  --background-200: #f2f2f7;
+  --background-300: #e5e5ea;
+  --background-400: #d1d1d6;
+  --background-500: #aeaeb2;
+  --background-600: #8e8e93;
+  --background-700: #3a3a3c;
+  --background-800: #1c1c1e;
+  --background-900: #000000;
+
+  /* text */
+  --text-50: #f5f5f7;
+  --text-100: #e3e3e8;
+  --text-200: #c7c7cc;
+  --text-300: #aeaeb2;
+  --text-400: #8e8e93;
+  --text-500: #6e6e73;
+  --text-600: #48484a;
+  --text-700: #3c3c43;
+  --text-800: #1d1d1f;
+  --text-900: #000000;
+
+  /* icon */
+  --icon-50: #f5f5f7;
+  --icon-100: #e5e5ea;
+  --icon-200: #d1d1d6;
+  --icon-300: #c7c7cc;
+  --icon-400: #aeaeb2;
+  --icon-500: #8e8e93;
+  --icon-600: #6e6e73;
+  --icon-700: #48484a;
+  --icon-800: #2c2c2e;
+  --icon-900: #1d1d1f;
+
+  /* state-success */
+  --state-success: #34c759; /* @primary */
+  --state-success-dark: #30d158;
+  --state-success-surface: #e9f9ee;
+  --state-success-foreground: #ffffff;
+
+  /* state-error */
+  --state-error: #ff3b30; /* @primary */
+  --state-error-dark: #ff453a;
+  --state-error-surface: #ffecea;
+  --state-error-foreground: #ffffff;
+
+  /* ===== SEMANTIC ROLES ===== */
+
+  /* semantic */
+  --background: var(--background-50);
+  --foreground: var(--text-800);
+  --card: var(--background-50);
+  --card-foreground: var(--text-800);
+  --popover: var(--background-50);
+  --popover-foreground: var(--text-900);
+
+  --primary: var(--brand-500);
+  --primary-foreground: var(--background-50);
+  --secondary: var(--background-200);
+  --secondary-foreground: var(--text-800);
+  --muted: var(--background-200);
+  --muted-foreground: var(--text-400);
+  --accent: var(--background-100);
+  --accent-foreground: var(--text-800);
+  --destructive: var(--state-error);
+  --destructive-foreground: var(--state-error-foreground);
+  --success: var(--state-success);
+  --success-foreground: var(--state-success-foreground);
+  --border: var(--background-300);
+  --input: var(--background-400);
+  --ring: var(--brand-500);
+
+  --icon: var(--icon-900);
+  --icon-muted: var(--icon-500);
+
+  /* chart */
+  --chart-1: var(--state-success);
+  --chart-2: var(--brand-500);
+  --chart-3: #ff9500;
+  --chart-4: #5856d6;
+  --chart-5: #af52de;
+
+  /* sidebar */
+  --sidebar: var(--background-200);
+  --sidebar-foreground: var(--text-800);
+  --sidebar-primary: var(--brand-500);
+  --sidebar-primary-foreground: var(--background-50);
+  --sidebar-accent: var(--background-300);
+  --sidebar-accent-foreground: var(--text-800);
+  --sidebar-border: var(--background-300);
+  --sidebar-ring: var(--brand-500);
+
+  /* TYPOGRAPHY */
+  --font-sans: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: JetBrains Mono, monospace;
+  --tracking-normal: 0em;
+
+  /* RADIUS */
+  --radius: 1.2rem;
+
+  /* SHADOWS */
+  --shadow-2xs: 0 1px 2px -1px rgba(0, 0, 0, 0.04); /* Hairline */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04); /* Subtle */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 1px 3px -1px rgba(0, 0, 0, 0.05); /* Card */
+  --shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.05); /* Raised */
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.05); /* Card Hover */
+  --shadow-lg: 0 8px 24px -8px rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.05); /* Float */
+  --shadow-xl: 0 16px 40px -10px rgba(0, 0, 0, 0.10), 0 8px 16px -8px rgba(0, 0, 0, 0.06); /* Overlay */
+  --shadow-2xl: 0 24px 64px -12px rgba(0, 0, 0, 0.12); /* Modal */
+
+  /* SPACING */
+  --spacing: 0.24rem;
+}
+
+/* ===== SEMANTIC ROLES - dark (primitive palette inherited) ===== */
+.dark {
+  --background: var(--background-900);
+  --foreground: var(--text-50);
+  --card: var(--background-800);
+  --card-foreground: var(--text-50);
+  --popover: var(--background-700);
+  --popover-foreground: var(--text-50);
+
+  --primary: var(--brand-400);
+  --primary-foreground: var(--background-900);
+  --secondary: var(--background-800);
+  --secondary-foreground: var(--text-50);
+  --muted: var(--background-800);
+  --muted-foreground: var(--text-400);
+  --accent: var(--background-700);
+  --accent-foreground: var(--text-50);
+  --destructive: var(--state-error-dark);
+  --destructive-foreground: var(--state-error-foreground);
+  --success: var(--state-success-dark);
+  --success-foreground: var(--state-success-foreground);
+  --border: var(--background-700);
+  --input: var(--background-700);
+  --ring: var(--brand-400);
+
+  --icon: var(--icon-50);
+  --icon-muted: var(--icon-500);
+
+  --chart-1: var(--state-success-dark);
+  --chart-2: var(--brand-400);
+  --chart-3: #ff9f0a;
+  --chart-4: #5e5ce6;
+  --chart-5: #bf5af2;
+
+  --sidebar: var(--background-800);
+  --sidebar-foreground: var(--text-50);
+  --sidebar-primary: var(--brand-400);
+  --sidebar-primary-foreground: var(--background-900);
+  --sidebar-accent: var(--background-700);
+  --sidebar-accent-foreground: var(--text-50);
+  --sidebar-border: var(--background-700);
+  --sidebar-ring: var(--brand-400);
+
+  --shadow-2xs: 0 1px 2px -1px rgba(0, 0, 0, 0.30);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.36), 0 1px 3px -1px rgba(0, 0, 0, 0.36);
+  --shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.40), 0 1px 2px -1px rgba(0, 0, 0, 0.36);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.44), 0 2px 4px -2px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 8px 24px -8px rgba(0, 0, 0, 0.50), 0 4px 8px -4px rgba(0, 0, 0, 0.40);
+  --shadow-xl: 0 16px 40px -10px rgba(0, 0, 0, 0.55), 0 8px 16px -8px rgba(0, 0, 0, 0.44);
+  --shadow-2xl: 0 24px 64px -12px rgba(0, 0, 0, 0.60);
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-foreground: var(--card-foreground);
+  }
+  @layer base {
+    body { background: var(--card-background); color: var(--card-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+    <main class="relative w-[1440px] h-[900px] mx-auto overflow-hidden">
+        <!-- Simulated Windows desktop background -->
+        <div class="absolute inset-0 desktop-bg"></div>
+        <div class="absolute inset-0 desktop-glow pointer-events-none"></div>
+
+        <!-- Top window chrome to suggest Windows desktop -->
+        <div class="absolute top-0 left-0 right-0 h-9 flex items-center justify-between px-4 z-10 text-[11px]" style="color: var(--text-700);">
+            <div class="flex items-center gap-2">
+                <span class="font-medium">小满 · OpenCloud Companion</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span style="color: var(--text-500);">100%</span>
+                <span style="color: var(--text-500);">2026/7/16</span>
+            </div>
+        </div>
+
+        <!-- Taskbar -->
+        <div class="absolute bottom-0 left-0 right-0 h-12 flex items-center justify-center z-10" style="background: rgba(255,255,255,0.55); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid rgba(255,255,255,0.5);">
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full" style="background: rgba(255,255,255,0.6); box-shadow: var(--shadow-sm);">
+                <div class="w-5 h-5 rounded grid place-items-center text-[10px] font-semibold" style="background: var(--brand-500); color: #fff;">奥</div>
+                <div class="w-5 h-5 rounded grid place-items-center text-[10px] font-semibold" style="background: var(--background-200); color: var(--text-700);">文</div>
+                <div class="w-5 h-5 rounded grid place-items-center text-[10px] font-semibold" style="background: var(--background-200); color: var(--text-700);">设</div>
+                <div class="w-px h-4" style="background: var(--background-300);"></div>
+                <div class="w-5 h-5 rounded grid place-items-center" style="background: var(--background-200); color: var(--brand-500);">
+                    <span class="block w-2.5 h-2.5 rounded-full" style="background: var(--brand-500);"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Desktop icons (fake, top-left) -->
+        <div class="absolute top-14 left-6 grid grid-cols-1 gap-3 z-10">
+            <div class="flex flex-col items-center gap-1 w-16">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #4f8cff, #2e6ad6); box-shadow: var(--shadow-sm);">
+                    <span class="text-white text-[16px] font-semibold" style="font-family: var(--font-sans);">奥</span>
+                </div>
+                <span class="text-[11px] px-1 rounded" style="color: var(--text-800);">奥创文档</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-16">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #f5a623, #e08800); box-shadow: var(--shadow-sm);">
+                    <span class="text-white text-[16px] font-semibold">灵</span>
+                </div>
+                <span class="text-[11px] px-1 rounded" style="color: var(--text-800);">灵感白板</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-16">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #34c759, #28a745); box-shadow: var(--shadow-sm);">
+                    <span class="text-white text-[16px] font-semibold">图</span>
+                </div>
+                <span class="text-[11px] px-1 rounded" style="color: var(--text-800);">图像工坊</span>
+            </div>
+        </div>
+
+        <!-- A faint window in background to add context -->
+        <div class="absolute top-16 left-44 w-[640px] h-[400px] rounded-2xl overflow-hidden z-0" style="background: rgba(255,255,255,0.78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow-xl); border: 1px solid rgba(255,255,255,0.6);">
+            <div class="h-8 flex items-center px-3 gap-2" style="border-bottom: 1px solid var(--background-200); background: rgba(255,255,255,0.5);">
+                <span class="w-2.5 h-2.5 rounded-full" style="background: #ff5f57;"></span>
+                <span class="w-2.5 h-2.5 rounded-full" style="background: #ffbd2e;"></span>
+                <span class="w-2.5 h-2.5 rounded-full" style="background: #28c840;"></span>
+                <span class="text-[11px] ml-2" style="color: var(--text-500);">2026-Q3 创意简报 · 草稿</span>
+            </div>
+            <div class="p-5 space-y-3">
+                <div class="h-3 rounded w-2/3" style="background: var(--background-200);"></div>
+                <div class="h-3 rounded w-1/2" style="background: var(--background-200);"></div>
+                <div class="h-3 rounded w-5/6" style="background: var(--background-100);"></div>
+                <div class="h-3 rounded w-3/5" style="background: var(--background-100);"></div>
+                <div class="grid grid-cols-3 gap-3 pt-4">
+                    <div class="h-20 rounded-xl" style="background: linear-gradient(135deg, var(--brand-100), var(--brand-200));"></div>
+                    <div class="h-20 rounded-xl" style="background: linear-gradient(135deg, #ffe9c2, #fbd28b);"></div>
+                    <div class="h-20 rounded-xl" style="background: linear-gradient(135deg, #d6f0d8, #a5d8ac);"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== FLOATING BALL ===================== -->
+        <div class="absolute top-14 right-8 z-30 ball-anchor">
+            <div class="annotation annotation-ball">
+                <div class="annotation-line"></div>
+                <div class="annotation-text">悬浮球 — 点击展开对话</div>
+            </div>
+            <div class="ball-shell">
+                <div class="ball-glow"></div>
+                <div class="ball-pulse"></div>
+                <div class="ball">
+                    <span class="ball-glyph">小</span>
+                </div>
+                <span class="ball-badge">2</span>
+            </div>
+        </div>
+
+        <!-- ===================== DAILY BRIEF NOTIFICATION CARD ===================== -->
+        <div class="absolute top-[152px] right-8 z-20 brief-card-wrap">
+            <div class="annotation annotation-brief">
+                <div class="annotation-text-right">每日简报 — 开机自动推送</div>
+                <div class="annotation-line-right"></div>
+            </div>
+            <div class="brief-card">
+                <div class="brief-header">
+                    <div class="flex items-center gap-2">
+                        <span class="brief-greeting">早上好，主人～</span>
+                        <span class="brief-sun" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="4"/>
+                                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+                            </svg>
+                        </span>
+                    </div>
+                    <button class="brief-close" aria-label="关闭">
+                        <span data-icon style="-webkit-mask-image: url('../assets/icons/dl_builtin_apple/circle-plus.svg'); mask-image: url('../assets/icons/dl_builtin_apple/circle-plus.svg'); width:14px;height:14px;background-color: var(--text-400); transform: rotate(45deg);"></span>
+                    </button>
+                </div>
+                <div class="brief-date">2026年7月16日 · 周三</div>
+
+                <!-- News -->
+                <div class="brief-section">
+                    <div class="brief-section-title">
+                        <span data-icon style="-webkit-mask-image: url('../assets/icons/dl_builtin_apple/star.svg'); mask-image: url('../assets/icons/dl_builtin_apple/star.svg'); width:14px;height:14px;background-color: var(--brand-500);"></span>
+                        <span>今日要闻</span>
+                    </div>
+                    <ul class="brief-list">
+                        <li>
+                            <span class="brief-dot" style="background: var(--brand-500);"></span>
+                            <span>Apple 发布 VisionOS 3，多人协作空间上线</span>
+                        </li>
+                        <li>
+                            <span class="brief-dot" style="background: #ff9500;"></span>
+                            <span>OpenAI 推出 AgentKit，智能体编排更轻量</span>
+                        </li>
+                        <li>
+                            <span class="brief-dot" style="background: #5856d6;"></span>
+                            <span>Anthropic Claude 4.5 Sonnet 长上下文突破 1M</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Todo -->
+                <div class="brief-section">
+                    <div class="brief-section-title">
+                        <span data-icon style="-webkit-mask-image: url('../assets/icons/dl_builtin_apple/circle-check.svg'); mask-image: url('../assets/icons/dl_builtin_apple/circle-check.svg'); width:14px;height:14px;background-color: var(--state-success);"></span>
+                        <span>待办事项</span>
+                    </div>
+                    <ul class="brief-list">
+                        <li class="brief-todo done">
+                            <span class="brief-check checked">
+                                <span data-icon style="-webkit-mask-image: url('../assets/icons/dl_builtin_apple/check.svg'); mask-image: url('../assets/icons/dl_builtin_apple/check.svg'); width:10px;height:10px;background-color: #fff;"></span>
+                            </span>
+                            <span class="brief-todo-text">晨会 · 与产品组同步 Q3 路线图</span>
+                        </li>
+                        <li class="brief-todo">
+                            <span class="brief-check"></span>
+                            <span class="brief-todo-text">整理「小满」对话样本，准备周复盘</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Weather -->
+                <div class="brief-section brief-weather">
+                    <div class="flex items-center gap-2">
+                        <span data-icon style="-webkit-mask-image: url('../assets/icons/dl_builtin_apple/map-pin.svg'); mask-image: url('../assets/icons/dl_builtin_apple/map-pin.svg'); width:14px;height:14px;background-color: var(--brand-500);"></span>
+                        <span style="color: var(--text-700);">上海</span>
+                    </div>
+                    <span style="color: var(--text-500);">多云 · 24°C ~ 32°C</span>
+                </div>
+
+                <!-- Footer -->
+                <div class="brief-footer">
+                    <span>有什么需要我帮忙的吗？</span>
+                    <a href="#" class="brief-link">和小满聊聊</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer caption -->
+        <div class="absolute bottom-3 right-4 text-[10px] z-10" style="color: var(--text-500);">
+            场景示意 · 实际界面随系统主题动态切换
+        </div>
+    </main>
+
+    <style>
+        /* === Desktop scene background === */
+        .desktop-bg {
+            background:
+                radial-gradient(1200px 600px at 12% 18%, rgba(0,122,255,0.18), transparent 60%),
+                radial-gradient(900px 700px at 88% 8%, rgba(88,86,214,0.16), transparent 65%),
+                radial-gradient(1100px 800px at 75% 95%, rgba(52,199,89,0.12), transparent 60%),
+                linear-gradient(160deg, #eaf1ff 0%, #f6f4fb 45%, #eef6f1 100%);
+        }
+        .desktop-glow {
+            background: radial-gradient(600px 300px at 80% 12%, rgba(255,255,255,0.55), transparent 70%);
+            mix-blend-mode: screen;
+        }
+
+        /* === Floating ball === */
+        .ball-anchor {
+            position: absolute;
+        }
+        .ball-shell {
+            position: relative;
+            width: 56px;
+            height: 56px;
+            cursor: pointer;
+            transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        .ball-shell:hover {
+            transform: scale(1.06);
+        }
+        .ball {
+            position: relative;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--brand-500) 0%, var(--brand-400) 100%);
+            box-shadow:
+                0 0 0 1px rgba(255,255,255,0.18) inset,
+                0 6px 14px -4px rgba(0,122,255,0.45),
+                0 2px 4px rgba(0,0,0,0.06);
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+        }
+        .ball::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(120% 80% at 30% 18%, rgba(255,255,255,0.45), transparent 55%);
+            pointer-events: none;
+        }
+        .ball-glyph {
+            color: #fff;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            font-family: var(--font-sans);
+            text-shadow: 0 1px 1px rgba(0,0,0,0.18);
+            position: relative;
+            z-index: 1;
+        }
+        .ball-glow {
+            position: absolute;
+            inset: -14px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,122,255,0.35), transparent 65%);
+            filter: blur(8px);
+            animation: ball-glow 3.4s cubic-bezier(0.32, 0.72, 0, 1) infinite;
+            pointer-events: none;
+        }
+        .ball-pulse {
+            position: absolute;
+            inset: -2px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(0,122,255,0.55);
+            opacity: 0;
+            animation: ball-pulse 3.4s cubic-bezier(0.32, 0.72, 0, 1) infinite;
+            pointer-events: none;
+        }
+        .ball-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: var(--state-error);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            display: grid;
+            place-items: center;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+            line-height: 1;
+        }
+        @keyframes ball-glow {
+            0%, 100% { opacity: 0.55; transform: scale(1); }
+            50% { opacity: 0.95; transform: scale(1.08); }
+        }
+        @keyframes ball-pulse {
+            0% { transform: scale(1); opacity: 0.6; }
+            80% { transform: scale(1.6); opacity: 0; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        /* === Daily brief card === */
+        .brief-card-wrap {
+            width: 360px;
+            animation: brief-enter 720ms cubic-bezier(0.32, 0.72, 0, 1) both;
+            animation-delay: 320ms;
+        }
+        .brief-card {
+            background: rgba(255,255,255,0.72);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.6);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-xl);
+            padding: 18px 18px 14px;
+            color: var(--text-800);
+        }
+        .brief-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .brief-greeting {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-800);
+            letter-spacing: 0.01em;
+        }
+        .brief-sun {
+            display: inline-flex;
+            color: #ff9500;
+        }
+        .brief-close {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: rgba(0,0,0,0.04);
+            transition: background 200ms ease;
+            cursor: pointer;
+            border: none;
+        }
+        .brief-close:hover {
+            background: rgba(0,0,0,0.08);
+        }
+        .brief-date {
+            font-size: 11px;
+            color: var(--text-500);
+            margin-top: 2px;
+        }
+        .brief-section {
+            margin-top: 14px;
+        }
+        .brief-section-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-700);
+            text-transform: none;
+            letter-spacing: 0.02em;
+            margin-bottom: 8px;
+        }
+        .brief-list {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .brief-list li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12.5px;
+            color: var(--text-700);
+            line-height: 1.45;
+        }
+        .brief-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .brief-todo {
+            align-items: center;
+        }
+        .brief-check {
+            width: 14px;
+            height: 14px;
+            border-radius: 4px;
+            border: 1.5px solid var(--background-400);
+            background: transparent;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+        }
+        .brief-check.checked {
+            background: var(--state-success);
+            border-color: var(--state-success);
+        }
+        .brief-todo-text {
+            color: var(--text-700);
+            transition: color 200ms ease;
+        }
+        .brief-todo.done .brief-todo-text {
+            color: var(--text-400);
+            text-decoration: line-through;
+        }
+        .brief-weather {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(0,122,255,0.08);
+            font-size: 12.5px;
+        }
+        .brief-footer {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px dashed rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-600);
+        }
+        .brief-link {
+            color: var(--brand-500);
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity 200ms ease;
+        }
+        .brief-link:hover {
+            opacity: 0.75;
+        }
+
+        @keyframes brief-enter {
+            0%   { opacity: 0; transform: translateY(-12px) scale(0.98); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* === Annotations (design presentation only) === */
+        .annotation {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-600);
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .annotation-ball {
+            top: 16px;
+            right: 72px;
+        }
+        .annotation-brief {
+            top: 4px;
+            left: -210px;
+        }
+        .annotation-text,
+        .annotation-text-right {
+            background: rgba(255,255,255,0.85);
+            border: 1px solid rgba(0,0,0,0.06);
+            border-radius: 999px;
+            padding: 4px 10px;
+            box-shadow: var(--shadow-xs);
+            color: var(--text-700);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .annotation-line,
+        .annotation-line-right {
+            flex: 1;
+            height: 1px;
+            background: repeating-linear-gradient(
+                to right,
+                rgba(0,0,0,0.25) 0 4px,
+                transparent 4px 8px
+            );
+        }
+        .annotation-ball .annotation-line {
+            width: 64px;
+        }
+        .annotation-brief .annotation-line-right {
+            width: 180px;
+        }
+    </style>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

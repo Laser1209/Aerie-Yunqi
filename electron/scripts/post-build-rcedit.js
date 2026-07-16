@@ -23,7 +23,7 @@ found.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
 const exe = found[0];
 
 if (!exe) {
-  console.error('[rcedit] Could not locate Aerie · 云栖.exe under', candidates);
+  console.error('[rcedit] Could not locate Aerie · 云栖.exe under', dirs.map((d) => path.join(ROOT, d)).join(', '));
   process.exit(1);
 }
 if (!fs.existsSync(ICON)) {

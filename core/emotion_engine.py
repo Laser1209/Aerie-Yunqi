@@ -79,8 +79,9 @@ KEYWORD_DELTAS = [
 
 
 class EmotionEngine:
-    def __init__(self, db: Any = None) -> None:
+    def __init__(self, db: Any = None, state_store: Any = None) -> None:
         self.db = db
+        self.state_store = state_store
         self._state: dict[str, float] = {"P": 0.0, "A": 0.0, "D": 0.0}
         self._history: list[dict] = []
         self.threshold_engine: CumulativeEmotionEngine = get_threshold_engine()
@@ -120,6 +121,20 @@ class EmotionEngine:
         if eruptions:
             for e in eruptions:
                 logger.info("Threshold eruption: %s — %s", e["mode"], e["trigger"])
+
+        # Phase 9 Batch 1: persist a snapshot for history curve.
+        # Trigger event distinguishes "user_msg" from "eruption" downstream.
+        if self.state_store:
+            try:
+                trigger = "eruption" if eruptions else "user_msg"
+                self.state_store.snapshot(
+                    user_id=user_id,
+                    state=self.get_state(user_id),
+                    threshold=self.threshold_engine.get_slots_summary(),
+                    trigger_event=trigger,
+                )
+            except Exception:
+                logger.exception("emotion state snapshot error")
 
         logger.debug("PAD: P=%.2f A=%.2f D=%.2f", *self._state.values())
 

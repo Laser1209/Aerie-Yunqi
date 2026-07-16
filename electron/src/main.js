@@ -118,12 +118,16 @@ function healthCheck() {
 function apiRequest(opts) {
   return new Promise((resolve, reject) => {
     const url = new URL(PY_BACKEND + (opts.path || "/"));
+    const isRaw = opts.rawBody === true;
+    const headers = isRaw
+      ? { "Content-Type": "text/plain; charset=utf-8" }
+      : { "Content-Type": "application/json" };
     const options = {
       hostname: "127.0.0.1",
       port: PY_PORT,
       path: url.pathname + url.search,
       method: opts.method || "GET",
-      headers: { "Content-Type": "application/json" },
+      headers,
       timeout: 30000,
     };
     const req = http.request(options, (res) => {
@@ -131,13 +135,22 @@ function apiRequest(opts) {
       res.on("data", (c) => (d += c));
       res.on("end", () => {
         let body;
-        try { body = JSON.parse(d); } catch (_) { body = d; }
+        const ct = (res.headers && res.headers["content-type"] || "").toLowerCase();
+        if (ct.indexOf("application/json") >= 0) {
+          try { body = JSON.parse(d); } catch (_) { body = d; }
+        } else if (isRaw) {
+          body = d; // keep as text for raw text/plain responses (e.g. yaml GET)
+        } else {
+          try { body = JSON.parse(d); } catch (_) { body = d; }
+        }
         resolve({ status: res.statusCode, data: body });
       });
     });
     req.on("error", (err) => reject(err));
     req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
-    if (opts.body) req.write(JSON.stringify(opts.body));
+    if (opts.body) {
+      req.write(isRaw ? String(opts.body) : JSON.stringify(opts.body));
+    }
     req.end();
   });
 }
@@ -203,6 +216,130 @@ ipcMain.handle("api:request", async (_event, opts) => {
     return await apiRequest(opts);
   } catch (err) {
     return { status: 0, data: { error: err.message } };
+  }
+});
+
+// ── Phase 9 Batch 4: SSE → IPC bridge (brain center) ──
+const sseClients = new Map(); // webContents.id -> { req }
+
+ipcMain.handle("sse:subscribe", async (event) => {
+  const senderId = event.sender.id;
+  if (sseClients.has(senderId)) {
+    return { ok: true, dedup: true };
+  }
+  const req = http.request(
+    {
+      hostname: "127.0.0.1",
+      port: PY_PORT,
+      path: "/api/events/stream",
+      method: "GET",
+      headers: { "Accept": "text/event-stream" },
+    },
+    (res) => {
+      let buf = "";
+      res.on("data", (chunk) => {
+        buf += chunk.toString("utf-8");
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          const frame = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          if (frame.startsWith("data: ")) {
+            const payload = frame.slice(6);
+            const target = BrowserWindow.getAllWindows().find(
+              (w) => !w.isDestroyed() && w.webContents.id === senderId
+            );
+            if (target) {
+              try { target.webContents.send("sse:event", payload); } catch (_) {}
+            }
+          }
+        }
+      });
+    }
+  );
+  req.on("error", () => {
+    sseClients.delete(senderId);
+    setTimeout(() => {
+      const stillAlive = BrowserWindow.getAllWindows().some(
+        (w) => !w.isDestroyed() && w.webContents.id === senderId
+      );
+      if (stillAlive) {
+        // reconnect by re-invoking ourselves
+        const target = BrowserWindow.getAllWindows().find(
+          (w) => !w.isDestroyed() && w.webContents.id === senderId
+        );
+        if (target) {
+          // Recreate the connection
+          connectSseForWebContents(senderId);
+        }
+      }
+    }, 3000);
+  });
+  req.end();
+  sseClients.set(senderId, { req });
+  return { ok: true };
+});
+
+function connectSseForWebContents(senderId) {
+  // Internal helper: same logic as the ipcMain handler, but for auto-reconnect.
+  if (sseClients.has(senderId)) return;
+  const req = http.request(
+    {
+      hostname: "127.0.0.1",
+      port: PY_PORT,
+      path: "/api/events/stream",
+      method: "GET",
+      headers: { "Accept": "text/event-stream" },
+    },
+    (res) => {
+      let buf = "";
+      res.on("data", (chunk) => {
+        buf += chunk.toString("utf-8");
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          const frame = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          if (frame.startsWith("data: ")) {
+            const payload = frame.slice(6);
+            const target = BrowserWindow.getAllWindows().find(
+              (w) => !w.isDestroyed() && w.webContents.id === senderId
+            );
+            if (target) {
+              try { target.webContents.send("sse:event", payload); } catch (_) {}
+            }
+          }
+        }
+      });
+    }
+  );
+  req.on("error", () => {
+    sseClients.delete(senderId);
+    setTimeout(() => {
+      const stillAlive = BrowserWindow.getAllWindows().some(
+        (w) => !w.isDestroyed() && w.webContents.id === senderId
+      );
+      if (stillAlive) connectSseForWebContents(senderId);
+    }, 3000);
+  });
+  req.end();
+  sseClients.set(senderId, { req });
+}
+
+ipcMain.handle("sse:unsubscribe", async (event) => {
+  const senderId = event.sender.id;
+  const client = sseClients.get(senderId);
+  if (client) {
+    try { client.req.destroy(); } catch (_) {}
+    sseClients.delete(senderId);
+  }
+  return { ok: true };
+});
+
+// Cleanup SSE clients when webContents is destroyed
+app.on("web-contents-destroyed", (_event, contents) => {
+  const client = sseClients.get(contents.id);
+  if (client) {
+    try { client.req.destroy(); } catch (_) {}
+    sseClients.delete(contents.id);
   }
 });
 

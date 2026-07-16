@@ -13,12 +13,15 @@ from communication.router import Router
 from communication.send_queue import SendQueue
 from communication.splitter import SemanticMessageSplitter
 from core.brain import Brain
+from core.cognition import CognitionEngine
 from core.context_builder import ContextBuilder
 from core.database import Database
 from core.emotion_engine import EmotionEngine
+from core.emotion_state_store import EmotionStateStore
 from core.emotion_threshold import get_threshold_engine, CumulativeEmotionEngine
 from core.pipeline import Pipeline
 from core.push_scheduler import PushScheduler
+from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry
 from config.persona_loader import load_settings, load_proactive_config
 from knowledge.kb import KnowledgeBase
@@ -43,10 +46,19 @@ class Companion:
         self.db = Database()
 
         # Core engines
-        self.emotion = EmotionEngine(self.db)
+        # Phase 9 Batch 1: emotion state store persists PAD + thresholds
+        # so the dashboard can show 24h/7d/30d history curves.
+        self.state_store = EmotionStateStore(self.db)
+        self.emotion = EmotionEngine(self.db, state_store=self.state_store)
         self.brain = Brain()
         self.memory = LongTermMemory(self.db)
         self.knowledge = KnowledgeBase(self.db)
+
+        # Phase 9 Batch 7 (B7.2): single cognition engine instance,
+        # shared by the pipeline (writes traces) and SendQueue (writes
+        # pacing_decisions back to those traces). This guarantees the
+        # local-path write and the QQ-path write target the same row.
+        self.cognition = CognitionEngine(self.db)
 
         # Cumulative threshold engine (shared singleton)
         self.threshold_engine = get_threshold_engine()
@@ -54,6 +66,13 @@ class Companion:
         # Tool registry
         self.tool_registry = ToolRegistry(self.db)
         register_all_tools(self.tool_registry)
+
+        # Phase 9 Batch 6: Self-evolution engine (capability-gap detector)
+        self.self_evolver = SelfEvolver(
+            db=self.db,
+            tool_registry=self.tool_registry,
+            brain=self.brain,
+        )
 
         # Communication
         qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
@@ -72,6 +91,10 @@ class Companion:
             recall_manager=self.recall_manager,
             db=self.db,
             qq_with_segments=self._send_qq_with_reply,
+            # Phase 9 Batch 7 (B7.2): pass the same cognition engine
+            # the pipeline uses, so the worker can append its observed
+            # pacing_decisions back to the originating trace.
+            cognition=self.cognition,
         )
 
         # Pipeline
@@ -83,6 +106,8 @@ class Companion:
             send_queue=self.queue,
             tool_registry=self.tool_registry,
             db=self.db,
+            self_evolver=self.self_evolver,
+            cognition=self.cognition,
         )
 
         # Push scheduler

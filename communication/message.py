@@ -74,3 +74,7 @@ class OutgoingReply:
     reply_to_qq_message_id: int = 0
     # Phase 4: optional attachments echoed back
     attachments: list[dict] = field(default_factory=list)
+    # Phase 9 Batch 7 (B7.2): link this reply to the originating
+    # cognition_log row so SendQueue can append pacing decisions back
+    # into the trace after the segments have actually been sent.
+    cognition_id: int = 0

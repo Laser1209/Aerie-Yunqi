@@ -8,6 +8,20 @@ contextBridge.exposeInMainWorld("aerie", {
       ipcRenderer.on("chat:message", (_event, data) => cb(data));
     },
   },
+  // Phase 9 Batch 4: SSE → IPC bridge subscription for brain center
+  sse: {
+    subscribe: (callback) => {
+      const handler = (_event, payload) => {
+        try { callback(payload); } catch (_) {}
+      };
+      ipcRenderer.on("sse:event", handler);
+      ipcRenderer.invoke("sse:subscribe");
+      return () => {
+        ipcRenderer.removeListener("sse:event", handler);
+        ipcRenderer.invoke("sse:unsubscribe");
+      };
+    },
+  },
   napcat: {
     getStatus: () => ipcRenderer.invoke("napcat:getStatus"),
     start: () => ipcRenderer.invoke("napcat:start"),

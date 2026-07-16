@@ -113,6 +113,13 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
         <span>状态</span>
       </button>
+      <button class="sidebar-tab" data-tab="cognition">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/>
+          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/>
+        </svg>
+        <span>大脑</span>
+      </button>
       <!-- 配置信息 -->
       <button class="sidebar-tab" data-tab="settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -243,6 +250,60 @@
               </div>
             </div>
           </div>
+
+          <!-- Phase 9 Batch 5: emotion history curves -->
+          <div class="emotion-history">
+            <h3>
+              情绪历史曲线
+              <small>Emotion history · 1h / 24h / 7d / 30d</small>
+            </h3>
+
+            <div class="emotion-history-toolbar">
+              <div class="emotion-history-windows" role="tablist">
+                <button class="emh-window active" data-window="1h">1h</button>
+                <button class="emh-window" data-window="24h">24h</button>
+                <button class="emh-window" data-window="7d">7d</button>
+                <button class="emh-window" data-window="30d">30d</button>
+              </div>
+              <button id="emh-refresh" class="btn btn-secondary btn-sm" title="刷新">刷新</button>
+            </div>
+
+            <!-- PAD line chart -->
+            <div class="emh-card">
+              <div class="emh-card-title">
+                <span class="emh-pad-p">●</span>
+                <span class="emh-pad-a">●</span>
+                <span class="emh-pad-d">●</span>
+                <span class="emh-card-name">PAD 三色折线</span>
+                <span class="emh-card-sub">Pleasure / Arousal / Dominance</span>
+              </div>
+              <div id="emh-pad-chart" class="emh-chart emh-chart--pad">
+                <div class="emh-empty">加载中…</div>
+              </div>
+            </div>
+
+            <!-- Threshold area chart -->
+            <div class="emh-card">
+              <div class="emh-card-title">
+                <span class="emh-card-name">4 槽位面积图</span>
+                <span class="emh-card-sub">patience · anxiety · desire · tenderness</span>
+              </div>
+              <div id="emh-threshold-chart" class="emh-chart emh-chart--thresholds">
+                <div class="emh-empty">加载中…</div>
+              </div>
+            </div>
+
+            <!-- Radar heatmap -->
+            <div class="emh-card">
+              <div class="emh-card-title">
+                <span class="emh-card-name">情绪雷达热力图</span>
+                <span class="emh-card-sub">label × time bucket</span>
+              </div>
+              <div id="emh-radar-chart" class="emh-chart emh-chart--radar">
+                <div class="emh-empty">加载中…</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -318,33 +379,66 @@
       <section id="panel-settings" class="tab-panel">
         <div id="settings-content" class="settings-panel">
           <h2>系统设置</h2>
-          <div class="settings-group">
-            <label>主题</label>
-            <select id="setting-theme">
-              <option value="yita-pink">伊塔粉</option>
-              <option value="midnight-purple">深夜紫</option>
-              <option value="sakura-white">樱白</option>
-              <option value="ocean-blue">海蓝</option>
-              <option value="forest-green">森绿</option>
-            </select>
+          <div class="settings-mode-tabs">
+            <button class="settings-mode-tab active" data-mode="form">常用</button>
+            <button class="settings-mode-tab" data-mode="yaml">高级 (YAML)</button>
           </div>
-          <div class="settings-group">
-            <label>开机自启</label>
-            <input type="checkbox" id="setting-auto-start">
+
+          <!-- 常用 form 视图 -->
+          <div id="settings-form-view">
+            <div class="settings-group">
+              <label>主题</label>
+              <select id="setting-theme">
+                <option value="yita-pink">伊塔粉</option>
+                <option value="midnight-purple">深夜紫</option>
+                <option value="sakura-white">樱白</option>
+                <option value="ocean-blue">海蓝</option>
+                <option value="forest-green">森绿</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label>开机自启</label>
+              <input type="checkbox" id="setting-auto-start">
+            </div>
+            <div class="settings-group">
+              <label>启动时最小化</label>
+              <input type="checkbox" id="setting-start-minimized">
+            </div>
+            <div class="settings-group">
+              <label>主动推送</label>
+              <input type="checkbox" id="setting-proactive" checked>
+            </div>
+            <div class="settings-actions">
+              <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
+              <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>
+            </div>
+            <div id="settings-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
           </div>
-          <div class="settings-group">
-            <label>启动时最小化</label>
-            <input type="checkbox" id="setting-start-minimized">
+
+          <!-- 高级 YAML 视图 -->
+          <div id="settings-yaml-view" style="display:none;">
+            <div class="settings-yaml-warning" style="margin: 8px 0 12px; padding: 10px 12px; border: 1px solid rgba(255, 91, 156, 0.4); border-radius: 8px; background: rgba(255, 91, 156, 0.06); font-size: 12px; line-height: 1.5;">
+              <strong>改坏了她会不开心。修改前自动备份。/ A bad edit makes her sad. Auto-backup first.</strong>
+            </div>
+            <div class="settings-group">
+              <label>配置文件 · Config file</label>
+              <select id="yaml-file-select">
+                <option value="settings.yaml">settings.yaml</option>
+                <option value="persona.yaml">persona.yaml</option>
+                <option value="proactive.yaml">proactive.yaml</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label>直接编辑 YAML · 修改前自动备份</label>
+              <textarea id="yaml-editor" spellcheck="false" rows="20" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; width: 100%; box-sizing: border-box; background: #1a1a2e; color: #f5f5f5; border: 1px solid rgba(255,91,156,0.3); border-radius: 6px; padding: 10px;"></textarea>
+            </div>
+            <div class="settings-actions">
+              <button id="yaml-save-btn" class="btn btn-primary">保存 · Save</button>
+              <button id="yaml-reload-btn" class="btn btn-secondary">重新加载 · Reload</button>
+              <button id="yaml-backup-btn" class="btn btn-secondary">备份当前 · Backup</button>
+            </div>
+            <div id="yaml-status" style="margin-top:8px;font-size:12px;"></div>
           </div>
-          <div class="settings-group">
-            <label>主动推送</label>
-            <input type="checkbox" id="setting-proactive" checked>
-          </div>
-          <div class="settings-actions">
-            <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
-            <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>
-          </div>
-          <div id="settings-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
         </div>
       </section>
 
@@ -378,6 +472,111 @@
           </div>
         </div>
       </section>
+
+      <!-- Cognition panel (Phase 9 Batch 4: brain center) -->
+      <section id="panel-cognition" class="tab-panel">
+        <div class="cognition-panel">
+          <!-- 头部 · header -->
+          <div class="cog-header">
+            <div class="cog-header-text">
+              <h2>伊塔 · 大脑中枢 <small>开发者后台 · Cognition Backend</small></h2>
+              <p class="cog-header-sub">这里能看到她刚才是怎么想的。/ Watch her think in real time.</p>
+            </div>
+            <div class="cog-header-stats">
+              <div class="cog-stat">
+                <span class="cog-stat-label">今日</span>
+                <span class="cog-stat-value" id="cog-stat-today">0</span>
+              </div>
+              <div class="cog-stat">
+                <span class="cog-stat-label">总 trace</span>
+                <span class="cog-stat-value" id="cog-stat-total">0</span>
+              </div>
+              <div class="cog-stat">
+                <span class="cog-stat-label">平均耗时</span>
+                <span class="cog-stat-value" id="cog-stat-avg">0<span class="cog-stat-unit">ms</span></span>
+              </div>
+              <div class="cog-stat cog-stat--pulse">
+                <span class="cog-stat-label">live</span>
+                <span class="cog-stat-pulse" id="cog-stat-pulse"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 工具栏 · toolbar -->
+          <div class="cognition-toolbar">
+            <select id="cog-source-filter" title="来源过滤">
+              <option value="">全部来源 / All sources</option>
+              <option value="qq">QQ</option>
+              <option value="local">本地 / Local</option>
+            </select>
+            <input id="cog-search" type="text" placeholder="搜索消息内容 / Search content">
+            <button id="cog-refresh" class="btn btn-secondary btn-sm" title="刷新历史">刷新 · Refresh</button>
+            <button id="cog-pause" class="btn btn-secondary btn-sm" title="暂停/继续实时流" data-paused="false">⏸ 暂停</button>
+            <button id="cog-clear" class="btn btn-secondary btn-sm" title="清屏实时区">🧹 清屏</button>
+          </div>
+
+          <!-- 自进化提议卡片槽位 (B6 填充) -->
+          <div id="cog-proposal-card" class="cog-proposal-card hidden"></div>
+
+          <!-- 9 阶段时间轴 · latest trace timeline -->
+          <div class="cog-section">
+            <h3>
+              <span class="cog-section-title">最近一次 9 阶段时间轴</span>
+              <span class="cog-section-sub">Last trace · 9 stages</span>
+            </h3>
+            <div id="cog-timeline" class="cog-timeline">
+              <div class="cog-timeline-empty">还没有任何 trace。/ No trace yet. Send her a message first.</div>
+            </div>
+          </div>
+
+          <!-- 决策权重赛马图 · decision race -->
+          <div class="cog-section">
+            <h3>
+              <span class="cog-section-title">决策权重赛马</span>
+              <span class="cog-section-sub">Decision race · L1+L2+L3+L4</span>
+            </h3>
+            <div id="cog-decision-race" class="cog-decision-race">
+              <div class="cog-timeline-empty">等待决策 / Awaiting decision</div>
+            </div>
+          </div>
+
+          <!-- 实时 stream · live -->
+          <div class="cog-section">
+            <h3>
+              <span class="cog-section-title">实时 stream</span>
+              <span class="cog-section-sub">最近 50 条 · last 50</span>
+            </h3>
+            <div id="cog-stream" class="cog-stream">
+              <div class="cog-timeline-empty">等待事件 / Waiting for events…</div>
+            </div>
+          </div>
+
+          <!-- 历史 trace · history -->
+          <div class="cog-section">
+            <h3>
+              <span class="cog-section-title">历史 trace</span>
+              <span class="cog-section-sub">Click row to expand</span>
+            </h3>
+            <ul id="cog-list" class="cog-list">
+              <li class="cog-list-empty">暂无历史 / No history yet.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cognition detail modal (Phase 9 Batch 4) -->
+      <div id="cog-modal" class="cog-modal hidden" role="dialog" aria-modal="true">
+        <div class="cog-modal-backdrop" data-close></div>
+        <div class="cog-modal-panel">
+          <div class="cog-modal-header">
+            <h3 id="cog-modal-title">Trace 详情 · Detail</h3>
+            <button class="cog-modal-close" data-close title="关闭">×</button>
+          </div>
+          <div class="cog-modal-body" id="cog-modal-body">
+            <div class="cog-modal-loading">加载中…</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -386,10 +585,14 @@
 <script src="js/chat-uploader.js"></script>
 <script src="js/napcat-panel.js"></script>
 <script src="js/emotion-dashboard.js"></script>
+<script src="js/emotion-history.js"></script>
 <script src="js/theme-switcher.js"></script>
 <script src="js/memorial.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/data-viewer.js"></script>
+<script src="js/cognition-panel.js"></script>
 <script src="js/app.js"></script>
+<link rel="stylesheet" href="styles/cognition-panel.css">
+<link rel="stylesheet" href="styles/emotion-history.css">
 </body>
 </html>

@@ -21,11 +21,14 @@ Routes:
 """
 
 from __future__ import annotations
+import json
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 import uvicorn
+import yaml
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, Response, FileResponse, StreamingResponse
 
@@ -38,6 +41,7 @@ from core.chat_events import emit
 from core.token_tracker import get_token_tracker
 from core.cognition import CognitionEngine
 from core.event_stream import stream as event_stream_generator
+from core.self_evolver import SelfEvolver
 
 logger = logging.getLogger(__name__)
 
@@ -430,8 +434,16 @@ async def cognition_detail(row_id: int) -> dict:
 async def emotion_history(
     user_id: int | None = None,
     window: str = Query(default="24h", pattern="^(1h|24h|7d|30d)$"),
+    downsample: bool = Query(default=True),
 ) -> dict:
-    """Emotion state snapshot history. Window: 1h / 24h / 7d / 30d."""
+    """Emotion state snapshot history. Window: 1h / 24h / 7d / 30d.
+
+    Phase 9 Batch 5: When ``downsample=true`` (default), the server
+    buckets the raw rows into a small number of evenly-spaced buckets
+    so the client doesn't have to render thousands of points. Bucket
+    size is chosen to keep the returned series at ~120-336 points
+    regardless of the window.
+    """
     if user_id is None:
         user_id = get_master_qq()
     window_ms = {
@@ -441,21 +453,418 @@ async def emotion_history(
         "30d": 30 * 24 * 3600 * 1000,
     }[window]
     since = int(time.time() * 1000) - window_ms
-    rows = _db.query(
+    raw_rows = _db.query(
         "SELECT ts, pleasure, arousal, dominance, label, "
         "patience_value, anxiety_value, desire_value, tenderness_value, "
         "active_eruption, trigger_event "
         "FROM emotion_state_snapshot WHERE user_id = ? AND ts >= ? "
-        "ORDER BY ts ASC LIMIT 2000",
+        "ORDER BY ts ASC LIMIT 5000",
         (user_id, since),
     )
+
+    if not downsample or len(raw_rows) <= 120:
+        return {
+            "user_id": user_id,
+            "window": window,
+            "since_ts": since,
+            "count": len(raw_rows),
+            "raw_count": len(raw_rows),
+            "downsampled": False,
+            "items": raw_rows,
+        }
+
+    # Choose bucket size to land at 120-336 buckets.
+    target_buckets = {
+        "1h": 120,
+        "24h": 144,
+        "7d": 168,
+        "30d": 240,
+    }[window]
+    bucket_ms = max(1, window_ms // target_buckets)
+    buckets: dict[int, dict] = {}
+    for r in raw_rows:
+        b = int(r["ts"]) // bucket_ms
+        cell = buckets.get(b)
+        if cell is None:
+            cell = {
+                "ts": int(r["ts"]),
+                "_count": 0,
+                "_pleasure_sum": 0.0, "_arousal_sum": 0.0, "_dominance_sum": 0.0,
+                "_patience_sum": 0.0, "_anxiety_sum": 0.0,
+                "_desire_sum": 0.0, "_tenderness_sum": 0.0,
+                "_label_counts": {},
+                "active_eruption": None,
+                "trigger_event": None,
+            }
+            buckets[b] = cell
+        cell["_count"] += 1
+        for k, sumk in (
+            ("pleasure", "_pleasure_sum"),
+            ("arousal", "_arousal_sum"),
+            ("dominance", "_dominance_sum"),
+            ("patience_value", "_patience_sum"),
+            ("anxiety_value", "_anxiety_sum"),
+            ("desire_value", "_desire_sum"),
+            ("tenderness_value", "_tenderness_sum"),
+        ):
+            v = r.get(k)
+            if v is not None:
+                try:
+                    cell[sumk] += float(v)
+                except (TypeError, ValueError):
+                    pass
+        lab = r.get("label")
+        if lab:
+            cell["_label_counts"][lab] = cell["_label_counts"].get(lab, 0) + 1
+        # Keep the most recent eruption / trigger (last write wins).
+        if r.get("active_eruption"):
+            cell["active_eruption"] = r.get("active_eruption")
+        if r.get("trigger_event"):
+            cell["trigger_event"] = r.get("trigger_event")
+
+    items: list[dict] = []
+    for b in sorted(buckets.keys()):
+        cell = buckets[b]
+        n = cell["_count"]
+        if n <= 0:
+            continue
+        # Pick the dominant label.
+        lc = cell["_label_counts"]
+        label = max(lc.items(), key=lambda kv: kv[1])[0] if lc else "neutral"
+        items.append({
+            "ts": cell["ts"],
+            "pleasure": round(cell["_pleasure_sum"] / n, 3),
+            "arousal": round(cell["_arousal_sum"] / n, 3),
+            "dominance": round(cell["_dominance_sum"] / n, 3),
+            "label": label,
+            "patience_value": round(cell["_patience_sum"] / n, 1),
+            "anxiety_value": round(cell["_anxiety_sum"] / n, 1),
+            "desire_value": round(cell["_desire_sum"] / n, 1),
+            "tenderness_value": round(cell["_tenderness_sum"] / n, 1),
+            "active_eruption": cell["active_eruption"],
+            "trigger_event": cell["trigger_event"],
+            "_bucket_count": n,
+        })
+
     return {
         "user_id": user_id,
         "window": window,
         "since_ts": since,
-        "count": len(rows),
-        "items": rows,
+        "count": len(items),
+        "raw_count": len(raw_rows),
+        "downsampled": True,
+        "bucket_ms": bucket_ms,
+        "items": items,
     }
+
+
+# ── Phase 9 Batch 3: YAML config editing (settings / persona / proactive) ──
+
+# Whitelist of editable config files (only these 3 are exposed for user editing).
+_YAML_ALLOWED_FILES: set[str] = {"settings.yaml", "persona.yaml", "proactive.yaml"}
+_YAML_CONFIG_DIR = Path("config")
+_YAML_BACKUP_DIR = Path("data/backups/config")
+
+
+def _yaml_path(filename: str) -> Path | None:
+    """Resolve a yaml file path against the whitelist. Returns None when rejected."""
+    if not filename or filename not in _YAML_ALLOWED_FILES:
+        return None
+    return _YAML_CONFIG_DIR / filename
+
+
+def _yaml_backup_now(filename: str) -> Path:
+    """Copy the current yaml file to a timestamped backup. Returns the backup path.
+
+    Creates the backup directory on demand. When the source file is missing,
+    still records the backup slot with an empty marker so the rollback path
+    is always available.
+    """
+    _YAML_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    ts_ms = int(time.time() * 1000)
+    backup_path = _YAML_BACKUP_DIR / f"{filename}.{ts_ms}.yaml"
+    source = _YAML_CONFIG_DIR / filename
+    if source.exists():
+        backup_path.write_bytes(source.read_bytes())
+    else:
+        backup_path.write_text("# missing source — placeholder\n", encoding="utf-8")
+    return backup_path
+
+
+def _yaml_latest_backup(filename: str) -> Path | None:
+    """Find the most recent backup for a given yaml filename."""
+    if not _YAML_BACKUP_DIR.exists():
+        return None
+    candidates = sorted(
+        _YAML_BACKUP_DIR.glob(f"{filename}.*.yaml"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+@app.get("/api/config/yaml/list")
+async def config_yaml_list() -> dict:
+    """Whitelist of editable config files."""
+    return {"files": sorted(_YAML_ALLOWED_FILES)}
+
+
+@app.get("/api/config/yaml")
+async def config_yaml_get(file: str = Query(...)) -> Response:
+    """Return the raw UTF-8 text of a whitelisted yaml file."""
+    target = _yaml_path(file)
+    if target is None:
+        return JSONResponse(
+            {"error": "file not allowed", "allowed": sorted(_YAML_ALLOWED_FILES)},
+            status_code=400,
+        )
+    if not target.exists():
+        return JSONResponse(
+            {"error": "not found", "file": file, "path": str(target)},
+            status_code=404,
+        )
+    try:
+        text = target.read_text(encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"error": f"read failed: {e}"}, status_code=500)
+    return Response(
+        content=text,
+        media_type="text/plain; charset=utf-8",
+    )
+
+
+@app.put("/api/config/yaml")
+async def config_yaml_put(file: str = Query(...), request: Request = None) -> dict:
+    """Write a yaml file with strict validation, auto-backup, and rollback.
+
+    Body is the raw UTF-8 yaml text. On any failure the original file is
+    restored from the most recent backup and the error is reported.
+    """
+    target = _yaml_path(file)
+    if target is None:
+        return JSONResponse(
+            {"error": "file not allowed", "allowed": sorted(_YAML_ALLOWED_FILES)},
+            status_code=400,
+        )
+
+    raw = (await request.body()).decode("utf-8", errors="replace")
+
+    # ── 1) Strict parse: yaml.safe_load must succeed ──
+    try:
+        parsed = yaml.safe_load(raw)
+    except yaml.YAMLError as e:
+        logger.warning("yaml put rejected: parse error file=%s err=%s", file, str(e)[:120])
+        return JSONResponse(
+            {"error": "yaml parse failed", "detail": str(e)},
+            status_code=400,
+        )
+
+    if parsed is None and not raw.strip():
+        # Empty file is also a parse failure — disallow wiping the config
+        return JSONResponse(
+            {"error": "empty yaml not allowed", "detail": "refusing to write empty file"},
+            status_code=400,
+        )
+
+    # ── 2) Snapshot current file (auto-backup before write) ──
+    backup_path = _yaml_backup_now(file)
+    backup_str = str(backup_path)
+
+    # ── 3) Write atomically: write to .tmp then replace ──
+    tmp_path = target.with_suffix(target.suffix + ".tmp")
+    try:
+        tmp_path.write_text(raw, encoding="utf-8")
+        tmp_path.replace(target)
+    except Exception as e:
+        # Rollback from backup
+        try:
+            if backup_path.exists():
+                target.write_bytes(backup_path.read_bytes())
+        except Exception:
+            pass
+        logger.exception("yaml put write error file=%s", file)
+        return JSONResponse(
+            {"error": f"write failed: {e}", "restored_from": backup_str},
+            status_code=500,
+        )
+
+    # ── 4) Re-parse the freshly written file as a self-check ──
+    try:
+        with target.open("r", encoding="utf-8") as fh:
+            yaml.safe_load(fh)
+    except Exception as e:
+        # Rollback: replace target with backup bytes
+        try:
+            if backup_path.exists():
+                target.write_bytes(backup_path.read_bytes())
+        except Exception:
+            pass
+        return JSONResponse(
+            {"error": f"post-write reparse failed: {e}", "restored_from": backup_str},
+            status_code=500,
+        )
+
+    logger.info(
+        "settings_change: file=%s ts=%d bytes=%d backup=%s",
+        file, int(time.time() * 1000), len(raw.encode("utf-8")), backup_str,
+    )
+    return {
+        "status": "ok",
+        "file": file,
+        "bytes": len(raw.encode("utf-8")),
+        "backup_path": backup_str,
+        "ts": int(time.time() * 1000),
+    }
+
+
+@app.post("/api/config/yaml/backup")
+async def config_yaml_backup(file: str = Query(...)) -> dict:
+    """Manually snapshot a yaml file into data/backups/config/."""
+    target = _yaml_path(file)
+    if target is None:
+        return JSONResponse(
+            {"error": "file not allowed", "allowed": sorted(_YAML_ALLOWED_FILES)},
+            status_code=400,
+        )
+    if not target.exists():
+        return JSONResponse({"error": "source not found", "file": file}, status_code=404)
+    try:
+        backup_path = _yaml_backup_now(file)
+    except Exception as e:
+        return JSONResponse({"error": f"backup failed: {e}"}, status_code=500)
+    return {
+        "status": "ok",
+        "file": file,
+        "backup_path": str(backup_path),
+        "ts": int(time.time() * 1000),
+    }
+
+
+# ── Phase 9 Batch 6: Self-Evolve endpoints ────────────
+
+
+def _get_self_evolver() -> SelfEvolver | None:
+    """Look up the SelfEvolver on the live companion.
+
+    Returns None if the companion is not yet ready (e.g. during early
+    boot). HTTP handlers translate None into 503.
+    """
+    comp = get_companion()
+    if not comp:
+        return None
+    return getattr(comp, "self_evolver", None)
+
+
+@app.get("/api/self_evolve/list")
+async def self_evolve_list(
+    user_id: int | None = None,
+    status: str = Query(default="pending", pattern="^(pending|approved|rejected|all)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict:
+    """List self-evolution proposals. Default status=pending.
+
+    Phase 9 Batch 6: Brain center shows pending proposals as cards;
+    approved/rejected are kept for audit + regression review.
+    """
+    ev = _get_self_evolver()
+    if ev is None:
+        return JSONResponse(
+            {"error": "self_evolver not ready"}, status_code=503
+        )
+    try:
+        items = ev.list_proposals(user_id=user_id, status=status, limit=limit)
+        # Decode the JSON schema for the frontend (it expects an object).
+        for it in items:
+            raw = it.get("proposed_tool_schema")
+            if raw and isinstance(raw, str):
+                try:
+                    it["proposed_tool_schema"] = json.loads(raw)
+                except Exception:
+                    pass
+        return {
+            "status": "ok",
+            "filter": {"user_id": user_id, "decision": status, "limit": limit},
+            "count": len(items),
+            "items": items,
+            "stats": ev.stats(),
+        }
+    except Exception as e:
+        logger.exception("self_evolve_list error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/self_evolve/{proposal_id}")
+async def self_evolve_detail(proposal_id: int) -> dict:
+    """Fetch a single proposal (full row + parsed schema)."""
+    ev = _get_self_evolver()
+    if ev is None:
+        return JSONResponse(
+            {"error": "self_evolver not ready"}, status_code=503
+        )
+    row = ev.get_proposal(proposal_id)
+    if not row:
+        return JSONResponse(
+            {"error": "not found", "id": proposal_id}, status_code=404
+        )
+    raw = row.get("proposed_tool_schema")
+    if raw and isinstance(raw, str):
+        try:
+            row["proposed_tool_schema"] = json.loads(raw)
+        except Exception:
+            pass
+    return row
+
+
+@app.post("/api/self_evolve/{proposal_id}/preview")
+async def self_evolve_preview(proposal_id: int) -> dict:
+    """Re-render the sandbox preview for an existing proposal.
+
+    Useful when the user clicks "查看预演 / Preview" on a card.
+    """
+    ev = _get_self_evolver()
+    if ev is None:
+        return JSONResponse(
+            {"error": "self_evolver not ready"}, status_code=503
+        )
+    preview = ev.render_preview(proposal_id)
+    if not preview.get("ok") and preview.get("error") == "not_found":
+        return JSONResponse(preview, status_code=404)
+    return preview
+
+
+@app.post("/api/self_evolve/{proposal_id}/approve")
+async def self_evolve_approve(proposal_id: int) -> dict:
+    """Approve a proposal: register the proposed tool in the live registry.
+
+    Idempotent — repeated approvals return already=True.
+    """
+    ev = _get_self_evolver()
+    if ev is None:
+        return JSONResponse(
+            {"error": "self_evolver not ready"}, status_code=503
+        )
+    result = ev.approve(proposal_id)
+    if result.get("status") == "error":
+        if result.get("reason") == "not_found":
+            return JSONResponse(result, status_code=404)
+        return JSONResponse(result, status_code=400)
+    return result
+
+
+@app.post("/api/self_evolve/{proposal_id}/reject")
+async def self_evolve_reject(proposal_id: int) -> dict:
+    """Reject a proposal. Idempotent."""
+    ev = _get_self_evolver()
+    if ev is None:
+        return JSONResponse(
+            {"error": "self_evolver not ready"}, status_code=503
+        )
+    result = ev.reject(proposal_id)
+    if result.get("status") == "error":
+        if result.get("reason") == "not_found":
+            return JSONResponse(result, status_code=404)
+        return JSONResponse(result, status_code=400)
+    return result
 
 
 # ── Stats ───────────────────────────────────────────

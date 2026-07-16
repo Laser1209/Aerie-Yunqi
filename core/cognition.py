@@ -168,6 +168,138 @@ class CognitionEngine:
             logger.exception("cognition commit error")
             return 0
 
+    def patch_stage_output(self, trace_id: int, output_payload: dict) -> bool:
+        """Re-write the ``stage_output`` column on an already-committed row.
+
+        The pacing decisions for the assistant segments are computed
+        AFTER commit (because they depend on segment_content and need
+        the next-style tree). Rather than refactor the entire pipeline
+        to commit twice, we expose this small patch so the pipeline /
+        send_queue can attach pacing_decisions without losing them.
+
+        Idempotent: re-writing the same payload is a no-op.
+
+        Returns True on success, False on any failure (logged).
+        """
+        if not trace_id:
+            return False
+        try:
+            self._db.update(
+                "cognition_log",
+                {
+                    "stage_output": json.dumps(
+                        output_payload, ensure_ascii=False
+                    ),
+                },
+                "id = ?",
+                (int(trace_id),),
+            )
+            return True
+        except Exception:
+            logger.exception("cognition patch_stage_output error id=%s", trace_id)
+            return False
+
+    def patch_decision(self, trace_id: int, decision_payload: dict) -> bool:
+        """Re-write the ``decision_trace`` column on an already-committed row."""
+        if not trace_id:
+            return False
+        try:
+            self._db.update(
+                "cognition_log",
+                {
+                    "decision_trace": json.dumps(
+                        decision_payload, ensure_ascii=False
+                    ),
+                },
+                "id = ?",
+                (int(trace_id),),
+            )
+            return True
+        except Exception:
+            logger.exception("cognition patch_decision error id=%s", trace_id)
+            return False
+
+    def append_pacing_decisions(
+        self, trace_id: int, additional: list[dict]
+    ) -> bool:
+        """Append pacing decisions to stage_output.pacing_decisions.
+
+        Phase 9 Batch 7 (B7.2): pacing for QQ messages is computed inside
+        SendQueue (which runs in a separate worker task), so the values
+        arrive AFTER the pipeline has already committed the trace. We
+        cannot rewrite the entire stage_output blindly (the local path
+        may have written first), so this method appends to the
+        existing ``pacing_decisions`` list, de-duplicating by
+        (seg_idx, style).
+
+        Idempotent: re-appending the same item is a no-op.
+
+        Returns True on success, False on any failure (logged).
+        """
+        if not trace_id or not additional:
+            return False
+        try:
+            row = self._db.query_one(
+                "SELECT stage_output FROM cognition_log WHERE id = ?",
+                (int(trace_id),),
+            )
+            if not row:
+                logger.warning(
+                    "append_pacing_decisions: no row id=%s", trace_id
+                )
+                return False
+
+            raw = row.get("stage_output")
+            current: dict = {}
+            if raw and isinstance(raw, str) and raw.strip():
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, dict):
+                        current = parsed
+                except Exception:
+                    pass
+            elif isinstance(raw, dict):
+                current = raw
+
+            existing = current.get("pacing_decisions") or []
+            if not isinstance(existing, list):
+                existing = []
+
+            # de-dup by (seg_idx, style) — keep the first occurrence.
+            seen: set[tuple] = {
+                (int(x.get("seg_idx", -1)), str(x.get("style") or x.get("next_style") or ""))
+                for x in existing
+            }
+            for item in additional:
+                if not isinstance(item, dict):
+                    continue
+                key = (
+                    int(item.get("seg_idx", -1)),
+                    str(item.get("style") or item.get("next_style") or ""),
+                )
+                if key in seen:
+                    continue
+                existing.append(item)
+                seen.add(key)
+
+            current["pacing_decisions"] = existing
+            self._db.update(
+                "cognition_log",
+                {
+                    "stage_output": json.dumps(
+                        current, ensure_ascii=False
+                    ),
+                },
+                "id = ?",
+                (int(trace_id),),
+            )
+            return True
+        except Exception:
+            logger.exception(
+                "cognition append_pacing_decisions error id=%s", trace_id
+            )
+            return False
+
     # ── Read helpers (used by API) ─────────────────────
     def recent(self, user_id: Optional[int] = None, source: Optional[str] = None,
                limit: int = 20) -> list[dict]:

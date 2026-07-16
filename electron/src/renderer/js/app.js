@@ -11,6 +11,11 @@ window.addEventListener("DOMContentLoaded", () => {
   const emotionDashboard = new EmotionDashboard();
   emotionDashboard.init();
 
+  // ── Emotion history curves (Phase 9 Batch 5) ───
+  if (window.emotionHistory) {
+    window.emotionHistory.init();
+  }
+
   // ── Memorial panel ──────────────────────────────
   if (window.memorialPanel) {
     window.memorialPanel.init();
@@ -26,6 +31,11 @@ window.addEventListener("DOMContentLoaded", () => {
     window.dataViewer.init();
   }
 
+  // ── Cognition panel (Phase 9 Batch 4: brain center) ─
+  if (window.cognitionPanel) {
+    window.cognitionPanel.init();
+  }
+
   // ── Tab switching ──────────────────────────────
   document.querySelectorAll(".sidebar-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -36,8 +46,12 @@ window.addEventListener("DOMContentLoaded", () => {
       const panel = document.getElementById("panel-" + tab);
       if (panel) panel.classList.add("active");
 
-      // Notify emotion dashboard of visibility
+      // Notify panels of visibility
       emotionDashboard.setVisible(tab === "emotion");
+      if (window.emotionHistory) window.emotionHistory.setVisible(tab === "emotion");
+      if (window.cognitionPanel) {
+        window.cognitionPanel.setVisible(tab === "cognition");
+      }
     });
   });
 

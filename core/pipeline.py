@@ -318,20 +318,34 @@ class Pipeline:
         self.cognition.commit(trace, route_mode)
 
         # Phase 9: self-evolution check
+        # B6: pass tool_results too so the gap detector can see WHICH tool
+        # failed (not just that one did). The proposal is dropped silently
+        # if no gap is detected.
         if self.self_evolver:
             try:
-                self.self_evolver.maybe_propose(msg.user_id, msg.content, react_trace)
+                self.self_evolver.maybe_propose(
+                    user_id=msg.user_id,
+                    user_message=msg.content,
+                    react_trace=react_trace,
+                    tool_results=tool_results,
+                )
             except Exception:
                 logger.exception("self_evolver error")
 
         # ══════════════════════════════════════════════
         # 12. Emit assistant event for each segment (UI gets one bubble per segment)
-        # Phase 9: local source is paced by emotion-aware intervals;
-        #          QQ source still goes through SendQueue which has its own pacing.
+        # Phase 9 Batch 2: persona-aware pacing.
+        #   - 1st segment: immediate (0 delay) — user wants first message timely.
+        #   - 2nd+ segments: persona decision tree (joy eager / sad cold-slow /
+        #     eruption-mode-specific / 5% yandere erase / 3% contemplative / 10% shy).
+        #   - 1.5s is the BASELINE (balanced mode), not a hard ceiling.
+        # Both local (this loop) and QQ (SendQueue) use the same persona tree.
         # ══════════════════════════════════════════════
-        from core.message_pacing import compute_interval
+        from core.persona_pacing import compute_persona_interval
         emotion_label_local = (emotion_info.get("label") if emotion_info else "neutral") or "neutral"
         is_eruption_local = bool(eruption_info and eruption_info.get("mode"))
+        threshold_summary_local = (emotion_info or {}).get("thresholds", {}) or {}
+        pacing_log: list[dict] = []
         for idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
             try:
                 emit_kwargs = {
@@ -349,8 +363,59 @@ class Pipeline:
                 emit("assistant", **emit_kwargs)
             except Exception:
                 pass
-            if msg.source == "local" and idx < len(segments) - 1:
-                await asyncio.sleep(compute_interval(emotion_label_local, is_eruption_local))
+
+            # Decide pacing for the NEXT gap (only if there is a next segment)
+            if idx < len(segments) - 1:
+                interval_sec, style = compute_persona_interval(
+                    segment_index=idx,
+                    emotion_label=emotion_label_local,
+                    threshold=threshold_summary_local,
+                    is_eruption=is_eruption_local,
+                    segment_content=seg,
+                )
+                pacing_log.append({
+                    "seg_idx": idx,
+                    "next_style": style,
+                    "next_interval_ms": int(interval_sec * 1000),
+                    "source": "local",
+                })
+                if msg.source == "local" and interval_sec > 0:
+                    await asyncio.sleep(interval_sec)
+
+        # Record pacing decisions into the cognition trace for analysis
+        # B7.2: the pipeline may not yet know what pacing the SendQueue
+        # eventually applied (the QQ worker runs after commit), so use
+        # the append API. For local messages the SendQueue never sees
+        # the reply, so this is the ONLY write.
+        if pacing_log:
+            try:
+                trace_id = trace.get("id") or 0
+                if trace_id and self.cognition is not None:
+                    self.cognition.append_pacing_decisions(
+                        trace_id, pacing_log
+                    )
+                # keep the in-memory trace in sync for any consumers
+                # that read it before the DB is updated.
+                stage_output = dict(trace.get("stages", {}).get("output") or {})
+                merged = list(stage_output.get("pacing_decisions") or [])
+                seen = {
+                    (int(x.get("seg_idx", -1)),
+                     str(x.get("style") or x.get("next_style") or ""))
+                    for x in merged
+                }
+                for item in pacing_log:
+                    key = (
+                        int(item.get("seg_idx", -1)),
+                        str(item.get("style") or item.get("next_style") or ""),
+                    )
+                    if key in seen:
+                        continue
+                    merged.append(item)
+                    seen.add(key)
+                stage_output["pacing_decisions"] = merged
+                trace["stages"]["output"] = stage_output
+            except Exception:
+                logger.exception("pacing_log persist error")
 
         # ══════════════════════════════════════════════
         # 13. QQ messages → SendQueue; local → skip
@@ -373,6 +438,9 @@ class Pipeline:
                 content=reply_text,
                 msg_id=ai_row_ids[0] if ai_row_ids else 0,
                 reply_to_qq_message_id=reply_to_qq_mid,
+                # Phase 9 Batch 7 (B7.2): let SendQueue write the
+                # observed pacing decisions back into this trace.
+                cognition_id=int(trace.get("id") or 0),
             )
             # Phase 9: attach eruption mode so SendQueue can pace faster
             if eruption_info and eruption_info.get("mode"):

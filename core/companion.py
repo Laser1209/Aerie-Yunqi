@@ -53,10 +53,18 @@ class Companion:
         # Phase 9 Batch 1: emotion state store persists PAD + thresholds
         # so the dashboard can show 24h/7d/30d history curves.
         self.state_store = EmotionStateStore(self.db)
+        # R7.0: build the brain first so EmotionEngine can call back into
+        # it for LLM-driven PAD inference. The keyword path is still
+        # always available as a fallback when the LLM call fails.
+        self.brain = Brain()
         # R0.3.7: pass behavior_cfg so EmotionEngine reads PAD centers
         # and threshold slots from config/persona_behavior.yaml.
-        self.emotion = EmotionEngine(self.db, state_store=self.state_store, behavior_cfg=self.behavior_cfg)
-        self.brain = Brain()
+        self.emotion = EmotionEngine(
+            self.db,
+            state_store=self.state_store,
+            behavior_cfg=self.behavior_cfg,
+            brain=self.brain,
+        )
         self.memory = LongTermMemory(self.db)
         self.knowledge = KnowledgeBase(self.db)
 
@@ -70,6 +78,14 @@ class Companion:
         # so the engine picks up persona_behavior.yaml thresholds on
         # first call (R0.3.7).
         self.threshold_engine = get_threshold_engine(self.behavior_cfg)
+
+        # R6.6: warm-up the threshold engine from the latest non-zero
+        # snapshot so the dashboard never shows a "0 → initial_value"
+        # jump after a restart. Without this, the user sees the bar
+        # flicker from 0 to 60 (initial_value) every time the backend
+        # boots, which looks like the engine "just turned on" and not
+        # like a real emotion continuation.
+        self._warmup_threshold_from_history()
 
         # Tool registry
         self.tool_registry = ToolRegistry(self.db)
@@ -168,6 +184,42 @@ class Companion:
             self.skill_loader = None
         self._started = True
         logger.info("Companion started")
+
+    # ── R6.6: warm-up threshold engine from history ───────────────
+    def _warmup_threshold_from_history(self) -> None:
+        """Restore the 4 cumulative slot values from the latest non-zero snapshot.
+
+        Without this, every backend restart would reset slot.value back to
+        the initial_value (60/15/35/25) configured in persona_behavior.yaml,
+        masking whatever real emotion state the user had built up. The fix:
+        read the most recent emotion_state_snapshot row, and if any of the
+        four slot values is non-zero, copy them into the live engine.
+        """
+        try:
+            row = self.db.query_one(
+                "SELECT patience_value, anxiety_value, desire_value, tenderness_value "
+                "FROM emotion_state_snapshot "
+                "ORDER BY id DESC LIMIT 1"
+            )
+            if not row:
+                return
+            slots = self.threshold_engine.slots
+            updates = {
+                "patience":   float(row.get("patience_value")   or 0.0),
+                "anxiety":    float(row.get("anxiety_value")    or 0.0),
+                "desire":     float(row.get("desire_value")     or 0.0),
+                "tenderness": float(row.get("tenderness_value") or 0.0),
+            }
+            for name, val in updates.items():
+                if name in slots and val > 0:
+                    slots[name].value = val
+            logger.info(
+                "threshold warm-up restored: %s",
+                {k: v for k, v in updates.items() if v > 0},
+            )
+        except Exception:
+            # Warm-up is best-effort: a missing table is not fatal.
+            logger.debug("threshold warm-up skipped (no history or table missing)")
 
     async def stop(self) -> None:
         if not self._started:

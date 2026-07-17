@@ -57,13 +57,15 @@ RSS_SOURCES: dict[str, list[dict[str, str]]] = {
     ],
     # 国际新闻
     "intl_news": [
-        {"name": "BBC 中文",    "url": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "domain": "bbc.co.uk"},
-        {"name": "路透中文",    "url": "https://cn.reuters.com/rss/CNTopGenNews", "domain": "reuters.com"},
+        {"name": "BBC 中文",    "url": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "domain": "feeds.bbci.co.uk"},
+        {"name": "BBC 中文",    "url": "https://www.bbc.co.uk/zhongwen/simp/index.xml",  "domain": "bbc.co.uk"},
+        {"name": "路透中文",    "url": "https://cn.reuters.com/rss/CNTopGenNews",         "domain": "reuters.com"},
     ],
-    # 国家新闻
+    # 国家新闻 — HTTPS only, modern Chinese sources that don't gate on User-Agent
     "cn_news": [
-        {"name": "新华网",      "url": "http://www.news.cn/rss/xinhuanet.xml",   "domain": "news.cn"},
-        {"name": "人民网",      "url": "http://www.people.com.cn/rss/feed.xml",  "domain": "people.com.cn"},
+        {"name": "新华网",      "url": "https://www.news.cn/rss/xinhuanet.xml",          "domain": "news.cn"},
+        {"name": "人民网",      "url": "https://www.people.com.cn/rss/feed.xml",         "domain": "people.com.cn"},
+        {"name": "中国网",      "url": "https://www.china.com.cn/rss/news.xml",          "domain": "china.com.cn"},
     ],
 }
 
@@ -78,6 +80,38 @@ LIKED_SECTION_LIMIT = 5
 # 不喜欢 → 缩到 1 条
 DISLIKED_SECTION_LIMIT = 1
 
+# ══════════════════════════════════════════════════
+# R7.0 Bocha Web Search API 配置
+# Bocha 是中文友好的多模态搜索 API，AI/IT/新闻都覆盖，
+# 用作 RSS 全挂时的兜底。需要环境变量 BOCHA_API_KEY 启用。
+# 文档：https://bocha-ai.feishu.cn/docx/Mk0IdjA1EozLRAx36YicI5bJnOh
+# ══════════════════════════════════════════════════
+BOCHA_ENDPOINT = "https://api.bochaai.com/v1/web-search"
+BOCHA_TIMEOUT_SEC = 10
+BOCHA_SECTION_QUERIES: dict[str, list[str]] = {
+    # section → 多角度查询（取首个非空结果）
+    "ai_news":   ["AI 行业最新动向", "人工智能公司新闻", "LLM 大模型发布"],
+    "it_news":   ["IT 互联网 行业新闻", "科技公司动态", "开源软件发布"],
+    "intl_news": ["国际新闻 今日", "world news today", "国际局势"],
+    "cn_news":   ["国内新闻 今日", "中国 重要新闻", "时政要闻"],
+}
+
+
+def _bocha_enabled() -> bool:
+    """Whether Bocha fallback is available. Reads BOCHA_API_KEY at call time."""
+    import os
+    return bool((os.environ.get("BOCHA_API_KEY") or "").strip())
+
+
+def _safe_bocha_url() -> bool:
+    """Bocha endpoint is fixed; only check the host to be safe."""
+    from urllib.parse import urlparse
+    try:
+        p = urlparse(BOCHA_ENDPOINT)
+        return p.hostname == "api.bochaai.com"
+    except Exception:
+        return False
+
 
 def _safe_url(url: str, allowed_domain: str) -> bool:
     """Validate URL host against the whitelist domain (SSRF guard)."""
@@ -91,7 +125,11 @@ def _safe_url(url: str, allowed_domain: str) -> bool:
 
 
 async def _fetch_rss_source(url: str, allowed_domain: str, limit: int) -> list[dict]:
-    """Fetch a single RSS feed; return up to `limit` items."""
+    """Fetch a single RSS feed; return up to `limit` items.
+
+    R6.6: re-raises on failure (instead of swallowing) so the upstream
+    ``_fetch_section`` can capture the error message in its err field.
+    """
     if not _safe_url(url, allowed_domain):
         logger.warning("brief_fetcher: rejected non-whitelisted URL %s", url)
         return []
@@ -102,21 +140,8 @@ async def _fetch_rss_source(url: str, allowed_domain: str, limit: int) -> list[d
         return []
     try:
         # Offload the blocking feedparser call to a thread so we don't stall the loop.
-        def _parse() -> list[dict]:
-            parsed = feedparser.parse(url)
-            items: list[dict] = []
-            for e in parsed.entries[:limit]:
-                items.append({
-                    "title":   getattr(e, "title", "")[:200],
-                    "summary": (getattr(e, "summary", "") or "")[:280],
-                    "url":     getattr(e, "link", ""),
-                    "source":  allowed_domain,
-                    "ts":      int(time.time()),
-                })
-            return items
-
         items = await asyncio.wait_for(
-            asyncio.to_thread(_parse),
+            asyncio.to_thread(_make_parse(url, allowed_domain, limit)),
             timeout=SOURCE_TIMEOUT_SEC,
         )
         return items
@@ -125,46 +150,194 @@ async def _fetch_rss_source(url: str, allowed_domain: str, limit: int) -> list[d
         return []
     except Exception as e:
         logger.warning("brief_fetcher: error on %s: %s", url, e)
-        return []
+        # R6.6: re-raise so _fetch_section can capture the message in errors[]
+        raise
+
+
+# User-Agent for RSS fetch — many Chinese news sites reject requests
+# without a browser-like UA. The default Python UA is sometimes blocked.
+def _make_parse(url: str, allowed_domain: str, limit: int):
+    """Closure factory: build a parse() with proper UA + fallback."""
+    import feedparser  # type: ignore
+    # feedparser accepts a custom UA via the `agent` argument.
+    UA = "Mozilla/5.0 (AerieBrief/1.0; +https://example.com/aerie)"
+
+    def _parse() -> list[dict]:
+        parsed = feedparser.parse(url, agent=UA)
+        items: list[dict] = []
+        for e in parsed.entries[:limit]:
+            items.append({
+                "title":   getattr(e, "title", "")[:200],
+                "summary": (getattr(e, "summary", "") or "")[:280],
+                "url":     getattr(e, "link", ""),
+                "source":  allowed_domain,
+                "ts":      int(time.time()),
+            })
+        return items
+
+    return _parse
 
 
 async def _fetch_section(
     section: str, sources: list[dict], limit: int
 ) -> tuple[list[dict], str | None]:
-    """Fetch all RSS sources for a section concurrently; aggregate + cap."""
+    """Fetch all RSS sources for a section concurrently; aggregate + cap.
+
+    R6.6: surface the first non-empty error message instead of silently
+    returning []. The previous behavior swallowed all exceptions inside
+    ``_fetch_rss_source`` and produced a list that looked identical to
+    "the network worked, just no items", which made the daily-brief
+    UI display empty sections without any explanation.
+
+    R7.0: if RSS returns nothing AND Bocha is enabled, fall back to
+    Bocha Web Search API. The fallback result is returned with a
+    ``source_kind="bocha"`` tag so the UI can show "Bocha 兜底" badge.
+    """
     results = await asyncio.gather(
         *[_fetch_rss_source(s["url"], s["domain"], limit) for s in sources],
         return_exceptions=True,
     )
     flat: list[dict] = []
+    err_parts: list[str] = []
     for r in results:
         if isinstance(r, list):
             flat.extend(r)
+        elif isinstance(r, BaseException):
+            err_parts.append(f"{type(r).__name__}: {r}")
     flat.sort(key=lambda x: x.get("ts", 0), reverse=True)
     err: str | None = None
+
+    # R7.0: Bocha fallback when RSS yielded zero items
+    used_fallback = False
+    if not flat and _bocha_enabled() and section in BOCHA_SECTION_QUERIES:
+        try:
+            bocha_items, bocha_err = await _fetch_bocha_section(section, limit)
+            if bocha_items:
+                flat = bocha_items
+                used_fallback = True
+                err = None  # fallback succeeded → not an error
+                logger.info(
+                    "brief_fetcher: %s fell back to Bocha (got %d items)",
+                    section, len(bocha_items),
+                )
+            elif bocha_err:
+                err_parts.append(f"bocha: {bocha_err}")
+        except Exception as e:
+            err_parts.append(f"bocha_exception: {e}")
+
     if not flat:
-        err = "empty_or_failed"
+        if err_parts:
+            err = " | ".join(err_parts[:3])[:240]
+        else:
+            err = "empty_or_failed"
+    if used_fallback and flat:
+        # Tag every item so the UI can show "Bocha 兜底" badge.
+        for it in flat:
+            it["source_kind"] = "bocha"
     return flat[:limit], err
 
 
-async def fetch_ai_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> list[dict]:
-    items, _ = await _fetch_section("ai_news", RSS_SOURCES["ai_news"], limit)
-    return items
+async def _fetch_bocha_section(section: str, limit: int) -> tuple[list[dict], str | None]:
+    """Bocha Web Search fallback. Reads BOCHA_API_KEY from env.
+
+    Returns ([items], error_str). Items follow the same shape as RSS
+    items so downstream code doesn't care which path produced them.
+    """
+    if not _bocha_enabled() or not _safe_bocha_url():
+        return [], "bocha_disabled"
+    import os
+    api_key = (os.environ.get("BOCHA_API_KEY") or "").strip()
+    if not api_key:
+        return [], "missing_api_key"
+    queries = BOCHA_SECTION_QUERIES.get(section) or []
+    if not queries:
+        return [], "no_query"
+    items: list[dict] = []
+    err: str | None = None
+    # Try each query; stop as soon as one yields items.
+    for q in queries:
+        try:
+            payload = {
+                "query": q,
+                "summary": True,
+                "count": min(10, max(3, limit)),
+                "freshness": "oneDay",
+            }
+            data = await asyncio.wait_for(
+                asyncio.to_thread(_bocha_post, api_key, payload),
+                timeout=BOCHA_TIMEOUT_SEC,
+            )
+            web_pages = ((data or {}).get("data") or {}).get("webPages") or {}
+            value_list = web_pages.get("value") or []
+            for vp in value_list[:limit]:
+                items.append({
+                    "title":   (vp.get("name") or "")[:200],
+                    "summary": (vp.get("summary") or vp.get("snippet") or "")[:280],
+                    "url":     vp.get("url") or "",
+                    "source":  (vp.get("siteName") or "bocha")[:60],
+                    "ts":      int(time.time()),
+                    "source_kind": "bocha",
+                })
+            if items:
+                return items, None
+        except asyncio.TimeoutError:
+            err = "bocha_timeout"
+        except Exception as e:
+            err = f"bocha: {type(e).__name__}: {e}"
+            logger.warning("brief_fetcher: Bocha query failed q=%r: %s", q, e)
+    return items, err
 
 
-async def fetch_it_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> list[dict]:
-    items, _ = await _fetch_section("it_news", RSS_SOURCES["it_news"], limit)
-    return items
+def _bocha_post(api_key: str, payload: dict) -> dict:
+    """Synchronous Bocha POST. Returns parsed JSON or {} on failure.
+
+    Uses urllib so we don't add a hard dependency on httpx / aiohttp.
+    """
+    import json as _json
+    import urllib.request
+    import urllib.error
+    body = _json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        BOCHA_ENDPOINT,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": "Bearer " + api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "AerieBrief/1.0 (+https://example.com/aerie)",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=BOCHA_TIMEOUT_SEC) as resp:
+            raw = resp.read().decode("utf-8", errors="ignore")
+            try:
+                return _json.loads(raw)
+            except Exception:
+                return {}
+    except urllib.error.HTTPError as e:
+        logger.warning("brief_fetcher: Bocha HTTP %s body=%s",
+                       e.code, e.read().decode("utf-8", errors="ignore")[:200])
+        return {}
+    except Exception as e:
+        logger.warning("brief_fetcher: Bocha request error: %s", e)
+        return {}
 
 
-async def fetch_intl_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> list[dict]:
-    items, _ = await _fetch_section("intl_news", RSS_SOURCES["intl_news"], limit)
-    return items
+async def fetch_ai_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
+    return await _fetch_section("ai_news", RSS_SOURCES["ai_news"], limit)
 
 
-async def fetch_cn_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> list[dict]:
-    items, _ = await _fetch_section("cn_news", RSS_SOURCES["cn_news"], limit)
-    return items
+async def fetch_it_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
+    return await _fetch_section("it_news", RSS_SOURCES["it_news"], limit)
+
+
+async def fetch_intl_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
+    return await _fetch_section("intl_news", RSS_SOURCES["intl_news"], limit)
+
+
+async def fetch_cn_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
+    return await _fetch_section("cn_news", RSS_SOURCES["cn_news"], limit)
 
 
 async def fetch_weather(city: str = "上海") -> dict | None:
@@ -255,20 +428,37 @@ async def run_all(city: str = "上海", feedback: dict | None = None) -> dict:
         logger.warning("brief_fetcher: total timeout %ds exceeded", TOTAL_TIMEOUT_SEC)
         return {"date": today, "errors": {"global": "total_timeout"}, "ts": int(time.time())}
 
-    ai_news, it_news, intl_news, cn_news, weather = result
+    ai_news_r, it_news_r, intl_news_r, cn_news_r, weather = result
+    # Each of the four news returns is (items, err_str|None).
+    def _unwrap_news(r):
+        if isinstance(r, BaseException):
+            return [], f"{type(r).__name__}: {r}"
+        if isinstance(r, tuple) and len(r) == 2:
+            return r[0] or [], r[1]
+        if isinstance(r, list):
+            return r, None
+        return [], "unknown_return_shape"
+
+    ai_news, ai_err = _unwrap_news(ai_news_r)
+    it_news, it_err = _unwrap_news(it_news_r)
+    intl_news, intl_err = _unwrap_news(intl_news_r)
+    cn_news, cn_err = _unwrap_news(cn_news_r)
     errors: dict[str, str] = {}
-    if isinstance(ai_news, Exception):   errors["ai_news"]   = str(ai_news)
-    if isinstance(it_news, Exception):   errors["it_news"]   = str(it_news)
-    if isinstance(intl_news, Exception): errors["intl_news"] = str(intl_news)
-    if isinstance(cn_news, Exception):   errors["cn_news"]   = str(cn_news)
-    if isinstance(weather, Exception):   errors["weather"]   = str(weather)
+    if ai_err:   errors["ai_news"]   = ai_err
+    if it_err:   errors["it_news"]   = it_err
+    if intl_err: errors["intl_news"] = intl_err
+    if cn_err:   errors["cn_news"]   = cn_err
+    if isinstance(weather, Exception):
+        errors["weather"] = f"{type(weather).__name__}: {weather}"
+    elif weather is None:
+        errors["weather"] = "unavailable"
 
     return {
         "date": today,
-        "ai_news":   ai_news if isinstance(ai_news, list) else [],
-        "it_news":   it_news if isinstance(it_news, list) else [],
-        "intl_news": intl_news if isinstance(intl_news, list) else [],
-        "cn_news":   cn_news if isinstance(cn_news, list) else [],
+        "ai_news":   ai_news,
+        "it_news":   it_news,
+        "intl_news": intl_news,
+        "cn_news":   cn_news,
         "weather":   weather if isinstance(weather, dict) else None,
         "errors":    errors,
         "ts":        int(time.time()),

@@ -47,7 +47,7 @@ WHITELIST_FILES = {
 # Format: { "path/relative": [line_numbers_allowed_to_contain_term] }
 # Lines that DECLARE the rule itself are exempt — they are not user-facing.
 WHITELIST_LINES: dict[str, list[int]] = {
-    "config/persona.yaml": [91, 105],  # rule declarations (forbidden_user_terms list)
+    "config/persona.yaml": [4, 91, 105, 127],  # rule declarations (forbidden_user_terms / taboo_phrases lists)
 }
 
 

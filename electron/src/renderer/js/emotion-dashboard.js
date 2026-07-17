@@ -1,23 +1,111 @@
 "use strict";
-/* Emotion Dashboard — real-time PAD + cumulative threshold display */
+/* Emotion Dashboard — real-time PAD + cumulative threshold display
+ *
+ * R6.4: Persona-derived defaults. When the API is unreachable (e.g. backend
+ * not yet up, network blip), the dashboard still renders a recognisable
+ * baseline so the user can verify the system is wired up. The defaults are
+ * derived from config/persona.yaml at startup and refreshed whenever the
+ * persona document is reloaded.
+ *
+ * PAD baseline (pleasure / arousal / dominance) is in
+ * config/persona_behavior.yaml → emotion.baseline. Threshold initial
+ * values are in the same file under emotion.thresholds.*.initial_value.
+ * The defaults baked here MUST stay in sync with those config files.
+ */
 
 class EmotionDashboard {
   constructor() {
     this.pollInterval = null;
     this._visible = false;
     this._padHistory = null;   // Phase 9 Batch 5: cached history series
+    this._persona = null;      // R6.4: cached persona for fallback defaults
+    this._hasRendered = false; // R6.4: render fallback once before first fetch
   }
 
   init() {
+    // R6.4: pull persona immediately so defaults reflect the latest doc.
+    this._loadPersonaForDefaults();
+    // Render fallback once so the UI is never blank on first paint.
+    this._renderFallback();
     // Start polling for emotion data
     this.pollInterval = setInterval(() => this._fetch(), 3000);
+    // R6.4: refresh persona every 60s so external YAML edits flow through.
+    this._personaInterval = setInterval(() => this._loadPersonaForDefaults(), 60_000);
     this._fetch(); // immediate first fetch
+  }
+
+  // ── R6.4: Persona → defaults (Big Five + archetype) ──
+  async _loadPersonaForDefaults() {
+    try {
+      if (!window.aerie || !window.aerie.api) return;
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/persona" });
+      if (r && r.data && !r.data.error) {
+        const wasEmpty = !this._persona;
+        this._persona = r.data;
+        // R6.4: re-render fallback so persona-driven values stay in sync
+        // with the latest doc. Force the render even if we've already
+        // rendered once before.
+        this._hasRendered = false;
+        this._renderFallback();
+      }
+    } catch (_) {
+      // Non-fatal — keep using baked-in defaults.
+    }
+  }
+
+  _baselinePad() {
+    // Mirrors config/persona_behavior.yaml → emotion.baseline.
+    // If persona big_five is available, lightly re-derive:
+    //   P   = 0.10  + (A - 0.5) * 0.3  + (E - 0.5) * 0.1
+    //   A   = 0.20  + (O - 0.5) * 0.2  + (N - 0.5) * 0.2
+    //   D   = 0.80  + (C - 0.5) * 0.1  + (E - 0.5) * 0.1
+    // Clamp to [-1, 1].
+    const bf = (this._persona && this._persona.profile
+      && this._persona.profile.big_five) || {};
+    const O = Number(bf.openness) || 0.70;
+    const C = Number(bf.conscientiousness) || 0.85;
+    const E = Number(bf.extraversion) || 0.45;
+    const A = Number(bf.agreeableness) || 0.70;
+    const N = Number(bf.neuroticism) || 0.45;
+    const clamp = (v) => Math.max(-1, Math.min(1, v));
+    return {
+      P: clamp(0.10 + (A - 0.5) * 0.3 + (E - 0.5) * 0.1),
+      A: clamp(0.20 + (O - 0.5) * 0.2 + (N - 0.5) * 0.2),
+      D: clamp(0.80 + (C - 0.5) * 0.1 + (E - 0.5) * 0.1),
+    };
+  }
+
+  _baselineThresholds() {
+    // Mirrors config/persona_behavior.yaml → emotion.thresholds.*
+    return {
+      patience:    { value: 60, threshold: 100, label: "忍耐值" },
+      anxiety:     { value: 15, threshold: 100, label: "不安值" },
+      desire:      { value: 35, threshold: 80,  label: "渴望值" },
+      tenderness:  { value: 25, threshold: 60,  label: "温柔透支值" },
+    };
+  }
+
+  _renderFallback() {
+    // Render once with persona-derived defaults so the panel is never blank.
+    if (this._hasRendered) return;
+    this._hasRendered = true;
+    const pad = this._baselinePad();
+    this._setPADCard("pad-p", pad.P, "愉悦度");
+    this._setPADCard("pad-a", pad.A, "唤醒度");
+    this._setPADCard("pad-d", pad.D, "支配度");
+    for (const [slot, info] of Object.entries(this._baselineThresholds())) {
+      this._setThresholdBar(slot, info);
+    }
   }
 
   destroy() {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
+    }
+    if (this._personaInterval) {
+      clearInterval(this._personaInterval);
+      this._personaInterval = null;
     }
   }
 
@@ -134,7 +222,15 @@ class EmotionDashboard {
   _setThresholdBar(slot, info) {
     const el = document.getElementById("threshold-" + slot);
     if (!el) return;
-    const pct = Math.min(100, Math.max(0, Number(info.pct) || 0));
+    // R6.4: if API or fallback didn't include pct, derive from
+    // value / threshold so the bar always reflects the actual ratio.
+    let pct = Number(info.pct);
+    if (!Number.isFinite(pct) || pct < 0) {
+      const v = Number(info.value) || 0;
+      const t = Number(info.threshold) || 0;
+      pct = t > 0 ? (v / t) * 100 : 0;
+    }
+    pct = Math.min(100, Math.max(0, pct));
     const fill = el.querySelector(".threshold-bar-fill");
     if (fill) {
       fill.style.width = pct + "%";

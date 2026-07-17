@@ -30,9 +30,11 @@ from typing import Any
 import uvicorn
 import yaml
 from fastapi import FastAPI, Query, Request, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, FileResponse, StreamingResponse
 
 from communication.message import IncomingMessage
+import main  # R6.6: for PROCESS_START_TIME / GIT_COMMIT (stale-code detection)
 from config.persona_loader import (
     get_master_qq,
     load_settings,
@@ -56,6 +58,20 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Aerie · 云栖", version="9.0.0")
 
+# R6.6: enable CORS so the Electron renderer (loaded from file://) can
+# call /api/persona/avatar via fetch() and other plain-XHR endpoints.
+# This is a local app per project constraints — no network-layer auth
+# is required. allow_origins=["*"] covers file://, app://, and any
+# custom scheme the renderer might use.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
+)
+
 _db = Database()
 _START_TIME = time.time()
 
@@ -67,13 +83,85 @@ async def health(request: Request) -> dict:
     comp = get_companion()
     qq_connected = comp.qq.is_connected if comp else False
     uptime = int(time.time() - _START_TIME)
+    # R6.6: also report whether the running process is stale (i.e. some
+    # source file has been modified after this Python process started).
+    stale_info = _check_stale_code()
     return {
         "status": "ok",
         "app": "Aerie · 云栖",
         "version": "9.0.0",
         "uptime_seconds": uptime,
         "qq_connected": qq_connected,
+        "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
+        "process_started_at": getattr(main, "PROCESS_START_ISO", ""),
+        "stale_code": stale_info,
     }
+
+
+def _check_stale_code() -> dict:
+    """R6.6: detect source files modified AFTER this process started.
+
+    Returns a dict with ``stale`` (bool) and ``modified`` (list of
+    relative paths) when any tracked file in core/ config/ or main.py
+    has mtime > PROCESS_START_TIME.
+    """
+    try:
+        start = getattr(main, "PROCESS_START_TIME", None)
+        if not start:
+            return {"stale": False, "modified": [], "reason": "no_start_time"}
+        # Allow a 2s skew (filesystem mtime resolution).
+        threshold = start - 2.0
+        project_root = Path(main.PROJECT_ROOT)
+        watch_dirs = [project_root / "core", project_root / "config", project_root / "main.py"]
+        modified: list[str] = []
+        for path in watch_dirs:
+            if path.is_file():
+                files = [path]
+            elif path.is_dir():
+                files = list(path.rglob("*.py"))
+            else:
+                continue
+            for f in files:
+                try:
+                    mtime = f.stat().st_mtime
+                except OSError:
+                    continue
+                if mtime > threshold:
+                    rel = f.relative_to(project_root).as_posix()
+                    modified.append(rel)
+        if modified:
+            return {
+                "stale": True,
+                "modified": modified[:20],
+                "started_at": main.PROCESS_START_ISO,
+                "now": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+                "hint": "Run tools/restart.bat to pick up the latest code.",
+            }
+        return {"stale": False, "modified": []}
+    except Exception as e:
+        return {"stale": False, "modified": [], "error": str(e)}
+
+
+# R6.6: backend self-restart endpoint. Triggers tools/restart_helper.ps1
+# in a detached process so the calling HTTP request can return BEFORE
+# the backend itself gets killed.
+@app.post("/api/system/restart")
+async def system_restart() -> dict:
+    import subprocess
+    project_root = Path(main.PROJECT_ROOT)
+    helper = project_root / "tools" / "restart_helper.ps1"
+    if not helper.exists():
+        return JSONResponse({"error": "helper_missing"}, status_code=500)
+    try:
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(helper)],
+            cwd=str(project_root),
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+    except Exception as e:
+        return JSONResponse({"error": "spawn_failed", "detail": str(e)}, status_code=500)
+    return {"status": "scheduled", "hint": "Backend will restart in ~3s"}
 
 
 # ── Chat ───────────────────────────────────────────

@@ -52,7 +52,7 @@
 .emh-window:hover { color: var(--color-text, #333); }
 .emh-window.active {
   background: linear-gradient(90deg, var(--color-pad-pleasure, #ff5b9c)0%, var(--color-eruption-grad-2, #9c27b0)100%);
-  color: #fff;
+  color: var(--color-primary-fg);
   font-weight: 600;
 }
 

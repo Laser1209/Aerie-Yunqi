@@ -1,17 +1,108 @@
 {
   "date": "2026-07-17",
-  "ai_news": [],
-  "it_news": [],
-  "intl_news": [],
-  "cn_news": [],
+  "ai_news": [
+    {
+      "title": "理想L6换代24.98万开卖！L9同款自研芯片中控屏下放，一个版本配置拉满不涨价",
+      "summary": "最快下周一提车",
+      "url": "https://www.qbitai.com/2026/07/451576.html",
+      "source": "qbitai.com",
+      "ts": 1784250135
+    },
+    {
+      "title": "全球首个！银河通用新框架仅需人类视频即可部署，特斯拉蚌埠住了",
+      "summary": "还能让机器人边干边学",
+      "url": "https://www.qbitai.com/2026/07/451403.html",
+      "source": "qbitai.com",
+      "ts": 1784250135
+    },
+    {
+      "title": "工业母机进入“计算化时刻”：中国移动投资友机技术，押注工业AI下一代基础设施",
+      "summary": "",
+      "url": "https://www.qbitai.com/2026/07/451371.html",
+      "source": "qbitai.com",
+      "ts": 1784250135
+    }
+  ],
+  "it_news": [
+    {
+      "title": "8点1氪丨长鑫科技网上发行初步中签率为0.40995452%；特朗普头像将被印上硬币，面值1美元；多家NFC鲜榨果汁生产车间被曝无水果",
+      "summary": "<h2><strong>今日热点导览</strong></h2>\n  <p>SpaceX市值蒸发近8500亿美元</p>\n  <p>韩国将暂停新的单一股票杠杆ETF上市，以抑制市场波动</p>\n  <p>泡泡玛特创始人王宁带队探访苹果总部</p>\n  <p>亚马逊Leo与南非企业达成协议，预计明年启动卫星互联网服务</p>\n  <p>日本拟采购2.75万颗英伟达Rubin芯片，打造本土机器人AI基础模型</p>\n  <h2><strong>TOP 3大新闻</strong></h2>\n  <p><strong>长鑫科技：网上发行初步中签率为0.40995",
+      "url": "https://36kr.com/p/3898973942007684?f=rss",
+      "source": "36kr.com",
+      "ts": 1784250135
+    },
+    {
+      "title": "商汤001号员工创办AI公司：将AI角色引擎做成护城河，获种子轮融资 | 36氪首发",
+      "summary": "<p>文丨刘士武</p>\n  <p>36氪游戏获悉， <strong>AI 角色硬件公司酷奇奇科技（Coolqq.com）已完成</strong><strong><span style=\"letter-spacing: 0px;\">数千万元种子轮融资，本轮融资由上海浦东人工智能种子基金领投，商汤科技、零以创投跟投。</span></strong><strong style=\"letter-spacing: 0px;\">云杉资本Spruce Capital担任长期独家财务顾问。</strong></p>\n  <p>酷奇奇创办于2025年，创始人徐持衡是商汤",
+      "url": "https://36kr.com/p/3898370289846153?f=rss",
+      "source": "36kr.com",
+      "ts": 1784250135
+    },
+    {
+      "title": "氪星晚报｜IDC：百度智能云蝉联中国金融大模型市场份额第一；腾讯云与RoboScience机器科学达成战略合作；商务部回应推动解决安世半导体问题进展",
+      "summary": "<h2><strong>大公司：</strong></h2>\n  <p><a href=\"https://36kr.com/newsflashes/3898089733523335\" rel=\"noopener noreferrer\" target=\"_blank\"><strong>OPPO：realme新品将聚焦海外市场，中国市场暂停产品更新</strong></a></p>\n  <p>36氪从OPPO方面获悉，为了进一步整合集团资源，实现全球产品战略的协同，未来 realme 新品将聚焦海外市场，在中国市场暂停产品更新；一加在中国市场的产品更新保持不",
+      "url": "https://36kr.com/p/3896564308379525?f=rss",
+      "source": "36kr.com",
+      "ts": 1784250135
+    }
+  ],
+  "intl_news": [
+    {
+      "title": "「贏了官司輸了輿論」：LV 訴茉莉奶白案，司法判決之後再被網絡審判",
+      "summary": "當品牌維權走進社交媒體，「第二法庭」如何改變企業的選擇？",
+      "url": "https://www.bbc.com/zhongwen/articles/cy0jnwzx5dzo/trad?at_medium=RSS&at_campaign=rss",
+      "source": "feeds.bbci.co.uk",
+      "ts": 1784250136
+    },
+    {
+      "title": "涉利用特朗普演說內幕下注，白宮讀稿機操作員獲利10萬元停職受查",
+      "summary": "白宮一名職員被指利用預先掌握演說內容的內幕資訊，在博彩平台Kalshi下注並獲利近10萬美元。",
+      "url": "https://www.bbc.com/zhongwen/articles/c3d392peye9o/trad?at_medium=RSS&at_campaign=rss",
+      "source": "feeds.bbci.co.uk",
+      "ts": 1784250136
+    },
+    {
+      "title": "皮尤研究：全球更多國家對中國好感勝過美國，逾20年以來首次",
+      "summary": "這項美國智庫調查顯示，受訪者對習近平的信心高於特朗普。",
+      "url": "https://www.bbc.com/zhongwen/articles/cpq8jd9dwr2o/trad?at_medium=RSS&at_campaign=rss",
+      "source": "feeds.bbci.co.uk",
+      "ts": 1784250136
+    }
+  ],
+  "cn_news": [
+    {
+      "title": "【冯站长之家】2026年7月16日(周四)三分钟新闻早餐-顶端新闻",
+      "summary": "1)习近平在上海考察时强调:全面践行人民城市理念,高质量推进城市更新。《求是》杂志发表习近平总书记重要文章《在庆祝中国共产党成立105周年大会上的讲话》。2)国家统计局:上半年,我国GDP同比增长4.7%;货物进出口总额254686亿元,同比增长16.9%;全国规模以上工业增加值同比增长5.4%;服务业增加值同比增长5.2%;全国居民人均可支配收入22981元。3)进度过四成,我国南方早稻迎来大面积收获。4)生态环境部、国家发展改革委等6部门近日印发《固体废物污染防治“十五五”规划》。5)国家能源局:1-6月份全社会用电量同比增长5.3%。6)国家发改委",
+      "url": "https://www.topnews.cn/news/145ED6E745B14972",
+      "source": "www.topnews.cn",
+      "ts": 1784250136,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "2026年07月16日《安庆新闻》<br/>",
+      "summary": "2026年07月16日《安庆新闻》作者:\n来源:本站原创\n发布时间:2026-07-16\n编辑:罗静",
+      "url": "http://www.aqnews.com.cn/2026/07/16/99846580.html",
+      "source": "www.aqnews.com.cn",
+      "ts": 1784250136,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "2026年7月15日新闻",
+      "summary": "2026年7月15日新闻\n2026-07-16\n来源:鹿泉区融媒体中心\n浏览次数:1\n打印\n2026年7月15日新闻",
+      "url": "https://sjzlq.gov.cn/columns/72d3f19d-42ba-4e4a-8525-200bcbf1dfef/202607/16/40c4bf31-ce05-47c7-934f-ce4c70d0166d.html",
+      "source": "鹿泉区人民政府",
+      "ts": 1784250136,
+      "source_kind": "bocha"
+    }
+  ],
   "weather": {
     "city": "上海",
     "temp": "—",
     "desc": "暂无 / unavailable",
     "suggestion": "穿合适的衣服。",
-    "ts": 1784238579,
+    "ts": 1784250134,
     "stub": true
   },
   "errors": {},
-  "ts": 1784238579
+  "ts": 1784250136
 }

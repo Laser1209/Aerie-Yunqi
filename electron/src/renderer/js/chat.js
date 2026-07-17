@@ -35,6 +35,16 @@ class ChatManager {
     // Block-2 A1: load persona + master avatar (best-effort, fail-soft)
     this._loadPersona();
     this._loadMasterAvatar();
+    // R6.6: periodic persona poll so an upload from the Settings page
+    // (or another window) shows up in the chat without manual reload.
+    // 30s is gentle on the API and matches the spec'd auto-refresh cadence.
+    setInterval(() => this._loadPersona(), 30000);
+    // R7.0: instant refresh on persona:updated event from settings.js.
+    // Without this listener, an upload via the settings page only takes
+    // effect after the 30s poll above — way too slow for the user.
+    window.addEventListener("aerie:persona-updated", () => {
+      try { this._loadPersona(); } catch (_) {}
+    });
   }
 
   _bindEvents() {
@@ -93,8 +103,24 @@ class ChatManager {
           english_name: r.data.english_name || this._personaCache.english_name,
           avatar_url: r.data.avatar_url || this._personaCache.avatar_url,
         };
+        // R6.6: refresh avatar src on every rendered assistant message
+        // so a freshly uploaded avatar shows up without a window reload.
+        this._refreshAvatarsInDom();
       }
     } catch (_) { /* fail-soft: keep defaults */ }
+  }
+
+  // R6.6: re-render every message in the DOM with the current persona
+  // cache. Cheap because the message list is small (≤ a few hundred)
+  // and it only runs after a known persona change.
+  _rerenderVisible() {
+    if (!this._el || !this._el.messages) return;
+    const messages = this._messages || [];
+    if (!messages.length) return;
+    this._el.messages.innerHTML = messages
+      .map((m) => this._renderMessage(m))
+      .join("");
+    this._scrollToBottom();
   }
 
   async _loadMasterAvatar() {
@@ -402,6 +428,12 @@ class ChatManager {
     html += `<div class="chat-msg__avatar-wrap">${avatarContent}</div>`;
     html += `<div class="chat-msg__body">`;
     html += `<div class="chat-msg__name">${this._escapeHtml(displayName)}</div>`;
+    // R6.5: timestamp (hover-only, shown by CSS when the message is
+    // hovered). Format: HH:MM for today, MM-DD HH:MM for older messages.
+    const tsText = this._formatTime(msg.ts);
+    if (tsText) {
+      html += `<span class="chat-msg__meta-time">${tsText}</span>`;
+    }
     // Phase 4: quote overlay (above bubble)
     if (msg.reply_to_id && msg.reply_to_content) {
       const role = msg.reply_to_role === "user" ? "你" : "伊塔";
@@ -465,6 +497,29 @@ class ChatManager {
     const d = document.createElement("div");
     d.textContent = text;
     return d.innerHTML.replace(/\n/g, "<br>");
+  }
+
+  // R6.5: format a timestamp for hover-only display on each message.
+  // Accepts unix seconds (number), unix milliseconds (large number), or
+  // ISO 8601 string. Returns "" for unparseable / missing input.
+  _formatTime(ts) {
+    if (ts === null || ts === undefined || ts === "") return "";
+    let d;
+    try {
+      d = typeof ts === "number"
+        ? new Date(ts < 1e12 ? ts * 1000 : ts)
+        : new Date(ts);
+    } catch (_) {
+      return "";
+    }
+    if (isNaN(d.getTime())) return "";
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const hh = pad(d.getHours());
+    const mm = pad(d.getMinutes());
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return `${hh}:${mm}`;
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hh}:${mm}`;
   }
 
   async _request(opts) {

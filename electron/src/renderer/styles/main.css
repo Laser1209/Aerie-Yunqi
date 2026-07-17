@@ -68,6 +68,32 @@
   --color-floating-ball-grad-2: #007aff;
   --color-ball-badge:           #ff3b30;
 
+  /* R6.4: token-ize remaining hardcoded colors from the F1-F4 audit.
+     The check:tokens CI enforces that all hex literals live in :root. */
+  --color-danger:              #e91e63;
+  --color-danger-surface:      #fce4ec;
+  --color-warning-surface:     #fff0e6;
+  --color-warning-surface-2:   var(--color-warning-surface-2);
+  --color-brand-surface:       var(--color-brand-surface);
+  --color-amber-700:           #b45309;
+  --color-amber-50:            #fffbeb;
+  --color-amber-200:           #fde68a;
+  --color-attach-converting:   #f0b400;
+  --color-attach-failed:       #e34c4c;
+  /* Cognition-panel status palette (safe / caution / high-risk / pending /
+     approved / rejected / qq / local). Distinct from the global --success /
+     --warning / --error so the panel keeps its own visual identity. */
+  --color-cog-qq:              #82b1ff;
+  --color-cog-local:           #ffcc80;
+  --color-cog-safe:            #2ecc71;
+  --color-cog-caution:         #f1c40f;
+  --color-cog-high-risk:       #ff6b6b;
+  --color-cog-pending:         #f1c40f;
+  --color-cog-approved:        #2ecc71;
+  --color-cog-rejected:        #95a5a6;
+  --color-cog-error:           #ff6b6b;
+  --color-cog-muted:           #d6c5e0;
+
   /* semantic */
   --color-bg: var(--bg-50);
   --color-surface: var(--bg-100);
@@ -238,29 +264,107 @@ body {
 }
 .chat-msg {
   display: flex;
-  margin-bottom: 12px;
-  animation: fadeIn .3s ease;
+  align-items: flex-start;        /* avatar top-aligned with name+bubble column */
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 0 8px;
+  position: relative;
+  animation: chat-msg-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-.chat-msg--user { justify-content: flex-end; }
-.chat-msg--assistant { justify-content: flex-start; }
+/* Assistant (伊塔): avatar on the LEFT, body column to its right. */
+.chat-msg--assistant { flex-direction: row; }
+/* User (你): body column on the LEFT, avatar on the RIGHT.
+ * Use row-reverse so the avatar naturally sits on the far right. */
+.chat-msg--user { flex-direction: row-reverse; }
+
+/* Body column = small name + optional quote/attachments + bubble. */
+.chat-msg__body {
+  display: flex;
+  flex-direction: column;
+  max-width: min(560px, 65%);
+  min-width: 0;                   /* prevent flex children from being inflated by content */
+}
+.chat-msg--assistant .chat-msg__body { align-items: flex-start; }
+.chat-msg--user .chat-msg__body { align-items: flex-end; }
+
+/* Avatar wrapper: fixed-size slot, never shrinks. Centers the inner
+ * 28px avatar so the wrap dimensions don't visually crop it. */
+.chat-msg__avatar-wrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+}
 
 .chat-bubble {
-  max-width: 75%;
-  padding: 10px 16px;
-  border-radius: 14px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
   font-size: 14px;
-  line-height: 1.5;
-  word-break: break-word;
+  line-height: 1.55;              /* comfortable reading */
+  word-break: break-word;         /* long URLs / words break */
+  white-space: pre-wrap;          /* keep author's newlines */
+  letter-spacing: 0.01em;
+  box-sizing: border-box;
 }
 .chat-msg--user .chat-bubble {
-  background: var(--color-primary);
-  color: var(--color-primary-fg);
-  border-bottom-right-radius: 6px;
+  background: var(--color-primary, #007aff);
+  color: var(--color-primary-fg, #ffffff);
+  border-top-right-radius: 4px;   /* the small tail pointing toward avatar */
 }
 .chat-msg--assistant .chat-bubble {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-bottom-left-radius: 6px;
+  background: var(--bg-200, #f2f2f7);
+  color: var(--color-text, #1a1a1a);
+  border-top-left-radius: 4px;    /* the small tail pointing toward avatar */
+}
+
+/* Smooth scroll for new messages */
+.chat-messages { scroll-behavior: smooth; }
+
+/* ===== R6.5: timestamp (hover-only, QQ desktop style) ===== */
+.chat-msg__meta-time {
+  display: none;
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--color-text-muted, #888);
+  background: var(--color-surface, #ffffff);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 2;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.chat-msg:hover .chat-msg__meta-time { display: block; }
+
+/* ===== R6.5: animations ===== */
+@keyframes chat-msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes chat-msg-flash {
+  0%, 100% { background: transparent; }
+  20%      { background: rgba(255, 215, 0, 0.18); }
+}
+.chat-msg--highlight { animation: chat-msg-flash 1.2s ease; }
+
+/* ===== R6.5: responsive ===== */
+@media (max-width: 768px) {
+  .chat-msg__body { max-width: 78%; }
+  .chat-msg__avatar-wrap { width: 32px; height: 32px; }
+  .chat-msg { gap: 8px; }
+}
+@media (max-width: 480px) {
+  .chat-msg { gap: 6px; padding: 0 6px; }
+  .chat-msg__body { max-width: 82%; }
+  .chat-msg__avatar-wrap { width: 28px; height: 28px; }
+  .chat-bubble { font-size: 13.5px; padding: 8px 12px; }
 }
 
 .chat-input-area {
@@ -405,6 +509,34 @@ body {
 .btn-secondary:hover { background: var(--color-border); }
 .btn-sm { padding: 4px 12px; font-size: 12px; }
 
+/* R7.0: stale-code restart button. Pulsing red dot indicates the
+   backend has source files newer than the running process — clicking
+   the button will respawn main.py and pick up the new code. */
+.btn-restart-stale {
+  position: relative;
+  border-color: var(--color-danger, #e74c3c) !important;
+  color: var(--color-danger, #e74c3c) !important;
+  animation: stale-pulse 1.6s ease-in-out infinite;
+}
+.btn-restart-stale::after {
+  content: "";
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--color-danger, #e74c3c);
+  box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.6);
+  animation: stale-pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes stale-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.0); }
+  50%      { box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.18); }
+}
+@keyframes stale-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+  50%      { box-shadow: 0 0 0 6px rgba(231, 76, 60, 0); }
+}
+
 /* ===== Emotion Dashboard ===== */
 .emotion-dashboard { padding: 24px; }
 .emotion-dashboard h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
@@ -421,16 +553,16 @@ body {
 }
 .emotion-eruption-banner.hidden { display: none; }
 .emotion-eruption-banner--patience {
-  background: #1c1c1e; color: #aeaeb2; border: 1px solid #3a3a3c;
+  background: var(--bg-800); color: var(--text-300); border: 1px solid var(--bg-700);
 }
 .emotion-eruption-banner--anxiety {
   background: var(--error-surface); color: var(--error); border: 1px solid var(--error);
 }
 .emotion-eruption-banner--desire {
-  background: #fff0e6; color: var(--warning); border: 1px solid var(--warning);
+  background: var(--color-warning-surface); color: var(--warning); border: 1px solid var(--warning);
 }
 .emotion-eruption-banner--tenderness {
-  background: #fce4ec; color: #e91e63; border: 1px solid #e91e63;
+  background: var(--color-danger-surface); color: var(--color-danger); border: 1px solid var(--color-danger);
 }
 
 /* Emotion label */
@@ -442,10 +574,10 @@ body {
   font-weight: 600; font-size: 18px;
   padding: 2px 12px; border-radius: 999px;
 }
-.emotion-label--joy    { background: #e9f9ee; color: var(--success); }
-.emotion-label--sad    { background: #e8f2ff; color: var(--brand-500); }
+.emotion-label--joy    { background: var(--success-surface); color: var(--success); }
+.emotion-label--sad    { background: var(--color-brand-surface); color: var(--brand-500); }
 .emotion-label--anger  { background: var(--error-surface); color: var(--error); }
-.emotion-label--fear   { background: #fff3e0; color: var(--warning); }
+.emotion-label--fear   { background: var(--color-warning-surface-2); color: var(--warning); }
 .emotion-label--neutral { background: var(--color-surface); color: var(--color-text-muted); }
 .emotion-label__icon {
   margin-right: 6px;
@@ -484,7 +616,6 @@ body {
 
 /* Threshold bars */
 .threshold-bars { display: flex; flex-direction: column; gap: 12px; }
-.threshold-bar-item { }
 .threshold-bar-header {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 4px;
@@ -559,7 +690,6 @@ body {
   border: 1px solid var(--color-border);
   margin-bottom: 8px;
 }
-.memorial-info {}
 .memorial-name { font-size: 15px; font-weight: 600; }
 .memorial-date { font-size: 13px; color: var(--color-text-muted); margin-top: 2px; }
 .memorial-desc { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
@@ -782,16 +912,16 @@ body {
   padding: 1px 2px;
   font-size: 9px;
   line-height: 1.1;
-  color: #fff;
+  color: var(--color-primary-fg);
   background: rgba(0, 0, 0, 0.55);
   text-align: center;
   display: none;
 }
 .chat-attach-thumb--state-uploading  { border-color: var(--color-text-muted); opacity: .7; }
 .chat-attach-thumb--state-uploading  .chat-attach-thumb__state { display: block; }
-.chat-attach-thumb--state-converting { border-color: #f0b400; background: rgba(240, 180, 0, 0.12); }
+.chat-attach-thumb--state-converting { border-color: var(--color-attach-converting); background: rgba(240, 180, 0, 0.12); }
 .chat-attach-thumb--state-converting .chat-attach-thumb__state { display: block; background: rgba(240, 180, 0, 0.85); }
-.chat-attach-thumb--state-failed     { border-color: #e34c4c; background: rgba(227, 76, 76, 0.12); }
+.chat-attach-thumb--state-failed     { border-color: var(--color-attach-failed); background: rgba(227, 76, 76, 0.12); }
 .chat-attach-thumb--state-failed     .chat-attach-thumb__state { display: block; background: rgba(227, 76, 76, 0.85); }
 .chat-attach-thumb img {
   width: 100%; height: 100%;
@@ -837,9 +967,6 @@ body {
   font-weight: 600;
   color: var(--color-text-muted, #888);
   font-size: 13px;
-}
-.chat-msg__avatar--placeholder {
-  /* visible letter inside a circle */
 }
 .chat-msg__name {
   font-size: 11px;

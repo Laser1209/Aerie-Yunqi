@@ -97,10 +97,15 @@ class Pipeline:
                 logger.exception("handle_user_negative error")
 
         # ══════════════════════════════════════════════
-        # 2. Emotion: PAD analysis + cumulative threshold scan (stages 2 + 3)
+        # 2. Emotion: LLM-driven PAD analysis + cumulative threshold scan
+        #    (stages 2 + 3). R7.0: switched from sync keyword-only
+        #    update_trajectory to async update_trajectory_async, which
+        #    additionally calls the LLM and blends the LLM PAD with
+        #    the keyword path. Falls back to keyword-only if the LLM
+        #    call fails or no brain is wired.
         # ══════════════════════════════════════════════
         try:
-            self.emotion.update_trajectory(msg.user_id, msg.content)
+            await self.emotion.update_trajectory_async(msg.user_id, msg.content)
         except Exception:
             logger.exception("emotion update error")
 

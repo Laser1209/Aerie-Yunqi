@@ -51,8 +51,13 @@ def _request(method: str, path: str, body: dict | None = None,
         data = json.dumps(body).encode("utf-8")
         h["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, method=method, headers=h)
+    # NOTE (R7.0): chat send can take 10-15s on slow providers (the
+    # cognition log shows 11-13s for verify-batch4 ping). 10s is too
+    # tight and produces flaky "timed out" failures. Bump to 40s to
+    # accommodate DeepSeek/BigModel cold-start + context window build.
+    _HTTP_TIMEOUT_SEC = 40
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT_SEC) as r:
             ct = r.headers.get("Content-Type", "")
             raw = r.read()
             if "application/json" in ct:

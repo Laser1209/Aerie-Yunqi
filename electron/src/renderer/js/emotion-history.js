@@ -34,7 +34,12 @@ const LABEL_KEYS = ["joy", "sad", "anger", "fear", "neutral", "missing", "curios
 
 class EmotionHistory {
   constructor() {
-    this._window = "1h";
+    // R7.0: default window is now 24h instead of 1h. The 1h window
+    // almost never has ≥2 points (snapshots fire only on user_msg,
+    // not on a timer), so the chart would perpetually show
+    // "数据不足 / need at least 2 points" — a bad first impression
+    // for a fresh user. 24h covers a full day of typical usage.
+    this._window = "24h";
     this._data = null;
     this._timer = null;
   }

@@ -447,8 +447,8 @@
   background: rgba(255, 105, 180, 0.12);
   color: var(--color-accent-pink, #ff7eb6);
 }
-.cog-row-src--qq    { background: rgba(100, 180, 255, 0.12); color: #82b1ff; }
-.cog-row-src--local { background: rgba(255, 200, 100, 0.12); color: #ffcc80; }
+.cog-row-src--qq    { background: rgba(100, 180, 255, 0.12); color: var(--color-cog-qq); }
+.cog-row-src--local { background: rgba(255, 200, 100, 0.12); color: var(--color-cog-local); }
 .cog-row-cmd {
   font-size: 9px;
   color: var(--color-stage-decision, #ff8a65);
@@ -520,9 +520,9 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.cog-proposal-safety--safe     { background: rgba(46, 204, 113, 0.22); color: #2ecc71; }
-.cog-proposal-safety--caution  { background: rgba(241, 196, 15, 0.22); color: #f1c40f; }
-.cog-proposal-safety--high_risk{ background: rgba(231, 76, 60, 0.25);  color: #ff6b6b; }
+.cog-proposal-safety--safe     { background: rgba(46, 204, 113, 0.22); color: var(--color-cog-safe); }
+.cog-proposal-safety--caution  { background: rgba(241, 196, 15, 0.22); color: var(--color-cog-caution); }
+.cog-proposal-safety--high_risk{ background: rgba(231, 76, 60, 0.25);  color: var(--color-cog-high-risk); }
 .cog-proposal-safety--?        { background: rgba(255,255,255,0.08); color: var(--cog-glass-muted); }
 .cog-proposal-decision {
   margin-left: auto;
@@ -531,9 +531,9 @@
   border-radius: 999px;
   font-weight: 500;
 }
-.cog-proposal-decision--pending  { background: rgba(241, 196, 15, 0.18); color: #f1c40f; }
-.cog-proposal-decision--approved { background: rgba(46, 204, 113, 0.22); color: #2ecc71; }
-.cog-proposal-decision--rejected { background: rgba(149, 165, 166, 0.30); color: #95a5a6; }
+.cog-proposal-decision--pending  { background: rgba(241, 196, 15, 0.18); color: var(--color-cog-pending); }
+.cog-proposal-decision--approved { background: rgba(46, 204, 113, 0.22); color: var(--color-cog-approved); }
+.cog-proposal-decision--rejected { background: rgba(149, 165, 166, 0.30); color: var(--color-cog-rejected); }
 .cog-proposal-body { margin-top: 4px; line-height: 1.5; }
 .cog-proposal-tool code {
   background: rgba(0, 0, 0, 0.25);
@@ -565,7 +565,7 @@
   color: var(--cog-glass-muted);
   font-style: italic;
 }
-.cog-proposal-error { color: #ff6b6b; }
+.cog-proposal-error { color: var(--color-cog-error); }
 .cog-proposal-preview-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -762,7 +762,7 @@
   margin: 0;
   padding: 8px 12px;
   background: var(--cog-glass-code);
-  color: #d6c5e0;
+  color: var(--color-cog-muted);
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   line-height: 1.5;
@@ -777,7 +777,7 @@
   border: 1px solid var(--cog-glass-border);
   border-radius: 8px;
   padding: 8px 12px;
-  color: #d6c5e0;
+  color: var(--color-cog-muted);
   font-size: 11px;
   max-height: 220px;
   overflow: auto;

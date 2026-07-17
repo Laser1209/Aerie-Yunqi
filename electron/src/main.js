@@ -371,6 +371,69 @@ ipcMain.handle("api:request", async (_event, opts) => {
   }
 });
 
+// R7.0: multipart upload IPC. The renderer cannot use file:// fetch
+// (CORS). This handler receives the raw bytes (as a plain Array) plus
+// metadata, builds a real multipart/form-data body, and forwards to
+// the Python backend over loopback HTTP. The backend's
+// /api/persona/avatar endpoint sees a normal FastAPI UploadFile.
+ipcMain.handle("api:upload", async (_event, opts) => {
+  try {
+    if (!opts || !opts.path) {
+      return { status: 0, data: { error: "missing path" } };
+    }
+    const filename = opts.filename || "upload.bin";
+    const contentType = opts.contentType || "application/octet-stream";
+    const bytes = Array.isArray(opts.bytes) ? Buffer.from(opts.bytes) : Buffer.alloc(0);
+    if (!bytes || bytes.length === 0) {
+      return { status: 0, data: { error: "empty bytes" } };
+    }
+    const boundary = "----AerieBoundary" + Date.now().toString(16);
+    const crlf = "\r\n";
+    const head = Buffer.from(
+      "--" + boundary + crlf
+      + 'Content-Disposition: form-data; name="file"; filename="' + filename + '"' + crlf
+      + "Content-Type: " + contentType + crlf + crlf,
+      "utf-8"
+    );
+    const tail = Buffer.from(crlf + "--" + boundary + "--" + crlf, "utf-8");
+    const body = Buffer.concat([head, bytes, tail]);
+
+    const url = new URL(PY_BACKEND + opts.path);
+    return await new Promise((resolve, reject) => {
+      const req = http.request({
+        hostname: "127.0.0.1",
+        port: PY_PORT,
+        path: url.pathname + url.search,
+        method: opts.method || "POST",
+        headers: {
+          "Content-Type": "multipart/form-data; boundary=" + boundary,
+          "Content-Length": body.length,
+        },
+        timeout: 30000,
+      }, (res) => {
+        let d = "";
+        res.on("data", (c) => (d += c));
+        res.on("end", () => {
+          const ct = (res.headers && res.headers["content-type"] || "").toLowerCase();
+          let parsed;
+          if (ct.indexOf("application/json") >= 0) {
+            try { parsed = JSON.parse(d); } catch (_) { parsed = d; }
+          } else {
+            try { parsed = JSON.parse(d); } catch (_) { parsed = d; }
+          }
+          resolve({ status: res.statusCode, data: parsed });
+        });
+      });
+      req.on("error", (err) => reject(err));
+      req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+      req.write(body);
+      req.end();
+    });
+  } catch (err) {
+    return { status: 0, data: { error: err && err.message || String(err) } };
+  }
+});
+
 // ── Phase 9 Batch 4: SSE → IPC bridge (brain center) ──
 const sseClients = new Map(); // webContents.id -> { req }
 
@@ -528,8 +591,25 @@ ipcMain.handle("window:close", (event) => {
   return true;
 });
 
+// R7.0: Forward /api/health as-is so the renderer can read stale_code
+// without a second round-trip. The renderer's poll already calls
+// /api/health, so this IPC is mainly used by the very first paint
+// before the renderer's poll loop kicks in.
 ipcMain.handle("get-health", async () => {
-  return { ready: _backendReady, port: PY_PORT };
+  try {
+    const r = await apiRequest({ path: "/api/health" });
+    if (r && r.data) {
+      const sc = (r.data && r.data.stale_code) || {};
+      return {
+        ready: _backendReady,
+        port: PY_PORT,
+        stale: !!sc.stale,
+        modified: sc.modified || [],
+        started_at: sc.started_at || r.data.process_started_at || "",
+      };
+    }
+  } catch (_) {}
+  return { ready: _backendReady, port: PY_PORT, stale: false, modified: [] };
 });
 
 ipcMain.handle("napcat:getStatus", async () => {
@@ -583,6 +663,19 @@ ipcMain.handle("settings:reset", async () => {
     return r.data;
   } catch (_) {
     return { error: "backend unreachable" };
+  }
+});
+
+// R6.6: backend self-restart. Triggers tools/restart_helper.ps1 via the
+// Python /api/system/restart endpoint, which spawns a fresh main.py in
+// a detached process. The Electron window stays alive; its SSE / status
+// polling will reconnect once the new backend is up.
+ipcMain.handle("system:restart-backend", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/system/restart" });
+    return r.data || { status: "scheduled" };
+  } catch (e) {
+    return { error: String((e && e.message) || e) };
   }
 });
 

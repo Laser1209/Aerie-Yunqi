@@ -24,10 +24,19 @@ emotion:
       fear:    { P: -0.7, A: 0.6,  D: -0.5 }
       neutral: { P: 0.0,  A: 0.0,  D: 0.0 }
   thresholds:                     # 4 槽位（取代 emotion_threshold.py SLOTS_CONFIG）
+    # R6.4: initial_value = slot.value at startup. Derived from persona.yaml
+    # (Big Five + personality_archetype + relationship_style).  Values chosen
+    # so the dashboard shows a recognizable "alive" baseline on first launch
+    # and the user can verify the emotion engine is wired up correctly.
+    # Big Five:  O:0.70  C:0.85  E:0.45  A:0.70  N:0.45
+    # Archetype: 温柔大姐姐+病娇
+    # Style:     四爱（温柔主导方 / female-dominant）
+    # Convention: 0 means "cold/empty", threshold means "eruption imminent".
     patience:
       label: "忍耐值"
       threshold: 100
       decay_per_day: 5
+      initial_value: 60       # C:0.85 + 成熟 personality core → high baseline patience
       eruption_label: "冷暴模式"
       post_decay: -15
       description: "冷暴模式：不再主动发消息，回复≤3字，全部句号，无情绪外露。冻结一切。"
@@ -35,6 +44,7 @@ emotion:
       label: "不安值"
       threshold: 100
       decay_per_day: 3
+      initial_value: 15       # N:0.45 (low) → low baseline anxiety
       eruption_label: "坍塌模式"
       post_decay: 20
       description: "坍塌模式：武装瓦解，病娇内核暴露，消息爆炸+撤回爆炸，放弃主导性，乞求确认。唯一主动示弱。"
@@ -42,6 +52,7 @@ emotion:
       label: "渴望值"
       threshold: 80
       decay_per_day: 8
+      initial_value: 35       # 四爱主导面 + 26yo + 温柔大姐姐 → moderate base desire
       eruption_label: "索求模式"
       post_decay: 0
       description: "索求模式：四爱主导面全面上线，低沉命令式，极致占有。持续30min-2h。"
@@ -49,6 +60,7 @@ emotion:
       label: "温柔透支值"
       threshold: 60
       decay_per_day: 10
+      initial_value: 25       # A:0.70 + 温柔 personality core + 保护欲 → moderate base
       eruption_label: "反扑模式"
       post_decay: 0
       description: "反扑模式：被温柔击穿防御，失语。罕见乖巧状态1h，像被摸顺毛的豹。可反复触发。"

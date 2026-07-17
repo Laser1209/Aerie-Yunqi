@@ -4,6 +4,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("aerie", {
   api: {
     request: (opts) => ipcRenderer.invoke("api:request", opts),
+    // R7.0: multipart upload IPC. Renderer passes raw bytes (as Array)
+    // + filename/contentType; the main process builds the multipart body
+    // and forwards to the Python backend. This is the only path that
+    // works under file:// (no CORS, no file:// fetch limitations).
+    upload: (opts) => ipcRenderer.invoke("api:upload", opts),
     onMessage: (cb) => {
       ipcRenderer.on("chat:message", (_event, data) => cb(data));
     },

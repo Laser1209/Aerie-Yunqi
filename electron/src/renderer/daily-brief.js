@@ -21,6 +21,10 @@ class DailyBrief {
     const closeBtn = document.getElementById("brief-close");
     if (closeBtn) closeBtn.addEventListener("click", () => this.close());
 
+    // R6.4: brand-strip refresh button.
+    const refreshBtn = document.getElementById("brief-refresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", () => this.load());
+
     const link = document.getElementById("brief-link-chat");
     if (link) {
       link.addEventListener("click", (e) => {
@@ -95,13 +99,39 @@ class DailyBrief {
   }
 
   render(data) {
-    this._setDate(data && data.date);
-    this._renderList("ai_news",   data && data.ai_news);
-    this._renderList("it_news",   data && data.it_news);
-    this._renderList("intl_news", data && data.intl_news);
-    this._renderList("cn_news",   data && data.cn_news);
-    this._renderWeather(data && data.weather);
+    this._setDate(data && (data.date || (data.brief && data.brief.date)));
+    // R6.6: API returns {date, brief: {ai_news, ...}, markdown, error}.
+    // Unwrap data.brief so each section read sees the actual list/dict.
+    const b = (data && data.brief) || data || {};
+    this._renderList("ai_news",   b.ai_news);
+    this._renderList("it_news",   b.it_news);
+    this._renderList("intl_news", b.intl_news);
+    this._renderList("cn_news",   b.cn_news);
+    this._renderWeather(b.weather);
+    // R6.6: surface fetch errors with a small inline notice so the user
+    // can tell "no news" from "couldn't reach the network".
+    if (data && data.error) {
+      this._renderError(data.error, data.detail || "");
+    }
   }
+
+  _renderError(code, detail) {
+    // Use a body-level notice rather than per-section so it doesn't fight
+    // with the (暂无) placeholders.
+    const wrap = document.getElementById("brief-wrap") || document.body;
+    let bar = document.getElementById("brief-error-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "brief-error-bar";
+      bar.className = "brief-error-bar";
+      wrap.insertBefore(bar, wrap.firstChild);
+    }
+    const msg = code === "fetch_failed"
+      ? "网络不可用 / Network unavailable"
+      : "拉取失败 / Fetch failed";
+    bar.textContent = msg + (detail ? " — " + detail : "");
+  }
+
 
   _setDate(dateStr) {
     const el = document.getElementById("brief-date");

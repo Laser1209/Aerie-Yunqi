@@ -9,8 +9,12 @@ Aligned with System_Features.md §11 and Ita.md §8-9.
 """
 
 from __future__ import annotations
+import json
 import logging
+import time
 from typing import Any
+
+import httpx
 
 from core.emotion_threshold import get_threshold_engine, CumulativeEmotionEngine
 
@@ -81,10 +85,14 @@ KEYWORD_DELTAS = [
 
 
 class EmotionEngine:
-    def __init__(self, db: Any = None, state_store: Any = None, behavior_cfg: dict | None = None) -> None:
+    def __init__(self, db: Any = None, state_store: Any = None, behavior_cfg: dict | None = None, brain: Any = None) -> None:
         self.db = db
         self.state_store = state_store
         self.behavior_cfg = behavior_cfg or {}
+        # R7.0: optional brain reference for LLM-driven emotion inference.
+        # When set, update_trajectory_async() will also call the LLM to
+        # produce a more nuanced PAD than the keyword-only path.
+        self.brain = brain
         # R0.3.4: PAD centers now loaded from behavior_cfg; fallback to deprecated EMOTION_CENTERS.
         states_cfg = self.behavior_cfg.get("emotion", {}).get("tree", {}).get("states")
         if states_cfg:
@@ -132,25 +140,175 @@ class EmotionEngine:
         return {"pleasure": round(p, 3), "arousal": round(a, 3), "dominance": round(d, 3)}
 
     def update_trajectory(self, user_id: int, text: str) -> None:
-        """Apply PAD deltas from user text, with EMA smoothing."""
-        pad = self.analyze(text)
-        # Exponential moving average (alpha=0.3)
-        self._state["P"] = round(self._state["P"] * 0.7 + pad["pleasure"] * 0.3, 3)
-        self._state["A"] = round(self._state["A"] * 0.7 + pad["arousal"] * 0.3, 3)
-        self._state["D"] = round(self._state["D"] * 0.7 + pad["dominance"] * 0.3, 3)
-        self._history.append({"user_id": user_id, "text": text[:60], **pad})
+        """Apply PAD deltas from user text, with EMA smoothing.
 
-        # Also scan for cumulative threshold triggers
+        Synchronous keyword-only path. Kept for backward compatibility
+        and for callers that don't have a brain / don't want the LLM
+        latency. New code should call update_trajectory_async().
+        """
+        pad = self.analyze(text)
+        self._apply_pad_and_persist(user_id, text, pad, source="keyword")
+
+    async def update_trajectory_async(self, user_id: int, text: str) -> None:
+        """R7.0: LLM-driven emotion trajectory update.
+
+        Sequence:
+          1. Run keyword analysis (sync, ~0ms) for a fast first pass.
+          2. If a brain is wired up, additionally call the LLM to get a
+             richer PAD reading (async, ~1-3s).
+          3. Blend the two with a weighted average; if LLM fails or
+             times out, the keyword result stands.
+          4. Persist the blended state to state_store with
+             trigger_event="llm_emotion" so the dashboard can
+             distinguish "the LLM actually ran" from "fallback".
+        """
+        kw_pad = self.analyze(text)
+        llm_pad = await self.infer_llm_pad(text) if self.brain else None
+        if llm_pad is not None:
+            # Weighted blend: 60% LLM, 40% keyword. LLM is the primary
+            # signal because it captures nuance the keyword list misses,
+            # but the keyword path keeps the LLM from drifting too far
+            # on messages that contain obvious triggers.
+            blended = {
+                "pleasure":  round(0.6 * llm_pad["pleasure"]  + 0.4 * kw_pad["pleasure"],  3),
+                "arousal":   round(0.6 * llm_pad["arousal"]   + 0.4 * kw_pad["arousal"],   3),
+                "dominance": round(0.6 * llm_pad["dominance"] + 0.4 * kw_pad["dominance"], 3),
+            }
+            self._apply_pad_and_persist(user_id, text, blended, source="llm")
+        else:
+            # Fallback to keyword-only (no brain wired, or LLM call failed).
+            self._apply_pad_and_persist(user_id, text, kw_pad, source="keyword")
+
+    async def infer_llm_pad(self, text: str) -> dict | None:
+        """Call the LLM to extract a PAD triple from the user text.
+
+        Returns ``{pleasure, arousal, dominance}`` in [-1, 1] or
+        ``None`` if the LLM call fails / times out. The prompt is short
+        (one-shot JSON) to keep latency low.
+        """
+        if not self.brain or not getattr(self.brain, "_providers", None):
+            return None
+        prompt = (
+            "你是一个情感分析专家。请阅读用户消息，"
+            "按 PAD 情感模型给出 3 个 -1 到 1 之间的实数:\n"
+            "  pleasure  (愉悦度: -1=极度痛苦, 0=中性, 1=极度愉悦)\n"
+            "  arousal   (唤醒度: -1=极度平静, 0=中性, 1=极度激动)\n"
+            "  dominance (主导度: -1=极度被动, 0=中性, 1=极度主动)\n"
+            "只输出一个 JSON, 例: {\"pleasure\":0.3,\"arousal\":0.5,\"dominance\":0.2}\n"
+            f"用户消息: {text[:400]}"
+        )
+        messages = [
+            {"role": "system", "content": "你只输出 JSON，不要任何解释。"},
+            {"role": "user", "content": prompt},
+        ]
+        # R7.0: try each provider in the brain's list, in order. This
+        # mirrors brain.generate() but with a tiny max_tokens budget so
+        # we don't spend 2s waiting for a 4096-token response.
+        last_error = ""
+        for idx, provider in enumerate(self.brain._providers):
+            try:
+                body = {
+                    "model": provider["model"],
+                    "messages": messages,
+                    "temperature": 0.2,
+                    "max_tokens": 60,
+                }
+                headers = {
+                    "Authorization": f"Bearer {provider['key']}",
+                    "Content-Type": "application/json",
+                }
+                t0 = time.monotonic()
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.post(
+                        f"{provider['url']}/chat/completions",
+                        json=body,
+                        headers=headers,
+                    )
+                if resp.status_code != 200:
+                    last_error = f"HTTP {resp.status_code}"
+                    continue
+                data = resp.json()
+                content = (
+                    (data.get("choices") or [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                    or ""
+                )
+                parsed = self._parse_pad_json(content)
+                if parsed is not None:
+                    dur_ms = int((time.monotonic() - t0) * 1000)
+                    logger.info(
+                        "emotion LLM: provider=%s dur=%dms pad=%s",
+                        provider["name"], dur_ms, parsed,
+                    )
+                    return parsed
+                last_error = "bad_json"
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {e}"
+                logger.warning(
+                    "emotion LLM provider %s failed: %s",
+                    provider.get("name", "?"), last_error[:80],
+                )
+        logger.warning("emotion LLM: all providers failed, last_error=%s", last_error[:80])
+        return None
+
+    @staticmethod
+    def _parse_pad_json(content: str) -> dict | None:
+        """Best-effort parse of an LLM PAD response. Strips ```json fences."""
+        if not content:
+            return None
+        s = content.strip()
+        # Strip code fences
+        if s.startswith("```"):
+            s = s.strip("`")
+            if s.lower().startswith("json"):
+                s = s[4:]
+            s = s.strip()
+        # Sometimes the model wraps JSON in extra prose; find first { ... }
+        if "{" in s:
+            s = s[s.index("{"):]
+            if "}" in s:
+                s = s[: s.rindex("}") + 1]
+        try:
+            d = json.loads(s)
+        except Exception:
+            return None
+        try:
+            p = float(d.get("pleasure", 0.0))
+            a = float(d.get("arousal", 0.0))
+            dom = float(d.get("dominance", 0.0))
+        except Exception:
+            return None
+        # Clamp to [-1, 1]
+        p = max(-1.0, min(1.0, p))
+        a = max(-1.0, min(1.0, a))
+        dom = max(-1.0, min(1.0, dom))
+        return {"pleasure": round(p, 3), "arousal": round(a, 3), "dominance": round(dom, 3)}
+
+    def _apply_pad_and_persist(self, user_id: int, text: str, pad: dict, source: str = "keyword") -> None:
+        """Apply PAD with EMA smoothing and persist a snapshot.
+
+        R7.0: extracted from update_trajectory so the sync and async
+        paths share the same state-mutation + persistence logic. The
+        ``source`` is recorded in state_store so the dashboard can
+        distinguish LLM-driven updates from keyword-only fallbacks.
+        """
+        self._state["P"] = round(self._state["P"] * 0.7 + pad["pleasure"]  * 0.3, 3)
+        self._state["A"] = round(self._state["A"] * 0.7 + pad["arousal"]   * 0.3, 3)
+        self._state["D"] = round(self._state["D"] * 0.7 + pad["dominance"] * 0.3, 3)
+        self._history.append({"user_id": user_id, "text": text[:60], "source": source, **pad})
+
+        # Scan for cumulative threshold triggers
         eruptions = self.threshold_engine.scan_text(text)
         if eruptions:
             for e in eruptions:
                 logger.info("Threshold eruption: %s — %s", e["mode"], e["trigger"])
 
-        # Phase 9 Batch 1: persist a snapshot for history curve.
-        # Trigger event distinguishes "user_msg" from "eruption" downstream.
+        # Persist a snapshot. ``trigger_event`` now includes the source
+        # so the dashboard can show "LLM 触发的情绪变化" vs "fallback".
         if self.state_store:
             try:
-                trigger = "eruption" if eruptions else "user_msg"
+                trigger = f"{source}_msg" if not eruptions else f"{source}_eruption"
                 self.state_store.snapshot(
                     user_id=user_id,
                     state=self.get_state(user_id),
@@ -160,7 +318,10 @@ class EmotionEngine:
             except Exception:
                 logger.exception("emotion state snapshot error")
 
-        logger.debug("PAD: P=%.2f A=%.2f D=%.2f", *self._state.values())
+        logger.debug(
+            "PAD(%s): P=%.2f A=%.2f D=%.2f",
+            source, *self._state.values(),
+        )
 
     # ── Emotion Classification ─────────────────────
 

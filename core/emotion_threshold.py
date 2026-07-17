@@ -171,6 +171,10 @@ class CumulativeEmotionEngine:
                     eruption_label=cfg.get("eruption_label", ""),
                     post_decay=float(cfg.get("post_decay", 0)),
                     description=cfg.get("description", ""),
+                    # R6.4: initial_value lets the dashboard show a
+                    # persona-derived baseline on first launch. Falls back
+                    # to 0 if the config doesn't declare one.
+                    value=float(cfg.get("initial_value", 0)),
                 )
             logger.info("emotion thresholds loaded from %s", self._cfg_source)
         else:

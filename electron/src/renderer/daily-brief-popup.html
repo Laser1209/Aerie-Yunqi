@@ -7,6 +7,23 @@
   <link rel="stylesheet" href="styles/daily-brief.css" />
 </head>
 <body>
+  <!-- R6.4: brand strip mirrors the main app's statusbar so the popup
+       feels like the same product, not a different floating card. -->
+  <div class="brief-brand">
+    <div class="brief-brand__left">
+      <img class="brief-brand__logo" src="../../../Aerie · 云栖.svg" alt="Aerie" onerror="this.style.visibility='hidden'">
+      <span class="brief-brand__title">Aerie · 云栖</span>
+      <span class="brief-brand__sub">每日简报 · Daily Brief</span>
+    </div>
+    <div class="brief-brand__right">
+      <button class="brief-brand__refresh" id="brief-refresh" type="button" title="刷新 / Refresh" aria-label="刷新 / Refresh">
+        <svg class="icon" style="width:14px;height:14px" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </div>
   <div class="brief-card-wrap" id="brief-wrap">
     <div class="brief-card" id="brief-card">
       <div class="brief-header">

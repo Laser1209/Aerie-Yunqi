@@ -202,10 +202,17 @@ def get_persona_summary() -> dict[str, Any]:
     """Block-2 A2: return name/english_name + avatar_url for the renderer."""
     p = load_persona() or {}
     persona = p.get("persona") or {}
+    # R6.6: check ALL supported extensions (PNG/JPG/JPEG), not just the
+    # hardcoded .png path. The previous check missed JPG uploads and
+    # reported an empty avatar_url even when the file existed on disk.
+    has_avatar = any(
+        (_PERSONA_AVATAR_DIR / f"avatar.{ext}").exists()
+        for ext in ("png", "jpg", "jpeg")
+    )
     return {
         "name": persona.get("name") or "伊塔",
         "english_name": persona.get("english_name") or "Ita",
-        "avatar_url": "/api/persona/avatar?v=" + str(int(time.time())) if _PERSONA_AVATAR_PATH.exists() else "",
+        "avatar_url": "/api/persona/avatar?v=" + str(int(time.time())) if has_avatar else "",
     }
 
 

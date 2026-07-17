@@ -171,28 +171,32 @@ window.addEventListener("DOMContentLoaded", () => {
     } catch (_) {}
   }, 5000);
 
-  // ── Block-4A R1.6: daily brief iframe toggle ─────────
-  const briefFrame = document.getElementById("brief-frame");
-  if (briefFrame && window.aerie && window.aerie.electron && window.aerie.electron.onBriefShow) {
-    window.aerie.electron.onBriefShow((_data) => {
-      // Re-load the iframe to refresh today's content, then reveal with fade-in.
-      try {
-        const src = briefFrame.getAttribute("src") || "daily-brief.html";
-        briefFrame.setAttribute("src", src + (src.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now());
-      } catch (_) {}
-      briefFrame.hidden = false;
-    });
-    // Click on the iframe backdrop area (very top 4px strip) to close.
-    briefFrame.addEventListener("click", (ev) => {
-      // The iframe inner page has its own close button; here we close on
-      // Escape key as a safety net.
-    });
-    document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape" && !briefFrame.hidden) {
-        briefFrame.hidden = true;
+  // ── R7.1: daily brief drawer (replaces legacy iframe / popup / detail) ──
+  // The drawer is bootstrapped by js/brief-drawer.js (loaded before
+  // app.js) and exposes ``window.briefDrawer``. The topbar "今日简报"
+  // button dispatches ``bus.emit('brief:open')`` which the drawer
+  // listens for. The legacy ``onBriefShow`` IPC is still supported as
+  // a back-compat channel from the main process.
+  const emitBrief = (action) => {
+    try {
+      if (window.bus) window.bus.emit(action);
+      else if (window.briefDrawer) {
+        if (action === "brief:open")  window.briefDrawer.open();
+        if (action === "brief:close") window.briefDrawer.close();
+        if (action === "brief:refresh") window.briefDrawer.refresh();
       }
-    });
+    } catch (_) {}
+  };
+  if (window.aerie && window.aerie.electron && window.aerie.electron.onBriefShow) {
+    window.aerie.electron.onBriefShow(() => emitBrief("brief:open"));
   }
+  // Wire the topbar / statusbar "今日简报" trigger, if any.
+  document.querySelectorAll("[data-brief-open]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      emitBrief("brief:open");
+    });
+  });
 });
 
 // R6.6 → R7.0: stale-code strong prompt.

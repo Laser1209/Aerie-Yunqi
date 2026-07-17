@@ -34,6 +34,22 @@ class SettingsPanel {
       });
     }
 
+    // R7.1: weather-city reset-to-auto button.
+    const weatherReset = document.getElementById("setting-weather-reset");
+    if (weatherReset) {
+      weatherReset.addEventListener("click", () => {
+        const inp = document.getElementById("setting-weather-city");
+        if (inp) {
+          inp.value = "";
+          inp.focus();
+        }
+        const hint = document.getElementById("setting-weather-hint");
+        if (hint) {
+          hint.textContent = "已清空，保存后将重新 IP 定位 / Cleared, will re-detect on next save.";
+        }
+      });
+    }
+
     // Block-2 A2: persona block controls
     this._initPersonaControls();
 
@@ -64,14 +80,19 @@ class SettingsPanel {
   async restartBackend() {
     const st = document.getElementById("settings-status");
     const btn = document.getElementById("settings-restart-btn");
-    if (!window.aerie || !window.aerie.invoke) {
+    // v2.2: was `!window.aerie.invoke` which always triggered because
+    // preload.js never exposed a top-level `invoke`. The real bridge
+    // lives at window.aerie.electron.system.restartBackend
+    // (preload.js → ipcRenderer.invoke("system:restart-backend")
+    //  → main.js ipcMain.handle → POST /api/system/restart).
+    if (!window.aerie || !window.aerie.electron || !window.aerie.electron.system || !window.aerie.electron.system.restartBackend) {
       if (st) st.textContent = "IPC 不可用";
       return;
     }
     if (btn) { btn.disabled = true; }
     if (st) { st.textContent = "正在重启后端…"; st.style.color = "var(--warning, #f39c12)"; }
     try {
-      const r = await window.aerie.invoke("system:restart-backend");
+      const r = await window.aerie.electron.system.restartBackend();
       if (r && r.error) {
         if (st) { st.textContent = "重启失败: " + r.error; st.style.color = "var(--danger, #e74c3c)"; }
       } else {
@@ -105,17 +126,34 @@ class SettingsPanel {
       const theme = s.theme || {};
       const startup = s.startup || {};
       const proactive = s.proactive || {};
+      const weather = s.weather || {};
 
       document.getElementById("setting-theme").value = theme.current || "yita-pink";
       document.getElementById("setting-auto-start").checked = startup.auto_start === true;
       document.getElementById("setting-start-minimized").checked = startup.start_minimized === true;
       document.getElementById("setting-proactive").checked = proactive.enabled !== false;
+
+      // R7.1: my-location picker.
+      const cityInput = document.getElementById("setting-weather-city");
+      const hint = document.getElementById("setting-weather-hint");
+      if (cityInput) {
+        cityInput.value = (weather.city || "").trim();
+      }
+      if (hint) {
+        const auto = (weather.auto_detected || "").trim();
+        hint.textContent = (weather.city || "").trim()
+          ? "已使用手动城市 / Using manual override."
+          : (auto
+              ? "已自动检测到: " + auto + " (留空将使用) / Auto-detected: " + auto + " (leave empty to use)"
+              : "留空时简报会显示通过 IP 自动检测到的城市。/ Leave empty for IP auto-detect.");
+      }
     } catch (e) {
       console.warn("settings load failed", e);
     }
   }
 
   async save() {
+    const cityRaw = (document.getElementById("setting-weather-city")?.value || "").trim();
     const data = {
       theme: {
         current: document.getElementById("setting-theme").value,
@@ -126,6 +164,10 @@ class SettingsPanel {
       },
       proactive: {
         enabled: document.getElementById("setting-proactive").checked,
+      },
+      // R7.1: empty string ⇒ resolver falls back to IP auto-detect.
+      weather: {
+        city: cityRaw,
       },
     };
     try {
@@ -264,6 +306,83 @@ class SettingsPanel {
     }
     if (saveBtn) saveBtn.addEventListener("click", () => this.savePersona());
     this.loadPersona();
+    // R7.5: user-side avatar + name. Pure localStorage, no backend.
+    this._initUserControls();
+  }
+
+  _initUserControls() {
+    const uploadBtn = document.getElementById("user-avatar-upload");
+    const fileInput = document.getElementById("user-avatar-file");
+    const saveBtn = document.getElementById("user-save-btn");
+    const nameInput = document.getElementById("user-name");
+    const preview = document.getElementById("user-avatar-preview");
+    // Pull cached state into the form fields.
+    if (nameInput && window._chat) {
+      const cached = (window._chat._userName || "").trim();
+      if (cached) nameInput.value = cached === "你" ? "" : cached;
+    }
+    if (preview && window._chat && window._chat._userDataurl) {
+      preview.src = window._chat._userDataurl;
+    }
+    if (uploadBtn && fileInput) {
+      uploadBtn.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", (e) => this._onUserAvatarPick(e));
+    }
+    if (saveBtn) saveBtn.addEventListener("click", () => this._saveUser());
+  }
+
+  _setUserStatus(text, ok = true) {
+    const st = document.getElementById("user-status");
+    if (!st) return;
+    st.textContent = text;
+    st.style.color = ok ? "var(--success)" : "var(--error)";
+    if (text) setTimeout(() => { if (st.textContent === text) st.textContent = ""; }, 4000);
+  }
+
+  async _onUserAvatarPick(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      this._setUserStatus("文件过大（>2MB）", false);
+      e.target.value = "";
+      return;
+    }
+    if (!/^image\/(png|jpeg)$/.test(file.type)) {
+      this._setUserStatus("只支持 PNG / JPG", false);
+      e.target.value = "";
+      return;
+    }
+    this._setUserStatus("设置中… / Setting…", true);
+    // Read as dataURL and push straight into the chat cache.
+    const dataurl = await new Promise((resolve) => {
+      try {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result || ""));
+        r.onerror = () => resolve("");
+        r.readAsDataURL(file);
+      } catch (_) { resolve(""); }
+    });
+    if (!dataurl) {
+      this._setUserStatus("读取失败 / Read failed", false);
+      e.target.value = "";
+      return;
+    }
+    const preview = document.getElementById("user-avatar-preview");
+    if (preview) preview.src = dataurl;
+    if (window._chat && typeof window._chat.setUserAvatar === "function") {
+      window._chat.setUserAvatar(dataurl);
+    }
+    this._setUserStatus("头像已更新 · Avatar updated", true);
+    e.target.value = "";
+  }
+
+  _saveUser() {
+    const nameInput = document.getElementById("user-name");
+    const raw = (nameInput && nameInput.value || "").trim();
+    if (window._chat && typeof window._chat.setUserName === "function") {
+      window._chat.setUserName(raw);
+    }
+    this._setUserStatus("已记住你 · She'll remember you", true);
   }
 
   _setPersonaStatus(text, ok = true) {
@@ -312,6 +431,19 @@ class SettingsPanel {
       return;
     }
     this._setPersonaStatus("上传中… / Uploading…", true);
+    // R7.5 fix: read the file as dataURL RIGHT NOW so the preview
+    // updates immediately — the previous version only set
+    // `img.src = data.url` which is a relative HTTP path that
+    // Electron's file:// cannot resolve, producing a broken-image
+    // icon in the settings panel even after a successful upload.
+    const localDataUrl = await new Promise((resolve) => {
+      try {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result || ""));
+        r.onerror = () => resolve("");
+        r.readAsDataURL(file);
+      } catch (_) { resolve(""); }
+    });
     // R7.0 双通道：先走 IPC，失败再降级到 fetch。
     // IPC 路径由 main.js 的 ipcMain.handle("api:upload") 实现，
     // 它会把 multipart bytes 直发到 Python /api/persona/avatar，
@@ -328,13 +460,33 @@ class SettingsPanel {
         });
         if (r && r.status && r.status >= 200 && r.status < 300) {
           const data = r.data || {};
+          // R7.5 fix: prefer the inline dataURL from the response
+          // (server now returns it). Fall back to our locally-read
+          // dataURL, then to the HTTP URL (which only works in
+          // non-Electron contexts).
+          const finalSrc = data.avatar_dataurl || localDataUrl || data.url;
           const img = document.getElementById("persona-avatar-preview");
-          if (img) img.src = data.url + (data.url.indexOf("?") >= 0 ? "&_t=" : "?_t=") + Date.now();
+          if (img) img.src = finalSrc;
+          // Cache the dataURL locally so the chat view picks it up
+          // instantly (no /api/persona round-trip) and so a reload
+          // shows the same image before the backend responds.
+          if (data.avatar_dataurl && window._chat
+              && typeof window._chat._writeLocalAvatar === "function") {
+            window._chat._writeLocalAvatar("persona", data.avatar_dataurl);
+          } else if (localDataUrl && window._chat
+              && typeof window._chat._writeLocalAvatar === "function") {
+            window._chat._writeLocalAvatar("persona", localDataUrl);
+          }
           this._setPersonaStatus("头像已更新 · Avatar updated", true);
-          // R7.0: broadcast so chat.js refreshes its master avatar
-          // immediately, without waiting for the 30s poll.
+          // R7.5 fix: ship the dataURL in the event detail so chat.js
+          // can update its cache + DOM in one frame, without waiting
+          // for the next 30s poll.
           window.dispatchEvent(new CustomEvent("aerie:persona-updated", {
-            detail: { avatar_url: data.url, source: "settings" },
+            detail: {
+              avatar_url: data.url,
+              avatar_dataurl: data.avatar_dataurl || localDataUrl,
+              source: "settings",
+            },
           }));
           return;
         }
@@ -354,12 +506,24 @@ class SettingsPanel {
       });
       const data = await resp.json().catch(() => ({}));
       if (resp.ok && data && data.status === "ok") {
+        const finalSrc = data.avatar_dataurl || localDataUrl || data.url;
         const img = document.getElementById("persona-avatar-preview");
-        if (img) img.src = data.url + (data.url.indexOf("?") >= 0 ? "&_t=" : "?_t=") + Date.now();
+        if (img) img.src = finalSrc;
+        if (data.avatar_dataurl && window._chat
+            && typeof window._chat._writeLocalAvatar === "function") {
+          window._chat._writeLocalAvatar("persona", data.avatar_dataurl);
+        } else if (localDataUrl && window._chat
+            && typeof window._chat._writeLocalAvatar === "function") {
+          window._chat._writeLocalAvatar("persona", localDataUrl);
+        }
         this._setPersonaStatus("头像已更新 · Avatar updated (fallback)", true);
-        // R7.0: same broadcast as the IPC path
+        // R7.5 fix: same as the IPC path
         window.dispatchEvent(new CustomEvent("aerie:persona-updated", {
-          detail: { avatar_url: data.url, source: "settings-fallback" },
+          detail: {
+            avatar_url: data.url,
+            avatar_dataurl: data.avatar_dataurl || localDataUrl,
+            source: "settings-fallback",
+          },
         }));
         return;
       }

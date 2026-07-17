@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld("aerie", {
     onOpenTab: (cb) => {
       ipcRenderer.on("ui:open-tab", (_event, tab) => cb(tab));
     },
+    // R6.6 / v2.2: one-click backend restart bridge. The handler
+    // lives in main.js (ipcMain.handle("system:restart-backend"))
+    // and ultimately calls /api/system/restart on the Python side.
+    system: {
+      restartBackend: () => ipcRenderer.invoke("system:restart-backend"),
+    },
     // Block-4A R1.6 bridge: tray "打开今日简报" or boot 8s later → pop brief iframe
     onBriefShow: (cb) => {
       ipcRenderer.on("brief:show", (_event, data) => cb(data || {}));

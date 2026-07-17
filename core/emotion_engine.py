@@ -11,6 +11,7 @@ Aligned with System_Features.md §11 and Ita.md §8-9.
 from __future__ import annotations
 import json
 import logging
+import random
 import time
 from typing import Any
 
@@ -363,6 +364,25 @@ class EmotionEngine:
             "eruption": eruption,
             "panel": self.threshold_engine.get_panel_text(),
         }
+
+    def idle_tick(self) -> dict:
+        """R7.5: periodic background tick for dashboard liveness.
+
+        - EMA: 0.98 * current + 0.02 * baseline (gentle pull toward
+          neutral so PAD eventually settles without strong signals).
+        - plus tiny Gaussian noise (sigma=0.01) so the dashboard never
+          looks frozen.
+        - No LLM call, no DB write here (caller decides when to snapshot
+          via state_store.snapshot(trigger_event="idle_tick")).
+        Returns the new state for inspection.
+        """
+        for k in ("P", "A", "D"):
+            cur = float(self._state.get(k, 0.0))
+            base = float(self._baseline.get(k, 0.0))
+            ema = 0.98 * cur + 0.02 * base
+            noise = random.gauss(0.0, 0.01)
+            self._state[k] = max(-0.95, min(0.95, ema + noise))
+        return dict(self._state)
 
     # ── Text Tuning ────────────────────────────────
 

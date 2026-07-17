@@ -28,4 +28,18 @@
   --text-500: #886677;
   --text-700: #3c3c43;
   --text-800: #333333;
+  /* R7.3: Liquid Glass tokens — semi-transparent layers that let the
+     underlying main app show through (backdrop-filter: blur). All glass
+     surfaces stack: --glass-bg-1 (drawer shell) > --glass-bg-2 (rows) >
+     --glass-bg-3 (pills/thumbs). Border is a 1px white highlight. */
+  --glass-blur: blur(24px) saturate(160%);
+  --glass-bg-1: rgba(255, 255, 255, 0.55);
+  --glass-bg-2: rgba(255, 255, 255, 0.32);
+  --glass-bg-3: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-highlight: rgba(255, 255, 255, 0.7);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6),
+                  inset 1px 0 0 rgba(255, 255, 255, 0.4),
+                  inset -1px 0 0 rgba(255, 255, 255, 0.18);
+  --glass-tint: 0deg; /* hue-rotate filter for theme-tinted glass */
 }

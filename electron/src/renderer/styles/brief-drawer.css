@@ -1,0 +1,845 @@
+/* Aerie · 云栖 — brief-drawer styles (R7.3 Liquid Glass)
+   Self-contained right-side drawer that slides in over the main app.
+
+   Visual contract (R7.3):
+   - All glass surfaces use --glass-bg-1/2/3 tokens (defined per theme)
+     and --glass-blur to refract the underlying main app.
+   - 1px white highlight border (--glass-border) + 1px top inset
+     highlight (--glass-shadow) replaces the old drop shadow.
+   - Spring curve cubic-bezier(0.34, 1.32, 0.64, 1) for snappy entry.
+   - Cards become "rows" — no white background, just an inset glow.
+   - @supports not (backdrop-filter) fallback to a solid --color-bg
+     surface (Windows 7/8/older Electron).
+*/
+
+:root {
+  --brief-drawer-radius: 22px;
+  --brief-row-radius: 14px;
+  --brief-pill-radius: 10px;
+  --brief-ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --brief-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── backdrop (scrim) ───────────────────────────── */
+.brief-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.06) 30%,
+    rgba(0, 0, 0, 0.18) 100%
+  );
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.36s var(--brief-ease-out),
+              visibility 0.36s var(--brief-ease-out);
+  z-index: 9000;
+}
+.brief-drawer-backdrop.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ── drawer shell (Liquid Glass) ───────────────── */
+.brief-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 92vw;
+  background: var(--glass-bg-1);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  color: var(--color-text);
+  border-top-left-radius: var(--brief-drawer-radius);
+  border-bottom-left-radius: var(--brief-drawer-radius);
+  /* 1px outer halo + 1px top white highlight + 1px left/right light edge.
+     This single inset stack is what makes it look like glass instead of
+     a flat panel. */
+  box-shadow: var(--glass-shadow),
+              -8px 0 32px rgba(0, 0, 0, 0.08);
+  border-left: 1px solid var(--glass-border);
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  transform: translateX(calc(100% + var(--brief-drawer-radius)));
+  transition: transform 0.5s var(--brief-ease-spring),
+              width 0.5s var(--brief-ease-spring),
+              max-width 0.5s var(--brief-ease-spring),
+              box-shadow 0.4s ease;
+  z-index: 9001;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  filter: hue-rotate(var(--glass-tint));
+}
+.brief-drawer.is-open {
+  transform: translateX(0);
+}
+
+/* R7.3: expanded mode (full-width) keeps the same glass, just wider. */
+.brief-drawer.brief-drawer--expanded {
+  width: 92vw;
+  max-width: 880px;
+  border-top-left-radius: 26px;
+  border-bottom-left-radius: 26px;
+  box-shadow: var(--glass-shadow),
+              -16px 0 56px rgba(0, 0, 0, 0.14);
+}
+.brief-drawer.brief-drawer--expanded .brief-drawer__body {
+  padding: 18px 26px 28px;
+}
+.brief-drawer.brief-drawer--expanded .brief-drawer__row {
+  padding: 14px 18px 12px;
+  margin-bottom: 14px;
+}
+
+/* Fallback: Windows 7/8 + some Electron 18 environments don't render
+   backdrop-filter at all. Show a solid panel with a 1px border so the
+   drawer is still readable, just not refractive. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .brief-drawer {
+    background: var(--color-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .brief-drawer-backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.32);
+  }
+}
+
+/* ── brand bar (self-painted titlebar) ─────────── */
+.brief-drawer__bar {
+  flex: 0 0 auto;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 16px;
+  background: var(--glass-bg-3);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+  -webkit-app-region: drag;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+}
+/* 1px tinted top highlight in the brand color. Uses a pseudo-element so
+   it doesn't fight with border shorthand. */
+.brief-drawer__bar::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-primary) 50%,
+    transparent 100%
+  );
+  opacity: 0.45;
+  pointer-events: none;
+}
+.brief-drawer__bar-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.brief-drawer__logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px var(--glass-border),
+              0 1px 2px rgba(0, 0, 0, 0.08);
+  background: var(--color-surface);
+}
+.brief-drawer__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+.brief-drawer__sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  margin-left: 2px;
+  font-weight: 400;
+}
+.brief-drawer__bar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+.brief-drawer__icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: var(--glass-bg-2);
+  color: var(--color-text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s var(--brief-ease-out),
+              color 0.2s var(--brief-ease-out),
+              transform 0.28s var(--brief-ease-spring),
+              border-color 0.2s ease;
+}
+.brief-drawer__icon-btn:hover {
+  background: var(--glass-bg-3);
+  color: var(--color-text);
+  border-color: var(--glass-border);
+  transform: scale(1.06);
+}
+.brief-drawer__icon-btn:active {
+  transform: scale(0.94);
+}
+.brief-drawer__icon-btn--close:hover {
+  background: color-mix(in srgb, var(--color-danger, #E84A5F) 14%, transparent);
+  color: var(--color-danger, #E84A5F);
+  border-color: color-mix(in srgb, var(--color-danger, #E84A5F) 30%, transparent);
+  transform: rotate(90deg) scale(1.06);
+}
+.brief-drawer__icon-btn svg {
+  transition: transform 0.32s var(--brief-ease-spring);
+}
+.brief-drawer__icon-btn.is-spinning svg {
+  transform: rotate(360deg);
+  transition: transform 0.9s linear;
+}
+.brief-drawer__icon-btn.is-active {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+/* ── body scroll area ──────────────────────────── */
+.brief-drawer__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 16px 28px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+  transition: padding 0.5s var(--brief-ease-spring);
+}
+.brief-drawer__body::-webkit-scrollbar { width: 6px; }
+.brief-drawer__body::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+.brief-drawer__body::-webkit-scrollbar-track { background: transparent; }
+
+/* ── greeting row ──────────────────────────────── */
+.brief-drawer__greet {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 2px 4px;
+}
+.brief-drawer__greet-text {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.3px;
+  line-height: 1.25;
+}
+.brief-drawer__greet-sun {
+  color: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.8;
+}
+.brief-drawer__date {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  margin: 0 2px 6px;
+  font-weight: 400;
+}
+.brief-drawer__date svg { color: var(--color-text-muted); flex: 0 0 auto; }
+.brief-drawer__date span { letter-spacing: 0.2px; }
+
+/* R7.3: location pill — shows where the weather city came from, so the
+   user can immediately tell whether the IP/manual override worked. */
+.brief-drawer__loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 2px 18px;
+  padding: 4px 9px 4px 7px;
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--glass-shadow);
+  cursor: default;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.brief-drawer__loc:hover {
+  background: var(--glass-bg-3);
+  color: var(--color-text);
+}
+.brief-drawer__loc svg { color: var(--color-primary); flex: 0 0 auto; }
+.brief-drawer__loc-city {
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 11px;
+}
+.brief-drawer__loc-tag {
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* ── section row (replaces old "card") ─────────── */
+.brief-drawer__row {
+  position: relative;
+  background: var(--glass-bg-2);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--brief-row-radius);
+  padding: 12px 14px 10px;
+  margin-bottom: 10px;
+  box-shadow: var(--glass-shadow);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: briefRowIn 0.5s var(--brief-ease-spring) both;
+  animation-delay: calc(var(--brief-i, 0) * 60ms + 80ms);
+  transition: transform 0.28s var(--brief-ease-spring),
+              box-shadow 0.28s var(--brief-ease-out),
+              border-color 0.2s ease,
+              background 0.2s ease;
+}
+/* 0.5px top highlight in the brand color — this is the "wet" edge of
+   real glass under a light source. */
+.brief-drawer__row::before {
+  content: "";
+  position: absolute;
+  top: 0.5px; left: 12px; right: 12px;
+  height: 0.5px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-primary) 50%,
+    transparent 100%
+  );
+  opacity: 0.35;
+  pointer-events: none;
+  border-radius: 1px;
+}
+.brief-drawer__row:hover {
+  transform: translateY(-1px);
+  background: var(--glass-bg-3);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--glass-border));
+  box-shadow: var(--glass-shadow),
+              0 4px 12px color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+@keyframes briefRowIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* weather row uses a slightly warmer tint */
+.brief-drawer__row--weather {
+  background: linear-gradient(
+    135deg,
+    var(--glass-bg-2) 0%,
+    color-mix(in srgb, var(--color-primary) 10%, var(--glass-bg-2)) 100%
+  );
+}
+
+.brief-drawer__row-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8px;
+  letter-spacing: 0.2px;
+}
+.brief-drawer__row-title svg {
+  color: var(--color-primary);
+  flex: 0 0 auto;
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--color-primary) 30%, transparent));
+}
+.brief-drawer__row-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--glass-bg-3);
+  border: 1px solid var(--glass-border);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* ── list items ───────────────────────────────── */
+.brief-drawer__list {
+  list-style: none;
+  margin: 6px 0 8px;
+  padding: 0;
+}
+.brief-drawer__item {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-text);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--glass-border);
+  word-break: break-word;
+  transition: color 0.2s ease, padding-left 0.22s var(--brief-ease-spring);
+}
+.brief-drawer__item:last-child { border-bottom: none; }
+.brief-drawer__item:hover {
+  color: var(--color-primary);
+  padding-left: 4px;
+}
+.brief-drawer__item--empty {
+  color: var(--color-text-muted);
+  font-style: normal;
+  text-align: center;
+  padding: 14px 0;
+  border-bottom: none;
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  opacity: 0.75;
+}
+.brief-drawer__item a {
+  color: inherit;
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0 1px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  transition: background-size 0.3s var(--brief-ease-out);
+}
+.brief-drawer__item a:hover {
+  background-size: 100% 1px;
+  color: var(--color-primary);
+}
+
+/* ── feedback row (thumbs + comment) ───────────── */
+.brief-drawer__feedback {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+.brief-drawer__thumb {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-3);
+  color: var(--color-text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition: transform 0.2s var(--brief-ease-spring),
+              background 0.2s ease,
+              color 0.2s ease,
+              border-color 0.2s ease;
+}
+.brief-drawer__thumb:hover { transform: scale(1.12); }
+.brief-drawer__thumb:active { transform: scale(0.92); }
+.brief-drawer__thumb:disabled { cursor: default; opacity: 0.55; }
+.brief-drawer__thumb:disabled:hover { transform: none; }
+.brief-drawer__thumb--up.is-on {
+  background: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+.brief-drawer__thumb--down.is-on {
+  background: color-mix(in srgb, var(--color-danger, #E84A5F) 18%, transparent);
+  color: var(--color-danger, #E84A5F);
+  border-color: color-mix(in srgb, var(--color-danger, #E84A5F) 35%, transparent);
+}
+.brief-drawer__comment {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-3);
+  color: var(--color-text);
+  border-radius: 8px;
+  outline: none;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition: border-color 0.2s ease,
+              box-shadow 0.2s var(--brief-ease-spring),
+              background 0.2s ease;
+}
+.brief-drawer__comment::placeholder { color: var(--color-text-muted); opacity: 0.6; }
+.brief-drawer__comment:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--glass-border));
+  background: var(--glass-bg-1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+/* ── weather pill ──────────────────────────────── */
+.brief-drawer__weather {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: var(--glass-bg-3);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-radius: var(--brief-pill-radius);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.brief-drawer__weather-city {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.2px;
+}
+.brief-drawer__weather-temp {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-left: 6px;
+  letter-spacing: -0.5px;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--color-primary) 25%, transparent));
+}
+.brief-drawer__weather-desc {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: right;
+  flex: 1 1 auto;
+  margin-left: 12px;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+/* ── footer actions (glass strip) ──────────────── */
+.brief-drawer__footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  background: var(--glass-bg-3);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  position: relative;
+}
+.brief-drawer__footer::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 16px; right: 16px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-primary) 50%,
+    transparent 100%
+  );
+  opacity: 0.3;
+  pointer-events: none;
+}
+.brief-drawer__footer-text {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.2px;
+}
+.brief-drawer__footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brief-drawer__footer-link {
+  font-size: 12px;
+  color: var(--color-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: background 0.2s var(--brief-ease-out),
+              color 0.2s ease,
+              transform 0.2s var(--brief-ease-spring),
+              border-color 0.2s ease;
+}
+.brief-drawer__footer-link:hover {
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--glass-bg-3));
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--glass-border));
+  transform: translateY(-1px);
+}
+.brief-drawer__footer-link svg {
+  transition: transform 0.32s var(--brief-ease-spring);
+}
+.brief-drawer__footer-link:hover svg { transform: translate(2px, -2px); }
+.brief-drawer__footer-link.is-expanded svg { transform: rotate(180deg); }
+.brief-drawer__footer-link.is-expanded:hover svg {
+  transform: rotate(180deg) translate(2px, -2px);
+}
+
+/* ── skeleton loader (shimmer on glass) ────────── */
+.brief-drawer__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 2px 14px;
+}
+.brief-drawer__skeleton-card {
+  height: 92px;
+  border-radius: var(--brief-row-radius);
+  background: linear-gradient(
+    90deg,
+    var(--glass-bg-2) 0%,
+    var(--glass-bg-3) 50%,
+    var(--glass-bg-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: briefShimmer 1.6s ease-in-out infinite;
+  border: 1px solid var(--glass-border);
+}
+.brief-drawer__skeleton-card:nth-child(2) { animation-delay: 0.12s; }
+.brief-drawer__skeleton-card:nth-child(3) { animation-delay: 0.24s; }
+.brief-drawer__skeleton-card:nth-child(4) { animation-delay: 0.36s; }
+.brief-drawer__skeleton-card:nth-child(5) { animation-delay: 0.48s; }
+.brief-drawer__skeleton-dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 0 2px;
+}
+.brief-drawer__skeleton-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  opacity: 0.5;
+  animation: briefDot 1.2s ease-in-out infinite;
+}
+.brief-drawer__skeleton-dots span:nth-child(2) { animation-delay: 0.15s; }
+.brief-drawer__skeleton-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes briefShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes briefDot {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50%      { opacity: 0.9; transform: scale(1.15); }
+}
+
+/* ── error state (full-row glass retry) ────────── */
+.brief-drawer__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px 2px;
+  padding: 26px 18px;
+  text-align: center;
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--brief-row-radius);
+  box-shadow: var(--glass-shadow);
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  letter-spacing: 0.2px;
+}
+.brief-drawer__error-title {
+  font-size: 14px;
+  color: var(--color-text);
+  font-weight: 600;
+}
+.brief-drawer__error-detail {
+  font-size: 11px;
+  opacity: 0.7;
+  max-width: 280px;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.brief-drawer__error-retry {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--color-primary);
+  background: var(--glass-bg-3);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s var(--brief-ease-spring);
+}
+.brief-drawer__error-retry:hover {
+  background: color-mix(in srgb, var(--color-primary) 16%, var(--glass-bg-3));
+  transform: translateY(-1px);
+}
+
+/* ── location popover (inline city editor) ──────── */
+.brief-drawer__locpop {
+  position: absolute;
+  top: 50px;
+  right: 12px;
+  z-index: 9100;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  width: 220px;
+  background: var(--glass-bg-1);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: var(--glass-shadow),
+              0 8px 24px rgba(0, 0, 0, 0.12);
+  animation: briefPopIn 0.28s var(--brief-ease-spring) both;
+}
+.brief-drawer__locpop.is-open { display: flex; }
+.brief-drawer__locpop-title {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.brief-drawer__locpop-row {
+  display: flex;
+  gap: 6px;
+}
+.brief-drawer__locpop-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-3);
+  color: var(--color-text);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.brief-drawer__locpop-input:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--glass-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+.brief-drawer__locpop-save,
+.brief-drawer__locpop-cancel {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-3);
+  color: var(--color-text);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.18s var(--brief-ease-spring);
+}
+.brief-drawer__locpop-save {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border-color: var(--color-primary);
+}
+.brief-drawer__locpop-save:hover { transform: translateY(-1px); }
+.brief-drawer__locpop-cancel:hover { background: var(--glass-bg-2); }
+.brief-drawer__locpop-hint {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  opacity: 0.75;
+}
+
+@keyframes briefPopIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── brand mark in popover (R7.3) ─────────────── */
+.brief-drawer__locpop-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 2px;
+}
+.brief-drawer__locpop-brand-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 70%, transparent) 0%,
+    var(--color-primary) 100%
+  );
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary-fg);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 0 0 1px var(--glass-border);
+}
+.brief-drawer__locpop-brand-text {
+  font-size: 11px;
+  color: var(--color-text);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* ── respect prefers-reduced-motion ───────────── */
+@media (prefers-reduced-motion: reduce) {
+  .brief-drawer,
+  .brief-drawer__row,
+  .brief-drawer__item,
+  .brief-drawer__icon-btn,
+  .brief-drawer__footer-link,
+  .brief-drawer__locpop {
+    transition: none !important;
+    animation: none !important;
+  }
+}

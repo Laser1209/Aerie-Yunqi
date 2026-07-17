@@ -262,19 +262,55 @@
               <div class="pad-card-ring pad-card-ring--p">
                 <span class="pad-card-value">0.00</span>
               </div>
+              <span class="pad-card-raw" data-raw="P">P=+0.000</span>
               <span class="pad-card-label">愉悦度</span>
             </div>
             <div id="pad-a" class="pad-card">
               <div class="pad-card-ring pad-card-ring--a">
                 <span class="pad-card-value">0.00</span>
               </div>
+              <span class="pad-card-raw" data-raw="A">A=+0.000</span>
               <span class="pad-card-label">唤醒度</span>
             </div>
             <div id="pad-d" class="pad-card">
               <div class="pad-card-ring pad-card-ring--d">
                 <span class="pad-card-value">0.00</span>
               </div>
+              <span class="pad-card-raw" data-raw="D">D=+0.000</span>
               <span class="pad-card-label">支配度</span>
+            </div>
+          </div>
+
+          <!-- R7.5: Live-flow bars showing the derivative dP/dt, dA/dt, dD/dt.
+               Width encodes the magnitude; green = positive, red = negative. -->
+          <div class="emotion-flow-bars" id="emotion-flow-bars">
+            <h3 class="emotion-flow-title">实时流通量 / Live flow</h3>
+            <div class="emotion-flow-row" data-flow="P">
+              <span class="emotion-flow-key">dP/dt</span>
+              <div class="emotion-flow-track">
+                <div class="emotion-flow-center"></div>
+                <div class="emotion-flow-fill" data-side="pos"></div>
+                <div class="emotion-flow-fill" data-side="neg"></div>
+              </div>
+              <span class="emotion-flow-value" data-flow-val="P">+0.000</span>
+            </div>
+            <div class="emotion-flow-row" data-flow="A">
+              <span class="emotion-flow-key">dA/dt</span>
+              <div class="emotion-flow-track">
+                <div class="emotion-flow-center"></div>
+                <div class="emotion-flow-fill" data-side="pos"></div>
+                <div class="emotion-flow-fill" data-side="neg"></div>
+              </div>
+              <span class="emotion-flow-value" data-flow-val="A">+0.000</span>
+            </div>
+            <div class="emotion-flow-row" data-flow="D">
+              <span class="emotion-flow-key">dD/dt</span>
+              <div class="emotion-flow-track">
+                <div class="emotion-flow-center"></div>
+                <div class="emotion-flow-fill" data-side="pos"></div>
+                <div class="emotion-flow-fill" data-side="neg"></div>
+              </div>
+              <span class="emotion-flow-value" data-flow-val="D">+0.000</span>
             </div>
           </div>
 
@@ -404,7 +440,7 @@
       <section id="panel-about" class="tab-panel">
         <div class="about-panel">
           <div class="about-hero">
-            <img src="../../../Aerie · 云栖.svg" alt="" class="about-logo">
+            <img src="assets/logo.png" alt="" class="about-logo">
             <h1>Aerie · 云栖</h1>
             <p class="about-version">v9.0.0</p>
             <p class="about-desc">「云端栖身，身心皆有归处」</p>
@@ -473,6 +509,46 @@
                 <button id="persona-save-btn" class="btn btn-primary" type="button">保存她 · Save</button>
               </div>
               <div id="persona-status" class="settings-status" style="font-size:12px;color:var(--success);margin-top:6px;"></div>
+            </div>
+            <!-- R7.5: User (master) avatar + name. Pure UI — persisted in
+                 localStorage on the renderer side, no backend round-trip. -->
+            <div class="settings-group settings-group--user">
+              <h3 class="settings-section-title">你的样子 · Your Appearance</h3>
+              <p class="settings-hint">这是你在她眼中的样子。只影响聊天界面，不会上传到任何地方。/ Purely local. Not uploaded anywhere.</p>
+              <div class="persona-edit">
+                <div class="persona-avatar">
+                  <img id="user-avatar-preview" src="/assets/avatar_ita_default.png" alt="" data-default-src="/assets/avatar_ita_default.png">
+                  <input type="file" id="user-avatar-file" accept="image/png,image/jpeg" hidden>
+                  <button id="user-avatar-upload" class="btn btn-secondary" type="button">换头像 · Change</button>
+                </div>
+                <div class="persona-fields">
+                  <label>你的名字 · Your Name <input type="text" id="user-name" maxlength="20" placeholder="你"></label>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button id="user-save-btn" class="btn btn-primary" type="button">保存我 · Save</button>
+              </div>
+              <div id="user-status" class="settings-status" style="font-size:12px;color:var(--success);margin-top:6px;"></div>
+            </div>
+            <!-- R7.1: my-location picker. Empty input ⇒ IP auto-detect. -->
+            <div class="settings-group settings-group--location">
+              <label>我的位置 / My Location</label>
+              <div class="settings-location-row">
+                <input type="text" id="setting-weather-city"
+                       placeholder="留空 = IP 自动定位 / empty = IP auto-detect"
+                       maxlength="40" autocomplete="off">
+                <button type="button" id="setting-weather-reset"
+                        class="btn btn-secondary btn-icon"
+                        title="恢复 IP 自动定位 / Reset to IP auto-detect">
+                  <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="settings-hint" id="setting-weather-hint">
+                留空时简报会显示通过 IP 自动检测到的城市。/ Leave empty for IP auto-detect.
+              </p>
             </div>
             <div class="settings-group">
               <label>主题</label>
@@ -680,6 +756,11 @@
   </div>
 </div>
 
+<!-- R7.4: Markdown rendering stack for chat (marked + DOMPurify + highlight.js) -->
+<link rel="stylesheet" href="vendor/github.min.css">
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script src="vendor/highlight.min.js"></script>
 <script src="js/chat.js"></script>
 <script src="js/chat-voice.js"></script>
 <script src="js/chat-uploader.js"></script>
@@ -691,13 +772,11 @@
 <script src="js/settings.js"></script>
 <script src="js/data-viewer.js"></script>
 <script src="js/cognition-panel.js"></script>
-<script src="js/app.js"></script>
 <link rel="stylesheet" href="styles/cognition-panel.css">
 <link rel="stylesheet" href="styles/emotion-history.css">
-
-<!-- Block-4A R1.6: daily brief iframe (popped on brief:show IPC event) -->
-<iframe id="brief-frame" class="brief-frame" hidden
-        src="daily-brief.html" title="今日简报 / Daily Brief"
-        sandbox="allow-scripts allow-same-origin"></iframe>
+<!-- R7.1: brief drawer (replaces legacy iframe + popup + detail window) -->
+<link rel="stylesheet" href="styles/brief-drawer.css">
+<script src="js/brief-drawer.js" defer></script>
+<script src="js/app.js"></script>
 </body>
 </html>

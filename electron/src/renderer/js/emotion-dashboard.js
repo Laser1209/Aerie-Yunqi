@@ -20,6 +20,9 @@ class EmotionDashboard {
     this._padHistory = null;   // Phase 9 Batch 5: cached history series
     this._persona = null;      // R6.4: cached persona for fallback defaults
     this._hasRendered = false; // R6.4: render fallback once before first fetch
+    // R7.5: track the previous tick's PAD so the flow bars can show
+    // dP/dt, dA/dt, dD/dt as derivatives of the live state.
+    this._prevPad = null;
   }
 
   init() {
@@ -146,6 +149,11 @@ class EmotionDashboard {
     this._setPADCard("pad-a", A, "唤醒度");
     this._setPADCard("pad-d", D, "支配度");
 
+    // R7.5: live flow bars show the derivative of PAD since the last
+    // 3s poll. Idle ticks from the backend produce small but visible
+    // deltas; chat replies produce larger spikes.
+    this._setFlowBars(P, A, D);
+
     // Emotion label — split icon + text (Phase 7: SVG)
     const labelEl = document.getElementById("emotion-label");
     const labelText = data.label || "neutral";
@@ -217,6 +225,76 @@ class EmotionDashboard {
     if (valEl) valEl.textContent = v.toFixed(2);
     const labEl = el.querySelector(".pad-card-label");
     if (labEl) labEl.textContent = label;
+    // R7.5: 3-decimal raw value row so users can see sub-1% deltas
+    // (e.g. P=0.010 vs P=0.000) that the ring collapses visually.
+    const rawEl = el.querySelector(".pad-card-raw");
+    if (rawEl) {
+      const key = rawEl.getAttribute("data-raw") || "";
+      const sign = v >= 0 ? "+" : "−";
+      const abs = Math.abs(v).toFixed(3);
+      rawEl.textContent = key + "=" + sign + abs;
+      rawEl.classList.toggle("pad-card-raw--pos", v > 0.0005);
+      rawEl.classList.toggle("pad-card-raw--neg", v < -0.0005);
+    }
+  }
+
+  // R7.5: live flow bars (dP/dt, dA/dt, dD/dt). Width encodes
+  // |delta|; the fill on the left half of the track means negative
+  // (red), on the right half means positive (green).
+  //
+  // SCALE was tuned for the original 10s backend tick; the dashboard
+  // now polls every 3s and the backend PAD tick also runs every 3s, so
+  // per-tick deltas land in the 0.001-0.02 range. SCALE=100 makes a
+  // 0.01 delta render as a 1% fill — small but readable. SCALE=25
+  // (the previous value) collapsed that to 0.25% which looked frozen.
+  //
+  // A 3-sample rolling average smooths the inevitable single-tick
+  // noise spikes (σ=0.01) so the bar doesn't twitch wildly.
+  _setFlowBars(P, A, D) {
+    const SCALE = 100;  // 1.0 delta → 100% track width (max ±50% each side)
+    const cur = { P: P, A: A, D: D };
+    if (!this._prevPad) {
+      this._prevPad = cur;
+      this._flowBuf = { P: [], A: [], D: [] };
+      this._writeFlow("P", 0);
+      this._writeFlow("A", 0);
+      this._writeFlow("D", 0);
+      return;
+    }
+    const raw = {
+      P: cur.P - this._prevPad.P,
+      A: cur.A - this._prevPad.A,
+      D: cur.D - this._prevPad.D,
+    };
+    this._prevPad = cur;
+    // Rolling buffer: keep last 3 samples, write the mean.
+    const buf = this._flowBuf;
+    const smooth = (key) => {
+      const arr = buf[key];
+      arr.push(raw[key]);
+      if (arr.length > 3) arr.shift();
+      return arr.reduce((s, v) => s + v, 0) / arr.length;
+    };
+    this._writeFlow("P", smooth("P"));
+    this._writeFlow("A", smooth("A"));
+    this._writeFlow("D", smooth("D"));
+  }
+
+  _writeFlow(key, delta) {
+    const SCALE = 100;
+    const row = document.querySelector('.emotion-flow-row[data-flow="' + key + '"]');
+    if (!row) return;
+    const posFill = row.querySelector('.emotion-flow-fill[data-side="pos"]');
+    const negFill = row.querySelector('.emotion-flow-fill[data-side="neg"]');
+    const valEl = row.querySelector('.emotion-flow-value[data-flow-val="' + key + '"]');
+    if (posFill) posFill.style.width = Math.max(0, Math.min(50, delta * SCALE)) + "%";
+    if (negFill) negFill.style.width = Math.max(0, Math.min(50, -delta * SCALE)) + "%";
+    if (valEl) {
+      const sign = delta >= 0 ? "+" : "−";
+      valEl.textContent = sign + Math.abs(delta).toFixed(3);
+      valEl.classList.toggle("emotion-flow-value--pos", delta > 0.0001);
+      valEl.classList.toggle("emotion-flow-value--neg", delta < -0.0001);
+    }
   }
 
   _setThresholdBar(slot, info) {

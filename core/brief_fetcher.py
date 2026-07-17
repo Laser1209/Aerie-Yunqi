@@ -340,12 +340,15 @@ async def fetch_cn_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[di
     return await _fetch_section("cn_news", RSS_SOURCES["cn_news"], limit)
 
 
-async def fetch_weather(city: str = "上海") -> dict | None:
+async def fetch_weather(city: str = "") -> dict | None:
     """Try the Baidu map MCP tool; fall back to None on failure.
 
-    R1.1 keeps the call dynamic (importlib) so the brief still runs when
-    the MCP server is offline.
+    R7.1: ``city`` defaults to empty so ``run_all`` (and any caller) can
+    pass ``city=None`` and the resolver kicks in. Hardcoding "上海" was
+    the root cause of the brief always saying 上海 for every user.
     """
+    from core.location_resolver import resolve_city
+    city = (city or resolve_city()).strip() or "上海"
     try:
         # Local import — `mcp_Bai_Du_Di_Tu` is only available on this machine.
         from mcp_Bai_Du_Di_Tu import map_weather  # type: ignore
@@ -400,11 +403,23 @@ def _limit_for_section(section: str, feedback: dict | None) -> int:
     return DEFAULT_LIMIT_PER_SECTION
 
 
-async def run_all(city: str = "上海", feedback: dict | None = None) -> dict:
+async def run_all(city: str | None = None, feedback: dict | None = None, limit: int | None = None) -> dict:
     """Concurrently fetch 5 sections within TOTAL_TIMEOUT_SEC.
+
+    R7.1: ``city=None`` triggers ``resolve_city()`` so the brief shows
+    the user's real city (IP-detected or manually overridden), not a
+    hardcoded 上海.
+
+    R7.2: optional ``limit`` overrides per-section caps. Drawer shows
+    3/section by default; the expanded "展开完整" mode passes ``limit=8``
+    so each section gets 8 fresh items. ``feedback`` (liked/disliked
+    sections) still narrows the cap further when set, so a disliked
+    section never grows back without the user re-liking it.
 
     Returns a dict ready for LLM compose_brief() consumption.
     """
+    from core.location_resolver import resolve_city
+    city = (city or resolve_city()).strip() or "上海"
     today = datetime.now().strftime("%Y-%m-%d")
     if feedback is None:
         # default: load yesterday's feedback to influence today's section depth
@@ -412,13 +427,21 @@ async def run_all(city: str = "上海", feedback: dict | None = None) -> dict:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         feedback = _load_feedback(yesterday)
 
+    def _cap(section: str) -> int:
+        """Per-section cap, with the user-supplied limit as the ceiling."""
+        feedback_cap = _limit_for_section(section, feedback)
+        if limit is None:
+            return feedback_cap
+        # Never shrink a section below what feedback wants (e.g. DISLIKED=1).
+        return max(feedback_cap, limit) if feedback_cap > 0 else limit
+
     try:
         result = await asyncio.wait_for(
             asyncio.gather(
-                fetch_ai_news(_limit_for_section("ai_news", feedback)),
-                fetch_it_news(_limit_for_section("it_news", feedback)),
-                fetch_intl_news(_limit_for_section("intl_news", feedback)),
-                fetch_cn_news(_limit_for_section("cn_news", feedback)),
+                fetch_ai_news(_cap("ai_news")),
+                fetch_it_news(_cap("it_news")),
+                fetch_intl_news(_cap("intl_news")),
+                fetch_cn_news(_cap("cn_news")),
                 fetch_weather(city),
                 return_exceptions=True,
             ),
@@ -558,134 +581,9 @@ def _escape(s: str) -> str:
     )
 
 
-def render_html(payload: dict) -> str:
-    """Render a full daily-brief HTML page for the 1280x800 detail window.
-
-    输入: run_all() 的输出 dict (date / ai_news / it_news / intl_news /
-    cn_news / weather / errors)。
-    输出: 完整 HTML 字符串（不依赖 jinja2，纯 f-string 拼装）。
-    """
-    date = payload.get("date", "")
-    sections = [
-        ("AI 动向 / AI Trends",   "ai_news",   payload.get("ai_news")),
-        ("IT 行业 / Tech Industry", "it_news",   payload.get("it_news")),
-        ("国际新闻 / International", "intl_news", payload.get("intl_news")),
-        ("国家新闻 / National",    "cn_news",   payload.get("cn_news")),
-    ]
-
-    def _items_html(items):
-        if not isinstance(items, list) or not items:
-            return '<p class="bd-empty">（暂无）</p>'
-        out = []
-        for i, it in enumerate(items, 1):
-            title = _escape((it.get("title") or "").strip())
-            summary = _escape((it.get("summary") or "").strip())
-            url = _escape(it.get("url") or "")
-            source = _escape(it.get("source") or "")
-            link = (
-                f'<a href="{url}" target="_blank" rel="noopener">{title}</a>'
-                if url else title
-            )
-            out.append(
-                f'<li class="bd-item">'
-                f'<span class="bd-idx">{i:02d}</span>'
-                f'<div class="bd-body"><h3 class="bd-title">{link}</h3>'
-                + (f'<p class="bd-summary">{summary}</p>' if summary else "")
-                + f'<span class="bd-src">{source}</span></div></li>'
-            )
-        return "<ul class='bd-list'>" + "".join(out) + "</ul>"
-
-    weather = payload.get("weather") or {}
-    w_city = _escape(weather.get("city", "—"))
-    w_desc = _escape(f"{weather.get('desc', '—')} · {weather.get('temp', '—')}℃")
-    w_hint = _escape(weather.get("suggestion", "") or "")
-
-    sections_html = "".join(
-        f'<section class="bd-section" id="bd-{sid}">'
-        f'<header><h2>{title}</h2><span class="bd-count">'
-        f'{len(items) if isinstance(items, list) else 0}</span></header>'
-        f'{_items_html(items)}</section>'
-        for (title, sid, items) in sections
-    )
-
-    errors = payload.get("errors") or {}
-    errors_html = ""
-    if errors:
-        items = "".join(f"<li>{_escape(k)}: {_escape(v)}</li>" for k, v in errors.items())
-        errors_html = (
-            f'<section class="bd-errors"><h3>抓取异常 / Fetch errors</h3>'
-            f'<ul>{items}</ul></section>'
-        )
-
-    return f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8" />
-<title>完整日报 / Full Daily Brief · {date}</title>
-<style>
-  body {{ font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-         background: #fafafa; color: #1a1a1a; margin: 0; padding: 24px; }}
-  h1 {{ font-size: 20px; margin: 0 0 4px 0; }}
-  .bd-meta {{ color: #888; font-size: 12px; margin-bottom: 18px; }}
-  .bd-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }}
-  .bd-section {{ background: #fff; border: 1px solid #eee; border-radius: 12px;
-                padding: 16px 18px; }}
-  .bd-section header {{ display: flex; justify-content: space-between;
-                        align-items: center; border-bottom: 1px dashed #eee;
-                        padding-bottom: 8px; margin-bottom: 10px; }}
-  .bd-section h2 {{ font-size: 14px; margin: 0; }}
-  .bd-count {{ font-size: 11px; color: #888; background: #f4f4f4;
-               border-radius: 999px; padding: 1px 8px; }}
-  .bd-list {{ list-style: none; padding: 0; margin: 0; display: flex;
-              flex-direction: column; gap: 10px; }}
-  .bd-item {{ display: flex; gap: 10px; }}
-  .bd-idx {{ font-size: 11px; color: #007aff; background: #e8f1ff;
-             border-radius: 6px; padding: 2px 6px; min-width: 22px;
-             text-align: center; font-family: ui-monospace, monospace; }}
-  .bd-title {{ font-size: 13.5px; margin: 0 0 4px 0; }}
-  .bd-title a {{ color: #1a1a1a; text-decoration: none;
-                 border-bottom: 1px dashed #aaa; }}
-  .bd-summary {{ font-size: 12px; color: #555; margin: 0 0 4px 0; }}
-  .bd-src {{ font-size: 10.5px; color: #aaa; }}
-  .bd-empty {{ color: #aaa; font-style: italic; padding: 8px 0; }}
-  .bd-weather {{ display: flex; gap: 12px; align-items: center;
-                 background: #fff; border: 1px solid #eee; border-radius: 12px;
-                 padding: 14px 18px; margin-top: 18px; }}
-  .bd-weather strong {{ font-size: 14px; }}
-  .bd-errors {{ margin-top: 18px; padding: 12px 16px; background: #fff8e1;
-                border: 1px solid #ffe082; border-radius: 8px; font-size: 12px; }}
-</style>
-</head>
-<body>
-<h1>完整日报 / Full Daily Brief</h1>
-<p class="bd-meta">日期 / Date: <strong>{date}</strong></p>
-<div class="bd-grid">
-  {sections_html}
-</div>
-<div class="bd-weather">
-  <strong>天气 / Weather</strong>
-  <span>{w_city}</span>
-  <span>{w_desc}</span>
-  <span style="color:#888; font-size: 12px;">{w_hint}</span>
-</div>
-{errors_html}
-</body>
-</html>"""
-
-
-def export_brief_html(date_str: str, payload: dict) -> str:
-    """Render + persist full HTML; return file path string.
-
-    Path-traversal guard via date_str regex.
-    """
-    import re
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-        raise ValueError(f"invalid date_str: {date_str!r}")
-    html = render_html(payload)
-    _DATA_BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
-    p = _DATA_BRIEFS_DIR / f"{date_str}.full.html"
-    p.write_text(html, encoding="utf-8")
-    return str(p)
+# R7.1: render_html() removed. The detail BrowserWindow that needed
+# it is gone; the brief-drawer renders client-side, so the backend no
+# longer produces HTML for the brief.
 
 
 # ══════════════════════════════════════════════════

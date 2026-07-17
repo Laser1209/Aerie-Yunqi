@@ -84,6 +84,12 @@ class CronScheduler:
         self._tasks: list[asyncio.Task] = []
         self._running = False
         self._dispatcher = None  # type: callable | None
+        # R7.5+: optional ProactiveJudge. If bound, _dispatch will consult
+        # it before calling the user dispatcher; otherwise falls back to
+        # the historical cron-only path.
+        self.judge: Any = None
+        # Optional: last Decision snapshot for observability (e2e + tests).
+        self.last_decision: Any = None
 
     def set_dispatcher(self, dispatcher) -> None:
         """Set the async dispatcher: dispatcher(scene_name, scene_config)."""
@@ -159,14 +165,48 @@ class CronScheduler:
     async def _dispatch(self, scene_name: str, scene_cfg: dict) -> bool:
         """Check policy and dispatch the push message.
 
+        R7.5+: when ``self.judge`` is bound, evaluate the scene with the
+        ProactiveJudge first. The Decision's tone + context_snapshot are
+        forwarded to the dispatcher as ``tone_hint`` / ``judge_context``
+        keys, so the LLM-side push generator can adapt wording. If the
+        Decision carries a ``suppress_reason``, the push is silently
+        skipped and ``last_decision`` is recorded for observability.
+
         Block-4A R1.5: support ``custom_dispatcher`` to bypass the default
         scene-based template path. Currently supported values:
           - "brief":     run brief_fetcher + compose_brief, then emit
                          "brief:show" event so the Electron renderer pops
                          the iframe. Does NOT push a QQ text message.
+        R8.0+: ``scene_cfg.get("force")`` (default False) makes the scene
+          bypass ProactiveJudge, PushPolicy.can_push, and daily_count
+          tracking. Intended for "boot greeting" / "first message" use
+          cases where the user explicitly wants unconditional send on
+          every launch (not timer-driven, not policy-gated).
         """
+        force = bool(scene_cfg.get("force"))
+
+        # ── R7.5+: Proactive judge gate ──
+        decision = None
+        if self.judge is not None and not force:
+            try:
+                decision = self.judge.evaluate(
+                    scene_name,
+                    context_override=scene_cfg.get("judge_override"),
+                )
+                self.last_decision = decision
+                if decision.suppress_reason:
+                    logger.debug(
+                        "[PushScheduler] Judge suppressed %s: %s (score=%s)",
+                        scene_name, decision.suppress_reason, decision.score,
+                    )
+                    return False
+            except Exception:
+                logger.exception(
+                    "[PushScheduler] ProactiveJudge failed; falling through"
+                )
+
         can_push, reason = self.policy.can_push(scene_name)
-        if not can_push:
+        if not can_push and not force:
             logger.debug(
                 "[PushScheduler] Skipped %s: %s", scene_name, reason,
             )
@@ -177,19 +217,39 @@ class CronScheduler:
         if cd == "brief":
             return await self._dispatch_brief(scene_name, scene_cfg)
         if cd == "desire_care":
-            return await self._dispatch_desire_text(scene_name, scene_cfg, kind="care")
+            return await self._dispatch_desire_text(
+                scene_name, scene_cfg, kind="care", decision=decision,
+            )
         if cd == "desire_voice":
-            return await self._dispatch_desire_text(scene_name, scene_cfg, kind="voice")
+            return await self._dispatch_desire_text(
+                scene_name, scene_cfg, kind="voice", decision=decision,
+            )
+        if cd == "boot_greeting":
+            # R7.5+: 应用启动后主动 QQ 推送
+            return await self._dispatch_desire_text(
+                scene_name, scene_cfg, kind="care", decision=decision,
+            )
 
         if not self._dispatcher:
             logger.warning("[PushScheduler] No dispatcher set for %s", scene_name)
             return False
 
+        # Forward judge context to the dispatcher so generate_push can
+        # pick up the tone (warm_with_light_flirt / collapse_seeking / ...).
+        forward_cfg = dict(scene_cfg)
+        if decision is not None:
+            forward_cfg["tone_hint"] = decision.tone
+            forward_cfg["judge_context"] = decision.context_snapshot
+
         try:
-            success = await self._dispatcher(scene_name, scene_cfg)
+            success = await self._dispatcher(scene_name, forward_cfg)
             if success:
                 self.policy.record(scene_name)
-                logger.info("[PushScheduler] Sent: %s", scene_name)
+                logger.info(
+                    "[PushScheduler] Sent: %s (tone=%s score=%s)",
+                    scene_name, decision.tone if decision else "?",
+                    decision.score if decision else "?",
+                )
                 return True
         except Exception:
             logger.exception("[PushScheduler] Dispatch error: %s", scene_name)
@@ -227,13 +287,21 @@ class CronScheduler:
             return False
 
     async def _dispatch_desire_text(
-        self, scene_name: str, scene_cfg: dict, kind: str
+        self,
+        scene_name: str,
+        scene_cfg: dict,
+        kind: str,
+        decision: Any | None = None,
     ) -> bool:
         """Block-4B R2.2: route desire-engine triggers to short text push.
 
         Uses Brain.generate_push for tone; if dispatcher (QQ client) is
         available, sends a single short message. Records on policy so the
         daily cap is honored.
+
+        R7.5+: when a ProactiveJudge Decision is provided, its
+        ``tone_hint`` is forwarded to the dispatcher so generate_push
+        picks up the per-scene tone (longing / collapse / ...).
         """
         try:
             template = scene_cfg.get("template", "")
@@ -244,8 +312,15 @@ class CronScheduler:
             if not self._dispatcher:
                 logger.warning("[PushScheduler] desire dispatcher missing")
                 return False
-            ok = await self._dispatcher(scene_name, {**scene_cfg, "template": template})
-            if ok:
+            forward = {**scene_cfg, "template": template}
+            if decision is not None:
+                forward["tone_hint"] = decision.tone
+                forward["judge_context"] = decision.context_snapshot
+            ok = await self._dispatcher(scene_name, forward)
+            if ok and not force:
+                # R8.0+: only record on policy for non-forced dispatches,
+                # so boot greetings don't pollute the daily_count / cooldown
+                # that gates timer-driven scenes.
                 self.policy.record(scene_name)
             return ok
         except Exception:
@@ -320,3 +395,9 @@ class PushScheduler:
 
     async def trigger(self, scene_name: str) -> bool:
         return await self.cron.trigger_scene(scene_name)
+
+    async def _dispatch(self, scene_name: str, scene_cfg: dict) -> bool:
+        """R7.5+: 透传 CronScheduler._dispatch,用于启动 hook 等
+        不经 cron / trigger 路径的 scene 触发。
+        """
+        return await self.cron._dispatch(scene_name, scene_cfg)

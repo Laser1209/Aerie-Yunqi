@@ -245,6 +245,36 @@ class CumulativeEmotionEngine:
             slot.last_decay_date = today
             logger.debug("%s decay -%.1f → %.1f", slot.label, slot.decay_per_day, slot.value)
 
+    def hourly_decay(self) -> None:
+        """R7.5 (legacy): hourly equivalent of daily_decay.
+
+        Kept for backward compatibility with any code path that still
+        calls it. Internally delegates to tick_decay(3600) so the
+        behavior is "1 hour of decay per call" — same as the previous
+        implementation. Prefer tick_decay(seconds) for new code so the
+        cadence matches the actual tick loop.
+        """
+        self.tick_decay(3600.0)
+
+    def tick_decay(self, seconds: float) -> None:
+        """R7.5+: natural decay proportional to elapsed time.
+
+        Decays each slot by ``decay_per_day * seconds / 86400`` (i.e.
+        a single call with seconds=86400 reproduces daily_decay()). This
+        way the cadence of the tick loop is decoupled from the decay
+        rate: at any frequency, the integrated 24h decay equals
+        decay_per_day as configured in persona_behavior.yaml.
+
+        Does NOT touch last_decay_date so daily_decay() will still mark
+        the next calendar-day cross when it next runs.
+        """
+        if seconds <= 0:
+            return
+        factor = seconds / 86400.0  # seconds_in_a_day
+        for slot in self.slots.values():
+            decay = slot.decay_per_day * factor
+            slot.value = max(0, slot.value - decay)
+
     def _erupt(self, slot: EmotionSlot, trigger: str) -> dict:
         """Handle eruption: reset value, adjust threshold (character wear)."""
         old_threshold = slot.threshold

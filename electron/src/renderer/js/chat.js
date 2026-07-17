@@ -16,8 +16,19 @@ class ChatManager {
     this._pendingAttachments = [];     // Phase 5: file attachments awaiting send
 
     // Block-2 A1: persona + master avatar cache
-    this._personaCache = { name: "伊塔", english_name: "Ita", avatar_url: "" };
+    // R7.5: avatar_dataurl is the base64 inline form. The renderer
+    // never goes through `<img src="/api/...">` because Electron's
+    // file:// protocol would resolve that to file:///api/... (a 404).
+    this._personaCache = { name: "伊塔", english_name: "Ita", avatar_url: "", avatar_dataurl: "" };
     this._masterAvatar = "";
+    // R7.5: user-side avatar + name. localStorage-only because these
+    // are pure UI affordances and don't need to round-trip to Python.
+    this._userDataurl = this._readLocalAvatar("user");
+    this._userName = (this._readLocalKey("user", "name") || "").trim() || "你";
+    // R7.5: cache the AI persona's dataURL in localStorage too so we
+    // don't have to wait for the backend round-trip on every startup.
+    const cached = this._readLocalAvatar("persona");
+    if (cached) this._personaCache.avatar_dataurl = cached;
 
     this._bindEvents();
     this._listenIPC();
@@ -42,8 +53,20 @@ class ChatManager {
     // R7.0: instant refresh on persona:updated event from settings.js.
     // Without this listener, an upload via the settings page only takes
     // effect after the 30s poll above — way too slow for the user.
-    window.addEventListener("aerie:persona-updated", () => {
-      try { this._loadPersona(); } catch (_) {}
+    // R7.5 fix: if the event detail ships an avatar_dataurl, push it
+    // straight into the cache + localStorage so the refresh is
+    // synchronous, not gated on a /api/persona round-trip.
+    window.addEventListener("aerie:persona-updated", (ev) => {
+      try {
+        const detail = (ev && ev.detail) || {};
+        if (detail.avatar_dataurl) {
+          this._personaCache.avatar_dataurl = detail.avatar_dataurl;
+          this._writeLocalAvatar("persona", detail.avatar_dataurl);
+          this._refreshAvatarsInDom();
+        } else {
+          this._loadPersona();
+        }
+      } catch (_) {}
     });
   }
 
@@ -102,12 +125,100 @@ class ChatManager {
           name: r.data.name || this._personaCache.name,
           english_name: r.data.english_name || this._personaCache.english_name,
           avatar_url: r.data.avatar_url || this._personaCache.avatar_url,
+          // R7.5: prefer the inline dataURL form. The backend always
+          // returns one when an avatar file exists, and using it
+          // bypasses the file:// + relative-path resolution issue.
+          avatar_dataurl: r.data.avatar_dataurl || this._personaCache.avatar_dataurl,
         };
+        // Persist into localStorage so a fresh launch has the image
+        // immediately, before the first /api/persona round-trip.
+        if (this._personaCache.avatar_dataurl) {
+          this._writeLocalAvatar("persona", this._personaCache.avatar_dataurl);
+        }
         // R6.6: refresh avatar src on every rendered assistant message
         // so a freshly uploaded avatar shows up without a window reload.
         this._refreshAvatarsInDom();
       }
     } catch (_) { /* fail-soft: keep defaults */ }
+  }
+
+  // R6.6: re-render every assistant / user avatar in the current
+  // message list. R7.5: now actually implemented (the previous version
+  // referenced this method but never defined it, so it threw and got
+  // swallowed by the try-catch — historical messages kept showing the
+  // stale avatar forever). R7.5 fix: placeholder uses first char of
+  // display name so it matches _render's logic.
+  _refreshAvatarsInDom() {
+    if (!this._el || !this._el.messages) return;
+    const ai = this._personaCache.avatar_dataurl || this._personaCache.avatar_url || "";
+    const user = this._userDataurl || this._masterAvatar || "";
+    const aiName = this._personaCache.name || "伊塔";
+    const userName = this._userName || "你";
+    const aiPlaceholder = (aiName || "伊").slice(0, 1);
+    const userPlaceholder = (userName || "你").slice(0, 1);
+    const aiImg = ai
+      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(ai)}" alt="" onerror="this.parentNode.innerHTML='<span class=&quot;chat-msg__avatar chat-msg__avatar--placeholder&quot; aria-hidden=&quot;true&quot;>${this._escapeHtml(aiPlaceholder)}</span>'">`
+      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${this._escapeHtml(aiPlaceholder)}</span>`;
+    const userImg = user
+      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(user)}" alt="" onerror="this.parentNode.innerHTML='<span class=&quot;chat-msg__avatar chat-msg__avatar--placeholder&quot; aria-hidden=&quot;true&quot;>${this._escapeHtml(userPlaceholder)}</span>'">`
+      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${this._escapeHtml(userPlaceholder)}</span>`;
+    const imgs = this._el.messages.querySelectorAll(".chat-msg__avatar");
+    imgs.forEach((img) => {
+      const wrap = img.closest(".chat-msg");
+      if (!wrap) return;
+      const role = wrap.classList.contains("chat-msg--assistant") ? "ai"
+        : wrap.classList.contains("chat-msg--user") ? "user"
+        : null;
+      if (role === "ai") {
+        img.outerHTML = aiImg;
+      } else if (role === "user") {
+        img.outerHTML = userImg;
+      }
+    });
+    // R7.5 fix: also refresh the name label so user-renamed display
+    // names show up on existing messages without a window reload.
+    const nameEls = this._el.messages.querySelectorAll(".chat-msg__name");
+    nameEls.forEach((el) => {
+      const wrap = el.closest(".chat-msg");
+      if (!wrap) return;
+      if (wrap.classList.contains("chat-msg--assistant")) {
+        el.textContent = aiName;
+      } else if (wrap.classList.contains("chat-msg--user")) {
+        el.textContent = userName;
+      }
+    });
+  }
+
+  // ── R7.5: localStorage helpers for user + persona avatar/name ──
+  // Avatar is stored as a dataURL so we never have to round-trip
+  // through a /api/... URL that Electron's file:// can't resolve.
+  _LS_KEY(side, field) { return "aerie." + side + "." + field; }
+  _readLocalKey(side, field) {
+    try { return window.localStorage.getItem(this._LS_KEY(side, field)) || ""; }
+    catch (_) { return ""; }
+  }
+  _writeLocalKey(side, field, value) {
+    try { window.localStorage.setItem(this._LS_KEY(side, field), String(value)); }
+    catch (_) { /* quota / private mode — non-fatal */ }
+  }
+  _readLocalAvatar(side) {
+    return this._readLocalKey(side, "avatar");
+  }
+  _writeLocalAvatar(side, dataurl) {
+    this._writeLocalKey(side, "avatar", dataurl);
+  }
+  // R7.5: allow settings.js (or anywhere) to push a new user avatar
+  // straight into the chat cache + DOM without a server round-trip.
+  setUserAvatar(dataurl) {
+    this._userDataurl = dataurl || "";
+    this._writeLocalAvatar("user", this._userDataurl);
+    this._refreshAvatarsInDom();
+  }
+  setUserName(name) {
+    const trimmed = (name || "").trim() || "你";
+    this._userName = trimmed;
+    this._writeLocalKey("user", "name", trimmed);
+    this._refreshAvatarsInDom();
   }
 
   // R6.6: re-render every message in the DOM with the current persona
@@ -412,19 +523,31 @@ class ChatManager {
 
     // Block-2 A1: avatar + name meta (above bubble)
     const isAssistant = msg.role === "assistant";
+    // R7.5 fix: always use the dataURL form (or the per-user dataURL).
+    // The HTTP /api/persona/avatar path is unusable under file:// in
+    // Electron (it resolves to file:///api/... and 404s, which used to
+    // show a broken-image icon). dataURL is a self-contained string
+    // the browser can always render.
     const displayName = isAssistant
       ? (this._personaCache && this._personaCache.name) || "伊塔"
-      : "你";
-    const avatarUrl = isAssistant
-      ? (this._personaCache && this._personaCache.avatar_url) || ""
-      : this._masterAvatar || "";
+      : this._userName || "你";
+    const aiAvatar = (this._personaCache && this._personaCache.avatar_dataurl)
+      || (this._personaCache && this._personaCache.avatar_url)
+      || "";
+    const userAvatar = this._userDataurl || this._masterAvatar || "";
+    const avatarUrl = isAssistant ? aiAvatar : userAvatar;
 
     let html = "";
     // Block-2 A1 + R6.4: avatar on outer side, name (small) above bubble,
     // bubble below name. Outer-side flip via flex-direction: row-reverse.
+    // R7.5 fix: onerror used to set visibility:hidden which also hid
+    // the placeholder span. Instead, on error we remove the broken
+    // <img> and the wrapper rebuilds as a placeholder. The placeholder
+    // is also the initial render when no avatar is set.
+    const placeholderText = isAssistant ? "伊" : (this._userName || "你").slice(0, 1);
     const avatarContent = avatarUrl
-      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(avatarUrl)}" alt="" onerror="this.style.visibility='hidden'">`
-      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${isAssistant ? "伊" : "你"}</span>`;
+      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(avatarUrl)}" alt="" onerror="this.parentNode.innerHTML='<span class=&quot;chat-msg__avatar chat-msg__avatar--placeholder&quot; aria-hidden=&quot;true&quot;>${this._escapeHtml(placeholderText)}</span>'">`
+      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${this._escapeHtml(placeholderText)}</span>`;
     html += `<div class="chat-msg__avatar-wrap">${avatarContent}</div>`;
     html += `<div class="chat-msg__body">`;
     html += `<div class="chat-msg__name">${this._escapeHtml(displayName)}</div>`;
@@ -457,7 +580,9 @@ class ChatManager {
       }
       html += "</div>";
     }
-    html += `<div class="chat-bubble">${this._escapeHtml(msg.content || "")}</div>`;
+    // R7.4: hand the bubble off to the new parser which splits out
+    // <action> / <thought> tags and runs markdown on the rest.
+    html += this._parseMessage(msg.content || "");
     html += `</div>`;  // close .chat-msg__body
     // Action menu trigger
     if (msg.id && !String(msg.id).startsWith("temp_")) {
@@ -490,7 +615,91 @@ class ChatManager {
       });
     }
 
+    // R7.4: re-scan any new <pre><code> blocks so highlight.js picks
+    // them up. highlight.js only auto-highlights on initial page load,
+    // so we re-trigger for every newly inserted message.
+    if (window.hljs && typeof window.hljs.highlightElement === "function") {
+      div.querySelectorAll("pre code").forEach((el) => {
+        try { window.hljs.highlightElement(el); } catch (_) {}
+      });
+    }
+
     this._el.messages.scrollTop = this._el.messages.scrollHeight;
+  }
+
+  /* R7.4: split a message into text / action / thought segments and
+     render each in its own bubble. Text segments get full markdown
+     treatment via marked + DOMPurify + highlight.js. Action/thought
+     segments are plain text in a smaller, centered glass row.
+     The three types appear in the order they were written, so a
+     single message can interleave dialogue and narration naturally. */
+  _parseMessage(content) {
+    if (!content) return "";
+    const tagRe = /<(action|thought)>([\s\S]*?)<\/\1>/g;
+    const parts = [];
+    let last = 0;
+    let m;
+    while ((m = tagRe.exec(content)) !== null) {
+      if (m.index > last) {
+        parts.push({ type: "text", body: content.slice(last, m.index) });
+      }
+      parts.push({
+        type: m[1] === "action" ? "action" : "thought",
+        body: (m[2] || "").trim(),
+      });
+      last = m.index + m[0].length;
+    }
+    if (last < content.length) {
+      parts.push({ type: "text", body: content.slice(last) });
+    }
+    // If no tags were found at all, fall back to the legacy single
+    // bubble so a totally plain message still works.
+    if (parts.length === 0) {
+      return `<div class="chat-bubble chat-bubble--text">${this._renderMarkdown("")}</div>`;
+    }
+    return parts
+      .map((p) => {
+        if (p.type === "text") {
+          return `<div class="chat-bubble chat-bubble--text">${this._renderMarkdown(p.body)}</div>`;
+        }
+        const esc = this._escapeHtml(p.body);
+        return `<div class="chat-bubble chat-bubble--${p.type}">${esc}</div>`;
+      })
+      .join("");
+  }
+
+  /* R7.4: run a text segment through marked + DOMPurify + highlight.js.
+     Falls back to a safe escape if any of those globals is missing
+     (e.g. when the file is loaded in a context that didn't get the
+     vendor scripts). */
+  _renderMarkdown(text) {
+    const body = text || "";
+    if (
+      !window.marked ||
+      !window.DOMPurify ||
+      !window.hljs
+    ) {
+      return this._escapeHtml(body);
+    }
+    try {
+      // marked v12: marked.parse returns a string; with langPrefix we
+      // match the class names highlight.js uses (hljs language-xxx).
+      const html = window.marked.parse(body, {
+        gfm: true,
+        breaks: true,
+        langPrefix: "hljs language-",
+      });
+      const safe = window.DOMPurify.sanitize(html, {
+        ADD_ATTR: ["class", "target", "rel"],
+        // Allow <pre>, <code>, <span>, <div>, <a>, <h1-h6>, <ul>, <ol>, <li>, <p>, <strong>, <em>, <blockquote>
+        // (these are all in DOMPurify's default allow-list, so no
+        // ADD_TAGS override is needed).
+      });
+      return safe;
+    } catch (e) {
+      console.warn("chat._renderMarkdown failed", e);
+      return this._escapeHtml(body);
+    }
   }
 
   _escapeHtml(text) {

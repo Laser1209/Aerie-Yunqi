@@ -1055,6 +1055,42 @@ async def settings_reset() -> dict:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# R7.3: dedicated city-set endpoint so the brief-drawer pin button can
+# write the weather city + bust the IP cache atomically. The previous
+# path (/api/settings PUT) does not clear data/cache/city.json, which
+# meant the next /api/brief/today still returned the cached IP city.
+@app.post("/api/location/set")
+async def location_set(request: Request) -> dict:
+    """Set the manual city override used by the daily brief weather.
+
+    Body: ``{"city": "上海"}`` (empty string clears the override).
+    Side effects:
+      1. Writes ``settings.yaml.weather.city`` (partial merge).
+      2. Deletes ``data/cache/city.json`` so the next call to
+         ``location_resolver.resolve_city()`` re-evaluates from
+         manual → IP instead of returning the stale cache.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json body"}, status_code=400)
+    city = str((body or {}).get("city") or "").strip()
+    try:
+        save_settings({"weather": {"city": city}})
+    except Exception as e:
+        return JSONResponse({"error": f"settings save failed: {e}"}, status_code=500)
+    # Bust the IP cache so resolve_city() picks up the new manual value
+    # immediately on the next /api/brief/today call.
+    try:
+        cache_file = Path("data/cache/city.json")
+        if cache_file.exists():
+            cache_file.unlink()
+            logger.info("location_set: cleared data/cache/city.json")
+    except Exception as e:
+        logger.warning("location_set: cache clear failed: %s", e)
+    return {"status": "ok", "city": city, "manual": bool(city)}
+
+
 # ── Anniversary ──────────────────────────────────────
 
 @app.get("/api/anniversary/list")
@@ -1242,17 +1278,46 @@ async def persona_avatar_upload(file: UploadFile = File(...)) -> dict:
         url = save_avatar_bytes(data, ext=ext)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-    return {"status": "ok", "url": url, "size": len(data)}
+    # R7.5: return the inline dataURL too so the renderer can update
+    # <img src> immediately without a follow-up GET /api/persona round
+    # trip. Saves one network hop and avoids the brief flash of the
+    # broken-image icon while /api/persona is in flight.
+    import base64 as _b64
+    dataurl = (
+        "data:" + file.content_type + ";base64,"
+        + _b64.b64encode(data).decode("ascii")
+    )
+    return {
+        "status": "ok",
+        "url": url,
+        "size": len(data),
+        "content_type": file.content_type,
+        "avatar_dataurl": dataurl,
+    }
 
 
 @app.get("/api/persona/avatar")
 async def persona_avatar_get() -> Response:
-    """Serve persona avatar bytes (or 404 if not set)."""
+    """Serve persona avatar bytes (or 404 if not set).
+
+    R7.5: use the actual file extension to set the correct
+    content-type. The previous version always returned image/png which
+    silently broke when the file on disk was a JPG wearing a .png
+    extension (it happens).
+    """
     pair = load_avatar_bytes()
     if not pair:
         return JSONResponse({"error": "not set"}, status_code=404)
     data, ct = pair
-    return Response(content=data, media_type=ct, headers={"Cache-Control": "no-cache"})
+    return Response(
+        content=data,
+        media_type=ct,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 # ── Daily Brief (Block-4A R1.4) ────────────────────────
@@ -1308,68 +1373,39 @@ async def brief_feedback(request: Request) -> dict:
     return {"status": "ok", "path": str(path)}
 
 
-# ── Block-5A: Export full brief HTML for the 1280x800 detail window ──
-@app.post("/api/brief/export")
-async def brief_export(request: Request) -> dict:
-    """Render the brief payload to standalone HTML and persist to data/briefs/.
-
-    Body: {"date": "YYYY-MM-DD", "payload": {...}}
-    Returns: {"ok": true, "path": "..."} on success.
-    """
-    from core import brief_fetcher
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "invalid json"}, status_code=400)
-    body = body or {}
-    date_str = body.get("date") or ""
-    payload = body.get("payload") or {}
-    if not date_str or not isinstance(payload, dict):
-        return JSONResponse(
-            {"error": "missing date or payload"}, status_code=400
-        )
-    try:
-        path = brief_fetcher.export_brief_html(date_str, payload)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-    return {"ok": True, "path": path, "date": date_str}
-
-
-# ── Block-5A: Return full brief HTML directly (read-only) ──
-@app.get("/api/brief/full")
-async def brief_full(date: str = "") -> dict:
-    """Return rendered full HTML for ?date=YYYY-MM-DD (defaults to today)."""
-    from datetime import datetime
-    from core import brief_fetcher
-    date_str = date or datetime.now().strftime("%Y-%m-%d")
-    import re
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-        return JSONResponse({"error": "invalid date"}, status_code=400)
-    sections = brief_fetcher.load_brief(date_str)
-    if not sections:
-        # 没缓存就现场拉一次
-        try:
-            sections = await brief_fetcher.run_all()
-        except Exception as e:
-            return JSONResponse({"error": f"run_all failed: {e}"}, status_code=500)
-    try:
-        html = brief_fetcher.render_html(sections)
-    except Exception as e:
-        return JSONResponse({"error": f"render failed: {e}"}, status_code=500)
-    return {"date": date_str, "html": html}
+# ── R7.1: /api/brief/export and /api/brief/full removed. They were
+# only consumed by the legacy detail BrowserWindow. The drawer uses
+# ``/api/brief/today`` (and ``/api/brief/feedback`` for thumbs).
 
 
 @app.post("/api/brief/run")
-async def brief_run() -> dict:
-    """Force re-run the brief (manual refresh)."""
+async def brief_run(request: Request, limit: int = Query(default=0, ge=0, le=50)) -> dict:
+    """Force re-run the brief (manual refresh).
+
+    R7.2: optional ``?limit=N`` query param (and matching body field)
+    overrides per-section caps. The drawer uses ``?limit=8`` to fetch
+    the expanded 8/section view. ``limit=0`` (default) keeps the
+    feedback-driven limit so a manual refresh does not undo a
+    "disliked" section's smaller depth.
+    """
     from datetime import datetime
     from core import brief_fetcher
     from core.brain import Brain
 
+    # Body can also carry a limit, but query param wins (more idiomatic).
+    body_limit = 0
     try:
-        sections = await brief_fetcher.run_all()
+        body = await request.json()
+        if isinstance(body, dict):
+            raw = body.get("limit")
+            if isinstance(raw, int) and 0 < raw <= 50:
+                body_limit = raw
+    except Exception:
+        body = {}
+    effective_limit = limit or body_limit or None
+
+    try:
+        sections = await brief_fetcher.run_all(limit=effective_limit)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     try:
@@ -1379,7 +1415,7 @@ async def brief_run() -> dict:
         md = ""
     today = sections.get("date") or datetime.now().strftime("%Y-%m-%d")
     brief_fetcher.save_brief(today, sections, html=md)
-    return {"status": "ok", "date": today, "markdown": md, "brief": sections}
+    return {"status": "ok", "date": today, "markdown": md, "brief": sections, "limit": effective_limit or 0}
 
 
 # ── Block-5C: AI Provider options + safe shell ──────────────

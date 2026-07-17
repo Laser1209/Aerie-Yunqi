@@ -104,6 +104,16 @@
   --color-primary-hover: var(--brand-600);
   --color-primary-fg: var(--bg-50);
 
+  /* R7.2: shared overlay/shadow tokens (brief-drawer + future modals).
+     Soft neutral so the drawer backdrop blends with any theme instead
+     of clashing with the brand colour. */
+  --color-overlay:    rgba(20, 20, 28, 0.42);
+  --color-overlay-2:  rgba(20, 20, 28, 0.28);
+  --color-shadow-md:  0 8px 24px rgba(0, 0, 0, 0.10);
+  --color-shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.05);
+  --color-shadow-lg:  0 16px 40px rgba(0, 0, 0, 0.14);
+  --color-border-soft: var(--bg-200);
+
   /* typography */
   --font-sans: "DM Sans", "PingFang SC", "Microsoft YaHei", ui-sans-serif, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", monospace;
@@ -614,6 +624,91 @@ body {
 .pad-card-value { font-size: 16px; font-weight: 700; color: var(--color-text); }
 .pad-card-label { font-size: 11px; color: var(--color-text-muted); }
 
+/* R7.5: raw PAD value row (3 decimals + sign) under the ring.
+   Lets the user see P=0.010 vs P=0.000 which the ring can't show
+   because the 0..100% scale collapses sub-1% deltas. */
+.pad-card-raw {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #5b6471);
+  letter-spacing: 0.3px;
+  margin-top: -2px;
+}
+.pad-card-raw--pos { color: var(--success, #2ecc71); }
+.pad-card-raw--neg { color: var(--danger,  #e74c3c); }
+
+/* R7.5: Live-flow bars (dP/dt, dA/dt, dD/dt) */
+.emotion-flow-bars {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 10px 0 16px;
+  padding: 10px 12px;
+  background: var(--glass-bg-1, rgba(255, 255, 255, 0.45));
+  border: 1px solid var(--color-border-soft, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.emotion-flow-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 4px;
+  letter-spacing: 0.5px;
+}
+.emotion-flow-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 60px;
+  align-items: center;
+  gap: 8px;
+}
+.emotion-flow-key {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: right;
+}
+.emotion-flow-track {
+  position: relative;
+  height: 10px;
+  background: var(--color-bg-100, rgba(0, 0, 0, 0.04));
+  border-radius: 5px;
+  overflow: hidden;
+}
+.emotion-flow-center {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--color-text-muted, rgba(0, 0, 0, 0.35));
+  opacity: 0.5;
+  z-index: 2;
+}
+.emotion-flow-fill {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 0;
+  transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1), background 0.4s ease;
+  border-radius: 5px;
+}
+.emotion-flow-fill[data-side="pos"] {
+  left: 50%;
+  background: var(--success, #2ecc71);
+}
+.emotion-flow-fill[data-side="neg"] {
+  right: 50%;
+  background: var(--danger, #e74c3c);
+}
+.emotion-flow-value {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace);
+  font-size: 11px;
+  text-align: left;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.emotion-flow-value--pos { color: var(--success, #2ecc71); }
+.emotion-flow-value--neg { color: var(--danger,  #e74c3c); }
+
 /* Threshold bars */
 .threshold-bars { display: flex; flex-direction: column; gap: 12px; }
 .threshold-bar-header {
@@ -650,6 +745,28 @@ body {
   font-weight: 500;
   color: var(--color-text);
   margin-bottom: 6px;
+}
+
+/* R7.1: weather-city input + inline reset button row. */
+.settings-location-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 360px;
+}
+.settings-location-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.settings-location-row .btn-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 8px;
 }
 .settings-group input[type="text"],
 .settings-group input[type="date"],
@@ -1015,6 +1132,137 @@ body {
   border: 2px solid var(--color-primary, var(--color-pad-pleasure, #ff5b9c));
   background: var(--bg-200);
 }
+
+/* ===== R7.4: Chat bubble variants + Markdown element styles ===== */
+
+/* R7.4: 动作 — 居中、灰边、小字号、无 italic
+   (see project_memory: non-verbal info uses a different visual
+   treatment from direct dialogue, per mainstream AI chat conventions) */
+.chat-bubble--action {
+  align-self: center;
+  max-width: 80%;
+  margin-top: 4px;
+  padding: 6px 14px;
+  background: var(--glass-bg-2, rgba(255, 255, 255, 0.32));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.55));
+  border-radius: var(--brief-row-radius, 14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* R7.4: 心理 — 居中、更深灰底+虚线边、小字号、italic */
+.chat-bubble--thought {
+  align-self: center;
+  max-width: 80%;
+  margin-top: 4px;
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--color-text-muted) 8%, var(--glass-bg-1, rgba(255,255,255,0.55)));
+  border: 1px dashed color-mix(in srgb, var(--color-text-muted) 40%, transparent);
+  border-radius: var(--brief-row-radius, 14px);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: briefRowIn 0.4s cubic-bezier(0.34, 1.32, 0.64, 1) both;
+}
+
+/* Both variants are centered regardless of which side the message is
+   on. flex align-self: center overrides the parent body's left/right
+   align so a user message that ends with an action still gets the
+   same centered, neutral treatment. */
+.chat-msg--user .chat-bubble--action,
+.chat-msg--user .chat-bubble--thought { align-self: center; }
+
+/* R7.4: Markdown elements (rendered from marked.js). Only scoped to
+   the .chat-bubble so a stray <pre> in the settings page is untouched. */
+.chat-bubble pre {
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 6px 0;
+  white-space: pre;
+}
+.chat-bubble code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace);
+  font-size: 0.9em;
+}
+.chat-bubble pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+.chat-bubble h1, .chat-bubble h2, .chat-bubble h3, .chat-bubble h4,
+.chat-bubble h5, .chat-bubble h6 {
+  margin: 8px 0 4px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+.chat-bubble h1 { font-size: 18px; }
+.chat-bubble h2 { font-size: 16px; }
+.chat-bubble h3 { font-size: 14.5px; }
+.chat-bubble h4 { font-size: 13.5px; }
+.chat-bubble h5 { font-size: 13px; }
+.chat-bubble h6 { font-size: 12.5px; }
+.chat-bubble ul, .chat-bubble ol {
+  margin: 4px 0 4px 20px;
+  padding: 0;
+}
+.chat-bubble li { margin: 2px 0; }
+.chat-bubble strong { font-weight: 600; color: var(--color-text); }
+.chat-bubble em { font-style: italic; }
+.chat-bubble a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.chat-bubble blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding: 2px 0 2px 10px;
+  margin: 6px 0;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.chat-bubble hr {
+  border: none;
+  border-top: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  margin: 8px 0;
+}
+.chat-bubble table {
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 12.5px;
+}
+.chat-bubble th, .chat-bubble td {
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  padding: 4px 8px;
+  text-align: left;
+}
+.chat-bubble th { background: rgba(0, 0, 0, 0.04); font-weight: 600; }
+
 .persona-fields {
   flex: 1;
   display: flex;

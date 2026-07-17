@@ -48,6 +48,15 @@ scenes:
     mood_aware: true
     exempt_quiet: false
 
+  # R7.5+: 应用启动后主动 QQ 推送。exempt_quiet=true (忽略静默时段),
+  # 不依赖 cron 触发,由 companion._boot_qq_greeting 在 start() 时调用。
+  # judge_override 让 ProactiveJudge 强制放行,同时保持屏幕隔空人设。
+  boot_greeting:
+    template: "刚醒。盯着屏幕看你头像。"
+    custom_dispatcher: "boot_greeting"
+    mood_aware: true
+    exempt_quiet: true
+
   weather_push:
     template: "{city}今天{weather}，{temp}度。{suggestion}。"
     cron: "0 7 * * *"

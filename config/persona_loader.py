@@ -199,20 +199,35 @@ def save_persona(patch: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_persona_summary() -> dict[str, Any]:
-    """Block-2 A2: return name/english_name + avatar_url for the renderer."""
+    """Block-2 A2: return name/english_name + avatar URL for the renderer.
+
+    R7.5: prefer ``avatar_dataurl`` (base64 inline) so the Electron
+    renderer can drop the image straight into an ``<img src>`` without
+    going through a loopback HTTP fetch. The relative-path version is
+    still returned for backwards-compat (non-Electron clients).
+
+    R6.6: check ALL supported extensions (PNG/JPG/JPEG), not just the
+    hardcoded .png path. The previous check missed JPG uploads and
+    reported an empty avatar_url even when the file existed on disk.
+    """
     p = load_persona() or {}
     persona = p.get("persona") or {}
-    # R6.6: check ALL supported extensions (PNG/JPG/JPEG), not just the
-    # hardcoded .png path. The previous check missed JPG uploads and
-    # reported an empty avatar_url even when the file existed on disk.
-    has_avatar = any(
-        (_PERSONA_AVATAR_DIR / f"avatar.{ext}").exists()
-        for ext in ("png", "jpg", "jpeg")
-    )
+    pair = load_avatar_bytes()
+    if pair:
+        data, _ct = pair
+        import base64 as _b64
+        dataurl = "data:image/" + ("jpeg" if pair[1] == "image/jpeg" else "png") + ";base64," + _b64.b64encode(data).decode("ascii")
+    else:
+        dataurl = ""
     return {
         "name": persona.get("name") or "伊塔",
         "english_name": persona.get("english_name") or "Ita",
-        "avatar_url": "/api/persona/avatar?v=" + str(int(time.time())) if has_avatar else "",
+        # Inline dataURL is the primary form. Renderer must prefer this
+        # over the http URL (file:// in Electron can't load relative
+        # HTTP paths so /api/... would 404 into a broken-image icon).
+        "avatar_dataurl": dataurl,
+        # HTTP path retained for external / non-Electron clients.
+        "avatar_url": ("/api/persona/avatar?v=" + str(int(time.time()))) if pair else "",
     }
 
 
@@ -221,18 +236,51 @@ def save_avatar_bytes(data: bytes, ext: str = "png") -> str:
 
     Backs up the previous avatar (if any) and enforces a 28-day retention
     on the backup folder. Returns the public URL suffix.
+
+    R7.5: before writing, **delete any sibling avatar files** in other
+    formats so we never end up with avatar.png + avatar.jpg + avatar.jpeg
+    all coexisting (which previously made ``load_avatar_bytes()`` always
+    pick the .png and silently ignore the user's latest upload).
+    Also auto-correct the extension by sniffing the first magic bytes
+    — uploading a PNG with ext="jpg" (or vice-versa) won't bite us.
     """
-    ext = (ext or "png").lower().lstrip(".")
-    if ext not in {"png", "jpg", "jpeg"}:
+    # R7.5: sniff actual format from magic bytes; trust bytes over caller hint.
+    real_ext = _sniff_image_ext(data) or (ext or "png").lower().lstrip(".")
+    ext = real_ext
+    if ext == "jpeg":
+        ext = "jpg"
+    if ext not in {"png", "jpg"}:
         raise ValueError("unsupported avatar format")
     _PERSONA_AVATAR_DIR.mkdir(parents=True, exist_ok=True)
-    # Backup previous
-    if _PERSONA_AVATAR_PATH.exists():
+    # R7.5: clean up sibling files in OTHER formats so the directory
+    # holds at most one canonical avatar.<ext> at any time.
+    for sibling_ext in ("png", "jpg", "jpeg"):
+        if sibling_ext == ext:
+            continue
+        sibling = _PERSONA_AVATAR_DIR / f"avatar.{sibling_ext}"
+        if sibling.exists():
+            try:
+                # Back up the about-to-be-replaced sibling so the user
+                # doesn't lose their previous avatar if the new upload
+                # is broken / rejected later.
+                backup_dir = _DATA_DIR / "backups" / "persona_avatar"
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                ts = int(time.time() * 1000)
+                shutil.copy2(sibling, backup_dir / f"avatar.{ts}.{sibling_ext}")
+            except OSError:
+                pass
+            try:
+                sibling.unlink()
+            except OSError:
+                pass
+    # Backup the file we're about to overwrite (same ext).
+    target = _PERSONA_AVATAR_DIR / f"avatar.{ext}"
+    if target.exists():
         backup_dir = _DATA_DIR / "backups" / "persona_avatar"
         backup_dir.mkdir(parents=True, exist_ok=True)
         ts = int(time.time() * 1000)
         try:
-            shutil.copy2(_PERSONA_AVATAR_PATH, backup_dir / f"avatar.{ts}.{ext}")
+            shutil.copy2(target, backup_dir / f"avatar.{ts}.{ext}")
         except OSError:
             pass
     # Cleanup old backups
@@ -246,7 +294,7 @@ def save_avatar_bytes(data: bytes, ext: str = "png") -> str:
             except OSError:
                 continue
     dest = _PERSONA_AVATAR_DIR / f"avatar.{ext}"
-    # Normalize to .png as the canonical filename (we keep ext tag)
+    # Atomic write
     fd, tmp_path = tempfile.mkstemp(suffix=f".{ext}", dir=str(_PERSONA_AVATAR_DIR))
     try:
         with os.fdopen(fd, "wb") as f:
@@ -259,6 +307,22 @@ def save_avatar_bytes(data: bytes, ext: str = "png") -> str:
             pass
         raise
     return f"/api/persona/avatar?v={int(time.time())}"
+
+
+def _sniff_image_ext(data: bytes) -> str | None:
+    """Return 'png' / 'jpg' / 'jpeg' / None from the first magic bytes.
+
+    PNG: 89 50 4E 47 0D 0A 1A 0A
+    JPEG: FF D8 FF
+    WebP: RIFF....WEBP (we don't support it, return None)
+    """
+    if not data or len(data) < 8:
+        return None
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    return None
 
 
 def load_avatar_bytes() -> tuple[bytes, str] | None:

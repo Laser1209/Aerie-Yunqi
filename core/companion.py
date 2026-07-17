@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from communication.message import IncomingMessage, OutgoingReply
@@ -138,11 +139,24 @@ class Companion:
         proactive_cfg = load_proactive_config()
         self.push_scheduler = PushScheduler(proactive_cfg)
         self.push_scheduler.set_dispatcher(self._dispatch_push)
+        # R7.5+: bind a ProactiveJudge so every dispatch consults
+        # 心情 / 想法 / 用户上下文 before sending.
+        try:
+            from core.proactive_judge import ProactiveJudge
+            self.proactive_judge = ProactiveJudge(companion=self)
+            self.push_scheduler.judge = self.proactive_judge
+        except Exception:
+            logger.exception("ProactiveJudge init failed; push will run judge-less")
+            self.proactive_judge = None
 
         self._started = False
         self._daily_decay_task: asyncio.Task | None = None
         self._push_task: asyncio.Task | None = None
         self._boot_brief_task: asyncio.Task | None = None
+        # R7.5+: 应用启动后主动 QQ 推送任务
+        self._boot_qq_task: asyncio.Task | None = None
+        # R7.5: 10s background tick for emotion dashboard liveness.
+        self._emotion_tick_task: asyncio.Task | None = None
         # Block-4B R2.2: 24h desire engine (lazy-created on first start()).
         self.desire: Any = None
         # Block-4C R3.4: skill loader (lazy-created on first start()).
@@ -158,10 +172,18 @@ class Companion:
         asyncio.create_task(self.qq.connect())
         # Start daily emotion decay scheduler
         self._daily_decay_task = asyncio.create_task(self._run_daily_decay())
+        # R7.5: 10s background tick for emotion dashboard liveness.
+        # Every 6th tick (≈60s) writes a snapshot so the history curve
+        # stays alive even when no user messages arrive.
+        self._emotion_tick_task = asyncio.create_task(self._emotion_tick_loop())
         # Start push scheduler
         self._push_task = asyncio.create_task(self.push_scheduler.start())
         # Block-4A R1.5: 8s boot delay then run brief once + emit show event
         self._boot_brief_task = asyncio.create_task(self._boot_brief())
+        # R7.5+: 8s boot delay then push a QQ greeting to the user.
+        # Idempotent: file flag at data/boot_greeting_sent_<date>.flag
+        # blocks re-sends within the same calendar day.
+        self._boot_qq_task = asyncio.create_task(self._boot_qq_greeting())
         # Block-4B R2.2: start 24h desire engine (24h polling, not cron)
         try:
             from core.desire_engine import DesireEngine
@@ -242,6 +264,18 @@ class Companion:
                 await self._boot_brief_task
             except asyncio.CancelledError:
                 pass
+        if self._boot_qq_task:
+            self._boot_qq_task.cancel()
+            try:
+                await self._boot_qq_task
+            except asyncio.CancelledError:
+                pass
+        if self._emotion_tick_task:
+            self._emotion_tick_task.cancel()
+            try:
+                await self._emotion_tick_task
+            except asyncio.CancelledError:
+                pass
         if self.desire:
             try:
                 await self.desire.stop()
@@ -291,6 +325,97 @@ class Companion:
             return
         except Exception:
             logger.exception("boot_brief failed")
+
+    # ── R7.5+: boot QQ greeting hook ─────────────────────
+    async def _boot_qq_greeting(self) -> None:
+        """R8.0+: 应用启动后主动给用户 QQ 发一条消息。
+
+        行为:
+          1. 等 8s,让 NapCat WS / 后端 / 情绪 / 隐藏槽位就绪
+          2. idempotency: 距上次发送 < 60s 则跳过(防快速重启刷屏)
+             R8.0+ 变更: 从"当天一次"改为"60s 窗口" — 用户要每次启动都欢迎
+          3. force=True 触发 boot_greeting scene (绕过 ProactiveJudge + PushPolicy)
+          4. 成功后写 flag,失败不写(下次启动可重试)
+        """
+        flag_dir = Path(self.settings.get("paths", {}).get("data", "./data")) if isinstance(
+            self.settings.get("paths"), dict) else Path("./data")
+        flag_dir.mkdir(parents=True, exist_ok=True)
+        # R8.0+: 60s 窗口 — flag 不再分日期,而是检查 mtime
+        flag_path = flag_dir / "boot_greeting_last_sent.flag"
+
+        # ── 步骤 1: 60s idempotency (防快速重启刷屏) ──
+        if flag_path.exists():
+            try:
+                import time
+                mtime = flag_path.stat().st_mtime
+                elapsed = time.time() - mtime
+                if elapsed < 60.0:
+                    logger.info(
+                        "boot_qq_greeting: sent %.0fs ago (< 60s window), skip",
+                        elapsed,
+                    )
+                    return
+            except Exception:
+                logger.debug("boot_qq_greeting: flag mtime check failed", exc_info=True)
+
+        try:
+            # ── 步骤 2: 等 NapCat + 后端就绪 ──
+            await asyncio.sleep(8)
+
+            # ── 步骤 3: 再次检查 (防 8s 内另一进程已发) ──
+            if flag_path.exists():
+                try:
+                    import time
+                    elapsed = time.time() - flag_path.stat().st_mtime
+                    if elapsed < 60.0:
+                        logger.info(
+                            "boot_qq_greeting: sent during sleep window, skip",
+                        )
+                        return
+                except Exception:
+                    pass
+
+            # ── 步骤 4: 触发 boot_greeting scene ──
+            # judge_override 让 ProactiveJudge 强制放行(中位数基线即可)
+            # R8.0+: force=True bypasses ProactiveJudge and PushPolicy
+            # so the greeting fires unconditionally on every launch.
+            ok = await self.push_scheduler._dispatch(
+                "boot_greeting",
+                {
+                    "template": "刚醒。盯着屏幕看你头像。",
+                    "custom_dispatcher": "boot_greeting",
+                    "mood_aware": True,
+                    "exempt_quiet": True,
+                    "force": True,
+                    "judge_override": {
+                        "desire_score": 60.0,
+                        "emotion_score": 60.0,
+                        "context_score": 50.0,
+                        "environment_score": 50.0,
+                    },
+                },
+            )
+
+            if ok:
+                # 写 flag
+                try:
+                    flag_path.write_text(
+                        datetime.now().isoformat(timespec="seconds"),
+                        encoding="utf-8",
+                    )
+                except Exception:
+                    logger.exception("boot_qq_greeting: failed to write flag")
+                logger.info(
+                    "boot_qq_greeting: sent OK, flag=%s", flag_path,
+                )
+            else:
+                logger.warning(
+                    "boot_qq_greeting: dispatch returned False (judge or policy suppressed)",
+                )
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("boot_qq_greeting failed")
 
     async def _send_to_qq(self, reply: OutgoingReply) -> bool:
         return await self.qq.send_message(reply.user_id, reply.content)
@@ -388,16 +513,90 @@ class Companion:
             # Small pause to avoid double-fire
             await asyncio.sleep(60)
 
+    async def _emotion_tick_loop(self) -> None:
+        """R7.5+: background tick loop for emotion dashboard liveness.
+
+        Three independent cadences on a shared 1-second base tick:
+
+        * **PAD (3 s)** — runs ``idle_tick()`` so P/A/D drift via EMA +
+          noise. Matches the dashboard's 3 s poll so the flow bars
+          (dP/dt, dA/dt, dD/dt) show a non-zero derivative on most
+          fetches.
+        * **Threshold (30 s)** — runs ``tick_decay(30)`` so each slot
+          loses ``decay_per_day / 2880`` per call. Integrated over 24 h
+          this equals ``decay_per_day`` (the configured daily rate);
+          the 30 s spacing keeps the user-perceived "speed of decay"
+          calm instead of the previous every-10-s collapse.
+        * **Snapshot (60 s)** — writes an ``idle_tick`` snapshot so the
+          24h / 7d / 30d curves keep filling in even with zero user
+          traffic.
+
+        All errors are swallowed — this is decorative, never fatal.
+        """
+        pad_ticks = 0
+        thr_ticks = 0
+        snap_ticks = 0
+        try:
+            while True:
+                await asyncio.sleep(1)
+                pad_ticks += 1
+                thr_ticks += 1
+                snap_ticks += 1
+                try:
+                    if pad_ticks >= 3:
+                        pad_ticks = 0
+                        self.emotion.idle_tick()
+                    if thr_ticks >= 30:
+                        thr_ticks = 0
+                        self.emotion.threshold_engine.tick_decay(30.0)
+                except Exception as e:
+                    logger.debug("emotion tick error: %s", e)
+                if snap_ticks >= 60:
+                    snap_ticks = 0
+                    try:
+                        from core.emotion_state_store import EmotionStateStore
+                        st = self.emotion.get_state(0)
+                        EmotionStateStore(self.db).snapshot(
+                            0,
+                            {"label": st.get("label"), "pad": st.get("pad")},
+                            st.get("thresholds", {}),
+                            trigger_event="idle_tick",
+                        )
+                    except Exception as e:
+                        logger.debug("emotion snapshot error: %s", e)
+        except asyncio.CancelledError:
+            return
+
     async def _dispatch_push(self, scene_name: str, scene_cfg: dict) -> bool:
         """Called by PushScheduler when a scene triggers.
-        
+
         Generates push content via Brain and sends via QQ client.
         Returns True on success.
+
+        R7.5+: forwards the ProactiveJudge's ``tone_hint`` and
+        ``judge_context`` to ``Brain.generate_push`` so the LLM-side
+        prompt picks up the per-scene tone (warm_with_light_flirt /
+        collapse_seeking / ...) and the screen-aware rewriting rules
+        rather than the legacy static mood. Falls back to
+        ``scene_cfg.get("mood_aware")``-driven mood when no judge
+        context is present.
         """
         try:
             master_id = int(self.settings.get("qq", {}).get("self_qq", 0))
             if not master_id:
-                logger.warning("[Push] No master QQ configured")
+                # R7.5+: fallback to SELF_QQ env (NapCat login user).
+                import os
+                env_qq = os.environ.get("SELF_QQ") or os.environ.get("MASTER_QQ")
+                if env_qq and env_qq.isdigit() and env_qq != "123456789":
+                    master_id = int(env_qq)
+            if not master_id:
+                # R7.5+: last resort — ask the QQ client what its own id is
+                # (learned from OneBot11 self_id field on first inbound msg).
+                sid = getattr(self.qq, "self_id", 0)
+                if sid:
+                    master_id = int(sid)
+            if not master_id:
+                logger.warning("[Push] No master QQ configured (settings.yaml qq.self_qq + SELF_QQ env + qq.self_id all empty)")
                 return False
 
             template = scene_cfg.get("template", "")
@@ -413,9 +612,15 @@ class Companion:
             now = datetime.now()
             kwargs["date"] = now.strftime("%Y年%m月%d日")
 
+            # R7.5+: judge-driven tone (preferred) beats mood_aware mood.
+            tone_hint = scene_cfg.get("tone_hint")
+            judge_context = scene_cfg.get("judge_context")
+
             content = await self.brain.generate_push(
                 template=template,
                 mood=mood,
+                tone_hint=tone_hint,
+                judge_context=judge_context,
                 **kwargs,
             )
 

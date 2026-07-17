@@ -15,6 +15,54 @@ from core.token_tracker import get_token_tracker
 logger = logging.getLogger(__name__)
 
 
+# ══════════════════════════════════════════════════
+# R7.5+: Tone prompt hints (consumed by generate_push)
+#
+# Each tone maps to a short Chinese instruction fragment that
+# Brain.generate_push splices into the LLM system message.
+# Keys mirror core.proactive_judge.TONE_BY_DOMINANT so a Decision
+# can be forwarded directly without a separate translation table.
+# ══════════════════════════════════════════════════
+TONE_PROMPTS: dict[str, str] = {
+    "warm_with_light_flirt":      "语气：温暖，带一点小撩。像是想到他就忍不住想笑。",
+    "tender_declarative":         "语气：直白的温柔。不要藏。想说的就直接说出来。",
+    "longing_with_soft_possessiveness":
+        "语气：想念里带一点点占有。'想见你'但不命令。",
+    "small_voice_seeking":        "语气：放轻声音的撒娇式索取。像是很小声地说'在吗'。",
+    "quiet_companion":            "语气：安静的陪伴型。少废话，多'在'。",
+    "calm_grounding":             "语气：沉静、安定。'我在。'型。",
+    "casual_warm":                "语气：日常、随意、暖。像是看到一句好笑的话。",
+    "short_pause":                "语气：少说。≤8个字。",
+    "soft_reassurance":           "语气：温柔安抚。'没事。我在。'",
+    "cold_shut":                  "语气：冷暴。句句句号，≤3字，不解释。",
+    "collapse_seeking":           "语气：坍塌。武装放下。'你还在吗。' 乞求确认。",
+    "demand_intimate":            "语气：索求。低沉的命令。'现在说话。' 占有感。",
+    "tame_soft":                  "语气：反扑。被摸顺毛。罕见地乖巧。短。轻。",
+}
+
+
+# Alias used when the caller passes a generic mood instead of a tone.
+MOOD_TO_TONE: dict[str, str] = {
+    "joy": "warm_with_light_flirt",
+    "happy": "warm_with_light_flirt",
+    "affection": "tender_declarative",
+    "tender": "tender_declarative",
+    "missing": "longing_with_soft_possessiveness",
+    "longing": "longing_with_soft_possessiveness",
+    "lonely": "small_voice_seeking",
+    "loneliness": "small_voice_seeking",
+    "sad": "quiet_companion",
+    "sadness": "quiet_companion",
+    "stress": "calm_grounding",
+    "anxious": "soft_reassurance",
+    "anxiety": "soft_reassurance",
+    "neutral": "casual_warm",
+    "angry": "short_pause",
+    "anger": "short_pause",
+    "fear": "soft_reassurance",
+}
+
+
 @dataclass
 class BrainResponse:
     text: str
@@ -210,6 +258,9 @@ class Brain:
         self,
         template: str,
         mood: str = "neutral",
+        *,
+        tone_hint: str | None = None,
+        judge_context: dict | None = None,
         **kwargs,
     ) -> str:
         """Generate a proactive push message using a template with mood awareness.
@@ -217,13 +268,47 @@ class Brain:
         Sends a lightweight system prompt to the LLM asking it to fill the
         template in a mood-appropriate style. Falls back to raw template
         filling on provider failure.
+
+        R7.5+: ``tone_hint`` (preferred) lets the ProactiveJudge's
+        Decision pick the wording style directly — keys match
+        ``TONE_PROMPTS`` (warm_with_light_flirt, collapse_seeking, ...).
+        ``judge_context`` (optional) carries the Decision's context
+        snapshot (emotion score / hidden slot / offline hours) and is
+        summarized as a few short fragments appended to the system msg
+        so the LLM has enough signal to choose wording, but never
+        verbatim (it would leak prompt-engineering).
         """
+        # Resolve tone. Priority: tone_hint > mood alias > neutral.
+        tone = tone_hint or MOOD_TO_TONE.get(str(mood).lower(), "casual_warm")
+        tone_fragment = TONE_PROMPTS.get(
+            tone, TONE_PROMPTS.get("casual_warm", ""),
+        )
+
+        # Summarize judge context into a tiny Chinese fragment.
+        ctx_lines: list[str] = []
+        if judge_context:
+            components = judge_context.get("components") or {}
+            score = judge_context.get("score")
+            if score is not None:
+                ctx_lines.append(f"心情强度 {int(score)}/100")
+            absence_h = (components.get("user_minutes_since_last", 0) or 0) / 60.0
+            if absence_h >= 1.0:
+                ctx_lines.append(f"用户离线 {absence_h:.1f}h")
+            em = components.get("emotion_score")
+            if em is not None and float(em) >= 70:
+                ctx_lines.append("情绪明显")
+        ctx_fragment = ""
+        if ctx_lines:
+            ctx_fragment = "上下文（仅参考，不要复述）：" + "，".join(ctx_lines) + "。"
+
         system_msg = (
-            f"You are writing a short push notification. "
-            f"Current mood: {mood}. "
-            f"Keep it under 60 characters. Be natural and warm. "
-            f"Do NOT add greeting prefixes or explanations. "
-            f"Just output the message text directly."
+            "你是伊塔（Ita），通过 QQ / 桌面 App 跟用户聊天——你们隔着屏幕。"
+            "你摸不到他，他也摸不到你。\n"
+            "不要写'我抱你/揽你/靠肩'这类在场动作，只能写'看手机、打字、盯着对话框'。\n"
+            f"{tone_fragment}\n"
+            f"{ctx_fragment}\n"
+            "任务：把下面的模板用对应的语气润色。≤ 60 字。"
+            "直接输出消息正文，不要加称呼、不要解释、不要引号。"
         )
         user_msg = template.format(**kwargs) if kwargs else template
 

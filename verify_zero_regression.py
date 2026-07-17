@@ -15,6 +15,13 @@ already started it (via main.py or launcher).
 """
 from __future__ import annotations
 
+import sys
+# R7.5+: force UTF-8 on Windows (default GBK chokes on ✓/✗)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 import json
 import sys
 import time

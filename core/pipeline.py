@@ -244,9 +244,18 @@ class Pipeline:
         self.cognition.record(trace, "tools", tool_summary)
 
         # ══════════════════════════════════════════════
-        # 8. Emotion tune + split (stages 7 + 8)
+        # 8. Emotion tune + screen-action sanitize (stage 7)
+        # R7.5: enforce "屏幕隔空铁律" at the output layer. Even if
+        # the LLM emitted a blacklisted "在场动作" (伸手/揽/抱/靠肩/etc),
+        # sanitizer.sanitize() rewrites it to a screen-side equivalent.
         # ══════════════════════════════════════════════
         reply_text = self.emotion.tune(reply_text_raw)
+        try:
+            from core.screen_action_sanitizer import sanitize as _sanitize_action
+            reply_text = _sanitize_action(reply_text)
+        except Exception:
+            # Sanitizer is best-effort; never break the pipeline.
+            logger.exception("screen_action_sanitizer failed; using tuned text as-is")
         self.cognition.record(trace, "postprocess", {
             "tune_label": (emotion_info or {}).get("label"),
             "eruption_mode": (eruption_info or {}).get("mode") if eruption_info else None,

@@ -44,6 +44,8 @@ class QQClient:
         self._handler: Optional[MessageHandler] = None
         self._running = False
         self._connected = False
+        # R7.5+: bot's own QQ, learned from OneBot11 self_id field.
+        self.self_id: int = 0
 
     @property
     def is_connected(self) -> bool:
@@ -66,6 +68,10 @@ class QQClient:
                 async with websockets.connect(url, ping_interval=20, ping_timeout=10) as ws:
                     self._connected = True
                     logger.info("QQ WS connected to %s", url)
+                    # R7.5+: ask NapCat for our own login info so we know
+                    # which user_id to address push messages to. Run in
+                    # background — don't block the inbound event loop.
+                    asyncio.create_task(self._learn_self_id())
                     await self._listen(ws)
             except Exception as e:
                 logger.warning("QQ WS connection error: %s", e)
@@ -92,6 +98,14 @@ class QQClient:
 
     async def _dispatch(self, event: dict) -> None:
         """Route OneBot11 events to handler."""
+        # R7.5+: every OneBot11 message event carries ``self_id``
+        # (the bot's own QQ). Cache the first one we see so push
+        # dispatchers can target the master without a separate
+        # settings.yaml entry.
+        sid = event.get("self_id")
+        if sid and not self.self_id:
+            self.self_id = int(sid)
+            logger.info("QQ client learned self_id=%s", self.self_id)
         post_type = event.get("post_type", "")
         if post_type == "message":
             msg_type = event.get("message_type", "")
@@ -121,31 +135,89 @@ class QQClient:
             logger.warning("Cannot send: QQ WS not connected")
             return False
 
+        # R7.5+: tag the request with a unique echo so we can pick our
+        # own response out of the inbound event stream. NapCat's
+        # lifecycle meta_event is broadcast on every (re)connect and
+        # would otherwise be mistaken for the send_private_msg reply.
+        import uuid
+        echo_tag = f"send_msg_{uuid.uuid4().hex[:12]}"
         payload = {
             "action": "send_private_msg",
             "params": {
                 "user_id": user_id,
                 "message": content,
             },
+            "echo": echo_tag,
         }
         url = f"ws://{self.host}:{self.port}"
         try:
             async with websockets.connect(url, ping_interval=None, close_timeout=2) as ws:
                 await ws.send(json.dumps(payload))
-                try:
-                    resp = await asyncio.wait_for(ws.recv(), timeout=5)
+                # Walk the inbound stream until we see *our* echo or
+                # we run out of patience. Skip meta_events.
+                deadline = asyncio.get_event_loop().time() + 5.0
+                while asyncio.get_event_loop().time() < deadline:
+                    try:
+                        resp = await asyncio.wait_for(
+                            ws.recv(),
+                            timeout=max(0.5, deadline - asyncio.get_event_loop().time()),
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("QQ send timeout for user %s", user_id)
+                        return False
                     data = json.loads(resp)
-                    if data.get("status") == "ok":
-                        logger.info("QQ -> %s: %.80s", user_id, content)
-                        return True
-                    logger.warning("QQ send failed: %s", data)
-                    return False
-                except asyncio.TimeoutError:
-                    logger.warning("QQ send timeout for user %s", user_id)
-                    return False
+                    # Match by echo (preferred) or by status field.
+                    if data.get("echo") == echo_tag:
+                        if data.get("status") == "ok":
+                            logger.info("QQ -> %s: %.80s", user_id, content)
+                            return True
+                        logger.warning("QQ send failed: %s", data)
+                        return False
+                    # Otherwise it's a meta_event / heartbeat / unrelated
+                    # inbound — keep scanning.
+                    logger.debug("QQ send: skip non-echo frame: %.80s", resp)
         except Exception as e:
             logger.warning("QQ send error: %s", e)
             return False
+
+    async def _learn_self_id(self) -> None:
+        """R7.5+: ask NapCat for our own login user_id.
+
+        NapCat's OneBot11 ``get_login_info`` returns ``{"user_id": ...}``.
+        We need this to address push messages back to the master before
+        any inbound message arrives (which would otherwise teach us via
+        the ``self_id`` field of the event payload).
+        """
+        # Retry a few times to ride out the WS handshake.
+        for attempt in range(5):
+            await asyncio.sleep(1 + attempt)
+            if not self.is_connected:
+                continue
+            try:
+                url = f"ws://{self.host}:{self.port}"
+                async with websockets.connect(
+                    url, ping_interval=None, close_timeout=2,
+                ) as ws:
+                    await ws.send(json.dumps({
+                        "action": "get_login_info",
+                        "params": {},
+                        "echo": "learn_self_id",
+                    }))
+                    resp = await asyncio.wait_for(ws.recv(), timeout=3)
+                    data = json.loads(resp)
+                    uid = (data.get("data") or {}).get("user_id")
+                    if uid:
+                        self.self_id = int(uid)
+                        logger.info(
+                            "QQ client learned self_id=%s via get_login_info",
+                            self.self_id,
+                        )
+                        return
+            except Exception as e:
+                logger.debug(
+                    "get_login_info attempt %s failed: %s", attempt + 1, e,
+                )
+        logger.warning("QQ client could not learn self_id via get_login_info")
 
     async def recall_message(self, message_id: int) -> bool:
         """Recall a previously sent message via NapCat OneBot11 delete_msg.

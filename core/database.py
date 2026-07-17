@@ -212,6 +212,25 @@ SCHEMA_SQL: list[str] = [
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
     """,
+    # ── v12.0.1: calendar events (纪念日/日程/倒计时/日志) ──
+    """
+    CREATE TABLE IF NOT EXISTS calendar_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        event_type TEXT NOT NULL DEFAULT 'schedule',
+        start_time TEXT NOT NULL,
+        end_time TEXT,
+        all_day INTEGER DEFAULT 1,
+        color TEXT DEFAULT '#ff9a9e',
+        repeat_type TEXT DEFAULT 'none',
+        remind_before INTEGER DEFAULT 0,
+        source TEXT DEFAULT 'manual',
+        user_id INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
 ]
 
 
@@ -224,6 +243,9 @@ INDEX_SQL: list[str] = [
     # Phase 9: emotion snapshot lookups
     "CREATE INDEX IF NOT EXISTS idx_emotion_user_ts ON emotion_state_snapshot(user_id, ts DESC);",
     "CREATE INDEX IF NOT EXISTS idx_emotion_label_ts ON emotion_state_snapshot(label, ts DESC);",
+    # v12.0.1: calendar events indexes
+    "CREATE INDEX IF NOT EXISTS idx_calendar_start_time ON calendar_events(start_time);",
+    "CREATE INDEX IF NOT EXISTS idx_calendar_type ON calendar_events(event_type);",
 ]
 
 

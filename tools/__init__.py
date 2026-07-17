@@ -63,3 +63,17 @@ def register_all_tools(registry) -> None:
             "required": ["text"],
         },
     })
+
+    try:
+        from .browser_tools import register_webbridge_tools
+        register_webbridge_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("webbridge tools registration failed: %s", e)
+
+    try:
+        from .douyin_tools import register_douyin_tools
+        register_douyin_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("douyin tools registration failed: %s", e)

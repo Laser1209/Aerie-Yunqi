@@ -125,10 +125,10 @@
 /* ── Toolbar ────────────────────────────────────── */
 .cognition-toolbar {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 12px;
   background: rgba(20, 14, 32, 0.45);
   border: 1px solid var(--cog-glass-border);
@@ -204,19 +204,25 @@
 }
 .cog-tl-grid {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(9, minmax(80px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
+.cog-tl-grid::-webkit-scrollbar { height: 6px; }
+.cog-tl-grid::-webkit-scrollbar-track { background: rgba(255,105,180,0.05); border-radius: 3px; }
+.cog-tl-grid::-webkit-scrollbar-thumb { background: rgba(255,105,180,0.2); border-radius: 3px; }
 .cog-tl-cell {
   position: relative;
   background: rgba(13, 10, 26, 0.6);
   border: 1px solid rgba(255, 105, 180, 0.14);
   border-radius: 8px;
-  padding: 8px 6px 6px;
+  padding: 10px 8px 8px;
   text-align: center;
   font-size: 11px;
   color: var(--cog-glass-muted);
-  min-height: 78px;
+  min-height: 82px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -808,8 +814,10 @@
 /* ── Tab 导航 ─────────────────────────────────── */
 .cog-tabs {
   display: flex;
+  align-items: center;
+  justify-content: space-around;
   gap: 6px;
-  padding: 6px;
+  padding: 16px;
   border-radius: 14px;
   background: linear-gradient(135deg,
     rgba(255, 105, 180, 0.08) 0%,
@@ -887,6 +895,7 @@
     rgba(156, 39, 176, 0.08) 100%);
   border: 1px solid var(--cog-shell-border);
   backdrop-filter: blur(6px);
+  flex-wrap: wrap;
 }
 .cog-v2-hero-icon {
   font-size: 42px;

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — HTTP API server (FastAPI + uvicorn).
+"""Aerie · 云栖 v12.0.1 — HTTP API server (FastAPI + uvicorn).
 
 Routes:
   GET  /api/health          — heartbeat + QQ WS status
@@ -53,10 +53,14 @@ from core.token_tracker import get_token_tracker
 from core.cognition import CognitionEngine
 from core.event_stream import stream as event_stream_generator
 from core.self_evolver import SelfEvolver
+from core.computer_control import ComputerController, PermissionLevel
+from core.file_organizer import FileOrganizer
+from core.doc_writer import DocWriter
+from core.calendar_manager import CalendarManager
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Aerie · 云栖", version="9.0.0")
+app = FastAPI(title="Aerie · 云栖", version="12.1.0")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -75,6 +79,11 @@ app.add_middleware(
 _db = Database()
 _START_TIME = time.time()
 
+_computer_controller = ComputerController()
+_file_organizer = FileOrganizer()
+_doc_writer = DocWriter()
+_calendar = CalendarManager(_db)
+
 
 # ── Health ──────────────────────────────────────────
 
@@ -89,7 +98,7 @@ async def health(request: Request) -> dict:
     return {
         "status": "ok",
         "app": "Aerie · 云栖",
-        "version": "9.0.0",
+        "version": "12.1.0",
         "uptime_seconds": uptime,
         "qq_connected": qq_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
@@ -1000,6 +1009,252 @@ async def self_evolve_reject(proposal_id: int) -> dict:
             return JSONResponse(result, status_code=404)
         return JSONResponse(result, status_code=400)
     return result
+
+
+# ── Self Evolve Stats ───────────────────────────────
+
+@app.get("/api/self_evolve/stats")
+async def self_evolve_stats() -> dict:
+    """Self-evolve proposal statistics."""
+    ev = _get_self_evolver()
+    if ev is None:
+        return {"total": 0, "pending": 0, "approved": 0, "rejected": 0, "rolled_back": 0}
+    try:
+        return ev.stats()
+    except Exception as e:
+        logger.exception("self_evolve_stats error")
+        return {"error": str(e)}
+
+
+# ── Computer Control ────────────────────────────────
+
+@app.get("/api/computer_control/stats")
+async def computer_control_stats() -> dict:
+    """Computer control statistics (today ops, blocked, etc)."""
+    try:
+        logs = _computer_controller.get_audit_logs(limit=200)
+        today_start = int(time.time()) - 86400
+        today_ops = sum(1 for l in logs if l.get("ts", 0) >= today_start and l.get("status") == "success")
+        blocked_ops = sum(1 for l in logs if l.get("status") == "blocked")
+        return {
+            "permission_level": _computer_controller.permission_level.value,
+            "today_operations": today_ops,
+            "blocked_operations": blocked_ops,
+            "total_operations": len(logs),
+        }
+    except Exception as e:
+        logger.exception("computer_control_stats error")
+        return {"error": str(e)}
+
+
+@app.get("/api/computer_control/level")
+async def computer_control_get_level() -> dict:
+    """Get current permission level."""
+    try:
+        return {"level": _computer_controller.permission_level.value}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.put("/api/computer_control/level")
+async def computer_control_set_level(request: Request) -> dict:
+    """Set permission level: view_only / standard / full."""
+    try:
+        body = await request.json()
+        level_str = (body.get("level") or "").lower()
+        level_map = {
+            "view_only": PermissionLevel.VIEW_ONLY,
+            "standard": PermissionLevel.STANDARD,
+            "full": PermissionLevel.FULL,
+        }
+        if level_str not in level_map:
+            return JSONResponse({"error": "invalid level"}, status_code=400)
+        _computer_controller.set_permission(level_map[level_str])
+        emit("computer_control_level_changed", {"level": level_str})
+        return {"status": "ok", "level": level_str}
+    except Exception as e:
+        logger.exception("computer_control_set_level error")
+        return {"error": str(e)}
+
+
+@app.get("/api/computer_control/logs")
+async def computer_control_logs(limit: int = Query(default=50, ge=1, le=200)) -> dict:
+    """Recent computer control audit logs."""
+    try:
+        logs = _computer_controller.get_audit_logs(limit=limit)
+        return {"logs": logs}
+    except Exception as e:
+        logger.exception("computer_control_logs error")
+        return {"error": str(e)}
+
+
+# ── File Organizer ──────────────────────────────────
+
+@app.get("/api/file_organizer/stats")
+async def file_organizer_stats() -> dict:
+    """File organizer statistics."""
+    try:
+        records = _file_organizer.list_undo_records(limit=200)
+        total_organized = len(records)
+        undoable = sum(1 for r in records if r.get("can_undo", False))
+        return {
+            "total_organized": total_organized,
+            "undoable": undoable,
+            "saved_space_bytes": 0,
+        }
+    except Exception as e:
+        logger.exception("file_organizer_stats error")
+        return {"error": str(e)}
+
+
+@app.get("/api/file_organizer/history")
+async def file_organizer_history(limit: int = Query(default=20, ge=1, le=100)) -> dict:
+    """File organizer history."""
+    try:
+        records = _file_organizer.list_undo_records(limit=limit)
+        return {"records": records}
+    except Exception as e:
+        logger.exception("file_organizer_history error")
+        return {"error": str(e)}
+
+
+@app.get("/api/file_organizer/undo_list")
+async def file_organizer_undo_list(limit: int = Query(default=20, ge=1, le=100)) -> dict:
+    """Undoable file organizer operations."""
+    try:
+        records = _file_organizer.list_undo_records(limit=limit)
+        undoable = [r for r in records if r.get("can_undo", False)]
+        return {"records": undoable}
+    except Exception as e:
+        logger.exception("file_organizer_undo_list error")
+        return {"error": str(e)}
+
+
+# ── Doc Writer ──────────────────────────────────────
+
+@app.get("/api/doc_writer/stats")
+async def doc_writer_stats() -> dict:
+    """Document writer statistics."""
+    try:
+        docs = _doc_writer.list_documents()
+        return {"total_documents": len(docs)}
+    except Exception as e:
+        logger.exception("doc_writer_stats error")
+        return {"error": str(e)}
+
+
+@app.get("/api/doc_writer/list")
+async def doc_writer_list(limit: int = Query(default=20, ge=1, le=100)) -> dict:
+    """List recent documents."""
+    try:
+        docs = _doc_writer.list_documents()
+        docs = docs[:limit]
+        result = []
+        for d in docs:
+            result.append({
+                "name": d.name,
+                "path": str(d),
+                "size": d.stat().st_size if d.exists() else 0,
+                "modified": d.stat().st_mtime if d.exists() else 0,
+                "format": d.suffix.lstrip(".").upper(),
+            })
+        return {"documents": result}
+    except Exception as e:
+        logger.exception("doc_writer_list error")
+        return {"error": str(e)}
+
+
+# ── Calendar ────────────────────────────────────────
+
+@app.get("/api/calendar/events")
+async def calendar_events(
+    start: str = Query(default=None),
+    end: str = Query(default=None),
+    event_type: str = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+) -> dict:
+    """List calendar events in a date range."""
+    try:
+        events = _calendar.list_events(
+            start_date=start, end_date=end,
+            event_type=event_type, limit=limit,
+        )
+        return {"events": events}
+    except Exception as e:
+        logger.exception("calendar_events error")
+        return {"error": str(e)}
+
+
+@app.get("/api/calendar/events/{event_id}")
+async def calendar_event_detail(event_id: int) -> dict:
+    """Get a single calendar event."""
+    try:
+        event = _calendar.get_event(event_id)
+        if not event:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return event
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/calendar/events")
+async def calendar_create(request: Request) -> dict:
+    """Create a new calendar event."""
+    try:
+        body = await request.json()
+        event_id = _calendar.create_event(**body)
+        emit("calendar_event_created", {"id": event_id, "event": _calendar.get_event(event_id)})
+        return {"status": "ok", "id": event_id}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        logger.exception("calendar_create error")
+        return {"error": str(e)}
+
+
+@app.put("/api/calendar/events/{event_id}")
+async def calendar_update(event_id: int, request: Request) -> dict:
+    """Update a calendar event."""
+    try:
+        body = await request.json()
+        ok = _calendar.update_event(event_id, **body)
+        if not ok:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        emit("calendar_event_updated", {"id": event_id})
+        return {"status": "ok"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.delete("/api/calendar/events/{event_id}")
+async def calendar_delete(event_id: int) -> dict:
+    """Delete a calendar event."""
+    try:
+        ok = _calendar.delete_event(event_id)
+        if not ok:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        emit("calendar_event_deleted", {"id": event_id})
+        return {"status": "ok"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/calendar/stats")
+async def calendar_stats() -> dict:
+    """Calendar statistics and upcoming events."""
+    try:
+        return _calendar.get_stats()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/calendar/companion")
+async def calendar_companion() -> dict:
+    """Companion stats: days together, message counts, etc."""
+    try:
+        return _calendar.get_companion_stats(first_start_ts=int(_START_TIME))
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # ── Stats ───────────────────────────────────────────

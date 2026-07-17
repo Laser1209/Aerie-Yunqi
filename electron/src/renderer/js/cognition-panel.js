@@ -927,44 +927,56 @@ class CognitionPanel {
     const gatesEl = document.getElementById("cog-se-gates");
     if (!totalEl || !listEl) return;
 
-    totalEl.textContent = "12";
-    appliedEl.textContent = "9";
-    rolledEl.textContent = "1";
+    Promise.all([
+      window.aerie.api.request({ method: "GET", path: "/api/self_evolve/stats" }).catch(() => null),
+      window.aerie.api.request({ method: "GET", path: "/api/self_evolve/list?limit=20" }).catch(() => null),
+    ]).then(([statsRes, listRes]) => {
+      const stats = (statsRes && statsRes.data) || {};
+      const items = (listRes && listRes.data && listRes.data.items) || [];
 
-    const proposals = [
-      { icon: "🧬", title: "优化 provider_router 路由算法", meta: "2 小时前 · 5 个文件", badge: "applied", badgeText: "已应用" },
-      { icon: "🔧", title: "新增记忆清理调度器", meta: "5 小时前 · 2 个文件", badge: "applied", badgeText: "已应用" },
-      { icon: "🎨", title: "重构 emotion 情绪计算逻辑", meta: "1 天前 · 3 个文件", badge: "applied", badgeText: "已应用" },
-      { icon: "⚡", title: "优化 context_builder 上下文压缩", meta: "2 天前 · 1 个文件", badge: "rolled", badgeText: "已回滚" },
-      { icon: "🔐", title: "增强 tool_isolation 安全校验", meta: "3 天前 · 2 个文件", badge: "rejected", badgeText: "已拒绝" },
-    ];
-    listEl.innerHTML = proposals.map((p) => `
-      <div class="cog-se-item">
-        <span class="cog-se-item-icon">${p.icon}</span>
-        <div class="cog-se-item-body">
-          <div class="cog-se-item-title">${p.title}</div>
-          <div class="cog-se-item-meta">${p.meta}</div>
-        </div>
-        <span class="cog-se-item-badge cog-se-item-badge--${p.badge}">${p.badgeText}</span>
-      </div>
-    `).join("");
+      totalEl.textContent = stats.total != null ? stats.total : 0;
+      appliedEl.textContent = stats.approved != null ? stats.approved : 0;
+      rolledEl.textContent = stats.rolled_back != null ? stats.rolled_back : 0;
 
-    const journals = [
-      { time: "14:32:15", action: "提案创建", detail: "优化 provider_router 路由算法" },
-      { time: "14:32:18", action: "安全审查", detail: "通过 ✓" },
-      { time: "14:32:20", action: "语法检查", detail: "通过 ✓" },
-      { time: "14:32:25", action: "测试验证", detail: "通过 ✓" },
-      { time: "14:32:30", action: "回滚准备", detail: "通过 ✓" },
-      { time: "14:32:31", action: "应用代码", detail: "5 个文件已修改" },
-      { time: "14:35:00", action: "观察期", detail: "24h 回滚窗口启动" },
-    ];
-    journalEl.innerHTML = journals.map((j) => `
-      <div class="cog-cc-item">
-        <span class="cog-cc-time">${j.time}</span>
-        <span class="cog-cc-type cog-cc-type--shell">${j.action}</span>
-        <span class="cog-cc-desc">${j.detail}</span>
-      </div>
-    `).join("");
+      if (!items.length) {
+        listEl.innerHTML = '<div class="cog-list-empty">暂无自我进化提案</div>';
+      } else {
+        const badgeMap = {
+          pending: { cls: "pending", text: "待决定" },
+          approved: { cls: "applied", text: "已应用" },
+          rejected: { cls: "rejected", text: "已拒绝" },
+          rolled_back: { cls: "rolled", text: "已回滚" },
+        };
+        listEl.innerHTML = items.slice(0, 5).map((p) => {
+          const schema = p.proposed_tool_schema || {};
+          const toolName = schema.name || "unnamed_tool";
+          const badge = badgeMap[p.user_decision] || badgeMap.pending;
+          const ts = p.ts ? new Date(p.ts).toLocaleString() : "";
+          return `
+            <div class="cog-se-item">
+              <span class="cog-se-item-icon">🧬</span>
+              <div class="cog-se-item-body">
+                <div class="cog-se-item-title">${this._escape(p.description || toolName)}</div>
+                <div class="cog-se-item-meta">${this._escape(ts)} · ${this._escape(toolName)}</div>
+              </div>
+              <span class="cog-se-item-badge cog-se-item-badge--${badge.cls}">${badge.text}</span>
+            </div>
+          `;
+        }).join("");
+      }
+
+      if (journalEl && items.length) {
+        const first = items[0];
+        const ts = first.ts ? new Date(first.ts).toLocaleTimeString() : "";
+        journalEl.innerHTML = `
+          <div class="cog-cc-item">
+            <span class="cog-cc-time">${ts}</span>
+            <span class="cog-cc-type cog-cc-type--shell">提案创建</span>
+            <span class="cog-cc-desc">${this._escape(first.description || "")}</span>
+          </div>
+        `;
+      }
+    });
   }
 
   _loadComputerControlData() {
@@ -974,24 +986,94 @@ class CognitionPanel {
     const logEl = document.getElementById("cog-cc-log");
     if (!levelEl || !logEl) return;
 
-    levelEl.textContent = "VIEW_ONLY";
-    todayEl.textContent = "0";
-    blockedEl.textContent = "0";
+    this._bindCCLevelButtons();
 
-    const logs = [
-      { time: "14:00:00", type: "screenshot", desc: "截取当前屏幕" },
-      { time: "14:05:00", type: "mouse", desc: "移动鼠标到 (500, 300)" },
-      { time: "14:10:00", type: "keyboard", desc: "输入 'hello world'" },
-      { time: "14:15:00", type: "blocked", desc: "拦截危险命令: rm -rf /" },
-      { time: "14:20:00", type: "shell", desc: "执行 dir 命令" },
-    ];
-    logEl.innerHTML = logs.map((l) => `
-      <div class="cog-cc-item">
-        <span class="cog-cc-time">${l.time}</span>
-        <span class="cog-cc-type cog-cc-type--${l.type}">${l.type}</span>
-        <span class="cog-cc-desc">${l.desc}</span>
-      </div>
-    `).join("");
+    Promise.all([
+      window.aerie.api.request({ method: "GET", path: "/api/computer_control/stats" }).catch(() => null),
+      window.aerie.api.request({ method: "GET", path: "/api/computer_control/logs?limit=20" }).catch(() => null),
+    ]).then(([statsRes, logsRes]) => {
+      const stats = (statsRes && statsRes.data) || {};
+      const logs = (logsRes && logsRes.data && logsRes.data.logs) || [];
+
+      const level = stats.permission_level || "view_only";
+      levelEl.textContent = level.toUpperCase();
+      todayEl.textContent = stats.today_operations != null ? stats.today_operations : 0;
+      blockedEl.textContent = stats.blocked_operations != null ? stats.blocked_operations : 0;
+
+      this._updateCCLevelUI(level);
+
+      if (!logs.length) {
+        logEl.innerHTML = '<div class="cog-list-empty">暂无操作记录</div>';
+      } else {
+        const typeMap = {
+          screenshot: { label: "截图", cls: "screenshot" },
+          mouse_move: { label: "鼠标", cls: "mouse" },
+          mouse_click: { label: "点击", cls: "mouse" },
+          key_press: { label: "按键", cls: "keyboard" },
+          key_type: { label: "输入", cls: "keyboard" },
+          shell_cmd: { label: "命令", cls: "shell" },
+          window_info: { label: "窗口", cls: "screenshot" },
+          uia_action: { label: "UIA", cls: "shell" },
+        };
+        logEl.innerHTML = logs.map((l) => {
+          const t = typeMap[l.action] || { label: l.action || "?", cls: "shell" };
+          const status = l.status || "success";
+          const time = l.ts ? new Date(l.ts).toLocaleTimeString() : "";
+          const desc = l.details ? (typeof l.details === "string" ? l.details : JSON.stringify(l.details)) : "";
+          const isBlocked = status === "blocked";
+          return `
+            <div class="cog-cc-item">
+              <span class="cog-cc-time">${time}</span>
+              <span class="cog-cc-type cog-cc-type--${isBlocked ? "blocked" : t.cls}">${isBlocked ? "拦截" : t.label}</span>
+              <span class="cog-cc-desc">${this._escape(desc.slice(0, 60))}</span>
+            </div>
+          `;
+        }).join("");
+      }
+    });
+  }
+
+  _bindCCLevelButtons() {
+    if (this._ccLevelBound) return;
+    this._ccLevelBound = true;
+    const levels = document.querySelectorAll(".cog-cc-level");
+    levels.forEach((el) => {
+      el.addEventListener("click", () => {
+        const level = el.dataset.level;
+        if (!level) return;
+        this._setCCLevel(level.toLowerCase());
+      });
+    });
+  }
+
+  _updateCCLevelUI(level) {
+    const levels = document.querySelectorAll(".cog-cc-level");
+    const levelUp = level.toUpperCase();
+    levels.forEach((el) => {
+      if (el.dataset.level === levelUp) {
+        el.classList.add("active");
+      } else {
+        el.classList.remove("active");
+      }
+    });
+    const levelEl = document.getElementById("cog-cc-level");
+    if (levelEl) levelEl.textContent = levelUp;
+  }
+
+  async _setCCLevel(level) {
+    try {
+      const r = await window.aerie.api.request({
+        method: "PUT",
+        path: "/api/computer_control/level",
+        body: JSON.stringify({ level }),
+        headers: { "Content-Type": "application/json" },
+      });
+      if (r.data && r.data.status === "ok") {
+        this._updateCCLevelUI(r.data.level || level);
+      }
+    } catch (e) {
+      console.warn("[cog-panel] set cc level failed", e);
+    }
   }
 
   _loadFileOrganizerData() {
@@ -1002,40 +1084,61 @@ class CognitionPanel {
     const undoEl = document.getElementById("cog-fo-undo");
     if (!organizedEl || !historyEl) return;
 
-    organizedEl.textContent = "156";
-    undoableEl.textContent = "3";
-    savedEl.textContent = "12.4 MB";
+    Promise.all([
+      window.aerie.api.request({ method: "GET", path: "/api/file_organizer/stats" }).catch(() => null),
+      window.aerie.api.request({ method: "GET", path: "/api/file_organizer/history?limit=20" }).catch(() => null),
+      window.aerie.api.request({ method: "GET", path: "/api/file_organizer/undo_list?limit=10" }).catch(() => null),
+    ]).then(([statsRes, historyRes, undoRes]) => {
+      const stats = (statsRes && statsRes.data) || {};
+      const history = (historyRes && historyRes.data && historyRes.data.records) || [];
+      const undos = (undoRes && undoRes.data && undoRes.data.records) || [];
 
-    const history = [
-      { icon: "🖼️", title: "下载目录图片整理", meta: "今天 10:30 · 42 张图片", count: "42" },
-      { icon: "📄", title: "文档目录分类", meta: "昨天 15:20 · 68 个文件", count: "68" },
-      { icon: "📦", title: "下载清理", meta: "3 天前 · 46 个文件", count: "46" },
-    ];
-    historyEl.innerHTML = history.map((h) => `
-      <div class="cog-fo-item">
-        <span class="cog-fo-item-icon">${h.icon}</span>
-        <div class="cog-fo-item-body">
-          <div class="cog-fo-item-title">${h.title}</div>
-          <div class="cog-fo-item-meta">${h.meta}</div>
-        </div>
-        <span class="cog-fo-item-count">${h.count}</span>
-      </div>
-    `).join("");
+      organizedEl.textContent = stats.total_organized != null ? stats.total_organized : 0;
+      undoableEl.textContent = stats.undoable != null ? stats.undoable : 0;
+      const savedMB = stats.saved_space_bytes ? (stats.saved_space_bytes / 1024 / 1024).toFixed(1) + " MB" : "0 MB";
+      savedEl.textContent = savedMB;
 
-    const undos = [
-      { icon: "↩️", title: "下载目录图片整理", meta: "今天 10:30 · 7 天内可撤销" },
-      { icon: "↩️", title: "文档目录分类", meta: "昨天 15:20 · 6 天内可撤销" },
-      { icon: "↩️", title: "下载清理", meta: "3 天前 · 4 天内可撤销" },
-    ];
-    undoEl.innerHTML = undos.map((u) => `
-      <div class="cog-fo-item">
-        <span class="cog-fo-item-icon">${u.icon}</span>
-        <div class="cog-fo-item-body">
-          <div class="cog-fo-item-title">${u.title}</div>
-          <div class="cog-fo-item-meta">${u.meta}</div>
-        </div>
-      </div>
-    `).join("");
+      if (!history.length) {
+        historyEl.innerHTML = '<div class="cog-list-empty">暂无整理记录</div>';
+      } else {
+        historyEl.innerHTML = history.slice(0, 5).map((h) => {
+          const ts = h.ts ? new Date(h.ts).toLocaleString() : "";
+          const fileCount = h.file_count || 0;
+          const title = h.description || h.undo_id || "文件整理";
+          const icon = h.category === "images" ? "🖼️" : h.category === "documents" ? "📄" : "📦";
+          return `
+            <div class="cog-fo-item">
+              <span class="cog-fo-item-icon">${icon}</span>
+              <div class="cog-fo-item-body">
+                <div class="cog-fo-item-title">${this._escape(title)}</div>
+                <div class="cog-fo-item-meta">${this._escape(ts)} · ${fileCount} 个文件</div>
+              </div>
+              <span class="cog-fo-item-count">${fileCount}</span>
+            </div>
+          `;
+        }).join("");
+      }
+
+      if (undoEl) {
+        if (!undos.length) {
+          undoEl.innerHTML = '<div class="cog-list-empty">暂无可撤销操作</div>';
+        } else {
+          undoEl.innerHTML = undos.map((u) => {
+            const ts = u.ts ? new Date(u.ts).toLocaleString() : "";
+            const title = u.description || u.undo_id || "文件整理";
+            return `
+              <div class="cog-fo-item">
+                <span class="cog-fo-item-icon">↩️</span>
+                <div class="cog-fo-item-body">
+                  <div class="cog-fo-item-title">${this._escape(title)}</div>
+                  <div class="cog-fo-item-meta">${this._escape(ts)}</div>
+                </div>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+    });
   }
 
   _loadDocWriterData() {
@@ -1043,25 +1146,37 @@ class CognitionPanel {
     const listEl = document.getElementById("cog-dw-list");
     if (!countEl || !listEl) return;
 
-    countEl.textContent = "28";
+    Promise.all([
+      window.aerie.api.request({ method: "GET", path: "/api/doc_writer/stats" }).catch(() => null),
+      window.aerie.api.request({ method: "GET", path: "/api/doc_writer/list?limit=20" }).catch(() => null),
+    ]).then(([statsRes, listRes]) => {
+      const stats = (statsRes && statsRes.data) || {};
+      const docs = (listRes && listRes.data && listRes.data.documents) || [];
 
-    const docs = [
-      { icon: "📔", title: "每日日记 2026-07-18", meta: "今天 · 日记模板", format: "MD" },
-      { icon: "📊", title: "Q3 销售分析报告", meta: "昨天 · 报告模板", format: "PDF" },
-      { icon: "📋", title: "API 规格说明书 v2.0", meta: "3 天前 · 规格模板", format: "HTML" },
-      { icon: "🔬", title: "大语言模型研究综述", meta: "1 周前 · 研究模板", format: "DOCX" },
-      { icon: "💼", title: "个人简历 2026", meta: "2 周前 · 简历模板", format: "PDF" },
-    ];
-    listEl.innerHTML = docs.map((d) => `
-      <div class="cog-dw-item">
-        <span class="cog-dw-item-icon">${d.icon}</span>
-        <div class="cog-dw-item-body">
-          <div class="cog-dw-item-title">${d.title}</div>
-          <div class="cog-dw-item-meta">${d.meta}</div>
-        </div>
-        <span class="cog-dw-item-format">${d.format}</span>
-      </div>
-    `).join("");
+      countEl.textContent = stats.total_documents != null ? stats.total_documents : 0;
+
+      if (!docs.length) {
+        listEl.innerHTML = '<div class="cog-list-empty">暂无文档</div>';
+      } else {
+        const iconMap = { MD: "📔", PDF: "📊", HTML: "📋", DOCX: "📄", TXT: "📝" };
+        listEl.innerHTML = docs.slice(0, 5).map((d) => {
+          const fmt = d.format || "MD";
+          const icon = iconMap[fmt] || "📄";
+          const modified = d.modified ? new Date(d.modified * 1000).toLocaleDateString() : "";
+          const title = d.name || "未命名文档";
+          return `
+            <div class="cog-dw-item">
+              <span class="cog-dw-item-icon">${icon}</span>
+              <div class="cog-dw-item-body">
+                <div class="cog-dw-item-title">${this._escape(title)}</div>
+                <div class="cog-dw-item-meta">${this._escape(modified)}</div>
+              </div>
+              <span class="cog-dw-item-format">${fmt}</span>
+            </div>
+          `;
+        }).join("");
+      }
+    });
   }
 }
 

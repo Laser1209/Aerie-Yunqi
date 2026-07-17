@@ -17,6 +17,7 @@ const PY_MAIN = path.join(PROJECT_ROOT, "main.py");
 let pythonProc = null;
 let mainWindow = null;
 let tray = null;
+let dynamicIsland = null;
 // R7.1: legacy brief popup/detail windows removed. The brief now
 // lives inside the main window as a right-side drawer (see
 // renderer/js/brief-drawer.js + styles/brief-drawer.css).
@@ -218,6 +219,53 @@ function createMainWindow() {
   mainWindow.on("unmaximize", () => broadcastMaximizeState(false));
 }
 
+// ── Dynamic Island ────────────────────────────────
+function createDynamicIsland() {
+  if (dynamicIsland) return;
+
+  const display = screen.getPrimaryDisplay();
+  const { workArea } = display;
+  const width = 200;
+  const height = 36;
+  const x = Math.round(workArea.x + (workArea.width - width) / 2);
+  const y = workArea.y + 12;
+
+  dynamicIsland = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    focusable: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  dynamicIsland.setAlwaysOnTop(true, "floating");
+  dynamicIsland.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  dynamicIsland.setIgnoreMouseEvents(true, { forward: true });
+
+  dynamicIsland.loadFile(path.join(__dirname, "renderer", "dynamic-island.html"));
+
+  dynamicIsland.on("closed", () => { dynamicIsland = null; });
+}
+
+function setIslandIgnoreMouse(ignore) {
+  if (!dynamicIsland || dynamicIsland.isDestroyed()) return;
+  dynamicIsland.setIgnoreMouseEvents(ignore, { forward: true });
+}
+
 function broadcastMaximizeState(isMax) {
   const wins = BrowserWindow.getAllWindows();
   for (const w of wins) {
@@ -253,13 +301,25 @@ function createTray() {
       },
     },
     {
+      label: "显示 / 隐藏灵动岛",
+      click: () => {
+        if (!dynamicIsland) return;
+        if (dynamicIsland.isVisible()) {
+          dynamicIsland.hide();
+        } else {
+          dynamicIsland.show();
+        }
+      },
+    },
+    { type: "separator" },
+    {
       // R7.1: trigger the in-app right-side drawer (no separate window)
       label: "打开今日简报 / Open Brief",
       click: () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.show();
           mainWindow.focus();
-          try { mainWindow.webContents.send("ui:open-brief"); } catch (_) {}
+          try { mainWindow.webContents.send("brief:show"); } catch (_) {}
         }
       },
     },
@@ -269,7 +329,7 @@ function createTray() {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.show();
           mainWindow.focus();
-          try { mainWindow.webContents.send("ui:open-brief", { expanded: true }); } catch (_) {}
+          try { mainWindow.webContents.send("brief:show", { expanded: true }); } catch (_) {}
         }
       },
     },
@@ -332,6 +392,102 @@ ipcMain.handle("api:request", async (_event, opts) => {
   } catch (err) {
     return { status: 0, data: { error: err.message } };
   }
+});
+
+// Dynamic Island IPC
+ipcMain.on("ui:open-main", () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
+
+ipcMain.on("ui:open-quick-chat", () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  try {
+    mainWindow.webContents.send("ui:open-tab", "chat");
+  } catch (_) {}
+});
+
+ipcMain.on("ui:quit-app", () => {
+  app.quit();
+});
+
+// Dynamic Island control IPC
+let _islandIgnoreDebounce = null;
+
+ipcMain.handle("island:set-size", async (_event, { width, height }) => {
+  if (!dynamicIsland || dynamicIsland.isDestroyed()) return { ok: false };
+  try {
+    const [x, y] = dynamicIsland.getPosition();
+    const newX = Math.round(x + (dynamicIsland.getSize()[0] - width) / 2);
+    dynamicIsland.setBounds({ x: newX, y, width, height }, true);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("island:set-ignore-mouse", async (_event, { ignore }) => {
+  if (!dynamicIsland || dynamicIsland.isDestroyed()) return { ok: false };
+  try {
+    if (_islandIgnoreDebounce) clearTimeout(_islandIgnoreDebounce);
+    _islandIgnoreDebounce = setTimeout(() => {
+      setIslandIgnoreMouse(!!ignore);
+    }, 60);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("island:open-main", async (_event, { tab }) => {
+  if (!mainWindow) return { ok: false };
+  try {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    if (tab) {
+      mainWindow.webContents.send("ui:open-tab", tab);
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("island:notify", async (_event, data) => {
+  if (!dynamicIsland || dynamicIsland.isDestroyed()) return { ok: false };
+  try {
+    dynamicIsland.webContents.send("island:notify", data || {});
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Island config (from main window → island window)
+let _islandConfig = {
+  theme: "dark",
+  interaction: "click",
+  expandType: "panel",
+  capsuleComponents: ["companion", "status", "notifications"],
+  expandedComponents: ["quickActions", "notifList"],
+};
+
+ipcMain.handle("island:set-config", async (_event, cfg) => {
+  _islandConfig = Object.assign(_islandConfig, cfg || {});
+  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+    dynamicIsland.webContents.send("island:config-change", _islandConfig);
+  }
+  return { ok: true, config: _islandConfig };
+});
+
+ipcMain.handle("island:get-config", async () => {
+  return { ok: true, config: _islandConfig };
 });
 
 // R7.0: multipart upload IPC. The renderer cannot use file:// fetch
@@ -652,6 +808,7 @@ ipcMain.handle("system:restart-backend", async () => {
 app.whenReady().then(() => {
   startPythonBackend();
   createMainWindow();
+  createDynamicIsland();
   // Delay tray creation to avoid flash
   setTimeout(createTray, 2000);
   // R7.1: after backend is ready, wait 8s and tell the main window
@@ -669,7 +826,7 @@ app.whenReady().then(() => {
       setTimeout(() => {
         try {
           if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("ui:open-brief");
+            mainWindow.webContents.send("brief:show");
           }
         } catch (e) { console.warn("[main] open-brief send failed:", e); }
       }, 8000);

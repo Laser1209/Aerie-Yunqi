@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aerie Dynamic Island</title>
+  <link rel="stylesheet" href="styles/dynamic-island.css">
+</head>
+<body>
+  <div id="dynamic-island" class="di di--capsule theme-dark">
+    <canvas id="di-particles" class="di-particles"></canvas>
+
+    <div class="di-inner">
+      <div class="di-capsule">
+        <div class="di-capsule-left">
+          <div class="di-avatar">
+            <span class="di-avatar-dot"></span>
+          </div>
+        </div>
+        <div class="di-capsule-center">
+          <span class="di-status-text">云栖在你身边</span>
+        </div>
+        <div class="di-capsule-right">
+          <span class="di-badge">3</span>
+        </div>
+      </div>
+
+      <div class="di-expanded">
+        <div class="di-expanded-header">
+          <div class="di-expanded-title">
+            <span class="di-expanded-icon">✨</span>
+            <span>云栖 · 灵动岛</span>
+          </div>
+          <button class="di-close-btn" id="di-close">×</button>
+        </div>
+        <div class="di-expanded-body">
+          <div class="di-section">
+            <div class="di-section-title">快捷操作</div>
+            <div class="di-quick-grid">
+              <button class="di-quick-item" data-action="chat">
+                <span class="di-quick-icon">💬</span>
+                <span class="di-quick-label">快捷对话</span>
+              </button>
+              <button class="di-quick-item" data-action="brief">
+                <span class="di-quick-icon">📋</span>
+                <span class="di-quick-label">今日简报</span>
+              </button>
+              <button class="di-quick-item" data-action="cognition">
+                <span class="di-quick-icon">🧠</span>
+                <span class="di-quick-label">认知面板</span>
+              </button>
+              <button class="di-quick-item" data-action="settings">
+                <span class="di-quick-icon">⚙️</span>
+                <span class="di-quick-label">设置</span>
+              </button>
+            </div>
+          </div>
+          <div class="di-section">
+            <div class="di-section-title">最近消息</div>
+            <div class="di-notif-list">
+              <div class="di-notif-item">
+                <span class="di-notif-icon">🌸</span>
+                <div class="di-notif-content">
+                  <div class="di-notif-title">想你啦</div>
+                  <div class="di-notif-desc">今天过得怎么样呀～</div>
+                </div>
+                <span class="di-notif-time">2m</span>
+              </div>
+              <div class="di-notif-item">
+                <span class="di-notif-icon">📝</span>
+                <div class="di-notif-content">
+                  <div class="di-notif-title">简报已生成</div>
+                  <div class="di-notif-desc">今日工作简报已准备好</div>
+                </div>
+                <span class="di-notif-time">5m</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/dynamic-island.js"></script>
+</body>
+</html>

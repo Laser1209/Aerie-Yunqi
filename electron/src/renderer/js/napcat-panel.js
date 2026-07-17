@@ -1,5 +1,5 @@
 "use strict";
-/* NapCat control panel in the sidebar QQ tab */
+/* NapCat control panel — merged into Status tab */
 
 class NapcatPanel {
   constructor() {
@@ -12,10 +12,23 @@ class NapcatPanel {
       qrZone: document.getElementById("napcat-qr-zone"),
       qrImg: document.getElementById("napcat-qr-img"),
       qrRefresh: document.getElementById("napcat-qr-refresh"),
+      statsQQ: document.getElementById("stats-qq"),
+      qqBadge: document.getElementById("status-qq-badge"),
     };
     this._interval = null;
     this._bindEvents();
+    this._bindQQToggle();
     this._startPoll();
+  }
+
+  _bindQQToggle() {
+    const toggle = document.getElementById("status-qq-toggle");
+    const section = document.getElementById("panel-status")?.querySelector(".status-qq-section");
+    if (toggle && section) {
+      toggle.addEventListener("click", () => {
+        section.classList.toggle("collapsed");
+      });
+    }
   }
 
   _bindEvents() {
@@ -40,17 +53,45 @@ class NapcatPanel {
       const resp = await window.aerie.napcat.getStatus();
       this._updateUI(resp);
     } catch (_) {}
+    try {
+      const logsResp = await window.aerie.api.request({
+        method: "GET",
+        path: "/api/napcat/logs?limit=100",
+      });
+      if (logsResp && logsResp.data && logsResp.data.logs) {
+        this._updateLogs(logsResp.data.logs);
+      }
+    } catch (_) {}
+  }
+
+  _updateLogs(logs) {
+    if (!this._el.logs || !Array.isArray(logs)) return;
+    const text = logs.join("\n");
+    if (this._el.logs.textContent !== text) {
+      this._el.logs.textContent = text;
+      this._el.logs.scrollTop = this._el.logs.scrollHeight;
+    }
   }
 
   _updateUI(status) {
     if (!status) return;
     const phase = status.phase || "idle";
     const phases = { idle: "未连接", starting: "启动中…", qr_pending: "等待扫码", connected: "已连接" };
+    const phaseText = phases[phase] || phase;
+
     if (this._el.phaseDot) {
       this._el.phaseDot.className = "phase-dot phase-dot--" + phase;
     }
     if (this._el.phaseText) {
-      this._el.phaseText.textContent = phases[phase] || phase;
+      this._el.phaseText.textContent = phaseText;
+    }
+
+    if (this._el.statsQQ) {
+      this._el.statsQQ.textContent = phase === "connected" ? "已连接" : phaseText;
+    }
+    if (this._el.qqBadge) {
+      this._el.qqBadge.className = "status-qq-badge status-qq-badge--" + phase;
+      this._el.qqBadge.textContent = phaseText;
     }
 
     // QR code

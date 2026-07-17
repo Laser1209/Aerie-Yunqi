@@ -84,6 +84,14 @@ class ChatManager {
         }
       });
     }
+    const briefBtn = document.getElementById("chat-brief-btn");
+    if (briefBtn) {
+      briefBtn.addEventListener("click", () => {
+        if (window.bus && typeof window.bus.emit === "function") {
+          window.bus.emit("brief:open");
+        }
+      });
+    }
     // Global click outside menu to close
     document.addEventListener("click", (e) => {
       if (!e.target.closest(".chat-msg-actions") && !e.target.closest(".chat-action-menu")) {

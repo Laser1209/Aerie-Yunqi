@@ -89,4 +89,32 @@ contextBridge.exposeInMainWorld("aerie", {
     set: (data) => ipcRenderer.invoke("settings:set", data),
     reset: () => ipcRenderer.invoke("settings:reset"),
   },
+  islandControl: {
+    setConfig: (cfg) => ipcRenderer.invoke("island:set-config", cfg || {}),
+    getConfig: () => ipcRenderer.invoke("island:get-config"),
+    notify: (data) => ipcRenderer.invoke("island:notify", data || {}),
+  },
+  dynamicIsland: {
+    setSize: (width, height) => ipcRenderer.invoke("island:set-size", { width, height }),
+    setIgnoreMouse: (ignore) => ipcRenderer.invoke("island:set-ignore-mouse", { ignore }),
+    openMain: (tab) => ipcRenderer.invoke("island:open-main", { tab }),
+    notify: (data) => ipcRenderer.invoke("island:notify", data || {}),
+    onConfigChange: (cb) => {
+      ipcRenderer.on("island:config-change", (_event, cfg) => cb(cfg || {}));
+    },
+    onNotify: (cb) => {
+      ipcRenderer.on("island:notify", (_event, data) => cb(data || {}));
+    },
+    sseSubscribe: (callback) => {
+      const handler = (_event, payload) => {
+        try { callback(payload); } catch (_) {}
+      };
+      ipcRenderer.on("sse:event", handler);
+      ipcRenderer.invoke("sse:subscribe");
+      return () => {
+        ipcRenderer.removeListener("sse:event", handler);
+        ipcRenderer.invoke("sse:unsubscribe");
+      };
+    },
+  },
 });

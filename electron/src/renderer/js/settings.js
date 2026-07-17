@@ -9,6 +9,7 @@ class SettingsPanel {
 
   init() {
     this.load();
+    this._initIslandSettings();
     // Form view
     document.getElementById("settings-save-btn").addEventListener("click", () => this.save());
     document.getElementById("settings-reset-btn").addEventListener("click", () => this.reset());
@@ -407,7 +408,7 @@ class SettingsPanel {
           // append a cache-buster so re-uploads show
           img.src = s.avatar_url + (s.avatar_url.indexOf("?") >= 0 ? "&_t=" : "?_t=") + Date.now();
         } else {
-          const fallback = img.getAttribute("data-default-src") || "/assets/avatar_ita_default.png";
+          const fallback = img.getAttribute("data-default-src") || "assets/avatar_default.svg";
           img.src = fallback;
         }
       }
@@ -573,6 +574,135 @@ class SettingsPanel {
     } catch (e) {
       this._setPersonaStatus("保存失败: " + e.message, false);
     }
+  }
+
+  /* ── Dynamic Island Settings ────────────────── */
+  _initIslandSettings() {
+    const applyBtn = document.getElementById("di-settings-apply");
+    const resetBtn = document.getElementById("di-settings-reset");
+    const preview = document.getElementById("di-preview");
+
+    if (!applyBtn || !preview) return;
+
+    document.querySelectorAll('input[name="di-theme"]').forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        preview.classList.remove("theme-dark", "theme-pink", "theme-light");
+        preview.classList.add(`theme-${e.target.value}`);
+      });
+    });
+
+    applyBtn.addEventListener("click", () => this._applyIslandSettings());
+    resetBtn.addEventListener("click", () => this._resetIslandSettings());
+
+    this._loadIslandSettings();
+  }
+
+  async _loadIslandSettings() {
+    try {
+      if (!window.aerie?.islandControl) return;
+      const r = await window.aerie.islandControl.getConfig();
+      if (!r || !r.ok) return;
+      const cfg = r.config || {};
+
+      const themeRadio = document.querySelector(`input[name="di-theme"][value="${cfg.theme || "dark"}"]`);
+      if (themeRadio) themeRadio.checked = true;
+
+      const preview = document.getElementById("di-preview");
+      if (preview) {
+        preview.classList.remove("theme-dark", "theme-pink", "theme-light");
+        preview.classList.add(`theme-${cfg.theme || "dark"}`);
+      }
+
+      const interactionSel = document.getElementById("di-interaction");
+      if (interactionSel) interactionSel.value = cfg.interaction || "click";
+
+      if (cfg.capsuleComponents) {
+        document.querySelectorAll('.di-comp-check input[data-comp]').forEach((cb) => {
+          cb.checked = cfg.capsuleComponents.includes(cb.dataset.comp);
+        });
+      }
+
+      if (cfg.expandedComponents) {
+        document.querySelectorAll('.di-comp-check input[data-excomp]').forEach((cb) => {
+          cb.checked = cfg.expandedComponents.includes(cb.dataset.excomp);
+        });
+      }
+    } catch (e) {
+      console.warn("load island settings failed", e);
+    }
+  }
+
+  async _applyIslandSettings() {
+    try {
+      if (!window.aerie?.islandControl) return;
+
+      const theme = document.querySelector('input[name="di-theme"]:checked')?.value || "dark";
+      const interaction = document.getElementById("di-interaction")?.value || "click";
+
+      const capsuleComponents = [];
+      document.querySelectorAll('.di-comp-check input[data-comp]:checked').forEach((cb) => {
+        capsuleComponents.push(cb.dataset.comp);
+      });
+
+      const expandedComponents = [];
+      document.querySelectorAll('.di-comp-check input[data-excomp]:checked').forEach((cb) => {
+        expandedComponents.push(cb.dataset.excomp);
+      });
+
+      const cfg = {
+        theme,
+        interaction,
+        capsuleComponents: capsuleComponents.length > 0 ? capsuleComponents : ["companion", "status", "notifications"],
+        expandedComponents: expandedComponents.length > 0 ? expandedComponents : ["quickActions", "notifList"],
+      };
+
+      const r = await window.aerie.islandControl.setConfig(cfg);
+      if (r && r.ok) {
+        const btn = document.getElementById("di-settings-apply");
+        if (btn) {
+          const origText = btn.textContent;
+          btn.textContent = "已应用 ✓";
+          setTimeout(() => { btn.textContent = origText; }, 1500);
+        }
+      }
+    } catch (e) {
+      console.warn("apply island settings failed", e);
+    }
+  }
+
+  async _resetIslandSettings() {
+    const defaults = {
+      theme: "dark",
+      interaction: "click",
+      capsuleComponents: ["companion", "status", "notifications"],
+      expandedComponents: ["quickActions", "notifList"],
+    };
+
+    const preview = document.getElementById("di-preview");
+    if (preview) {
+      preview.classList.remove("theme-dark", "theme-pink", "theme-light");
+      preview.classList.add("theme-dark");
+    }
+
+    const darkRadio = document.querySelector('input[name="di-theme"][value="dark"]');
+    if (darkRadio) darkRadio.checked = true;
+
+    const interactionSel = document.getElementById("di-interaction");
+    if (interactionSel) interactionSel.value = "click";
+
+    document.querySelectorAll('.di-comp-check input[data-comp]').forEach((cb) => {
+      cb.checked = defaults.capsuleComponents.includes(cb.dataset.comp);
+    });
+
+    document.querySelectorAll('.di-comp-check input[data-excomp]').forEach((cb) => {
+      cb.checked = defaults.expandedComponents.includes(cb.dataset.excomp);
+    });
+
+    try {
+      if (window.aerie?.islandControl) {
+        await window.aerie.islandControl.setConfig(defaults);
+      }
+    } catch (_) {}
   }
 }
 

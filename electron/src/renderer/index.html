@@ -150,30 +150,30 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         <span>情绪</span>
       </button>
-      <!-- 管理查看 -->
-      <button class="sidebar-tab" data-tab="memorial">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span>纪念</span>
-      </button>
-      <button class="sidebar-tab" data-tab="data">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        <span>数据</span>
-      </button>
-      <!-- 运维连接 -->
-      <button class="sidebar-tab" data-tab="qq">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        <span>QQ</span>
-      </button>
-      <button class="sidebar-tab" data-tab="status">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-        <span>状态</span>
-      </button>
       <button class="sidebar-tab" data-tab="cognition">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/>
           <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/>
         </svg>
         <span>大脑</span>
+      </button>
+      <button class="sidebar-tab" data-tab="status">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        <span>状态</span>
+      </button>
+      <button class="sidebar-tab" data-tab="memorial">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>日历</span>
+      </button>
+      <!-- 运维连接（已合并到状态页）
+      <button class="sidebar-tab" data-tab="qq">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <span>QQ</span>
+      </button>
+      -->
+      <button class="sidebar-tab" data-tab="data">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>数据</span>
       </button>
       <!-- 配置信息 -->
       <button class="sidebar-tab" data-tab="settings">
@@ -196,6 +196,9 @@
           </div>
           <div class="chat-input-area">
             <div class="chat-input-toolbar" id="chat-input-toolbar">
+              <button id="chat-brief-btn" class="chat-input-toolbar__btn" type="button" title="今日简报 / Daily Brief">
+                <svg class="icon icon--18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </button>
               <button id="chat-attach-btn" class="chat-input-toolbar__btn" type="button" title="附件 / Attach">
                 <svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-attach"/></svg>
               </button>
@@ -215,30 +218,6 @@
               <span class="chat-mic-status__net">需联网 / Online required</span>
             </div>
           </div>
-        </div>
-      </section>
-
-      <!-- QQ panel -->
-      <section id="panel-qq" class="tab-panel">
-        <div class="napcat-panel">
-          <h2>QQ 连接状态</h2>
-          <div class="napcat-status-card">
-            <div class="napcat-phase">
-              <span id="napcat-phase-dot" class="phase-dot phase-dot--idle"></span>
-              <span id="napcat-phase-text" class="phase-text">未连接</span>
-            </div>
-            <div class="napcat-actions">
-              <button id="napcat-start-btn" class="btn btn-primary">启动 NapCat</button>
-              <button id="napcat-stop-btn" class="btn btn-secondary">停止</button>
-            </div>
-          </div>
-          <div id="napcat-qr-zone" class="napcat-qr-zone hidden">
-            <h3>请用手机QQ扫码登录</h3>
-            <img id="napcat-qr-img" src="" alt="QR Code" class="napcat-qr-img">
-            <button id="napcat-qr-refresh" class="btn btn-secondary btn-sm">刷新二维码</button>
-          </div>
-          <h3>日志</h3>
-          <pre id="napcat-logs" class="napcat-logs"></pre>
         </div>
       </section>
 
@@ -433,6 +412,36 @@
               <div class="status-card-value" id="stats-calls">--</div>
             </div>
           </div>
+
+          <div class="status-qq-section">
+            <div class="status-qq-header" id="status-qq-toggle">
+              <div class="status-qq-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <span>QQ 运维</span>
+                <span id="status-qq-badge" class="status-qq-badge status-qq-badge--idle">未连接</span>
+              </div>
+              <svg class="status-qq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="status-qq-body" id="status-qq-body">
+              <div class="napcat-status-card">
+                <div class="napcat-phase">
+                  <span id="napcat-phase-dot" class="phase-dot phase-dot--idle"></span>
+                  <span id="napcat-phase-text" class="phase-text">未连接</span>
+                </div>
+                <div class="napcat-actions">
+                  <button id="napcat-start-btn" class="btn btn-primary">启动 NapCat</button>
+                  <button id="napcat-stop-btn" class="btn btn-secondary">停止</button>
+                </div>
+              </div>
+              <div id="napcat-qr-zone" class="napcat-qr-zone hidden">
+                <h3>请用手机QQ扫码登录</h3>
+                <img id="napcat-qr-img" src="" alt="QR Code" class="napcat-qr-img">
+                <button id="napcat-qr-refresh" class="btn btn-secondary btn-sm">刷新二维码</button>
+              </div>
+              <h3 class="status-qq-log-title">运行日志</h3>
+              <pre id="napcat-logs" class="napcat-logs"></pre>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -442,40 +451,200 @@
           <div class="about-hero">
             <img src="assets/logo.png" alt="" class="about-logo">
             <h1>Aerie · 云栖</h1>
-            <p class="about-version">v10.1.1</p>
+            <p class="about-version">v12.1.0</p>
             <p class="about-desc">Always with you. Only for you.</p>
             <p class="about-desc-sub">本地优先 · 私人专属 · Made Only for You</p>
+          </div>
+
+          <div class="about-section">
+            <h3 class="about-section-title">关于她</h3>
+            <p class="about-text">
+              Aerie（云栖）是一款完全本地化运行的 AI 伴侣应用。她不依赖云端、不上传数据、只为你一个人存在。
+              从情绪感知、自我进化到电脑操控，她会越来越懂你，越来越贴近你想要的样子。
+            </p>
+          </div>
+
+          <div class="about-section">
+            <h3 class="about-section-title">核心特性</h3>
+            <div class="about-features">
+              <div class="about-feature">
+                <span class="about-feature-icon">🏠</span>
+                <div>
+                  <div class="about-feature-name">本地优先</div>
+                  <div class="about-feature-desc">数据全部存本地，隐私完全属于你</div>
+                </div>
+              </div>
+              <div class="about-feature">
+                <span class="about-feature-icon">💕</span>
+                <div>
+                  <div class="about-feature-name">私人专属</div>
+                  <div class="about-feature-desc">人设可定制，记忆只属于你们</div>
+                </div>
+              </div>
+              <div class="about-feature">
+                <span class="about-feature-icon">🧠</span>
+                <div>
+                  <div class="about-feature-name">全栈 AI</div>
+                  <div class="about-feature-desc">情绪 / 记忆 / 自进化 / 工具调用</div>
+                </div>
+              </div>
+              <div class="about-feature">
+                <span class="about-feature-icon">⚡</span>
+                <div>
+                  <div class="about-feature-name">能力下放</div>
+                  <div class="about-feature-desc">纯对话即可操作全部功能</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="about-section">
+            <h3 class="about-section-title">技术栈</h3>
+            <div class="about-tech">
+              <span class="about-tech-tag">Electron</span>
+              <span class="about-tech-tag">Python</span>
+              <span class="about-tech-tag">FastAPI</span>
+              <span class="about-tech-tag">SQLite</span>
+              <span class="about-tech-tag">Vanilla JS</span>
+              <span class="about-tech-tag">FullCalendar</span>
+            </div>
+          </div>
+
+          <div class="about-section about-section--warning">
+            <h3 class="about-section-title">免责声明</h3>
+            <ul class="about-disclaimer">
+              <li>本软件仅供学习交流与个人使用，请勿用于商业用途</li>
+              <li>使用本软件需遵守所在国家/地区的法律法规</li>
+              <li>AI 生成的所有内容均为自动生成，不代表开发者立场</li>
+              <li>电脑操控等功能请谨慎使用，重要数据请提前备份</li>
+              <li>因使用本软件产生的任何直接或间接损失，由使用者自行承担</li>
+            </ul>
+          </div>
+
+          <div class="about-section about-section--small">
+            <p class="about-copyright">© 2026 Aerie · 云栖 — Made with 💗 for you</p>
           </div>
         </div>
       </section>
 
-      <!-- Memorial panel -->
+      <!-- Calendar panel -->
       <section id="panel-memorial" class="tab-panel">
-        <div id="memorial-content" class="settings-panel">
-          <h2>纪念日</h2>
-          <div id="memorial-list"></div>
-          <div id="memorial-form" style="display:none; margin-top:16px;">
-            <h3 id="memorial-form-title">添加纪念日</h3>
-            <div class="settings-group">
-              <label>名称</label>
-              <input type="text" id="mem-name" placeholder="例：第一次见面">
-              <label>日期</label>
-              <input type="date" id="mem-date">
-              <label>类型</label>
-              <select id="mem-type">
-                <option value="custom">自定义</option>
-                <option value="first_meet">初次相遇</option>
-                <option value="birthday">生日</option>
-              </select>
-              <label>描述</label>
-              <input type="text" id="mem-desc" placeholder="可选">
+        <div class="calendar-panel">
+          <div class="calendar-header">
+            <h2>日历 · 我们的时光</h2>
+            <button id="cal-add-btn" class="btn btn-primary">+ 添加事件</button>
+          </div>
+
+          <div class="calendar-stats">
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon">💕</div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-days-together">--</div>
+                <div class="cal-stat-label">相识天数</div>
+              </div>
             </div>
-            <div class="settings-actions">
-              <button id="mem-save-btn" class="btn btn-primary">保存</button>
-              <button id="mem-cancel-btn" class="btn btn-secondary">取消</button>
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon">💬</div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-user-msgs">--</div>
+                <div class="cal-stat-label">你说的话</div>
+              </div>
+            </div>
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon">💕</div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-companion-msgs">--</div>
+                <div class="cal-stat-label">她的回复</div>
+              </div>
+            </div>
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon">📅</div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-total-events">--</div>
+                <div class="cal-stat-label">纪念与日程</div>
+              </div>
             </div>
           </div>
-          <button id="mem-add-btn" class="btn btn-primary" style="margin-top:12px;">+ 添加纪念日</button>
+
+          <div class="calendar-main">
+            <div class="calendar-month">
+              <div class="cal-month-header">
+                <button id="cal-prev-month" class="cal-nav-btn">‹</button>
+                <div class="cal-month-title" id="cal-month-title">--</div>
+                <button id="cal-next-month" class="cal-nav-btn">›</button>
+                <button id="cal-today-btn" class="btn btn-secondary btn-sm">今天</button>
+              </div>
+              <div class="cal-weekdays">
+                <div class="cal-weekday">日</div>
+                <div class="cal-weekday">一</div>
+                <div class="cal-weekday">二</div>
+                <div class="cal-weekday">三</div>
+                <div class="cal-weekday">四</div>
+                <div class="cal-weekday">五</div>
+                <div class="cal-weekday">六</div>
+              </div>
+              <div class="cal-grid" id="cal-grid"></div>
+            </div>
+
+            <div class="calendar-events">
+              <div class="cal-events-header">
+                <h3 id="cal-events-date">今日事件</h3>
+                <div class="cal-event-filters">
+                  <button class="cal-filter-btn active" data-type="all">全部</button>
+                  <button class="cal-filter-btn" data-type="anniversary">纪念日</button>
+                  <button class="cal-filter-btn" data-type="schedule">日程</button>
+                  <button class="cal-filter-btn" data-type="countdown">倒计时</button>
+                  <button class="cal-filter-btn" data-type="journal">日志</button>
+                </div>
+              </div>
+              <div class="cal-events-list" id="cal-events-list"></div>
+            </div>
+          </div>
+
+          <div id="cal-event-modal" class="cal-modal hidden">
+            <div class="cal-modal-backdrop" data-close></div>
+            <div class="cal-modal-content">
+              <div class="cal-modal-header">
+                <h3 id="cal-modal-title">添加事件</h3>
+                <button class="cal-modal-close" data-close>×</button>
+              </div>
+              <div class="cal-modal-body">
+                <div class="settings-group">
+                  <label>事件名称</label>
+                  <input type="text" id="cal-form-title" placeholder="例：第一次见面">
+                  <label>类型</label>
+                  <select id="cal-form-type">
+                    <option value="anniversary">纪念日</option>
+                    <option value="schedule">日程</option>
+                    <option value="countdown">倒计时</option>
+                    <option value="journal">日志</option>
+                    <option value="reminder">提醒</option>
+                  </select>
+                  <label>开始日期</label>
+                  <input type="date" id="cal-form-date">
+                  <label>开始时间（可选）</label>
+                  <input type="time" id="cal-form-time">
+                  <label>描述（可选）</label>
+                  <textarea id="cal-form-desc" rows="3" placeholder="详细描述..."></textarea>
+                  <label>颜色</label>
+                  <div class="cal-color-picker" id="cal-color-picker">
+                    <span class="cal-color-dot cal-color-dot--pink" data-color="#ff9a9e"></span>
+                    <span class="cal-color-dot cal-color-dot--purple" data-color="#a18cd1"></span>
+                    <span class="cal-color-dot cal-color-dot--peach" data-color="#fad0c4"></span>
+                    <span class="cal-color-dot cal-color-dot--green" data-color="#84fab0"></span>
+                    <span class="cal-color-dot cal-color-dot--orange" data-color="#fccb90"></span>
+                    <span class="cal-color-dot cal-color-dot--blue" data-color="#a1c4fd"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="cal-modal-footer">
+                <button id="cal-delete-btn" class="btn btn-danger" style="display:none;">删除</button>
+                <div style="flex:1"></div>
+                <button id="cal-cancel-btn" class="btn btn-secondary" data-close>取消</button>
+                <button id="cal-save-btn" class="btn btn-primary">保存</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -496,7 +665,7 @@
               <p class="settings-hint">这是她在你眼中的样子。改完她就是这个人。/ This is who she is to you.</p>
               <div class="persona-edit">
                 <div class="persona-avatar">
-                  <img id="persona-avatar-preview" src="/assets/avatar_ita_default.png" alt="" data-default-src="/assets/avatar_ita_default.png">
+                  <img id="persona-avatar-preview" src="assets/avatar_default.svg" alt="" data-default-src="assets/avatar_default.svg" onerror="this.src='assets/avatar_default.svg'">
                   <input type="file" id="persona-avatar-file" accept="image/png,image/jpeg" hidden>
                   <button id="persona-avatar-upload" class="btn btn-secondary" type="button">换头像 · Change</button>
                 </div>
@@ -517,7 +686,7 @@
               <p class="settings-hint">这是你在她眼中的样子。只影响聊天界面，不会上传到任何地方。/ Purely local. Not uploaded anywhere.</p>
               <div class="persona-edit">
                 <div class="persona-avatar">
-                  <img id="user-avatar-preview" src="/assets/avatar_ita_default.png" alt="" data-default-src="/assets/avatar_ita_default.png">
+                  <img id="user-avatar-preview" src="assets/avatar_default.svg" alt="" data-default-src="assets/avatar_default.svg" onerror="this.src='assets/avatar_default.svg'">
                   <input type="file" id="user-avatar-file" accept="image/png,image/jpeg" hidden>
                   <button id="user-avatar-upload" class="btn btn-secondary" type="button">换头像 · Change</button>
                 </div>
@@ -572,6 +741,112 @@
               <label>主动推送</label>
               <input type="checkbox" id="setting-proactive" checked>
             </div>
+
+            <div class="settings-group settings-group--dynamic-island">
+              <h3 class="settings-section-title">灵动岛 · Dynamic Island</h3>
+              <p class="settings-hint">桌面顶部灵动岛的外观、交互和组件配置 / Desktop Dynamic Island appearance & interaction</p>
+
+              <div class="di-settings-preview">
+                <div class="di-preview-capsule theme-dark" id="di-preview">
+                  <div class="di-preview-left">🌸</div>
+                  <div class="di-preview-center">预览效果</div>
+                  <div class="di-preview-right">3</div>
+                </div>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>主题风格</label>
+                <div class="di-theme-options">
+                  <label class="di-theme-option">
+                    <input type="radio" name="di-theme" value="dark" checked>
+                    <span class="di-theme-preview di-theme-dark"></span>
+                    <span class="di-theme-label">深色毛玻璃</span>
+                  </label>
+                  <label class="di-theme-option">
+                    <input type="radio" name="di-theme" value="pink">
+                    <span class="di-theme-preview di-theme-pink"></span>
+                    <span class="di-theme-label">恋粉治愈</span>
+                  </label>
+                  <label class="di-theme-option">
+                    <input type="radio" name="di-theme" value="light">
+                    <span class="di-theme-preview di-theme-light"></span>
+                    <span class="di-theme-label">浅白清新</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>触发方式</label>
+                <select id="di-interaction">
+                  <option value="click">点击展开</option>
+                  <option value="hover">悬停展开</option>
+                  <option value="longpress">长按展开</option>
+                  <option value="both">点击 + 悬停</option>
+                </select>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>胶囊态显示组件（左→右）</label>
+                <div class="di-component-checks">
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="companion" checked>
+                    <span>陪伴状态</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="status" checked>
+                    <span>状态文字</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="notifications" checked>
+                    <span>消息提醒</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="quickChat">
+                    <span>快捷对话</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="media">
+                    <span>媒体状态</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="system">
+                    <span>系统状态</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>展开态显示模块</label>
+                <div class="di-component-checks">
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="quickActions" checked>
+                    <span>快捷操作</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="notifList" checked>
+                    <span>消息通知</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="companionDetail">
+                    <span>陪伴详情</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="mediaControl">
+                    <span>媒体控制</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="systemStatus">
+                    <span>系统状态</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-actions">
+                <button id="di-settings-apply" class="btn btn-primary">应用到灵动岛</button>
+                <button id="di-settings-reset" class="btn btn-secondary">恢复默认</button>
+              </div>
+            </div>
+
             <div class="settings-actions">
               <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
               <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>
@@ -1104,11 +1379,12 @@
 <script src="js/emotion-dashboard.js"></script>
 <script src="js/emotion-history.js"></script>
 <script src="js/theme-switcher.js"></script>
-<script src="js/memorial.js"></script>
-<script src="js/settings.js"></script>
-<script src="js/data-viewer.js"></script>
 <script src="js/cognition-panel.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/data-viewer.js"></script>
+    <script src="js/calendar-panel.js"></script>
 <link rel="stylesheet" href="styles/cognition-panel.css">
+<link rel="stylesheet" href="styles/calendar-panel.css">
 <link rel="stylesheet" href="styles/emotion-history.css">
 <!-- R7.1: brief drawer (replaces legacy iframe + popup + detail window) -->
 <link rel="stylesheet" href="styles/brief-drawer.css">

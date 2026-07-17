@@ -66,9 +66,12 @@ class CognitionPanel {
     this._bindToolbar();
     this._bindModal();
     this._bindSse();
+    this._bindV2Tabs();        // v2: 5 tab navigation
+    this._bindV2Refresh();     // v2: refresh buttons on capability tabs
     this._loadHistory();
     this._loadStats();
     this._loadPendingProposals();
+    this._loadV2DemoData();    // v2: seed demo data for capability tabs
     setInterval(() => this._loadStats(), 8000);
   }
 
@@ -875,6 +878,190 @@ class CognitionPanel {
     const d = new Date(ms);
     const pad = (n) => (n < 10 ? "0" + n : "" + n);
     return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  // ── v2: Tab 导航 ──────────────────────────────
+  _bindV2Tabs() {
+    const tabs = document.querySelectorAll(".cog-tab");
+    const panes = document.querySelectorAll(".cog-tab-pane");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const target = tab.dataset.cogTab;
+        tabs.forEach((t) => t.classList.remove("active"));
+        panes.forEach((p) => p.classList.remove("active"));
+        tab.classList.add("active");
+        const pane = document.getElementById("cog-pane-" + target);
+        if (pane) pane.classList.add("active");
+      });
+    });
+  }
+
+  // ── v2: 刷新按钮绑定 ──────────────────────────
+  _bindV2Refresh() {
+    const refreshMap = {
+      "cog-se-refresh": () => this._loadSelfEvolveData(),
+      "cog-cc-refresh": () => this._loadComputerControlData(),
+      "cog-fo-refresh": () => this._loadFileOrganizerData(),
+      "cog-dw-refresh": () => this._loadDocWriterData(),
+    };
+    Object.entries(refreshMap).forEach(([id, fn]) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener("click", fn.bind(this));
+    });
+  }
+
+  // ── v2: 加载演示数据 ──────────────────────────
+  _loadV2DemoData() {
+    this._loadSelfEvolveData();
+    this._loadComputerControlData();
+    this._loadFileOrganizerData();
+    this._loadDocWriterData();
+  }
+
+  _loadSelfEvolveData() {
+    const totalEl = document.getElementById("cog-se-total");
+    const appliedEl = document.getElementById("cog-se-applied");
+    const rolledEl = document.getElementById("cog-se-rolled");
+    const listEl = document.getElementById("cog-se-list");
+    const journalEl = document.getElementById("cog-se-journal");
+    const gatesEl = document.getElementById("cog-se-gates");
+    if (!totalEl || !listEl) return;
+
+    totalEl.textContent = "12";
+    appliedEl.textContent = "9";
+    rolledEl.textContent = "1";
+
+    const proposals = [
+      { icon: "🧬", title: "优化 provider_router 路由算法", meta: "2 小时前 · 5 个文件", badge: "applied", badgeText: "已应用" },
+      { icon: "🔧", title: "新增记忆清理调度器", meta: "5 小时前 · 2 个文件", badge: "applied", badgeText: "已应用" },
+      { icon: "🎨", title: "重构 emotion 情绪计算逻辑", meta: "1 天前 · 3 个文件", badge: "applied", badgeText: "已应用" },
+      { icon: "⚡", title: "优化 context_builder 上下文压缩", meta: "2 天前 · 1 个文件", badge: "rolled", badgeText: "已回滚" },
+      { icon: "🔐", title: "增强 tool_isolation 安全校验", meta: "3 天前 · 2 个文件", badge: "rejected", badgeText: "已拒绝" },
+    ];
+    listEl.innerHTML = proposals.map((p) => `
+      <div class="cog-se-item">
+        <span class="cog-se-item-icon">${p.icon}</span>
+        <div class="cog-se-item-body">
+          <div class="cog-se-item-title">${p.title}</div>
+          <div class="cog-se-item-meta">${p.meta}</div>
+        </div>
+        <span class="cog-se-item-badge cog-se-item-badge--${p.badge}">${p.badgeText}</span>
+      </div>
+    `).join("");
+
+    const journals = [
+      { time: "14:32:15", action: "提案创建", detail: "优化 provider_router 路由算法" },
+      { time: "14:32:18", action: "安全审查", detail: "通过 ✓" },
+      { time: "14:32:20", action: "语法检查", detail: "通过 ✓" },
+      { time: "14:32:25", action: "测试验证", detail: "通过 ✓" },
+      { time: "14:32:30", action: "回滚准备", detail: "通过 ✓" },
+      { time: "14:32:31", action: "应用代码", detail: "5 个文件已修改" },
+      { time: "14:35:00", action: "观察期", detail: "24h 回滚窗口启动" },
+    ];
+    journalEl.innerHTML = journals.map((j) => `
+      <div class="cog-cc-item">
+        <span class="cog-cc-time">${j.time}</span>
+        <span class="cog-cc-type cog-cc-type--shell">${j.action}</span>
+        <span class="cog-cc-desc">${j.detail}</span>
+      </div>
+    `).join("");
+  }
+
+  _loadComputerControlData() {
+    const levelEl = document.getElementById("cog-cc-level");
+    const todayEl = document.getElementById("cog-cc-today");
+    const blockedEl = document.getElementById("cog-cc-blocked");
+    const logEl = document.getElementById("cog-cc-log");
+    if (!levelEl || !logEl) return;
+
+    levelEl.textContent = "VIEW_ONLY";
+    todayEl.textContent = "0";
+    blockedEl.textContent = "0";
+
+    const logs = [
+      { time: "14:00:00", type: "screenshot", desc: "截取当前屏幕" },
+      { time: "14:05:00", type: "mouse", desc: "移动鼠标到 (500, 300)" },
+      { time: "14:10:00", type: "keyboard", desc: "输入 'hello world'" },
+      { time: "14:15:00", type: "blocked", desc: "拦截危险命令: rm -rf /" },
+      { time: "14:20:00", type: "shell", desc: "执行 dir 命令" },
+    ];
+    logEl.innerHTML = logs.map((l) => `
+      <div class="cog-cc-item">
+        <span class="cog-cc-time">${l.time}</span>
+        <span class="cog-cc-type cog-cc-type--${l.type}">${l.type}</span>
+        <span class="cog-cc-desc">${l.desc}</span>
+      </div>
+    `).join("");
+  }
+
+  _loadFileOrganizerData() {
+    const organizedEl = document.getElementById("cog-fo-organized");
+    const undoableEl = document.getElementById("cog-fo-undoable");
+    const savedEl = document.getElementById("cog-fo-saved");
+    const historyEl = document.getElementById("cog-fo-history");
+    const undoEl = document.getElementById("cog-fo-undo");
+    if (!organizedEl || !historyEl) return;
+
+    organizedEl.textContent = "156";
+    undoableEl.textContent = "3";
+    savedEl.textContent = "12.4 MB";
+
+    const history = [
+      { icon: "🖼️", title: "下载目录图片整理", meta: "今天 10:30 · 42 张图片", count: "42" },
+      { icon: "📄", title: "文档目录分类", meta: "昨天 15:20 · 68 个文件", count: "68" },
+      { icon: "📦", title: "下载清理", meta: "3 天前 · 46 个文件", count: "46" },
+    ];
+    historyEl.innerHTML = history.map((h) => `
+      <div class="cog-fo-item">
+        <span class="cog-fo-item-icon">${h.icon}</span>
+        <div class="cog-fo-item-body">
+          <div class="cog-fo-item-title">${h.title}</div>
+          <div class="cog-fo-item-meta">${h.meta}</div>
+        </div>
+        <span class="cog-fo-item-count">${h.count}</span>
+      </div>
+    `).join("");
+
+    const undos = [
+      { icon: "↩️", title: "下载目录图片整理", meta: "今天 10:30 · 7 天内可撤销" },
+      { icon: "↩️", title: "文档目录分类", meta: "昨天 15:20 · 6 天内可撤销" },
+      { icon: "↩️", title: "下载清理", meta: "3 天前 · 4 天内可撤销" },
+    ];
+    undoEl.innerHTML = undos.map((u) => `
+      <div class="cog-fo-item">
+        <span class="cog-fo-item-icon">${u.icon}</span>
+        <div class="cog-fo-item-body">
+          <div class="cog-fo-item-title">${u.title}</div>
+          <div class="cog-fo-item-meta">${u.meta}</div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  _loadDocWriterData() {
+    const countEl = document.getElementById("cog-dw-count");
+    const listEl = document.getElementById("cog-dw-list");
+    if (!countEl || !listEl) return;
+
+    countEl.textContent = "28";
+
+    const docs = [
+      { icon: "📔", title: "每日日记 2026-07-18", meta: "今天 · 日记模板", format: "MD" },
+      { icon: "📊", title: "Q3 销售分析报告", meta: "昨天 · 报告模板", format: "PDF" },
+      { icon: "📋", title: "API 规格说明书 v2.0", meta: "3 天前 · 规格模板", format: "HTML" },
+      { icon: "🔬", title: "大语言模型研究综述", meta: "1 周前 · 研究模板", format: "DOCX" },
+      { icon: "💼", title: "个人简历 2026", meta: "2 周前 · 简历模板", format: "PDF" },
+    ];
+    listEl.innerHTML = docs.map((d) => `
+      <div class="cog-dw-item">
+        <span class="cog-dw-item-icon">${d.icon}</span>
+        <div class="cog-dw-item-body">
+          <div class="cog-dw-item-title">${d.title}</div>
+          <div class="cog-dw-item-meta">${d.meta}</div>
+        </div>
+        <span class="cog-dw-item-format">${d.format}</span>
+      </div>
+    `).join("");
   }
 }
 

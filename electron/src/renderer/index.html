@@ -648,14 +648,14 @@
         </div>
       </section>
 
-      <!-- Cognition panel (Phase 9 Batch 4: brain center) -->
+      <!-- Cognition panel v2 (Phase S6: brain center + 4 capability tabs) -->
       <section id="panel-cognition" class="tab-panel">
         <div class="cognition-panel">
           <!-- 头部 · header -->
           <div class="cog-header">
             <div class="cog-header-text">
-              <h2>伊塔 · 大脑中枢 <small>开发者后台 · Cognition Backend</small></h2>
-              <p class="cog-header-sub">这里能看到她刚才是怎么想的。/ Watch her think in real time.</p>
+              <h2>伊塔 · 认知中枢 <small>v2 · Cognition Backend</small></h2>
+              <p class="cog-header-sub">大脑、自进化、操控、整理、写作 — 她的全部内在。</p>
             </div>
             <div class="cog-header-stats">
               <div class="cog-stat">
@@ -666,10 +666,6 @@
                 <span class="cog-stat-label">总 trace</span>
                 <span class="cog-stat-value" id="cog-stat-total">0</span>
               </div>
-              <div class="cog-stat">
-                <span class="cog-stat-label">平均耗时</span>
-                <span class="cog-stat-value" id="cog-stat-avg">0<span class="cog-stat-unit">ms</span></span>
-              </div>
               <div class="cog-stat cog-stat--pulse">
                 <span class="cog-stat-label">live</span>
                 <span class="cog-stat-pulse" id="cog-stat-pulse"></span>
@@ -677,65 +673,405 @@
             </div>
           </div>
 
-          <!-- 工具栏 · toolbar -->
-          <div class="cognition-toolbar">
-            <select id="cog-source-filter" title="来源过滤">
-              <option value="">全部来源 / All sources</option>
-              <option value="qq">QQ</option>
-              <option value="local">本地 / Local</option>
-            </select>
-            <input id="cog-search" type="text" placeholder="搜索消息内容 / Search content">
-            <button id="cog-refresh" class="btn btn-secondary btn-sm" title="刷新历史">刷新 · Refresh</button>
-            <button id="cog-pause" class="btn btn-secondary btn-sm" title="暂停/继续实时流" data-paused="false"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-pause"/></svg> 暂停</button>
-            <button id="cog-clear" class="btn btn-secondary btn-sm" title="清屏实时区"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-broom"/></svg> 清屏</button>
+          <!-- v2 Tab 导航 · tab nav -->
+          <div class="cog-tabs" role="tablist">
+            <button class="cog-tab active" data-cog-tab="brain" role="tab">
+              <span class="cog-tab-icon">🧠</span>
+              <span class="cog-tab-label">大脑中枢</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="self-evolve" role="tab">
+              <span class="cog-tab-icon">🧬</span>
+              <span class="cog-tab-label">自进化</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="computer" role="tab">
+              <span class="cog-tab-icon">🖱️</span>
+              <span class="cog-tab-label">电脑操控</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="files" role="tab">
+              <span class="cog-tab-icon">📁</span>
+              <span class="cog-tab-label">文件整理</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="docs" role="tab">
+              <span class="cog-tab-icon">📝</span>
+              <span class="cog-tab-label">文档写作</span>
+            </button>
           </div>
 
-          <!-- 自进化提议卡片槽位 (B6 填充) -->
-          <div id="cog-proposal-card" class="cog-proposal-card hidden"></div>
+          <!-- Tab 内容 · tab content -->
+          <div class="cog-tab-content">
 
-          <!-- 9 阶段时间轴 · latest trace timeline -->
-          <div class="cog-section">
-            <h3>
-              <span class="cog-section-title">最近一次 9 阶段时间轴</span>
-              <span class="cog-section-sub">Last trace · 9 stages</span>
-            </h3>
-            <div id="cog-timeline" class="cog-timeline">
-              <div class="cog-timeline-empty">还没有任何 trace。/ No trace yet. Send her a message first.</div>
-            </div>
-          </div>
+            <!-- Tab 1: 大脑中枢（原有内容） -->
+            <div class="cog-tab-pane active" id="cog-pane-brain" role="tabpanel">
 
-          <!-- 决策权重赛马图 · decision race -->
-          <div class="cog-section">
-            <h3>
-              <span class="cog-section-title">决策权重赛马</span>
-              <span class="cog-section-sub">Decision race · L1+L2+L3+L4</span>
-            </h3>
-            <div id="cog-decision-race" class="cog-decision-race">
-              <div class="cog-timeline-empty">等待决策 / Awaiting decision</div>
-            </div>
-          </div>
+              <!-- 工具栏 · toolbar -->
+              <div class="cognition-toolbar">
+                <select id="cog-source-filter" title="来源过滤">
+                  <option value="">全部来源 / All sources</option>
+                  <option value="qq">QQ</option>
+                  <option value="local">本地 / Local</option>
+                </select>
+                <input id="cog-search" type="text" placeholder="搜索消息内容 / Search content">
+                <button id="cog-refresh" class="btn btn-secondary btn-sm" title="刷新历史">刷新 · Refresh</button>
+                <button id="cog-pause" class="btn btn-secondary btn-sm" title="暂停/继续实时流" data-paused="false"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-pause"/></svg> 暂停</button>
+                <button id="cog-clear" class="btn btn-secondary btn-sm" title="清屏实时区"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-broom"/></svg> 清屏</button>
+              </div>
 
-          <!-- 实时 stream · live -->
-          <div class="cog-section">
-            <h3>
-              <span class="cog-section-title">实时 stream</span>
-              <span class="cog-section-sub">最近 50 条 · last 50</span>
-            </h3>
-            <div id="cog-stream" class="cog-stream">
-              <div class="cog-timeline-empty">等待事件 / Waiting for events…</div>
-            </div>
-          </div>
+              <!-- 自进化提议卡片槽位 (B6 填充) -->
+              <div id="cog-proposal-card" class="cog-proposal-card hidden"></div>
 
-          <!-- 历史 trace · history -->
-          <div class="cog-section">
-            <h3>
-              <span class="cog-section-title">历史 trace</span>
-              <span class="cog-section-sub">Click row to expand</span>
-            </h3>
-            <ul id="cog-list" class="cog-list">
-              <li class="cog-list-empty">暂无历史 / No history yet.</li>
-            </ul>
-          </div>
+              <!-- 9 阶段时间轴 · latest trace timeline -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近一次 9 阶段时间轴</span>
+                  <span class="cog-section-sub">Last trace · 9 stages</span>
+                </h3>
+                <div id="cog-timeline" class="cog-timeline">
+                  <div class="cog-timeline-empty">还没有任何 trace。/ No trace yet. Send her a message first.</div>
+                </div>
+              </div>
+
+              <!-- 决策权重赛马图 · decision race -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">决策权重赛马</span>
+                  <span class="cog-section-sub">Decision race · L1+L2+L3+L4</span>
+                </h3>
+                <div id="cog-decision-race" class="cog-decision-race">
+                  <div class="cog-timeline-empty">等待决策 / Awaiting decision</div>
+                </div>
+              </div>
+
+              <!-- 实时 stream · live -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">实时 stream</span>
+                  <span class="cog-section-sub">最近 50 条 · last 50</span>
+                </h3>
+                <div id="cog-stream" class="cog-stream">
+                  <div class="cog-timeline-empty">等待事件 / Waiting for events…</div>
+                </div>
+              </div>
+
+              <!-- 历史 trace · history -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">历史 trace</span>
+                  <span class="cog-section-sub">Click row to expand</span>
+                </h3>
+                <ul id="cog-list" class="cog-list">
+                  <li class="cog-list-empty">暂无历史 / No history yet.</li>
+                </ul>
+              </div>
+
+            </div><!-- /#cog-pane-brain -->
+
+            <!-- Tab 2: 自进化 -->
+            <div class="cog-tab-pane" id="cog-pane-self-evolve" role="tabpanel">
+              <div class="cog-v2-hero">
+                <div class="cog-v2-hero-icon">🧬</div>
+                <div class="cog-v2-hero-text">
+                  <h3>自进化 L4 · Self-Evolution</h3>
+                  <p>代码自修改 · 4 道生存闸门 · 24h 回滚窗口</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">总提案</span>
+                    <span class="cog-v2-stat-value" id="cog-se-total">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已应用</span>
+                    <span class="cog-v2-stat-value" id="cog-se-applied">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已回滚</span>
+                    <span class="cog-v2-stat-value" id="cog-se-rolled">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">生存闸门状态</span>
+                  <span class="cog-section-sub">Viability gates</span>
+                </h3>
+                <div class="cog-gates-grid" id="cog-se-gates">
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">安全审查</div>
+                    <div class="cog-gate-desc">Security review</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">语法检查</div>
+                    <div class="cog-gate-desc">Syntax check</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">测试验证</div>
+                    <div class="cog-gate-desc">Test verify</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">回滚准备</div>
+                    <div class="cog-gate-desc">Rollback ready</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近提案</span>
+                  <span class="cog-section-sub">Recent proposals</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-se-refresh">刷新</button>
+                </h3>
+                <div id="cog-se-list" class="cog-se-list">
+                  <div class="cog-timeline-empty">暂无提案 / No proposals yet</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">审计日志</span>
+                  <span class="cog-section-sub">Audit journal</span>
+                </h3>
+                <div id="cog-se-journal" class="cog-se-journal">
+                  <div class="cog-timeline-empty">暂无日志 / No journal entries</div>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-self-evolve -->
+
+            <!-- Tab 3: 电脑操控 -->
+            <div class="cog-tab-pane" id="cog-pane-computer" role="tabpanel">
+              <div class="cog-v2-hero">
+                <div class="cog-v2-hero-icon">🖱️</div>
+                <div class="cog-v2-hero-text">
+                  <h3>电脑操控 · Computer Control</h3>
+                  <p>3 级权限 · 键鼠/截图/UIA · 危险命令拦截</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">当前权限</span>
+                    <span class="cog-v2-stat-value" id="cog-cc-level">VIEW_ONLY</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">今日操作</span>
+                    <span class="cog-v2-stat-value" id="cog-cc-today">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已拦截</span>
+                    <span class="cog-v2-stat-value" id="cog-cc-blocked">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">权限档位</span>
+                  <span class="cog-section-sub">Permission level</span>
+                </h3>
+                <div class="cog-cc-levels">
+                  <div class="cog-cc-level" data-level="VIEW_ONLY">
+                    <div class="cog-cc-level-name">👁️ 仅查看</div>
+                    <div class="cog-cc-level-desc">只能截图、查看窗口信息</div>
+                  </div>
+                  <div class="cog-cc-level" data-level="STANDARD">
+                    <div class="cog-cc-level-name">✋ 标准</div>
+                    <div class="cog-cc-level-desc">可键鼠操作、执行安全命令</div>
+                  </div>
+                  <div class="cog-cc-level" data-level="FULL">
+                    <div class="cog-cc-level-name">⚡ 完全</div>
+                    <div class="cog-cc-level-desc">完整控制，需用户持续确认</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">操作审计日志</span>
+                  <span class="cog-section-sub">Audit log</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-cc-refresh">刷新</button>
+                </h3>
+                <div id="cog-cc-log" class="cog-cc-log">
+                  <div class="cog-timeline-empty">暂无操作记录 / No operations yet</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">危险命令黑名单</span>
+                  <span class="cog-section-sub">Dangerous command blacklist</span>
+                </h3>
+                <div class="cog-cc-blacklist" id="cog-cc-blacklist">
+                  <span class="cog-tag">rm -rf /</span>
+                  <span class="cog-tag">format</span>
+                  <span class="cog-tag">del /s /q</span>
+                  <span class="cog-tag">mkfs</span>
+                  <span class="cog-tag">dd if=</span>
+                  <span class="cog-tag">reg delete</span>
+                  <span class="cog-tag">shutdown /s</span>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-computer -->
+
+            <!-- Tab 4: 文件整理 -->
+            <div class="cog-tab-pane" id="cog-pane-files" role="tabpanel">
+              <div class="cog-v2-hero">
+                <div class="cog-v2-hero-icon">📁</div>
+                <div class="cog-v2-hero-text">
+                  <h3>文件整理 · File Organizer</h3>
+                  <p>AI 智能分类 · 预览执行 · 7 天撤销</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已整理</span>
+                    <span class="cog-v2-stat-value" id="cog-fo-organized">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">可撤销</span>
+                    <span class="cog-v2-stat-value" id="cog-fo-undoable">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">节省空间</span>
+                    <span class="cog-v2-stat-value" id="cog-fo-saved">0 MB</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">快速整理</span>
+                  <span class="cog-section-sub">Quick organize</span>
+                </h3>
+                <div class="cog-fo-quick">
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon">🖼️</div>
+                    <div class="cog-fo-name">图片整理</div>
+                    <div class="cog-fo-desc">按日期/类型归档图片</div>
+                  </div>
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon">📄</div>
+                    <div class="cog-fo-name">文档整理</div>
+                    <div class="cog-fo-desc">PDF/Word/Excel 分类</div>
+                  </div>
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon">🎬</div>
+                    <div class="cog-fo-name">视频整理</div>
+                    <div class="cog-fo-desc">按大小/时长排序</div>
+                  </div>
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon">📦</div>
+                    <div class="cog-fo-name">下载清理</div>
+                    <div class="cog-fo-desc">清理重复/过期文件</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近整理记录</span>
+                  <span class="cog-section-sub">Recent operations</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-fo-refresh">刷新</button>
+                </h3>
+                <div id="cog-fo-history" class="cog-fo-history">
+                  <div class="cog-timeline-empty">暂无整理记录 / No operations yet</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">撤销日志</span>
+                  <span class="cog-section-sub">Undo log · 7 天有效</span>
+                </h3>
+                <div id="cog-fo-undo" class="cog-fo-undo">
+                  <div class="cog-timeline-empty">暂无撤销记录 / No undo entries</div>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-files -->
+
+            <!-- Tab 5: 文档写作 -->
+            <div class="cog-tab-pane" id="cog-pane-docs" role="tabpanel">
+              <div class="cog-v2-hero">
+                <div class="cog-v2-hero-icon">📝</div>
+                <div class="cog-v2-hero-text">
+                  <h3>文档写作 · Doc Writer</h3>
+                  <p>5 类模板 · 4 种导出格式 · 3 种 HTML 样式</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已生成</span>
+                    <span class="cog-v2-stat-value" id="cog-dw-count">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">模板使用</span>
+                    <span class="cog-v2-stat-value" id="cog-dw-templates">5</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">导出格式</span>
+                    <span class="cog-v2-stat-value" id="cog-dw-formats">4</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">文档模板</span>
+                  <span class="cog-section-sub">Templates</span>
+                </h3>
+                <div class="cog-dw-templates">
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon">📔</div>
+                    <div class="cog-dw-tpl-name">日记</div>
+                    <div class="cog-dw-tpl-desc">Diary</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon">📊</div>
+                    <div class="cog-dw-tpl-name">报告</div>
+                    <div class="cog-dw-tpl-desc">Report</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon">📋</div>
+                    <div class="cog-dw-tpl-name">规格</div>
+                    <div class="cog-dw-tpl-desc">Spec</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon">🔬</div>
+                    <div class="cog-dw-tpl-name">研究</div>
+                    <div class="cog-dw-tpl-desc">Research</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon">💼</div>
+                    <div class="cog-dw-tpl-name">简历</div>
+                    <div class="cog-dw-tpl-desc">Resume</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">导出格式</span>
+                  <span class="cog-section-sub">Export formats</span>
+                </h3>
+                <div class="cog-dw-formats">
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon">📝</span> Markdown</div>
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon">🌐</span> HTML</div>
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon">📕</span> PDF</div>
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon">📘</span> Word</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近文档</span>
+                  <span class="cog-section-sub">Recent documents</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-dw-refresh">刷新</button>
+                </h3>
+                <div id="cog-dw-list" class="cog-dw-list">
+                  <div class="cog-timeline-empty">暂无文档 / No documents yet</div>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-docs -->
+
+          </div><!-- /.cog-tab-content -->
         </div>
       </section>
 

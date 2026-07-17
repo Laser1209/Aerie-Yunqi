@@ -1,0 +1,16 @@
+# gen_toc_keywords.txt
+# Block keyword definitions for gen_toc_v3.ps1
+# Format: <BLOCK_ID>: kw1 | kw2 | kw3
+# Lines starting with # are comments.
+# Block order: ENTRANCE -> CORE -> NEW -> APPENDIX -> OPS
+# Keywords are matched against H1 titles via substring match.
+
+BLOCK_ENTRANCE: 快速恢复 | 项目历程
+
+BLOCK_CORE: 版本演进 | Phase 0 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | 版本号管理 | 架构决策 | 为什么不引入 | 工作流可视化 | 已确认决策
+
+BLOCK_NEW: 悬浮球 v2 | Persona
+
+BLOCK_APPENDIX: 附录 A | 附录 B | 附录 C | 附录 D
+
+BLOCK_OPS: 免责声明 | 用户须知 | 联系方式

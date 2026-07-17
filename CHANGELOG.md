@@ -9,6 +9,44 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [12.0.1] - 2026-07-18
+
+> **v12 大版本发布 / Major release: v12**
+> 外部单 Agent + 内部准多 Agent 架构，能力全面爆发
+> 核心跃升：自进化 L4 · 电脑操控 · 文件整理 · 文档写作 · 自主 Skill · QQ 深耕 · Cognition Panel v2
+
+### ✨ Added / 新增
+
+#### 架构升级
+- **Agent 抽象 (S1)**：显式 Agent 类，六步主循环（Perceive→Reason→Decide→Act→Reflect→Express），异步 Reflect 队列
+- **Provider 智能路由 (S2)**：5 维复杂度评估，动态路由 + 全局预算跟踪，混合模式（规则为主 + LLM 仲裁）
+- **四层记忆 + 安全 (S3)**：transient/working/long-term/permanent 四层记忆架构，工具调用隔离，10 类 Prompt Injection 防御
+- **多模态 + 自进化 L1-L3 (S4)**：图片输入、TTS 语音输出，梦境整理 / 会话复盘 / 主动沉淀三级自进化
+
+#### S5 能力大爆发
+- **🧬 自进化 L4**：代码自修改引擎，4 道生存闸门（安全审查 / 语法检查 / 测试验证 / 回滚准备），白名单控制，24h 回滚窗口，完整审计日志
+- **🖱️ 电脑操控**：3 级权限（VIEW_ONLY / STANDARD / FULL），键鼠控制 + 截图 + UIA 自动化 + 受限 Shell，危险命令黑名单，操作审计日志
+- **📁 文件整理**：目录扫描 + AI 智能分类 + 预览执行 + 一键移动/重命名，7 天撤销日志，大文件/近期文件标记
+- **📝 文档写作**：5 类模板（日记/报告/规格/研究/简历），4 种导出格式（Markdown/HTML/PDF/Word），3 种 HTML 样式
+- **🔧 自主 Skill 创建**：5 类模板（utility/text_processing/data_query/transform/custom），安全沙箱验证，命名空间隔离，自动注册加载
+- **💬 QQ 深耕**：语音优化（Silk 编码 + 缓存），视频管理（缩略图 + 压缩），大文件传输（分块 + MD5 校验），主动消息 v2（4 级优先级 + 定时 + 速率限制）
+
+#### S6 集成发布
+- **🧠 Cognition Panel v2**：5 Tab 导航（大脑中枢 / 自进化 / 电脑操控 / 文件整理 / 文档写作），渐变玻璃风，完整响应式，原有功能完整保留
+- **📦 便携版打包**：Windows x64 portable ZIP，即下即用，无需安装
+
+### 🔧 Changed / 变更
+- Electron 版本号：9.0.0 → 12.0.1
+- Cognition Panel 全面升级为 v2 多 Tab 架构
+
+### 🛡️ Security / 安全
+- L4 自进化：白名单 + 4 道闸门 + 24h 回滚窗口，确保代码修改安全可控
+- 电脑操控：3 级权限 + 危险命令黑名单 + 审计日志，防止误操作
+- 文件整理：预览二次确认 + 7 天撤销日志，数据可恢复
+- Prompt Injection：10 类攻击向量全绿，工具调用隔离生效
+
+---
+
 ## [9.0.0] - 2026-07-16
 
 > **首个可分发的完整版本 / First distributable complete release**

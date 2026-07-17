@@ -1,78 +1,18 @@
 {
-  "score": 51.33,
-  "ts": 1784289618.1322646,
+  "score": 52.51,
+  "ts": 1784291118.2076788,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.4166996071073744,
-    "emotion_overdraft": 5.647108136408633,
-    "patience_loss": 40.8,
+    "user_absence_hours": 0.8333869981765747,
+    "emotion_overdraft": 6.723450387658436,
+    "patience_loss": 40.7,
     "weather_impact": 0.0,
     "time_of_day_boost": 8.0,
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1784251618.0375552,
-      "score": 63.8,
-      "variables": {
-        "user_absence_hours": 0.005366107887691922,
-        "emotion_overdraft": 4.74,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784253051.1995592,
-      "score": 60.52,
-      "variables": {
-        "user_absence_hours": 0.08334913074970246,
-        "emotion_overdraft": 0.5399999999999999,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784253351.2165022,
-      "score": 60.6,
-      "variables": {
-        "user_absence_hours": 0.1666870912578371,
-        "emotion_overdraft": 0.5399999999999999,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784253651.2367868,
-      "score": 60.68,
-      "variables": {
-        "user_absence_hours": 0.2500257251660029,
-        "emotion_overdraft": 0.5399999999999999,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784253951.2548609,
-      "score": 60.33,
-      "variables": {
-        "user_absence_hours": 0.3333642062213686,
-        "emotion_overdraft": 0.0,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1784254251.2811086,
       "score": 60.85,
@@ -608,6 +548,66 @@
         "user_absence_hours": 0.4166996071073744,
         "emotion_overdraft": 5.647108136408633,
         "patience_loss": 40.8,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784289918.1495297,
+      "score": 52.7,
+      "variables": {
+        "user_absence_hours": 0.5000372912486394,
+        "emotion_overdraft": 7.253097068900716,
+        "patience_loss": 40.8,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784290218.1657057,
+      "score": 53.75,
+      "variables": {
+        "user_absence_hours": 0.5833751604292128,
+        "emotion_overdraft": 8.459739511363924,
+        "patience_loss": 40.8,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784290518.179143,
+      "score": 52.45,
+      "variables": {
+        "user_absence_hours": 0.6667124734984504,
+        "emotion_overdraft": 6.73377684813022,
+        "patience_loss": 40.8,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784290818.1974916,
+      "score": 51.41,
+      "variables": {
+        "user_absence_hours": 0.750050850643052,
+        "emotion_overdraft": 5.454909898387615,
+        "patience_loss": 40.7,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784291118.2076807,
+      "score": 52.51,
+      "variables": {
+        "user_absence_hours": 0.8333869981765747,
+        "emotion_overdraft": 6.723450387658436,
+        "patience_loss": 40.7,
         "weather_impact": 0.0,
         "time_of_day_boost": 8.0,
         "anniversary_boost": 0.0

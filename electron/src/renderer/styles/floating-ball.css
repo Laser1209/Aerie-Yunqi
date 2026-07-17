@@ -1,6 +1,34 @@
-/* Aerie · 云栖 v9.0 — Floating Ball Styles */
+/* Aerie · 云栖 v10.1.1 — Floating Ball Styles
+ * 仿豆包悬浮球 · CSS 变量驱动，外观可热更新
+ * 主题：Aerie 蓝（默认） · 晨曦粉 · 森林绿 · 薰衣紫 · 琥珀金 · 墨夜
+ */
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* 默认主题（Aerie 蓝） */
+  --ball-size: 56px;
+  --ball-opacity: 1;
+  --ball-grad-1: #66abff;
+  --ball-grad-2: #007aff;
+  --ball-glow: rgba(0, 122, 255, 0.45);
+  --ball-glyph-color: #ffffff;
+  --ball-badge-bg: #ff3b30;
+  --ball-badge-fg: #ffffff;
+  --ball-shell-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 6px 14px -4px var(--ball-glow),
+    0 2px 4px rgba(0, 0, 0, 0.06);
+  --ball-transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  --ball-edge-peek: 6px;
+  --ball-edge-hidden: calc(var(--ball-size) * -1 + var(--ball-edge-peek));
+}
 
 body {
   margin: 0;
@@ -8,73 +36,612 @@ body {
   background: transparent;
   -webkit-user-select: none;
   user-select: none;
+  font-family: "DM Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
+/* ==================== 主球体 ==================== */
 .floating-ball {
   position: fixed;
   right: 30px;
   top: 30px;
-  width: 56px;
-  height: 56px;
-  cursor: pointer;
+  width: var(--ball-size);
+  height: var(--ball-size);
+  cursor: grab;
   z-index: 9999;
+  opacity: var(--ball-opacity);
+  transition: left 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+              top 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+              opacity 0.24s ease,
+              transform 0.18s ease;
+  transform-origin: center;
+  -webkit-app-region: no-drag;
+  touch-action: none;
+}
+
+.floating-ball.dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.floating-ball:hover:not(.dragging) {
+  transform: scale(1.08);
+}
+
+.floating-ball.docked .ball-inner {
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--ball-grad-1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.floating-ball.docked .ball-glyph,
+.floating-ball.docked .ball-pulse {
+  display: none;
+}
+
+.floating-ball.docked:hover {
+  transform: scale(1.6);
+}
+
+.floating-ball.docked:hover .ball-inner {
+  width: var(--ball-size);
+  height: var(--ball-size);
+  border-radius: 50%;
+}
+
+.floating-ball.docked:hover .ball-glyph {
+  display: block;
+}
+
+/* ==================== 球壳 ==================== */
+.ball-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .ball-inner {
-  width: 56px;
-  height: 56px;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-floating-ball-grad-1, #66abff), var(--color-floating-ball-grad-2, #007aff));
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.18) inset,
-    0 6px 14px -4px rgba(0,122,255,.45),
-    0 2px 4px rgba(0,0,0,.06);
+  background: linear-gradient(135deg, var(--ball-grad-1), var(--ball-grad-2));
+  box-shadow: var(--ball-shell-shadow);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: transform .3s cubic-bezier(.32,.72,0,1);
+  transition: width 0.28s ease, height 0.28s ease, border-radius 0.28s ease;
 }
+
 .ball-inner::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(120% 80% at 30% 18%, rgba(255,255,255,.45), transparent 55%);
+  background: radial-gradient(120% 80% at 30% 18%, rgba(255, 255, 255, 0.45), transparent 55%);
   pointer-events: none;
-}
-.floating-ball:hover .ball-inner {
-  transform: scale(1.08);
 }
 
 .ball-glyph {
-  color: var(--color-primary-fg);
-  font-size: 22px;
+  color: var(--ball-glyph-color);
+  font-size: calc(var(--ball-size) * 0.4);
   font-weight: 600;
-  font-family: "DM Sans", "PingFang SC", sans-serif;
-  text-shadow: 0 1px 1px rgba(0,0,0,.18);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
   position: relative;
-  z-index: 1;
+  z-index: 2;
+  line-height: 1;
+  transition: font-size 0.28s ease;
 }
 
+/* 脉动光晕（未读消息时显示） */
+.ball-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--ball-glow) 0%, transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.floating-ball.has-unread .ball-pulse {
+  opacity: 0.7;
+  animation: ballPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ballPulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.25); opacity: 0.85; }
+}
+
+/* ==================== 角标 ==================== */
 .ball-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -4px;
+  right: -4px;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--color-ball-badge, #ff3b30);
-  color: var(--color-primary-fg);
+  background: var(--ball-badge-bg);
+  color: var(--ball-badge-fg);
   font-size: 11px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--color-primary-fg);
-  box-shadow: 0 1px 2px rgba(0,0,0,.18);
-  font-family: "DM Sans", sans-serif;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  z-index: 3;
+  font-family: "DM Sans", "PingFang SC", sans-serif;
 }
 
+.ball-badge.bump {
+  animation: badgeBump 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes badgeBump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* ==================== 右键菜单 ==================== */
+.ball-context-menu {
+  position: fixed;
+  min-width: 200px;
+  background: rgba(28, 30, 36, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  padding: 6px;
+  z-index: 10000;
+  opacity: 0;
+  transform: scale(0.92) translateY(-4px);
+  transform-origin: top left;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  pointer-events: none;
+}
+
+.ball-context-menu:not(.hidden) {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #f0f1f5;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menu-item:active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.menu-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  filter: grayscale(0.1);
+}
+
+.menu-text {
+  flex: 1;
+}
+
+.menu-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 6px;
+}
+
+/* ==================== 设置面板 ==================== */
+.ball-settings {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.ball-settings:not(.hidden) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.settings-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.settings-panel {
+  position: relative;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  background: #1c1e24;
+  color: #f0f1f5;
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.95);
+  transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.ball-settings:not(.hidden) .settings-panel {
+  transform: scale(1);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.settings-close {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  color: #f0f1f5;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.12s ease;
+}
+
+.settings-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.settings-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.settings-section {
+  margin-bottom: 20px;
+}
+
+.section-label {
+  font-size: 11px;
+  color: rgba(240, 241, 245, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+}
+
+/* 预览区 */
+.preview-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.preview-stage::before,
+.preview-stage::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.preview-stage::before { top: 30%; }
+.preview-stage::after { top: 70%; }
+
+.preview-ball {
+  width: var(--ball-size);
+  height: var(--ball-size);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--ball-grad-1), var(--ball-grad-2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--ball-shell-shadow);
+  transition: width 0.2s ease, height 0.2s ease, background 0.2s ease;
+}
+
+.preview-glyph {
+  color: var(--ball-glyph-color);
+  font-size: calc(var(--ball-size) * 0.4);
+  font-weight: 600;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+}
+
+/* 字符选择 */
+.glyph-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.glyph-chip {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f0f1f5;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s ease;
+}
+
+.glyph-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.glyph-chip.active {
+  background: rgba(0, 122, 255, 0.18);
+  border-color: rgba(0, 122, 255, 0.5);
+  color: #66abff;
+}
+
+.glyph-input {
+  width: 100%;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f0f1f5;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+
+.glyph-input:focus {
+  border-color: rgba(0, 122, 255, 0.5);
+}
+
+/* 主题色 */
+.theme-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.theme-chip {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  position: relative;
+}
+
+.theme-chip:hover {
+  transform: scale(1.08);
+}
+
+.theme-chip.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+}
+
+/* 滑块 */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  outline: none;
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #007aff;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+}
+
+.slider-value {
+  font-size: 12px;
+  color: rgba(240, 241, 245, 0.75);
+  min-width: 50px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 开关 */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13px;
+  color: #f0f1f5;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-row input[type="checkbox"] {
+  width: 36px;
+  height: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.toggle-row input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: left 0.18s ease;
+}
+
+.toggle-row input[type="checkbox"]:checked {
+  background: #007aff;
+}
+
+.toggle-row input[type="checkbox"]:checked::after {
+  left: 18px;
+}
+
+/* 设置页脚 */
+.settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-primary,
+.btn-secondary {
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.btn-primary {
+  background: #007aff;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background: #0066d6;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f0f1f5;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ==================== 边缘小条 ==================== */
+.ball-edge-tab {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--ball-grad-1), var(--ball-grad-2));
+  border-radius: 0 8px 8px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease, left 0.32s ease, right 0.32s ease;
+}
+
+.ball-edge-tab:not(.hidden) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ball-edge-tab.left {
+  left: 0;
+  border-radius: 0 8px 8px 0;
+}
+
+.ball-edge-tab.right {
+  right: 0;
+  border-radius: 8px 0 0 8px;
+}
+
+.edge-tab-glyph {
+  color: var(--ball-glyph-color);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* ==================== 工具类 ==================== */
 .hidden { display: none !important; }

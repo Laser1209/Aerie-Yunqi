@@ -968,19 +968,32 @@ body {
   cursor: pointer;
   font-size: 12px;
   max-width: 280px;
+  min-width: 0;
+  overflow: hidden;
   transition: background .15s;
 }
 .chat-quote-overlay:hover { background: var(--bg-200); }
 .chat-quote-overlay__bar {
   width: 3px;
+  flex-shrink: 0;
   background: var(--color-primary);
   border-radius: 2px;
 }
-.chat-quote-overlay__text { display: flex; flex-direction: column; gap: 2px; }
+.chat-quote-overlay__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
 .chat-quote-overlay__author {
   font-weight: 600;
   color: var(--color-primary);
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chat-quote-overlay__preview {
   color: var(--color-text-muted);

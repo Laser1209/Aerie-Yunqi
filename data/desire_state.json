@@ -1,78 +1,18 @@
 {
-  "score": 46.96,
-  "ts": 1784281865.8205976,
+  "score": 51.33,
+  "ts": 1784289618.1322646,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.16667977889378865,
-    "emotion_overdraft": 7.370350882591796,
-    "patience_loss": 40.9,
+    "user_absence_hours": 0.4166996071073744,
+    "emotion_overdraft": 5.647108136408633,
+    "patience_loss": 40.8,
     "weather_impact": 0.0,
-    "time_of_day_boost": 0.0,
+    "time_of_day_boost": 8.0,
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1784249787.3722434,
-      "score": 61.0,
-      "variables": {
-        "user_absence_hours": 1.0005761410792668,
-        "emotion_overdraft": 0.0,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784250087.3919322,
-      "score": 61.08,
-      "variables": {
-        "user_absence_hours": 1.0839144751098422,
-        "emotion_overdraft": 0.0,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784250387.4158354,
-      "score": 61.17,
-      "variables": {
-        "user_absence_hours": 1.1672541916370391,
-        "emotion_overdraft": 0.0,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784251017.1240451,
-      "score": 64.88,
-      "variables": {
-        "user_absence_hours": 0.08362178160084618,
-        "emotion_overdraft": 6.0,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1784251318.0267608,
-      "score": 63.96,
-      "variables": {
-        "user_absence_hours": 0.167205763525433,
-        "emotion_overdraft": 4.74,
-        "patience_loss": 60.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1784251618.0375552,
       "score": 63.8,
@@ -610,6 +550,66 @@
         "patience_loss": 40.9,
         "weather_impact": 0.0,
         "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784288418.0605114,
+      "score": 49.83,
+      "variables": {
+        "user_absence_hours": 0.08334614197413126,
+        "emotion_overdraft": 4.056322237585976,
+        "patience_loss": 40.9,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784288718.07801,
+      "score": 49.17,
+      "variables": {
+        "user_absence_hours": 0.16668421076403725,
+        "emotion_overdraft": 3.124700266709236,
+        "patience_loss": 40.9,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784289018.0948908,
+      "score": 51.24,
+      "variables": {
+        "user_absence_hours": 0.250022541085879,
+        "emotion_overdraft": 5.735216873132231,
+        "patience_loss": 40.8,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784289318.1258724,
+      "score": 49.9,
+      "variables": {
+        "user_absence_hours": 0.3333644755681356,
+        "emotion_overdraft": 3.9523568545999126,
+        "patience_loss": 40.8,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1784289618.1322668,
+      "score": 51.33,
+      "variables": {
+        "user_absence_hours": 0.4166996071073744,
+        "emotion_overdraft": 5.647108136408633,
+        "patience_loss": 40.8,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
         "anniversary_boost": 0.0
       }
     }

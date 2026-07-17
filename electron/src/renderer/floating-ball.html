@@ -3,16 +3,160 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>悬浮球</title>
+<title>Aerie · 云栖 悬浮球</title>
 <link rel="stylesheet" href="styles/floating-ball.css">
 </head>
 <body>
-<div id="floating-ball" class="floating-ball" title="Aerie · 云栖">
-  <div class="ball-inner">
-    <span class="ball-glyph">伊</span>
+<!--
+  Aerie · 云栖 v10.1.1 — Floating Ball
+  仿豆包悬浮球重写版
+  - 拖动吸附边缘 + 隐藏/唤出
+  - 右键菜单
+  - 设置面板（外观可自定义）
+  - 未读消息红点
+  - 长按显示脉动呼吸
+-->
+<div id="floating-ball" class="floating-ball" data-edge="right" data-hidden="false">
+  <div class="ball-shell">
+    <div class="ball-inner">
+      <span class="ball-glyph" id="ball-glyph">栖</span>
+      <span class="ball-pulse" aria-hidden="true"></span>
+    </div>
+    <span id="ball-badge" class="ball-badge hidden" aria-label="未读消息数">0</span>
   </div>
-  <span id="ball-badge" class="ball-badge hidden">0</span>
 </div>
+
+<!-- 右键上下文菜单 -->
+<div id="ball-context-menu" class="ball-context-menu hidden" role="menu">
+  <button class="menu-item" data-action="open-main" role="menuitem">
+    <span class="menu-icon">🪟</span>
+    <span class="menu-text">打开主窗口</span>
+  </button>
+  <button class="menu-item" data-action="open-quick" role="menuitem">
+    <span class="menu-icon">💬</span>
+    <span class="menu-text">打开对话浮窗</span>
+  </button>
+  <button class="menu-item" data-action="screenshot-ask" role="menuitem">
+    <span class="menu-icon">📸</span>
+    <span class="menu-text">截图提问</span>
+  </button>
+  <button class="menu-item" data-action="meeting-note" role="menuitem">
+    <span class="menu-icon">🎙️</span>
+    <span class="menu-text">记录会议</span>
+  </button>
+  <button class="menu-item" data-action="quick-summarize" role="menuitem">
+    <span class="menu-icon">📝</span>
+    <span class="menu-text">快速总结</span>
+  </button>
+  <div class="menu-separator"></div>
+  <button class="menu-item" data-action="open-settings" role="menuitem">
+    <span class="menu-icon">⚙️</span>
+    <span class="menu-text">外观与设置</span>
+  </button>
+  <button class="menu-item" data-action="hide-until-restart" role="menuitem">
+    <span class="menu-icon">🌙</span>
+    <span class="menu-text">隐藏直到下次重启</span>
+  </button>
+  <div class="menu-separator"></div>
+  <button class="menu-item" data-action="quit" role="menuitem">
+    <span class="menu-icon">🚪</span>
+    <span class="menu-text">退出 Aerie · 云栖</span>
+  </button>
+</div>
+
+<!-- 设置面板（外观可自定义） -->
+<div id="ball-settings" class="ball-settings hidden" role="dialog" aria-label="悬浮球设置">
+  <div class="settings-backdrop"></div>
+  <div class="settings-panel">
+    <div class="settings-header">
+      <span class="settings-title">悬浮球设置 · Floating Ball</span>
+      <button class="settings-close" data-action="close-settings" aria-label="关闭">×</button>
+    </div>
+
+    <div class="settings-body">
+      <!-- 预览 -->
+      <div class="settings-section">
+        <div class="section-label">实时预览 · Preview</div>
+        <div class="preview-stage">
+          <div class="preview-ball" id="preview-ball">
+            <span class="preview-glyph" id="preview-glyph">栖</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 字符与配色 -->
+      <div class="settings-section">
+        <div class="section-label">字符 · Glyph</div>
+        <div class="glyph-row">
+          <button class="glyph-chip" data-glyph="栖">栖</button>
+          <button class="glyph-chip" data-glyph="A">A</button>
+          <button class="glyph-chip" data-glyph="E">E</button>
+          <button class="glyph-chip" data-glyph="云">云</button>
+          <button class="glyph-chip" data-glyph="✦">✦</button>
+          <button class="glyph-chip" data-glyph="●">●</button>
+        </div>
+        <input type="text" class="glyph-input" id="glyph-input" maxlength="3" placeholder="自定义（≤3 字符）" value="栖" />
+      </div>
+
+      <div class="settings-section">
+        <div class="section-label">配色 · Color Theme</div>
+        <div class="theme-row">
+          <button class="theme-chip" data-theme="aerie" style="background: linear-gradient(135deg, #66abff, #007aff);" title="Aerie 蓝"></button>
+          <button class="theme-chip" data-theme="dawn" style="background: linear-gradient(135deg, #ffb199, #ff7a7a);" title="晨曦粉"></button>
+          <button class="theme-chip" data-theme="forest" style="background: linear-gradient(135deg, #6dd5a3, #1f9d68);" title="森林绿"></button>
+          <button class="theme-chip" data-theme="lavender" style="background: linear-gradient(135deg, #b09dff, #7c5cff);" title="薰衣紫"></button>
+          <button class="theme-chip" data-theme="amber" style="background: linear-gradient(135deg, #ffd58a, #ff9d2e);" title="琥珀金"></button>
+          <button class="theme-chip" data-theme="ink" style="background: linear-gradient(135deg, #6a7488, #2a3142);" title="墨夜"></button>
+        </div>
+      </div>
+
+      <!-- 尺寸与透明度 -->
+      <div class="settings-section">
+        <div class="section-label">尺寸 · Size</div>
+        <div class="slider-row">
+          <input type="range" id="size-slider" min="40" max="80" value="56" />
+          <span class="slider-value" id="size-value">56px</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="section-label">不透明度 · Opacity</div>
+        <div class="slider-row">
+          <input type="range" id="opacity-slider" min="30" max="100" value="100" />
+          <span class="slider-value" id="opacity-value">100%</span>
+        </div>
+      </div>
+
+      <!-- 行为开关 -->
+      <div class="settings-section">
+        <div class="section-label">行为 · Behavior</div>
+        <label class="toggle-row">
+          <span>拖动到边缘自动吸附</span>
+          <input type="checkbox" id="snap-toggle" checked />
+        </label>
+        <label class="toggle-row">
+          <span>吸附后自动隐藏（鼠标悬停唤出）</span>
+          <input type="checkbox" id="autohide-toggle" checked />
+        </label>
+        <label class="toggle-row">
+          <span>显示未读消息数</span>
+          <input type="checkbox" id="badge-toggle" checked />
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-footer">
+      <button class="btn-secondary" data-action="reset-settings">恢复默认</button>
+      <button class="btn-primary" data-action="save-settings">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 边缘贴边小条（吸附后露出） -->
+<div id="ball-edge-tab" class="ball-edge-tab hidden" aria-hidden="true">
+  <span class="edge-tab-glyph">栖</span>
+</div>
+
 <script src="js/floating-ball.js"></script>
 </body>
 </html>

@@ -156,3 +156,46 @@ class TestContextBuilderHistory:
     def test_build_no_history_works(self, builder):
         msgs = builder.build(3998874040, "你好", "FULL")
         assert len(msgs) == 2  # system + user only
+
+
+class TestContextBuilderPersona9_10:
+    """R8.1 (Persona 9/10): 守门 9/10 基线在 L1/L2/L4 都已显式标注，
+    防止未来无意改回 7/10（暗涌克制版）。"""
+
+    @pytest.fixture
+    def builder(self):
+        return ContextBuilder()
+
+    def test_persona_l1_marks_9_10_baseline(self, builder):
+        """_PERSONA_L1 必须显式标注 9/10 基线。"""
+        msgs = builder.build(3998874040, "你好", "FULL")
+        system = msgs[0]["content"]
+        assert "9/10" in system, "L1 must include 9/10 baseline marker"
+        # 验证 extraversion 数值
+        assert "0.78" in system, "L1 must include 0.78 extraversion value"
+        assert "extraversion" in system.lower() or "外向" in system
+
+    def test_persona_l2_has_direct_expression(self, builder):
+        """_PERSONA_L2 必须含 9/10 直球表达关键词。"""
+        msgs = builder.build(3998874040, "你好", "FULL")
+        system = msgs[0]["content"]
+        # 至少含 "不许不接" 或 "直球" 之一
+        assert ("不许不接" in system) or ("直球" in system), \
+            "L2 must include direct-expression markers (不许不接/直球)"
+
+    def test_persona_l4_has_screen_aware_9_10(self, builder):
+        """_PERSONA_L4 必须含屏幕隔空铁律 + 9/10 基线。"""
+        msgs = builder.build(3998874040, "你好", "FULL")
+        system = msgs[0]["content"]
+        assert "屏幕隔空" in system, "L4 must include 屏幕隔空 iron rule"
+        # 9/10 或 "9 分" 任一即可
+        assert ("9/10" in system) or ("9 分" in system), \
+            "L4 must include 9/10 baseline marker"
+
+    def test_full_mode_includes_all_9_10_layers(self, builder):
+        """FULL 模式下 L1/L2/L4 三层都应该含 9/10 信号。"""
+        msgs = builder.build(3998874040, "你好", "FULL")
+        system = msgs[0]["content"]
+        # 至少 3 处 "9/10" 出现（L1 + L2 + L4）
+        count = system.count("9/10")
+        assert count >= 3, f"FULL mode system prompt should have ≥3 '9/10' markers, got {count}"

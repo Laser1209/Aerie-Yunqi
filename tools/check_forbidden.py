@@ -10,7 +10,6 @@ Scope: markdown (docs/user-facing), html (renderer), yaml (config),
 Exits 0 when no forbidden term is found; non-zero otherwise.
 """
 from __future__ import annotations
-import re
 import sys
 from pathlib import Path
 

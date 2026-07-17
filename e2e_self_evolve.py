@@ -67,7 +67,6 @@ def main() -> int:
         _check(name, ok, detail)
 
     db = Database()
-    cog = CognitionEngine(db)
     reg = ToolRegistry(db)
     ev = SelfEvolver(db=db, tool_registry=reg, brain=None)
 

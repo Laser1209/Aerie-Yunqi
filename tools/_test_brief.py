@@ -1,4 +1,7 @@
-import urllib.request, json, time, sys
+import urllib.request
+import json
+import time
+import sys
 sys.stdout.reconfigure(encoding="utf-8")
 t0 = time.time()
 r = urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:7890/api/brief/run", method="POST"), timeout=60)

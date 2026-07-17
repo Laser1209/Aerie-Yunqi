@@ -10,6 +10,9 @@ Acceptance (from B7 plan):
   * No segment exceeds 5.0s (the soft ceiling for a real human's gap)
   * The style label is one of the 11 documented styles
 
+R8.1 (Persona 9/10): 额外验证 9/10 基线下 joy/missing/affection
+命中 eager_warm 区间 (0.30, 0.55) —— 比 7/10 (0.40, 0.70) 更短。
+
 Usage:
   python e2e_pacing.py
 """
@@ -35,6 +38,12 @@ SCENARIOS: list[tuple[str, dict, bool]] = [
     ("anxiety",     {"anxiety":   {"active": True, "value": 100, "threshold": 80}},          True),
     ("tenderness",  {"tenderness":{"active": True, "value": 60,  "threshold": 50}},          True),
 ]
+
+# R8.1 (Persona 9/10): 9/10 基线下 eager_warm 区间 (0.30, 0.55)
+# （比 7/10 的 (0.40, 0.70) 更急）。守门 joy/affection/missing/love
+# 4 个 9/10 受益情绪，验证非首段 interval 落入新区间。
+EAGER_WARM_9_10_RANGE: tuple[float, float] = (0.30, 0.55)
+EAGER_WARM_9_10_LABELS: tuple[str, ...] = ("joy", "affection", "missing", "love")
 
 VALID_STYLES = set(STYLES.keys())
 SOFT_CEILING_SECONDS = 5.0
@@ -121,6 +130,34 @@ async def _run_scenario(name: str, threshold: dict, is_eruption: bool) -> tuple[
     return passed, failed
 
 
+async def _check_9_10_baseline() -> tuple[int, int]:
+    """R8.1 (Persona 9/10): 验证 joy/affection/missing/love 4 个
+    9/10 受益情绪在非首段时 interval 落入 eager_warm (0.30, 0.55) 区间。
+    """
+    passed = failed = 0
+    print("\n=== R8.1 9/10 基线验证 ===")
+    lo, hi = EAGER_WARM_9_10_RANGE
+    for label in EAGER_WARM_9_10_LABELS:
+        for seg_idx in range(1, N_SEGMENTS):  # skip segment 0 (immediate)
+            seg_content = f"伊塔——第{seg_idx+1}句"
+            iv, style = compute_persona_interval(
+                segment_index=seg_idx,
+                emotion_label=label,
+                segment_content=seg_content,
+            )
+            in_range = (lo <= iv <= hi)
+            if in_range:
+                passed += 1
+                _check(f"{label} seg {seg_idx} iv={iv:.2f}s ∈ [{lo:.2f},{hi:.2f}]", True)
+            else:
+                failed += 1
+                _check(
+                    f"{label} seg {seg_idx} iv={iv:.2f}s ∈ [{lo:.2f},{hi:.2f}]",
+                    False, f"style={style}",
+                )
+    return passed, failed
+
+
 async def main() -> int:
     print("=" * 60)
     print("Phase 9 Batch 7 E2E — persona_pacing 综合节奏演示")
@@ -131,6 +168,11 @@ async def main() -> int:
         p, f = await _run_scenario(name, threshold, is_eruption)
         total_p += p
         total_f += f
+
+    # R8.1 (Persona 9/10): 跑 9/10 区间断言
+    p, f = await _check_9_10_baseline()
+    total_p += p
+    total_f += f
 
     print("\n" + "=" * 60)
     print(f"  Total: passed={total_p}  failed={total_f}")

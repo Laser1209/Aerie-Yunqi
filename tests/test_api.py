@@ -4,7 +4,6 @@ Tests health, emotion state, tools list, and chat endpoints.
 Uses httpx or FastAPI TestClient with mocked companion.
 """
 
-import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
 from fastapi.testclient import TestClient

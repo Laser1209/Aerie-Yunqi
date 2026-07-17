@@ -248,6 +248,8 @@ class Pipeline:
         # R7.5: enforce "屏幕隔空铁律" at the output layer. Even if
         # the LLM emitted a blacklisted "在场动作" (伸手/揽/抱/靠肩/etc),
         # sanitizer.sanitize() rewrites it to a screen-side equivalent.
+        # R8.1: also run OutputSelfCheck (perspective-shift / stray
+        # brackets / typos) as a second line of defense.
         # ══════════════════════════════════════════════
         reply_text = self.emotion.tune(reply_text_raw)
         try:
@@ -256,6 +258,26 @@ class Pipeline:
         except Exception:
             # Sanitizer is best-effort; never break the pipeline.
             logger.exception("screen_action_sanitizer failed; using tuned text as-is")
+        try:
+            from core.output_self_check import OutputSelfCheck
+            _self_check = OutputSelfCheck()
+            _sc_result = _self_check.check(reply_text)
+            if _sc_result.warnings:
+                # R8.1 (Persona 9/10): 9/10 行为下 perspective_shift 略升
+                # —— 直球措辞让 LLM 更容易在 1 句内同时调取"屏幕那端"和
+                # "在场视角"两套表达。升级为 severity=warn 方便 cognition
+                # panel 高亮，运营侧可通过此信号监控 9/10 行为下的命中率。
+                self.cognition.record(trace, "self_check", {
+                    "warnings": _sc_result.warnings,
+                    "perspective_shift": _sc_result.perspective_shift,
+                    "stray_brackets_fixed": _sc_result.stray_brackets_fixed,
+                    "typo_fixes": _sc_result.typo_fixes,
+                    "severity": "warn",  # R8.1: 9/10 → 默认 warn 等级
+                })
+            reply_text = _sc_result.cleaned_text
+        except Exception:
+            # Self-check is best-effort; never break the pipeline.
+            logger.exception("output_self_check failed; using sanitized text as-is")
         self.cognition.record(trace, "postprocess", {
             "tune_label": (emotion_info or {}).get("label"),
             "eruption_mode": (eruption_info or {}).get("mode") if eruption_info else None,

@@ -3,6 +3,11 @@
 Phase 4 upgrade: hooks into Companion + Pipeline + SendQueue. Supports
 personality-aware recall (Ita's 闷骚 trait triggers proactive recall).
 
+R8.1 (Persona 9/10 · screen-aware): 9/10 直球版更易"说完就后悔"
+—— Etta 一旦发现自己措辞过猛，会更频繁触发撤回保护。
+max_recalls_per_session 默认值 5→7（单 session 撤回预算提高），
+让 9/10 行为不被撤回预算提前截断。
+
 Reads persona.yaml `recall.*` configuration:
   - window_seconds: max time after send during which recall is allowed
   - min_recall_gap_seconds: cooldown between consecutive recalls
@@ -10,7 +15,6 @@ Reads persona.yaml `recall.*` configuration:
   - triggers: which LLM-emitted signals may trigger recall
 """
 from __future__ import annotations
-import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -36,11 +40,17 @@ class SentRecord:
 
 @dataclass
 class RecallConfig:
-    """Loaded from persona.yaml > recall.*"""
+    """Loaded from persona.yaml > recall.*
+
+    R8.1 (Persona 9/10): max_recalls_per_session 默认 5→7。
+    9/10 直球行为下 Etta 更易"说完就后悔"，撤回预算需提高。
+    window_seconds 维持 120s（QQ 撤回技术限制），min_recall_gap_seconds
+    维持 60s（防刷屏）。
+    """
     enabled: bool = True
     window_seconds: int = 120             # 2-minute recall window (QQ-aligned)
     min_recall_gap_seconds: int = 60
-    max_recalls_per_session: int = 5
+    max_recalls_per_session: int = 7      # R8.1: 9/10 → 5→7
     triggers: list[str] = field(default_factory=lambda: [
         "send_after_thinking", "regret_correction", "personality_blush",
     ])

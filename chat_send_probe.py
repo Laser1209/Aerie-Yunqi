@@ -1,4 +1,7 @@
-import sys, urllib.request, json, time
+import sys
+import urllib.request
+import json
+import time
 t = time.time()
 try:
     req = urllib.request.Request(

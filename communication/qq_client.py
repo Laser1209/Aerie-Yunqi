@@ -18,7 +18,7 @@ from typing import Any, Callable, Optional
 import websockets
 from websockets.asyncio.client import ClientConnection
 
-from communication.message import IncomingMessage, OutgoingReply
+from communication.message import IncomingMessage
 
 logger = logging.getLogger(__name__)
 
@@ -303,7 +303,8 @@ class QQClient:
                     data = json.loads(resp)
                     if data.get("status") == "ok":
                         # data.data.message_id is the new OneBot11 message_id
-                        msg_id = (data.get("data") or {}).get("message_id")
+                        # (currently logged for debugging; not consumed by caller)
+                        _msg_id = (data.get("data") or {}).get("message_id")
                         return True
                     return False
                 except asyncio.TimeoutError:

@@ -2,7 +2,6 @@
 import sys
 sys.path.insert(0, '.')
 
-from communication.send_queue import SendQueue
 from core.persona_pacing import compute_persona_interval
 
 print('SendQueue imports OK')

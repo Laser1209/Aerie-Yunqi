@@ -12,7 +12,6 @@ Pure local — 不依赖 LLM / DB / NapCat。
 from __future__ import annotations
 
 import asyncio
-import io
 import sys
 from datetime import datetime
 from pathlib import Path

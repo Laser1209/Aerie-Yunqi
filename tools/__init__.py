@@ -34,7 +34,6 @@ async def echo(text: str) -> dict:
 
 def register_all_tools(registry) -> None:
     """Register all built-in tools with the given registry."""
-    from core.tool_registry import ToolRegistry
 
     registry.register("get_time", get_time, {
         "description": "获取当前系统时间",

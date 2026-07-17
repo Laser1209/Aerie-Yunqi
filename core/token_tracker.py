@@ -81,7 +81,6 @@ class TokenTracker:
 
     def get_week(self, user_id: int = 0) -> dict:
         """Get this week's token usage summary."""
-        today = datetime.now().strftime("%Y-%m-%d")
         week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         return self._aggregate(
             "WHERE user_id = ? AND date(created_at) >= ?",

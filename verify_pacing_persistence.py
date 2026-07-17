@@ -45,7 +45,6 @@ import time
 import socket
 import urllib.request
 import urllib.error
-from typing import Any
 
 # ── helpers ─────────────────────────────────────────────
 def _check_port(host: str, port: int, timeout: float = 1.0) -> bool:

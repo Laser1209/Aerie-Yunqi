@@ -1,5 +1,4 @@
 """Aerie · 云栖 v9.0 — Phase 4 Recall tests."""
-import pytest
 import asyncio
 import time
 from communication.recall_manager import RecallManager, RecallConfig

@@ -26,7 +26,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import sqlite3
@@ -230,7 +229,7 @@ def diag_health_and_stale(host: str, port: int) -> None:
     code, body = http_get(host, port, "/api/health")
     if code != 200:
         fail(f"后端 /api/health 返回 {code}: {body[:200]!r}")
-        info(f"→ 后端可能压根没启动；请先 python main.py")
+        info("→ 后端可能压根没启动；请先 python main.py")
         return
     try:
         d = json.loads(body)
@@ -529,7 +528,7 @@ def diag_avatar(host: str, port: int) -> None:
     log("")
     code, body = http_get(host, port, "/api/persona/avatar?nocache=" + hex(int(time.time())))
     if code == 200 and body == test_png:
-        ok(f"GET 之后 200 + bytes 匹配上传内容 → 后端 round-trip **完全正常**")
+        ok("GET 之后 200 + bytes 匹配上传内容 → 后端 round-trip **完全正常**")
     elif code == 200:
         warn(f"GET 200 但 bytes 与上传不一致 (got {len(body)} bytes, expected {len(test_png)})")
     else:
@@ -595,7 +594,7 @@ def main() -> int:
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     log("=" * 72)
-    log(f"  Aerie · 云栖  F1-F4 诊断报告")
+    log("  Aerie · 云栖  F1-F4 诊断报告")
     log(f"  目标后端: http://{args.host}:{args.port}")
     log(f"  时间:     {datetime.now():%Y-%m-%d %H:%M:%S}")
     log(f"  日志:     logs/diag_{ts}.log")

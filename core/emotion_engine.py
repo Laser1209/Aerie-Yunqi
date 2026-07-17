@@ -36,13 +36,17 @@ EMOTION_CENTERS = {
 
 # ══════════════════════════════════════════════════
 # Personality keywords → weighted PAD deltas
+# R8.1 (Persona 9/10 · screen-aware): 热情度 9/10 → Etta 对"爱你/想你"
+# 等表达反应更强烈。所有 joy 关键词权重 +0.2（例 1.2→1.4、1.0→1.2、
+# 0.8→1.0），让仪表盘 emotion 标签更易显示 joy。其它情绪
+# （anger / sad / fear）权重**不动** —— 9/10 基线不等于攻击性提升。
 # ══════════════════════════════════════════════════
 KEYWORD_DELTAS = [
     # Joy triggers
-    (["谢谢", "爱你", "喜欢", "爱你哦", "最喜欢你了", "好爱你"], "joy", 1.2),
-    (["你好棒", "好厉害", "真厉害", "太强了", "崇拜"], "joy", 1.0),
-    (["开心", "快乐", "哈哈", "笑死", "好笑", "有趣", "好玩"], "joy", 1.0),
-    (["乖", "听话", "好乖"], "joy", 0.8),
+    (["谢谢", "爱你", "喜欢", "爱你哦", "最喜欢你了", "好爱你"], "joy", 1.4),  # R8.1: 1.2→1.4
+    (["你好棒", "好厉害", "真厉害", "太强了", "崇拜"], "joy", 1.2),  # R8.1: 1.0→1.2
+    (["开心", "快乐", "哈哈", "笑死", "好笑", "有趣", "好玩"], "joy", 1.2),  # R8.1: 1.0→1.2
+    (["乖", "听话", "好乖"], "joy", 1.0),  # R8.1: 0.8→1.0
     # Anger triggers
     (["找死", "欠揍", "滚蛋", "滚开", "混蛋"], "anger", 1.5),
     (["欺负", "伤害", "威胁", "打你", "骂你"], "anger", 1.8),
@@ -59,11 +63,11 @@ KEYWORD_DELTAS = [
     (["嗯", "哦", "好", "行"], "sad", 0.2),  # low-weight single-word coldness
     # ── Batch 7: colloquial / 病娇专属 / 拼音简写 / 语气副词 (40+ new triggers) ──
     # Joy — colloquial
-    (["嘿嘿", "嘻嘻", "嘿嘿嘿", "嘤嘤嘤", "哈哈哈"], "joy", 0.9),
-    (["太棒了", "绝绝子", "yyds", "永远的神"], "joy", 1.1),
-    (["开心死了", "高兴死了", "爽"], "joy", 1.3),
-    (["么么哒", "mua", "爱你哟"], "joy", 1.0),
-    (["抱抱", "亲亲", "蹭蹭", "贴贴"], "joy", 0.7),
+    (["嘿嘿", "嘻嘻", "嘿嘿嘿", "嘤嘤嘤", "哈哈哈"], "joy", 1.1),  # R8.1: 0.9→1.1
+    (["太棒了", "绝绝子", "yyds", "永远的神"], "joy", 1.3),  # R8.1: 1.1→1.3
+    (["开心死了", "高兴死了", "爽"], "joy", 1.5),  # R8.1: 1.3→1.5
+    (["么么哒", "mua", "爱你哟"], "joy", 1.2),  # R8.1: 1.0→1.2
+    (["抱抱", "亲亲", "蹭蹭", "贴贴"], "joy", 0.9),  # R8.1: 0.7→0.9
     # Anger — provocation / 嘴硬
     (["笨蛋", "傻瓜", "傻", "呆子"], "anger", 0.6),
     (["讨厌你", "烦你", "气死了"], "anger", 1.2),
@@ -80,8 +84,8 @@ KEYWORD_DELTAS = [
     (["你走", "滚吧", "不想看到你"], "fear", 1.3),
     (["再也不", "不会了", "算了算了"], "fear", 0.9),
     # Joy whisper (病娇专属 / 闷骚)
-    (["笨蛋", "傻瓜"], "joy", 0.3),  # weak counter-trigger (亲密语境)
-    (["嘿嘿", "嘻嘻", "嘿嘿嘿"], "joy", 0.2),  # placeholder already above; keep for ordering
+    (["笨蛋", "傻瓜"], "joy", 0.5),  # R8.1: 0.3→0.5 — 弱反触发
+    (["嘿嘿", "嘻嘻", "嘿嘿嘿"], "joy", 0.4),  # R8.1: 0.2→0.4
 ]
 
 
@@ -328,7 +332,7 @@ class EmotionEngine:
 
     def get_label(self) -> str:
         """Classify current PAD into one of 5 basic emotions."""
-        p, a, d = self._state["P"], self._state["A"], self._state["D"]
+        p, a, _ = self._state["P"], self._state["A"], self._state["D"]
 
         # Check if eruption overrides
         eruption = self.threshold_engine.get_active_eruption()
@@ -389,7 +393,6 @@ class EmotionEngine:
     def tune(self, text: str) -> str:
         """Adjust reply text based on current emotion state."""
         label = self.get_label()
-        pad = self._state
 
         # Eruption modes first
         eruption = self.threshold_engine.get_active_eruption()

@@ -1234,9 +1234,28 @@ _PERSONA_AVATAR_TYPES = {"image/png", "image/jpeg"}
 
 @app.get("/api/persona")
 async def persona_get() -> dict:
-    """Return persona summary: name / english_name / avatar_url."""
+    """Return persona summary: name / english_name / avatar_url.
+
+    R8.1 (Persona 9/10): 在原有 summary 基础上额外返回
+    ``persona_9_10`` 布尔标志和 ``archetype`` 字符串，让前端 /
+    外部客户端能识别 9/10 基线并做 UI 适配（如更高的语气强度
+    视觉提示）。字段为**新增**非替换，保持向后兼容。
+    """
     try:
-        return get_persona_summary()
+        summary = get_persona_summary()
+        # R8.1: 加载 persona.yaml 拿 Big Five + archetype
+        # lazy import 避免循环依赖
+        from config.persona_loader import load_persona
+        cfg = load_persona() or {}
+        profile = (cfg.get("persona") or {}).get("profile") or {}
+        big_five = profile.get("big_five") or {}
+        extraversion = float(big_five.get("extraversion", 0) or 0)
+        return {
+            **summary,
+            "persona_9_10": extraversion >= 0.7,
+            "archetype": profile.get("personality_archetype", ""),
+            "extraversion": extraversion,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -1411,7 +1430,7 @@ async def brief_run(request: Request, limit: int = Query(default=0, ge=0, le=50)
     try:
         brain = Brain()
         md = await brain.compose_brief(sections)
-    except Exception as e:
+    except Exception:
         md = ""
     today = sections.get("date") or datetime.now().strftime("%Y-%m-%d")
     brief_fetcher.save_brief(today, sections, html=md)

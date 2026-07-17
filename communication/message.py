@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any
 
 
 @dataclass
@@ -29,8 +28,6 @@ class IncomingMessage:
 
         # Phase 4: extract OneBot11 reply segment if present
         reply_to_id = 0
-        reply_to_content = ""
-        reply_to_role = ""
         msg_array = event.get("message", [])
         if isinstance(msg_array, list):
             for seg in msg_array:

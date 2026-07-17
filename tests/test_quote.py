@@ -1,5 +1,4 @@
 """Aerie · 云栖 v9.0 — Phase 4 Quote tests."""
-import pytest
 from communication.message import IncomingMessage, OutgoingReply
 
 

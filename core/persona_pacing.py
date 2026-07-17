@@ -32,22 +32,25 @@ documenting in-line.
 from __future__ import annotations
 
 import random
-from typing import Any, Optional
+from typing import Optional
 
 # ── 11 persona pacing styles ───────────────────────────
 # Tuple: (min_seconds, max_seconds). Picked uniformly within range.
+# R8.1 (Persona 9/10): 热情度 9/10 → 打字后等不及，eager_warm 和 balanced
+# 区间都压低；其余模式（eruption / contemplative）保持人类自然节奏，
+# 防止 9/10 行为反而拖累非情绪关键场景。
 STYLES: dict[str, tuple[float, float]] = {
     "immediate":              (0.0,  0.0),  # 1st segment — no delay
-    "eager_warm":             (0.40, 0.70),  # joy / missing / affection
-    "eager_eruption":         (0.40, 0.70),  # any eruption when truly urgent
-    "anxious_fast":           (0.50, 1.00),  # fear — don't lose you
-    "balanced":               (0.60, 1.00),  # neutral default — close to 1.5s baseline
-    "shy_hesitation":         (1.40, 1.90),  # 10% in neutral — want to say but shy
-    "shy_tenderness_pause":   (1.20, 1.70),  # 反扑模式 — overwhelmed by tenderness
-    "yandere_collapse_pause": (1.00, 1.80),  # 坍塌模式 — breaking, words won't come
-    "cold_slow":              (0.90, 1.60),  # sad / anger / 冷暴模式 — deliberate delay
-    "contemplative":          (2.50, 4.00),  # 3% — long meaningful pause
-    "yandere_erase_hesitate": (2.00, 5.00),  # 5% — wanted to recall but couldn't
+    "eager_warm":             (0.30, 0.55),  # R8.1: 9/10 → (0.40,0.70)→(0.30,0.55) — 更急
+    "eager_eruption":         (0.40, 0.70),  # 维持 — eruption 仍需辨识
+    "anxious_fast":           (0.50, 1.00),  # 维持
+    "balanced":               (0.50, 0.85),  # R8.1: 9/10 → (0.60,1.00)→(0.50,0.85) — 更短
+    "shy_hesitation":         (1.40, 1.90),  # 维持
+    "shy_tenderness_pause":   (1.20, 1.70),  # 维持
+    "yandere_collapse_pause": (1.00, 1.80),  # 维持
+    "cold_slow":              (0.90, 1.60),  # 维持
+    "contemplative":          (2.50, 4.00),  # 维持
+    "yandere_erase_hesitate": (2.00, 5.00),  # 维持
 }
 
 # Probabilistic triggers inside the decision tree

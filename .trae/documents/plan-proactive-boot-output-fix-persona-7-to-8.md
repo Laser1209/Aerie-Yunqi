@@ -270,18 +270,140 @@ async def _dispatch_desire_text(
   9. `TONE_PROMPTS["warm_with_light_flirt"]` 含 "想你" 且不含 "克制"
   10. **回归保护**：原有 6 条 e2e 全部继续通过（三原则之零回退）
 
+### Change 5 — Section 5: 4 个 UI / 数据新问题
+
+> 用户在 2026-07-17 计划对话中追加 4 个问题。本节作为 Section 5，**先做最小探查再决定实施粒度**。
+
+#### 5.1 美化所有滚动条（符合主题样式）
+
+**症状**：浏览器/Chromium 默认滚动条样式，与 5 套主题色（伊塔粉/深夜紫/樱白/海蓝/森绿）不统一。
+
+**根因假设**：
+- Electron 渲染层用了 Chromium 默认 `::-webkit-scrollbar` 样式
+- 没有走 `var(--color-*)` token
+
+**修复方向**（待 Phase 1 探查后细化）：
+
+文件 [electron/src/renderer/css/main.css](file:///e:/Agent_reply/electron/src/renderer/css/main.css) 或新建 `electron/src/renderer/css/scrollbar.css`：
+
+```css
+/* ── 三原则之「主题色 token 化」：所有滚动条色值走 var() ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-1, transparent);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary, #888);
+  border-radius: 4px;
+  opacity: 0.6;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary, #888);
+  opacity: 1;
+}
+* {
+  scrollbar-color: var(--color-primary) var(--color-surface-1);
+  scrollbar-width: thin;
+}
+```
+
+验证：`tools/check_tokens.py` 不报新增硬编码色 + 5 套主题切换时滚动条同步变色。
+
+#### 5.2 无法打开今日简报
+
+**症状**：点"今日简报"按钮无反应 / 报错 / 空白。
+
+**可能根因**（待 Phase 1 探查）：
+- `electron/src/renderer/daily-brief.html` 不存在或被 webpack 漏打包
+- `electron/src/main.js` IPC 路径 `open-brief` / 渲染层 `app.js` 事件绑定断链
+- `brief_fetcher` 在 `data/briefs/{date}.json` 写失败
+- `electron/src/preload.js` 没暴露 `brief:show` API
+
+**修复方向**（待 Phase 1 探查后细化）：
+1. 跑 `brief_fetcher.run_all()` 验证数据层 OK
+2. 检查 `electron/src/main.js` `open-brief-window` 处理器
+3. 检查 `app.js` 事件绑定
+4. 检查 `daily-brief.html` 是否 inline 完整（sprite + 主题色）
+
+**预估涉及文件**：1-3 个 Electron 渲染层文件。
+
+#### 5.3 决策权重赛马无数据
+
+**症状**：cognition 面板的"决策权重赛马"显示"无数据"。
+
+**可能根因**（待 Phase 1 探查）：
+- `core/cognition.py` 没有写 `decision_weights` 表
+- `electron/src/renderer/js/cognition-panel.js` 调 API 路径错
+- 后端 `api_server.py` 缺 `/api/cognition/decision-weights` 端点
+- 数据采集 hook 没接到 `brain.compose_*` 链路
+
+**修复方向**（待 Phase 1 探查后细化）：
+1. 确认 `core/cognition.py` 有 `record_decision_weights()` 方法
+2. 确认 `api_server.py` 有对应 GET 端点
+3. 确认 `cognition-panel.js` fetch URL 拼对
+4. 跑一遍决策触发链（boot_brief / morning_brief / 主动消息）确认数据写入
+
+**预估涉及文件**：1-2 个后端 + 1 个前端。
+
+#### 5.4 系统状态 Token 消耗和 API 调用次数始终 0
+
+**症状**：仪表盘"系统状态"卡片显示 token 消耗 0 / API 调用 0。
+
+**可能根因**（待 Phase 1 探查）：
+- `core/brain.py` 调用 LLM 后**没有写** `token_usage` 表
+- `core/usage_tracker.py`（如有）hook 没接到 `chat.completions.create` 返回
+- `api_server.py` 缺 `/api/system/usage` 端点
+- 前端 `app.js` 调错端点或解析错字段
+
+**修复方向**（待 Phase 1 探查后细化）：
+1. 确认 `brain.py` 的 `_call_llm` 是否解析 `response.usage` 并写库
+2. 确认 `database.py` 有 `token_usage` 表 schema
+3. 确认 `api_server.py` 有 `/api/system/usage` 端点
+4. 跑一遍对话触发 + 仪表盘刷新，验证数字非 0
+
+**预估涉及文件**：1-2 个后端 + 1 个前端。
+
+**Section 5 总预估**：4-8 个文件，需先做 Phase 1 探查（5-10 分钟）才能给出精确方案。本节在主计划 A/C/E/F + Persona 7→9 完成后执行。
+
+---
+
+## 实际状态盘点（2026-07-17 17:00）
+
+| 方案 | 实施状态 | 证据 |
+| --- | --- | --- |
+| A 主体（force=True 入口） | ✅ 完成 | [push_scheduler.py:186-231](file:///e:/Agent_reply/core/push_scheduler.py#L186-L231) 已加 `force` 局部变量 + 跳过 judge/policy |
+| A 调用方（companion） | ✅ 完成 | [companion.py:382-397](file:///e:/Agent_reply/core/companion.py#L382-L397) 已传 `force=True` |
+| A 配置层（proactive.yaml） | ❌ 未做 | [proactive.yaml:54-58](file:///e:/Agent_reply/config/proactive.yaml#L54-L58) `boot_greeting` 缺 `force: true` |
+| A 1.5 force 变量补丁 | ❌ 未做（NameError 风险） | [push_scheduler.py:289-328](file:///e:/Agent_reply/core/push_scheduler.py#L289-L328) `_dispatch_desire_text` 未定义 `force` |
+| C 输出层自检 | ❌ 未做 | `core/output_self_check.py` 文件不存在 |
+| E+F 原子感知 splitter | ❌ 未做 | [communication/splitter.py:11-52](file:///e:/Agent_reply/communication/splitter.py#L11-L52) 仍是按"。"无差别切 |
+| Persona 7→9 数字 | ❌ 未做 | [persona.yaml:73-78](file:///e:/Agent_reply/config/persona.yaml#L73-L78) `big_five.extraversion` 仍 0.45 |
+| Persona 7→9 few-shot | ⚠️ 部分 | [persona.yaml:111-119](file:///e:/Agent_reply/config/persona.yaml#L111-L119) 已是直球措辞（"盯着屏幕等你回我"），但未明确标记 9/10 基线 |
+| Persona behavior 阈值 | ❌ 未做 | [persona_behavior.yaml:35-66](file:///e:/Agent_reply/config/persona_behavior.yaml#L35-L66) 仍是 60/15/35/25 |
+| Context builder 同步 | ❌ 未做 | `core/context_builder.py` `_PERSONA_L1` 未标 9/10 |
+| Brain TONE_PROMPTS 同步 | ❌ 未做 | `core/brain.py` TONE_PROMPTS 仍是暗涌克制措辞 |
+| Section 5 (4 个 UI 问题) | ❌ 未探查 | 待 Phase 1 |
+
 ---
 
 ## Assumptions & Decisions
 
-1. **5 条 Message 规范原则原样保留**——不增不减，仅在 change 4 中通过"明确角色"原则体现"热情度 8/10"基线。原则原文（统一 DTO / 明确角色 / 可追溯 / 优雅降级 / 可观测）一字不动。
-2. **boot_greeting flag 改为 60s 窗口**——而不是"今天一次"。理由：用户要"每次启动都欢迎"。如果用户 5 分钟内重启 3 次（如调试），避免刷屏但仍能每次都发。
-3. **原子保护用 `【.*?】` 配对**——而不是 `<action>.*?</action>` 转换。理由：成本最低，不需要让 LLM 重新输出。
-4. **方案 C 的 typo 字典保守 3-5 条**——避免过度修正。"产出/产出" 是已知 case，"的的/了了" 是中文典型 typo 模式。不引入拼写检查库。
-5. **不引入 retry/regenerate 机制**——self_correct 在本 patch 不做。理由：成本高、LLM 调用延迟翻倍，方案 C 的输出后自检能覆盖 80% case。
-6. **方案 C 不做"内容质量自检"**（如"对用户太冷淡了"）——只做字面/标签/typo 三类硬规则。
-7. **Persona 升级不改"温柔"维度**——只升"热情"和"外显力"，不变成攻击型或控制型。
-8. **不引入新的"左侧脑/右侧脑"机制**——用户提到"左右脑互搏"是描述 LLM 输出不稳定的现象，方案 C 解决，不引入新架构。
+1. **5 条 Message 规范原则原样保留**——不增不减，仅在 change 4 中通过"明确角色"原则体现"热情度 9/10"基线。原则原文（统一 DTO / 明确角色 / 可追溯 / 优雅降级 / 可观测）一字不动。
+2. **三原则保留原样**（Block-5E R6.3 定义）——零回退 / 无禁词 / 主题色 token 化。Section 5.1 滚动条美化即遵循"主题色 token 化"原则。
+3. **Persona 7→9 不突破"屏幕隔空铁律"**——9 分外显力体现在文字（"我现在就想见你""你再不回我我就……"）和屏幕那端动作（"把手机扣在胸口""靠在椅背上"），绝不写"伸手揽""抱"等在场动作。这是 9 分热情 + 屏幕隔空的**辩证统一**——热情但仍用文字表达。
+4. **boot_greeting flag 改为 60s 窗口**——而不是"今天一次"。理由：用户要"每次启动都欢迎"。如果用户 5 分钟内重启 3 次（如调试），避免刷屏但仍能每次都发。
+5. **proactive.yaml 加 `force: true`**——在 `boot_greeting` scene 显式声明，避免代码里硬编码。三原则之"明确角色"原则。
+6. **原子保护用 `【.*?】` 配对**——而不是 `<action>.*?</action>` 转换。理由：成本最低，不需要让 LLM 重新输出。
+7. **方案 C 的 typo 字典保守 3-5 条**——避免过度修正。"产出/产出" 是已知 case，"的的/了了" 是中文典型 typo 模式。不引入拼写检查库。
+8. **不引入 retry/regenerate 机制**——self_correct 在本 patch 不做。理由：成本高、LLM 调用延迟翻倍，方案 C 的输出后自检能覆盖 80% case。
+9. **方案 C 不做"内容质量自检"**（如"对用户太冷淡了"）——只做字面/标签/typo 三类硬规则。
+10. **Persona 升级不改"温柔"维度**——只升"热情"和"外显力"，不变成攻击型或控制型。
+11. **不引入新的"左侧脑/右侧脑"机制**——用户提到"左右脑互搏"是描述 LLM 输出不稳定的现象，方案 C 解决，不引入新架构。
+12. **Section 5 必须先做 Phase 1 探查**——4 个新问题（滚动条 / 简报 / 赛马 / token 计数）的根因假设待验证，不直接进入实施。
 
 ---
 
@@ -289,24 +411,36 @@ async def _dispatch_desire_text(
 
 实施完成后按以下顺序验证：
 
-1. **单元测试**：
+1. **单元测试**（三原则之"零回退"）：
 
-   - `e2e_boot_greeting.py` 19 用例（原 17 + 新 2）
+   - `e2e_boot_greeting.py` 20 用例（原 17 + force 1.5 新 1 + force=True 路径 2）
    - `e2e_output_self_check.py` 12 用例（新建）
    - `e2e_splitter_atomic.py` 8 用例（新建）
-   - `e2e_persona_baseline.py` 8 用例（新建）
+   - `e2e_persona_baseline.py` 10 用例（新建：7→9 数字 / archetype / example / system_prompt / thresholds / context_builder / TONE_PROMPTS / 回归）
    - `e2e_proactive_judge.py` 28 / `e2e_pacing.py` 96 / `e2e_self_evolve.py` 20 / `verify_screen_sanitizer.py` 23 / `core/proactive_judge.py` 自测 6 / `verify_zero_regression.py` — 全部继续通过
+   - `tools/check_forbidden.py` 持续绿（无禁词）
+   - `tools/check_tokens.py` Section 5.1 完成后新增 0 处硬编码色
+
 2. **截图复现**：
 
    - 拿截图里那段 `<action>伊塔把聊天窗口点开...你个表情...` 输入 splitter，**期望**整段作为 1 个 segment 输出，`<action>` 标签完整闭合。
    - 输入"产出"重复 1 段文字到 self_check，**期望**第二次"产出"被删。
+
 3. **集成测试**：
 
    - 重启后端 → 验证 boot_greeting 强制发（即使在 quiet 期间）→ flag 60s 后允许再次启动触发。
    - 跑 `/api/chat/send` 发一条用户消息 → 验证 self_check 在 trace 里记录 → 验证 splitter 切分正确（segment 数 = 1 或 2，标签完整）。
-4. **回归套件总数预期**：190 → 257（+67 用例）。
+   - 改 persona.yaml 的 big_five extraversion 到 0.78 → 重启 → 验证脑回路生成的第一条回复里出现"我想你""你现在就得回我"等直球措辞。
+   - 跑 brain.py 的 TONE_PROMPTS 字典 → 验证 `warm_with_light_flirt` 等 key 含直球关键词。
+
+4. **回归套件总数预期**：190 → 282（+92 用例：A 1.5 / C 12 / E+F 8 / Persona 10 / Section 5 估算 30+）。
+
 5. **手动验收**：
 
    - QQ 端收到 boot_greeting 欢迎语。
    - 跟 Etta 说 3 句不同情绪的话，每句回复里 `<action>` 都完整闭合。
-   - few-shot 措辞明显从"暗涌克制"变"直球外显"（"我现在就想见你" / "你今天没回我，不许" / "你不知道我盯着屏幕盯了多久" 等）。
+   - few-shot 措辞明显从"暗涌克制"变"直球外显"（"你今天不回我我就一直发" / "我把这件事写进我的黑历史清单了" / "我现在就想听你的声音" 等）。
+   - 滚动条颜色与当前主题色一致（5 套主题切换验证）。
+   - 今日简报按钮可点击且正常显示内容。
+   - cognition 面板"决策权重赛马"有数据。
+   - 系统状态卡片"token 消耗"和"API 调用次数"非 0。

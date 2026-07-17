@@ -26,14 +26,13 @@ import asyncio
 import sys
 from typing import Any
 
-from core.brain import TONE_PROMPTS, MOOD_TO_TONE
+from core.brain import TONE_PROMPTS
 from core.proactive_judge import (
     ProactiveJudge,
     SCENE_THRESHOLDS,
     TONE_BY_DOMINANT,
-    Decision,
 )
-from core.push_scheduler import CronScheduler, PushPolicy
+from core.push_scheduler import CronScheduler
 
 
 # ── helpers ────────────────────────────────────────────────

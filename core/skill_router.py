@@ -11,7 +11,6 @@ never breaks the chat pipeline.
 """
 
 from __future__ import annotations
-from typing import Any
 
 # Hint → ai_options id (single source of truth for routing).
 PROVIDER_HINTS: dict[str, str] = {

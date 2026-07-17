@@ -130,7 +130,6 @@ class TestEmotionEngineState:
     @pytest.fixture(autouse=True)
     def _reset_thresholds(self):
         """Reset threshold engine singleton between tests to avoid cross-test contamination."""
-        from core.emotion_threshold import _THRESHOLD_ENGINE
         import core.emotion_threshold as thresh_mod
         old = thresh_mod._THRESHOLD_ENGINE
         thresh_mod._THRESHOLD_ENGINE = None

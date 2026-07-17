@@ -7,12 +7,10 @@ Does NOT auto-start — user clicks "Start" in the UI.
 from __future__ import annotations
 import asyncio
 import logging
-import os
 import socket
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 

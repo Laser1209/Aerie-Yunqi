@@ -59,7 +59,7 @@ _dbmod.Database.__init__ = _patched_db_init  # type: ignore[assignment]
 
 from core.database import Database  # noqa: E402
 from core.sandbox_runner import SandboxRunner  # noqa: E402
-from core.self_evolver import SelfEvolver, _GAP_RE  # noqa: E402
+from core.self_evolver import SelfEvolver  # noqa: E402
 from core.tool_registry import ToolRegistry  # noqa: E402
 
 

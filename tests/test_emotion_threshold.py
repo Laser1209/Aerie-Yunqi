@@ -3,14 +3,12 @@
 Covers: slot init, add, scan_text, daily_decay, eruption, character wear, singleton.
 """
 
-import time
 from datetime import datetime
 
 import pytest
 
 from core.emotion_threshold import (
     CumulativeEmotionEngine,
-    EmotionSlot,
     SLOTS_CONFIG,
     TEXT_TRIGGERS,
     get_threshold_engine,

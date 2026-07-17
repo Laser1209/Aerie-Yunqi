@@ -302,7 +302,13 @@ class CronScheduler:
         R7.5+: when a ProactiveJudge Decision is provided, its
         ``tone_hint`` is forwarded to the dispatcher so generate_push
         picks up the per-scene tone (longing / collapse / ...).
+
+        R8.1+: reads ``force`` from scene_cfg locally — the force flag
+        in ``_dispatch`` is a local var and does not propagate. force=True
+        bypasses ``policy.record`` so boot greetings don't pollute
+        daily_count / cooldown.
         """
+        force = bool(scene_cfg.get("force", False))
         try:
             template = scene_cfg.get("template", "")
             if kind == "voice":

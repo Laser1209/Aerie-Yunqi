@@ -76,11 +76,16 @@ _DEFAULT_BEHAVIOR_CONFIG: dict[str, Any] = {
                 "neutral": {"P": 0.0,  "A": 0.0,  "D": 0.0},
             },
         },
+        # R8.1 (Persona 9/10): initial_value 跟 config/persona_behavior.yaml
+        # 同步 9/10 基线：patience 60→45（更易冷暴）、anxiety 15→25（更
+        # 易坍塌）、desire 35→55（更易索求）、tenderness 25→15（更易
+        # 反扑）。本默认值仅在 config/persona_behavior.yaml 缺失时被用——
+        # 跟最新基线一致避免 fallback 走 7/10 老值。
         "thresholds": {
-            "patience":   {"label": "忍耐值",       "threshold": 100, "decay_per_day": 5,  "eruption_label": "冷暴模式", "post_decay": -15, "description": ""},
-            "anxiety":    {"label": "不安值",       "threshold": 100, "decay_per_day": 3,  "eruption_label": "坍塌模式", "post_decay": 20,  "description": ""},
-            "desire":     {"label": "渴望值",       "threshold": 80,  "decay_per_day": 8,  "eruption_label": "索求模式", "post_decay": 0,   "description": ""},
-            "tenderness": {"label": "温柔透支值",   "threshold": 60,  "decay_per_day": 10, "eruption_label": "反扑模式", "post_decay": 0,   "description": ""},
+            "patience":   {"label": "忍耐值",       "threshold": 100, "decay_per_day": 5,  "initial_value": 45, "eruption_label": "冷暴模式", "post_decay": -15, "description": ""},  # R8.1: 60→45
+            "anxiety":    {"label": "不安值",       "threshold": 100, "decay_per_day": 3,  "initial_value": 25, "eruption_label": "坍塌模式", "post_decay": 20,  "description": ""},  # R8.1: 15→25
+            "desire":     {"label": "渴望值",       "threshold": 80,  "decay_per_day": 8,  "initial_value": 55, "eruption_label": "索求模式", "post_decay": 0,   "description": ""},  # R8.1: 35→55
+            "tenderness": {"label": "温柔透支值",   "threshold": 60,  "decay_per_day": 10, "initial_value": 15, "eruption_label": "反扑模式", "post_decay": 0,   "description": ""},  # R8.1: 25→15
         },
     },
     "desire": {

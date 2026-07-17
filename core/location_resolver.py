@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import re
 import time
 from pathlib import Path
 
@@ -30,7 +28,6 @@ _FALLBACK_CITY = "上海"
 def _read_settings_city() -> str:
     """Read settings.yaml.weather.city. Empty string means "no override"."""
     try:
-        import yaml
         from config.persona_loader import load_settings  # type: ignore
         cfg = load_settings() or {}
         w = cfg.get("weather") or {}

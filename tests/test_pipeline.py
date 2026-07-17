@@ -4,10 +4,10 @@ Uses mock dependencies to test pipeline stages in isolation.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from core.pipeline import Pipeline
-from communication.message import IncomingMessage, OutgoingReply
+from communication.message import IncomingMessage
 
 
 class TestPipelineHandle:

@@ -20,7 +20,7 @@ from core.context_builder import ContextBuilder
 from core.database import Database
 from core.emotion_engine import EmotionEngine
 from core.emotion_state_store import EmotionStateStore
-from core.emotion_threshold import get_threshold_engine, CumulativeEmotionEngine
+from core.emotion_threshold import get_threshold_engine
 from core.pipeline import Pipeline
 from core.push_scheduler import PushScheduler
 from core.self_evolver import SelfEvolver

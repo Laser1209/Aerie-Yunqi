@@ -78,7 +78,6 @@ class TestUploadAPI:
 
 class TestUploadDirectory:
     def test_upload_dir_exists_or_creatable(self):
-        import os
         from pathlib import Path
         Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
         assert Path(UPLOAD_DIR).exists()

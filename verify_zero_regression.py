@@ -156,6 +156,30 @@ def main() -> int:
     expect("yaml put invalid rejected", code == 400,
            f"code={code} body={body!r}")
 
+    # ── 5b. Persona 9/10 baseline gate (R8.1) ─────────
+    # Pulls persona.yaml and asserts the 9/10 baseline markers are still
+    # present. This is the runtime counterpart of e2e_persona_baseline.py
+    # (which runs offline) and prevents accidental rollback to 7/10.
+    code, body = _request("GET", "/api/config/yaml?file=persona.yaml")
+    yaml_text = body if isinstance(body, str) else ""
+    expect("persona.yaml GET ok", code == 200 and len(yaml_text) > 0,
+           f"code={code} len={len(yaml_text)}")
+    expect("persona.yaml contains 9/10 marker",
+           "9/10" in yaml_text,
+           f"text head: {yaml_text[:200]!r}")
+    expect("persona.yaml extraversion == 0.78",
+           "extraversion: 0.78" in yaml_text,
+           f"text head: {yaml_text[:200]!r}")
+    expect("persona.yaml agreeableness == 0.85",
+           "agreeableness: 0.85" in yaml_text,
+           f"text head: {yaml_text[:200]!r}")
+    expect("persona.yaml archetype 含直球",
+           "直球" in yaml_text,
+           f"text head: {yaml_text[:200]!r}")
+    expect("persona.yaml system_prompt 含 9/10",
+           "system_prompt" in yaml_text and "9/10" in yaml_text,
+           f"text head: {yaml_text[:200]!r}")
+
     # ── 6. Cognition endpoints (Batch 4 backend) ────
     code, body = _request("GET", "/api/cognition/recent?limit=5")
     expect("cognition recent", code == 200 and isinstance(body, dict)

@@ -34,7 +34,6 @@ if hasattr(sys.stderr, "reconfigure"):
 import json
 import sys
 
-from core.cognition import CognitionEngine
 from core.database import Database
 from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry

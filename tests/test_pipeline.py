@@ -101,7 +101,7 @@ class TestPipelineHandle:
     @pytest.mark.asyncio
     async def test_handle_qq_message_enqueues(self, pipeline):
         msg = IncomingMessage(user_id=3998874040, content="你好", source="qq")
-        result = await pipeline.handle(msg)
+        await pipeline.handle(msg)
         pipeline.send_queue.enqueue.assert_called_once()
 
     @pytest.mark.asyncio

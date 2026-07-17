@@ -134,7 +134,7 @@ async def _fetch_rss_source(url: str, allowed_domain: str, limit: int) -> list[d
         logger.warning("brief_fetcher: rejected non-whitelisted URL %s", url)
         return []
     try:
-        import feedparser  # type: ignore
+        import feedparser  # type: ignore  # noqa: F401 (defensive lazy import)
     except ImportError:
         logger.warning("brief_fetcher: feedparser not installed; skipping")
         return []
@@ -467,10 +467,10 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
     intl_news, intl_err = _unwrap_news(intl_news_r)
     cn_news, cn_err = _unwrap_news(cn_news_r)
     errors: dict[str, str] = {}
-    if ai_err:   errors["ai_news"]   = ai_err
-    if it_err:   errors["it_news"]   = it_err
-    if intl_err: errors["intl_news"] = intl_err
-    if cn_err:   errors["cn_news"]   = cn_err
+    if ai_err:   errors["ai_news"]   = ai_err   # noqa: E701 (column-aligned)
+    if it_err:   errors["it_news"]   = it_err   # noqa: E701
+    if intl_err: errors["intl_news"] = intl_err  # noqa: E701
+    if cn_err:   errors["cn_news"]   = cn_err   # noqa: E701
     if isinstance(weather, Exception):
         errors["weather"] = f"{type(weather).__name__}: {weather}"
     elif weather is None:

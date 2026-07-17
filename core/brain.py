@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -578,9 +579,8 @@ class Brain:
 
 
 # ── ReAct trace extraction (Phase 9 Batch 6) ─────────────────
-import re as _re
 
-_THINK_PATTERN = _re.compile(r"<think>(.*?)</think>", flags=_re.DOTALL)
+_THINK_PATTERN = re.compile(r"<think>(.*?)</think>", flags=re.DOTALL)
 
 
 def _classify_action(thought: str | None, tool_calls_present: bool) -> str:

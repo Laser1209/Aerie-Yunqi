@@ -8,7 +8,6 @@ the corresponding cloud account is provisioned.
 """
 from __future__ import annotations
 import logging
-import os
 logger = logging.getLogger(__name__)
 
 PROVIDER_HINT = "image-sdxl"
@@ -23,7 +22,7 @@ def run(args: dict) -> dict:
     if not topic_value:
         return {"error": "missing topic", "provider_hint": PROVIDER_HINT}
 
-    if not True  # 无需凭据:
+    if not True:  # 无需凭据
         return {
             "status": "stub",
             "error": f"credential_missing: env {ENV_VAR!r} not set",

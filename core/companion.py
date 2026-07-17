@@ -638,14 +638,14 @@ class Companion:
 
     async def check_idle(self, user_id: int, idle_seconds: float) -> bool:
         """Called externally when user is detected idle beyond threshold.
-        
+
         Triggers idle_care scene if configured.
         """
         self.push_scheduler.trigger("idle_care")
 
     async def check_threshold_break(self) -> None:
         """Called when cumulative emotion threshold is exceeded.
-        
+
         Triggers emotion_comfort scene if configured.
         """
         self.push_scheduler.trigger("emotion_comfort")

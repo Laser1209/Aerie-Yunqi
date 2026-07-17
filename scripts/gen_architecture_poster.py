@@ -1,4 +1,4 @@
-"""Generate Aerie · 云栖 v9.0.0 system architecture poster — "Frozen Blueprint" aesthetic.
+r"""Generate Aerie · 云栖 v9.0.0 system architecture poster — "Frozen Blueprint" aesthetic.
 
 Output: e:\Agent_reply\documents\aerie_architecture_poster.png
 """

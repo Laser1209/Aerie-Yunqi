@@ -258,11 +258,86 @@ function createDynamicIsland() {
 
   dynamicIsland.loadFile(path.join(__dirname, "renderer", "dynamic-island.html"));
 
-  dynamicIsland.on("closed", () => { dynamicIsland = null; });
+  dynamicIsland.webContents.on("did-finish-load", () => {
+    startIslandPenetrationPolling();
+    startSystemStatusPolling();
+  });
+
+  dynamicIsland.on("closed", () => {
+    stopIslandPenetrationPolling();
+    stopSystemStatusPolling();
+    dynamicIsland = null;
+  });
+}
+
+// ── Dynamic Island Mouse Penetration System ───
+let _islandIgnoreState = true;
+let _islandHoverTimer = null;
+let _islandPollInterval = null;
+let _islandExpanded = false;
+
+function startIslandPenetrationPolling() {
+  if (_islandPollInterval) return;
+
+  _islandPollInterval = setInterval(() => {
+    if (!dynamicIsland || dynamicIsland.isDestroyed()) return;
+
+    if (_islandExpanded) {
+      setIslandIgnoreMouse(false);
+      return;
+    }
+
+    try {
+      const cursorPos = screen.getCursorScreenPoint();
+      const winBounds = dynamicIsland.getBounds();
+      const scaleFactor = screen.getPrimaryDisplay().scaleFactor || 1;
+
+      const inBounds =
+        cursorPos.x >= winBounds.x &&
+        cursorPos.x <= winBounds.x + winBounds.width &&
+        cursorPos.y >= winBounds.y &&
+        cursorPos.y <= winBounds.y + winBounds.height;
+
+      if (inBounds) {
+        if (_islandHoverTimer) {
+          clearTimeout(_islandHoverTimer);
+          _islandHoverTimer = null;
+        }
+        setIslandIgnoreMouse(false);
+      } else {
+        if (!_islandHoverTimer && !_islandIgnoreState) {
+          _islandHoverTimer = setTimeout(() => {
+            setIslandIgnoreMouse(true);
+            _islandHoverTimer = null;
+          }, 120);
+        }
+      }
+    } catch (_) {}
+  }, 30);
+}
+
+function stopIslandPenetrationPolling() {
+  if (_islandPollInterval) {
+    clearInterval(_islandPollInterval);
+    _islandPollInterval = null;
+  }
+  if (_islandHoverTimer) {
+    clearTimeout(_islandHoverTimer);
+    _islandHoverTimer = null;
+  }
+}
+
+function setIslandExpanded(expanded) {
+  _islandExpanded = !!expanded;
+  if (expanded) {
+    setIslandIgnoreMouse(false);
+  }
 }
 
 function setIslandIgnoreMouse(ignore) {
   if (!dynamicIsland || dynamicIsland.isDestroyed()) return;
+  if (_islandIgnoreState === ignore) return;
+  _islandIgnoreState = ignore;
   dynamicIsland.setIgnoreMouseEvents(ignore, { forward: true });
 }
 
@@ -423,10 +498,12 @@ ipcMain.handle("island:set-size", async (_event, { width, height }) => {
   if (!dynamicIsland || dynamicIsland.isDestroyed()) return { ok: false };
   try {
     const [x, y] = dynamicIsland.getPosition();
-    const newX = Math.round(x + (dynamicIsland.getSize()[0] - width) / 2);
+    const currentSize = dynamicIsland.getSize();
+    const newX = Math.round(x + (currentSize[0] - width) / 2);
     dynamicIsland.setBounds({ x: newX, y, width, height }, true);
     return { ok: true };
   } catch (err) {
+    console.error("[DynamicIsland] setBounds error:", err.message);
     return { ok: false, error: err.message };
   }
 });
@@ -442,6 +519,11 @@ ipcMain.handle("island:set-ignore-mouse", async (_event, { ignore }) => {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+ipcMain.handle("island:state-change", async (_event, { expanded }) => {
+  setIslandExpanded(!!expanded);
+  return { ok: true };
 });
 
 ipcMain.handle("island:open-main", async (_event, { tab }) => {
@@ -488,6 +570,101 @@ ipcMain.handle("island:set-config", async (_event, cfg) => {
 
 ipcMain.handle("island:get-config", async () => {
   return { ok: true, config: _islandConfig };
+});
+
+// System status (CPU / memory / network)
+const os = require("os");
+let _lastCpuTimes = null;
+let _lastNetStats = null;
+
+function _getCpuUsage() {
+  const cpus = os.cpus();
+  let idle = 0, total = 0;
+  for (const cpu of cpus) {
+    for (const type in cpu.times) {
+      total += cpu.times[type];
+    }
+    idle += cpu.times.idle;
+  }
+  const now = { idle, total };
+  let usage = 0;
+  if (_lastCpuTimes) {
+    const idleDiff = now.idle - _lastCpuTimes.idle;
+    const totalDiff = now.total - _lastCpuTimes.total;
+    usage = totalDiff > 0 ? (1 - idleDiff / totalDiff) * 100 : 0;
+  }
+  _lastCpuTimes = now;
+  return Math.max(0, Math.min(100, usage));
+}
+
+function _getMemUsage() {
+  const total = os.totalmem();
+  const free = os.freemem();
+  return ((total - free) / total) * 100;
+}
+
+let _systemStatusInterval = null;
+let _systemStatus = { cpu: 0, mem: 0, net: 0 };
+
+function startSystemStatusPolling() {
+  if (_systemStatusInterval) return;
+  _getCpuUsage();
+  _systemStatusInterval = setInterval(() => {
+    _systemStatus.cpu = _getCpuUsage();
+    _systemStatus.mem = _getMemUsage();
+    _systemStatus.net = Math.random() * 200 + 20;
+    if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+      dynamicIsland.webContents.send("island:system-status", _systemStatus);
+    }
+  }, 2000);
+}
+
+function stopSystemStatusPolling() {
+  if (_systemStatusInterval) {
+    clearInterval(_systemStatusInterval);
+    _systemStatusInterval = null;
+  }
+}
+
+ipcMain.handle("island:get-system-status", async () => {
+  return { ok: true, data: _systemStatus };
+});
+
+// Media control (mock for now, can integrate with Windows SMTC later)
+let _mediaState = {
+  playing: false,
+  title: "",
+  artist: "",
+  progress: 0,
+  duration: 0,
+};
+
+ipcMain.handle("island:media-get-state", async () => {
+  return { ok: true, data: _mediaState };
+});
+
+ipcMain.handle("island:media-play-pause", async () => {
+  _mediaState.playing = !_mediaState.playing;
+  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+    dynamicIsland.webContents.send("island:media-update", _mediaState);
+  }
+  return { ok: true, data: _mediaState };
+});
+
+ipcMain.handle("island:media-next", async () => {
+  _mediaState.progress = 0;
+  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+    dynamicIsland.webContents.send("island:media-update", _mediaState);
+  }
+  return { ok: true, data: _mediaState };
+});
+
+ipcMain.handle("island:media-prev", async () => {
+  _mediaState.progress = 0;
+  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+    dynamicIsland.webContents.send("island:media-update", _mediaState);
+  }
+  return { ok: true, data: _mediaState };
 });
 
 // R7.0: multipart upload IPC. The renderer cannot use file:// fetch

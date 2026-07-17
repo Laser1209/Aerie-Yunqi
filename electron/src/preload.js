@@ -96,9 +96,21 @@ contextBridge.exposeInMainWorld("aerie", {
   },
   dynamicIsland: {
     setSize: (width, height) => ipcRenderer.invoke("island:set-size", { width, height }),
+    setState: (expanded) => ipcRenderer.invoke("island:state-change", { expanded }),
     setIgnoreMouse: (ignore) => ipcRenderer.invoke("island:set-ignore-mouse", { ignore }),
     openMain: (tab) => ipcRenderer.invoke("island:open-main", { tab }),
     notify: (data) => ipcRenderer.invoke("island:notify", data || {}),
+    getSystemStatus: () => ipcRenderer.invoke("island:get-system-status"),
+    onSystemStatus: (cb) => {
+      ipcRenderer.on("island:system-status", (_event, data) => cb(data || {}));
+    },
+    mediaGetState: () => ipcRenderer.invoke("island:media-get-state"),
+    mediaPlayPause: () => ipcRenderer.invoke("island:media-play-pause"),
+    mediaNext: () => ipcRenderer.invoke("island:media-next"),
+    mediaPrev: () => ipcRenderer.invoke("island:media-prev"),
+    onMediaUpdate: (cb) => {
+      ipcRenderer.on("island:media-update", (_event, data) => cb(data || {}));
+    },
     onConfigChange: (cb) => {
       ipcRenderer.on("island:config-change", (_event, cfg) => cb(cfg || {}));
     },

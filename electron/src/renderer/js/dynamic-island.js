@@ -3,10 +3,16 @@
 (function () {
   const diEl = document.getElementById("dynamic-island");
   const capsuleEl = diEl.querySelector(".di-capsule");
+  const capsuleLeft = diEl.querySelector(".di-capsule-left");
+  const capsuleCenter = diEl.querySelector(".di-capsule-center");
+  const capsuleRight = diEl.querySelector(".di-capsule-right");
   const expandedEl = diEl.querySelector(".di-expanded");
+  const expandedBody = diEl.querySelector(".di-expanded-body");
   const closeBtn = document.getElementById("di-close");
   const particlesCanvas = document.getElementById("di-particles");
   const ctx = particlesCanvas.getContext("2d");
+
+  const api = window.aerie?.dynamicIsland;
 
   let state = "capsule";
   let config = {
@@ -16,17 +22,17 @@
     hoverDelay: 300,
     longPressDuration: 500,
     capsuleComponents: ["companion", "status", "notifications"],
-    expandedComponents: ["quickActions", "notifList"],
+    expandedComponents: ["quickActions", "notifList", "companionDetail", "mediaControl", "systemStatus"],
   };
 
-  let componentState = {
-    companion: { status: "online", mood: "happy" },
-    status: { text: "云栖在你身边", sub: "" },
-    notifications: { count: 3, items: [] },
-    quickActions: { items: ["chat", "brief", "cognition", "settings"] },
-    notifList: { items: [] },
-    media: { playing: false, title: "", artist: "", progress: 0 },
+  let uiState = {
+    companion: { mood: "joy", status: "online" },
+    statusText: "云栖在你身边",
+    notifications: { count: 0, items: [] },
     system: { cpu: 0, mem: 0, net: 0 },
+    media: { playing: false, title: "", artist: "", progress: 0 },
+    quickActions: ["chat", "brief", "cognition", "settings"],
+    companionStartTime: Date.now(),
   };
 
   let hoverTimer = null;
@@ -34,319 +40,47 @@
   let pressStart = 0;
   let particles = [];
   let animFrame = null;
-  let lastMousePos = { x: 0, y: 0 };
 
-  /* ── Component Registry ─────────────────────── */
-  const CapsuleComponents = {
-    companion: {
-      name: "陪伴状态",
-      position: "left",
-      render() {
-        const s = componentState.companion;
-        const moodEmoji = { happy: "🌸", thinking: "💭", sleeping: "💤", busy: "⚡" }[s.mood] || "✨";
-        const statusColor = s.status === "online" ? "var(--di-success)" : "var(--di-text-tertiary)";
-        return `
-          <div class="di-companion">
-            <div class="di-avatar">
-              <span class="di-avatar-mood">${moodEmoji}</span>
-              <span class="di-avatar-dot" style="background:${statusColor};box-shadow:0 0 8px ${statusColor}"></span>
-            </div>
-          </div>
-        `;
-      },
-    },
-
-    status: {
-      name: "状态文字",
-      position: "center",
-      render() {
-        const s = componentState.status;
-        return `
-          <div class="di-status">
-            <span class="di-status-text">${s.text || "云栖在你身边"}</span>
-          </div>
-        `;
-      },
-    },
-
-    notifications: {
-      name: "消息提醒",
-      position: "right",
-      render() {
-        const count = componentState.notifications.count;
-        return `
-          <div class="di-notif-badge">
-            ${count > 0 ? `<span class="di-badge">${count > 99 ? "99+" : count}</span>` : ""}
-          </div>
-        `;
-      },
-    },
-
-    quickChat: {
-      name: "快捷对话",
-      position: "right",
-      render() {
-        return `
-          <div class="di-quick-chat-icon">
-            <span>💬</span>
-          </div>
-        `;
-      },
-    },
-
-    system: {
-      name: "系统状态",
-      position: "center",
-      render() {
-        const s = componentState.system;
-        return `
-          <div class="di-system-mini">
-            <span class="di-system-item">CPU ${Math.round(s.cpu)}%</span>
-          </div>
-        `;
-      },
-    },
-
-    media: {
-      name: "媒体控制",
-      position: "center",
-      render() {
-        const s = componentState.media;
-        if (!s.playing) return `<div class="di-status"><span class="di-status-text">♪ 未播放</span></div>`;
-        return `
-          <div class="di-media-mini">
-            <span class="di-media-icon">🎵</span>
-            <span class="di-media-title">${s.title || "播放中"}</span>
-          </div>
-        `;
-      },
-    },
+  const ICON = (name, size = 16) => {
+    const cls = `icon icon--${size}`;
+    return `<svg class="${cls}" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
   };
 
-  const ExpandedComponents = {
-    quickActions: {
-      name: "快捷操作",
-      render() {
-        const actions = {
-          chat: { icon: "💬", label: "快捷对话" },
-          brief: { icon: "📋", label: "今日简报" },
-          cognition: { icon: "🧠", label: "认知面板" },
-          settings: { icon: "⚙️", label: "设置" },
-          calendar: { icon: "📅", label: "日程" },
-          files: { icon: "📁", label: "文件" },
-        };
-        const items = componentState.quickActions.items
-          .map((k) => actions[k])
-          .filter(Boolean);
+  const ACTION_ICONS = {
+    chat: "ui-chat",
+    brief: "ui-file-text",
+    cognition: "ui-brain",
+    settings: "ui-settings",
+    calendar: "ui-calendar",
+    files: "ui-folder",
+    home: "ui-home",
+  };
 
-        return `
-          <div class="di-section">
-            <div class="di-section-title">快捷操作</div>
-            <div class="di-quick-grid">
-              ${items
-                .map(
-                  (a, i) => `
-                <button class="di-quick-item" data-action="${componentState.quickActions.items[i]}" style="animation-delay:${i * 30}ms">
-                  <span class="di-quick-icon">${a.icon}</span>
-                  <span class="di-quick-label">${a.label}</span>
-                </button>
-              `
-                )
-                .join("")}
-            </div>
-          </div>
-        `;
-      },
-    },
-
-    notifList: {
-      name: "消息通知",
-      render() {
-        const items = componentState.notifList.items;
-        return `
-          <div class="di-section">
-            <div class="di-section-title">最近消息</div>
-            <div class="di-notif-list">
-              ${
-                items.length === 0
-                  ? `<div class="di-empty">暂无消息</div>`
-                  : items
-                      .map(
-                        (n, i) => `
-                <div class="di-notif-item" data-index="${i}" style="animation-delay:${i * 40 + 100}ms">
-                  <span class="di-notif-icon">${n.icon || "🔔"}</span>
-                  <div class="di-notif-content">
-                    <div class="di-notif-title">${n.title || ""}</div>
-                    <div class="di-notif-desc">${n.desc || ""}</div>
-                  </div>
-                  <span class="di-notif-time">${n.time || "now"}</span>
-                </div>
-              `
-                      )
-                      .join("")
-              }
-            </div>
-          </div>
-        `;
-      },
-    },
-
-    companionDetail: {
-      name: "陪伴详情",
-      render() {
-        const s = componentState.companion;
-        const moodText = { happy: "开心陪伴中", thinking: "在想你呢", sleeping: "休息中", busy: "忙工作中" }[s.mood] || "陪伴中";
-        return `
-          <div class="di-section">
-            <div class="di-section-title">云栖状态</div>
-            <div class="di-companion-card">
-              <div class="di-companion-avatar">
-                <span class="di-companion-emoji">🌸</span>
-              </div>
-              <div class="di-companion-info">
-                <div class="di-companion-name">云栖</div>
-                <div class="di-companion-mood">${moodText}</div>
-                <div class="di-companion-together">已陪伴 2小时 35分</div>
-              </div>
-            </div>
-          </div>
-        `;
-      },
-    },
-
-    mediaControl: {
-      name: "媒体控制",
-      render() {
-        const s = componentState.media;
-        return `
-          <div class="di-section">
-            <div class="di-section-title">媒体控制</div>
-            <div class="di-media-card">
-              <div class="di-media-cover">🎵</div>
-              <div class="di-media-info">
-                <div class="di-media-title">${s.title || "未在播放"}</div>
-                <div class="di-media-artist">${s.artist || ""}</div>
-                <div class="di-media-progress">
-                  <div class="di-media-progress-bar" style="width:${s.progress || 0}%"></div>
-                </div>
-              </div>
-              <div class="di-media-controls">
-                <button class="di-media-btn">⏮</button>
-                <button class="di-media-btn di-media-play">${s.playing ? "⏸" : "▶"}</button>
-                <button class="di-media-btn">⏭</button>
-              </div>
-            </div>
-          </div>
-        `;
-      },
-    },
-
-    systemStatus: {
-      name: "系统状态",
-      render() {
-        const s = componentState.system;
-        return `
-          <div class="di-section">
-            <div class="di-section-title">系统状态</div>
-            <div class="di-system-grid">
-              <div class="di-system-card">
-                <div class="di-system-label">CPU</div>
-                <div class="di-system-value">${Math.round(s.cpu)}%</div>
-                <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${s.cpu}%"></div></div>
-              </div>
-              <div class="di-system-card">
-                <div class="di-system-label">内存</div>
-                <div class="di-system-value">${Math.round(s.mem)}%</div>
-                <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${s.mem}%"></div></div>
-              </div>
-              <div class="di-system-card">
-                <div class="di-system-label">网络</div>
-                <div class="di-system-value">${s.net || 0} KB/s</div>
-                <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${Math.min(s.net / 10, 100)}%"></div></div>
-              </div>
-            </div>
-          </div>
-        `;
-      },
-    },
+  const MOOD_ICONS = {
+    joy: "mood-joy",
+    neutral: "mood-neutral",
+    sad: "mood-sad",
+    anger: "mood-anger",
+    fear: "mood-fear",
   };
 
   /* ── Init ───────────────────────────────────── */
   function init() {
     loadConfig();
     applyTheme(config.theme);
-    initDemoData();
     setupCanvas();
-    renderAll();
     bindEvents();
-    resizeCanvas();
-    startBreathParticles();
-    bindIpcListeners();
-    trySetIgnoreMouse(true);
-  }
-
-  function initDemoData() {
-    componentState.notifList.items = [
-      { icon: "🌸", title: "想你啦", desc: "今天过得怎么样呀～", time: "2m" },
-      { icon: "📝", title: "简报已生成", desc: "今日工作简报已准备好", time: "5m" },
-      { icon: "📅", title: "日程提醒", desc: "下午3点有个会议", time: "1h" },
-    ];
-    componentState.notifications.count = 3;
-  }
-
-  function renderAll() {
     renderCapsule();
     renderExpanded();
+    startBreathParticles();
+    bindIpcListeners();
+    fetchInitialData();
   }
 
-  function renderCapsule() {
-    const left = [];
-    const center = [];
-    const right = [];
-
-    for (const key of config.capsuleComponents) {
-      const comp = CapsuleComponents[key];
-      if (!comp) continue;
-      const html = comp.render();
-      if (comp.position === "left") left.push(html);
-      else if (comp.position === "right") right.push(html);
-      else center.push(html);
-    }
-
-    capsuleEl.innerHTML = `
-      <div class="di-capsule-left">${left.join("")}</div>
-      <div class="di-capsule-center">${center.join("")}</div>
-      <div class="di-capsule-right">${right.join("")}</div>
-    `;
-  }
-
-  function renderExpanded() {
-    const sections = config.expandedComponents
-      .map((key) => ExpandedComponents[key])
-      .filter(Boolean)
-      .map((c) => c.render())
-      .join("");
-
-    const body = expandedEl.querySelector(".di-expanded-body");
-    if (body) {
-      body.innerHTML = sections;
-    }
-  }
-
-  function updateComponent(compKey, data) {
-    if (componentState[compKey]) {
-      Object.assign(componentState[compKey], data);
-    }
-    renderAll();
-  }
-
-  /* ── Config & Theme ─────────────────────────── */
   function loadConfig() {
     try {
       const saved = localStorage.getItem("di_config");
-      if (saved) {
-        config = Object.assign(config, JSON.parse(saved));
-      }
+      if (saved) Object.assign(config, JSON.parse(saved));
     } catch (_) {}
   }
 
@@ -363,7 +97,6 @@
     saveConfig();
   }
 
-  /* ── Canvas ─────────────────────────────────── */
   function setupCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const rect = diEl.getBoundingClientRect();
@@ -380,7 +113,295 @@
     ctx.scale(dpr, dpr);
   }
 
-  /* ── Events ─────────────────────────────────── */
+  function fetchInitialData() {
+    if (!api) return;
+    try {
+      api.getSystemStatus?.().then((r) => {
+        if (r?.ok && r.data) {
+          uiState.system = r.data;
+          renderCapsule();
+        }
+      }).catch(() => {});
+
+      api.mediaGetState?.().then((r) => {
+        if (r?.ok && r.data) {
+          uiState.media = r.data;
+          renderExpanded();
+        }
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  /* ── Capsule Render ─────────────────────────── */
+  function renderCapsule() {
+    let leftHtml = "";
+    let centerHtml = "";
+    let rightHtml = "";
+
+    for (const key of config.capsuleComponents) {
+      switch (key) {
+        case "companion":
+          leftHtml += renderCompanionBadge();
+          break;
+        case "status":
+          centerHtml += renderStatusText();
+          break;
+        case "notifications":
+          rightHtml += renderNotificationBadge();
+          break;
+        case "quickChat":
+          rightHtml += renderQuickChatIcon();
+          break;
+        case "media":
+          centerHtml += renderMediaMini();
+          break;
+        case "system":
+          centerHtml += renderSystemMini();
+          break;
+      }
+    }
+
+    if (!leftHtml && config.capsuleComponents.includes("companion")) {
+      leftHtml = renderCompanionBadge();
+    }
+    if (!centerHtml) {
+      centerHtml = renderStatusText();
+    }
+    if (!rightHtml && config.capsuleComponents.includes("notifications")) {
+      rightHtml = renderNotificationBadge();
+    }
+
+    capsuleLeft.innerHTML = leftHtml;
+    capsuleCenter.innerHTML = centerHtml;
+    capsuleRight.innerHTML = rightHtml;
+  }
+
+  function renderCompanionBadge() {
+    const moodIcon = MOOD_ICONS[uiState.companion.mood] || "mood-neutral";
+    const statusColor = uiState.companion.status === "online" ? "var(--di-success)" : "var(--di-text-tertiary)";
+    return `
+      <div class="di-avatar" title="云栖">
+        ${ICON(moodIcon, 18)}
+        <span class="di-avatar-dot" style="background:${statusColor};box-shadow:0 0 6px ${statusColor}"></span>
+      </div>
+    `;
+  }
+
+  function renderStatusText() {
+    return `<div class="di-status"><span class="di-status-text">${uiState.statusText}</span></div>`;
+  }
+
+  function renderNotificationBadge() {
+    const count = uiState.notifications.count;
+    if (count <= 0) return `<div class="di-notif-badge"></div>`;
+    const display = count > 99 ? "99+" : count;
+    return `<div class="di-notif-badge"><span class="di-badge">${display}</span></div>`;
+  }
+
+  function renderQuickChatIcon() {
+    return `<div class="di-quick-chat-icon">${ICON("ui-chat", 16)}</div>`;
+  }
+
+  function renderMediaMini() {
+    if (!uiState.media.playing) {
+      return `<div class="di-status"><span class="di-status-text">${ICON("ui-music", 12)} 未播放</span></div>`;
+    }
+    return `
+      <div class="di-media-mini">
+        ${ICON("ui-music", 12)}
+        <span class="di-media-title">${uiState.media.title || "播放中"}</span>
+      </div>
+    `;
+  }
+
+  function renderSystemMini() {
+    return `<div class="di-status"><span class="di-status-text">CPU ${Math.round(uiState.system.cpu)}%</span></div>`;
+  }
+
+  /* ── Expanded Render ──────────────────────── */
+  function renderExpanded() {
+    let html = "";
+    for (const key of config.expandedComponents) {
+      switch (key) {
+        case "quickActions":
+          html += renderQuickActions();
+          break;
+        case "notifList":
+          html += renderNotificationList();
+          break;
+        case "companionDetail":
+          html += renderCompanionDetail();
+          break;
+        case "mediaControl":
+          html += renderMediaControl();
+          break;
+        case "systemStatus":
+          html += renderSystemStatus();
+          break;
+      }
+    }
+    expandedBody.innerHTML = html;
+    bindExpandedEvents();
+  }
+
+  function renderQuickActions() {
+    const labels = {
+      chat: "快捷对话",
+      brief: "今日简报",
+      cognition: "认知面板",
+      settings: "设置",
+      calendar: "日程",
+      files: "文件",
+    };
+    const items = uiState.quickActions
+      .map((k) => ({ key: k, icon: ACTION_ICONS[k], label: labels[k] || k }))
+      .filter((x) => x.icon);
+
+    return `
+      <div class="di-section">
+        <div class="di-section-title">快捷操作</div>
+        <div class="di-quick-grid">
+          ${items.map((a, i) => `
+            <button class="di-quick-item" data-action="${a.key}" style="animation-delay:${i * 30}ms">
+              <span class="di-quick-icon">${ICON(a.icon, 20)}</span>
+              <span class="di-quick-label">${a.label}</span>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderNotificationList() {
+    const items = uiState.notifications.items;
+    return `
+      <div class="di-section">
+        <div class="di-section-title">
+          最近消息
+          <span class="di-section-count">${items.length}</span>
+        </div>
+        <div class="di-notif-list">
+          ${items.length === 0
+            ? `<div class="di-empty">暂无新消息</div>`
+            : items.map((n, i) => `
+              <div class="di-notif-item" data-index="${i}" style="animation-delay:${i * 40 + 80}ms">
+                <span class="di-notif-icon">${n.icon ? ICON(n.icon, 18) : ICON("ui-bell", 18)}</span>
+                <div class="di-notif-content">
+                  <div class="di-notif-title">${n.title || ""}</div>
+                  <div class="di-notif-desc">${n.desc || ""}</div>
+                </div>
+                <span class="di-notif-time">${n.time || "now"}</span>
+              </div>
+            `).join("")
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCompanionDetail() {
+    const moodText = {
+      joy: "开心陪伴中",
+      neutral: "静静陪着你",
+      sad: "有点低落中",
+      anger: "气鼓鼓",
+      fear: "担心你呢",
+    }[uiState.companion.mood] || "陪伴中";
+
+    const together = formatDuration(Date.now() - uiState.companionStartTime);
+
+    return `
+      <div class="di-section">
+        <div class="di-section-title">云栖状态</div>
+        <div class="di-companion-card">
+          <div class="di-companion-avatar">
+            ${ICON(MOOD_ICONS[uiState.companion.mood] || "mood-neutral", 28)}
+          </div>
+          <div class="di-companion-info">
+            <div class="di-companion-name">云栖</div>
+            <div class="di-companion-mood">${moodText}</div>
+            <div class="di-companion-together">已陪伴 ${together}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMediaControl() {
+    const m = uiState.media;
+    return `
+      <div class="di-section">
+        <div class="di-section-title">媒体控制</div>
+        <div class="di-media-card">
+          <div class="di-media-cover">${ICON("ui-music", 22)}</div>
+          <div class="di-media-info">
+            <div class="di-media-title">${m.title || "未在播放"}</div>
+            <div class="di-media-artist">${m.artist || "—"}</div>
+            <div class="di-media-progress">
+              <div class="di-media-progress-bar" style="width:${m.progress || 0}%"></div>
+            </div>
+          </div>
+          <div class="di-media-controls">
+            <button class="di-media-btn" data-media-action="prev" aria-label="上一首">${ICON("ui-skip-back", 14)}</button>
+            <button class="di-media-btn di-media-play" data-media-action="toggle" aria-label="播放/暂停">${m.playing ? ICON("ui-pause", 14) : ICON("ui-play", 14)}</button>
+            <button class="di-media-btn" data-media-action="next" aria-label="下一首">${ICON("ui-skip-forward", 14)}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSystemStatus() {
+    const s = uiState.system;
+    return `
+      <div class="di-section">
+        <div class="di-section-title">系统状态</div>
+        <div class="di-system-grid">
+          <div class="di-system-card">
+            <div class="di-system-icon">${ICON("ui-cpu", 18)}</div>
+            <div class="di-system-label">CPU</div>
+            <div class="di-system-value">${Math.round(s.cpu)}%</div>
+            <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${s.cpu}%"></div></div>
+          </div>
+          <div class="di-system-card">
+            <div class="di-system-icon">${ICON("ui-memory", 18)}</div>
+            <div class="di-system-label">内存</div>
+            <div class="di-system-value">${Math.round(s.mem)}%</div>
+            <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${s.mem}%"></div></div>
+          </div>
+          <div class="di-system-card">
+            <div class="di-system-icon">${ICON("ui-wifi", 18)}</div>
+            <div class="di-system-label">网络</div>
+            <div class="di-system-value">${Math.round(s.net || 0)} KB/s</div>
+            <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${Math.min((s.net || 0) / 5, 100)}%"></div></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindExpandedEvents() {
+    expandedBody.querySelectorAll(".di-quick-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        handleQuickAction(btn.dataset.action);
+      });
+    });
+
+    expandedBody.querySelectorAll(".di-notif-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        handleNotifClick(item);
+      });
+    });
+
+    expandedBody.querySelectorAll("[data-media-action]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        handleMediaAction(btn.dataset.mediaAction);
+      });
+    });
+  }
+
+  /* ── Events ───────────────────────────────── */
   function bindEvents() {
     capsuleEl.addEventListener("click", onCapsuleClick);
 
@@ -398,15 +419,6 @@
     closeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       collapse();
-    });
-
-    diEl.addEventListener("click", (e) => {
-      if (e.target.closest(".di-quick-item")) {
-        handleQuickAction(e.target.closest(".di-quick-item").dataset.action);
-      }
-      if (e.target.closest(".di-notif-item")) {
-        handleNotifClick(e.target.closest(".di-notif-item"));
-      }
     });
 
     window.addEventListener("resize", resizeCanvas);
@@ -431,13 +443,9 @@
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const size = Math.max(rect.width, rect.height);
-
     const ripple = document.createElement("span");
     ripple.className = "di-ripple";
-    ripple.style.width = ripple.style.height = size + "px";
-    ripple.style.left = x - size / 2 + "px";
-    ripple.style.top = y - size / 2 + "px";
-
+    ripple.style.cssText = `width:${size}px;height:${size}px;left:${x - size / 2}px;top:${y - size / 2}px;`;
     capsuleEl.appendChild(ripple);
     setTimeout(() => ripple.remove(), 600);
   }
@@ -445,23 +453,15 @@
   function onCapsuleMouseEnter() {
     if (config.interaction === "click") return;
     if (state !== "capsule") return;
-
-    hoverTimer = setTimeout(() => {
-      expand();
-    }, config.hoverDelay);
+    hoverTimer = setTimeout(expand, config.hoverDelay);
   }
 
   function onCapsuleMouseLeave() {
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      hoverTimer = null;
-    }
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
   }
 
   function onCapsuleMouseDown(e) {
     pressStart = Date.now();
-    lastMousePos = { x: e.clientX, y: e.clientY };
-
     if (config.interaction === "longpress" || config.interaction === "both") {
       pressTimer = setTimeout(() => {
         if (state === "capsule") {
@@ -473,26 +473,22 @@
   }
 
   function onCapsuleMouseUp() {
-    if (pressTimer) {
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    }
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
   }
 
-  /* ── Expand / Collapse ──────────────────────── */
+  /* ── Expand / Collapse ─────────────────────── */
   function expand() {
     if (state !== "capsule") return;
     state = "expanding";
     diEl.classList.add("di--expanding");
     renderExpanded();
 
-    const expandedWidth = 320;
-    const expandedHeight = estimateExpandedHeight();
+    const w = 320;
+    const h = estimateExpandedHeight();
 
     try {
-      if (window.aerie?.dynamicIsland?.setSize) {
-        window.aerie.dynamicIsland.setSize(expandedWidth, expandedHeight);
-      }
+      api?.setState?.(true)?.catch(() => {});
+      api?.setSize?.(w, h)?.catch(() => {});
     } catch (_) {}
 
     setTimeout(() => {
@@ -500,7 +496,6 @@
       diEl.classList.remove("di--expanding");
       diEl.classList.add("di--expanded");
       resizeCanvas();
-      trySetIgnoreMouse(false);
     }, 480);
   }
 
@@ -510,173 +505,192 @@
     diEl.classList.add("di--collapsing");
     diEl.classList.remove("di--expanded");
 
+    try { api?.setState?.(false)?.catch(() => {}); } catch (_) {}
+
     setTimeout(() => {
       state = "capsule";
       diEl.classList.remove("di--collapsing");
-
-      try {
-        if (window.aerie?.dynamicIsland?.setSize) {
-          window.aerie.dynamicIsland.setSize(200, 36);
-        }
-      } catch (_) {}
-
+      try { api?.setSize?.(200, 36)?.catch(() => {}); } catch (_) {}
       resizeCanvas();
-      trySetIgnoreMouse(true);
     }, 340);
   }
 
   function estimateExpandedHeight() {
     const temp = expandedEl.cloneNode(true);
-    temp.style.position = "absolute";
-    temp.style.visibility = "hidden";
-    temp.style.display = "block";
-    temp.style.width = "320px";
+    temp.style.cssText = "position:absolute;visibility:hidden;display:block;width:320px;";
     document.body.appendChild(temp);
-    const h = temp.offsetHeight + 8;
+    const h = temp.offsetHeight + 12;
     document.body.removeChild(temp);
-    return Math.min(h, 460);
+    return Math.min(h, 500);
   }
 
-  function trySetIgnoreMouse(ignore) {
-    try {
-      if (window.aerie?.dynamicIsland?.setIgnoreMouse) {
-        window.aerie.dynamicIsland.setIgnoreMouse(ignore);
-      }
-    } catch (_) {}
-  }
-
-  /* ── Action Handlers ────────────────────────── */
+  /* ── Action Handlers ─────────────────────── */
   function handleQuickAction(action) {
-    const tabMap = {
-      chat: "chat",
-      brief: "brief",
-      cognition: "cognition",
-      settings: "settings",
-      calendar: "calendar",
-      files: "files",
-    };
+    const tabMap = { chat: "chat", brief: "brief", cognition: "cognition", settings: "settings" };
     const tab = tabMap[action];
     if (tab) {
-      try {
-        if (window.aerie?.dynamicIsland?.openMain) {
-          window.aerie.dynamicIsland.openMain(tab);
-        }
-      } catch (_) {}
+      try { api?.openMain?.(tab)?.catch(() => {}); } catch (_) {}
     }
     collapse();
   }
 
   function handleNotifClick(item) {
+    const idx = parseInt(item.dataset.index, 10);
     item.style.opacity = "0";
     item.style.transform = "translateX(20px)";
     setTimeout(() => {
-      const idx = parseInt(item.dataset.index, 10);
       if (!isNaN(idx)) {
-        componentState.notifList.items.splice(idx, 1);
-        componentState.notifications.count = Math.max(0, componentState.notifications.count - 1);
-        renderAll();
+        uiState.notifications.items.splice(idx, 1);
+        uiState.notifications.count = Math.max(0, uiState.notifications.count - 1);
+        renderCapsule();
+        renderExpanded();
       }
-    }, 300);
+    }, 280);
   }
 
-  /* ── IPC ────────────────────────────────────── */
-  function bindIpcListeners() {
+  function handleMediaAction(action) {
+    if (!api) return;
     try {
-      if (window.aerie?.dynamicIsland?.onConfigChange) {
-        window.aerie.dynamicIsland.onConfigChange((cfg) => {
-          if (cfg.theme) applyTheme(cfg.theme);
-          if (cfg.interaction) config.interaction = cfg.interaction;
-          if (cfg.expandType) config.expandType = cfg.expandType;
-          if (cfg.capsuleComponents) config.capsuleComponents = cfg.capsuleComponents;
-          if (cfg.expandedComponents) config.expandedComponents = cfg.expandedComponents;
-          saveConfig();
-          renderAll();
-        });
-      }
-    } catch (_) {}
-
-    try {
-      if (window.aerie?.dynamicIsland?.onNotify) {
-        window.aerie.dynamicIsland.onNotify((data) => {
-          if (data.title || data.desc) {
-            window.DynamicIsland.notify(data.title, data.desc, data.icon);
+      if (action === "toggle") {
+        api.mediaPlayPause?.().then((r) => {
+          if (r?.ok && r.data) {
+            uiState.media = r.data;
+            renderExpanded();
+            renderCapsule();
           }
-        });
+        }).catch(() => {});
+      } else if (action === "next") {
+        api.mediaNext?.().catch(() => {});
+      } else if (action === "prev") {
+        api.mediaPrev?.().catch(() => {});
       }
     } catch (_) {}
+  }
 
+  /* ── IPC & SSE ───────────────────────────── */
+  function bindIpcListeners() {
+    if (!api) return;
     try {
-      if (window.aerie?.dynamicIsland?.sseSubscribe) {
-        window.aerie.dynamicIsland.sseSubscribe((payload) => {
-          handleSseEvent(payload);
-        });
-      }
+      api.onConfigChange?.((cfg) => {
+        if (cfg.theme) applyTheme(cfg.theme);
+        if (cfg.interaction) config.interaction = cfg.interaction;
+        if (cfg.capsuleComponents) config.capsuleComponents = cfg.capsuleComponents;
+        if (cfg.expandedComponents) config.expandedComponents = cfg.expandedComponents;
+        saveConfig();
+        renderCapsule();
+        renderExpanded();
+      });
+
+      api.onNotify?.((data) => {
+        if (data.title || data.desc) {
+          addNotification(data.title, data.desc, data.icon, data.type);
+        }
+      });
+
+      api.onSystemStatus?.((data) => {
+        if (data) {
+          uiState.system = data;
+          if (state === "expanded") renderExpanded();
+          if (config.capsuleComponents.includes("system")) renderCapsule();
+        }
+      });
+
+      api.onMediaUpdate?.((data) => {
+        if (data) {
+          uiState.media = data;
+          if (state === "expanded") renderExpanded();
+          if (config.capsuleComponents.includes("media")) renderCapsule();
+        }
+      });
+
+      api.sseSubscribe?.((payload) => {
+        handleSseEvent(payload);
+      });
     } catch (_) {}
   }
 
   function handleSseEvent(payload) {
-    if (!payload || !payload.type) return;
-
+    if (!payload?.type) return;
     switch (payload.type) {
       case "proactive_message":
       case "chat_message":
         if (payload.data?.text) {
-          window.DynamicIsland.notify(
+          addNotification(
             payload.data.title || "云栖",
             payload.data.text,
-            payload.data.icon || "🌸"
+            payload.data.icon || "ui-bell",
+            payload.type
           );
+        }
+        break;
+      case "emotion_update":
+      case "mood_change":
+        if (payload.data?.mood) {
+          uiState.companion.mood = payload.data.mood;
+          renderCapsule();
+          if (state === "expanded") renderExpanded();
         }
         break;
       case "companion_status":
         if (payload.data) {
-          updateComponent("companion", payload.data);
+          Object.assign(uiState.companion, payload.data);
+          renderCapsule();
         }
         break;
-      case "system_status":
-        if (payload.data) {
-          updateComponent("system", payload.data);
-        }
-        break;
-      case "media_update":
-        if (payload.data) {
-          updateComponent("media", payload.data);
+      case "status_update":
+        if (payload.data?.text) {
+          uiState.statusText = payload.data.text;
+          renderCapsule();
         }
         break;
     }
   }
 
-  /* ── Particle System ────────────────────────── */
+  function addNotification(title, desc, icon, type) {
+    uiState.notifications.items.unshift({
+      icon: icon || "ui-bell",
+      title: title || "",
+      desc: desc || "",
+      time: "刚刚",
+      type: type || "",
+    });
+    if (uiState.notifications.items.length > 20) {
+      uiState.notifications.items.pop();
+    }
+    uiState.notifications.count++;
+    renderCapsule();
+    if (state === "expanded") renderExpanded();
+
+    if (state === "capsule") {
+      diEl.classList.add("di--notif");
+      setTimeout(() => diEl.classList.remove("di--notif"), 600);
+    }
+  }
+
+  /* ── Particle System ─────────────────────── */
   const PARTICLE_TYPES = ["circle", "heart", "star", "sparkle"];
 
   function spawnBurstParticles(x, y) {
     const rect = diEl.getBoundingClientRect();
     const px = x - rect.left;
     const py = y - rect.top;
-
     const count = 16;
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
       const speed = 2.5 + Math.random() * 3.5;
-      const type = PARTICLE_TYPES[Math.floor(Math.random() * PARTICLE_TYPES.length)];
       particles.push({
-        x: px,
-        y: py,
+        x: px, y: py,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed - 1.5,
         size: 3 + Math.random() * 4,
         life: 1,
         decay: 0.015 + Math.random() * 0.02,
-        color: getAccentColor(),
-        type,
+        type: PARTICLE_TYPES[Math.floor(Math.random() * PARTICLE_TYPES.length)],
         rotation: Math.random() * Math.PI * 2,
         rotationSpeed: (Math.random() - 0.5) * 0.1,
       });
     }
-
-    if (!animFrame) {
-      animateParticles();
-    }
+    if (!animFrame) animateParticles();
   }
 
   function startBreathParticles() {
@@ -686,34 +700,25 @@
       const diRect = diEl.getBoundingClientRect();
       const px = rect.left - diRect.left + rect.width / 2 + (Math.random() - 0.5) * 30;
       const py = rect.top - diRect.top + rect.height / 2;
-
-      const type = Math.random() > 0.7 ? "heart" : "sparkle";
       particles.push({
-        x: px,
-        y: py,
+        x: px, y: py,
         vx: (Math.random() - 0.5) * 0.6,
         vy: -0.4 - Math.random() * 0.6,
         size: 2 + Math.random() * 2.5,
         life: 1,
         decay: 0.006 + Math.random() * 0.005,
-        color: getAccentColor(),
-        type,
+        type: Math.random() > 0.7 ? "heart" : "sparkle",
         rotation: Math.random() * Math.PI * 2,
         rotationSpeed: (Math.random() - 0.5) * 0.05,
       });
-
-      if (!animFrame) {
-        animateParticles();
-      }
+      if (!animFrame) animateParticles();
     }, 600);
   }
 
   function animateParticles() {
     const dpr = window.devicePixelRatio || 1;
     ctx.clearRect(0, 0, particlesCanvas.width / dpr, particlesCanvas.height / dpr);
-
     particles = particles.filter((p) => p.life > 0);
-
     for (const p of particles) {
       p.x += p.vx;
       p.y += p.vy;
@@ -721,19 +726,15 @@
       p.vx *= 0.99;
       p.rotation += p.rotationSpeed;
       p.life -= p.decay;
-
       ctx.save();
       ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
+      ctx.fillStyle = getAccentColor();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rotation);
       ctx.scale(p.life, p.life);
-
       drawParticle(p.type, p.size);
-
       ctx.restore();
     }
-
     if (particles.length > 0) {
       animFrame = requestAnimationFrame(animateParticles);
     } else {
@@ -743,21 +744,13 @@
 
   function drawParticle(type, size) {
     switch (type) {
-      case "heart":
-        drawHeart(size);
-        break;
-      case "star":
-        drawStar(size);
-        break;
-      case "sparkle":
-        drawSparkle(size);
-        break;
-      case "circle":
+      case "heart": drawHeart(size); break;
+      case "star": drawStar(size); break;
+      case "sparkle": drawSparkle(size); break;
       default:
         ctx.beginPath();
         ctx.arc(0, 0, size, 0, Math.PI * 2);
         ctx.fill();
-        break;
     }
   }
 
@@ -771,18 +764,14 @@
   }
 
   function drawStar(size) {
-    const outerR = size;
-    const innerR = size * 0.45;
-    const spikes = 5;
+    const outer = size, inner = size * 0.45, spikes = 5;
     let rot = -Math.PI / 2;
-
     ctx.beginPath();
     for (let i = 0; i < spikes * 2; i++) {
-      const r = i % 2 === 0 ? outerR : innerR;
+      const r = i % 2 === 0 ? outer : inner;
       const x = Math.cos(rot) * r;
       const y = Math.sin(rot) * r;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       rot += Math.PI / spikes;
     }
     ctx.closePath();
@@ -805,52 +794,34 @@
   }
 
   function getAccentColor() {
-    const styles = getComputedStyle(diEl);
-    return styles.getPropertyValue("--di-accent").trim() || "#66abff";
+    return getComputedStyle(diEl).getPropertyValue("--di-accent").trim() || "#66abff";
   }
 
-  /* ── Public API ─────────────────────────────── */
+  /* ── Utils ────────────────────────────────── */
+  function formatDuration(ms) {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}小时${m}分`;
+    if (m > 0) return `${m}分${sec}秒`;
+    return `${sec}秒`;
+  }
+
+  /* ── Public API ───────────────────────────── */
   window.DynamicIsland = {
-    expand,
-    collapse,
-    applyTheme,
-    updateComponent,
-    renderAll,
-
-    notify(title, desc, icon) {
-      componentState.notifList.items.unshift({
-        icon: icon || "🔔",
-        title: title || "",
-        desc: desc || "",
-        time: "now",
-      });
-      componentState.notifications.count++;
-      renderAll();
-
-      if (state === "capsule") {
-        diEl.classList.add("di--notif");
-        setTimeout(() => diEl.classList.remove("di--notif"), 600);
-      }
-    },
-
-    updateStatus(text) {
-      updateComponent("status", { text });
-    },
-
+    expand, collapse, applyTheme,
+    notify: addNotification,
+    updateStatus(text) { uiState.statusText = text; renderCapsule(); },
     setConfig(cfg) {
-      config = Object.assign(config, cfg);
+      Object.assign(config, cfg);
       saveConfig();
       if (cfg.theme) applyTheme(cfg.theme);
-      renderAll();
+      renderCapsule();
+      renderExpanded();
     },
-
-    getState() {
-      return state;
-    },
-
-    getConfig() {
-      return { ...config };
-    },
+    getState() { return state; },
+    getConfig() { return { ...config }; },
   };
 
   if (document.readyState === "loading") {

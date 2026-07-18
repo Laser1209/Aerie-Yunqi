@@ -1,0 +1,38 @@
+[
+  {
+    "id": "b69a5ad8-8f5e-4426-91c8-03012f330cfd",
+    "title": "完善每日简报任务模块",
+    "priority": "high",
+    "notes": "需要对接 todo_manager，支持勾选、编辑、删除",
+    "due_time": "2026-07-19T04:33:36.999227",
+    "estimated_minutes": 90,
+    "completed": false,
+    "completed_at": null,
+    "created_at": "2026-07-19T00:33:36.999242",
+    "updated_at": "2026-07-19T00:33:36.999242"
+  },
+  {
+    "id": "52c476a8-8c4b-44ea-9579-c0087745ee05",
+    "title": "给伊塔写一封感谢信",
+    "priority": "medium",
+    "notes": "她今天又陪了我一整天，说点暖心的话",
+    "due_time": null,
+    "estimated_minutes": 20,
+    "completed": false,
+    "completed_at": null,
+    "created_at": "2026-07-19T00:33:36.999719",
+    "updated_at": "2026-07-19T00:33:36.999719"
+  },
+  {
+    "id": "9a552ed6-e4c6-4551-a174-bffca235d75e",
+    "title": "整理本周学习笔记",
+    "priority": "low",
+    "notes": "把这周看的论文和教程整理成思维导图",
+    "due_time": null,
+    "estimated_minutes": 60,
+    "completed": false,
+    "completed_at": null,
+    "created_at": "2026-07-19T00:33:37.006565",
+    "updated_at": "2026-07-19T00:33:37.006565"
+  }
+]

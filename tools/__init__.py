@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Built-in tools for the tool registry."""
+"""Aerie · 云栖 v0.1.0-beta.1 — Built-in tools for the tool registry."""
 
 from __future__ import annotations
 import platform
@@ -92,3 +92,16 @@ def register_all_tools(registry) -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("office tools registration failed: %s", e)
+
+    # [扩展] v0.1.0-beta.1: computer control tools — previously never registered,
+    # so LLM Function Calling could not invoke any computer_control actions.
+    # ZERO-BREAKING: adds new tool entries without touching existing ones.
+    try:
+        from tools.compute_tools import register_computer_tools
+        from core.companion import get_companion
+        companion = get_companion()
+        if companion and companion.computer_controller:
+            register_computer_tools(registry, companion.computer_controller)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("computer tools registration failed: %s", e)

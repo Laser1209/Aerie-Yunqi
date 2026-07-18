@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — YAML config loader."""
+"""Aerie · 云栖 v0.1.0-beta.1 — YAML config loader."""
 
 from __future__ import annotations
 import os
@@ -40,17 +40,38 @@ def _load_yaml(filename: str) -> dict[str, Any]:
 
 def load_settings() -> dict[str, Any]:
     """Load main settings from config/settings.yaml."""
-    return _load_yaml("settings.yaml")
+    try:
+        return _load_yaml("settings.yaml")
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Unexpected error loading settings.yaml; returning empty dict"
+        )
+        return {}
 
 
 def load_persona() -> dict[str, Any]:
     """Load persona from config/persona.yaml."""
-    return _load_yaml("persona.yaml")
+    try:
+        return _load_yaml("persona.yaml") or {}
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Unexpected error loading persona.yaml; returning empty dict"
+        )
+        return {}
 
 
 def load_proactive_config() -> dict[str, Any]:
     """Load proactive messaging config from config/proactive.yaml."""
-    return _load_yaml("proactive.yaml")
+    try:
+        return _load_yaml("proactive.yaml") or {}
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Unexpected error loading proactive.yaml; returning empty dict"
+        )
+        return {}
 
 
 # R0.3.2: centralized behavior config (emotion / desire / decision / cognition)
@@ -63,9 +84,16 @@ def load_behavior_config() -> dict[str, Any]:
 
     Returns deep-merged dict (file overrides defaults).
     """
-    file_cfg = _load_yaml("persona_behavior.yaml")
-    merged = _deep_merge(_DEFAULT_BEHAVIOR_CONFIG, file_cfg)
-    return merged
+    try:
+        file_cfg = _load_yaml("persona_behavior.yaml") or {}
+        merged = _deep_merge(_DEFAULT_BEHAVIOR_CONFIG, file_cfg)
+        return merged
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Unexpected error loading persona_behavior.yaml; returning defaults"
+        )
+        return dict(_DEFAULT_BEHAVIOR_CONFIG)
 
 
 _DEFAULT_BEHAVIOR_CONFIG: dict[str, Any] = {

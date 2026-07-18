@@ -1,4 +1,4 @@
-# Aerie · 云栖 v13.0
+# Aerie · 云栖 v0.1.0-beta.1
 
 > **本地优先的 AI 桌面伴侣 / Local-first AI desktop companion**
 > 你的私人 AI · 伊塔 · 在 Windows 11 上随时待命。办公学习 / 情感陪伴 / 电脑操控 / 主动关怀，一个就够了。

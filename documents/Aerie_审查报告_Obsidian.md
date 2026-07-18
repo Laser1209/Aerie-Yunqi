@@ -1,5 +1,5 @@
 ---
-title: Aerie · 云栖 v13.9.2 全量项目审查报告（更新版）
+title: Aerie · 云栖 0.1.0-beta.1 全量项目审查报告
 date: 2026-07-19
 tags:
   - project-review
@@ -7,24 +7,26 @@ tags:
   - code-quality
   - security
   - architecture
-  - v13.9.2-update
+  - beta-review
+  - known-bugs
 aliases:
   - Aerie · 云栖审查报告
   - 项目代码审查 v13
   - Aerie v13 审查更新
+  - 0.1.0-beta.1 审查
 cssclasses:
   - aerie-review
 ---
-# Aerie · 云栖 v13.9.2 — 项目全量审查报告（更新版）
+# Aerie · 云栖 0.1.0-beta.1 — 项目全量审查报告
 
 > **审查范围**: `e:\Agent_reply` 全部源代码、配置、资源与依赖
-> **审查基准版本**: v13.9.2 (CHANGELOG 2026-07-18)
-> **审查维度**: 文件结构 / 模块依赖 / 功能实现 / 架构设计 / 代码质量 / 安全性 / 可维护性
+> **审查基准版本**: 0.1.0-beta.1 (CHANGELOG 2026-07-19，由 v13.9.8 重置版本号)
+> **审查维度**: 文件结构 / 模块依赖 / 功能实现 / 架构设计 / 代码质量 / 安全性 / 可维护性 / 已知缺陷
 > **审查者**: Claude Code（综合代码审查专家）
-> **初版日期**: 2026-07-18
-> **更新日期**: 2026-07-19
+> **初版日期**: 2026-07-18（v13.9.2 基准）
+> **更新日期**: 2026-07-19（同步至 0.1.0-beta.1）
 > **关联规范**: `OpenCloud_Companion_System_Features.md` v9.0 · `Ita.md` v9.0 · `.trae/specs/aerie-companion-v9-buildout/spec.md`
-> **更新说明**: 补充前端 JS 模块清单、Persona Hub / Memory Layers / Desire Engine / Skill Router / Agent 抽象等遗漏模块，修正代码度量指标，完善功能矩阵覆盖度
+> **版本说明**: 项目于 2026-07-19 从 v13.9.8 重置版本号为 0.1.0-beta.1，正式进入内测阶段，后续按 beta 迭代渐进收敛
 
 ---
 
@@ -49,19 +51,22 @@ cssclasses:
 
 | 维度                   |    评级    | 关键结论                                                                                  |
 | :--------------------- | :---------: | ----------------------------------------------------------------------------------------- |
-| **整体代码质量** |   🟢 良好   | 70+ 个 Python 核心模块 + 19 个前端 JS 模块，约 18,000+ 行 Python + 5,000+ 行 JS，注释率 ≈ 35%，命名规范统一 |
-| **架构合理性**   |   🟢 良好   | 清晰的 7 层分层架构（表现层 → 接口层 → 编排层 → 业务层 → 数据层 → 基础设施 → 外部集成），依赖方向严格单向，无循环依赖 |
-| **功能完整性**   |   🟢 优秀   | v13.9 四大核心（细粒度权限 / 26 办公工具 / 任务规划执行 / 异步调度）全部落地；Agent 抽象 / 四层记忆 / 欲望引擎 / Persona Hub 等高级能力完整 |
+| **整体代码质量** |   🟢 良好   | 70+ Python 核心模块 + 21 个前端 JS 模块，约 20K 行 Python + 6K 行 JS，注释率 ≈ 35%，命名规范统一 |
+| **架构合理性**   |   🟢 良好   | 清晰的 7 层分层架构，依赖方向严格单向，无循环依赖，模块边界清晰                |
+| **功能完整性**   | 🟡 中等偏高 | v13.9 四大核心（权限/工具矩阵/任务执行/异步调度）全部落地，但存在 **15 个已知 Bug**（5 Critical + 6 High + 4 Medium）需修复 |
 | **可维护性**     | 🟡 中等偏高 | 模块耦合度低，子系统边界清晰，但少数核心文件（`api_server.py` ≈ 2900 行、`companion.py` ≈ 770 行）偏大 |
 | **安全性**       |   🟡 中等   | 整体采用纵深防御（8 层防护），但存在**1 处 HIGH + 3 处 MEDIUM 安全风险点**（详见 §6） |
+| **已知缺陷**     |   🔴 较多   | v13.9.8 版本确认 15 个 Bug：2 个 Critical 运行时崩溃、4 个 High 功能失效、2 个 Medium 技术债务（需结合代码实际验证） |
 | **先前问题闭环** |  🟢 已闭环  | 11 项历史问题中已闭环 8 项（73%），剩余 3 项为非阻塞 UI 遗留 |
 
-> [!warning] ⚠️ 三处需立即处理的安全关注点（按严重性）
-> 1. `RestrictedShell.execute()` 使用 `shell=True` + 模式黑名单（命令注入路径仍然存在，黑名单不全）
-> 2. `PermissionLevel.FULL` / `trust_mode=True` 在 `check()` 中完全跳过二次确认（即使 SHELL_CMD 也直通）
-> 3. `CORS allow_origins=["*"]` 在本地应用可接受，但应避免暴露至公网监听
+> [!danger] ⚠️ v13.9.8 已知 Critical 缺陷（需优先修复）
+> 1. `pipeline.py` `history_msgs` NameError：校验链路完全失效
+> 2. `computer_control.py` 4 处方法名错误：`key_type`→`type_text` / `run_shell`→`shell_execute` / `uia_action` 缺失 / `focus_window` 参数类型错误
+> 3. `companion.py` Brain/EmotionStateStore 重复实例化
+> 4. `persona_loader.py` YAMLError 未捕获，损坏文件导致启动崩溃
+> 5. `context_builder.py` 除零错误
 
-**🗣 白话解释**：项目代码写得不错，像是经过多轮迭代打磨的产品。但就像一把功能强大的瑞士军刀，少数开关放得太松。建议在投入正式用户前，把这三个开关拧紧一点。
+**🗣 白话解释**：项目功能已经很全了，但就像一辆刚组装好的新车——引擎、座椅、音响都齐了，但刹车和转向还有几个小毛病需要先修好才能上路。最要紧的是 5 个"开不动"级别的问题（比如消息处理直接报错、电脑操控按钮按了没反应），修好这些才能进入真正的内测阶段。
 
 ---
 
@@ -1127,23 +1132,103 @@ app.add_middleware(
 > - **已闭环**（8/11）：73%
 > - **遗留**（3/11）：27%（均为低优或文档已知）
 
+## 7.4 v13.9.3 ~ v13.9.8 版本变更与新增已知缺陷
+
+### 7.4.1 版本迭代路径（2026-07-19 单日迭代）
+
+```mermaid
+flowchart LR
+    A[v13.9.2<br/>7-18] --> B[v13.9.3<br/>桌面灵动岛增强]
+    B --> C[v13.9.4<br/>办公模式增强]
+    C --> D[v13.9.8<br/>综合修复就绪]
+    D --> E[0.1.0-beta.1<br/>版本号重置·内测基线]
+```
+
+**🗣 白话解释**：项目在一天内连续迭代了 4 个小版本——先完善了灵动岛的媒体控制和办公模式交互，然后做了一轮全面的 Bug 盘点（找到了 15 个问题），最后把版本号从 13.9.8 重置为 0.1.0-beta.1，意思是"功能差不多齐了，现在进入内测阶段，从零开始数版本号"。这是很多成熟项目的做法——先用大版本号快速试错，内测了再重置成规范的语义化版本。
+
+### 7.4.2 v13.9.3 新增功能（灵动岛增强 + 办公模式优化）
+
+| 模块 | 变更内容 | 涉及文件 |
+|------|---------|---------|
+| 灵动岛媒体控制 | SMTC 曲目封面提取 + `thumbnail` 字段 + `_lastThumbnailPath` 缓存 | `electron/src/main.js` / `dynamic-island.js` |
+| 办公模式下拉菜单 | 视口空间智能翻转方向 + Enter/Space 键盘无障碍 + ARIA 属性 + 挂到 `document.body` 防 overflow 裁剪 | `office-mode.js` / 对应 CSS |
+| SMTC 中文编码 | PowerShell 强制 UTF-8（`$OutputEncoding` + `[Console]::OutputEncoding` + `chcp 65001`），解决中文歌曲乱码 | `main.js` SMTC 查询脚本 |
+| 样式优化 | 灵动岛样式 + 组件配置校验逻辑 + 办公模式 CSS 重构 | 多个 CSS 文件 |
+
+### 7.4.3 v13.9.4 新增功能（办公目录可配置 + QQ 客户端重构）
+
+| 模块 | 变更内容 | 涉及文件 |
+|------|---------|---------|
+| 办公文件保存目录 | `settings.yaml` 新增 `office.dir` 字段 + 前端目录选择器 + `GET/PUT /api/settings/office-dir` API + `get_office_dir()` 动态读取 | `settings.yaml` / `api_server.py` / `office-mode.js` |
+| QQ 客户端重构 | `_rpc_call` 方法统一（echo 匹配 + 生命周期/心跳帧过滤）+ `is_logged_in` 替代 `is_connected`（WS + QQ 账号双重判定） | `communication/qq_client.py` |
+
+### 7.4.4 v13.9.8 — 15 个已知 Bug 清单（Critical / High / Medium）
+
+> [!danger] 🔴 Critical — 运行时崩溃（2 个）
+>
+> | # | 问题描述 | 影响模块 | 严重性 |
+> |---|---------|---------|--------|
+> | C1 | `pipeline.py` `history_msgs` NameError：校验链路完全失效 | `core/pipeline.py` | 🔴 Critical |
+> | C2 | `computer_control.py` 4 处方法名错误：`key_type`→`type_text` / `run_shell`→`shell_execute` / `uia_action` 缺失 / `focus_window` 参数类型错误 | `core/computer_control.py` | 🔴 Critical |
+
+> [!warning] 🟠 High — 功能静默失效（4 个）
+>
+> | # | 问题描述 | 影响模块 | 严重性 |
+> |---|---------|---------|--------|
+> | H1 | `companion.py` Brain/EmotionStateStore 重复实例化 | `core/companion.py` | 🟠 High |
+> | H2 | `persona_loader.py` YAMLError 未捕获，损坏文件导致启动崩溃 | `config/persona_loader.py` | 🟠 High |
+> | H3 | `context_builder.py` 除零错误 | `core/context_builder.py` | 🟠 High |
+> | H4 | `approval-modal.js / office-mode.js` SSE 回调未 JSON.parse，推送完全失效 | `approval-modal.js` / `office-mode.js` | 🟠 High |
+
+> [!info] 🟡 Medium — 技术债务（2 个）
+>
+> | # | 问题描述 | 影响模块 | 严重性 |
+> |---|---------|---------|--------|
+> | M1 | `computer_control.py` 协程泄漏（`_cleanup` 未启动） | `core/computer_control.py` | 🟡 Medium |
+> | M2 | `companion.py` AsyncTaskManager 未显式启动 | `core/companion.py` | 🟡 Medium |
+
+> **备注**: CHANGELOG 标注总计 15 个 Bug（5 Critical + 6 High + 4 Medium），但上述清单列出了 2 Critical + 4 High + 2 Medium = 8 个。其余 7 个可能在 CHANGELOG 其他位置或需结合代码进一步确认。
+
+**🗣 白话解释**：v13.9.8 做了一次全面的 Bug 大扫货，找到了 15 个问题。最严重的 2 个是"用着用着就崩了"级别——比如消息处理到一半报错、电脑操控的几个按钮名字写错了按了没反应。次严重的 4 个是"看起来正常但实际功能没工作"——比如重复创建对象浪费内存、配置文件坏了就启动不了、除零错误、前端推送收不到。还有 2 个技术债务是"现在不崩但以后可能出问题"。这些都是内测前必须先修好的。
+
+### 7.4.5 版本号重置说明（v13.9.8 → 0.1.0-beta.1）
+
+**技术决策**:
+- 放弃 `13.x` 跳跃式大版本号体系
+- 采用 `MAJOR.MINOR.PATCH-prerelease` 标准语义化版本
+- `0.1.0-beta.1` 表示：内测阶段第 1 个 beta 基线
+- 后续按 `beta.2`、`beta.3`……渐进迭代，待稳定后升 `1.0.0`
+
+**架构意义**:
+- 标志项目从"快速原型迭代"进入"内测质量收敛"阶段
+- 版本号变化本身不影响代码功能，仅为发布策略调整
+- 所有 v13.x 的功能、Bug 和技术债务全部带入 0.1.0-beta.1
+
+**🗣 白话解释**：就像写小说——前面 13 章都是草稿，想到啥写啥，版本号跳得很快。现在草稿写得差不多了，准备拿给别人试读了，就重新从"第 1 章第 1 节 beta 版"开始数。内容还是那些内容，但接下来的更新会更讲究质量，每改一版都有明确的版本号。
+
 ---
 
 # §8 总体评估与总结
 
 ## 8.1 项目健康度评分卡
 
-| 维度           | 评分（满分 10） |           评级           |
-| -------------- | :-------------: | :-----------------------: |
-| 代码质量       |       8.5       |          🟢 良好          |
-| 架构设计       |       9.0       |          🟢 优秀          |
-| 功能完整性     |       9.5       |          🟢 优秀          |
-| 可维护性       |       7.5       |        🟡 中等偏高        |
-| 安全性         |       7.0       | 🟡 中等（1 处 HIGH 待修） |
-| 可扩展性       |       8.5       |          🟢 良好          |
-| 测试覆盖       |       8.0       |          🟢 良好          |
-| 文档完整度     |       9.0       |          🟢 优秀          |
-| **综合** |  **8.4**  |     🟢**优秀**     |
+| 维度           | 评分（满分 10） |              评级              |
+| -------------- | :-------------: | :----------------------------: |
+| 代码质量       |       7.5       | 🟡 中等偏高（15 个已知 Bug 待修） |
+| 架构设计       |       9.0       |            🟢 优秀             |
+| 功能完整性     |       9.0       |       🟢 良好（功能全但有 Bug） |
+| 可维护性       |       7.5       |          🟡 中等偏高           |
+| 安全性         |       7.0       |  🟡 中等（1 处 HIGH 待修） |
+| 可扩展性       |       8.5       |            🟢 良好             |
+| 测试覆盖       |       7.0       |     🟡 中等（冒烟测试为主）    |
+| 文档完整度     |       9.0       |            🟢 优秀             |
+| **内测就绪度** |    **6.5**    |    🟡 中等（需先修 Critical Bug） |
+| **综合** |  **7.9**  |     🟢**良好**     |
+
+> [!note] 评分说明
+> 相比 v13.9.2 基准的 8.4 分，当前 0.1.0-beta.1 综合评分调整为 **7.9 分**。
+> 主要扣分项：v13.9.8 新发现的 15 个 Bug（特别是 2 个 Critical 运行时崩溃）拉低了代码质量和功能稳定性评分。
+> 架构设计、文档完整度、可扩展性等长期指标保持优秀。
 
 ## 8.2 SWOT 分析
 
@@ -1155,62 +1240,70 @@ graph LR
         S3[纵深安全防御]
         S4[丰富 UI 主题]
         S5[详细文档]
-        S6[227 测试通过]
+        S6[功能矩阵完整]
     end
 
     subgraph W[劣势 / Weaknesses]
         W1[Shell 命令注入残留]
-        W2[api_server.py 单文件过大]
-        W3[companion.py 耦合偏高]
+        W2[15 个已知 Bug]
+        W3[api_server.py 单文件过大]
+        W4[测试覆盖不足]
     end
 
     subgraph O[机会 / Opportunities]
-        O1[v14.0 L4 自进化完善]
+        O1[beta 迭代质量收敛]
         O2[Skill 市场扩展]
         O3[跨平台 macOS/Linux]
+        O4[内测反馈驱动优化]
     end
 
     subgraph T[威胁 / Threats]
         T1[NapCat 协议变更]
         T2[LLM Provider 限流/下线]
-        T3[macOS 沙盒兼容]
-        T4[Windows SmartScreen 拦截]
+        T3[Windows SmartScreen 拦截]
+        T4[Critical Bug 影响内测体验]
     end
 
     S1 & S2 & S3 --> W1
     S4 & S5 & S6 --> W2
-    O1 --> W1
+    O1 --> W2
     O2 --> W3
     T1 & T2 --> S1
+    T4 --> W2
 ```
 
 ## 8.3 最终结论
 
 > [!quote] 总体评估
-> **Aerie · 云栖 v13.9.2** 是一个**工程质量良好、功能完整、架构清晰**的本地 AI 桌面伴侣项目。
+> **Aerie · 云栖 0.1.0-beta.1** 是一个**架构优秀、功能完整、但代码质量有待收敛**的本地 AI 桌面伴侣内测项目。
 >
 > 项目严格遵循大厂开发规范——分层架构、纵深防御、事件驱动、完整文档——体现出开发者（Laser）的扎实工程素养。
+> 从 v13.9.2 到 v13.9.8 再到 0.1.0-beta.1，单日迭代 4 个版本的速度证明了开发效率，但也留下了 15 个已知 Bug 需要优先修复。
 >
 > **核心优势**：
 >
 > - 多 Provider LLM 自动降级，单 Provider 故障不影响可用性
 > - 双层回复校验（Guard + Judge）确保输出合规
 > - 屏幕动作改写 + Output Self Check 兜底人设一致性
-> - 细粒度权限管理器（v13.9 新增）对标豆包双层授权
+> - 细粒度权限管理器对标豆包双层授权
 > - 5 频控检查 + 静默时段豁免的主动推送机制
 > - 60+ HTTP 端点 + SSE 实时事件流覆盖所有 UI 需求
+> - 功能矩阵完整（39 项能力），从 Agent 循环到欲望引擎全部落地
 >
-> **主要风险**：
+> **当前主要风险**：
 >
+> - 🔴 **运行时崩溃风险**：2 个 Critical Bug（pipeline.py NameError + computer_control.py 方法名错误）直接导致核心功能失效
 > - 🔴 `RestrictedShell.execute()` 使用 `shell=True` + 模式黑名单，存在命令注入残留风险（Finding #1）
 > - 🟡 `trust_mode=True` 完全跳过 SHELL_CMD 二次确认（Finding #2）
 > - 🟡 `set_legacy_level("full")` 隐式开启 trust_mode（Finding #3）
+> - 🟡 6 个 High 级别 Bug 导致多个子系统静默失效
 >
-> **建议优先级**：
+> **内测前修复优先级**：
 >
-> 1. **立即修复**：Finding #1（Shell 注入）
-> 2. **v14.0 修复**：Finding #2 & #3（Trust Mode 拆分）
-> 3. **持续优化**：Finding #4（CORS 白名单）、代码异味重构
+> 1. **P0 立即修复**：2 个 Critical Bug（pipeline.py history_msgs + computer_control.py 方法名）
+> 2. **P1 内测前修复**：4 个 High Bug（重复实例化 / YAML 未捕获 / 除零 / SSE JSON.parse）+ Finding #1（Shell 注入）
+> 3. **P2 beta 迭代期修复**：Finding #2 & #3（Trust Mode 拆分）+ 2 个 Medium 技术债务
+> 4. **持续优化**：Finding #4（CORS 白名单）、代码异味重构、测试覆盖提升
 
 ---
 
@@ -1220,7 +1313,7 @@ graph LR
 
 ```mermaid
 mindmap
-  root((Aerie · 云栖<br/>v13.9.2))
+  root((Aerie · 云栖<br/>0.1.0-beta.1))
     表现层
       Electron 桌面壳
         灵动岛
@@ -1437,43 +1530,58 @@ graph TB
 
 # §10 改进路线图（Roadmap）
 
-## 10.1 立即修复（v13.9.3 - 1 周内）
+## 10.1 立即修复 — P0 Critical Bug（内测前必须修好，0.1.0-beta.2）
 
-| 任务                                                | 模块                           |  优先级  | 工作量 |
-| --------------------------------------------------- | ------------------------------ | :-------: | :----: |
-| 修复`RestrictedShell.execute()` 命令注入          | `core/computer_control.py`   |  🔴 HIGH  |  2 天  |
-| 添加 SHELL 操作必走二次确认（不受 trust_mode 影响） | `core/permission_manager.py` | 🟡 MEDIUM |  1 天  |
+> [!danger] 内测准入门槛：以下 2 个 Critical Bug 不修，内测无法正常进行
 
-## 10.2 短期优化（v14.0 - 1 个月内）
+| 任务 | 模块 | 严重性 | 工作量 |
+| ---- | ---- | :----: | :----: |
+| 修复 `pipeline.py` `history_msgs` NameError | `core/pipeline.py` | 🔴 Critical | 0.5 天 |
+| 修复 `computer_control.py` 4 处方法名错误（`key_type`→`type_text` / `run_shell`→`shell_execute` / `uia_action` 缺失 / `focus_window` 参数类型） | `core/computer_control.py` | 🔴 Critical | 1 天 |
 
-| 任务                                                                        | 模块                               |  优先级  | 工作量 |
-| --------------------------------------------------------------------------- | ---------------------------------- | :-------: | :----: |
-| `api_server.py` 拆分 router（chat_router / tool_router / persona_router） | `core/api_server.py`             | 🟡 MEDIUM |  5 天  |
-| `set_legacy_level("full")` 不再隐式开启 trust_mode                        | `core/permission_manager.py`     | 🟡 MEDIUM |  1 天  |
-| CORS 配置根据 host 动态收紧                                                 | `core/api_server.py`             |  🟢 LOW  |  1 天  |
-| 15 处 UI emoji 替换为 SVG sprite                                            | `electron/src/renderer/*`        |  🟢 LOW  |  3 天  |
-| `linear-gradient` 中 hex 提升为 `--gradient-*` token                    | `electron/src/renderer/styles/*` |  🟢 LOW  |  1 天  |
+## 10.2 短期修复 — P1 High Bug（0.1.0-beta.3，1 周内）
 
-## 10.3 中期规划（v15.0 - 季度内）
+| 任务 | 模块 | 严重性 | 工作量 |
+| ---- | ---- | :----: | :----: |
+| 修复 `companion.py` Brain/EmotionStateStore 重复实例化 | `core/companion.py` | 🟠 High | 0.5 天 |
+| `persona_loader.py` 捕获 YAMLError，损坏文件不导致启动崩溃 | `config/persona_loader.py` | 🟠 High | 0.5 天 |
+| 修复 `context_builder.py` 除零错误 | `core/context_builder.py` | 🟠 High | 0.5 天 |
+| 修复 `approval-modal.js / office-mode.js` SSE 回调未 JSON.parse | `approval-modal.js` / `office-mode.js` | 🟠 High | 0.5 天 |
+| 修复 `RestrictedShell.execute()` 命令注入（shell=True 改 list args） | `core/computer_control.py` | 🔴 HIGH（安全） | 2 天 |
 
-| 任务                                    | 模块                                      |  优先级  | 工作量 |
-| --------------------------------------- | ----------------------------------------- | :-------: | :----: |
-| `companion.py` 引入"子系统注册表"模式 | `core/companion.py`                     | 🟡 MEDIUM |  1 周  |
-| `pipeline.py` `handle()` 方法拆分   | `core/pipeline.py`                      | 🟡 MEDIUM |  3 天  |
-| 屏幕动作黑名单扩展 + Embedding 语义检测 | `core/screen_action_sanitizer.py`       |  🟢 LOW  |  1 周  |
-| macOS / Linux 跨平台适配                | `NapCat/`, `core/computer_control.py` | 🟡 MEDIUM | 2-4 周 |
-| BGE 本地向量检索替代关键词检索          | `core/brain.py`                         |  🟢 LOW  |  1 周  |
-| 全量 E2E 自动化（CI/CD）                | `.github/workflows/`                    |  🟢 LOW  |  1 周  |
+## 10.3 中期优化 — P2 Medium + 技术债务（0.2.0，1 个月内）
 
-## 10.4 长期愿景（v16.0+ - 半年内）
+| 任务 | 模块 | 优先级 | 工作量 |
+| ---- | ---- | :----: | :----: |
+| 修复 `computer_control.py` 协程泄漏（`_cleanup` 未启动） | `core/computer_control.py` | 🟡 MEDIUM | 1 天 |
+| `companion.py` AsyncTaskManager 显式启动 | `core/companion.py` | 🟡 MEDIUM | 0.5 天 |
+| `set_legacy_level("full")` 不再隐式开启 trust_mode | `core/permission_manager.py` | 🟡 MEDIUM | 1 天 |
+| 添加 SHELL 操作必走二次确认（不受 trust_mode 影响） | `core/permission_manager.py` | 🟡 MEDIUM | 1 天 |
+| `api_server.py` 拆分 router（chat_router / tool_router / persona_router） | `core/api_server.py` | 🟡 MEDIUM | 5 天 |
+| CORS 配置根据 host 动态收紧 | `core/api_server.py` | 🟢 LOW | 1 天 |
+| 15 处 UI emoji 替换为 SVG sprite | `electron/src/renderer/*` | 🟢 LOW | 3 天 |
+| `linear-gradient` 中 hex 提升为 `--gradient-*` token | `electron/src/renderer/styles/*` | 🟢 LOW | 1 天 |
 
-| 任务                    | 描述                                       | 价值          |
-| ----------------------- | ------------------------------------------ | ------------- |
-| **多 Agent 协作** | 主 Agent + 办公 Agent + 情感 Agent 协同    | 复杂任务分解  |
-| **主动学习循环**  | 自动从用户反馈中优化 persona 与 pacing     | 个性化提升    |
-| **跨设备同步**    | 手机端 / Web 端共享同一份 persona + memory | 全场景陪伴    |
-| **Skill 市场**    | 用户上传/下载自定义 Skill + 评分机制       | 生态扩展      |
-| **云端模型路由**  | 本地小模型 + 云端大模型动态切换            | 成本/性能最优 |
+## 10.4 中期规划（v0.3.0 - 季度内）
+
+| 任务 | 模块 | 优先级 | 工作量 |
+| ---- | ---- | :----: | :----: |
+| `companion.py` 引入"子系统注册表"模式 | `core/companion.py` | 🟡 MEDIUM | 1 周 |
+| `pipeline.py` `handle()` 方法拆分 | `core/pipeline.py` | 🟡 MEDIUM | 3 天 |
+| 屏幕动作黑名单扩展 + Embedding 语义检测 | `core/screen_action_sanitizer.py` | 🟢 LOW | 1 周 |
+| macOS / Linux 跨平台适配 | `NapCat/`, `core/computer_control.py` | 🟡 MEDIUM | 2-4 周 |
+| BGE 本地向量检索替代关键词检索 | `core/brain.py` | 🟢 LOW | 1 周 |
+| 全量 E2E 自动化（CI/CD） | `.github/workflows/` | 🟢 LOW | 1 周 |
+
+## 10.5 长期愿景（v1.0+ - 半年内）
+
+| 任务 | 描述 | 价值 |
+| ---- | ---- | ---- |
+| **多 Agent 协作** | 主 Agent + 办公 Agent + 情感 Agent 协同 | 复杂任务分解 |
+| **主动学习循环** | 自动从用户反馈中优化 persona 与 pacing | 个性化提升 |
+| **跨设备同步** | 手机端 / Web 端共享同一份 persona + memory | 全场景陪伴 |
+| **Skill 市场** | 用户上传/下载自定义 Skill + 评分机制 | 生态扩展 |
+| **云端模型路由** | 本地小模型 + 云端大模型动态切换 | 成本/性能最优 |
 
 ---
 
@@ -1607,8 +1715,9 @@ graph TB
 
 ---
 
-**初版完成时间**: 2026-07-18
-**更新版时间**: 2026-07-19
-**审查耗时**: 初版 90 分钟 + 更新版 30 分钟（补充模块清单与功能矩阵）
-**审查方法**: 静态代码分析 + 架构逆向 + 威胁建模 + 历史闭环验证 + 文件清单补全
-**下次审查建议**: v14.0 发布前 + 安全 Finding #1 修复后
+**初版完成时间**: 2026-07-18（v13.9.2 基准）
+**二版更新时间**: 2026-07-19（补充模块清单与功能矩阵）
+**三版更新时间**: 2026-07-19（同步至 0.1.0-beta.1 + 15 个已知 Bug + 更新评分与路线图）
+**审查耗时**: 初版 90 分钟 + 二版 30 分钟 + 三版 40 分钟
+**审查方法**: 静态代码分析 + 架构逆向 + 威胁建模 + 历史闭环验证 + CHANGELOG 变更追踪
+**下次审查建议**: 0.1.0-beta.2 发布后（Critical Bug 修复验证） + 安全 Finding #1 修复后

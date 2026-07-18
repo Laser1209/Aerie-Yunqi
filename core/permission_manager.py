@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 · 细粒度权限管理器
+"""Aerie v0.1.0-beta.1 · 细粒度权限管理器
 
 对标豆包 Turbo 双层授权架构：
   - 目录级白名单：哪些文件夹允许 AI 操作
@@ -416,7 +416,19 @@ class FineGrainedPermissionManager:
         # 4. 高危操作：二次确认
         needs_confirm = False
         confirm_reason = ""
-        if self._config.require_confirmation and not self._config.trust_mode:
+
+        # v0.1.0-beta.1: SHELL_CMD and UIA_ACTION always require confirmation
+        # even in trust_mode, because they control the user's system at a deep
+        # level. trust_mode relaxes file-system confirmation only.
+        # ZERO-BREAKING: trust_mode users receive extra confirmation dialogs
+        # for Shell/UIA — a security improvement.
+        always_confirm_ops = {OperationType.SHELL_CMD, OperationType.UIA_ACTION}
+        if operation in always_confirm_ops:
+            needs_confirm = True
+            confirm_reason = (
+                f"系统控制操作（{operation.value}）需要用户确认"
+            )
+        elif self._config.require_confirmation and not self._config.trust_mode:
             if risk == RiskLevel.HIGH or risk == RiskLevel.CRITICAL:
                 needs_confirm = True
                 confirm_reason = f"高风险操作（{risk.value}）需要用户确认"
@@ -426,9 +438,6 @@ class FineGrainedPermissionManager:
             elif operation == OperationType.DELETE_FILE:
                 needs_confirm = True
                 confirm_reason = "删除文件需要用户确认"
-            elif operation == OperationType.SHELL_CMD:
-                needs_confirm = True
-                confirm_reason = "执行 shell 命令需要用户确认"
 
         self._audit(operation, target_path, True, needs_confirm, "", risk)
         return PermissionCheckResult(
@@ -515,7 +524,9 @@ class FineGrainedPermissionManager:
             self._config.file_delete_enabled = True
             self._config.ui_control_enabled = True
             self._config.system_enabled = True
-            self._config.trust_mode = True
+            # v0.1.0-beta.1: trust_mode is no longer auto-set.
+            # User must enable explicitly via update_config(trust_mode=True)
+            # or PUT /api/permissions/config.
         logger.info("兼容旧版权限档位: %s", level)
 
     def get_legacy_level(self) -> str:

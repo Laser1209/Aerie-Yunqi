@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 · 电脑操控模块
+"""Aerie v0.1.0-beta.1 · 电脑操控模块
 
 权限三档：
   - VIEW_ONLY (只读)：仅允许截图、查询窗口信息
@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 import os
+import shlex
 import time
 import json
 import ctypes
@@ -697,12 +698,14 @@ class RestrictedShell:
     def execute(self, command: str, cwd: Optional[str] = None,
                 permission: PermissionLevel = PermissionLevel.STANDARD
                 ) -> ControlResult:
-        """执行命令
+        """Execute a shell command — safe implementation.
 
-        Args:
-            command: 要执行的命令
-            cwd: 工作目录
-            permission: 当前权限等级
+        v0.1.0-beta.1: migrated from subprocess.run(shell=True) to
+        subprocess.run(shlex.split(cmd), shell=False) for injection safety.
+        Commands containing shell metacharacters (|, >, &, ;) are rejected
+        with a clear error asking the LLM to split into multiple calls.
+
+        ZERO-BREAKING: signature unchanged. Return type unchanged.
         """
         # 危险检查
         is_danger, issues = self.is_dangerous(command)
@@ -724,11 +727,28 @@ class RestrictedShell:
                     data={"command": command[:100], "permission": permission.value},
                 )
 
+        # ── v0.1.0-beta.1: reject shell metacharacters ──
+        shell_meta_chars = {"|", ">", "<", "&", ";"}
+        if any(c in command for c in shell_meta_chars):
+            return ControlResult(
+                success=False,
+                action=ControlAction.SHELL_CMD.value,
+                error=(
+                    "命令包含管道/重定向/命令链接符号，"
+                    "请拆分为多个独立的简单命令分步执行"
+                ),
+                data={
+                    "command": command[:100],
+                    "rejected_reason": "shell_meta_characters_detected",
+                },
+            )
+
         try:
             work_dir = cwd or self.default_cwd
+            cmd_parts = shlex.split(command)
             result = subprocess.run(
-                command,
-                shell=True,
+                cmd_parts,
+                shell=False,
                 cwd=work_dir,
                 capture_output=True,
                 text=True,
@@ -1431,6 +1451,25 @@ class ComputerController:
             self._pending_approvals.pop(call_id, None)
 
         return True
+
+    # ── Resource cleanup ──
+    async def cleanup(self) -> None:
+        """Release all resources (subprocesses, temp files, hooks).
+
+        ZERO-BREAKING: new public method, does not alter existing pathways.
+        Called from Companion.stop() to ensure clean shutdown.
+        """
+        # Cancel any pending approvals
+        self._pending_approvals.clear()
+
+        # Clean up screenshot temp directory
+        try:
+            import shutil, tempfile
+            tmp_dir = Path(tempfile.gettempdir()) / "aerie_screenshots"
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            logger.debug("cleanup: screenshot temp dir already cleaned")
 
     def _execute_action(self, action: ControlAction, params: dict) -> ControlResult:
         """根据 action 类型执行对应操作（审批通过后调用）"""

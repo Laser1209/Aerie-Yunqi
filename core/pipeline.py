@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Message pipeline.
+"""Aerie · 云栖 v0.1.0-beta.1 — Message pipeline.
 
 Processes incoming messages through:
   route → emotion(text scan + cumulative trigger check) → history → context(with emotion+eruption) → LLM → emotion tune → persist → emit → reply.
@@ -122,6 +122,8 @@ class Pipeline:
 
         # ══════════════════════════════════════════════
         # 3. Get history from DB
+        #    Variable `history` is used consistently (not `history_rows`
+        #    or `history_msgs`) for passing to ContextBuilder.build().
         # ══════════════════════════════════════════════
         history = []
         try:

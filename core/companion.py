@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Companion: orchestrator for all backend modules."""
+"""Aerie · 云栖 v0.1.0-beta.1 — Companion: orchestrator for all backend modules."""
 
 from __future__ import annotations
 import asyncio
@@ -53,13 +53,15 @@ class Companion:
         # Data layer
         self.db = Database()
 
-        # Core engines
-        # Phase 9 Batch 1: emotion state store persists PAD + thresholds
-        # so the dashboard can show 24h/7d/30d history curves.
+        # ── Core engines (single instantiation — no duplicates) ──
+        # Phase 9 Batch 1: emotion state store persists PAD + threshold
+        # snapshots for 24h/7d/30d history curves on the dashboard.
+        # OWNER: companion.py — always pass this instance to downstream modules.
         self.state_store = EmotionStateStore(self.db)
         # R7.0: build the brain first so EmotionEngine can call back into
         # it for LLM-driven PAD inference. The keyword path is still
         # always available as a fallback when the LLM call fails.
+        # OWNER: companion.py — always pass this instance to downstream modules.
         self.brain = Brain()
         # R0.3.7: pass behavior_cfg so EmotionEngine reads PAD centers
         # and threshold slots from config/persona_behavior.yaml.
@@ -480,6 +482,13 @@ class Companion:
             await self.qq.stop()
         except Exception:
             pass
+
+        # ── Resource cleanup ──
+        try:
+            await self.computer_controller.cleanup()
+        except Exception:
+            logger.exception("computer_controller cleanup error")
+
         self._started = False
         logger.info("Companion stopped")
 

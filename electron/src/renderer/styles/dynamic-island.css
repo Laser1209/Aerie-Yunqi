@@ -11,8 +11,13 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  /* v13.9: Put Windows-native CJK fonts first so Chinese / Japanese /
+   * Korean media titles render correctly instead of as fallback boxes.
+   * macOS fonts are kept as secondary fallbacks for cross-platform builds.
+   */
+  font-family: "Microsoft YaHei", "Microsoft YaHei UI", "SimHei", "SimSun",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft JhengHei", sans-serif;
   background: transparent;
 }
 
@@ -266,17 +271,27 @@ button {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--di-text-secondary);
   max-width: 100%;
   overflow: hidden;
+  /* v13.9: Force CJK-capable font for media text (titles may contain Chinese). */
+  font-family: "Microsoft YaHei", "SimHei", "SimSun", sans-serif;
+}
+
+.di-media-mini-cover {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .di-media-mini .di-media-title {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
+  max-width: 90px;
 }
 
 .di-badge {
@@ -363,7 +378,9 @@ button {
 
 .di-expanded-body {
   padding: 12px;
-  max-height: 360px;
+  /* v13.9: lifted from 360px -> 480px so mediaControl + systemStatus
+   * are visible without scrolling on a 500px-tall island. */
+  max-height: 480px;
   overflow-y: auto;
 }
 
@@ -534,6 +551,14 @@ button {
   justify-content: center;
   font-size: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.di-companion-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .di-companion-emoji {
@@ -588,6 +613,31 @@ button {
   justify-content: center;
   font-size: 20px;
   flex-shrink: 0;
+}
+
+.di-media-cover-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  background: var(--di-bg);
+}
+
+.di-media-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.di-media-cover-fallback {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .di-media-info {
@@ -730,6 +780,14 @@ button {
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
+}
+
+.di-avatar-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .di-avatar-mood {

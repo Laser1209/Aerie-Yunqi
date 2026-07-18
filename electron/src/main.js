@@ -645,12 +645,21 @@ let _mediaState = {
   artist: "",
   progress: 0,
   duration: 0,
+  thumbnail: "",
 };
 let _mediaPollInterval = null;
+let _lastThumbnailPath = null;
 
 const _SMTC_PS1 = `
 try {
     $ErrorActionPreference = 'Stop'
+    # v13.9: Force UTF-8 output so Chinese titles/artists don't become garbled
+    # when Node.js reads stdout. Without this, PowerShell 5.1 on Windows
+    # defaults to the system ANSI code page (GBK on Chinese Windows) and
+    # UTF-8 bytes get reinterpreted as question marks / replacement chars.
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    chcp 65001 | Out-Null
     $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
     $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSession, Windows.Media.Control, ContentType = WindowsRuntime]
     $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus, Windows.Media.Control, ContentType = WindowsRuntime]
@@ -675,25 +684,77 @@ try {
         $timelineProps = $session.GetTimelineProperties()
         $playbackInfo = $session.GetPlaybackInfo()
         $playing = $playbackInfo.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing
+
+        $thumbnailPath = ""
+        try {
+            if ($mediaProps.Thumbnail -ne $null) {
+                $streamOp = $mediaProps.Thumbnail.OpenReadAsync()
+                $stream = Await-WinRtAsync $streamOp ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+                if ($stream -ne $null) {
+                    $asStreamMethod = $null
+                    $asm = [System.AppDomain]::CurrentDomain.GetAssemblies() |
+                        Where-Object { $_.GetName().Name -eq 'System.Runtime.WindowsRuntime' } |
+                        Select-Object -First 1
+                    if ($asm -ne $null) {
+                        $extType = $asm.GetType('System.IO.WindowsRuntimeStreamExtensions')
+                        if ($extType -ne $null) {
+                            $methods = $extType.GetMethods() | Where-Object { $_.Name -eq 'AsStream' -and $_.IsStatic }
+                            foreach ($m in $methods) {
+                                $params = $m.GetParameters()
+                                if ($params.Count -eq 1 -and $params[0].ParameterType.Name -eq 'IRandomAccessStream') {
+                                    $asStreamMethod = $m
+                                    break
+                                }
+                            }
+                        }
+                    }
+                    if ($asStreamMethod -ne $null) {
+                        $dotNetStream = $asStreamMethod.Invoke($null, @($stream))
+                        if ($dotNetStream -ne $null) {
+                            $ms = New-Object System.IO.MemoryStream
+                            $dotNetStream.CopyTo($ms)
+                            $buffer = $ms.ToArray()
+                            $ms.Close()
+                            $dotNetStream.Close()
+                            if ($buffer -and $buffer.Length -gt 0) {
+                                $ext = ".jpg"
+                                if ($buffer.Length -ge 4) {
+                                    if ($buffer[0] -eq 0x89 -and $buffer[1] -eq 0x50 -and $buffer[2] -eq 0x4E -and $buffer[3] -eq 0x47) { $ext = ".png" }
+                                    elseif ($buffer[0] -eq 0xFF -and $buffer[1] -eq 0xD8) { $ext = ".jpg" }
+                                    elseif ($buffer[0] -eq 0x47 -and $buffer[1] -eq 0x49 -and $buffer[2] -eq 0x46) { $ext = ".gif" }
+                                }
+                                $tempPath = Join-Path $env:TEMP "aerie_media_thumb_$([Guid]::NewGuid())$ext"
+                                [System.IO.File]::WriteAllBytes($tempPath, $buffer)
+                                $thumbnailPath = $tempPath
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {
+            $thumbnailPath = ""
+        }
+
         [PSCustomObject]@{
             playing = $playing
             title = $mediaProps.Title
             artist = $mediaProps.Artist
             position = [int][Math]::Round($timelineProps.Position.TotalSeconds)
             duration = [int][Math]::Round($timelineProps.EndTime.TotalSeconds)
+            thumbnail = $thumbnailPath
         } | ConvertTo-Json -Compress
     } else {
-        '{"playing":false,"title":"","artist":"","position":0,"duration":0}'
+        '{"playing":false,"title":"","artist":"","position":0,"duration":0,"thumbnail":""}'
     }
 } catch {
-    '{"playing":false,"title":"","artist":"","position":0,"duration":0}'
+    '{"playing":false,"title":"","artist":"","position":0,"duration":0,"thumbnail":""}'
 }
 `;
 
 function _fetchMediaState() {
   return new Promise((resolve) => {
     if (process.platform !== "win32") {
-      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0 });
+      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" });
       return;
     }
     const ps = spawn("powershell.exe", [
@@ -713,15 +774,25 @@ function _fetchMediaState() {
           artist: data.artist || "",
           progress: data.position || 0,
           duration: data.duration || 0,
+          thumbnail: data.thumbnail || "",
         });
       } catch {
-        resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0 });
+        resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" });
       }
     });
     ps.on("error", () => {
-      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0 });
+      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" });
     });
   });
+}
+
+function _cleanupOldThumbnail() {
+  if (_lastThumbnailPath) {
+    try {
+      fs.unlinkSync(_lastThumbnailPath);
+    } catch (_) {}
+    _lastThumbnailPath = null;
+  }
 }
 
 function _startMediaPolling() {
@@ -731,7 +802,12 @@ function _startMediaPolling() {
     const changed =
       state.playing !== _mediaState.playing ||
       state.title !== _mediaState.title ||
-      state.artist !== _mediaState.artist;
+      state.artist !== _mediaState.artist ||
+      state.thumbnail !== _mediaState.thumbnail;
+    if (state.thumbnail && state.thumbnail !== _mediaState.thumbnail) {
+      _cleanupOldThumbnail();
+      _lastThumbnailPath = state.thumbnail;
+    }
     _mediaState = state;
     if (changed && dynamicIsland && !dynamicIsland.isDestroyed()) {
       dynamicIsland.webContents.send("island:media-update", _mediaState);
@@ -744,6 +820,7 @@ function _stopMediaPolling() {
     clearInterval(_mediaPollInterval);
     _mediaPollInterval = null;
   }
+  _cleanupOldThumbnail();
 }
 
 ipcMain.handle("island:media-get-state", async () => {
@@ -813,6 +890,10 @@ function _buildMediaControlScript(action) {
   return `
 try {
     $ErrorActionPreference = 'Stop'
+    # v13.9: Force UTF-8 output (see _SMTC_PS1 for rationale)
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    chcp 65001 | Out-Null
     $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
     $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSession, Windows.Media.Control, ContentType = WindowsRuntime]
     Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -1207,6 +1288,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  _cleanupOldThumbnail();
   if (pythonProc) {
     pythonProc.kill();
     pythonProc = null;

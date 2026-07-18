@@ -50,25 +50,69 @@
 
 /* 办公模式下拉菜单 */
 .office-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  width: 200px;
+  position: fixed;
+  /* left / top 由 JS 根据按钮 getBoundingClientRect 设置 */
+  width: 220px;
   background: var(--card, #fff);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
   padding: 8px;
-  z-index: 100;
+  z-index: 9999;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(8px);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(6px) scale(0.96);
+  transform-origin: bottom right;
+  transition:
+    opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0.18s;
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
 }
 
 .office-menu--visible {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
+}
+
+/* 翻到按钮下方时：从顶部展开 */
+.office-menu--below {
+  transform-origin: top right;
+}
+
+/* 箭头：默认指下（菜单在按钮上方） */
+.office-menu::before,
+.office-menu::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  background: var(--card, #fff);
+  transform: rotate(45deg);
+  border-radius: 2px;
+  z-index: -1;
+}
+.office-menu::before {
+  bottom: -4px;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.04);
+}
+.office-menu::after {
+  bottom: -3px;
+  background: inherit;
+}
+/* 翻到下方时箭头指上 */
+.office-menu--below::before,
+.office-menu--below::after {
+  top: -4px;
+  bottom: auto;
+}
+.office-menu--below::after {
+  top: -3px;
 }
 
 .office-menu__header {
@@ -90,16 +134,33 @@
   color: var(--text-700, #3c3c43);
   cursor: pointer;
   transition: all 0.15s ease;
+  position: relative;
 }
 
 .office-menu__item:hover {
   background: var(--bg-200, #f2f2f7);
+  transform: translateX(2px);
+}
+
+.office-menu__item:active {
+  transform: translateX(2px) scale(0.98);
 }
 
 .office-menu__item--active {
-  background: rgba(255, 107, 0, 0.1);
+  background: linear-gradient(135deg, rgba(255, 107, 0, 0.12) 0%, rgba(255, 71, 133, 0.08) 100%);
   color: #ff6b00;
   font-weight: 500;
+}
+
+.office-menu__item--active::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff6b00;
+  box-shadow: 0 0 8px rgba(255, 107, 0, 0.6);
 }
 
 .office-menu__item-icon {
@@ -128,7 +189,16 @@
 
 .dark .office-menu {
   background: var(--card, #1c1c1e);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.dark .office-menu::before,
+.dark .office-menu::after {
+  background: var(--card, #1c1c1e);
+  box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .dark .office-menu__item:hover {

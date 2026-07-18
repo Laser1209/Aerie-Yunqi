@@ -12,9 +12,23 @@ class OfficeModeController {
     const btn = document.getElementById("chat-office-btn");
     if (!btn) return;
 
+    btn.setAttribute("aria-haspopup", "menu");
+    btn.setAttribute("aria-expanded", "false");
+
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       this._toggleMenu(btn);
+    });
+
+    // 键盘：Enter / Space 也可触发
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        this._toggleMenu(btn);
+      } else if (e.key === "Escape" && this._menuEl && this._menuEl.classList.contains("office-menu--visible")) {
+        this._hideMenu();
+        btn.focus();
+      }
     });
 
     // 点击其他地方关闭菜单
@@ -65,7 +79,9 @@ class OfficeModeController {
       this._menuEl = document.createElement("div");
       this._menuEl.className = "office-menu";
       this._menuEl.innerHTML = this._buildMenuHtml();
-      btn.parentElement.appendChild(this._menuEl);
+      // R7.5-fix: 挂到 body 而不是 btn.parentElement，
+      // 避免被父级 overflow / 定位上下文裁剪而"看不见"。
+      document.body.appendChild(this._menuEl);
 
       // 绑定菜单点击
       this._menuEl.addEventListener("click", (e) => {
@@ -79,17 +95,73 @@ class OfficeModeController {
       });
     }
 
+    // 基于按钮的屏幕坐标定位（fixed 定位，不受父级影响）
+    this._positionMenu(btn);
+
+    // 视口/滚动变化时跟随按钮重新定位
+    this._bindReposition(btn);
+
     // 先更新选中状态
     this._updateMenuSelection();
+    btn.setAttribute("aria-expanded", "true");
     requestAnimationFrame(() => {
+      // 测量高度后决定 top（flip: 上方空间不够则翻到下方）
+      const menuHeight = this._menuEl.offsetHeight || 220;
+      const btnRect = btn.getBoundingClientRect();
+      let top = btnRect.top - menuHeight - 8;
+      if (top < 8) {
+        // 翻到按钮下方
+        top = btnRect.bottom + 8;
+        this._menuEl.classList.add("office-menu--below");
+      } else {
+        this._menuEl.classList.remove("office-menu--below");
+      }
+      this._menuEl.style.top = `${top}px`;
       this._menuEl.classList.add("office-menu--visible");
     });
+  }
+
+  _positionMenu(btn) {
+    if (!this._menuEl) return;
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 220;
+    // 默认：在按钮上方弹出，右对齐到按钮右边缘
+    let left = rect.right - menuWidth;
+    // 防止溢出视口左边
+    if (left < 8) left = 8;
+    // 防止溢出视口右边
+    const maxLeft = window.innerWidth - menuWidth - 8;
+    if (left > maxLeft) left = maxLeft;
+    this._menuEl.style.left = `${left}px`;
+    this._menuEl.style.width = `${menuWidth}px`;
+  }
+
+  _bindReposition(btn) {
+    // 只在菜单显示期间绑定，关闭时解绑
+    if (this._repositionHandler) {
+      window.removeEventListener("resize", this._repositionHandler);
+      window.removeEventListener("scroll", this._repositionHandler, true);
+    }
+    this._repositionHandler = () => this._positionMenu(btn);
+    window.addEventListener("resize", this._repositionHandler);
+    window.addEventListener("scroll", this._repositionHandler, true);
+  }
+
+  _unbindReposition() {
+    if (this._repositionHandler) {
+      window.removeEventListener("resize", this._repositionHandler);
+      window.removeEventListener("scroll", this._repositionHandler, true);
+      this._repositionHandler = null;
+    }
   }
 
   _hideMenu() {
     if (this._menuEl) {
       this._menuEl.classList.remove("office-menu--visible");
     }
+    this._unbindReposition();
+    const btn = document.getElementById("chat-office-btn");
+    if (btn) btn.setAttribute("aria-expanded", "false");
   }
 
   _buildMenuHtml() {

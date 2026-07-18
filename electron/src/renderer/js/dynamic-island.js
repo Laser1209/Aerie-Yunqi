@@ -21,8 +21,10 @@
     expandType: "panel",
     hoverDelay: 300,
     longPressDuration: 500,
-    capsuleComponents: ["companion", "status", "notifications"],
-    expandedComponents: ["quickActions", "notifList", "companionDetail", "mediaControl", "systemStatus"],
+    capsuleComponents: ["companion", "media", "notifications"],
+    // v13.9: mediaControl moved up to position 2 so it appears right after
+    // the quick actions, no scrolling required on a 500px-tall island.
+    expandedComponents: ["quickActions", "mediaControl", "companionDetail", "notifList", "systemStatus"],
   };
 
   let uiState = {
@@ -30,7 +32,7 @@
     statusText: "云栖在你身边",
     notifications: { count: 0, items: [] },
     system: { cpu: 0, mem: 0, net: 0 },
-    media: { playing: false, title: "", artist: "", progress: 0 },
+    media: { playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" },
     quickActions: ["chat", "brief", "cognition", "settings"],
     companionStartTime: Date.now(),
   };
@@ -80,7 +82,28 @@
   function loadConfig() {
     try {
       const saved = localStorage.getItem("di_config");
-      if (saved) Object.assign(config, JSON.parse(saved));
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      // v13.9: stale localStorage configs from older builds may only
+      // contain a subset of components (e.g. ["quickActions", "notifList"]),
+      // which would silently overwrite the default expandedComponents and
+      // hide mediaControl / systemStatus / companionDetail. Only merge
+      // known top-level fields, and skip component arrays that are missing
+      // any of the expected keys so the defaults win.
+      const safeKeys = ["theme", "interaction", "expandType", "hoverDelay", "longPressDuration"];
+      for (const k of safeKeys) {
+        if (parsed[k] !== undefined) config[k] = parsed[k];
+      }
+      const requiredCapsule = ["companion", "media", "notifications"];
+      const requiredExpanded = ["quickActions", "mediaControl", "companionDetail", "notifList", "systemStatus"];
+      if (Array.isArray(parsed.capsuleComponents) &&
+          requiredCapsule.every((k) => parsed.capsuleComponents.includes(k))) {
+        config.capsuleComponents = parsed.capsuleComponents;
+      }
+      if (Array.isArray(parsed.expandedComponents) &&
+          requiredExpanded.every((k) => parsed.expandedComponents.includes(k))) {
+        config.expandedComponents = parsed.expandedComponents;
+      }
     } catch (_) {}
   }
 
@@ -127,6 +150,7 @@
         if (r?.ok && r.data) {
           uiState.media = r.data;
           renderExpanded();
+          if (config.capsuleComponents.includes("media")) renderCapsule();
         }
       }).catch(() => {});
     } catch (_) {}
@@ -177,11 +201,10 @@
   }
 
   function renderCompanionBadge() {
-    const moodIcon = MOOD_ICONS[uiState.companion.mood] || "mood-neutral";
     const statusColor = uiState.companion.status === "online" ? "var(--di-success)" : "var(--di-text-tertiary)";
     return `
       <div class="di-avatar" title="云栖">
-        ${ICON(moodIcon, 18)}
+        <img class="di-avatar-logo" src="assets/logo.png" alt="云栖">
         <span class="di-avatar-dot" style="background:${statusColor};box-shadow:0 0 6px ${statusColor}"></span>
       </div>
     `;
@@ -203,15 +226,23 @@
   }
 
   function renderMediaMini() {
-    if (!uiState.media.playing) {
-      return `<div class="di-status"><span class="di-status-text">${ICON("ui-music", 12)} 未播放</span></div>`;
+    const m = uiState.media;
+    if (m.title) {
+      let coverHtml;
+      if (m.thumbnail) {
+        const thumbUrl = "file:///" + m.thumbnail.replace(/\\/g, "/").replace(/^\/+/, "");
+        coverHtml = `<img class="di-media-mini-cover" src="${thumbUrl}" alt="" onerror="this.style.display='none';">`;
+      } else {
+        coverHtml = ICON("ui-music", 12);
+      }
+      return `
+        <div class="di-media-mini">
+          ${coverHtml}
+          <span class="di-media-title">${m.title}</span>
+        </div>
+      `;
     }
-    return `
-      <div class="di-media-mini">
-        ${ICON("ui-music", 12)}
-        <span class="di-media-title">${uiState.media.title || "播放中"}</span>
-      </div>
-    `;
+    return `<div class="di-status"><span class="di-status-text">${ICON("ui-music", 12)} 未播放</span></div>`;
   }
 
   function renderSystemMini() {
@@ -315,7 +346,7 @@
         <div class="di-section-title">云栖状态</div>
         <div class="di-companion-card">
           <div class="di-companion-avatar">
-            ${ICON(MOOD_ICONS[uiState.companion.mood] || "mood-neutral", 28)}
+            <img class="di-companion-logo" src="assets/logo.png" alt="云栖">
           </div>
           <div class="di-companion-info">
             <div class="di-companion-name">云栖</div>
@@ -329,16 +360,29 @@
 
   function renderMediaControl() {
     const m = uiState.media;
+    let coverHtml;
+    if (m.thumbnail) {
+      const thumbUrl = "file:///" + m.thumbnail.replace(/\\/g, "/").replace(/^\/+/, "");
+      coverHtml = `
+        <div class="di-media-cover-wrap">
+          <img class="di-media-cover-img" src="${thumbUrl}" alt=""
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+          <div class="di-media-cover di-media-cover-fallback" style="display:none;">${ICON("ui-music", 22)}</div>
+        </div>`;
+    } else {
+      coverHtml = `<div class="di-media-cover">${ICON("ui-music", 22)}</div>`;
+    }
+    const progPercent = m.duration > 0 ? Math.min(100, (m.progress / m.duration) * 100) : 0;
     return `
       <div class="di-section">
         <div class="di-section-title">媒体控制</div>
         <div class="di-media-card">
-          <div class="di-media-cover">${ICON("ui-music", 22)}</div>
+          ${coverHtml}
           <div class="di-media-info">
             <div class="di-media-title">${m.title || "未在播放"}</div>
             <div class="di-media-artist">${m.artist || "—"}</div>
             <div class="di-media-progress">
-              <div class="di-media-progress-bar" style="width:${m.progress || 0}%"></div>
+              <div class="di-media-progress-bar" style="width:${progPercent}%"></div>
             </div>
           </div>
           <div class="di-media-controls">
@@ -521,7 +565,9 @@
     document.body.appendChild(temp);
     const h = temp.offsetHeight + 12;
     document.body.removeChild(temp);
-    return Math.min(h, 500);
+    // v13.9: lifted cap from 500 -> 580 so the new max-height: 480px body
+    // plus ~50px header all fit without clipping the mediaControl row.
+    return Math.min(h, 580);
   }
 
   /* ── Action Handlers ─────────────────────── */
@@ -574,8 +620,19 @@
       api.onConfigChange?.((cfg) => {
         if (cfg.theme) applyTheme(cfg.theme);
         if (cfg.interaction) config.interaction = cfg.interaction;
-        if (cfg.capsuleComponents) config.capsuleComponents = cfg.capsuleComponents;
-        if (cfg.expandedComponents) config.expandedComponents = cfg.expandedComponents;
+        // v13.9: same defensive guard as loadConfig — only accept arrays
+        // that contain every required component, so the default 5-section
+        // layout isn't silently replaced by a stale 2-section one.
+        const requiredCapsule = ["companion", "media", "notifications"];
+        const requiredExpanded = ["quickActions", "mediaControl", "companionDetail", "notifList", "systemStatus"];
+        if (Array.isArray(cfg.capsuleComponents) &&
+            requiredCapsule.every((k) => cfg.capsuleComponents.includes(k))) {
+          config.capsuleComponents = cfg.capsuleComponents;
+        }
+        if (Array.isArray(cfg.expandedComponents) &&
+            requiredExpanded.every((k) => cfg.expandedComponents.includes(k))) {
+          config.expandedComponents = cfg.expandedComponents;
+        }
         saveConfig();
         renderCapsule();
         renderExpanded();

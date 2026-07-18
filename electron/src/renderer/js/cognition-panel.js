@@ -68,10 +68,12 @@ class CognitionPanel {
     this._bindSse();
     this._bindV2Tabs();        // v2: 5 tab navigation
     this._bindV2Refresh();     // v2: refresh buttons on capability tabs
+    this._bindQQWhitelist();   // v13.9: QQ whitelist management
     this._loadHistory();
     this._loadStats();
     this._loadPendingProposals();
     this._loadV2DemoData();    // v2: seed demo data for capability tabs
+    this._loadQQWhitelist();   // v13.9: load whitelist on init
     setInterval(() => this._loadStats(), 8000);
   }
 
@@ -954,7 +956,7 @@ class CognitionPanel {
           const ts = p.ts ? new Date(p.ts).toLocaleString() : "";
           return `
             <div class="cog-se-item">
-              <span class="cog-se-item-icon">🧬</span>
+              <span class="cog-se-item-icon"><svg class="icon icon--18" style="color: var(--color-primary, #ff7eb6);"><use href="#icon-ui-dna"/></svg></span>
               <div class="cog-se-item-body">
                 <div class="cog-se-item-title">${this._escape(p.description || toolName)}</div>
                 <div class="cog-se-item-meta">${this._escape(ts)} · ${this._escape(toolName)}</div>
@@ -1105,7 +1107,7 @@ class CognitionPanel {
           const ts = h.ts ? new Date(h.ts).toLocaleString() : "";
           const fileCount = h.file_count || 0;
           const title = h.description || h.undo_id || "文件整理";
-          const icon = h.category === "images" ? "🖼️" : h.category === "documents" ? "📄" : "📦";
+          const icon = h.category === "images" ? '<svg class="icon icon--18" style="color: #ec4899;"><use href="#icon-ui-image"/></svg>' : h.category === "documents" ? '<svg class="icon icon--18" style="color: #3b82f6;"><use href="#icon-ui-file-text"/></svg>' : '<svg class="icon icon--18" style="color: #f59e0b;"><use href="#icon-ui-package"/></svg>';
           return `
             <div class="cog-fo-item">
               <span class="cog-fo-item-icon">${icon}</span>
@@ -1158,10 +1160,16 @@ class CognitionPanel {
       if (!docs.length) {
         listEl.innerHTML = '<div class="cog-list-empty">暂无文档</div>';
       } else {
-        const iconMap = { MD: "📔", PDF: "📊", HTML: "📋", DOCX: "📄", TXT: "📝" };
+        const iconMap = {
+          MD: '<svg class="icon icon--18" style="color: #f59e0b;"><use href="#icon-ui-book"/></svg>',
+          PDF: '<svg class="icon icon--18" style="color: #ef4444;"><use href="#icon-ui-book-open"/></svg>',
+          HTML: '<svg class="icon icon--18" style="color: #0ea5e9;"><use href="#icon-ui-globe"/></svg>',
+          DOCX: '<svg class="icon icon--18" style="color: #2563eb;"><use href="#icon-ui-book-blue"/></svg>',
+          TXT: '<svg class="icon icon--18" style="color: #64748b;"><use href="#icon-ui-file-text"/></svg>',
+        };
         listEl.innerHTML = docs.slice(0, 5).map((d) => {
           const fmt = d.format || "MD";
-          const icon = iconMap[fmt] || "📄";
+          const icon = iconMap[fmt] || '<svg class="icon icon--18" style="color: #64748b;"><use href="#icon-ui-file-text"/></svg>';
           const modified = d.modified ? new Date(d.modified * 1000).toLocaleDateString() : "";
           const title = d.name || "未命名文档";
           return `
@@ -1176,6 +1184,198 @@ class CognitionPanel {
           `;
         }).join("");
       }
+    });
+  }
+
+  // ── QQ Whitelist (v13.9) ────────────────────────
+  _bindQQWhitelist() {
+    const addBtn = document.getElementById("qq-wl-add-btn");
+    if (addBtn) {
+      addBtn.addEventListener("click", () => this._addQQWhitelist());
+    }
+    const numberInput = document.getElementById("qq-wl-add-number");
+    if (numberInput) {
+      numberInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this._addQQWhitelist();
+      });
+    }
+    const enabledSwitch = document.getElementById("qq-wl-enabled");
+    if (enabledSwitch) {
+      enabledSwitch.addEventListener("change", (e) => this._toggleQQWhitelistEnabled(e.target.checked));
+    }
+    const refreshBtn = document.getElementById("qq-wl-refresh-btn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => this._loadQQWhitelist());
+    }
+    const clearBtn = document.getElementById("qq-wl-clear-btn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => this._clearQQWhitelist());
+    }
+    const bulkBtn = document.getElementById("qq-wl-bulk-btn");
+    if (bulkBtn) {
+      bulkBtn.addEventListener("click", () => this._bulkAddQQWhitelist());
+    }
+  }
+
+  _loadQQWhitelist() {
+    window.aerie.api.request({ method: "GET", path: "/api/qq/whitelist" }).then((res) => {
+      if (!res || !res.data) return;
+      const { items, stats } = res.data;
+
+      const totalEl = document.getElementById("qq-wl-total");
+      const activeEl = document.getElementById("qq-wl-active");
+      const modeEl = document.getElementById("qq-wl-mode");
+      const enabledEl = document.getElementById("qq-wl-enabled");
+      const listEl = document.getElementById("qq-wl-list");
+
+      if (totalEl) totalEl.textContent = stats.total || 0;
+      if (activeEl) activeEl.textContent = stats.active || 0;
+      if (modeEl) modeEl.textContent = stats.mode === "strict" ? "严格" : "兼容";
+      if (enabledEl) enabledEl.checked = !!stats.enabled;
+
+      if (!listEl) return;
+      if (!items || !items.length) {
+        listEl.innerHTML = '<div class="cog-timeline-empty">暂无白名单用户，添加后会显示在这里</div>';
+        return;
+      }
+
+      listEl.innerHTML = items.map((item) => {
+        const qq = item.qq_number || "";
+        const remark = item.remark || "";
+        const enabled = item.enabled === 1 || item.enabled === true;
+        const lastMsg = item.last_message_at || "暂无消息";
+        const avatar = remark ? remark.charAt(0).toUpperCase() : (qq.toString().slice(-1));
+        return `
+          <div class="qq-wl-item ${enabled ? "" : "disabled"}" data-qq="${qq}">
+            <div class="qq-wl-item-avatar">${this._escape(avatar)}</div>
+            <div class="qq-wl-item-info">
+              <div class="qq-wl-item-number">${this._escape(qq)}</div>
+              <div class="qq-wl-item-remark">${this._escape(remark || "未设置备注")}</div>
+              <div class="qq-wl-item-meta">最后消息：${this._escape(lastMsg)}</div>
+            </div>
+            <div class="qq-wl-status-dot ${enabled ? "" : "off"}" title="${enabled ? "已启用" : "已禁用"}"></div>
+            <div class="qq-wl-item-actions">
+              <button class="qq-wl-item-btn" data-action="toggle" data-qq="${qq}">${enabled ? "禁用" : "启用"}</button>
+              <button class="qq-wl-item-btn danger" data-action="delete" data-qq="${qq}">删除</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // Bind item actions
+      listEl.querySelectorAll(".qq-wl-item-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const action = e.currentTarget.getAttribute("data-action");
+          const qq = e.currentTarget.getAttribute("data-qq");
+          if (action === "toggle") {
+            this._toggleQQWhitelistItem(qq);
+          } else if (action === "delete") {
+            this._removeQQWhitelistItem(qq);
+          }
+        });
+      });
+    }).catch(() => null);
+  }
+
+  _addQQWhitelist() {
+    const numberInput = document.getElementById("qq-wl-add-number");
+    const remarkInput = document.getElementById("qq-wl-add-remark");
+    const qqNumber = numberInput ? numberInput.value.trim() : "";
+    const remark = remarkInput ? remarkInput.value.trim() : "";
+
+    if (!qqNumber || !/^\d+$/.test(qqNumber)) {
+      alert("请输入有效的 QQ 号");
+      return;
+    }
+
+    window.aerie.api.request({
+      method: "POST",
+      path: "/api/qq/whitelist",
+      body: { qq_number: qqNumber, remark },
+    }).then(() => {
+      if (numberInput) numberInput.value = "";
+      if (remarkInput) remarkInput.value = "";
+      this._loadQQWhitelist();
+    }).catch((e) => {
+      alert("添加失败：" + (e.message || e));
+    });
+  }
+
+  _removeQQWhitelistItem(qq) {
+    if (!confirm(`确定要从白名单中移除 ${qq} 吗？`)) return;
+    window.aerie.api.request({
+      method: "DELETE",
+      path: `/api/qq/whitelist/${qq}`,
+    }).then(() => {
+      this._loadQQWhitelist();
+    }).catch((e) => {
+      alert("删除失败：" + (e.message || e));
+    });
+  }
+
+  _toggleQQWhitelistItem(qq) {
+    const item = document.querySelector(`.qq-wl-item[data-qq="${qq}"]`);
+    const isEnabled = item ? !item.classList.contains("disabled") : true;
+    window.aerie.api.request({
+      method: "PUT",
+      path: `/api/qq/whitelist/${qq}/toggle`,
+      body: { enabled: !isEnabled },
+    }).then(() => {
+      this._loadQQWhitelist();
+    }).catch((e) => {
+      alert("操作失败：" + (e.message || e));
+    });
+  }
+
+  _toggleQQWhitelistEnabled(enabled) {
+    window.aerie.api.request({
+      method: "PUT",
+      path: "/api/qq/whitelist/enabled",
+      body: { enabled },
+    }).then(() => {
+      this._loadQQWhitelist();
+    }).catch((e) => {
+      alert("操作失败：" + (e.message || e));
+    });
+  }
+
+  _clearQQWhitelist() {
+    if (!confirm("确定要清空所有白名单吗？清空后将恢复兼容模式（全部放行）。")) return;
+    window.aerie.api.request({
+      method: "DELETE",
+      path: "/api/qq/whitelist",
+    }).then(() => {
+      this._loadQQWhitelist();
+    }).catch((e) => {
+      alert("清空失败：" + (e.message || e));
+    });
+  }
+
+  _bulkAddQQWhitelist() {
+    const input = prompt("批量添加白名单，每行一个 QQ 号，可带备注（QQ号 备注，空格分隔）：", "");
+    if (!input) return;
+    const lines = input.split("\n").map((l) => l.trim()).filter((l) => l);
+    const qqNumbers = [];
+    lines.forEach((line) => {
+      const parts = line.split(/\s+/);
+      if (parts[0] && /^\d+$/.test(parts[0])) {
+        qqNumbers.push(parts[0]);
+      }
+    });
+    if (!qqNumbers.length) {
+      alert("未识别到有效的 QQ 号");
+      return;
+    }
+    window.aerie.api.request({
+      method: "POST",
+      path: "/api/qq/whitelist/bulk",
+      body: { qq_numbers: qqNumbers },
+    }).then((res) => {
+      const data = (res && res.data) || {};
+      alert(`批量添加完成：成功 ${data.added_count || 0} / ${data.total || 0}`);
+      this._loadQQWhitelist();
+    }).catch((e) => {
+      alert("批量添加失败：" + (e.message || e));
     });
   }
 }

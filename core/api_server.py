@@ -61,7 +61,7 @@ from core.persona_hub import get_persona_manager
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Aerie · 云栖", version="13.0.0")
+app = FastAPI(title="Aerie · 云栖", version="13.9.1")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -80,11 +80,28 @@ app.add_middleware(
 _db = Database()
 _START_TIME = time.time()
 
-_computer_controller = ComputerController()
+# v13.9: 使用 companion 中的共享 ComputerController 实例，确保权限设置全局生效
+# 延迟初始化：第一次访问时从 companion 获取
+_computer_controller = None
 _file_organizer = FileOrganizer()
 _doc_writer = DocWriter()
 _calendar = CalendarManager(_db)
 _persona_mgr = get_persona_manager()
+
+
+def _get_computer_controller():
+    """获取共享的 ComputerController 实例（优先使用 companion 中的）。"""
+    global _computer_controller
+    if _computer_controller is None:
+        try:
+            comp = get_companion()
+            if comp and hasattr(comp, "computer_controller") and comp.computer_controller:
+                _computer_controller = comp.computer_controller
+        except Exception:
+            pass
+        if _computer_controller is None:
+            _computer_controller = ComputerController()
+    return _computer_controller
 
 
 # ── Health ──────────────────────────────────────────
@@ -1034,12 +1051,13 @@ async def self_evolve_stats() -> dict:
 async def computer_control_stats() -> dict:
     """Computer control statistics (today ops, blocked, etc)."""
     try:
-        logs = _computer_controller.get_audit_logs(limit=200)
+        ctrl = _get_computer_controller()
+        logs = ctrl.get_audit_logs(limit=200)
         today_start = int(time.time()) - 86400
         today_ops = sum(1 for l in logs if l.get("ts", 0) >= today_start and l.get("status") == "success")
         blocked_ops = sum(1 for l in logs if l.get("status") == "blocked")
         return {
-            "permission_level": _computer_controller.permission_level.value,
+            "permission_level": ctrl.permission_level.value,
             "today_operations": today_ops,
             "blocked_operations": blocked_ops,
             "total_operations": len(logs),
@@ -1053,7 +1071,8 @@ async def computer_control_stats() -> dict:
 async def computer_control_get_level() -> dict:
     """Get current permission level."""
     try:
-        return {"level": _computer_controller.permission_level.value}
+        ctrl = _get_computer_controller()
+        return {"level": ctrl.permission_level.value}
     except Exception as e:
         return {"error": str(e)}
 
@@ -1071,7 +1090,8 @@ async def computer_control_set_level(request: Request) -> dict:
         }
         if level_str not in level_map:
             return JSONResponse({"error": "invalid level"}, status_code=400)
-        _computer_controller.set_permission(level_map[level_str])
+        ctrl = _get_computer_controller()
+        ctrl.set_permission(level_map[level_str])
         emit("computer_control_level_changed", {"level": level_str})
         return {"status": "ok", "level": level_str}
     except Exception as e:
@@ -1083,7 +1103,8 @@ async def computer_control_set_level(request: Request) -> dict:
 async def computer_control_logs(limit: int = Query(default=50, ge=1, le=200)) -> dict:
     """Recent computer control audit logs."""
     try:
-        logs = _computer_controller.get_audit_logs(limit=limit)
+        ctrl = _get_computer_controller()
+        logs = ctrl.get_audit_logs(limit=limit)
         return {"logs": logs}
     except Exception as e:
         logger.exception("computer_control_logs error")
@@ -1096,7 +1117,8 @@ async def computer_control_logs(limit: int = Query(default=50, ge=1, le=200)) ->
 async def computer_control_approvals_pending() -> dict:
     """Get pending approval requests."""
     try:
-        approvals = _computer_controller.get_pending_approvals()
+        ctrl = _get_computer_controller()
+        approvals = ctrl.get_pending_approvals()
         return {"approvals": approvals, "count": len(approvals)}
     except Exception as e:
         logger.exception("approvals_pending error")
@@ -1107,7 +1129,8 @@ async def computer_control_approvals_pending() -> dict:
 async def computer_control_approve(approval_id: str) -> dict:
     """Approve a pending action."""
     try:
-        result = _computer_controller.approve_action(approval_id)
+        ctrl = _get_computer_controller()
+        result = ctrl.approve_action(approval_id)
         if result:
             emit("computer_control_approval_updated", {
                 "id": approval_id,
@@ -1124,7 +1147,8 @@ async def computer_control_approve(approval_id: str) -> dict:
 async def computer_control_reject(approval_id: str) -> dict:
     """Reject a pending action."""
     try:
-        result = _computer_controller.reject_action(approval_id)
+        ctrl = _get_computer_controller()
+        result = ctrl.reject_action(approval_id)
         if result:
             emit("computer_control_approval_updated", {
                 "id": approval_id,
@@ -1134,6 +1158,151 @@ async def computer_control_reject(approval_id: str) -> dict:
         return JSONResponse({"error": "approval not found"}, status_code=404)
     except Exception as e:
         logger.exception("reject error")
+        return {"error": str(e)}
+
+
+# ── QQ Whitelist (v13.9) ────────────────────────────
+
+@app.get("/api/qq/whitelist")
+async def qq_whitelist_list() -> dict:
+    """获取 QQ 白名单列表和统计信息。"""
+    try:
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return {"items": [], "stats": {"enabled": False, "total": 0, "active": 0, "mode": "compatible"}}
+        items = comp.qq_whitelist.list_all()
+        stats = comp.qq_whitelist.stats()
+        return {"items": items, "stats": stats}
+    except Exception as e:
+        logger.exception("qq whitelist list error")
+        return {"error": str(e)}
+
+
+@app.post("/api/qq/whitelist")
+async def qq_whitelist_add(request: Request) -> dict:
+    """添加白名单用户。"""
+    try:
+        body = await request.json()
+        qq_number = body.get("qq_number")
+        remark = body.get("remark", "")
+        if not qq_number:
+            return JSONResponse({"error": "qq_number is required"}, status_code=400)
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return JSONResponse({"error": "whitelist not available"}, status_code=503)
+        ok = comp.qq_whitelist.add(qq_number, remark)
+        emit("qq_whitelist_changed", {"action": "add", "qq_number": str(qq_number)})
+        return {"status": "ok", "added": ok}
+    except Exception as e:
+        logger.exception("qq whitelist add error")
+        return {"error": str(e)}
+
+
+@app.delete("/api/qq/whitelist/{qq_number}")
+async def qq_whitelist_remove(qq_number: str) -> dict:
+    """移除白名单用户。"""
+    try:
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return JSONResponse({"error": "whitelist not available"}, status_code=503)
+        ok = comp.qq_whitelist.remove(qq_number)
+        emit("qq_whitelist_changed", {"action": "remove", "qq_number": qq_number})
+        return {"status": "ok", "removed": ok}
+    except Exception as e:
+        logger.exception("qq whitelist remove error")
+        return {"error": str(e)}
+
+
+@app.put("/api/qq/whitelist/{qq_number}/toggle")
+async def qq_whitelist_toggle(qq_number: str, request: Request) -> dict:
+    """启用/禁用单个白名单用户。"""
+    try:
+        body = await request.json()
+        enabled = body.get("enabled", True)
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return JSONResponse({"error": "whitelist not available"}, status_code=503)
+        ok = comp.qq_whitelist.toggle(qq_number, enabled)
+        emit("qq_whitelist_changed", {"action": "toggle", "qq_number": qq_number, "enabled": enabled})
+        return {"status": "ok", "toggled": ok}
+    except Exception as e:
+        logger.exception("qq whitelist toggle error")
+        return {"error": str(e)}
+
+
+@app.put("/api/qq/whitelist/{qq_number}/remark")
+async def qq_whitelist_remark(qq_number: str, request: Request) -> dict:
+    """更新白名单用户备注。"""
+    try:
+        body = await request.json()
+        remark = body.get("remark", "")
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return JSONResponse({"error": "whitelist not available"}, status_code=503)
+        ok = comp.qq_whitelist.update_remark(qq_number, remark)
+        return {"status": "ok", "updated": ok}
+    except Exception as e:
+        logger.exception("qq whitelist remark error")
+        return {"error": str(e)}
+
+
+@app.put("/api/qq/whitelist/enabled")
+async def qq_whitelist_set_enabled(request: Request) -> dict:
+    """启用/禁用白名单机制。"""
+    try:
+        body = await request.json()
+        enabled = body.get("enabled", True)
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return JSONResponse({"error": "whitelist not available"}, status_code=503)
+        comp.qq_whitelist.set_enabled(enabled)
+        emit("qq_whitelist_changed", {"action": "enabled_changed", "enabled": enabled})
+        return {"status": "ok", "enabled": enabled}
+    except Exception as e:
+        logger.exception("qq whitelist set enabled error")
+        return {"error": str(e)}
+
+
+@app.post("/api/qq/whitelist/bulk")
+async def qq_whitelist_bulk_add(request: Request) -> dict:
+    """批量添加白名单。"""
+    try:
+        body = await request.json()
+        qq_numbers = body.get("qq_numbers", [])
+        remark_prefix = body.get("remark_prefix", "")
+        if not isinstance(qq_numbers, list):
+            return JSONResponse({"error": "qq_numbers must be array"}, status_code=400)
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return JSONResponse({"error": "whitelist not available"}, status_code=503)
+        count = comp.qq_whitelist.bulk_add(qq_numbers, remark_prefix)
+        emit("qq_whitelist_changed", {"action": "bulk_add", "count": count})
+        return {"status": "ok", "added_count": count, "total": len(qq_numbers)}
+    except Exception as e:
+        logger.exception("qq whitelist bulk add error")
+        return {"error": str(e)}
+
+
+@app.delete("/api/qq/whitelist")
+async def qq_whitelist_clear() -> dict:
+    """清空白名单（恢复兼容模式）。"""
+    try:
+        from core.companion import get_companion
+        comp = get_companion()
+        if not comp or not comp.qq_whitelist:
+            return JSONResponse({"error": "whitelist not available"}, status_code=503)
+        ok = comp.qq_whitelist.clear()
+        emit("qq_whitelist_changed", {"action": "clear"})
+        return {"status": "ok", "cleared": ok}
+    except Exception as e:
+        logger.exception("qq whitelist clear error")
         return {"error": str(e)}
 
 

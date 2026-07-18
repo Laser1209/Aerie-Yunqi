@@ -16,6 +16,7 @@ from communication.splitter import SemanticMessageSplitter
 from config.persona_loader import load_behavior_config
 from core.brain import Brain
 from core.cognition import CognitionEngine
+from core.computer_control import ComputerController, PermissionLevel
 from core.context_builder import ContextBuilder
 from core.database import Database
 from core.emotion_engine import EmotionEngine
@@ -23,6 +24,7 @@ from core.emotion_state_store import EmotionStateStore
 from core.emotion_threshold import get_threshold_engine
 from core.pipeline import Pipeline
 from core.push_scheduler import PushScheduler
+from core.qq_whitelist import QQWhitelistManager
 from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry
 from config.persona_loader import load_settings, load_proactive_config
@@ -89,6 +91,8 @@ class Companion:
         self._warmup_threshold_from_history()
 
         # Tool registry
+        # v13.9: 全局共享的 ComputerController 单例，确保权限设置全局生效
+        self.computer_controller = ComputerController()
         self.tool_registry = ToolRegistry(self.db)
         register_all_tools(self.tool_registry)
 
@@ -102,6 +106,9 @@ class Companion:
         # Communication
         qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
         self.qq = QQClient(qq_cfg)
+        # v13.9: QQ whitelist manager
+        self.qq_whitelist = QQWhitelistManager(self.db)
+        self.qq.set_whitelist(self.qq_whitelist)
         self.router = Router(
             self_qq=int(qq_cfg.get("self_qq", 0)),
             friends_qq=qq_cfg.get("friends_qq", []),

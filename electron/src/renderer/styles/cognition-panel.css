@@ -1347,3 +1347,196 @@
   .cog-tab-label { display: none; }
   .cog-tab { padding: 8px 10px; }
 }
+
+/* ── QQ Whitelist (v13.9) ─────────────────────── */
+.qq-wl-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 105, 180, 0.06);
+  border: 1px solid rgba(255, 105, 180, 0.15);
+}
+.qq-wl-toggle-label {
+  font-size: 13px;
+  color: var(--cog-shell-text);
+  font-weight: 500;
+}
+.qq-wl-hint {
+  margin: 10px 2px 0;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  line-height: 1.5;
+}
+
+/* Switch */
+.qq-wl-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.qq-wl-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.qq-wl-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 105, 180, 0.25);
+  transition: .3s;
+  border-radius: 24px;
+}
+.qq-wl-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  transition: .3s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.qq-wl-switch input:checked + .qq-wl-slider {
+  background: linear-gradient(135deg, #ff5b9c, #9c27b0);
+  border-color: transparent;
+}
+.qq-wl-switch input:checked + .qq-wl-slider:before {
+  transform: translateX(20px);
+}
+
+/* Add form */
+.qq-wl-add-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.qq-wl-input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 105, 180, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--cog-shell-text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.qq-wl-input:focus {
+  border-color: rgba(255, 105, 180, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.1);
+}
+.qq-wl-bulk-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* List */
+.qq-wl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.qq-wl-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 105, 180, 0.12);
+  transition: background .2s, border-color .2s;
+}
+.qq-wl-item:hover {
+  background: rgba(255, 105, 180, 0.06);
+  border-color: rgba(255, 105, 180, 0.25);
+}
+.qq-wl-item.disabled {
+  opacity: 0.5;
+}
+.qq-wl-item-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff5b9c, #9c27b0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.qq-wl-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.qq-wl-item-number {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cog-shell-text);
+  margin-bottom: 2px;
+}
+.qq-wl-item-remark {
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qq-wl-item-meta {
+  font-size: 10px;
+  color: var(--color-text-muted, #888);
+  margin-top: 2px;
+}
+.qq-wl-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.qq-wl-item-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 105, 180, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--cog-shell-text);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.qq-wl-item-btn:hover {
+  background: rgba(255, 105, 180, 0.15);
+  border-color: rgba(255, 105, 180, 0.4);
+}
+.qq-wl-item-btn.danger:hover {
+  background: rgba(244, 67, 54, 0.2);
+  border-color: rgba(244, 67, 54, 0.5);
+  color: #ff6b6b;
+}
+.qq-wl-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4caf50;
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
+}
+.qq-wl-status-dot.off {
+  background: #9e9e9e;
+  box-shadow: none;
+}
+
+@media (max-width: 600px) {
+  .qq-wl-add-form { flex-direction: column; }
+  .qq-wl-item { padding: 8px 10px; }
+  .qq-wl-item-avatar { width: 32px; height: 32px; font-size: 12px; }
+}

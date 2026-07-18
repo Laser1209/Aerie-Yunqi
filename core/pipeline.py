@@ -18,6 +18,7 @@ from communication.splitter import SemanticMessageSplitter
 from core.chat_events import emit
 from core.cognition import CognitionEngine
 from core.office_mode import get_office_mode_manager, OfficeMode
+from core.response_validator import ResponseValidator
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ class Pipeline:
         self.decision_engine = decision_engine
         self.self_evolver = self_evolver
         self._splitter = SemanticMessageSplitter()
+        # v13.9: 回复校验器（准确性 Guard + 质量 Judge）
+        self.validator = ResponseValidator()
 
     async def handle(
         self, msg: IncomingMessage, force_full: bool = False
@@ -62,12 +65,15 @@ class Pipeline:
         # ══════════════════════════════════════════════
         trace = self.cognition.begin(msg.user_id, msg.source, msg.content)
         route_mode = self.router.route(msg.user_id)
+
+        # v13.9: BASIC 模式走轻量链路，不再完全跳过
+        # 保留情绪 + LLM + 后处理 + 持久化，跳过工具 + 自进化
         if route_mode == "BASIC" and not force_full:
-            logger.debug("BASIC skip for user %s", msg.user_id)
-            # Still record the route decision for transparency
-            self.cognition.record(trace, "route", {"mode": "BASIC", "skipped": True})
+            logger.debug("BASIC lightweight mode for user %s", msg.user_id)
+            self.cognition.record(trace, "route", {"mode": "BASIC", "skipped": False, "lightweight": True})
+            result = await self._handle_basic_lightweight(msg, trace, route_mode)
             self.cognition.commit(trace, route_mode)
-            return None
+            return result
 
         # ══════════════════════════════════════════════
         # 1. Route (stage 1)
@@ -316,39 +322,28 @@ class Pipeline:
         })
 
         # ══════════════════════════════════════════════
-        # 8.5 Response Validation（Guard + Judge 双层校验）
+        # 8.5 Response Validation（v13.9: Guard + Judge 双层校验）
         # ══════════════════════════════════════════════
         try:
-            from core.response_validator import get_response_validator
-            validator = get_response_validator()
             is_office = office_mgr.current_mode == OfficeMode.OFFICE or (
                 office_ctx and office_ctx.is_office_mode()
             )
-            vr = validator.validate(
+            vr = await self.validator.validate(
                 reply_text,
                 user_message=msg.content,
-                persona_style="warm",
-                office_mode=is_office,
+                context_history=history_msgs,
+                route_mode="OFFICE" if is_office else route_mode,
             )
             if vr.issues:
                 self.cognition.record(trace, "validation", {
                     "passed": vr.passed,
-                    "score": vr.score,
-                    "guard_score": vr.guard_score,
+                    "guard_passed": vr.guard_passed,
                     "judge_score": vr.judge_score,
-                    "issues": [
-                        {
-                            "code": i.code,
-                            "severity": i.severity.value,
-                            "message": i.message,
-                            "layer": i.layer,
-                        }
-                        for i in vr.issues
-                    ],
-                    "needs_revision": vr.needs_revision,
-                    "suggestion": vr.revision_suggestion,
+                    "rewrite_count": vr.rewrite_count,
+                    "issues": vr.issues,
                 })
         except Exception:
+            # 校验是 best-effort，失败不影响主流程
             logger.exception("response validation failed; best-effort skip")
 
         segments = self._splitter.split(reply_text) or [reply_text]
@@ -564,6 +559,229 @@ class Pipeline:
         }
 
     # ── Helpers ────────────────────────────────────────
+    async def _handle_basic_lightweight(
+        self,
+        msg: IncomingMessage,
+        trace: dict,
+        route_mode: str,
+    ) -> dict | None:
+        """BASIC 模式轻量对话链路。
+
+        保留：情绪识别 + 历史上下文 + LLM 回复 + 后处理 + 持久化 + emit
+        跳过：工具调用 + 自进化 + 决策引擎 + 完整认知追踪
+        """
+        # 1. 情绪更新（轻量：仅关键词路径，不调 LLM PAD 以省 Token）
+        try:
+            self.emotion.update_trajectory(msg.user_id, msg.content)
+        except Exception:
+            logger.exception("BASIC emotion update error")
+
+        # 获取情绪状态（用于回复语气调整）
+        emotion_info = None
+        try:
+            state = self.emotion.get_state(msg.user_id)
+            emotion_info = {
+                "label": state.get("label", "neutral"),
+                "pad": state.get("pad", {}),
+            }
+        except Exception:
+            pass
+
+        self.cognition.record(trace, "emotion", {
+            "label": (emotion_info or {}).get("label"),
+            "pad": (emotion_info or {}).get("pad"),
+            "lightweight": True,
+        })
+
+        # 2. 获取历史（精简：最近 10 条）
+        history = []
+        try:
+            history = self.db.query(
+                "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 10",
+                (msg.user_id,),
+            )
+            history.reverse()
+        except Exception:
+            pass
+
+        # 3. 构建上下文（BASIC 精简系统提示词）
+        ctx_messages = self.ctx_builder.build(
+            msg.user_id,
+            msg.content,
+            route_mode,  # "BASIC" — context_builder 会生成精简系统提示
+            history_msgs=history,
+            emotion_info=emotion_info,
+            eruption_info=None,
+            reply_to=None,
+            attachments=None,
+        )
+
+        system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
+        self.cognition.record(trace, "context", {
+            "messages": len(ctx_messages),
+            "system_prompt_chars": system_chars,
+            "tools_offered": False,
+            "lightweight": True,
+        })
+
+        # 4. 调 LLM（无工具，纯对话）
+        response = await self.brain.chat(
+            ctx_messages,
+            tools=None,
+            tool_registry=self.tool_registry,
+            preferred_provider=None,
+        )
+        raw_text = getattr(response, "text", "") or ""
+        model_name = getattr(response, "model", "unknown")
+        usage = getattr(response, "usage", None) or {}
+
+        # 剥掉 <think> 块
+        reply_text_raw = self._strip_think(raw_text)
+
+        self.cognition.record(trace, "brain", {
+            "model": model_name,
+            "tokens": usage,
+            "raw_chars": len(raw_text),
+            "lightweight": True,
+        })
+
+        # 5. 情绪润色 + 自检
+        reply_text = self.emotion.tune(reply_text_raw)
+        try:
+            from core.screen_action_sanitizer import sanitize as _sanitize_action
+            reply_text = _sanitize_action(reply_text)
+        except Exception:
+            pass
+        try:
+            from core.output_self_check import OutputSelfCheck
+            _self_check = OutputSelfCheck()
+            _sc_result = _self_check.check(reply_text)
+            reply_text = _sc_result.cleaned_text
+        except Exception:
+            pass
+
+        self.cognition.record(trace, "postprocess", {
+            "tune_label": (emotion_info or {}).get("label"),
+            "raw_chars": len(reply_text_raw),
+            "tuned_chars": len(reply_text),
+            "lightweight": True,
+        })
+
+        # 5.5 Response Validation（v13.9: BASIC 模式也做轻量校验）
+        try:
+            vr = await self.validator.validate(
+                reply_text,
+                user_message=msg.content,
+                context_history=history,
+                route_mode=route_mode,
+            )
+            if vr.issues:
+                self.cognition.record(trace, "validation", {
+                    "passed": vr.passed,
+                    "guard_passed": vr.guard_passed,
+                    "judge_score": vr.judge_score,
+                    "rewrite_count": vr.rewrite_count,
+                    "issues": vr.issues,
+                    "lightweight": True,
+                })
+        except Exception:
+            logger.exception("BASIC validation failed; best-effort skip")
+
+        # 6. 语义拆分
+        segments = self._splitter.split(reply_text) or [reply_text]
+        self.cognition.record(trace, "split", {
+            "segments": segments,
+            "count": len(segments),
+            "lightweight": True,
+        })
+
+        # 7. 持久化用户消息
+        user_row_id = 0
+        try:
+            user_row_id = self.db.insert("chat_log", {
+                "user_id": msg.user_id,
+                "role": "user",
+                "content": msg.content,
+                "msg_type": msg.msg_type,
+                "route_mode": route_mode,
+            })
+        except Exception:
+            logger.exception("db insert user msg error")
+
+        # 8. 持久化 AI 回复
+        ai_row_ids: list[int] = []
+        try:
+            for seg in segments:
+                rid = self.db.insert("chat_log", {
+                    "user_id": msg.user_id,
+                    "role": "assistant",
+                    "content": seg,
+                    "msg_type": msg.msg_type,
+                    "route_mode": route_mode,
+                })
+                ai_row_ids.append(rid)
+        except Exception:
+            logger.exception("db insert ai msg error")
+
+        self.cognition.record(trace, "output", {
+            "ai_msg_ids": ai_row_ids,
+            "user_msg_id": user_row_id,
+            "source": msg.source,
+            "segment_count": len(ai_row_ids),
+            "lightweight": True,
+        })
+
+        # 9. Emit 事件（前端展示用）
+        try:
+            emit(
+                "user",
+                role="user",
+                id=user_row_id,
+                user_id=msg.user_id,
+                content=msg.content,
+                source=msg.source,
+            )
+        except Exception:
+            pass
+
+        for idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
+            try:
+                emit_kwargs = {
+                    "role": "assistant",
+                    "id": rid,
+                    "user_id": msg.user_id,
+                    "content": seg,
+                    "source": msg.source,
+                }
+                if idx == 0 and emotion_info:
+                    emit_kwargs["emotion"] = emotion_info["label"]
+                emit("assistant", **emit_kwargs)
+            except Exception:
+                pass
+
+        # 10. QQ 消息入队
+        if msg.source == "qq" and ai_row_ids:
+            reply = OutgoingReply(
+                user_id=msg.user_id,
+                content=reply_text,
+                msg_id=ai_row_ids[0],
+                reply_to_qq_message_id=0,
+                cognition_id=int(trace.get("id") or 0),
+            )
+            self.send_queue.enqueue(reply)
+
+        return {
+            "reply": reply_text,
+            "user_msg_id": user_row_id,
+            "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
+            "ai_msg_ids": ai_row_ids,
+            "segments": segments,
+            "route_mode": route_mode,
+            "emotion": emotion_info.get("label") if emotion_info else "unknown",
+            "cognition_id": trace.get("id", 0),
+            "lightweight": True,
+        }
+
     @staticmethod
     def _extract_react(text: str) -> dict:
         """Backward-compat shim: delegate to brain._build_react_from_text.

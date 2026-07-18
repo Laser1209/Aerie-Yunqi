@@ -128,7 +128,7 @@ class ContextBuilder:
         messages.append({"role": "system", "content": system})
 
         # History
-        limit = {"FULL": 8, "AUTO": 5, "BASIC": 0}.get(route_mode, 5)
+        limit = {"FULL": 8, "AUTO": 5, "BASIC": 3}.get(route_mode, 5)
         if history_msgs and limit > 0:
             for h in history_msgs[-limit:]:
                 messages.append(

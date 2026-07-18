@@ -177,6 +177,107 @@ RECENT_FILE_THRESHOLD_DAYS = 7
 UNDO_RETENTION_DAYS = 7
 
 
+# v13.9 Batch 2.5: 文件整理预设模板
+ORGANIZE_TEMPLATES: dict[str, dict] = {
+    "downloads": {
+        "id": "downloads",
+        "name": "下载文件夹整理",
+        "description": "按文件类型分类下载目录",
+        "icon": "package",
+        "default_source": "~/Downloads",
+        "default_target": "~/Downloads",
+        "categories": [
+            FileCategory.IMAGES.value,
+            FileCategory.DOCUMENTS.value,
+            FileCategory.VIDEOS.value,
+            FileCategory.AUDIO.value,
+            FileCategory.ARCHIVES.value,
+            FileCategory.INSTALLERS.value,
+            FileCategory.OTHER.value,
+        ],
+        "category_folders": {
+            FileCategory.IMAGES.value: "图片",
+            FileCategory.DOCUMENTS.value: "文档",
+            FileCategory.VIDEOS.value: "视频",
+            FileCategory.AUDIO.value: "音频",
+            FileCategory.ARCHIVES.value: "压缩包",
+            FileCategory.INSTALLERS.value: "安装包",
+            FileCategory.CODE.value: "代码",
+            FileCategory.OTHER.value: "其他",
+        },
+    },
+    "desktop": {
+        "id": "desktop",
+        "name": "桌面整理",
+        "description": "按用途分类桌面文件，保持桌面整洁",
+        "icon": "briefcase",
+        "default_source": "~/Desktop",
+        "default_target": "~/Desktop",
+        "categories": [
+            FileCategory.DOCUMENTS.value,
+            FileCategory.IMAGES.value,
+            FileCategory.VIDEOS.value,
+            FileCategory.ARCHIVES.value,
+            FileCategory.OTHER.value,
+        ],
+        "category_folders": {
+            FileCategory.DOCUMENTS.value: "工作文档",
+            FileCategory.IMAGES.value: "图片素材",
+            FileCategory.VIDEOS.value: "视频",
+            FileCategory.ARCHIVES.value: "压缩文件",
+            FileCategory.OTHER.value: "其他",
+        },
+    },
+    "photos_by_date": {
+        "id": "photos_by_date",
+        "name": "照片按日期整理",
+        "description": "按拍摄日期/修改日期归档照片",
+        "icon": "image",
+        "default_source": "~/Pictures",
+        "default_target": "~/Pictures",
+        "categories": [FileCategory.IMAGES.value],
+        "group_by": "date_month",
+        "category_folders": {
+            FileCategory.IMAGES.value: "照片",
+        },
+    },
+    "work_docs": {
+        "id": "work_docs",
+        "name": "工作文档整理",
+        "description": "按项目和年份分类工作文档",
+        "icon": "file-text",
+        "default_source": "~/Documents",
+        "default_target": "~/Documents/工作文档",
+        "categories": [
+            FileCategory.DOCUMENTS.value,
+            FileCategory.ARCHIVES.value,
+        ],
+        "category_folders": {
+            FileCategory.DOCUMENTS.value: "文档",
+            FileCategory.ARCHIVES.value: "归档项目",
+        },
+    },
+}
+
+
+def get_organize_template(template_id: str) -> dict | None:
+    """获取整理预设模板"""
+    return ORGANIZE_TEMPLATES.get(template_id)
+
+
+def list_organize_templates() -> list[dict]:
+    """列出所有整理预设模板"""
+    return [
+        {
+            "id": t["id"],
+            "name": t["name"],
+            "description": t["description"],
+            "icon": t["icon"],
+        }
+        for t in ORGANIZE_TEMPLATES.values()
+    ]
+
+
 @dataclass
 class FileInfo:
     """文件信息"""

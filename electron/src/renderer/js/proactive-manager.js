@@ -260,21 +260,21 @@ class ProactiveManager {
           <h4>触发源说明</h4>
           <div class="trigger-sources">
             <div class="trigger-source">
-              <div class="trigger-icon">⏰</div>
+              <div class="trigger-icon"><svg class="icon icon--20" style="color: #f59e0b;"><use href="#icon-ui-calendar"/></svg></div>
               <div class="trigger-info">
                 <div class="trigger-title">定时触发</div>
                 <div class="trigger-desc">基于 Cron 表达式的定时推送，如早安、午安、晚安等</div>
               </div>
             </div>
             <div class="trigger-source">
-              <div class="trigger-icon">💭</div>
+              <div class="trigger-icon"><svg class="icon icon--20" style="color: #ec4899;"><use href="#icon-ui-thought"/></svg></div>
               <div class="trigger-info">
                 <div class="trigger-title">情绪触发</div>
                 <div class="trigger-desc">基于思念值、情绪状态的主动推送，她想你了才会发</div>
               </div>
             </div>
             <div class="trigger-source">
-              <div class="trigger-icon">🎯</div>
+              <div class="trigger-icon"><svg class="icon icon--20" style="color: #8b5cf6;"><use href="#icon-ui-target"/></svg></div>
               <div class="trigger-info">
                 <div class="trigger-title">事件触发</div>
                 <div class="trigger-desc">用户上线、纪念日、天气变化、待办到期等事件驱动</div>

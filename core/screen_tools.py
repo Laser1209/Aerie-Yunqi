@@ -1,4 +1,4 @@
-"""Aerie v13.0 — Screen Control Tools
+"""Aerie v13.9 — Screen Control Tools
 电脑操控工具集，注册到 tool_registry 供 AI function calling 调用。
 
 工具清单：
@@ -28,7 +28,16 @@ _controller: Optional[ComputerController] = None
 def get_controller() -> ComputerController:
     global _controller
     if _controller is None:
-        _controller = ComputerController()
+        # v13.9: 优先使用 companion 中的共享实例，确保权限设置全局生效
+        try:
+            from core.companion import get_companion
+            comp = get_companion()
+            if comp and hasattr(comp, "computer_controller"):
+                _controller = comp.computer_controller
+        except Exception:
+            pass
+        if _controller is None:
+            _controller = ComputerController()
     return _controller
 
 

@@ -9,6 +9,57 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [13.9.1] - 2026-07-18
+
+> **v13.9 第二批升级 / Batch 2: 全图标矢量化 + 任务规划引擎 + 文件整理模板**
+> 完成 emoji 全面替换，新增任务规划引擎和文件整理预设模板，完善回复校验集成
+
+### ✨ Added / 新增
+
+#### 图标系统
+- **全项目 emoji 矢量图标替换**：新增 30+ 个 SVG sprite 图标，覆盖所有 UI 场景
+  - UI 基础类：home / heart / brain / dna / mouse / shield / folder / file-text / calendar / message
+  - 媒体类：image / video / package / lightbulb / list / trash / refresh / eye / hand
+  - 功能类：sparkles / flower / briefcase / microscope / bar-chart / book / globe / thought / target / check
+  - 文档类：book-open (PDF) / book-blue (Word)
+- **替换范围**：HTML 页面 37 处 + JS 动态渲染 7 处，全部使用矢量图标替代 emoji
+
+#### 任务规划引擎
+- **TaskPlanner 任务规划引擎** (`core/task_planner.py`)：办公模式下复杂任务自动拆解
+  - 6 种任务类型识别：doc_write / data_analysis / file_organize / research / code_task / simple
+  - 5 步标准流程模板：需求分析 → 方案设计 → 核心执行 → 测试验证 → 优化交付
+  - 动态调整：根据用户关键词（简单/详细）自动增减步骤和复杂度
+  - 进度追踪：每步状态管理 + 进度百分比 + 结构化输出
+  - 最大步数限制：默认 10 步，防止 Token 过度消耗
+
+#### 文件整理模板
+- **4 个预设整理模板** (`core/file_organizer.py`)
+  - 下载文件夹整理：按文件类型（图片/文档/视频/音频/压缩包/安装包/其他）分类
+  - 桌面整理：按用途（工作文档/图片素材/视频/压缩文件/其他）分类
+  - 照片按日期整理：按月归档照片
+  - 工作文档整理：按项目和年份分类工作文档
+- **模板 API**：`list_organize_templates()` / `get_organize_template()`
+
+### 🔧 Changed / 变更
+
+#### QQ 消息优化
+- **thought/action 标签过滤**：QQ 发送消息前自动移除 `<thought>` 和 `<action>` 标签
+  - 支持跨行匹配、大小写不敏感
+  - 自动清理多余空行，只输出纯对话文本
+  - 集成到 `send_message` 和 `send_message_with_segments` 两个发送入口
+
+#### 回复校验完善
+- **Pipeline 集成**：FULL 模式和 BASIC 模式均接入回复校验
+  - FULL 模式：完整 Guard + Judge 双层校验，结果写入认知 trace
+  - BASIC 模式：轻量校验，不影响响应速度
+  - best-effort 模式：校验失败不影响主流程
+
+### 🛡️ Security / 安全
+- **回复校验 Accuracy Guard**：敏感内容检测（赌博/毒品/自伤/暴力），自动拦截
+- **文件整理路径安全**：所有移动操作基于预览计划生成，支持 7 天撤销
+
+---
+
 ## [13.0.0] - 2026-07-18
 
 > **v13 大版本发布 / Major release: 办公模式 + 回复校验 + 事件驱动推送**

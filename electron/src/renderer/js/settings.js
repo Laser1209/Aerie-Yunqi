@@ -661,7 +661,7 @@ class SettingsPanel {
         const btn = document.getElementById("di-settings-apply");
         if (btn) {
           const origText = btn.textContent;
-          btn.textContent = "已应用 ✓";
+          btn.innerHTML = '<svg class="icon icon--14" style="margin-right:4px;vertical-align:-1px;color: var(--color-success, #10b981);"><use href="#icon-ui-check"/></svg>已应用';
           setTimeout(() => { btn.textContent = origText; }, 1500);
         }
       }

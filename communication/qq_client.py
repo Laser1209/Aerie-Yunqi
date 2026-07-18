@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import socket
 from typing import Any, Callable, Optional
 
@@ -23,6 +24,22 @@ from communication.message import IncomingMessage
 logger = logging.getLogger(__name__)
 
 MessageHandler = Callable[[IncomingMessage], Any]
+
+# ── v13.9: thought/action 标签过滤 ──
+
+def strip_thought_action_tags(text: str) -> str:
+    """移除 <thought> 和 <action> 标签及其内容，QQ 只输出纯对话文本。"""
+    if not text:
+        return text
+    # 移除 <thought>...</thought>（支持跨行）
+    text = re.sub(r'<thought>.*?</thought>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # 移除 <action>...</action>（支持跨行）
+    text = re.sub(r'<action>.*?</action>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # 清理多余空行（连续多个换行合并为 2 个以内）
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # 清理首尾空白
+    text = text.strip()
+    return text
 
 
 def _port_is_open(host: str, port: int, timeout: float = 1.0) -> bool:
@@ -46,6 +63,12 @@ class QQClient:
         self._connected = False
         # R7.5+: bot's own QQ, learned from OneBot11 self_id field.
         self.self_id: int = 0
+        # v13.9: QQ whitelist manager (injected later via setter)
+        self._whitelist = None
+
+    def set_whitelist(self, whitelist_manager) -> None:
+        """设置白名单管理器。"""
+        self._whitelist = whitelist_manager
 
     @property
     def is_connected(self) -> bool:
@@ -115,6 +138,16 @@ class QQClient:
                     "QQ <- %s %s: %.60s",
                     msg.user_id, msg.msg_type, msg.content,
                 )
+                # v13.9: QQ whitelist check
+                if self._whitelist and not self._whitelist.is_allowed(msg.user_id):
+                    logger.debug(
+                        "QQ user %s not in whitelist, skipped",
+                        msg.user_id,
+                    )
+                    return
+                # 更新最后消息时间
+                if self._whitelist:
+                    self._whitelist.update_last_message(msg.user_id)
                 if self._handler:
                     try:
                         result = self._handler(msg)
@@ -133,6 +166,12 @@ class QQClient:
         """Send a private message via NapCat OneBot11 API."""
         if not self.is_connected:
             logger.warning("Cannot send: QQ WS not connected")
+            return False
+
+        # v13.9: 过滤 thought/action 标签，QQ 只输出纯对话文本
+        content = strip_thought_action_tags(content)
+        if not content:
+            logger.warning("QQ send: content empty after stripping tags, skip")
             return False
 
         # R7.5+: tag the request with a unique echo so we can pick our
@@ -290,9 +329,22 @@ class QQClient:
         if not self.is_connected:
             return False
 
+        # v13.9: 过滤 text 类型 segment 中的 thought/action 标签
+        cleaned_segments = []
+        for seg in segments:
+            if seg.get("type") == "text" and "text" in (seg.get("data") or {}):
+                cleaned = strip_thought_action_tags(seg["data"]["text"])
+                if cleaned:
+                    cleaned_segments.append({**seg, "data": {**seg["data"], "text": cleaned}})
+            else:
+                cleaned_segments.append(seg)
+        if not cleaned_segments:
+            logger.warning("QQ segments send: all empty after stripping tags, skip")
+            return False
+
         payload = {
             "action": "send_private_msg",
-            "params": {"user_id": int(user_id), "message": segments},
+            "params": {"user_id": int(user_id), "message": cleaned_segments},
         }
         url = f"ws://{self.host}:{self.port}"
         try:

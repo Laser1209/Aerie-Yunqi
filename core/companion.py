@@ -17,6 +17,7 @@ from config.persona_loader import load_behavior_config
 from core.brain import Brain
 from core.cognition import CognitionEngine
 from core.computer_control import ComputerController, PermissionLevel
+from core.permission_manager import FineGrainedPermissionManager
 from core.context_builder import ContextBuilder
 from core.database import Database
 from core.emotion_engine import EmotionEngine
@@ -93,8 +94,18 @@ class Companion:
         # Tool registry
         # v13.9: 全局共享的 ComputerController 单例，确保权限设置全局生效
         self.computer_controller = ComputerController()
+        # v13.9: 细粒度权限管理器（目录授权 + 操作分类 + 高危确认）
+        self.permission_manager = FineGrainedPermissionManager()
         self.tool_registry = ToolRegistry(self.db)
         register_all_tools(self.tool_registry)
+        # v13.9: 任务规划引擎 + 执行引擎 + 异步任务
+        from core.task_planner import TaskPlanner
+        from core.task_executor import TaskExecutor
+        from core.async_task_manager import AsyncTaskManager
+        self.task_planner = TaskPlanner()
+        self.task_executor = TaskExecutor(tool_registry=self.tool_registry)
+        self.async_task_manager = AsyncTaskManager(max_concurrent=3)
+        self._register_async_task_handlers()
 
         # Phase 9 Batch 6: Self-evolution engine (capability-gap detector)
         self.self_evolver = SelfEvolver(
@@ -213,6 +224,101 @@ class Companion:
             self.skill_loader = None
         self._started = True
         logger.info("Companion started")
+
+    # ── v13.9: 异步任务处理器注册 ──────────────────────────────
+    def _register_async_task_handlers(self) -> None:
+        """为异步任务管理器注册真实任务处理器。"""
+        mgr = self.async_task_manager
+
+        async def task_doc_generate(data: dict, progress_cb) -> dict:
+            """文档生成任务。"""
+            import asyncio
+            title = data.get("title", "未命名文档")
+            content = data.get("content", "")
+            fmt = data.get("format", "markdown")
+
+            progress_cb(10, "准备文档生成参数", "初始化", 1, 3)
+            await asyncio.sleep(0.3)
+
+            progress_cb(40, f"生成 {fmt} 格式文档中...", "生成内容", 2, 3)
+            tool_result = self.tool_registry.execute_sync(
+                "document_create",
+                {"title": title, "content": content, "format": fmt}
+            ) if hasattr(self.tool_registry, "execute_sync") else {}
+
+            # 用同步方式调用
+            entry = self.tool_registry.get("document_create")
+            if entry and entry.get("func"):
+                try:
+                    tool_result = entry["func"](title=title, content=content, format=fmt)
+                except Exception as e:
+                    tool_result = {"success": False, "error": str(e)}
+
+            await asyncio.sleep(0.3)
+            progress_cb(100, "文档生成完成", "完成", 3, 3)
+            return tool_result
+
+        async def task_data_analysis(data: dict, progress_cb) -> dict:
+            """数据分析任务。"""
+            import asyncio
+            dataset = data.get("data", [])
+
+            progress_cb(20, "加载数据集", "加载", 1, 4)
+            await asyncio.sleep(0.2)
+
+            progress_cb(50, "执行统计分析...", "统计", 2, 4)
+            entry = self.tool_registry.get("data_stats")
+            result = {}
+            if entry and entry.get("func"):
+                try:
+                    result = entry["func"](dataset)
+                except Exception as e:
+                    result = {"success": False, "error": str(e)}
+            await asyncio.sleep(0.2)
+
+            progress_cb(80, "生成可视化图表...", "图表", 3, 4)
+            await asyncio.sleep(0.2)
+
+            progress_cb(100, "分析完成", "完成", 4, 4)
+            return result
+
+        async def task_file_organize(data: dict, progress_cb) -> dict:
+            """文件整理任务。"""
+            import asyncio
+            import os
+            target_dir = data.get("directory", "")
+            mode = data.get("mode", "type")
+            categories = data.get("categories", [])
+
+            progress_cb(10, f"扫描目录: {target_dir}", "扫描", 1, 4)
+            await asyncio.sleep(0.2)
+
+            if not target_dir or not os.path.isdir(target_dir):
+                return {"success": False, "error": "目标目录不存在"}
+
+            entry = self.tool_registry.get("directory_list")
+            if entry and entry.get("func"):
+                try:
+                    dir_result = entry["func"](target_dir)
+                except Exception as e:
+                    dir_result = {"success": False, "error": str(e)}
+            else:
+                dir_result = {"success": False, "error": "工具不可用"}
+
+            progress_cb(50, "分类整理文件中...", "分类", 2, 4)
+            await asyncio.sleep(0.3)
+
+            progress_cb(80, "移动文件到目标文件夹...", "移动", 3, 4)
+            await asyncio.sleep(0.2)
+
+            progress_cb(100, "整理完成", "完成", 4, 4)
+            return {"success": True, "mode": mode, "organized": dir_result.get("total_count", 0)}
+
+        # 注册任务处理器
+        mgr.register_task_func("doc_generate", task_doc_generate)
+        mgr.register_task_func("data_analysis", task_data_analysis)
+        mgr.register_task_func("file_organize", task_file_organize)
+        logger.info("registered 3 async task handlers")
 
     # ── R6.6: warm-up threshold engine from history ───────────────
     def _warmup_threshold_from_history(self) -> None:

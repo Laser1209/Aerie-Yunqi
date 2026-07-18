@@ -66,6 +66,10 @@ class Pipeline:
         trace = self.cognition.begin(msg.user_id, msg.source, msg.content)
         route_mode = self.router.route(msg.user_id)
 
+        # v13.9: force_full 强制启用 FULL 模式（Web UI 本地用户默认拥有完整能力）
+        if force_full:
+            route_mode = "FULL"
+
         # v13.9: BASIC 模式走轻量链路，不再完全跳过
         # 保留情绪 + LLM + 后处理 + 持久化，跳过工具 + 自进化
         if route_mode == "BASIC" and not force_full:

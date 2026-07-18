@@ -61,7 +61,7 @@ from core.persona_hub import get_persona_manager
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Aerie · 云栖", version="13.9.1")
+app = FastAPI(title="Aerie · 云栖", version="13.9.2")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -104,6 +104,25 @@ def _get_computer_controller():
     return _computer_controller
 
 
+_permission_manager = None
+
+
+def _get_permission_manager():
+    """获取共享的 FineGrainedPermissionManager 实例。"""
+    global _permission_manager
+    if _permission_manager is None:
+        try:
+            comp = get_companion()
+            if comp and hasattr(comp, "permission_manager") and comp.permission_manager:
+                _permission_manager = comp.permission_manager
+        except Exception:
+            pass
+        if _permission_manager is None:
+            from core.permission_manager import FineGrainedPermissionManager
+            _permission_manager = FineGrainedPermissionManager()
+    return _permission_manager
+
+
 # ── Health ──────────────────────────────────────────
 
 @app.get("/api/health")
@@ -117,7 +136,7 @@ async def health(request: Request) -> dict:
     return {
         "status": "ok",
         "app": "Aerie · 云栖",
-        "version": "13.0.0",
+        "version": "13.9.2",
         "uptime_seconds": uptime,
         "qq_connected": qq_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
@@ -1158,6 +1177,281 @@ async def computer_control_reject(approval_id: str) -> dict:
         return JSONResponse({"error": "approval not found"}, status_code=404)
     except Exception as e:
         logger.exception("reject error")
+        return {"error": str(e)}
+
+
+# ── Fine-Grained Permission Manager (v13.9) ───────────
+
+@app.get("/api/permissions/config")
+async def permissions_get_config() -> dict:
+    """获取细粒度权限配置。"""
+    try:
+        pm = _get_permission_manager()
+        cfg = pm.config
+        return {
+            "config": cfg.to_dict(),
+            "authorized_dirs": pm.list_authorized_dirs(),
+        }
+    except Exception as e:
+        logger.exception("permissions_get_config error")
+        return {"error": str(e)}
+
+
+@app.put("/api/permissions/config")
+async def permissions_update_config(request: Request) -> dict:
+    """更新细粒度权限配置。"""
+    try:
+        body = await request.json()
+        pm = _get_permission_manager()
+        new_cfg = pm.update_config(body)
+        emit("permissions_config_changed", new_cfg.to_dict())
+        return {"status": "ok", "config": new_cfg.to_dict()}
+    except Exception as e:
+        logger.exception("permissions_update_config error")
+        return {"error": str(e)}
+
+
+@app.get("/api/permissions/dirs")
+async def permissions_list_dirs() -> dict:
+    """获取授权目录列表。"""
+    try:
+        pm = _get_permission_manager()
+        return {"dirs": pm.list_authorized_dirs()}
+    except Exception as e:
+        logger.exception("permissions_list_dirs error")
+        return {"error": str(e)}
+
+
+@app.post("/api/permissions/dirs")
+async def permissions_add_dir(request: Request) -> dict:
+    """添加授权目录。"""
+    try:
+        body = await request.json()
+        dir_path = body.get("path", "")
+        if not dir_path:
+            return JSONResponse({"error": "path is required"}, status_code=400)
+        pm = _get_permission_manager()
+        ok = pm.add_authorized_dir(dir_path)
+        if ok:
+            emit("permissions_dirs_changed", {"action": "add", "path": dir_path})
+            return {"status": "ok", "dirs": pm.list_authorized_dirs()}
+        return JSONResponse({"error": "无法添加该目录（系统路径或不存在）"}, status_code=400)
+    except Exception as e:
+        logger.exception("permissions_add_dir error")
+        return {"error": str(e)}
+
+
+@app.delete("/api/permissions/dirs")
+async def permissions_remove_dir(path: str = "") -> dict:
+    """移除授权目录。"""
+    try:
+        if not path:
+            return JSONResponse({"error": "path is required"}, status_code=400)
+        pm = _get_permission_manager()
+        ok = pm.remove_authorized_dir(path)
+        if ok:
+            emit("permissions_dirs_changed", {"action": "remove", "path": path})
+            return {"status": "ok", "dirs": pm.list_authorized_dirs()}
+        return JSONResponse({"error": "目录不在白名单中"}, status_code=404)
+    except Exception as e:
+        logger.exception("permissions_remove_dir error")
+        return {"error": str(e)}
+
+
+@app.post("/api/permissions/check")
+async def permissions_check(request: Request) -> dict:
+    """权限检查接口。"""
+    try:
+        from core.permission_manager import OperationType
+        body = await request.json()
+        operation_str = body.get("operation", "")
+        target_path = body.get("path", "")
+        batch_count = int(body.get("batch_count", 1))
+        try:
+            operation = OperationType(operation_str)
+        except ValueError:
+            return JSONResponse({"error": f"未知操作类型: {operation_str}"}, status_code=400)
+        pm = _get_permission_manager()
+        result = pm.check(operation, target_path, batch_count)
+        return result.to_dict()
+    except Exception as e:
+        logger.exception("permissions_check error")
+        return {"error": str(e)}
+
+
+@app.get("/api/permissions/audit")
+async def permissions_audit_log(limit: int = Query(default=50, ge=1, le=200)) -> dict:
+    """获取权限审计日志。"""
+    try:
+        pm = _get_permission_manager()
+        return {"logs": pm.get_audit_log(limit=limit)}
+    except Exception as e:
+        logger.exception("permissions_audit_log error")
+        return {"error": str(e)}
+
+
+@app.post("/api/permissions/revoke_all")
+async def permissions_revoke_all() -> dict:
+    """一键撤销所有非必要权限。"""
+    try:
+        pm = _get_permission_manager()
+        pm.revoke_all()
+        emit("permissions_config_changed", pm.config.to_dict())
+        return {"status": "ok", "config": pm.config.to_dict()}
+    except Exception as e:
+        logger.exception("permissions_revoke_all error")
+        return {"error": str(e)}
+
+
+# ── Async Task Manager (v13.9) ───────────────────────
+
+def _get_async_task_manager():
+    """获取共享的异步任务管理器实例。"""
+    try:
+        from core.companion import get_companion
+        comp = get_companion()
+        if comp and hasattr(comp, "async_task_manager") and comp.async_task_manager:
+            return comp.async_task_manager
+    except Exception:
+        pass
+    from core.async_task_manager import AsyncTaskManager
+    return AsyncTaskManager()
+
+
+@app.get("/api/tasks")
+async def tasks_list(
+    status: str = "",
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict:
+    """获取任务列表。"""
+    try:
+        mgr = _get_async_task_manager()
+        from core.async_task_manager import AsyncTaskStatus
+        status_filter = None
+        if status:
+            try:
+                status_filter = AsyncTaskStatus(status)
+            except ValueError:
+                pass
+        tasks = mgr.list_tasks(status=status_filter, limit=limit)
+        return {
+            "tasks": [t.to_dict() for t in tasks],
+            "stats": mgr.stats(),
+        }
+    except Exception as e:
+        logger.exception("tasks_list error")
+        return {"error": str(e)}
+
+
+@app.get("/api/tasks/stats")
+async def tasks_stats() -> dict:
+    """获取任务统计。"""
+    try:
+        mgr = _get_async_task_manager()
+        return {"stats": mgr.stats()}
+    except Exception as e:
+        logger.exception("tasks_stats error")
+        return {"error": str(e)}
+
+
+@app.get("/api/tasks/{task_id}")
+async def tasks_get(task_id: str) -> dict:
+    """获取单个任务详情。"""
+    try:
+        mgr = _get_async_task_manager()
+        task = mgr.get_task(task_id)
+        if not task:
+            return JSONResponse({"error": "任务不存在"}, status_code=404)
+        return {"task": task.to_dict()}
+    except Exception as e:
+        logger.exception("tasks_get error")
+        return {"error": str(e)}
+
+
+@app.post("/api/tasks")
+async def tasks_submit(request: Request) -> dict:
+    """提交异步任务。"""
+    try:
+        body = await request.json()
+        name = body.get("name", "未命名任务")
+        description = body.get("description", "")
+        task_type = body.get("task_type", "generic")
+        priority_str = body.get("priority", "medium")
+        task_data = body.get("data", {})
+
+        from core.async_task_manager import TaskPriority
+        priority_map = {
+            "high": TaskPriority.HIGH,
+            "medium": TaskPriority.MEDIUM,
+            "low": TaskPriority.LOW,
+        }
+        priority = priority_map.get(priority_str.lower(), TaskPriority.MEDIUM)
+
+        mgr = _get_async_task_manager()
+        # 确保管理器已启动
+        if not mgr._running:
+            mgr.start()
+
+        task = mgr.submit_task(
+            name=name,
+            description=description,
+            task_type=task_type,
+            priority=priority,
+            task_data=task_data,
+        )
+        emit("task_submitted", task.to_dict())
+        return {"task": task.to_dict()}
+    except Exception as e:
+        logger.exception("tasks_submit error")
+        return {"error": str(e)}
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def tasks_cancel(task_id: str) -> dict:
+    """取消任务。"""
+    try:
+        mgr = _get_async_task_manager()
+        ok = mgr.cancel_task(task_id)
+        if ok:
+            emit("task_cancelled", {"task_id": task_id})
+            return {"status": "ok", "cancelled": True}
+        return JSONResponse({"error": "无法取消该任务"}, status_code=400)
+    except Exception as e:
+        logger.exception("tasks_cancel error")
+        return {"error": str(e)}
+
+
+@app.post("/api/tasks/{task_id}/retry")
+async def tasks_retry(task_id: str) -> dict:
+    """重试失败的任务。"""
+    try:
+        mgr = _get_async_task_manager()
+        new_task = mgr.retry_task(task_id)
+        if new_task:
+            emit("task_submitted", new_task.to_dict())
+            return {"task": new_task.to_dict()}
+        return JSONResponse({"error": "无法重试该任务"}, status_code=400)
+    except Exception as e:
+        logger.exception("tasks_retry error")
+        return {"error": str(e)}
+
+
+@app.get("/api/tasks/{task_id}/progress")
+async def tasks_progress(task_id: str) -> dict:
+    """获取任务进度历史。"""
+    try:
+        mgr = _get_async_task_manager()
+        task = mgr.get_task(task_id)
+        if not task:
+            return JSONResponse({"error": "任务不存在"}, status_code=404)
+        return {
+            "task_id": task_id,
+            "progress": task.progress,
+            "current_step": task.current_step,
+            "history": [p.to_dict() for p in task.progress_history[-20:]],
+        }
+    except Exception as e:
+        logger.exception("tasks_progress error")
         return {"error": str(e)}
 
 

@@ -68,18 +68,44 @@ class ToolRegistry:
         The provider hint is appended to the tool description as
         ``[provider=<hint>]`` so the LLM is aware of which model will
         actually execute the call (for routing-aware planning).
+
+        Supports two schema formats:
+        - New format: {"type": "function", "function": {"name", "description", "parameters"}}
+        - Old format: {"description": "...", "parameters": {...}}
         """
         result = []
         for name, t in self._tools.items():
             schema = deepcopy(t["schema"])
-            fn = schema.get("function", {}) if isinstance(schema, dict) else {}
-            desc = fn.get("description", "") or ""
-            hint = t["provider_hint"]
-            if hint and hint != "text":
-                fn["description"] = f"{desc} [provider={hint}]".strip()
+            if not isinstance(schema, dict):
+                continue
+
+            # Detect format: new (has "function" key) vs old (direct description+parameters)
+            if "function" in schema and isinstance(schema["function"], dict):
+                # New format
+                fn = schema["function"]
+                fn["name"] = fn.get("name") or name
+                desc = fn.get("description", "") or ""
+                hint = t["provider_hint"]
+                if hint and hint != "text":
+                    fn["description"] = f"{desc} [provider={hint}]".strip()
+                if "type" not in schema:
+                    schema["type"] = "function"
             else:
-                fn["description"] = desc
-            schema["function"] = fn
+                # Old format: wrap into standard OpenAI function schema
+                desc = schema.get("description", "") or ""
+                params = schema.get("parameters", {}) or {}
+                hint = t["provider_hint"]
+                if hint and hint != "text":
+                    desc = f"{desc} [provider={hint}]".strip()
+                schema = {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": desc,
+                        "parameters": params,
+                    },
+                }
+
             result.append(schema)
         return result
 

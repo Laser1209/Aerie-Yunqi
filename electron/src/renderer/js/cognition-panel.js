@@ -69,6 +69,7 @@ class CognitionPanel {
     this._bindV2Tabs();        // v2: 5 tab navigation
     this._bindV2Refresh();     // v2: refresh buttons on capability tabs
     this._bindQQWhitelist();   // v13.9: QQ whitelist management
+    this._bindCCLevelButtons(); // v13.9: computer control permission level buttons
     this._loadHistory();
     this._loadStats();
     this._loadPendingProposals();
@@ -1043,6 +1044,7 @@ class CognitionPanel {
       el.addEventListener("click", () => {
         const level = el.dataset.level;
         if (!level) return;
+        this._updateCCLevelUI(level);
         this._setCCLevel(level.toLowerCase());
       });
     });
@@ -1067,8 +1069,7 @@ class CognitionPanel {
       const r = await window.aerie.api.request({
         method: "PUT",
         path: "/api/computer_control/level",
-        body: JSON.stringify({ level }),
-        headers: { "Content-Type": "application/json" },
+        body: { level },
       });
       if (r.data && r.data.status === "ok") {
         this._updateCCLevelUI(r.data.level || level);

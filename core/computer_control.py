@@ -197,7 +197,7 @@ class AuditLogger:
 class PermissionManager:
     """权限管理器"""
 
-    def __init__(self, level: PermissionLevel = PermissionLevel.VIEW_ONLY):
+    def __init__(self, level: PermissionLevel = PermissionLevel.STANDARD):
         self._level = level
 
     @property
@@ -1009,7 +1009,7 @@ class ComputerController:
 
     def __init__(
         self,
-        permission_level: PermissionLevel = PermissionLevel.VIEW_ONLY,
+        permission_level: PermissionLevel = PermissionLevel.STANDARD,
         audit_log_dir: str = "data/audit",
         shell_timeout: int = 30,
     ):

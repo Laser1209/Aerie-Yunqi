@@ -184,7 +184,13 @@ function apiRequest(opts) {
     req.on("error", (err) => reject(err));
     req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
     if (opts.body) {
-      req.write(isRaw ? String(opts.body) : JSON.stringify(opts.body));
+      if (isRaw) {
+        req.write(String(opts.body));
+      } else if (typeof opts.body === "string") {
+        req.write(opts.body);
+      } else {
+        req.write(JSON.stringify(opts.body));
+      }
     }
     req.end();
   });
@@ -261,11 +267,13 @@ function createDynamicIsland() {
   dynamicIsland.webContents.on("did-finish-load", () => {
     startIslandPenetrationPolling();
     startSystemStatusPolling();
+    _startMediaPolling();
   });
 
   dynamicIsland.on("closed", () => {
     stopIslandPenetrationPolling();
     stopSystemStatusPolling();
+    _stopMediaPolling();
     dynamicIsland = null;
   });
 }
@@ -630,7 +638,7 @@ ipcMain.handle("island:get-system-status", async () => {
   return { ok: true, data: _systemStatus };
 });
 
-// Media control (mock for now, can integrate with Windows SMTC later)
+// Media control (Windows SMTC integration)
 let _mediaState = {
   playing: false,
   title: "",
@@ -638,13 +646,125 @@ let _mediaState = {
   progress: 0,
   duration: 0,
 };
+let _mediaPollInterval = null;
+
+const _SMTC_PS1 = `
+try {
+    $ErrorActionPreference = 'Stop'
+    $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSession, Windows.Media.Control, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus, Windows.Media.Control, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties, Windows.Media.Control, ContentType = WindowsRuntime]
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    function Await-WinRtAsync($asyncOp, $resultType) {
+        $asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+            Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 } |
+            Where-Object { $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } |
+            Select-Object -First 1
+        $asTask = $asTaskGeneric.MakeGenericMethod($resultType)
+        $task = $asTask.Invoke($null, @($asyncOp))
+        $task.Wait() | Out-Null
+        return $task.Result
+    }
+    $managerOp = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()
+    $manager = Await-WinRtAsync $managerOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+    $session = $manager.GetCurrentSession()
+    if ($session -ne $null) {
+        $mediaOp = $session.TryGetMediaPropertiesAsync()
+        $mediaProps = Await-WinRtAsync $mediaOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+        $timelineProps = $session.GetTimelineProperties()
+        $playbackInfo = $session.GetPlaybackInfo()
+        $playing = $playbackInfo.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing
+        [PSCustomObject]@{
+            playing = $playing
+            title = $mediaProps.Title
+            artist = $mediaProps.Artist
+            position = [int][Math]::Round($timelineProps.Position.TotalSeconds)
+            duration = [int][Math]::Round($timelineProps.EndTime.TotalSeconds)
+        } | ConvertTo-Json -Compress
+    } else {
+        '{"playing":false,"title":"","artist":"","position":0,"duration":0}'
+    }
+} catch {
+    '{"playing":false,"title":"","artist":"","position":0,"duration":0}'
+}
+`;
+
+function _fetchMediaState() {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") {
+      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0 });
+      return;
+    }
+    const ps = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-Command", _SMTC_PS1,
+    ]);
+    let stdout = "";
+    ps.stdout.on("data", (d) => (stdout += d.toString()));
+    ps.stderr.on("data", () => {});
+    ps.on("close", () => {
+      try {
+        const data = JSON.parse(stdout.trim());
+        resolve({
+          playing: !!data.playing,
+          title: data.title || "",
+          artist: data.artist || "",
+          progress: data.position || 0,
+          duration: data.duration || 0,
+        });
+      } catch {
+        resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0 });
+      }
+    });
+    ps.on("error", () => {
+      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0 });
+    });
+  });
+}
+
+function _startMediaPolling() {
+  if (_mediaPollInterval) return;
+  _mediaPollInterval = setInterval(async () => {
+    const state = await _fetchMediaState();
+    const changed =
+      state.playing !== _mediaState.playing ||
+      state.title !== _mediaState.title ||
+      state.artist !== _mediaState.artist;
+    _mediaState = state;
+    if (changed && dynamicIsland && !dynamicIsland.isDestroyed()) {
+      dynamicIsland.webContents.send("island:media-update", _mediaState);
+    }
+  }, 3000);
+}
+
+function _stopMediaPolling() {
+  if (_mediaPollInterval) {
+    clearInterval(_mediaPollInterval);
+    _mediaPollInterval = null;
+  }
+}
 
 ipcMain.handle("island:media-get-state", async () => {
-  return { ok: true, data: _mediaState };
+  const state = await _fetchMediaState();
+  _mediaState = state;
+  return { ok: true, data: state };
 });
 
 ipcMain.handle("island:media-play-pause", async () => {
-  _mediaState.playing = !_mediaState.playing;
+  if (process.platform === "win32") {
+    try {
+      const ps = spawn("powershell.exe", [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command", _buildMediaControlScript("PlayPause"),
+      ]);
+      ps.on("error", () => {});
+    } catch (_) {}
+  }
+  const state = await _fetchMediaState();
+  _mediaState = state;
   if (dynamicIsland && !dynamicIsland.isDestroyed()) {
     dynamicIsland.webContents.send("island:media-update", _mediaState);
   }
@@ -652,7 +772,18 @@ ipcMain.handle("island:media-play-pause", async () => {
 });
 
 ipcMain.handle("island:media-next", async () => {
-  _mediaState.progress = 0;
+  if (process.platform === "win32") {
+    try {
+      const ps = spawn("powershell.exe", [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command", _buildMediaControlScript("Next"),
+      ]);
+      ps.on("error", () => {});
+    } catch (_) {}
+  }
+  const state = await _fetchMediaState();
+  _mediaState = state;
   if (dynamicIsland && !dynamicIsland.isDestroyed()) {
     dynamicIsland.webContents.send("island:media-update", _mediaState);
   }
@@ -660,12 +791,72 @@ ipcMain.handle("island:media-next", async () => {
 });
 
 ipcMain.handle("island:media-prev", async () => {
-  _mediaState.progress = 0;
+  if (process.platform === "win32") {
+    try {
+      const ps = spawn("powershell.exe", [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command", _buildMediaControlScript("Previous"),
+      ]);
+      ps.on("error", () => {});
+    } catch (_) {}
+  }
+  const state = await _fetchMediaState();
+  _mediaState = state;
   if (dynamicIsland && !dynamicIsland.isDestroyed()) {
     dynamicIsland.webContents.send("island:media-update", _mediaState);
   }
   return { ok: true, data: _mediaState };
 });
+
+function _buildMediaControlScript(action) {
+  return `
+try {
+    $ErrorActionPreference = 'Stop'
+    $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSession, Windows.Media.Control, ContentType = WindowsRuntime]
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    function Await-WinRtAsync($asyncOp, $resultType) {
+        $asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+            Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 } |
+            Where-Object { $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } |
+            Select-Object -First 1
+        $asTask = $asTaskGeneric.MakeGenericMethod($resultType)
+        $task = $asTask.Invoke($null, @($asyncOp))
+        $task.Wait() | Out-Null
+        return $task.Result
+    }
+    function Await-WinRtAction($asyncOp) {
+        $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+            Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 } |
+            Where-Object { $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' } |
+            Select-Object -First 1
+        $task = $asTask.Invoke($null, @($asyncOp))
+        $task.Wait() | Out-Null
+    }
+    $managerOp = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()
+    $manager = Await-WinRtAsync $managerOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+    $session = $manager.GetCurrentSession()
+    if ($session -ne $null) {
+        switch ('${action}') {
+            'PlayPause' {
+                $playback = $session.GetPlaybackInfo()
+                if ($playback.PlaybackStatus -eq 'Playing') {
+                    Await-WinRtAction $session.TryPauseAsync()
+                } else {
+                    Await-WinRtAction $session.TryPlayAsync()
+                }
+            }
+            'Next' { Await-WinRtAction $session.TrySkipNextAsync() }
+            'Previous' { Await-WinRtAction $session.TrySkipPreviousAsync() }
+        }
+    }
+    'ok'
+} catch {
+    'error'
+}
+`;
+}
 
 // R7.0: multipart upload IPC. The renderer cannot use file:// fetch
 // (CORS). This handler receives the raw bytes (as a plain Array) plus

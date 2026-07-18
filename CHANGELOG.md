@@ -9,6 +9,83 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [13.9.2] - 2026-07-18
+
+> **v13.9 第三批升级 / Batch 3: 权限体系 + 工具矩阵 + 任务执行 + 异步调度**
+> 四大核心模块全部落地，从办公助手升级为自主办事 Agent
+
+### ✨ Added / 新增
+
+#### 权限体系重做（对标豆包双层授权）
+- **细粒度权限管理器** ([permission_manager.py](file:///e:/Agent_reply/core/permission_manager.py))
+  - 5 大类权限：文件读取 / 文件写入 / 文件删除 / 界面控制 / 系统操作
+  - 目录级白名单：默认授权文档/下载/桌面/AerieOffice 四个目录
+  - 系统路径自动拦截：Windows / Program Files / 注册表等永久禁止
+  - 高危操作二次确认：删除、批量操作、shell 命令均需用户确认
+  - 信任模式：可跳过二次确认（带风险提示）
+  - 一键撤销：立即关闭所有非必要权限
+  - 完整审计日志：500 条操作记录可追溯
+  - 旧版兼容：三档权限（view_only/standard/full）仍可使用
+
+#### 办公工具矩阵扩充（7 → 26 个）
+- **文件管理类**：目录遍历、文件复制、文件移动、文件重命名、创建目录
+- **文档处理类**：Word 文档生成、CSV 表格生成、文档格式转换
+- **系统操作类**：系统信息查询、进程列表、打开应用
+- **数据分析类**：数据统计、数据过滤、数据排序、SVG 图表生成（柱状/折线/饼图）
+- **网络工具类**：网页抓取、天气查询、多语言翻译、GitHub 代码搜索
+- 所有工具均带 OpenAI Function Calling Schema，可直接被 LLM 调用
+
+#### 任务执行引擎
+- **TaskExecutor 任务执行器** ([task_executor.py](file:///e:/Agent_reply/core/task_executor.py))
+  - 步骤级执行：按顺序执行 TaskPlanner 规划的每一步
+  - 失败自动重试：单步最多重试 3 次，逐步增加等待时间
+  - 进度实时追踪：每步状态、耗时、结果完整记录
+  - 执行结果汇总：自动生成执行总结报告
+  - 可扩展处理器：支持注册自定义 step handler
+
+#### 异步任务系统
+- **AsyncTaskManager 异步任务管理器** ([async_task_manager.py](file:///e:/Agent_reply/core/async_task_manager.py))
+  - 任务队列：基于 asyncio 的调度队列，支持优先级（高/中/低）
+  - 并发控制：默认同时最多 3 个任务
+  - 实时进度：进度百分比 + 当前步骤 + 已用时间 + 预计剩余
+  - 任务管理：运行中/历史记录/取消/重试，完整生命周期管理
+  - WebSocket 事件：task_submitted / task_cancelled / 进度更新
+  - 进度回调机制：支持注册多个进度监听器
+  - 历史记录：最多保留 100 条任务记录
+
+### 🔌 API 接口
+
+#### 权限管理 API
+- `GET /api/permissions/config` 获取权限配置
+- `PUT /api/permissions/config` 更新权限配置
+- `GET /api/permissions/dirs` 列出授权目录
+- `POST /api/permissions/dirs` 添加授权目录
+- `DELETE /api/permissions/dirs` 移除授权目录
+- `POST /api/permissions/check` 权限检查
+- `GET /api/permissions/audit` 审计日志
+- `POST /api/permissions/revoke_all` 一键撤销所有权限
+
+#### 异步任务 API
+- `GET /api/tasks` 任务列表（支持状态过滤）
+- `GET /api/tasks/stats` 任务统计
+- `GET /api/tasks/{id}` 任务详情
+- `POST /api/tasks` 提交任务
+- `POST /api/tasks/{id}/cancel` 取消任务
+- `POST /api/tasks/{id}/retry` 重试任务
+- `GET /api/tasks/{id}/progress` 进度历史
+
+### 🧪 Testing / 测试
+- 综合测试套件：7 大类测试全部通过
+- 权限管理器：9 项测试（默认配置/目录授权/系统拦截/二次确认/一键撤销等）
+- 办公工具：26 个工具全部注册成功，OpenAI Schema 完整
+- 任务规划：7 项测试（触发判断/分类/创建/进度/动态调整）
+- 任务执行：步骤级执行 + 重试 + 结果汇总全部正常
+- 异步任务：提交/执行/取消/列表，全流程通过
+- 数据分析：统计/过滤/排序/图表，4 项工具验证通过
+- 文件管理：列目录/创建/复制/重命名，全部正常
+
+---
+
 ## [13.9.1] - 2026-07-18
 
 > **v13.9 第二批升级 / Batch 2: 全图标矢量化 + 任务规划引擎 + 文件整理模板**

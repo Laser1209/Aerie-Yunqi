@@ -330,16 +330,20 @@ class QQClient:
             return False
 
         # v13.9: 过滤 text 类型 segment 中的 thought/action 标签
+        # 非 text 类型（image/face/reply 等）一律保留，不做过滤
         cleaned_segments = []
+        has_usable_content = False
         for seg in segments:
             if seg.get("type") == "text" and "text" in (seg.get("data") or {}):
                 cleaned = strip_thought_action_tags(seg["data"]["text"])
+                cleaned_segments.append({**seg, "data": {**seg["data"], "text": cleaned}})
                 if cleaned:
-                    cleaned_segments.append({**seg, "data": {**seg["data"], "text": cleaned}})
+                    has_usable_content = True
             else:
                 cleaned_segments.append(seg)
-        if not cleaned_segments:
-            logger.warning("QQ segments send: all empty after stripping tags, skip")
+                has_usable_content = True
+        if not has_usable_content:
+            logger.warning("QQ segments send: no usable content after stripping tags, skip")
             return False
 
         payload = {

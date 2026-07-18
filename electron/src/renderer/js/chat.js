@@ -354,6 +354,16 @@ class ChatManager {
           attachments,
         },
       });
+      if (resp.data && resp.data.user_msg_id) {
+        const realId = resp.data.user_msg_id;
+        const tempEl = this._el.messages.querySelector(`[data-id="${tempId}"]`);
+        if (tempEl) {
+          tempEl.setAttribute("data-id", realId);
+          tempEl.setAttribute("data-msg-id", realId);
+        }
+        this._seenIds.add(realId);
+        if (realId > this._sinceId) this._sinceId = realId;
+      }
       if (resp.data && resp.data.reply) {
         // Server reply already pushed via IPC; this is a fallback
       }

@@ -18,10 +18,10 @@
     "notes": "她今天又陪了我一整天，说点暖心的话",
     "due_time": null,
     "estimated_minutes": 20,
-    "completed": false,
-    "completed_at": null,
+    "completed": true,
+    "completed_at": "2026-07-18T13:51:53.842679",
     "created_at": "2026-07-18T08:10:07.810196",
-    "updated_at": "2026-07-18T08:10:07.810196"
+    "updated_at": "2026-07-18T13:51:53.842684"
   },
   {
     "id": "4e9ec034-e918-4929-ba97-48f0bd333c92",

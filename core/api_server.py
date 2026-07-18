@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v12.0.1 — HTTP API server (FastAPI + uvicorn).
+"""Aerie · 云栖 v13.0.0 — HTTP API server (FastAPI + uvicorn).
 
 Routes:
   GET  /api/health          — heartbeat + QQ WS status
@@ -57,10 +57,11 @@ from core.computer_control import ComputerController, PermissionLevel
 from core.file_organizer import FileOrganizer
 from core.doc_writer import DocWriter
 from core.calendar_manager import CalendarManager
+from core.persona_hub import get_persona_manager
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Aerie · 云栖", version="12.1.0")
+app = FastAPI(title="Aerie · 云栖", version="13.0.0")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -83,6 +84,7 @@ _computer_controller = ComputerController()
 _file_organizer = FileOrganizer()
 _doc_writer = DocWriter()
 _calendar = CalendarManager(_db)
+_persona_mgr = get_persona_manager()
 
 
 # ── Health ──────────────────────────────────────────
@@ -98,7 +100,7 @@ async def health(request: Request) -> dict:
     return {
         "status": "ok",
         "app": "Aerie · 云栖",
-        "version": "12.1.0",
+        "version": "13.0.0",
         "uptime_seconds": uptime,
         "qq_connected": qq_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
@@ -1088,6 +1090,318 @@ async def computer_control_logs(limit: int = Query(default=50, ge=1, le=200)) ->
         return {"error": str(e)}
 
 
+# ── Approval Flow ───────────────────────────────────
+
+@app.get("/api/computer_control/approvals/pending")
+async def computer_control_approvals_pending() -> dict:
+    """Get pending approval requests."""
+    try:
+        approvals = _computer_controller.get_pending_approvals()
+        return {"approvals": approvals, "count": len(approvals)}
+    except Exception as e:
+        logger.exception("approvals_pending error")
+        return {"error": str(e)}
+
+
+@app.post("/api/computer_control/approvals/{approval_id}/approve")
+async def computer_control_approve(approval_id: str) -> dict:
+    """Approve a pending action."""
+    try:
+        result = _computer_controller.approve_action(approval_id)
+        if result:
+            emit("computer_control_approval_updated", {
+                "id": approval_id,
+                "status": "approved",
+            })
+            return {"status": "ok", "approved": True}
+        return JSONResponse({"error": "approval not found"}, status_code=404)
+    except Exception as e:
+        logger.exception("approve error")
+        return {"error": str(e)}
+
+
+@app.post("/api/computer_control/approvals/{approval_id}/reject")
+async def computer_control_reject(approval_id: str) -> dict:
+    """Reject a pending action."""
+    try:
+        result = _computer_controller.reject_action(approval_id)
+        if result:
+            emit("computer_control_approval_updated", {
+                "id": approval_id,
+                "status": "rejected",
+            })
+            return {"status": "ok", "rejected": True}
+        return JSONResponse({"error": "approval not found"}, status_code=404)
+    except Exception as e:
+        logger.exception("reject error")
+        return {"error": str(e)}
+
+
+# ── Office Mode (v13.0) ────────────────────────────
+
+@app.get("/api/office/mode")
+async def office_mode_get() -> dict:
+    """Get current office mode and context."""
+    try:
+        from core.office_mode import get_office_mode_manager
+        mgr = get_office_mode_manager()
+        ctx = mgr.get_context()
+        return {
+            "mode": ctx.mode.value,
+            "detected_mode": ctx.detected_mode.value if ctx.detected_mode else None,
+            "is_office": ctx.is_office_mode(),
+            "task_type": ctx.task_type.value if ctx.task_type else None,
+            "task_keywords": ctx.task_keywords,
+            "confidence": ctx.confidence,
+            "preferred_provider": mgr.get_preferred_provider(),
+        }
+    except Exception as e:
+        logger.exception("office mode get error")
+        return {"error": str(e)}
+
+
+@app.put("/api/office/mode")
+async def office_mode_set(request: Request) -> dict:
+    """Set office mode: chat / office / auto."""
+    try:
+        body = await request.json()
+        mode_str = (body.get("mode") or "auto").lower()
+        valid_modes = {"chat", "office", "auto"}
+        if mode_str not in valid_modes:
+            return JSONResponse({"error": "invalid mode"}, status_code=400)
+
+        from core.office_mode import get_office_mode_manager
+        mgr = get_office_mode_manager()
+        mgr.set_mode(mode_str)
+
+        emit("office_mode_changed", {"mode": mode_str})
+        return {"status": "ok", "mode": mode_str}
+    except Exception as e:
+        logger.exception("office mode set error")
+        return {"error": str(e)}
+
+
+@app.post("/api/office/detect")
+async def office_mode_detect(request: Request) -> dict:
+    """Detect office mode from a message."""
+    try:
+        body = await request.json()
+        message = body.get("message", "") or ""
+        history = body.get("history") or []
+
+        from core.office_mode import get_office_mode_manager
+        mgr = get_office_mode_manager()
+        ctx = mgr.detect(message, history)
+
+        return {
+            "is_office": ctx.is_office_mode(),
+            "detected_mode": ctx.detected_mode.value if ctx.detected_mode else None,
+            "task_type": ctx.task_type.value if ctx.task_type else None,
+            "task_keywords": ctx.task_keywords,
+            "confidence": ctx.confidence,
+        }
+    except Exception as e:
+        logger.exception("office mode detect error")
+        return {"error": str(e)}
+
+
+@app.get("/api/office/device")
+async def office_device_info(request: Request) -> dict:
+    """Detect device type from User-Agent."""
+    try:
+        ua = request.headers.get("user-agent", "")
+        from core.office_mode import detect_device
+        device_info = detect_device(ua)
+        return device_info
+    except Exception as e:
+        logger.exception("device detect error")
+        return {"error": str(e)}
+
+
+# ── Response Validator ────────────────────────────
+
+@app.post("/api/validation/check")
+async def validation_check(request: Request) -> dict:
+    """校验回复文本的准确性与质量"""
+    try:
+        body = await request.json()
+        text = body.get("text", "") or ""
+        user_message = body.get("user_message", "") or ""
+        office_mode = bool(body.get("office_mode", False))
+        persona_style = body.get("persona_style", "warm")
+
+        from core.response_validator import get_response_validator
+        validator = get_response_validator()
+        result = validator.validate(
+            text,
+            user_message=user_message,
+            persona_style=persona_style,
+            office_mode=office_mode,
+        )
+
+        return {
+            "passed": result.passed,
+            "score": result.score,
+            "guard_score": result.guard_score,
+            "judge_score": result.judge_score,
+            "issues": [
+                {
+                    "code": i.code,
+                    "severity": i.severity.value,
+                    "message": i.message,
+                    "layer": i.layer,
+                    "details": i.details,
+                }
+                for i in result.issues
+            ],
+            "needs_revision": result.needs_revision,
+            "revision_suggestion": result.revision_suggestion,
+        }
+    except Exception as e:
+        logger.exception("validation check error")
+        return {"error": str(e)}
+
+
+@app.get("/api/validation/config")
+async def validation_config() -> dict:
+    """获取校验配置状态"""
+    try:
+        from core.response_validator import get_response_validator
+        validator = get_response_validator()
+        return {
+            "enabled": validator.enabled,
+            "guard_rules": [
+                "sensitive_content",
+                "professional_disclaimer",
+                "contradiction",
+                "exaggeration",
+            ],
+            "judge_dimensions": [
+                "length",
+                "relevance",
+                "tone_consistency",
+                "emotion_value",
+            ],
+        }
+    except Exception as e:
+        logger.exception("validation config error")
+        return {"error": str(e)}
+
+
+# ── Proactive Push ────────────────────────────
+
+@app.get("/api/proactive/status")
+async def proactive_status() -> dict:
+    """获取主动推送状态"""
+    try:
+        from core.push_event_engine import get_event_engine
+        engine = get_event_engine()
+        status = engine.get_status()
+
+        # 尝试获取 scheduler 状态
+        try:
+            from core.companion import get_companion
+            comp = get_companion()
+            if hasattr(comp, "push_scheduler") and comp.push_scheduler:
+                sched = comp.push_scheduler
+                status["scheduler"] = {
+                    "running": getattr(sched, "_running", False),
+                    "scene_count": len(getattr(sched, "scenes", {})),
+                    "daily_count": getattr(sched.policy, "daily_count", 0) if hasattr(sched, "policy") else 0,
+                }
+        except Exception:
+            pass
+
+        return status
+    except Exception as e:
+        logger.exception("proactive status error")
+        return {"error": str(e)}
+
+
+@app.get("/api/proactive/scenes")
+async def proactive_scenes() -> dict:
+    """获取所有推送场景列表"""
+    try:
+        from core.companion import get_companion
+        comp = get_companion()
+        scenes = {}
+        if hasattr(comp, "push_scheduler") and comp.push_scheduler:
+            sched = comp.push_scheduler
+            for name, cfg in getattr(sched, "scenes", {}).items():
+                scenes[name] = {
+                    "cron": cfg.get("cron"),
+                    "trigger": cfg.get("trigger"),
+                    "mood_aware": cfg.get("mood_aware", False),
+                    "exempt_quiet": cfg.get("exempt_quiet", False),
+                    "custom_dispatcher": cfg.get("custom_dispatcher"),
+                    "template": cfg.get("template", ""),
+                }
+        return {"scenes": scenes}
+    except Exception as e:
+        logger.exception("proactive scenes error")
+        return {"error": str(e)}
+
+
+@app.post("/api/proactive/trigger")
+async def proactive_trigger(request: Request) -> dict:
+    """手动触发推送场景"""
+    try:
+        body = await request.json()
+        scene = body.get("scene", "")
+
+        from core.companion import get_companion
+        comp = get_companion()
+        if hasattr(comp, "push_scheduler") and comp.push_scheduler:
+            success = await comp.push_scheduler.trigger_scene(scene)
+            return {"success": success, "scene": scene}
+        return {"success": False, "error": "scheduler not available"}
+    except Exception as e:
+        logger.exception("proactive trigger error")
+        return {"error": str(e)}
+
+
+@app.post("/api/proactive/toggle")
+async def proactive_toggle(request: Request) -> dict:
+    """开关主动推送"""
+    try:
+        body = await request.json()
+        enabled = bool(body.get("enabled", True))
+
+        from core.companion import get_companion
+        comp = get_companion()
+        if hasattr(comp, "push_scheduler") and comp.push_scheduler:
+            comp.push_scheduler.policy.enabled = enabled
+            return {"enabled": enabled}
+        return {"error": "scheduler not available"}
+    except Exception as e:
+        logger.exception("proactive toggle error")
+        return {"error": str(e)}
+
+
+@app.get("/api/proactive/events")
+async def proactive_events(limit: int = 20) -> dict:
+    """获取最近的事件历史"""
+    try:
+        from core.push_event_engine import get_event_engine
+        engine = get_event_engine()
+        history = engine.bus.get_history(limit=limit)
+        return {
+            "events": [
+                {
+                    "type": e.event_type.value,
+                    "source": e.source,
+                    "priority": e.priority,
+                    "timestamp": e.timestamp.isoformat(),
+                    "payload": e.payload,
+                }
+                for e in history
+            ]
+        }
+    except Exception as e:
+        logger.exception("proactive events error")
+        return {"error": str(e)}
+
+
 # ── File Organizer ──────────────────────────────────
 
 @app.get("/api/file_organizer/stats")
@@ -1592,6 +1906,160 @@ async def persona_avatar_get() -> Response:
             "Expires": "0",
         },
     )
+
+
+# ── v13.0: Persona Hub (人设中心) ──────────────────────
+
+
+@app.get("/api/persona/hub/list")
+async def persona_hub_list() -> dict:
+    """列出所有人设模板。"""
+    try:
+        personas = _persona_mgr.list_personas()
+        return {"status": "ok", "personas": personas, "active_id": _persona_mgr.get_active_id()}
+    except Exception as e:
+        logger.exception("persona hub list error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/persona/hub/{persona_id}")
+async def persona_hub_get(persona_id: str) -> dict:
+    """获取指定人设的完整配置。"""
+    try:
+        persona = _persona_mgr.get_persona(persona_id)
+        if not persona:
+            return JSONResponse({"error": "persona not found"}, status_code=404)
+        return {"status": "ok", "persona": persona}
+    except Exception as e:
+        logger.exception("persona hub get error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/persona/hub")
+async def persona_hub_create(request: Request) -> dict:
+    """创建新人设。"""
+    try:
+        body = await request.json()
+    except Exception as e:
+        return JSONResponse({"error": f"invalid json: {e}"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a dict"}, status_code=400)
+    try:
+        ok, msg = _persona_mgr.create_persona(body)
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=400)
+        return {"status": "ok", "persona_id": msg}
+    except Exception as e:
+        logger.exception("persona hub create error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.put("/api/persona/hub/{persona_id}")
+async def persona_hub_update(persona_id: str, request: Request) -> dict:
+    """更新人设配置。"""
+    try:
+        body = await request.json()
+    except Exception as e:
+        return JSONResponse({"error": f"invalid json: {e}"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a dict"}, status_code=400)
+    try:
+        ok, msg = _persona_mgr.update_persona(persona_id, body)
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=400)
+        return {"status": "ok", "persona_id": msg}
+    except Exception as e:
+        logger.exception("persona hub update error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.delete("/api/persona/hub/{persona_id}")
+async def persona_hub_delete(persona_id: str) -> dict:
+    """删除人设（内置人设不可删除）。"""
+    try:
+        ok, msg = _persona_mgr.delete_persona(persona_id)
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=400)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.exception("persona hub delete error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/persona/hub/{persona_id}/activate")
+async def persona_hub_activate(persona_id: str) -> dict:
+    """切换激活人设。"""
+    try:
+        ok, msg = _persona_mgr.switch_persona(persona_id)
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=400)
+        # 通知前端人设已切换
+        await emit("persona:changed", {"persona_id": persona_id})
+        return {"status": "ok", "active_id": msg}
+    except Exception as e:
+        logger.exception("persona hub activate error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/persona/hub/{persona_id}/export")
+async def persona_hub_export(persona_id: str):
+    """导出人设配置（JSON 下载）。"""
+    try:
+        data = _persona_mgr.export_persona(persona_id)
+        if not data:
+            return JSONResponse({"error": "persona not found"}, status_code=404)
+        import json as _json
+        content = _json.dumps(data, ensure_ascii=False, indent=2)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="persona_{persona_id}.json"',
+            },
+        )
+    except Exception as e:
+        logger.exception("persona hub export error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/persona/hub/import")
+async def persona_hub_import(file: UploadFile = File(...)) -> dict:
+    """导入人设模板（JSON 文件）。"""
+    try:
+        data = await file.read()
+        import json as _json
+        persona_data = _json.loads(data.decode("utf-8"))
+    except Exception as e:
+        return JSONResponse({"error": f"invalid file: {e}"}, status_code=400)
+    if not isinstance(persona_data, dict):
+        return JSONResponse({"error": "file must contain a JSON object"}, status_code=400)
+    try:
+        # 确保导入的 ID 不冲突
+        import_id = persona_data.get("id", "imported")
+        existing = _persona_mgr.get_persona(import_id)
+        if existing:
+            persona_data["id"] = f"{import_id}_imported"
+        ok, msg = _persona_mgr.create_persona(persona_data)
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=400)
+        return {"status": "ok", "persona_id": msg}
+    except Exception as e:
+        logger.exception("persona hub import error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/persona/hub/reset-default")
+async def persona_hub_reset_default() -> dict:
+    """重置为默认伊塔人设。"""
+    try:
+        ok, msg = _persona_mgr.switch_persona("yita_default")
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=400)
+        await emit("persona:changed", {"persona_id": "yita_default"})
+        return {"status": "ok", "active_id": "yita_default"}
+    except Exception as e:
+        logger.exception("persona hub reset error")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── Daily Brief (Block-4A R1.4) ────────────────────────

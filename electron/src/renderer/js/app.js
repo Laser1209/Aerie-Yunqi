@@ -36,6 +36,27 @@ window.addEventListener("DOMContentLoaded", () => {
     window.cognitionPanel.init();
   }
 
+  // ── v13.0: Permission approval modal ─
+  if (window.ApprovalModal) {
+    const approvalModal = new ApprovalModal();
+    approvalModal.init();
+    window.approvalModal = approvalModal;
+  }
+
+  // ── v13.0: Persona Hub panel ─
+  if (window.PersonaHubPanel) {
+    const personaHub = new PersonaHubPanel();
+    personaHub.init();
+    window.personaHub = personaHub;
+  }
+
+  // ── v13.0: Office Mode controller ─
+  if (window.OfficeModeController) {
+    const officeMode = new OfficeModeController();
+    officeMode.init();
+    window.officeMode = officeMode;
+  }
+
   // ── Tab switching ──────────────────────────────
   document.querySelectorAll(".sidebar-tab").forEach((btn) => {
     btn.addEventListener("click", () => {

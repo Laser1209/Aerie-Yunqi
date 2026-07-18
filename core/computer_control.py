@@ -1291,3 +1291,152 @@ class ComputerController:
             "mouse_position": self.mouse.get_position(),
             "pending_approvals": len(self._pending_approvals),
         }
+
+    # ---- 审批流程 ----
+
+    def get_pending_approvals(self) -> list[dict]:
+        """获取待审批列表"""
+        result = []
+        for call_id, entry in self._pending_approvals.items():
+            action = entry.get("action")
+            action_name = action.value if hasattr(action, "value") else str(action)
+            risk = ACTION_RISK_MAP.get(action, RiskLevel.MEDIUM) if hasattr(action, "value") else RiskLevel.MEDIUM
+            result.append({
+                "id": call_id,
+                "action": action_name,
+                "risk_level": risk.value if hasattr(risk, "value") else str(risk),
+                "params": entry.get("params", {}),
+                "description": entry.get("description", ""),
+                "created_at": entry.get("created_at", time.time()),
+            })
+        return result
+
+    def request_approval(
+        self,
+        action: ControlAction,
+        params: dict,
+        description: str = "",
+    ) -> str:
+        """发起审批请求，返回审批 ID"""
+        import uuid
+        call_id = f"appr_{uuid.uuid4().hex[:12]}"
+        self._pending_approvals[call_id] = {
+            "action": action,
+            "params": params,
+            "description": description,
+            "created_at": time.time(),
+            "status": "pending",
+            "result": None,
+        }
+        logger.info("审批请求已创建: %s (%s)", call_id, action.value)
+
+        # v13.0: 推送审批请求事件到前端
+        try:
+            from core.chat_events import emit
+            risk = ACTION_RISK_MAP.get(action, RiskLevel.MEDIUM)
+            emit("computer_control_approval_requested",
+                 id=call_id,
+                 action=action.value,
+                 risk_level=risk.value,
+                 params=params,
+                 description=description)
+        except Exception:
+            pass
+
+        return call_id
+
+    def approve_action(self, call_id: str) -> bool:
+        """批准操作，返回是否成功找到并执行"""
+        entry = self._pending_approvals.get(call_id)
+        if not entry:
+            return False
+
+        entry["status"] = "approved"
+        action = entry.get("action")
+        params = entry.get("params", {})
+
+        # 执行操作
+        try:
+            result = self._execute_action(action, params)
+            entry["result"] = result
+            self._audit(
+                action, params,
+                "success" if result.success else f"failed: {result.error}",
+                user_approved=True,
+            )
+        except Exception as e:
+            entry["result"] = ControlResult(
+                success=False,
+                action=action.value if hasattr(action, "value") else str(action),
+                error=str(e),
+            )
+            self._audit(action, params, f"error: {e}", user_approved=True)
+
+        # 清理（保留一小段时间供查询）
+        import asyncio
+        async def _cleanup():
+            await asyncio.sleep(30)
+            self._pending_approvals.pop(call_id, None)
+
+        return True
+
+    def reject_action(self, call_id: str) -> bool:
+        """拒绝操作，返回是否成功找到"""
+        entry = self._pending_approvals.get(call_id)
+        if not entry:
+            return False
+
+        entry["status"] = "rejected"
+        action = entry.get("action")
+        params = entry.get("params", {})
+        self._audit(action, params, "rejected by user", user_approved=False)
+
+        # 清理
+        import asyncio
+        async def _cleanup():
+            await asyncio.sleep(30)
+            self._pending_approvals.pop(call_id, None)
+
+        return True
+
+    def _execute_action(self, action: ControlAction, params: dict) -> ControlResult:
+        """根据 action 类型执行对应操作（审批通过后调用）"""
+        if action == ControlAction.SCREENSHOT:
+            region = params.get("region")
+            return self.take_screenshot(region)
+        elif action == ControlAction.MOUSE_MOVE:
+            return self.mouse_move(
+                params.get("x", 0),
+                params.get("y", 0),
+                params.get("duration", 0.2),
+            )
+        elif action == ControlAction.MOUSE_CLICK:
+            return self.mouse_click(
+                params.get("x"),
+                params.get("y"),
+                params.get("button", "left"),
+                params.get("clicks", 1),
+            )
+        elif action == ControlAction.MOUSE_SCROLL:
+            return self.mouse_scroll(params.get("clicks", 1))
+        elif action == ControlAction.KEY_PRESS:
+            return self.key_press(params.get("key", ""))
+        elif action == ControlAction.KEY_TYPE:
+            return self.key_type(params.get("text", ""))
+        elif action == ControlAction.SHELL_CMD:
+            return self.run_shell(params.get("command", ""))
+        elif action == ControlAction.WINDOW_INFO:
+            return self.list_windows()
+        elif action == ControlAction.WINDOW_FOCUS:
+            return self.focus_window(params.get("title", ""))
+        elif action == ControlAction.UIA_ACTION:
+            return self.uia_action(
+                params.get("action_type", ""),
+                params.get("params", {}),
+            )
+        else:
+            return ControlResult(
+                success=False,
+                action=action.value if hasattr(action, "value") else str(action),
+                error=f"unknown action: {action}",
+            )

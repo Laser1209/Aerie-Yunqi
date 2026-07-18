@@ -1,0 +1,563 @@
+/* v13.0: Persona Hub — 人设管理面板样式 */
+
+.persona-hub__container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── List View ── */
+
+.persona-hub__list-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.persona-hub__list-view--hidden {
+  display: none;
+}
+
+.persona-hub__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 28px 20px;
+  flex-shrink: 0;
+}
+
+.persona-hub__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-800, #1d1d1f);
+}
+
+.persona-hub__subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-500, #6e6e73);
+}
+
+.persona-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.persona-btn:active {
+  transform: scale(0.97);
+}
+
+.persona-btn--primary {
+  background: linear-gradient(135deg, #ff6b9d 0%, #ff4785 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(255, 107, 157, 0.35);
+}
+
+.persona-btn--primary:hover {
+  box-shadow: 0 4px 12px rgba(255, 107, 157, 0.5);
+}
+
+.persona-btn--ghost {
+  background: transparent;
+  color: var(--text-600, #5a5a61);
+  border: 1px solid var(--bg-300, #e5e5ea);
+}
+
+.persona-btn--ghost:hover {
+  background: var(--bg-200, #f2f2f7);
+}
+
+.persona-btn__icon {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* Grid */
+
+.persona-hub__grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 28px 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+.persona-hub__loading,
+.persona-hub__empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-400, #8e8e93);
+  font-size: 14px;
+}
+
+/* Persona Card */
+
+.persona-card {
+  background: var(--card, #ffffff);
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  padding: 18px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.persona-card:hover {
+  border-color: #ffb3cc;
+  box-shadow: 0 4px 12px rgba(255, 107, 157, 0.15);
+  transform: translateY(-2px);
+}
+
+.persona-card--active {
+  border-color: #ff6b9d;
+  background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%);
+}
+
+.persona-card__avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffb3cc 0%, #ff8fb1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.persona-card__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.persona-card__avatar span {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.persona-card__badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: #ff4785;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 2px solid var(--card, #fff);
+}
+
+.persona-card__info {
+  margin-bottom: 14px;
+}
+
+.persona-card__name {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-800, #1d1d1f);
+}
+
+.persona-card__tagline {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-500, #6e6e73);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.persona-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.persona-card__btn {
+  flex: 1;
+  height: 30px;
+  border: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.persona-card__btn--activate {
+  background: linear-gradient(135deg, #ff6b9d 0%, #ff4785 100%);
+  color: #fff;
+}
+
+.persona-card__btn--activate:hover {
+  opacity: 0.9;
+}
+
+.persona-card__btn--edit {
+  background: var(--bg-200, #f2f2f7);
+  color: var(--text-700, #3c3c43);
+}
+
+.persona-card__btn--edit:hover {
+  background: var(--bg-300, #e5e5ea);
+}
+
+/* ── Editor View ── */
+
+.persona-hub__editor-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.persona-hub__editor-view--hidden {
+  display: none;
+}
+
+.persona-hub__editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--bg-200, #f2f2f7);
+  flex-shrink: 0;
+}
+
+.persona-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--text-600, #5a5a61);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 7px;
+  transition: all 0.15s ease;
+}
+
+.persona-back-btn:hover {
+  background: var(--bg-200, #f2f2f7);
+  color: var(--text-800, #1d1d1f);
+}
+
+.persona-back-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.persona-hub__editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.persona-hub__editor-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.persona-hub__editor-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--bg-200, #f2f2f7);
+  padding: 20px 16px;
+  overflow-y: auto;
+  background: var(--bg-100, #f7f7fa);
+}
+
+.persona-avatar-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.persona-avatar-card__img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffb3cc 0%, #ff8fb1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.persona-avatar-card__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.persona-avatar-card__img span {
+  color: #fff;
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.persona-avatar-card__upload {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--bg-300, #e5e5ea);
+  border-radius: 14px;
+  background: var(--card, #fff);
+  color: var(--text-600, #5a5a61);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.persona-avatar-card__upload:hover {
+  background: var(--bg-200, #f2f2f7);
+}
+
+.persona-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.persona-nav-item {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-600, #5a5a61);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.persona-nav-item:hover {
+  background: var(--bg-200, #f2f2f7);
+  color: var(--text-800, #1d1d1f);
+}
+
+.persona-nav-item--active {
+  background: var(--card, #fff);
+  color: #ff4785;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.persona-hub__editor-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.persona-section {
+  max-width: 520px;
+}
+
+.persona-section--hidden {
+  display: none;
+}
+
+.persona-section__title {
+  margin: 0 0 20px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-800, #1d1d1f);
+}
+
+.persona-form-row {
+  margin-bottom: 18px;
+}
+
+.persona-form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-700, #3c3c43);
+}
+
+.persona-form-input,
+.persona-form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--bg-300, #e5e5ea);
+  border-radius: 9px;
+  font-size: 14px;
+  color: var(--text-800, #1d1d1f);
+  background: var(--card, #fff);
+  font-family: inherit;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.persona-form-input:focus,
+.persona-form-textarea:focus {
+  outline: none;
+  border-color: #ff8fb1;
+  box-shadow: 0 0 0 3px rgba(255, 143, 177, 0.15);
+}
+
+.persona-form-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.55;
+}
+
+.persona-form-textarea--mono {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.persona-form-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-400, #8e8e93);
+}
+
+/* Slider group */
+
+.persona-slider-group {
+  background: var(--bg-100, #f7f7fa);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: 8px;
+}
+
+.persona-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.persona-slider-label {
+  width: 80px;
+  font-size: 13px;
+  color: var(--text-700, #3c3c43);
+  flex-shrink: 0;
+}
+
+.persona-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-300, #e5e5ea);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.persona-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ff6b9d;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(255, 107, 157, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.persona-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.persona-slider-value {
+  width: 36px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-600, #5a5a61);
+  flex-shrink: 0;
+}
+
+/* Dark mode */
+
+.dark .persona-card {
+  background: var(--card, #1c1c1e);
+}
+
+.dark .persona-card:hover {
+  border-color: #ff6b9d;
+}
+
+.dark .persona-card--active {
+  background: linear-gradient(135deg, #2c1c22 0%, #1c1c1e 100%);
+}
+
+.dark .persona-card__badge {
+  border-color: var(--card, #1c1c1e);
+}
+
+.dark .persona-card__btn--edit {
+  background: var(--bg-600, #3a3a3c);
+  color: var(--text-200, #c7c7cc);
+}
+
+.dark .persona-card__btn--edit:hover {
+  background: var(--bg-500, #48484a);
+}
+
+.dark .persona-hub__editor-sidebar {
+  background: var(--bg-800, #2c2c2e);
+}
+
+.dark .persona-nav-item {
+  color: var(--text-400, #8e8e93);
+}
+
+.dark .persona-nav-item:hover {
+  background: var(--bg-700, #3a3a3c);
+  color: var(--text-200, #c7c7cc);
+}
+
+.dark .persona-nav-item--active {
+  background: var(--card, #1c1c1e);
+  color: #ff8fb1;
+}
+
+.dark .persona-form-input,
+.dark .persona-form-textarea {
+  background: var(--bg-800, #2c2c2e);
+  border-color: var(--bg-600, #3a3a3c);
+  color: var(--text-100, #e3e3e8);
+}
+
+.dark .persona-form-input:focus,
+.dark .persona-form-textarea:focus {
+  border-color: #ff6b9d;
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
+}
+
+.dark .persona-slider-group {
+  background: var(--bg-800, #2c2c2e);
+}
+
+.dark .persona-slider {
+  background: var(--bg-600, #3a3a3c);
+}

@@ -91,6 +91,10 @@ class BrainResponse:
     # Shape: {"thought": str|None, "action": str, "observation": str|None, "react_source": str}
     # react_source in {"model", "synthesized", "model-no-think"}
     react_trace: dict | None = None
+    # v13.0: tool call results from ReAct loop
+    tool_results: list[dict] | None = None
+    # Internal: raw tool_calls from the model response (before execution)
+    _raw_tool_calls: list[dict] | None = None
 
 
 class Brain:
@@ -153,6 +157,18 @@ class Brain:
                 "model": "qwen-plus",
             })
 
+        # v13.0: Doubao / 豆包（火山方舟 Ark）
+        doubao_key = os.getenv("DOUBAO_API_KEY", "")
+        doubao_url = os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+        doubao_model = os.getenv("DOUBAO_MODEL", "doubao-seed-2-1-turbo-260628")
+        if doubao_key:
+            providers.append({
+                "name": "doubao",
+                "url": doubao_url,
+                "key": doubao_key,
+                "model": doubao_model,
+            })
+
         if not providers:
             logger.warning("No LLM providers configured! Set OPENAI_API_KEY or DEEPSEEK_API_KEY.")
 
@@ -162,41 +178,150 @@ class Brain:
         self,
         messages: list[dict],
         tools: list[dict] | None = None,
+        tool_registry: Any = None,
+        max_react_rounds: int = 6,
+        preferred_provider: str | None = None,
     ) -> BrainResponse:
         """Send chat completion request, try all providers in sequence.
+
+        Supports ReAct (tool-use) loop when ``tool_registry`` is provided:
+        if the model returns tool_calls, execute them via the registry,
+        append tool results back to the conversation, and re-call the model
+        until a final text response is produced or ``max_react_rounds`` is hit.
+
+        Args:
+            preferred_provider: 优先使用的 provider 名称，会被移到列表最前面
 
         On failure of all providers, returns a fallback response.
         """
         last_error = ""
         tracker = get_token_tracker()
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_duration_ms = 0
+        all_tool_results: list[dict] = []
 
-        for idx, provider in enumerate(self._providers):
+        # 调整 provider 顺序：优先 provider 移到最前面
+        providers = list(self._providers)
+        if preferred_provider:
+            pref_idx = None
+            for i, p in enumerate(providers):
+                if p["name"] == preferred_provider:
+                    pref_idx = i
+                    break
+            if pref_idx is not None:
+                pref = providers.pop(pref_idx)
+                providers.insert(0, pref)
+                logger.debug("provider reordered: %s promoted to first", preferred_provider)
+
+        for idx, provider in enumerate(providers):
             try:
-                resp = await self._call_provider(provider, messages, tools)
-                if resp.text and not resp.text.startswith("(连接") and not resp.text.startswith("(思考"):
-                    # Success — record token usage
-                    if tracker._db is not None:
-                        tracker.record(
-                            provider=resp.provider,
-                            model=resp.model,
-                            prompt_tokens=resp.tokens_prompt,
-                            completion_tokens=resp.tokens_completion,
-                            user_id=0,
+                working_msgs = list(messages)
+                provider_tool_results: list[dict] = []
+                rounds_used = 0
+
+                while rounds_used < max_react_rounds:
+                    resp = await self._call_provider(provider, working_msgs, tools)
+
+                    total_prompt_tokens += resp.tokens_prompt
+                    total_completion_tokens += resp.tokens_completion
+                    total_duration_ms += resp.duration_ms
+
+                    # Check if the model wants to call tools
+                    tool_calls = resp._raw_tool_calls
+
+                    if not tool_calls or tool_registry is None:
+                        # Final text response (or no tool executor available)
+                        if resp.text and not resp.text.startswith("(连接") and not resp.text.startswith("(思考"):
+                            final_resp = BrainResponse(
+                                text=resp.text.strip(),
+                                provider=resp.provider,
+                                model=resp.model,
+                                tokens_prompt=total_prompt_tokens,
+                                tokens_completion=total_completion_tokens,
+                                duration_ms=total_duration_ms,
+                                react_trace=resp.react_trace,
+                                tool_results=provider_tool_results if provider_tool_results else None,
+                            )
+                            if tracker._db is not None:
+                                tracker.record(
+                                    provider=final_resp.provider,
+                                    model=final_resp.model,
+                                    prompt_tokens=final_resp.tokens_prompt,
+                                    completion_tokens=final_resp.tokens_completion,
+                                    user_id=0,
+                                )
+                            logger.info(
+                                "LLM: %s/%s → %d+%d tokens, %dms, %d tool calls",
+                                final_resp.provider, final_resp.model,
+                                final_resp.tokens_prompt, final_resp.tokens_completion,
+                                final_resp.duration_ms, len(provider_tool_results),
+                            )
+                            return final_resp
+                        else:
+                            last_error = resp.text
+                            logger.warning(
+                                "Provider %s returned fallback: %s",
+                                provider["name"], last_error[:60],
+                            )
+                            break
+
+                    # ReAct round: execute tool calls and feed results back
+                    rounds_used += 1
+
+                    # Append the assistant message with tool_calls to history
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": tool_calls,
+                    }
+                    working_msgs.append(assistant_msg)
+
+                    # Execute each tool call
+                    for tc in tool_calls:
+                        tc_id = tc.get("id", "")
+                        tc_name = tc.get("function", {}).get("name", "")
+                        tc_args_raw = tc.get("function", {}).get("arguments", "{}")
+                        try:
+                            tc_args = json.loads(tc_args_raw)
+                        except (json.JSONDecodeError, TypeError):
+                            tc_args = {}
+
+                        t_tool = time.monotonic()
+                        try:
+                            result = await tool_registry.execute(tc_name, tc_args)
+                            success = "error" not in result
+                        except Exception as e:
+                            result = {"error": str(e)}
+                            success = False
+                        tool_dur = int((time.monotonic() - t_tool) * 1000)
+
+                        tool_result_entry = {
+                            "name": tc_name,
+                            "arguments": tc_args,
+                            "result": result,
+                            "success": success,
+                            "duration_ms": tool_dur,
+                        }
+                        provider_tool_results.append(tool_result_entry)
+
+                        # Append tool result message
+                        tool_msg = {
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "content": json.dumps(result, ensure_ascii=False),
+                        }
+                        working_msgs.append(tool_msg)
+
+                        logger.info(
+                            "ReAct tool: %s → %s (%.2fms)",
+                            tc_name, "ok" if success else "fail", tool_dur,
                         )
-                    logger.info(
-                        "LLM: %s/%s → %d+%d tokens, %dms",
-                        resp.provider, resp.model,
-                        resp.tokens_prompt, resp.tokens_completion,
-                        resp.duration_ms,
-                    )
-                    return resp
-                else:
-                    # Got a fallback response from the provider itself
-                    last_error = resp.text
-                    logger.warning(
-                        "Provider %s returned fallback: %s",
-                        provider["name"], last_error[:60],
-                    )
+
+                # Hit max rounds or provider returned fallback — try next provider
+                if provider_tool_results:
+                    all_tool_results = provider_tool_results
+
             except Exception as e:
                 last_error = str(e)
                 logger.warning(
@@ -205,7 +330,29 @@ class Brain:
                 )
 
         logger.error("All %d providers failed. Last error: %s", len(self._providers), last_error)
-        return BrainResponse(text="(伊塔暂时无法连接大脑，稍后再试...)")
+        return BrainResponse(
+            text="(伊塔暂时无法连接大脑，稍后再试...)",
+            tool_results=all_tool_results if all_tool_results else None,
+        )
+
+    def _extract_tool_calls(self, text: str) -> list[dict] | None:
+        """Extract tool_calls from response text if it's a JSON-encoded list.
+
+        In _call_provider, when tool_calls are present, the raw text is set
+        to json.dumps(tool_calls). We reverse that here.
+        """
+        if not text or not text.startswith("["):
+            return None
+        try:
+            data = json.loads(text)
+            if isinstance(data, list) and len(data) > 0:
+                # Validate it looks like OpenAI tool_calls format
+                first = data[0]
+                if isinstance(first, dict) and "function" in first:
+                    return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
 
     async def _call_provider(
         self,
@@ -244,11 +391,12 @@ class Brain:
             message = choice.get("message", {})
 
             # Phase 9 Batch 6: detect tool_calls so we can mark the react action
-            tool_calls_present = bool(message.get("tool_calls"))
+            raw_tool_calls = message.get("tool_calls") or None
+            tool_calls_present = bool(raw_tool_calls)
 
             # Handle tool calls
             if tool_calls_present:
-                text = json.dumps(message["tool_calls"], ensure_ascii=False)
+                text = json.dumps(raw_tool_calls, ensure_ascii=False)
             else:
                 text = message.get("content", "") or ""
 
@@ -268,6 +416,7 @@ class Brain:
                 tokens_completion=usage.get("completion_tokens", 0),
                 duration_ms=duration,
                 react_trace=react_trace,
+                _raw_tool_calls=raw_tool_calls,
             )
 
     async def generate_push(

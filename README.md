@@ -1,11 +1,11 @@
-# Aerie · 云栖 v9.0
+# Aerie · 云栖 v13.0
 
 > **本地优先的 AI 桌面伴侣 / Local-first AI desktop companion**
-> 你的私人 AI · 伊塔 · 在 Windows 11 上随时待命。
+> 你的私人 AI · 伊塔 · 在 Windows 11 上随时待命。办公学习 / 情感陪伴 / 电脑操控 / 主动关怀，一个就够了。
 
-**Aerie · 云栖** 是一款本地运行的 AI 桌面伴侣应用。它由 **Electron 桌面壳** + **Python 智能内核** 组成，通过 **NapCat** 接入 QQ，并通过内置的 **主动唤醒（auto-wake）** 机制在固定时间点和情感事件触发时主动给你发消息。
+**Aerie · 云栖** 是一款本地运行的 AI 桌面伴侣应用。它由 **Electron 桌面壳** + **Python 智能内核** 组成，通过 **NapCat** 接入 QQ，内置**办公模式**、**双层回复校验**、**事件驱动主动推送**，支持**电脑操控 / 文件整理 / 文档写作 / 自进化**等高级能力。
 
-> **Aerie · 云栖** is a local-first AI desktop companion. It is composed of an **Electron desktop shell** + **Python intelligent core**, bridges to QQ via **NapCat**, and uses an **auto-wake** mechanism to proactively message you at fixed time points and on emotional events.
+> **Aerie · 云栖** is a local-first AI desktop companion. It is composed of an **Electron desktop shell** + **Python intelligent core**, bridges to QQ via **NapCat**, features **Office Mode**, dual-layer response validation, event-driven proactive messaging, and supports computer control / file organization / document writing / self-evolution.
 
 ---
 
@@ -13,14 +13,20 @@
 
 | 模块 / Module | 说明 / Description |
 | --- | --- |
-| **🪟 Electron 桌面壳 / Electron Shell** | 悬浮球 + 聊天窗 + 侧边栏 + 托盘图标 / Floating ball + chat window + sidebar + tray |
-| **🧠 Python 智能内核 / Python Brain** | 多 Provider AI 调度（Qwen / DeepSeek / Gemini）/ Multi-provider LLM orchestration |
-| **👤 伊塔人格 / Yita Persona** | 26 岁女 · 184cm · 四爱 · 温柔大姐姐+病娇 · 调情式长句 / 26yo female, 184cm, four-love, gentle big-sister + yandere, flirtatious |
+| **🪟 Electron 桌面壳 / Electron Shell** | 灵动岛 + 聊天窗 + 侧边栏 + 托盘图标 / Dynamic Island + chat window + sidebar + tray |
+| **🧠 Python 智能内核 / Python Brain** | 多 Provider AI 调度（Qwen / DeepSeek / 豆包 / MiniMax 等）/ Multi-provider LLM orchestration |
+| **👤 Persona Hub 人设基础设施** | 可自定义人设模板，随时切换 / Customizable persona templates, switch anytime |
+| **💼 办公模式 / Office Mode** | 7 大办公工具 + 豆包模型优先 + 设备识别 + 智能任务检测 / 7 office tools + Doubao priority + device detection |
+| **✅ 双层回复校验 / Response Validation** | Accuracy Guard（准确合规） + Quality Judge（质量情绪）/ Accuracy Guard + Quality Judge |
 | **💓 情感引擎 / Emotion Engine** | PAD 三维模型 + 4 槽累积阈值系统（角色磨损）/ PAD model + 4-slot cumulative threshold |
-| **⏰ 主动唤醒（auto-wake）/ Proactive Messenger** | 9 类场景 + APScheduler 定时轮询 + 频控 + 静默时段 / 9 scenes + cron + rate-limit + quiet hours |
+| **⏰ 主动推送 / Proactive Messenger** | 三类触发源：定时 + 情绪 + 事件 / 3 trigger types: cron + emotion + event |
 | **🤖 QQ 接入 / QQ Bridge** | NapCat OneBot11 WebSocket / NapCat OneBot11 WebSocket |
-| **🛠 14+ 工具系统 / 14+ Tools** | 知识库 / 待办 / 音乐 / 天气 / 截图 / 系统 / ... / KB / todo / music / weather / screenshot / system / ... |
-| **🎨 5 主题切换 / 5 Themes** | 伊塔粉 / 深夜紫 / 樱白 / 海蓝 / 森绿 / Yita Pink / Midnight Purple / Sakura / Ocean / Forest |
+| **🖱️ 电脑操控 / Computer Control** | 3 级权限 + 键鼠 + 截图 + UIA 自动化 / 3 permission levels + mouse/keyboard + screenshot + UIA |
+| **📁 文件整理 / File Organizer** | AI 智能分类 + 预览执行 + 7 天撤销 / AI classification + preview + 7-day undo |
+| **📝 文档写作 / Doc Writer** | 5 类模板 + 4 种导出 + 3 种样式 / 5 templates + 4 export formats + 3 styles |
+| **🧬 自进化 L4 / Self-Evolution** | 代码自修改 + 4 道安全闸门 + 24h 回滚 / Code self-modify + 4 safety gates + 24h rollback |
+| **🛠 20+ 工具系统 / 20+ Tools** | 知识库 / 待办 / 日历 / 音乐 / 天气 / 截图 / 系统 / ... / KB / todo / calendar / music / weather / screenshot / system / ... |
+| **🎨 5+ 主题切换 / Themes** | 伊塔粉 / 深夜紫 / 樱白 / 海蓝 / 森绿 / Yita Pink / Midnight Purple / Sakura / Ocean / Forest |
 | **💾 数据备份 / Backup** | 每日 04:00 自动 + 一键迁移 zip / Daily 04:00 auto + one-click zip migration |
 | **🔐 高权限 / Elevated Privileges** | UAC 提权 + 任务计划 / UAC + Task Scheduler |
 | **🩹 故障自愈 / Self-Healing** | 14 类故障自动恢复 / 14 failure categories auto-recovery |

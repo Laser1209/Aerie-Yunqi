@@ -77,3 +77,18 @@ def register_all_tools(registry) -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("douyin tools registration failed: %s", e)
+
+    try:
+        from core.screen_tools import register_screen_tools
+        register_screen_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("screen tools registration failed: %s", e)
+
+    # v13.0: Office tools 办公工具集
+    try:
+        from core.office_tools import register_office_tools
+        register_office_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("office tools registration failed: %s", e)

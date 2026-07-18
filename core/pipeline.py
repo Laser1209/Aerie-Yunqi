@@ -17,6 +17,7 @@ from communication.message import IncomingMessage, OutgoingReply
 from communication.splitter import SemanticMessageSplitter
 from core.chat_events import emit
 from core.cognition import CognitionEngine
+from core.office_mode import get_office_mode_manager, OfficeMode
 
 logger = logging.getLogger(__name__)
 
@@ -189,9 +190,38 @@ class Pipeline:
         })
 
         # ══════════════════════════════════════════════
+        # v13.0: Office Mode 办公模式检测与增强
+        # ══════════════════════════════════════════════
+        office_mgr = get_office_mode_manager()
+        office_ctx = office_mgr.detect(msg.content, history)
+        is_office = office_ctx.is_office_mode()
+
+        if is_office and ctx_messages:
+            # 增强系统提示词
+            sys_content = ctx_messages[0].get("content", "")
+            ctx_messages[0]["content"] = office_mgr.augment_system_prompt(sys_content)
+            system_chars = len(ctx_messages[0]["content"])
+
+        # 记录到认知链路
+        self.cognition.record(trace, "office_mode", {
+            "mode": office_ctx.mode.value if office_ctx.mode else "auto",
+            "detected": office_ctx.detected_mode.value if office_ctx.detected_mode else None,
+            "is_office": is_office,
+            "task_type": office_ctx.task_type.value if office_ctx.task_type else None,
+            "confidence": office_ctx.confidence,
+            "keywords": office_ctx.task_keywords,
+        })
+
+        # ══════════════════════════════════════════════
         # 6. Call LLM (stage 5)
         # ══════════════════════════════════════════════
-        response = await self.brain.chat(ctx_messages, tools=tools)
+        preferred_provider = office_mgr.get_preferred_provider() if is_office else None
+        response = await self.brain.chat(
+            ctx_messages,
+            tools=tools,
+            tool_registry=self.tool_registry,
+            preferred_provider=preferred_provider,
+        )
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None)
         tool_results = getattr(response, "tool_results", None) or []
@@ -284,6 +314,42 @@ class Pipeline:
             "raw_chars": len(reply_text_raw),
             "tuned_chars": len(reply_text),
         })
+
+        # ══════════════════════════════════════════════
+        # 8.5 Response Validation（Guard + Judge 双层校验）
+        # ══════════════════════════════════════════════
+        try:
+            from core.response_validator import get_response_validator
+            validator = get_response_validator()
+            is_office = office_mgr.current_mode == OfficeMode.OFFICE or (
+                office_ctx and office_ctx.is_office_mode()
+            )
+            vr = validator.validate(
+                reply_text,
+                user_message=msg.content,
+                persona_style="warm",
+                office_mode=is_office,
+            )
+            if vr.issues:
+                self.cognition.record(trace, "validation", {
+                    "passed": vr.passed,
+                    "score": vr.score,
+                    "guard_score": vr.guard_score,
+                    "judge_score": vr.judge_score,
+                    "issues": [
+                        {
+                            "code": i.code,
+                            "severity": i.severity.value,
+                            "message": i.message,
+                            "layer": i.layer,
+                        }
+                        for i in vr.issues
+                    ],
+                    "needs_revision": vr.needs_revision,
+                    "suggestion": vr.revision_suggestion,
+                })
+        except Exception:
+            logger.exception("response validation failed; best-effort skip")
 
         segments = self._splitter.split(reply_text) or [reply_text]
         self.cognition.record(trace, "split", {

@@ -9,6 +9,88 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.1.0-beta.1] - 2026-07-19
+
+> **内测基准版本 / Internal Beta Baseline**
+> 从 v13.9.8 重置版本号，确立内测阶段第一个稳定基线，后续严格按内测规范迭代
+
+### 🔄 Changed / 变更
+- **版本号重置**：13.9.8 → 0.1.0-beta.1，正式进入内测阶段
+- **版本策略调整**：放弃跳跃式大版本号，采用 beta 迭代渐进收敛
+
+---
+
+## [13.9.8] - 2026-07-19
+
+> **v13.9 收尾版本 / Final v13.9 Release**
+> 全项目综合修复方案就绪，15 个 Bug 确认待修复（5 Critical + 6 High + 4 Medium）
+
+### 🐛 发现问题 / Issues Identified
+
+#### Critical — 运行时崩溃
+- **pipeline.py** `history_msgs` NameError：校验链路完全失效
+- **computer_control.py** 4 处方法名错误：`key_type`→`type_text` / `run_shell`→`shell_execute` / `uia_action` 缺失 / `focus_window` 参数类型错误
+
+#### High — 功能静默失效
+- **companion.py** Brain/EmotionStateStore 重复实例化
+- **persona_loader.py** YAMLError 未捕获，损坏文件导致启动崩溃
+- **context_builder.py** 除零错误
+- **approval-modal.js / office-mode.js** SSE 回调未 JSON.parse，推送完全失效
+
+#### Medium — 技术债务
+- **computer_control.py** 协程泄漏（`_cleanup` 未启动）
+- **companion.py** AsyncTaskManager 未显式启动
+
+---
+
+## [13.9.4] - 2026-07-19
+
+> **办公模式增强 / Office Mode Enhancement**
+> 文件保存目录可配置化，QQ 客户端重构优化
+
+### ✨ Added / 新增
+
+#### 办公文件保存目录配置
+- **settings.yaml 新增 `office.dir` 字段**：用户可自定义办公文件保存路径
+- **设置面板 UI**：前端新增办公目录选择器，支持浏览文件夹
+- **API 端点**：`GET/PUT /api/settings/office-dir` 读写办公目录配置
+- **动态目录支持**：`get_office_dir()` 每次从 settings 重新读取，配置变更即时生效
+
+### 🔧 Changed / 变更
+
+#### QQ 客户端重构
+- **`_rpc_call` 方法统一**：`_learn_self_id` / `recall_message` / `send_poke` / `send_message_with_segments` 全部使用 `_rpc_call` 进行 echo 匹配和生命周期/心跳帧过滤
+- **`is_logged_in` 替代 `is_connected`**：QQ 消息发送就绪判断改用 WS 层 + QQ 账号双重登录状态
+
+---
+
+## [13.9.3] - 2026-07-19
+
+> **桌面应用功能迭代 / Desktop App Feature Iteration**
+> 灵动岛媒体控制完善、办公模式交互优化、SMTC 中文编码修复
+
+### ✨ Added / 新增
+
+#### 灵动岛增强
+- **媒体缩略图支持**：SMTC 曲目封面提取并在灵动岛展示
+- **媒体状态扩展**：新增 `thumbnail` 字段和 `_lastThumbnailPath` 缓存
+
+#### 办公模式优化
+- **下拉菜单智能定位**：根据视口空间自动翻转方向（上方/下方），`transform-origin` 动态调整
+- **键盘无障碍**：Enter/Space 触发、Esc 关闭，`aria-haspopup` / `aria-expanded` ARIA 属性
+- **菜单挂载优化**：追加到 `document.body` 避免 overflow 裁剪，`position: fixed` + `z-index: 9999`
+
+### 🐛 Fixed / 修复
+
+#### SMTC 中文乱码
+- **PowerShell UTF-8 强制编码**：在 SMTC 查询脚本开头添加 `$OutputEncoding` / `[Console]::OutputEncoding` / `chcp 65001`，解决中文歌曲标题/艺术家在 Node.js stdout 读取时变成乱码的问题
+
+### 🔧 Changed / 变更
+- **灵动岛**：样式优化 + 组件配置加载逻辑修正（仅完整数组通过校验）
+- **办公模式 CSS**：重构样式表，改进菜单交互与视觉
+
+---
+
 ## [13.9.2] - 2026-07-18
 
 > **v13.9 第三批升级 / Batch 3: 权限体系 + 工具矩阵 + 任务执行 + 异步调度**

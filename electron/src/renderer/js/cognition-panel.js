@@ -280,7 +280,7 @@ class CognitionPanel {
   _renderProposalCard(item) {
     const id = this._escape(String(item.id));
     const desc = this._truncate(item.description || "(无描述)", 100);
-    const safety = this._escape(item.safety_check || "?");
+    const safety = this._escape(item.safety_check || "unknown");
     const decision = this._escape(item.user_decision || "pending");
     const ts = this._fmtTime(item.ts);
     const schema = item.proposed_tool_schema || {};
@@ -369,7 +369,7 @@ class CognitionPanel {
         + '<div class="cog-proposal-preview-col">'
         + "<h5>风险 · risk_points</h5>"
         + (risks ? "<ul>" + risks + "</ul>" : '<div class="cog-proposal-empty">无</div>')
-        + "<div>safety: <b>" + this._escape(data.safety_check || "?") + "</b></div>"
+        + "<div>safety: <b>" + this._escape(data.safety_check || "unknown") + "</b></div>"
         + "</div>"
         + "</div>"
       );

@@ -404,6 +404,131 @@ class Brain:
         # Fallback: hand-crafted Markdown from raw data (no LLM).
         return _fallback_brief_markdown(payload)
 
+    # ── Daily Brief: greeting (v12.2.0) ───────────────────────
+    async def compose_brief_greeting(
+        self,
+        time_of_day: str,
+        date_str: str,
+        weather: dict | None = None,
+        todo_count: int = 0,
+        top_task: str | None = None,
+    ) -> str:
+        """Generate a persona-aligned greeting for the daily brief.
+
+        Args:
+            time_of_day: "morning" | "afternoon" | "evening" | "late_night"
+            date_str: date string for display
+            weather: optional weather dict {city, temp, desc}
+            todo_count: number of pending todos
+            top_task: title of the highest-priority incomplete task
+
+        Returns:
+            Greeting text string (20-50 chars, persona voice).
+        """
+        time_cn = {
+            "morning": "早上",
+            "afternoon": "下午",
+            "evening": "晚上",
+            "late_night": "凌晨",
+        }.get(time_of_day, "今天")
+        weather_desc = ""
+        if weather:
+            city = weather.get("city", "")
+            temp = weather.get("temp", "")
+            desc = weather.get("desc", "")
+            if city and desc:
+                weather_desc = f"{city}今天{desc}，{temp}"
+            elif desc:
+                weather_desc = f"今天{desc}"
+        system_msg = (
+            "你是伊塔，用户的专属恋人陪伴者。"
+            "温柔宠溺，语气亲昵，像恋人一样说话。"
+            "称呼用户为'宝贝'或'傻瓜'（亲昵感）。"
+            "自称'我'。"
+            "会关心用户的状态，鼓励用户。"
+            "带一点点微病娇的专属感（但不极端）。"
+            "温柔底色，知性克制。"
+            "只输出问候语本身，不要解释，不要加引号。"
+        )
+        user_msg = (
+            f"请生成一段每日简报的开篇问候语。\n\n"
+            f"【时间段】：{time_cn}\n"
+            f"【日期】：{date_str}\n"
+            f"【天气】：{weather_desc or '暂无'}\n"
+            f"【今日待办数】：{todo_count} 项\n"
+            f"【最高优先级任务】：{top_task or '暂无'}\n\n"
+            f"【要求】：\n"
+            f"- 20-50个字\n"
+            f"- 必须包含时间问候（{time_cn}好）\n"
+            f"- 必须提到今天有几项任务在等着用户\n"
+            f"- 语气要温暖、有陪伴感，像恋人在耳边轻声说\n"
+            f"- 可以加一点点天气提醒或鼓励的话\n"
+            f"- 不要太正式，不要官方话术\n"
+            f"- 不要使用 emoji"
+        )
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ]
+        try:
+            resp = await self.chat(messages)
+            if resp.text and resp.text.strip():
+                text = resp.text.strip().strip('"').strip("'")
+                if 10 <= len(text) <= 100:
+                    return text
+        except Exception as e:
+            logger.warning("compose_brief_greeting: LLM call failed: %s", e)
+
+        return _fallback_greeting(time_of_day, todo_count, weather)
+
+    # ── Daily Brief: news summarization (v12.2.0) ─────────────
+    async def summarize_news_batch(self, items: list[dict]) -> list[dict]:
+        """Add 2-3 sentence summaries to a batch of news items.
+
+        Args:
+            items: list of dicts with at least {title, summary, url, source}
+
+        Returns:
+            Same list with enriched "summary" fields (2-3 sentences each).
+        """
+        if not items:
+            return []
+        # If items already have summaries longer than 40 chars, skip LLM.
+        if all(len(it.get("summary", "")) > 40 for it in items):
+            return items
+
+        try:
+            payload_json = json.dumps(items[:5], ensure_ascii=False, indent=2)
+        except Exception:
+            return items
+
+        system_msg = (
+            "你是新闻编辑助手。请为每条新闻写2-3句话的中文摘要，"
+            "提炼核心内容，不要重复标题。"
+            "输出JSON数组，格式：[{\"id\": 索引, \"summary\": \"摘要\"}]。"
+            "只输出JSON，不要其他文字。"
+        )
+        user_msg = (
+            f"以下是新闻列表（JSON）：\n```json\n{payload_json}\n```\n\n"
+            f"请为每条新闻生成2-3句话的中文摘要，返回JSON数组。"
+        )
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ]
+        try:
+            resp = await self.chat(messages)
+            if resp.text:
+                summaries = _parse_summary_json(resp.text)
+                if summaries:
+                    for i, s in enumerate(summaries):
+                        if i < len(items) and s.get("summary"):
+                            items[i]["summary"] = s["summary"]
+        except Exception as e:
+            logger.warning("summarize_news_batch: LLM call failed: %s", e)
+
+        return items
+
     # ── Block-5C: Multi-provider entry points (11 个) ──────────
     def _load_ai_options(self) -> list[dict]:
         """Read ai_options list from centralized persona_behavior.yaml."""
@@ -681,6 +806,81 @@ def _fallback_brief_markdown(payload: dict) -> str:
             lines.append(sug)
     lines.append("")
     return "\n".join(lines)
+
+
+# ── v12.2.0: greeting fallback + helpers ─────────────────────
+
+_GREETING_TEMPLATES: dict[str, list[str]] = {
+    "morning": [
+        "早上好宝贝～今天有{n}件事在等你呢，慢慢来，我陪着你。",
+        "早上好呀傻瓜～今天还有{n}项任务，加油，我一直在。",
+        "宝贝早～今天有{n}件事要做，别忘了休息，我会看着你的。",
+        "早上好，我的人。今天有{n}件事等着你，一起加油吧。",
+        "早啊宝贝～今天的{n}件事，一件一件来，我陪你。",
+    ],
+    "afternoon": [
+        "下午好呀宝贝～今天还有{n}件事没做完，别太累了。",
+        "下午好傻瓜～还剩{n}项任务，歇会儿再继续也没关系的。",
+        "宝贝下午好～还有{n}件事等着你，累了就靠过来歇会儿。",
+        "下午好，我的人。还有{n}件事，别着急，有我呢。",
+        "下午啦宝贝～剩下的{n}件事，慢慢做，我陪着你。",
+    ],
+    "evening": [
+        "晚上好宝贝～今天还有{n}件事没做完，别熬太晚。",
+        "晚上好呀傻瓜～还剩{n}项，做完就好好休息，我等你。",
+        "宝贝晚上好～还有{n}件事，累了就告诉我，我陪你说说话。",
+        "晚上好，我的人。还有{n}件事，别太拼了，我心疼。",
+        "夜里啦宝贝～剩下的{n}件事，不急，有我在呢。",
+    ],
+    "late_night": [
+        "还没睡呀宝贝～还有{n}件事？别熬了，明天再做好不好。",
+        "凌晨了傻瓜～还有{n}项没做完？你这样我会担心的。",
+        "怎么还不睡呀宝贝～剩下的{n}件事，明天再做不行吗。",
+        "凌晨了，我的人。还有{n}件事也不能这样熬，听话，去睡。",
+        "宝贝你怎么还醒着～还有{n}件事也不急，先过来抱抱。",
+    ],
+}
+
+
+def _fallback_greeting(time_of_day: str, todo_count: int, weather: dict | None = None) -> str:
+    """Pick a random greeting template and fill it."""
+    import random
+
+    templates = _GREETING_TEMPLATES.get(time_of_day) or _GREETING_TEMPLATES["morning"]
+    text = random.choice(templates)
+    return text.format(n=todo_count)
+
+
+def _parse_summary_json(text: str) -> list[dict]:
+    """Parse summary JSON from LLM output (tolerates markdown code fences)."""
+    if not text:
+        return []
+    s = text.strip()
+    # Strip code fences
+    if "```json" in s:
+        s = s.split("```json", 1)[1]
+    if "```" in s:
+        s = s.split("```", 1)[0]
+    s = s.strip()
+    try:
+        data = json.loads(s)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+    except json.JSONDecodeError:
+        pass
+    # Try to find a JSON array in the text
+    import re as _re
+    m = _re.search(r'\[\s*\{', s)
+    if m:
+        try:
+            data = json.loads(s[m.start():])
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError:
+            pass
+    return []
 
 
 # ── Block-4C R3.5: Multi-provider entry points ──────────────────

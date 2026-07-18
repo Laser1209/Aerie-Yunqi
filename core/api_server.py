@@ -1614,13 +1614,26 @@ async def brief_today() -> dict:
         logger.warning("brief_today: run_all failed: %s", e)
         return JSONResponse({"error": "fetch_failed", "detail": str(e)}, status_code=500)
 
-    # Compose Markdown
+    # Compose greeting
+    greeting = ""
     try:
         brain = Brain()
+        greeting = await brain.compose_brief_greeting(
+            time_of_day=sections.get("time_of_day", "morning"),
+            todo_count=sections.get("todo_stats", {}).get("remaining", 0),
+            weather=sections.get("weather"),
+        )
+    except Exception as e:
+        logger.warning("brief_today: greeting failed: %s", e)
+
+    # Compose Markdown
+    try:
         md = await brain.compose_brief(sections)
     except Exception as e:
         logger.warning("brief_today: compose_brief failed: %s", e)
         md = ""
+
+    sections["greeting"] = greeting
 
     # Persist (no HTML for now — renderer renders JSON to DOM)
     brief_fetcher.save_brief(today, sections, html=md)
@@ -1684,12 +1697,100 @@ async def brief_run(request: Request, limit: int = Query(default=0, ge=0, le=50)
         return JSONResponse({"error": str(e)}, status_code=500)
     try:
         brain = Brain()
+        greeting = await brain.compose_brief_greeting(
+            time_of_day=sections.get("time_of_day", "morning"),
+            todo_count=sections.get("todo_stats", {}).get("remaining", 0),
+            weather=sections.get("weather"),
+        )
+        sections["greeting"] = greeting
         md = await brain.compose_brief(sections)
     except Exception:
         md = ""
+        sections["greeting"] = ""
     today = sections.get("date") or datetime.now().strftime("%Y-%m-%d")
     brief_fetcher.save_brief(today, sections, html=md)
     return {"status": "ok", "date": today, "markdown": md, "brief": sections, "limit": effective_limit or 0}
+
+
+# ── v12.2.0: Todo Management API ────────────────────────
+
+@app.get("/api/todos")
+async def get_todos(date: str | None = None) -> dict:
+    """Get todos for a given date (default: today)."""
+    try:
+        from core import todo_manager
+        todos = todo_manager.get_todos(date)
+        s = todo_manager.stats(date)
+        return {"status": "ok", "todos": todos, "stats": s}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/todos")
+async def add_todo(request: Request) -> dict:
+    """Add a new todo."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+    try:
+        from core import todo_manager
+        todo = todo_manager.add_todo(
+            title=body.get("title", ""),
+            priority=body.get("priority", "medium"),
+            notes=body.get("notes"),
+            due_time=body.get("due_time"),
+            estimated_minutes=body.get("estimated_minutes"),
+            date_str=body.get("date_str"),
+        )
+        return {"status": "ok", "todo": todo}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.patch("/api/todos/{todo_id}")
+async def update_todo(todo_id: str, request: Request, date: str | None = None) -> dict:
+    """Update a todo by id."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+    try:
+        from core import todo_manager
+        updated = todo_manager.update_todo(todo_id, body, date)
+        if updated is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return {"status": "ok", "todo": updated}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.delete("/api/todos/{todo_id}")
+async def delete_todo(todo_id: str, date: str | None = None) -> dict:
+    """Delete a todo by id."""
+    try:
+        from core import todo_manager
+        ok = todo_manager.delete_todo(todo_id, date)
+        if not ok:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/todos/{todo_id}/toggle")
+async def toggle_todo(todo_id: str, date: str | None = None) -> dict:
+    """Toggle todo completion status."""
+    try:
+        from core import todo_manager
+        updated = todo_manager.toggle_todo(todo_id, date)
+        if updated is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return {"status": "ok", "todo": updated}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── Block-5C: AI Provider options + safe shell ──────────────

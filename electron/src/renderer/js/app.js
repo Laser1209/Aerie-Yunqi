@@ -187,7 +187,20 @@ window.addEventListener("DOMContentLoaded", () => {
     } catch (_) {}
   };
   if (window.aerie && window.aerie.electron && window.aerie.electron.onBriefShow) {
-    window.aerie.electron.onBriefShow(() => emitBrief("brief:open"));
+    window.aerie.electron.onBriefShow((data) => {
+      emitBrief("brief:open");
+      if (data && data.expanded && window.briefDrawer) {
+        setTimeout(() => {
+          try { window.briefDrawer.expand && window.briefDrawer.expand(); } catch (_) {}
+        }, 300);
+      }
+    });
+  }
+  if (window.aerie && window.aerie.electron && window.aerie.electron.onOpenTab) {
+    window.aerie.electron.onOpenTab((tab) => {
+      const btn = document.querySelector('.sidebar-tab[data-tab="' + tab + '"]');
+      if (btn) btn.click();
+    });
   }
   // Wire the topbar / statusbar "今日简报" trigger, if any.
   document.querySelectorAll("[data-brief-open]").forEach((btn) => {

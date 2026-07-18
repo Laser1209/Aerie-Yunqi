@@ -4,22 +4,66 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DOUYIN_MCP_ROOT = Path(__file__).resolve().parent.parent / "douyin-mcp"
-_DOUYIN_SRC = _DOUYIN_MCP_ROOT / "src"
-
 _browser_service: Any | None = None
 _initialized = False
+_root_cache: Path | None = None
+
+
+def _resolve_douyin_mcp_root() -> Path:
+    """Resolve douyin-mcp root path with priority: env var > config > default."""
+    global _root_cache
+    if _root_cache is not None:
+        return _root_cache
+
+    env_path = os.environ.get("DOUYIN_MCP_ROOT")
+    if env_path:
+        p = Path(env_path).expanduser().resolve()
+        if p.exists():
+            logger.debug("douyin-mcp root from env: %s", p)
+            _root_cache = p
+            return p
+        logger.warning("DOUYIN_MCP_ROOT set but path not found: %s, falling back", env_path)
+
+    try:
+        _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+        _CONFIG_DIR = _PROJECT_ROOT / "config"
+        settings_yaml = _CONFIG_DIR / "settings.yaml"
+        if settings_yaml.exists():
+            import yaml
+            with open(settings_yaml, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            cfg_path = cfg.get("douyin_mcp_path") or cfg.get("tools", {}).get("douyin_mcp_path")
+            if cfg_path:
+                p = Path(cfg_path).expanduser()
+                if not p.is_absolute():
+                    p = (_PROJECT_ROOT / p).resolve()
+                if p.exists():
+                    logger.debug("douyin-mcp root from settings.yaml: %s", p)
+                    _root_cache = p
+                    return p
+    except Exception as e:
+        logger.debug("failed to read settings.yaml for douyin_mcp_path: %s", e)
+
+    default = Path(__file__).resolve().parent.parent / "douyin-mcp"
+    _root_cache = default
+    return default
+
+
+def _get_douyin_src() -> Path:
+    return _resolve_douyin_mcp_root() / "src"
 
 
 def _ensure_import_path() -> None:
-    if str(_DOUYIN_SRC) not in sys.path:
-        sys.path.insert(0, str(_DOUYIN_SRC))
+    src_path = _get_douyin_src()
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
 
 
 def _ensure_initialized() -> Any:
@@ -34,9 +78,10 @@ def _ensure_initialized() -> Any:
         from douyin_creator_mcp.services.browser_service import BrowserService
         from douyin_creator_mcp.storage.db import Database
 
-        settings = load_settings(dotenv_path=_DOUYIN_MCP_ROOT / ".env")
-        settings.data_dir = _DOUYIN_MCP_ROOT / "data"
-        settings.douyin_browser_profile_dir = _DOUYIN_MCP_ROOT / "data" / "browser-profile"
+        root = _resolve_douyin_mcp_root()
+        settings = load_settings(dotenv_path=root / ".env")
+        settings.data_dir = root / "data"
+        settings.douyin_browser_profile_dir = root / "data" / "browser-profile"
         ensure_runtime_dirs(settings)
 
         db = Database(settings.data_dir / "douyin.sqlite")
@@ -105,8 +150,9 @@ def _schema(desc: str, props: dict | None = None, required: list | None = None) 
 def register_douyin_tools(registry) -> None:
     """Register all douyin-mcp tools into the Aerie tool registry."""
 
-    if not _DOUYIN_MCP_ROOT.exists():
-        logger.warning("douyin-mcp not found at %s, skipping registration", _DOUYIN_MCP_ROOT)
+    root = _resolve_douyin_mcp_root()
+    if not root.exists():
+        logger.warning("douyin-mcp not found at %s, skipping registration", root)
         return
 
     sync_tools = [

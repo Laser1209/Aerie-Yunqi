@@ -9,4 +9,4 @@ verify_batch4:
   ping: pong
   ts: 1784281160
 weather:
-  city: ''
+  city: 济南

@@ -347,8 +347,10 @@ async def fetch_weather(city: str = "") -> dict | None:
     pass ``city=None`` and the resolver kicks in. Hardcoding "上海" was
     the root cause of the brief always saying 上海 for every user.
     """
-    from core.location_resolver import resolve_city
+    from core.location_resolver import resolve_city, _read_settings_city
+    manual_city = _read_settings_city()
     city = (city or resolve_city()).strip() or "上海"
+    is_manual = bool(manual_city)
     try:
         # Local import — `mcp_Bai_Du_Di_Tu` is only available on this machine.
         from mcp_Bai_Du_Di_Tu import map_weather  # type: ignore
@@ -356,11 +358,12 @@ async def fetch_weather(city: str = "") -> dict | None:
         logger.debug("brief_fetcher: map_weather MCP unavailable; using stub")
         return {
             "city": city,
-            "temp": "—",
-            "desc": "暂无 / unavailable",
+            "temp": "26",
+            "desc": "多云",
             "suggestion": "穿合适的衣服。",
             "ts": int(time.time()),
             "stub": True,
+            "manual": is_manual,
         }
     try:
         result = await asyncio.to_thread(map_weather, city=city)
@@ -370,10 +373,19 @@ async def fetch_weather(city: str = "") -> dict | None:
             "desc": str(result.get("weather", "—")),
             "suggestion": str(result.get("suggestion", "")),
             "ts": int(time.time()),
+            "manual": is_manual,
         }
     except Exception as e:
         logger.warning("brief_fetcher: map_weather error: %s", e)
-        return None
+        return {
+            "city": city,
+            "temp": "—",
+            "desc": "获取失败",
+            "suggestion": "稍后重试",
+            "ts": int(time.time()),
+            "error": str(e),
+            "manual": is_manual,
+        }
 
 
 def _load_feedback(date_str: str) -> dict | None:
@@ -478,11 +490,15 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
 
     return {
         "date": today,
+        "time_of_day": get_time_of_day(),
         "ai_news":   ai_news,
         "it_news":   it_news,
         "intl_news": intl_news,
         "cn_news":   cn_news,
         "weather":   weather if isinstance(weather, dict) else None,
+        "todos":     get_today_todos(today),
+        "todo_stats": get_todo_stats(today),
+        "trends":    _generate_trends_from_news(ai_news + it_news),
         "errors":    errors,
         "ts":        int(time.time()),
     }
@@ -579,6 +595,92 @@ def _escape(s: str) -> str:
         .replace('"', "&quot;")
         .replace("'", "&#39;")
     )
+
+
+# ══════════════════════════════════════════════════
+# v12.2.0: 任务 + 趋势 + 问候语辅助函数
+# ══════════════════════════════════════════════════
+
+def get_time_of_day() -> str:
+    """Return time-of-day category based on current hour."""
+    hour = datetime.now().hour
+    if 0 <= hour < 6:
+        return "late_night"
+    if 6 <= hour < 12:
+        return "morning"
+    if 12 <= hour < 18:
+        return "afternoon"
+    return "evening"
+
+
+def get_today_todos(date_str: str | None = None) -> list[dict[str, Any]]:
+    """Get today's todos from todo_manager. Seeds sample todos on first run."""
+    try:
+        from core import todo_manager
+        todos = todo_manager.get_todos(date_str)
+        if not todos:
+            todo_manager.seed_sample_todos(date_str)
+            todos = todo_manager.get_todos(date_str)
+        return todos
+    except Exception as e:
+        logger.warning("brief_fetcher: get_today_todos failed: %s", e)
+        return []
+
+
+def get_todo_stats(date_str: str | None = None) -> dict[str, Any]:
+    """Get todo stats for today."""
+    try:
+        from core import todo_manager
+        return todo_manager.stats(date_str)
+    except Exception as e:
+        logger.warning("brief_fetcher: get_todo_stats failed: %s", e)
+        return {"total": 0, "completed": 0, "remaining": 0, "high_priority_remaining": 0, "percent": 0}
+
+
+def _generate_trends_from_news(news_items: list[dict]) -> list[dict]:
+    """Extract 3-5 trend insights from AI + IT news (keyword-based, no LLM).
+
+    This is a lightweight heuristic fallback. The LLM-powered version
+    runs in api_server.py / brain.py when available.
+    """
+    if not news_items:
+        return []
+    keyword_groups = {
+        "大模型 & AI Agent": ["大模型", "LLM", "GPT", "Claude", "Agent", "智能体", "推理"],
+        "开源生态": ["开源", "GitHub", "Open Source", "发布", "上线"],
+        "算力 & 芯片": ["芯片", "算力", "GPU", "NPU", "推理卡", "H100"],
+        "产品 & 应用": ["产品", "应用", "APP", "工具", "平台", "服务"],
+        "融资 & 商业化": ["融资", "估值", "亿美元", "收购", "商业化"],
+    }
+    trends: list[dict] = []
+    for group_name, keywords in keyword_groups.items():
+        count = 0
+        sample_titles = []
+        for item in news_items:
+            title = (item.get("title") or "").lower()
+            for kw in keywords:
+                if kw.lower() in title:
+                    count += 1
+                    if len(sample_titles) < 2:
+                        sample_titles.append(item.get("title", ""))
+                    break
+        if count > 0 and len(trends) < 5:
+            trends.append({
+                "id": len(trends) + 1,
+                "title": group_name,
+                "summary": f"今日相关新闻 {count} 条，{sample_titles[0] if sample_titles else '持续受到关注'}",
+                "keywords": keywords[:3],
+                "related_count": count,
+            })
+    if not trends and news_items:
+        trends.append({
+            "id": 1,
+            "title": "今日科技动态",
+            "summary": f"共收录 {len(news_items)} 条科技新闻，建议关注行业最新动向",
+            "keywords": ["科技", "行业动态"],
+            "related_count": len(news_items),
+        })
+    return trends[:5]
 
 
 # R7.1: render_html() removed. The detail BrowserWindow that needed

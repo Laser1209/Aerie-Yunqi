@@ -1020,6 +1020,11 @@ app.on("before-quit", () => {
     pythonProc.kill();
     pythonProc = null;
   }
+  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+    dynamicIsland.setClosable(true);
+    dynamicIsland.close();
+    dynamicIsland = null;
+  }
   if (tray) tray.destroy();
 });
 

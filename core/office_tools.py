@@ -1537,7 +1537,35 @@ _OFFICE_TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "document_create",
-            "description": "创建并保存一个办公文档（Markdown/TXT格式）到本地 AerieOffice 目录。用于写报告、方案、总结、邮件草稿等。",
+            "description": """创建并保存一个办公文档（Markdown/TXT格式）到本地 AerieOffice 目录。
+
+使用场景：
+- 写报告、方案、总结、邮件草稿等文档
+- 保存文本内容到本地文件
+- 创建笔记、备忘录
+
+【重要】文件保存位置：
+文件会保存在用户的 AerieOffice 目录下（通常是 C:\\Users\\用户名\\AerieOffice\\）。
+如果用户要求保存到桌面、文档或其他位置，请先调用 document_create 创建文件，
+然后再调用 file_copy 或 file_move 把文件复制/移动到目标位置。
+
+参数说明：
+- filename: 文件名（不需要路径和后缀，会自动保存到 AerieOffice 目录）
+- content: 文档完整内容
+- format: 文档格式：markdown（默认）或 txt
+
+标准操作流程：
+1. 调用 document_create 创建文件（在 AerieOffice 目录）
+2. 如果用户要求保存到桌面，先获取桌面路径（不要硬编码！）：
+   - 推荐：用 shell_execute 执行 powershell -Command "[Environment]::GetFolderPath('Desktop')"
+   - 简单：用 shell_execute 执行 echo %USERPROFILE%\\Desktop
+3. 再调用 file_copy 或 file_move 把文件复制/移动到桌面
+
+示例：
+- 创建 TXT 文件：filename="笔记", content="今天的...", format="txt"
+- 创建后复制到桌面：先用 document_create，获取桌面路径，再用 file_copy
+
+相关工具：file_copy, file_move, document_read, document_convert, shell_execute""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1746,17 +1774,40 @@ _OFFICE_TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "file_copy",
-            "description": "复制文件或目录到目标位置。",
+            "description": """复制文件或目录到目标位置。
+
+使用场景：
+- 把生成的文件复制到桌面、文档等用户可见位置
+- 备份文件或目录
+- 在不同目录间复制文件
+
+参数说明：
+- source: 源文件或源目录的完整路径
+- destination: 目标路径（可以是目录路径，也可以是完整的目标文件路径）
+
+注意事项：
+- Windows 桌面路径通常是：C:\\Users\\用户名\\Desktop 或 ~/Desktop
+- 如果目标是目录，源文件会被复制到该目录下，保持原名
+- 如果目标是文件路径，源文件会被复制并重命名为目标文件名
+- 路径中带空格时，直接写完整路径即可，不需要额外加引号
+- 不确定桌面路径时，先用 shell_execute 动态获取：
+  powershell -Command "[Environment]::GetFolderPath('Desktop')"
+
+示例：
+- 复制到桌面：source="C:/AerieOffice/report.md", destination="C:/Users/Administrator/Desktop/"
+- 复制并重命名：source="data/temp.txt", destination="C:/Users/Administrator/Desktop/final.txt"
+
+相关工具：file_move, document_create, directory_create, shell_execute""",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "source": {
                         "type": "string",
-                        "description": "源文件或源目录路径",
+                        "description": "源文件或源目录的完整路径",
                     },
                     "destination": {
                         "type": "string",
-                        "description": "目标路径",
+                        "description": "目标路径（目录或完整文件路径）",
                     },
                 },
                 "required": ["source", "destination"],
@@ -1767,17 +1818,39 @@ _OFFICE_TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "file_move",
-            "description": "移动文件或目录到目标位置。",
+            "description": """移动文件或目录到目标位置。
+
+使用场景：
+- 把生成的文件移动到桌面、文档等用户可见位置
+- 整理文件，重新归类存放
+- 重命名并移动文件
+
+参数说明：
+- source: 源文件或源目录的完整路径
+- destination: 目标路径（可以是目录路径，也可以是完整的目标文件路径）
+
+注意事项：
+- Windows 桌面路径通常是：C:\\Users\\用户名\\Desktop 或 ~/Desktop
+- 移动后源文件会被删除，等同于剪切+粘贴
+- 如果目标是目录，源文件会被移动到该目录下，保持原名
+- 路径中带空格时，直接写完整路径即可，不需要额外加引号
+- 不确定桌面路径时，先用 shell_execute 动态获取：
+  powershell -Command "[Environment]::GetFolderPath('Desktop')"
+
+示例：
+- 移动到桌面：source="C:/AerieOffice/report.md", destination="C:/Users/Administrator/Desktop/"
+
+相关工具：file_copy, document_create, file_rename, shell_execute""",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "source": {
                         "type": "string",
-                        "description": "源文件或源目录路径",
+                        "description": "源文件或源目录的完整路径",
                     },
                     "destination": {
                         "type": "string",
-                        "description": "目标路径",
+                        "description": "目标路径（目录或完整文件路径）",
                     },
                 },
                 "required": ["source", "destination"],
@@ -2219,7 +2292,7 @@ def register_office_tools(registry) -> int:
     for name, func in tool_funcs.items():
         schema = _OFFICE_TOOL_SCHEMAS.get(name)
         if schema:
-            registry.register(name, func, schema)
+            registry.register(name, func, schema, category="office")
             count += 1
 
     logger.info("registered %d office tools", count)

@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Agent 抽象层 (S1 M1.1 + M1.2).
+"""Aerie · 云栖 v0.1.0-beta.1 — Agent 抽象层 (S1 M1.1 + M1.2).
 
 将原有的 7 大核心模块收口为统一的 Agent 视角，通过委托模式
 调用 Companion 内部的各个引擎，实现显式的六步主循环：
@@ -159,8 +159,23 @@ class Agent:
         settings = companion.settings if hasattr(companion, 'settings') else {}
         if isinstance(settings, dict):
             self._use_agent_path = settings.get("agent", {}).get("enabled", False)
+            self._task_planner_enabled = settings.get("agent", {}).get("task_planner_enabled", False)
+            self._max_plan_steps = settings.get("agent", {}).get("max_plan_steps", 10)
         else:
             self._use_agent_path = False
+            self._task_planner_enabled = False
+            self._max_plan_steps = 10
+
+        # 任务规划器（可选，默认关闭）
+        self._task_planner = None
+        if self._task_planner_enabled:
+            try:
+                from core.task_planner import TaskPlanner
+                self._task_planner = TaskPlanner(max_steps=self._max_plan_steps)
+                logger.info("Agent task planner enabled (max_steps=%d)", self._max_plan_steps)
+            except Exception:
+                logger.exception("Failed to initialize TaskPlanner, task planning disabled")
+                self._task_planner = None
 
     @property
     def use_agent_path(self) -> bool:
@@ -339,7 +354,21 @@ class Agent:
         """思考阶段: 调用 LLM Brain 进行推理."""
         tools = self.tool_registry.get_openai_schema() if perceived.route_mode == "FULL" else None
 
-        response = await self.brain.chat(perceived.context, tools=tools)
+        # 可选：任务规划注入（仅 FULL 模式且启用时）
+        context = perceived.context
+        if (self._task_planner and self._task_planner_enabled
+                and perceived.route_mode == "FULL"
+                and perceived.msg.content
+                and self._task_planner.should_plan(perceived.msg.content)):
+            try:
+                plan = self._task_planner.create_plan(perceived.msg.content)
+                context = self._inject_plan_into_context(context, plan)
+                logger.debug("Task plan injected: %d steps", plan.total_steps)
+            except Exception:
+                logger.exception("Task planning failed, falling back to normal mode")
+                context = perceived.context
+
+        response = await self.brain.chat(context, tools=tools)
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None) or {}
         tool_results = getattr(response, "tool_results", None) or []
@@ -787,3 +816,63 @@ class Agent:
             synthesized["react_source"] = "agent-synthesized"
 
         return synthesized
+
+    def _inject_plan_into_context(self, context: list[dict], plan) -> list[dict]:
+        """将任务计划注入到系统提示词中，引导 LLM 按步骤执行.
+
+        Args:
+            context: 原始上下文消息列表
+            plan: TaskPlan 对象
+
+        Returns:
+            注入计划后的新上下文列表
+        """
+        if not context or not plan or not plan.steps:
+            return context
+
+        # 构建计划描述文本
+        plan_lines = [
+            "",
+            "---",
+            "",
+            "【任务执行计划 · Task Execution Plan】",
+            f"任务：{plan.title}",
+            f"类型：{plan.task_type.value if hasattr(plan.task_type, 'value') else str(plan.task_type)}",
+            f"总步数：{plan.total_steps}",
+            "",
+            "请按以下步骤逐步执行任务：",
+        ]
+
+        for step in plan.steps:
+            status_text = f"[{step.status.value}]" if hasattr(step.status, 'value') else ""
+            plan_lines.append(
+                f"  {step.step_id}. {step.title} {status_text}"
+            )
+            if step.description:
+                plan_lines.append(f"     说明：{step.description}")
+            if step.tool and step.tool != "direct":
+                plan_lines.append(f"     推荐工具：{step.tool}")
+
+        plan_lines.extend([
+            "",
+            "执行要求：",
+            "1. 按步骤顺序执行，每步完成后验证结果",
+            "2. 不要跳步，也不要在一步内做多个步骤的事",
+            "3. 如果某步失败，分析原因后重试或调整方案",
+            "4. 全部完成后做最终检查，确保任务目标达成",
+            "",
+        ])
+
+        plan_text = "\n".join(plan_lines)
+
+        # 复制上下文，在系统提示词末尾追加计划
+        new_context = []
+        for i, msg in enumerate(context):
+            if i == 0 and msg.get("role") == "system":
+                new_msg = dict(msg)
+                new_msg["content"] = msg.get("content", "") + plan_text
+                new_context.append(new_msg)
+            else:
+                new_context.append(dict(msg))
+
+        return new_context

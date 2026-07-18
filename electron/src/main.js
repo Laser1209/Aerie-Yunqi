@@ -9,9 +9,25 @@ const http = require("http");
 const PY_PORT = 7890;
 const PY_BACKEND = "http://127.0.0.1:" + PY_PORT;
 
-const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
-const PYTHON_EXE = path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe");
-const PY_MAIN = path.join(PROJECT_ROOT, "main.py");
+let PROJECT_ROOT;
+let PYTHON_ROOT;
+let PYTHON_EXE;
+let PY_MAIN;
+let ICON_PATH;
+
+if (app.isPackaged) {
+  PROJECT_ROOT = path.dirname(process.execPath);
+  PYTHON_ROOT = path.join(process.resourcesPath, "python");
+  PYTHON_EXE = path.join(PYTHON_ROOT, ".venv", "Scripts", "python.exe");
+  PY_MAIN = path.join(PYTHON_ROOT, "main.py");
+  ICON_PATH = path.join(process.resourcesPath, "icon.png");
+} else {
+  PROJECT_ROOT = path.resolve(__dirname, "..", "..");
+  PYTHON_ROOT = PROJECT_ROOT;
+  PYTHON_EXE = path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe");
+  PY_MAIN = path.join(PROJECT_ROOT, "main.py");
+  ICON_PATH = path.join(PROJECT_ROOT, "Aerie · 云栖.png");
+}
 
 // ── State ──────────────────────────────────────────
 let pythonProc = null;
@@ -48,7 +64,7 @@ function _spawnNewPython() {
   console.log("[main] starting Python backend:", PY_MAIN);
 
   pythonProc = spawn(PYTHON_EXE, [PY_MAIN], {
-    cwd: PROJECT_ROOT,
+    cwd: PYTHON_ROOT,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
@@ -209,12 +225,13 @@ function createMainWindow() {
     transparent: true,
     titleBarStyle: "hidden",
     backgroundColor: "#00000000",
+    backgroundMaterial: "acrylic",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    icon: path.join(PROJECT_ROOT, "Aerie · 云栖.png"),
+    icon: ICON_PATH,
   });
 
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
@@ -360,12 +377,11 @@ function broadcastMaximizeState(isMax) {
 
 // ── Tray ───────────────────────────────────────────
 function createTray() {
-  const iconPath = path.join(PROJECT_ROOT, "Aerie · 云栖.png");
-  if (!fs.existsSync(iconPath)) {
-    console.warn("[main] tray icon not found:", iconPath);
+  if (!fs.existsSync(ICON_PATH)) {
+    console.warn("[main] tray icon not found:", ICON_PATH);
     return;
   }
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  const icon = nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 });
   tray = new Tray(icon);
   tray.setToolTip("Aerie · 云栖");
   // Block-2 T1: right-click context menu
@@ -1356,7 +1372,11 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  // Don't quit on all windows closed (keep tray)
+  // Keep app running if tray is available (background mode with Dynamic Island)
+  // If tray failed to create, quit after all windows close
+  if (!tray) {
+    app.quit();
+  }
 });
 
 app.on("before-quit", () => {

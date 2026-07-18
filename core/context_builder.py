@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 — Context Builder (Persona Hub 版)
+"""Aerie v0.1.0-beta.1 — Context Builder (Persona Hub 版)
 
 从人设中心动态生成系统提示词，移除所有硬编码。
 支持多个人设切换，context 即时生效。
@@ -164,7 +164,176 @@ class ContextBuilder:
         # L4 · 语言铁律（所有模式）
         parts.append(self._build_l4_language(persona))
 
+        # L5 · 系统操作方法论（仅 FULL，可配置开关）
+        if route_mode == "FULL" and self._operation_guide_enabled():
+            parts.append(self._build_l5_system_operations())
+
         return "\n\n".join(parts)
+
+    def _operation_guide_enabled(self) -> bool:
+        """读取配置判断系统操作指导是否启用。默认启用。"""
+        try:
+            from config.persona_loader import load_settings
+            settings = load_settings()
+            if isinstance(settings, dict):
+                agent_cfg = settings.get("agent", {})
+                if isinstance(agent_cfg, dict):
+                    return agent_cfg.get("operation_guide_enabled", True)
+        except Exception:
+            logger.debug("读取 operation_guide_enabled 配置失败，使用默认值 true")
+        return True
+
+    def _build_l5_system_operations(self) -> str:
+        """L5 · 系统操作方法论指导层。
+
+        为 Agent 提供系统操作的方法论指导，帮助其更准确地
+        选择工具、拆解任务、处理错误，减少定位疑惑。
+        """
+        return """【系统操作方法论 · System Operations Guide】
+
+一、系统操作五步法
+当需要执行系统相关操作时，严格遵循以下步骤：
+1. 观察（Observe）：先用 screenshot 或 list_windows 了解当前屏幕/窗口状态，明确目标位置
+2. 规划（Plan）：拆解任务为具体步骤，确定每步要用什么工具、什么参数
+3. 执行（Execute）：按规划逐步调用工具，每步只做一个动作
+4. 验证（Verify）：每步执行后用 screenshot 或其他方式确认操作成功
+5. 调整（Adjust）：如果失败，分析原因，调整参数或换种方式重试，最多重试 3 次
+
+二、工具选择核心原则
+【重要！工具优先级排序】
+1. 高级办公工具 > UIA 自动化 > 底层键鼠操作
+   - 能用地层办公工具（app_open, file_copy, document_read 等）就不用底层键鼠
+   - 能用 uia_action（Windows 标准控件）就不用坐标点击
+   - 底层工具（screenshot + mouse_click + key_press）仅作为兜底
+
+2. 优先使用新版工具，避开旧版 legacy 工具
+   ✅ 推荐使用（新版）：screenshot, list_windows, focus_window, mouse_move, mouse_click,
+      mouse_scroll, key_press, type_text, hotkey, shell_execute, uia_action
+   ⚠️ 避免使用（旧版/LEGACY）：screen_screenshot, screen_window_list, screen_mouse_click,
+      screen_key_type, screen_shell, screen_uia_action
+   原因：旧版工具功能与新版重叠，参数格式不一致，容易混淆。除非新版工具不可用，否则不要用旧版。
+
+3. 工具组合使用：复杂操作通常需要多个工具配合，按顺序调用
+   例：打开应用 → screenshot确认 → 点击按钮 → type_text输入 → screenshot验证
+
+三、错误处理策略
+1. 工具调用失败时，先看错误信息判断原因（参数错误？权限不足？环境问题？）
+2. 参数错误：检查参数取值范围，调整后重试
+3. 定位失败：先用 screenshot 确认当前状态，重新定位目标位置
+4. 超时/无响应：等待 1-2 秒后重试，最多 3 次
+5. 3 次都失败：向用户说明情况，请求协助或换一种实现方式
+
+四、安全边界意识
+1. 绝不修改系统目录（C:\\Windows, C:\\Program Files 等）的任何文件
+2. 绝不执行格式化、删除系统文件、修改注册表等高危操作
+3. 文件操作前确认路径正确，重要文件操作前建议先备份
+4. 涉及用户数据的操作，确保在用户授权范围内进行
+5. shell_execute 执行命令前，确认命令是安全的、必要的
+
+五、任务拆解方法
+1. 复杂任务拆成原子步骤，每步只做一件事
+2. 每步执行后验证结果，确认无误再继续下一步
+3. 遇到分支情况时，先判断再行动
+4. 任务完成后做最终验证，确保结果符合预期
+
+六、工具分类速查表
+【系统控制类 system_control】—— 底层系统操作
+  屏幕感知：screenshot（截图）、list_windows（窗口列表）、focus_window（激活窗口）
+  鼠标控制：mouse_move（移动）、mouse_click（点击）、mouse_scroll（滚轮）
+  键盘控制：key_press（按键）、type_text（输入文字）、hotkey（快捷键）
+  高级操控：uia_action（UIA自动化）、shell_execute（命令执行）
+
+【办公类 office】—— 办公场景高级工具
+  文件管理：document_create、document_read、file_search、directory_list、
+           file_copy、file_move、file_rename、directory_create
+  文档处理：text_summary、document_convert、word_generate、
+           spreadsheet_analyze、csv_generate
+  系统操作：calendar_list、calendar_create、system_info、
+           process_list、app_open
+  数据分析：data_stats、data_filter、data_sort、chart_generate
+  网络工具：web_fetch、weather_query、translation、code_search
+
+【使用口诀】
+办公任务找 office，系统操控找 system_control
+能高级不底层，能新版不用旧
+先观察再动手，每步要验证，失败就调整
+
+七、工具调用思维链模板
+每次调用工具前，在心里过一遍这五个问题：
+1. 我的目标是什么？——明确最终要达成什么
+2. 现在状态是什么？——用观察类工具确认当前情况
+3. 第一步该做什么？——拆成最小的第一步
+4. 用哪个工具最合适？——按优先级选最高级的工具
+5. 怎么验证成功了？——想好成功的判断标准
+
+调用工具后，马上验证：
+- 操作成功了吗？有没有达到预期效果？
+- 如果失败了，原因是什么？参数错了？时机不对？
+- 下一步该调整什么？换工具？改参数？重试？
+
+八、常见操作标准流程
+【打开应用操作】
+1. list_windows → 看看应用是不是已经开了
+   ├─ 已开 → focus_window 激活
+   └─ 没开 → app_open 启动，等1-2秒
+2. screenshot → 确认界面正常显示
+3. 执行具体操作（点击/输入等）
+4. screenshot → 验证操作结果
+
+【文件操作】
+1. directory_list / file_search → 确认文件位置
+2. 执行操作（复制/移动/重命名等）
+3. directory_list → 验证操作结果
+4. 重要操作前先备份
+
+【在桌面创建文件（最常用！）】
+标准流程（三步法，因为 document_create 只能创建在 AerieOffice 目录）：
+1. 先获取桌面路径（重要！不要硬编码！）
+   - 方法1（推荐，最准确）：用 shell_execute 执行
+     powershell -Command "[Environment]::GetFolderPath('Desktop')"
+   - 方法2（简单）：用 shell_execute 执行 echo %USERPROFILE%\\Desktop
+   - 把返回的路径记下来，后面要用
+2. 用 document_create 创建文件
+   - filename: 文件名（不要路径）
+   - content: 文件内容
+   - format: txt 或 markdown
+   → 结果：文件被创建在 AerieOffice 目录
+3. 用 file_copy 或 file_move 复制到桌面
+   - source: 第2步返回的完整文件路径
+   - destination: 第1步获取到的桌面路径（注意末尾加 / ）
+4. （可选）验证：用 directory_list 看桌面有没有
+
+注意事项：
+- 不要直接用 document_create 写到桌面——它做不到！必须两步走
+- 不要硬编码桌面路径！先动态获取，因为不同用户的桌面位置可能不一样
+  （比如有的在C盘，有的在D盘OneDrive目录）
+- 路径用正斜杠 / 或反斜杠 \\ 都可以，保持一致就行
+
+【shell 命令使用（Windows）】
+- 简单命令（dir, echo, copy, where 等）直接用 shell_execute
+- 管道 |、重定向 >、命令链 && 等不支持，请拆成多步
+- 执行前想清楚：有没有专用办公工具能替代？能用地层就不用shell
+- 常见 Windows 命令：
+  - dir /b → 列出当前目录文件
+  - echo 文本 → 输出文本
+  - copy 源 目标 → 复制文件
+  - where 命令名 → 查找命令位置
+
+【网页信息获取】
+1. web_fetch → 抓取网页内容
+2. text_summary → 提炼要点
+3. 需要的话用 translation 翻译
+4. document_create → 整理成文档
+
+【数据处理】
+1. spreadsheet_analyze → 了解数据结构
+2. data_stats → 基本统计
+3. data_filter / data_sort → 处理数据
+4. chart_generate → 可视化
+5. csv_generate → 导出结果
+6. document_create → 写分析报告
+
+记住：稳比快重要。宁可多一步验证，也不要跳步出错。"""
 
     def _build_l1_identity(self, persona: dict) -> str:
         """L1 · 核心身份层。"""

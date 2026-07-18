@@ -26,6 +26,9 @@ window.addEventListener("DOMContentLoaded", () => {
     window.settingsPanel.init();
   }
 
+  // ── v13.9.9: First-run self-check → jump to API Key setup ─
+  _runFirstRunSelfCheck();
+
   // ── Data viewer ─────────────────────────────────
   if (window.dataViewer) {
     window.dataViewer.init();
@@ -118,13 +121,13 @@ window.addEventListener("DOMContentLoaded", () => {
     btnMax.addEventListener("click", (e) => {
       e.stopPropagation();
       winApi.toggleMaximize().then((isMax) => {
-        btnMax.classList.toggle("titlebar-btn--maximized", !!isMax);
+        btnMax.classList.toggle("header-btn--maximized", !!isMax);
         btnMax.title = isMax ? "还原" : "最大化";
       });
     });
     if (winApi.onMaximize) {
       winApi.onMaximize((isMax) => {
-        btnMax.classList.toggle("titlebar-btn--maximized", !!isMax);
+        btnMax.classList.toggle("header-btn--maximized", !!isMax);
         btnMax.title = isMax ? "还原" : "最大化";
       });
     }
@@ -136,15 +139,15 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Double-click titlebar to toggle maximize (Windows convention)
-  const titlebar = document.getElementById("titlebar");
-  if (titlebar && winApi) {
-    titlebar.addEventListener("dblclick", (e) => {
+  // Double-click app-header to toggle maximize (Windows convention)
+  const appHeader = document.getElementById("app-header");
+  if (appHeader && winApi) {
+    appHeader.addEventListener("dblclick", (e) => {
       // Ignore double-clicks on the buttons themselves
-      if (e.target.closest(".titlebar-btn")) return;
+      if (e.target.closest(".header-btn")) return;
       winApi.toggleMaximize().then((isMax) => {
         if (btnMax) {
-          btnMax.classList.toggle("titlebar-btn--maximized", !!isMax);
+          btnMax.classList.toggle("header-btn--maximized", !!isMax);
           btnMax.title = isMax ? "还原" : "最大化";
         }
       });
@@ -378,6 +381,37 @@ function _hideStaleBanner() {
     _staleBannerEl.parentNode.removeChild(_staleBannerEl);
   }
   _staleBannerEl = null;
+}
+
+// ── v13.9.9: First-run self-check ───────────────
+async function _runFirstRunSelfCheck() {
+  try {
+    // Wait for backend to be ready
+    let ready = false;
+    for (let i = 0; i < 30; i++) {
+      try {
+        const h = await window.aerie.api.request({ method: "GET", path: "/api/health" });
+        if (h && !h.error) { ready = true; break; }
+      } catch (_) { /* ignore */ }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!ready) return;
+
+    const r = await window.aerie.api.request({ method: "GET", path: "/api/self-check" });
+    if (r && r.data && !r.data.error && r.data.has_api_key === false) {
+      // No API key configured — switch to settings → API Key tab
+      const tab = document.querySelector('.sidebar-tab[data-tab="settings"]');
+      if (tab) tab.click();
+      // Small delay to let settings panel render
+      setTimeout(() => {
+        if (window.settingsPanel && typeof window.settingsPanel._switchMode === "function") {
+          window.settingsPanel._switchMode("apikey");
+        }
+      }, 200);
+    }
+  } catch (_) {
+    // Silent fail — self-check is best-effort
+  }
 }
 
 function _showStaleCodeToast(stale) {

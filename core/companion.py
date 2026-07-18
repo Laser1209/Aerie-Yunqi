@@ -57,8 +57,7 @@ class Companion:
         # Phase 9 Batch 1: emotion state store persists PAD + threshold
         # snapshots for 24h/7d/30d history curves on the dashboard.
         # OWNER: companion.py — always pass this instance to downstream modules.
-        self.state_store = EmotionStateStore(self.db)
-        # R7.0: build the brain first so EmotionEngine can call back into
+        self.state_store = EmotionStateStore(self.db)        # R7.0: build the brain first so EmotionEngine can call back into
         # it for LLM-driven PAD inference. The keyword path is still
         # always available as a fallback when the LLM call fails.
         # OWNER: companion.py — always pass this instance to downstream modules.
@@ -99,6 +98,9 @@ class Companion:
         # v13.9: 细粒度权限管理器（目录授权 + 操作分类 + 高危确认）
         self.permission_manager = FineGrainedPermissionManager()
         self.tool_registry = ToolRegistry(self.db)
+        # ⚠️ 重要：必须在 register_all_tools 之前设置 _COMPANION，
+        # 否则 compute_tools 等通过 get_companion() 获取依赖的工具会注册失败
+        _COMPANION = self
         register_all_tools(self.tool_registry)
         # v13.9: 任务规划引擎 + 执行引擎 + 异步任务
         from core.task_planner import TaskPlanner
@@ -153,6 +155,7 @@ class Companion:
             db=self.db,
             self_evolver=self.self_evolver,
             cognition=self.cognition,
+            settings=self.settings,
         )
 
         # Push scheduler

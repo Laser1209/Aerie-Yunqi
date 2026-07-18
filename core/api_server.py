@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — HTTP API server (FastAPI + uvicorn).
+"""Aerie · 云栖 v0.1.0-beta.1 — HTTP API server (FastAPI + uvicorn).
 
 Routes:
   GET  /api/health          — heartbeat + QQ WS status
@@ -2236,6 +2236,148 @@ async def settings_reset() -> dict:
         return {"status": "ok", "settings": settings}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── v13.9.9: API Key management & self-check ──
+
+_PROVIDER_META = [
+    {"key": "deepseek", "name": "DeepSeek", "env_key": "DEEPSEEK_API_KEY",
+     "env_url": "DEEPSEEK_BASE_URL", "env_model": "DEEPSEEK_MODEL",
+     "default_url": "https://api.deepseek.com/v1", "default_model": "deepseek-chat"},
+    {"key": "dashscope", "name": "通义千问 (DashScope)", "env_key": "DASHSCOPE_API_KEY",
+     "env_url": "QWEN_BASE_URL", "env_model": "QWEN_MODEL",
+     "default_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "default_model": "qwen-plus"},
+    {"key": "doubao", "name": "豆包 (Doubao)", "env_key": "DOUBAO_API_KEY",
+     "env_url": "DOUBAO_BASE_URL", "env_model": "DOUBAO_MODEL",
+     "default_url": "https://ark.cn-beijing.volces.com/api/v3", "default_model": "doubao-seed-2-1-turbo-260628"},
+    {"key": "siliconflow", "name": "SiliconFlow", "env_key": "SILICONFLOW_API_KEY",
+     "env_url": "SILICONFLOW_BASE_URL", "env_model": "SILICONFLOW_MODEL",
+     "default_url": "https://api.siliconflow.com/v1", "default_model": "google/gemma-4-26B-A4B-it"},
+    {"key": "openai", "name": "OpenAI / GPT", "env_key": "OPENAI_API_KEY",
+     "env_url": "OPENAI_BASE_URL", "env_model": "OPENAI_MODEL",
+     "default_url": "https://api.codexgood.com/v1", "default_model": "gpt-5.5"},
+    {"key": "gemini", "name": "Gemini", "env_key": "GEMINI_API_KEY",
+     "env_url": "GEMINI_BASE_URL", "env_model": "GEMINI_MODEL",
+     "default_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "default_model": "gemini-2.0-flash-exp"},
+    {"key": "glm", "name": "智谱 GLM", "env_key": "BIGMODEL_API_KEY",
+     "env_url": "BIGMODEL_BASE_URL", "env_model": "BIGMODEL_MODEL",
+     "default_url": "https://open.bigmodel.cn/api/paas/v4/", "default_model": "glm-4-plus"},
+    {"key": "minimax", "name": "MiniMax", "env_key": "MINIMAX_API_KEY",
+     "env_url": "MINIMAX_BASE_URL", "env_model": "MINIMAX_MODEL",
+     "default_url": "https://api.minimaxi.com/v1", "default_model": "MiniMax-M3"},
+]
+
+
+def _env_file_path() -> Path:
+    """Return path to .env file (same directory as main.py)."""
+    return Path(__file__).resolve().parent.parent / ".env"
+
+
+def _read_env_file() -> dict[str, str]:
+    """Parse .env file into a dict. Returns empty dict if file doesn't exist."""
+    env_path = _env_file_path()
+    result: dict[str, str] = {}
+    if not env_path.exists():
+        return result
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        result[k.strip()] = v.strip()
+    return result
+
+
+def _write_env_file(data: dict[str, str]) -> None:
+    """Write env dict back to .env file, preserving comments and order where possible."""
+    env_path = _env_file_path()
+    existing_lines: list[str] = []
+    if env_path.exists():
+        existing_lines = env_path.read_text(encoding="utf-8").splitlines()
+
+    updated = set()
+    new_lines: list[str] = []
+    for line in existing_lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k = stripped.split("=", 1)[0].strip()
+            if k in data:
+                new_lines.append(f"{k}={data[k]}")
+                updated.add(k)
+                continue
+        new_lines.append(line)
+
+    for k, v in data.items():
+        if k not in updated:
+            new_lines.append(f"{k}={v}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+
+@app.get("/api/env/providers")
+async def env_providers() -> dict:
+    """Return list of AI providers with config status (keys masked)."""
+    env = _read_env_file()
+    providers = []
+    for meta in _PROVIDER_META:
+        key_val = env.get(meta["env_key"], "")
+        providers.append({
+            "key": meta["key"],
+            "name": meta["name"],
+            "configured": bool(key_val),
+            "api_key_masked": "•" * 8 + key_val[-4:] if len(key_val) > 4 else ("•" * len(key_val) if key_val else ""),
+            "base_url": env.get(meta["env_url"], meta["default_url"]),
+            "model": env.get(meta["env_model"], meta["default_model"]),
+            "env_key": meta["env_key"],
+            "env_url": meta["env_url"],
+            "env_model": meta["env_model"],
+            "default_url": meta["default_url"],
+            "default_model": meta["default_model"],
+        })
+    return {"providers": providers}
+
+
+@app.post("/api/env/save")
+async def env_save(request: Request) -> dict:
+    """Save provider API key / base_url / model to .env file.
+
+    Body: {"provider_key": "deepseek", "api_key": "...", "base_url": "...", "model": "..."}
+    """
+    try:
+        body = await request.json()
+        provider_key = body.get("provider_key", "")
+        meta = next((m for m in _PROVIDER_META if m["key"] == provider_key), None)
+        if not meta:
+            return JSONResponse({"error": "Unknown provider: " + provider_key}, status_code=400)
+
+        env = _read_env_file()
+        api_key = body.get("api_key")
+        if api_key is not None:
+            env[meta["env_key"]] = api_key
+        base_url = body.get("base_url")
+        if base_url is not None:
+            env[meta["env_url"]] = base_url
+        model = body.get("model")
+        if model is not None:
+            env[meta["env_model"]] = model
+
+        _write_env_file(env)
+        return {"status": "ok", "provider": provider_key}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/self-check")
+async def self_check() -> dict:
+    """First-run self-check: API key status, DB health, etc."""
+    env = _read_env_file()
+    has_any_key = any(env.get(m["env_key"], "") for m in _PROVIDER_META)
+    configured = [m["key"] for m in _PROVIDER_META if env.get(m["env_key"], "")]
+    return {
+        "has_api_key": has_any_key,
+        "providers_configured": configured,
+        "db_ok": _db is not None,
+    }
 
 
 # R7.3: dedicated city-set endpoint so the brief-drawer pin button can

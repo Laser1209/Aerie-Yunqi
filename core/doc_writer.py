@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 · 文档写作模块
+"""Aerie v0.1.0-beta.1 · 文档写作模块
 
 支持 5 类文档模板：
   - diary: 日记
@@ -706,17 +706,17 @@ class DocWriter:
         try:
             import weasyprint  # noqa: F401
             deps["weasyprint"] = True
-        except ImportError:
+        except (ImportError, OSError, Exception):
             pass
         try:
             import docx  # noqa: F401
             deps["python_docx"] = True
-        except ImportError:
+        except (ImportError, OSError, Exception):
             pass
         try:
             import markdown  # noqa: F401
             deps["markdown"] = True
-        except ImportError:
+        except (ImportError, OSError, Exception):
             pass
         return deps
 

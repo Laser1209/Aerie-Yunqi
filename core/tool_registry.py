@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Tool registry with OpenAI function-calling schema.
+"""Aerie · 云栖 v0.1.0-beta.1 — Tool registry with OpenAI function-calling schema.
 
 Block-4C R3.2: each registered tool carries a ``provider_hint`` that the
 SkillRouter (or any future routing layer) can use to pick a real model
@@ -28,7 +28,7 @@ ToolFn = Callable[..., dict]
 
 class ToolRegistry:
     def __init__(self, db: Any = None) -> None:
-        # name -> {"func": ToolFn, "schema": dict, "provider_hint": str}
+        # name -> {"func": ToolFn, "schema": dict, "provider_hint": str, "category": str}
         self._tools: dict[str, dict] = {}
         self.db = db
 
@@ -38,17 +38,27 @@ class ToolRegistry:
         func: ToolFn,
         schema: dict,
         provider_hint: str = "text",
+        category: str = "utility",
     ) -> None:
         """Register a tool. ``provider_hint`` is consumed by SkillRouter
         and surfaced in the OpenAI function-calling schema.
+
+        ``category`` is used for tool grouping and prompt-side guidance:
+        - system_control: 底层系统控制（截图、键鼠、shell、窗口等）
+        - office: 办公场景工具（文件、文档、数据、日历等）
+        - browser: 浏览器相关工具
+        - douyin: 抖音互动工具
+        - utility: 通用实用工具（默认）
         """
         self._tools[name] = {
             "func": func,
             "schema": schema or {},
             "provider_hint": str(provider_hint or "text"),
+            "category": str(category or "utility"),
         }
         logger.debug(
-            "tool %s registered (provider_hint=%s)", name, provider_hint,
+            "tool %s registered (provider_hint=%s, category=%s)",
+            name, provider_hint, category,
         )
 
     def get(self, name: str) -> dict | None:
@@ -61,6 +71,41 @@ class ToolRegistry:
     def list_provider_hints(self) -> dict[str, str]:
         """Return name -> provider_hint mapping for brain routing."""
         return {n: t["provider_hint"] for n, t in self._tools.items()}
+
+    def get_tool_categories(self) -> list[str]:
+        """Return all distinct tool categories."""
+        cats = set()
+        for t in self._tools.values():
+            cats.add(t.get("category", "utility"))
+        return sorted(cats)
+
+    def get_tools_by_category(self, category: str) -> list[str]:
+        """Return tool names belonging to a specific category."""
+        result = []
+        for name, t in self._tools.items():
+            if t.get("category", "utility") == category:
+                result.append(name)
+        return result
+
+    def get_category_map(self) -> dict[str, list[str]]:
+        """Return category -> [tool_names] mapping for prompt-side guidance."""
+        mapping: dict[str, list[str]] = {}
+        for name, t in self._tools.items():
+            cat = t.get("category", "utility")
+            if cat not in mapping:
+                mapping[cat] = []
+            mapping[cat].append(name)
+        return mapping
+
+    def summary(self) -> str:
+        """Return a human-readable summary of registered tools, for logging."""
+        cats = self.get_category_map()
+        total = len(self._tools)
+        lines = [f"ToolRegistry: {total} tools total"]
+        for cat in sorted(cats.keys()):
+            tools = sorted(cats[cat])
+            lines.append(f"  - {cat}: {len(tools)} tools ({', '.join(tools)})")
+        return "\n".join(lines)
 
     def get_openai_schema(self) -> list[dict]:
         """Return OpenAI function-calling schema for every registered tool.

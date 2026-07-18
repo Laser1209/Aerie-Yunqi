@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Brain: multi-provider LLM call layer with fallback chain."""
+"""Aerie · 云栖 v0.1.0-beta.1 — Brain: multi-provider LLM call layer with fallback chain."""
 
 from __future__ import annotations
 import json
@@ -117,24 +117,28 @@ class Brain:
         sf_key = os.getenv("OPENAI_API_KEY", "")
         sf_url = os.getenv("OPENAI_BASE_URL", "https://api.siliconflow.cn/v1")
         sf_model = os.getenv("OPENAI_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+        sf_supports_tools = os.getenv("SF_SUPPORTS_TOOLS", "false").lower() == "true"
         if sf_key:
             providers.append({
                 "name": "siliconflow",
                 "url": sf_url,
                 "key": sf_key,
                 "model": sf_model,
+                "supports_tools": sf_supports_tools,
             })
 
         # Fallback: DeepSeek
         ds_key = os.getenv("DEEPSEEK_API_KEY", "")
         ds_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
         ds_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        ds_supports_tools = os.getenv("DS_SUPPORTS_TOOLS", "false").lower() == "true"
         if ds_key:
             providers.append({
                 "name": "deepseek",
                 "url": ds_url,
                 "key": ds_key,
                 "model": ds_model,
+                "supports_tools": ds_supports_tools,
             })
 
         # Secondary fallback: SiliconFlow free models
@@ -145,28 +149,33 @@ class Brain:
                 "url": sf_url,
                 "key": sf_key,
                 "model": sf_free_model,
+                "supports_tools": False,
             })
 
         # Tertiary fallback: Qwen (DashScope)
         qw_key = os.getenv("DASHSCOPE_API_KEY", "")
+        qw_supports_tools = os.getenv("QWEN_SUPPORTS_TOOLS", "false").lower() == "true"
         if qw_key:
             providers.append({
                 "name": "qwen",
                 "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "key": qw_key,
                 "model": "qwen-plus",
+                "supports_tools": qw_supports_tools,
             })
 
         # v13.0: Doubao / 豆包（火山方舟 Ark）
         doubao_key = os.getenv("DOUBAO_API_KEY", "")
         doubao_url = os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
         doubao_model = os.getenv("DOUBAO_MODEL", "doubao-seed-2-1-turbo-260628")
+        doubao_supports_tools = os.getenv("DOUBAO_SUPPORTS_TOOLS", "true").lower() == "true"
         if doubao_key:
             providers.append({
                 "name": "doubao",
                 "url": doubao_url,
                 "key": doubao_key,
                 "model": doubao_model,
+                "supports_tools": doubao_supports_tools,
             })
 
         if not providers:
@@ -213,6 +222,17 @@ class Brain:
                 pref = providers.pop(pref_idx)
                 providers.insert(0, pref)
                 logger.debug("provider reordered: %s promoted to first", preferred_provider)
+
+        # 工具调用场景：把支持工具调用的 provider 移到前面
+        # （用户指定的 preferred_provider 优先级仍最高）
+        need_tools = tools is not None and tool_registry is not None and len(tools) > 0
+        if need_tools and not preferred_provider:
+            tool_providers = [p for p in providers if p.get("supports_tools", False)]
+            other_providers = [p for p in providers if not p.get("supports_tools", False)]
+            if tool_providers:
+                providers = tool_providers + other_providers
+                tool_names = [p["name"] for p in tool_providers]
+                logger.debug("tool-use mode: providers reordered, tool-capable first: %s", tool_names)
 
         for idx, provider in enumerate(providers):
             try:
@@ -314,8 +334,9 @@ class Brain:
                         working_msgs.append(tool_msg)
 
                         logger.info(
-                            "ReAct tool: %s → %s (%.2fms)",
+                            "ReAct tool: %s → %s (%.2fms)%s",
                             tc_name, "ok" if success else "fail", tool_dur,
+                            "" if success else f" error={result.get('error', 'unknown')[:80]}",
                         )
 
                 # Hit max rounds or provider returned fallback — try next provider

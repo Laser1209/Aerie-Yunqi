@@ -3,8 +3,9 @@
 
 class SettingsPanel {
   constructor() {
-    this._currentMode = "form"; // "form" | "yaml"
+    this._currentMode = "form"; // "form" | "apikey" | "yaml"
     this._currentYamlFile = "settings.yaml";
+    this._apikeyProviders = [];
   }
 
   init() {
@@ -83,6 +84,10 @@ class SettingsPanel {
     if (reloadBtn) reloadBtn.addEventListener("click", () => this.loadYaml());
     const backupBtn = document.getElementById("yaml-backup-btn");
     if (backupBtn) backupBtn.addEventListener("click", () => this.backupYaml());
+
+    // API Key view controls
+    const reloadApiBtn = document.getElementById("apikey-reload-btn");
+    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => this.loadApiKeys());
   }
 
   async restartBackend() {
@@ -163,12 +168,161 @@ class SettingsPanel {
       b.classList.toggle("active", b.getAttribute("data-mode") === mode);
     });
     const formView = document.getElementById("settings-form-view");
+    const apikeyView = document.getElementById("settings-apikey-view");
     const yamlView = document.getElementById("settings-yaml-view");
     if (formView) formView.style.display = mode === "form" ? "" : "none";
+    if (apikeyView) apikeyView.style.display = mode === "apikey" ? "" : "none";
     if (yamlView) yamlView.style.display = mode === "yaml" ? "" : "none";
     if (mode === "yaml") {
       this.loadYaml();
+    } else if (mode === "apikey") {
+      this.loadApiKeys();
     }
+  }
+
+  async loadApiKeys() {
+    const st = document.getElementById("apikey-status");
+    try {
+      if (st) { st.textContent = "加载中…"; st.style.color = "var(--text-muted, #999)"; }
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/providers" });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      this._apikeyProviders = (r && r.data && r.data.providers) || [];
+      this._renderApiKeyList();
+      if (st) { st.textContent = ""; }
+    } catch (e) {
+      if (st) { st.textContent = "加载失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+    }
+  }
+
+  _renderApiKeyList() {
+    const list = document.getElementById("apikey-provider-list");
+    if (!list) return;
+    list.innerHTML = "";
+
+    this._apikeyProviders.forEach((p) => {
+      const card = document.createElement("div");
+      card.className = "apikey-provider-card" + (p.configured ? " configured" : "");
+      card.innerHTML = `
+        <div class="apikey-provider-header">
+          <div class="apikey-provider-name">
+            <span class="apikey-provider-dot" style="background: ${p.configured ? 'var(--success, #2ecc71)' : 'var(--text-muted, #999)'}"></span>
+            ${p.name}
+          </div>
+          <div class="apikey-provider-status">${p.configured ? '已配置' : '未配置'}</div>
+        </div>
+        <div class="apikey-provider-fields">
+          <label class="apikey-field">
+            <span>API Key</span>
+            <div class="apikey-input-row">
+              <input type="password" class="apikey-input" data-provider="${p.key}" data-field="api_key"
+                     value="${p.configured ? p.api_key_masked : ''}" placeholder="请输入 API Key"
+                     ${p.configured ? '' : ''}>
+              <button type="button" class="apikey-toggle-btn" data-provider="${p.key}" title="显示/隐藏">
+                👁
+              </button>
+            </div>
+          </label>
+          <label class="apikey-field">
+            <span>Base URL</span>
+            <input type="text" class="apikey-input" data-provider="${p.key}" data-field="base_url"
+                   value="${p.base_url || ''}" placeholder="${p.default_url}">
+          </label>
+          <label class="apikey-field">
+            <span>模型 · Model</span>
+            <input type="text" class="apikey-input" data-provider="${p.key}" data-field="model"
+                   value="${p.model || ''}" placeholder="${p.default_model}">
+          </label>
+        </div>
+        <div class="apikey-provider-actions">
+          <button type="button" class="btn btn-primary btn-sm apikey-save-btn" data-provider="${p.key}">
+            保存 · Save
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm apikey-default-btn" data-provider="${p.key}">
+            恢复默认 URL/模型
+          </button>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+
+    // Bind events
+    list.querySelectorAll(".apikey-save-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const provider = e.target.getAttribute("data-provider");
+        this._saveApiKey(provider);
+      });
+    });
+    list.querySelectorAll(".apikey-default-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const provider = e.target.getAttribute("data-provider");
+        this._resetToDefault(provider);
+      });
+    });
+    list.querySelectorAll(".apikey-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const provider = e.target.getAttribute("data-provider");
+        const input = list.querySelector(`.apikey-input[data-provider="${provider}"][data-field="api_key"]`);
+        if (input) {
+          input.type = input.type === "password" ? "text" : "password";
+        }
+      });
+    });
+  }
+
+  async _saveApiKey(providerKey) {
+    const st = document.getElementById("apikey-status");
+    const list = document.getElementById("apikey-provider-list");
+    const saveBtn = list.querySelector(`.apikey-save-btn[data-provider="${providerKey}"]`);
+    const p = this._apikeyProviders.find((x) => x.key === providerKey);
+    if (!p) return;
+
+    const apiKeyInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="api_key"]`);
+    const baseUrlInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="base_url"]`);
+    const modelInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="model"]`);
+
+    const apiKeyVal = apiKeyInput ? apiKeyInput.value.trim() : "";
+    const baseUrlVal = baseUrlInput ? baseUrlInput.value.trim() : "";
+    const modelVal = modelInput ? modelInput.value.trim() : "";
+
+    if (!apiKeyVal && !p.configured) {
+      if (st) { st.textContent = "请输入 API Key"; st.style.color = "var(--warning, #f39c12)"; }
+      return;
+    }
+
+    if (saveBtn) saveBtn.disabled = true;
+    if (st) { st.textContent = "保存中…"; st.style.color = "var(--text-muted, #999)"; }
+
+    try {
+      const body = { provider_key: providerKey };
+      if (apiKeyVal && apiKeyVal !== p.api_key_masked) {
+        body.api_key = apiKeyVal;
+      }
+      if (baseUrlVal) body.base_url = baseUrlVal;
+      if (modelVal) body.model = modelVal;
+
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/env/save",
+        body,
+      });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      if (st) { st.textContent = "保存成功 ✓ 重启后端后生效"; st.style.color = "var(--success, #2ecc71)"; }
+      await this.loadApiKeys();
+    } catch (e) {
+      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  _resetToDefault(providerKey) {
+    const list = document.getElementById("apikey-provider-list");
+    const p = this._apikeyProviders.find((x) => x.key === providerKey);
+    if (!p) return;
+    const baseUrlInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="base_url"]`);
+    const modelInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="model"]`);
+    if (baseUrlInput) baseUrlInput.value = p.default_url;
+    if (modelInput) modelInput.value = p.default_model;
   }
 
   async load() {

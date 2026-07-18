@@ -287,24 +287,24 @@
   </defs>
 </svg>
 <div id="app" class="app">
-  <!-- Titlebar -->
-  <header id="titlebar" class="titlebar">
-    <button id="btn-minimize" class="titlebar-btn" title="最小化">─</button>
-    <button id="btn-maximize" class="titlebar-btn" title="最大化">□</button>
-    <button id="btn-close" class="titlebar-btn titlebar-btn--close" title="关闭"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-close"/></svg></button>
-  </header>
-
-  <!-- Status bar -->
-  <div id="statusbar" class="statusbar">
-    <div class="statusbar-left">
-      <img src="../../../Aerie · 云栖.svg" alt="" class="statusbar-logo">
-      <span class="statusbar-title">Aerie · 云栖</span>
+  <!-- App Header (titlebar + statusbar merged) -->
+  <header id="app-header" class="app-header">
+    <div class="app-header-left">
+      <img src="../../../Aerie · 云栖.svg" alt="" class="app-header-logo">
+      <span class="app-header-title">Aerie · 云栖</span>
     </div>
-    <div class="statusbar-right">
+    <div class="app-header-right">
       <span id="status-text" class="status-text status-text--loading">后端启动中...</span>
       <span class="status-dot status-dot--loading" id="status-dot"></span>
+      <div class="app-header-controls">
+        <button id="btn-minimize" class="header-btn" title="最小化">─</button>
+        <button id="btn-maximize" class="header-btn" title="最大化">□</button>
+        <button id="btn-close" class="header-btn header-btn--close" title="关闭">
+          <svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-close"/></svg>
+        </button>
+      </div>
     </div>
-  </div>
+  </header>
 
   <!-- Main layout -->
   <div class="main-layout">
@@ -835,6 +835,7 @@
           <h2>系统设置</h2>
           <div class="settings-mode-tabs">
             <button class="settings-mode-tab active" data-mode="form">常用</button>
+            <button class="settings-mode-tab" data-mode="apikey">API Key</button>
             <button class="settings-mode-tab" data-mode="yaml">高级 (YAML)</button>
           </div>
 
@@ -1097,6 +1098,21 @@
               </button>
             </div>
             <div id="settings-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
+          </div>
+
+          <!-- API Key 视图 -->
+          <div id="settings-apikey-view" style="display:none;">
+            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6;">
+              <strong style="color: var(--accent, #ff5b9c);">🔑 AI 服务配置</strong><br>
+              选择你常用的 AI 服务商，填入 API Key 就能开始对话了。所有密钥只保存在本地，不会上传到任何地方。
+            </div>
+            <div id="apikey-provider-list" class="apikey-provider-list">
+              <!-- JS 动态渲染 -->
+            </div>
+            <div id="apikey-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
+            <div class="settings-actions" style="margin-top:16px;">
+              <button id="apikey-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
+            </div>
           </div>
 
           <!-- 高级 YAML 视图 -->

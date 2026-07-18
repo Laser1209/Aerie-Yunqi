@@ -37,6 +37,7 @@ class Pipeline:
         cognition: CognitionEngine | None = None,
         decision_engine: Any = None,         # Phase 9: §10.2 multi-layer
         self_evolver: Any = None,            # Phase 9: capability gap detector
+        settings: dict | None = None,
     ) -> None:
         self.router = router
         self.emotion = emotion_engine
@@ -52,6 +53,23 @@ class Pipeline:
         self._splitter = SemanticMessageSplitter()
         # v13.9: 回复校验器（准确性 Guard + 质量 Judge）
         self.validator = ResponseValidator()
+
+        # v13.9.8: 任务规划器（Pipeline 主路径集成，配置开关控制）
+        self._task_planner = None
+        self._task_planner_enabled = False
+        if settings and isinstance(settings, dict):
+            agent_cfg = settings.get("agent", {})
+            self._task_planner_enabled = agent_cfg.get("task_planner_enabled", False)
+            max_steps = agent_cfg.get("max_plan_steps", 10)
+            if self._task_planner_enabled:
+                try:
+                    from core.task_planner import TaskPlanner
+                    self._task_planner = TaskPlanner(max_steps=max_steps)
+                    logger.info("Pipeline task planner enabled (max_steps=%d)", max_steps)
+                except Exception:
+                    logger.exception("Failed to initialize TaskPlanner for Pipeline, task planning disabled")
+                    self._task_planner = None
+                    self._task_planner_enabled = False
 
     async def handle(
         self, msg: IncomingMessage, force_full: bool = False
@@ -223,6 +241,25 @@ class Pipeline:
             "confidence": office_ctx.confidence,
             "keywords": office_ctx.task_keywords,
         })
+
+        # ══════════════════════════════════════════════
+        # v13.9.8: 任务规划注入（仅 FULL 模式且启用时）
+        # ══════════════════════════════════════════════
+        task_plan_injected = False
+        if (self._task_planner and self._task_planner_enabled
+                and route_mode == "FULL"
+                and msg.content
+                and self._task_planner.should_plan(msg.content)):
+            try:
+                plan = self._task_planner.create_plan(msg.content)
+                if plan and plan.steps and len(plan.steps) > 1:
+                    sys_content = ctx_messages[0].get("content", "") if ctx_messages else ""
+                    ctx_messages[0]["content"] = self._inject_task_plan_into_context(sys_content, plan)
+                    system_chars = len(ctx_messages[0]["content"])
+                    task_plan_injected = True
+                    logger.debug("Task plan injected into Pipeline context: %d steps", plan.total_steps)
+            except Exception:
+                logger.exception("Task planning for Pipeline failed, falling back to normal mode")
 
         # ══════════════════════════════════════════════
         # 6. Call LLM (stage 5)
@@ -798,6 +835,39 @@ class Pipeline:
         """
         from core.brain import _build_react_from_text
         return _build_react_from_text(text, tool_calls_present=False)
+
+    @staticmethod
+    def _inject_task_plan_into_context(system_prompt: str, plan) -> str:
+        """将任务计划注入到系统提示词中，引导 Agent 按步骤执行。"""
+        if not plan or not plan.steps or len(plan.steps) <= 1:
+            return system_prompt
+
+        steps_text = "\n".join([
+            f"  {s.step_id}. {s.title}：{s.description}"
+            for s in plan.steps
+        ])
+
+        plan_suffix = f"""
+
+---
+
+【任务执行计划 · Task Execution Plan】
+当前任务类型：{plan.task_type.value if hasattr(plan.task_type, 'value') else str(plan.task_type)}
+任务目标：{plan.title}
+
+=== 执行步骤 ===
+{steps_text}
+
+=== 执行要求 ===
+1. 严格按照上述步骤顺序执行，不要跳步
+2. 每步执行完用工具验证结果，确认无误再进入下一步
+3. 遇到问题及时调整，但不要偏离整体目标
+4. 全部完成后给用户一个清晰的总结
+
+记住：你是一个靠谱的执行者。稳比快重要，每一步都要有结果。
+"""
+
+        return system_prompt + plan_suffix
 
     @staticmethod
     def _strip_think(text: str) -> str:

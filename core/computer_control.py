@@ -745,17 +745,34 @@ class RestrictedShell:
 
         try:
             work_dir = cwd or self.default_cwd
-            cmd_parts = shlex.split(command)
-            result = subprocess.run(
-                cmd_parts,
-                shell=False,
-                cwd=work_dir,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                encoding="utf-8",
-                errors="replace",
-            )
+            is_windows = os.name == "nt"
+
+            if is_windows:
+                # Windows: 很多命令是 cmd.exe 内置的（echo/dir/copy 等），
+                # 必须用 shell=True 才能找到。安全由前面的白名单+危险检查保证。
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=work_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout,
+                    encoding="utf-8",
+                    errors="replace",
+                )
+            else:
+                # Unix: 继续用 shell=False + shlex.split 更安全
+                cmd_parts = shlex.split(command)
+                result = subprocess.run(
+                    cmd_parts,
+                    shell=False,
+                    cwd=work_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout,
+                    encoding="utf-8",
+                    errors="replace",
+                )
 
             # 输出截断
             stdout = result.stdout

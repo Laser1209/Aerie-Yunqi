@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 — Screen Control Tools
+"""Aerie v0.1.0-beta.1 — Screen Control Tools
 电脑操控工具集，注册到 tool_registry 供 AI function calling 调用。
 
 工具清单：
@@ -307,7 +307,11 @@ _TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "screen_screenshot",
-            "description": "截取电脑屏幕，返回截图尺寸和缩略图。用于查看屏幕内容、识别界面元素、获取当前窗口状态。仅查看，不做任何修改。",
+            "description": """【已过时/LEGACY】请优先使用 screenshot 工具。
+
+截取电脑屏幕，返回截图尺寸和缩略图。用于查看屏幕内容、识别界面元素、获取当前窗口状态。仅查看，不做任何修改。
+
+注意：这是旧版工具，新代码请使用 screenshot 工具（功能更完整，参数更简洁）。""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -324,7 +328,11 @@ _TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "screen_window_list",
-            "description": "获取当前打开的所有窗口列表，包括窗口标题、句柄、位置尺寸。用于了解用户当前在使用什么程序。仅查看。",
+            "description": """【已过时/LEGACY】请优先使用 list_windows 工具。
+
+获取当前打开的所有窗口列表，包括窗口标题、句柄、位置尺寸。用于了解用户当前在使用什么程序。仅查看。
+
+注意：这是旧版工具，新代码请使用 list_windows 工具。""",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -336,7 +344,11 @@ _TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "screen_mouse_click",
-            "description": "在屏幕指定位置执行鼠标点击操作。用于模拟用户点击按钮、链接、菜单等界面元素。需要 STANDARD 或更高权限。",
+            "description": """【已过时/LEGACY】请优先使用 mouse_click 工具。
+
+在屏幕指定位置执行鼠标点击操作。用于模拟用户点击按钮、链接、菜单等界面元素。需要 STANDARD 或更高权限。
+
+注意：这是旧版工具，新代码请使用 mouse_click 工具（支持更多参数，如拖拽、相对移动等）。""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -353,7 +365,11 @@ _TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "screen_key_type",
-            "description": "在当前活动窗口输入文本内容。用于填写表单、输入文字、发送消息等。需要 STANDARD 或更高权限。",
+            "description": """【已过时/LEGACY】请优先使用 type_text 工具。
+
+在当前活动窗口输入文本内容。用于填写表单、输入文字、发送消息等。需要 STANDARD 或更高权限。
+
+注意：这是旧版工具，新代码请使用 type_text 工具。""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -367,7 +383,23 @@ _TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "app_launch",
-            "description": "打开应用程序或文件。支持常用应用快捷名（notepad/calc/chrome/edge等），也支持完整路径。需要 STANDARD 或更高权限。",
+            "description": """打开应用程序或文件。支持常用应用快捷名（notepad/calc/chrome/edge等），也支持完整路径。需要 STANDARD 或更高权限。
+
+使用场景：
+- 需要启动某个应用程序时
+- 需要打开某个文件时
+- 不知道应用完整路径时，用快捷名尝试
+
+参数说明：
+- app_name: 应用名（如 notepad、chrome、记事本）或文件路径
+- args: 启动参数（可选）
+
+注意事项：
+- 启动后建议等待1-2秒再操作
+- 如果启动失败，可以试试完整路径
+- 也可以用 shell_execute 替代
+
+相关工具：shell_execute, process_list, focus_window""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -382,7 +414,11 @@ _TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "screen_shell",
-            "description": "执行受限的 Windows shell 命令。有安全黑名单，危险命令会被拦截。需要 STANDARD 或更高权限，且需用户确认。",
+            "description": """【已过时/LEGACY】请优先使用 shell_execute 工具。
+
+执行受限的 Windows shell 命令。有安全黑名单，危险命令会被拦截。需要 STANDARD 或更高权限，且需用户确认。
+
+注意：这是旧版工具，新代码请使用 shell_execute 工具。""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -397,7 +433,11 @@ _TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "screen_uia_action",
-            "description": "UIA 自动化深度操控，可枚举窗口控件、点击控件等。需要 FULL 权限，且需用户确认。",
+            "description": """【已过时/LEGACY】请优先使用 uia_action 工具。
+
+UIA 自动化深度操控，可枚举窗口控件、点击控件等。需要 FULL 权限，且需用户确认。
+
+注意：这是旧版工具，新代码请使用 uia_action 工具（功能更强大，支持更多操作类型）。""",
             "parameters": {
                 "type": "object",
                 "properties": {

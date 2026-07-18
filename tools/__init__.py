@@ -105,3 +105,11 @@ def register_all_tools(registry) -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("computer tools registration failed: %s", e)
+
+    # 打印工具注册统计，便于排查
+    try:
+        import logging
+        summary = registry.summary() if hasattr(registry, "summary") else f"{len(registry._tools)} tools"
+        logging.getLogger(__name__).info("Tool registration complete:\n%s", summary)
+    except Exception:
+        pass

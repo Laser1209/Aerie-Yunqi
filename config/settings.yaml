@@ -1,19 +1,3 @@
-office:
-  dir: D:\AerieOffice
-proactive:
-  enabled: true
-qq:
-  napcat_ws_url: ws://127.0.0.1:3001
-  startup_wait_timeout: 30
-  push_pause_when_offline: true
-  push_resume_when_online: true
-startup:
-  auto_start: false
-  start_minimized: false
-theme:
-  current: yita-pink
 verify_batch4:
   ping: pong
-  ts: 1784281160
-weather:
-  city: 济南
+  ts: 1784404889

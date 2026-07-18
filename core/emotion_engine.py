@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Emotion engine (PAD + 5 emotions + cumulative thresholds).
+"""Aerie · 云栖 v13.9.8 — Emotion engine (PAD + 5 emotions + cumulative thresholds).
 
 Integrates:
   1. PAD 3D emotion model (Pleasure-Arousal-Dominance)
@@ -122,6 +122,39 @@ class EmotionEngine:
         # Pass behavior_cfg through to threshold engine so the same source
         # is used for both emotion and threshold configuration.
         self.threshold_engine: CumulativeEmotionEngine = get_threshold_engine(behavior_cfg)
+
+    def update_behavior_config(self, behavior_cfg: dict) -> None:
+        """Hot-reload behavior config without restarting.
+
+        Updates emotion centers, baseline PAD, and propagates new config
+        down to the threshold engine. Current PAD state is preserved.
+        """
+        import logging
+        log = logging.getLogger(__name__)
+        self.behavior_cfg = behavior_cfg or {}
+
+        states_cfg = self.behavior_cfg.get("emotion", {}).get("tree", {}).get("states")
+        if states_cfg:
+            self._emotion_centers = {
+                name: {"P": float(v.get("P", 0)), "A": float(v.get("A", 0)), "D": float(v.get("D", 0))}
+                for name, v in states_cfg.items()
+            }
+            self._cfg_source = "persona_behavior.yaml"
+            log.info("emotion centers reloaded from config (%d states)", len(self._emotion_centers))
+
+        baseline_cfg = self.behavior_cfg.get("emotion", {}).get("baseline", {})
+        self._baseline = {
+            "P": float(baseline_cfg.get("pleasure", 0.0)),
+            "A": float(baseline_cfg.get("arousal", 0.0)),
+            "D": float(baseline_cfg.get("dominance", 0.0)),
+        }
+        log.info("emotion baseline reloaded: P=%.2f A=%.2f D=%.2f", *self._baseline.values())
+
+        if hasattr(self, "threshold_engine") and self.threshold_engine:
+            try:
+                self.threshold_engine.reload_config(behavior_cfg)
+            except Exception as e:
+                log.warning("threshold engine reload failed: %s", e)
 
     # ── PAD Analysis ───────────────────────────────
 

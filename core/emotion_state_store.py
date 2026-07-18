@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Emotion state persistence store (Phase 9 Batch 1).
+"""Aerie · 云栖 v13.9.8 — Emotion state persistence store (Phase 9 Batch 1).
 
 Persists emotion state + threshold values into ``emotion_state_snapshot``
 so the dashboard can show 24h / 7d / 30d curves and we survive restarts.

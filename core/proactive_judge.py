@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Proactive Judge.
+"""Aerie · 云栖 v13.9.8 — Proactive Judge.
 
 R7.5: 综合判断模块。在 ``push_scheduler._dispatch`` 之前调用,
 根据"心情 + 想法 + 用户上下文"算出一个 0-100 的 score,选 scene,

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Long-term memory store."""
+"""Aerie · 云栖 v13.9.8 — Long-term memory store."""
 
 from __future__ import annotations
 from typing import Any

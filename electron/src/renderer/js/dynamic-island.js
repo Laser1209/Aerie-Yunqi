@@ -33,7 +33,7 @@
     notifications: { count: 0, items: [] },
     system: { cpu: 0, mem: 0, net: 0 },
     media: { playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" },
-    quickActions: ["chat", "brief", "cognition", "settings"],
+    quickActions: ["chat", "brief", "cognition", "settings", "restart"],
     companionStartTime: Date.now(),
   };
 
@@ -56,6 +56,7 @@
     calendar: "ui-calendar",
     files: "ui-folder",
     home: "ui-home",
+    restart: "ui-refresh",
   };
 
   const MOOD_ICONS = {
@@ -283,6 +284,7 @@
       settings: "设置",
       calendar: "日程",
       files: "文件",
+      restart: "重启后端",
     };
     const items = uiState.quickActions
       .map((k) => ({ key: k, icon: ACTION_ICONS[k], label: labels[k] || k }))
@@ -576,6 +578,17 @@
     const tab = tabMap[action];
     if (tab) {
       try { api?.openMain?.(tab)?.catch(() => {}); } catch (_) {}
+      collapse();
+      return;
+    }
+    if (action === "restart") {
+      if (confirm("确定要重启后端服务吗？\nRestart the backend service?")) {
+        try {
+          window.aerie?.electron?.system?.restartBackend?.();
+        } catch (_) {}
+      }
+      collapse();
+      return;
     }
     collapse();
   }

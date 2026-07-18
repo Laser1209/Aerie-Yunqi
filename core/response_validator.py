@@ -1,4 +1,4 @@
-"""Aerie v13.9 — Response Validator（回复校验器）
+"""Aerie v13.9.8 — Response Validator（回复校验器）
 
 双层校验架构：
   - Accuracy Guard（准确性守卫）：事实准确性 + 安全合规

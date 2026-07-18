@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v11.2 — Long-term + Permanent 记忆层 (S3 M3.1).
+"""Aerie · 云栖 v13.9.8 — Long-term + Permanent 记忆层 (S3 M3.1).
 
 Long-term (长期层):
     - ChromaDB 向量数据库存储嵌入，SQLite 存元数据

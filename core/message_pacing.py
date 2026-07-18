@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Message pacing engine.
+"""Aerie · 云栖 v13.9.8 — Message pacing engine.
 
 Phase 9: 1.5s hard cap + jitter + emotion-aware base.
 User clarification: 1.5s is the maximum interval, not a fixed value.

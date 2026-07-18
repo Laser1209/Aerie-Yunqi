@@ -1,4 +1,4 @@
-# Aerie · 云栖 v9.0 — Persona Behavior Central Config
+# Aerie · 云栖 v13.9.8 — Persona Behavior Central Config
 # Single source of truth for emotion, decision, desire, cognition visibility.
 # All modules MUST read from here; no hardcoded constants.
 # Aligned with Ita.md §8-9 and System_Features.md §11.

@@ -1,7 +1,7 @@
 {
   "name": "aerie-companion",
   "productName": "Aerie · 云栖",
-  "version": "13.9.2",
+  "version": "13.9.8",
   "description": "Aerie · 云栖 — Local-first AI companion with auto-wake proactive messenger / 本地优先 AI 桌面伴侣",
   "main": "src/main.js",
   "scripts": {

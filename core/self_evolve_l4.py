@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v12.0 — Self-Evolution L4: Code Self-Modification.
+"""Aerie · 云栖 v13.9.8 — Self-Evolution L4: Code Self-Modification.
 
   ╔══════════════════════════════════════════════════════════╗
   ║  L4 自进化：代码自修改（沙箱自动进化模式）              ║

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — stderr event bridge + in-process event bus.
+"""Aerie · 云栖 v13.9.8 — stderr event bridge + in-process event bus.
 
 Writes [CHAT_EVENT] lines to stderr so Electron's main process can parse
 them and broadcast via IPC to all renderer windows.

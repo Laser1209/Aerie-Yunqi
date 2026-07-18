@@ -431,6 +431,20 @@ function createTray() {
         });
       },
     },
+    { type: "separator" },
+    {
+      label: "重启后端 / Restart Backend",
+      click: () => {
+        restartBackend();
+      },
+    },
+    {
+      label: "重启应用 / Restart App",
+      click: () => {
+        restartApp();
+      },
+    },
+    { type: "separator" },
     {
       label: "关于",
       click: () => {
@@ -1263,10 +1277,43 @@ ipcMain.handle("settings:reset", async () => {
 // Python /api/system/restart endpoint, which spawns a fresh main.py in
 // a detached process. The Electron window stays alive; its SSE / status
 // polling will reconnect once the new backend is up.
+function restartBackend() {
+  apiRequest({ method: "POST", path: "/api/system/restart" }).catch(() => {});
+  const wins = BrowserWindow.getAllWindows();
+  for (const w of wins) {
+    if (w && !w.isDestroyed()) {
+      try { w.webContents.send("system:restarting", { target: "backend" }); } catch (_) {}
+    }
+  }
+}
+
+function restartApp() {
+  const { app } = require("electron");
+  restartBackend();
+  setTimeout(() => {
+    app.relaunch();
+    app.exit(0);
+  }, 1500);
+}
+
 ipcMain.handle("system:restart-backend", async () => {
   try {
     const r = await apiRequest({ method: "POST", path: "/api/system/restart" });
     return r.data || { status: "scheduled" };
+  } catch (e) {
+    return { error: String((e && e.message) || e) };
+  }
+});
+
+ipcMain.handle("system:restart-app", async () => {
+  restartApp();
+  return { status: "scheduled" };
+});
+
+ipcMain.handle("system:reload-config", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/system/reload-config" });
+    return r.data || { status: "ok" };
   } catch (e) {
     return { error: String((e && e.message) || e) };
   }

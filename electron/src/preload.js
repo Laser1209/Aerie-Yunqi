@@ -58,6 +58,11 @@ contextBridge.exposeInMainWorld("aerie", {
     // and ultimately calls /api/system/restart on the Python side.
     system: {
       restartBackend: () => ipcRenderer.invoke("system:restart-backend"),
+      restartApp: () => ipcRenderer.invoke("system:restart-app"),
+      reloadConfig: () => ipcRenderer.invoke("system:reload-config"),
+      onRestarting: (cb) => {
+        ipcRenderer.on("system:restarting", (_event, data) => cb(data || {}));
+      },
     },
     // Block-4A R1.6 bridge: tray "打开今日简报" or boot 8s later → pop brief iframe
     onBriefShow: (cb) => {

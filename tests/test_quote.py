@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Phase 4 Quote tests."""
+"""Aerie · 云栖 v13.9.8 — Phase 4 Quote tests."""
 from communication.message import IncomingMessage, OutgoingReply
 
 

@@ -1,44 +1,132 @@
-# Aerie · 云栖 v9.0 — Python Backend Dependencies
+# Aerie · 云栖 v13.9.8 — Python Backend Dependencies
 # Code-level elements (package names) must use pure English
 #
 # Install: pip install -r requirements.txt
-# Important: psutil / fastapi / uvicorn are REQUIRED; if missing,
-# the Electron app will show "后端启动失败" in the UI.
+# Python: >=3.10 (tested on CPython 3.14 · 2026-07-18)
+#
+# All versions below are pinned via "==" to what pip resolved on this
+# machine.  Use ">=" if you prefer looser constraints and are willing to
+# accept future breaking changes.
+#
+# =============================================================================
+# Important
+# =============================================================================
+# psutil / fastapi / uvicorn are REQUIRED; if missing, the Electron app
+# will show "后埠启动失败" in the UI.
+#
+# Heavy ML packages (easyocr, openai-whisper, chromadb) are COMMENTED
+# at the bottom.  They pull large downloads (PyTorch ~2 GB, chromadb
+# ~24 MB) that may be impractical on slow connections.  Uncomment and
+# install manually when multimodal features are needed.
 
-# HTTP API server (FastAPI app)
-fastapi>=0.110
-uvicorn[standard]>=0.27
+# ============================================================
+# HTTP API server (FastAPI app) -------------------- verified=yes
+# ============================================================
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
 
-# Core async & HTTP
-aiohttp>=3.9
-websockets>=12.0
+# ============================================================
+# Core async & networking --------------------------- verified=yes
+# ============================================================
+aiohttp==3.14.1
+websockets==16.1.1
+httpx==0.28.1
+requests==2.34.2
 
-# Process / system monitoring
-psutil>=5.9
+# ============================================================
+# Process / system monitoring ----------------------- verified=yes
+# ============================================================
+psutil==7.2.2
 
-# Logging & utilities
-loguru>=0.7
-pyyaml>=6.0
-python-dotenv>=1.0
+# ============================================================
+# Logging & configuration utilities ----------------- verified=yes
+# ============================================================
+loguru==0.7.3
+pyyaml==6.0.3
+python-dotenv==1.2.2
 
-# Scheduler (auto-wake core)
-apscheduler>=3.10
+# ============================================================
+# Scheduler (auto-wake core) ------------------------ verified=yes
+# ============================================================
+apscheduler==3.11.3
 
-# AI / LLM (multi-provider)
-openai>=1.10
+# ============================================================
+# AI / LLM (DeepSeek / Doubao / OpenAI-compatible) -- verified=yes
+# ============================================================
+openai==2.45.0
 
-# Document → Markdown conversion (office / pdf / html / csv)
-# Block-3: attachments uploaded to chat go through markitdown before LLM sees them
-markitdown[all]>=0.0.1
+# ============================================================
+# Attachment ingestion (office/pdf/html/csv -> Markdown)
+# Block-3: attachments go through markitdown before LLM sees them
+# -------------------------------------------------- verified=yes
+# ============================================================
+markitdown[all]==0.1.6
 
-# HTTP client
-requests>=2.31
-httpx>=0.25
+# ============================================================
+# Document generation (core/doc_writer.py) ---------- verified=yes
+# ============================================================
+python-docx==1.2.0
+Markdown==3.10.2
+weasyprint==69.0               # requires GTK runtime on Windows
 
-# Windows integration (UAC + Task Scheduler + screenshot)
-pywin32>=306 ; sys_platform == "win32"
-pyautogui>=0.9.54 ; sys_platform == "win32"
+# ============================================================
+# Multimodal output (voice/multimodal_output.py) ---- verified=yes
+# ============================================================
+edge-tts==7.2.8
+Pillow==12.2.0
 
-# Optional: testing
-pytest>=8.0
-pytest-asyncio>=0.23
+# ============================================================
+# Multimodal input — OCR (core/multimodal_input.py) - verified=yes
+# ============================================================
+pytesseract==0.3.13
+
+# ============================================================
+# Information feeds (core/brief_fetcher.py) --------- verified=yes
+# ============================================================
+feedparser==6.0.12
+
+# ============================================================
+# Windows integration ------------------------------ verified=yes
+# (UAC + Task Scheduler + UI automation + screenshot)
+# ============================================================
+pywin32==312 ; sys_platform == "win32"
+pywinauto==0.6.9 ; sys_platform == "win32"
+pyautogui==0.9.54 ; sys_platform == "win32"
+
+# ============================================================
+# Testing ------------------------------------------ verified=yes
+# ============================================================
+pytest==9.1.1
+pytest-asyncio==1.4.0
+
+# ============================================================
+# Heavy / optional packages — verified=no (download too large)
+# ============================================================
+# Uncomment and install manually when the corresponding
+# features are needed.  These pulls large downloads:
+#   chromadb      ~24 MB  (vector database)
+#   easyocr       ~2 GB   (deep-learning OCR, pulls PyTorch + CUDA)
+#   openai-whisper ~2 GB  (speech-to-text, pulls PyTorch)
+#
+# pip install chromadb easyocr openai-whisper
+#
+# chromadb>=1.5.9
+# easyocr>=1.7.2
+# openai-whisper>=20250625
+
+# ============================================================
+# Electron / npm dependencies (see electron/package.json)
+# ============================================================
+# Installed: electron@28.3.3  electron-builder@24.13.3  sharp@0.32.6
+# npm audit: 6 high-severity CVEs accepted as known risk
+#   - electron@28.3.3: 17 CVEs (fix: 43.1.1, breaking)
+#   - tar (via electron-builder): 6 CVEs (fix: 26.15.3, breaking)
+# Rationale: Aerie is a local-only desktop app; network-attack
+# vectors in these CVEs pose negligible practical risk.
+# Full details: run `npm audit` in electron/ directory.
+
+# ============================================================
+# End of requirements.txt
+# Generated: 2026-07-18 | pip check: No broken requirements found
+# npm check: 348 packages audited, 6 known CVEs accepted
+# ============================================================

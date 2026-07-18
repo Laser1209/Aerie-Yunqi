@@ -73,6 +73,9 @@ window.addEventListener("DOMContentLoaded", () => {
       if (window.cognitionPanel) {
         window.cognitionPanel.setVisible(tab === "cognition");
       }
+      if (window.personaHub) {
+        window.personaHub.setVisible(tab === "persona-hub");
+      }
     });
   });
 

@@ -1,4 +1,4 @@
-"""Aerie v13.0 — Event-Driven Push Engine 事件驱动推送引擎
+"""Aerie v13.9.8 — Event-Driven Push Engine 事件驱动推送引擎
 
 三类主动推送触发源：
 ┌─────────────────────────────────────────────┐

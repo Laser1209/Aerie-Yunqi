@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Daily Brief Fetcher (Block-4A R1.1).
+"""Aerie · 云栖 v13.9.8 — Daily Brief Fetcher (Block-4A R1.1).
 
 Fetches 5 categories of content for the daily brief popup:
   - AI 公司最新动向

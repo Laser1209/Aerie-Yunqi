@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Message pipeline.
+"""Aerie · 云栖 v13.9.8 — Message pipeline.
 
 Processes incoming messages through:
   route → emotion(text scan + cumulative trigger check) → history → context(with emotion+eruption) → LLM → emotion tune → persist → emit → reply.

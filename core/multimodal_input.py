@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v11.3 — Multimodal Input Processor.
+"""Aerie · 云栖 v13.9.8 — Multimodal Input Processor.
 
 Handles image understanding, OCR, and audio transcription,
 seamlessly integrating with the Agent perception pipeline.

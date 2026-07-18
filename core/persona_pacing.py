@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Persona-aware message pacing (Phase 9 Batch 2).
+"""Aerie · 云栖 v13.9.8 — Persona-aware message pacing (Phase 9 Batch 2).
 
 User clarification (2026-07-16):
     "第一条消息是及时的，是没有延迟的。第一条消息之后的消息是经过

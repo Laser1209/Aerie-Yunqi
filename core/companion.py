@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Companion: orchestrator for all backend modules."""
+"""Aerie · 云栖 v13.9.8 — Companion: orchestrator for all backend modules."""
 
 from __future__ import annotations
 import asyncio
@@ -186,22 +186,24 @@ class Companion:
             return
         self.queue.start()
         self.qq.set_message_handler(self._on_qq_message)
-        # Connect to NapCat WS (passive — won't start NapCat)
+
+        # ── Phase 1: 基础设施启动 ──
+
+        # R9.0+: subscribe to QQ state changes BEFORE connecting
+        self._boot_greeting_fired = False
+        self.qq.on_state_change(self._on_qq_state_change)
+
+        # Start QQ connection in background (it will poll for port open)
         asyncio.create_task(self.qq.connect())
+
         # Start daily emotion decay scheduler
         self._daily_decay_task = asyncio.create_task(self._run_daily_decay())
+
         # R7.5: 10s background tick for emotion dashboard liveness.
         # Every 6th tick (≈60s) writes a snapshot so the history curve
         # stays alive even when no user messages arrive.
         self._emotion_tick_task = asyncio.create_task(self._emotion_tick_loop())
-        # Start push scheduler
-        self._push_task = asyncio.create_task(self.push_scheduler.start())
-        # Block-4A R1.5: 8s boot delay then run brief once + emit show event
-        self._boot_brief_task = asyncio.create_task(self._boot_brief())
-        # R7.5+: 8s boot delay then push a QQ greeting to the user.
-        # Idempotent: file flag at data/boot_greeting_sent_<date>.flag
-        # blocks re-sends within the same calendar day.
-        self._boot_qq_task = asyncio.create_task(self._boot_qq_greeting())
+
         # Block-4B R2.2: start 24h desire engine (24h polling, not cron)
         try:
             from core.desire_engine import DesireEngine
@@ -210,6 +212,7 @@ class Companion:
         except Exception:
             logger.exception("desire engine start failed; continuing without it")
             self.desire = None
+
         # Block-4C R3.4: discover + register all 17 skills (local + data).
         try:
             from core.skill_loader import SkillLoader
@@ -222,8 +225,79 @@ class Companion:
         except Exception:
             logger.exception("skill loader init failed; continuing without skills")
             self.skill_loader = None
+
+        # ── Phase 1b: 等待 QQ 就绪（有超时，不阻塞其他服务） ──
+        qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
+        wait_timeout = float(qq_cfg.get("startup_wait_timeout", 30.0))
+        push_pause_when_offline = bool(qq_cfg.get("push_pause_when_offline", True))
+
+        logger.info("[Startup] Waiting for QQ readiness (timeout=%ss)", wait_timeout)
+        qq_ready = await self.qq.wait_until_ready(timeout=wait_timeout)
+
+        if qq_ready:
+            logger.info("[Startup] QQ ready, proceeding with full startup")
+            # ── Phase 2: 通信层就绪（QQ 已就绪） ──
+            # (SendQueue / Router / Pipeline 已经在 __init__ 中初始化好，
+            #  这里不需要额外动作）
+
+            # ── Phase 3: 业务层启动 ──
+            # Start push scheduler
+            self._push_task = asyncio.create_task(self.push_scheduler.start())
+
+            # Block-4A R1.5: run brief once + emit show event
+            # (8s delay is inside _boot_brief itself)
+            self._boot_brief_task = asyncio.create_task(self._boot_brief())
+
+            # boot_greeting: trigger immediately (QQ is already ready)
+            # Set the flag FIRST so the state-change callback doesn't
+            # fire a duplicate (lifecycle.connect may fire after this).
+            self._boot_greeting_fired = True
+            asyncio.create_task(self._boot_qq_greeting())
+        else:
+            logger.warning(
+                "[Startup] QQ not ready after %ss; starting in degraded mode "
+                "(push scheduler paused)",
+                wait_timeout,
+            )
+            # Start push scheduler but pause it immediately
+            self._push_task = asyncio.create_task(self.push_scheduler.start())
+            if push_pause_when_offline:
+                self.push_scheduler.pause("qq_offline")
+
+            # boot_brief_task = asyncio.create_task(self._boot_brief())
+
         self._started = True
-        logger.info("Companion started")
+        logger.info("Companion started (qq_ready=%s)", qq_ready)
+
+    def _on_qq_state_change(self, new_state: str) -> None:
+        """R9.0+: handle QQ state transitions at runtime.
+
+        - When QQ goes offline → pause push scheduler
+        - When QQ comes back online → resume push scheduler
+        - First time QQ logs in → fire boot_greeting
+        """
+        from communication.qq_client import STATE_LOGGED_IN, STATE_DISCONNECTED
+
+        if new_state == STATE_LOGGED_IN:
+            # Resume push scheduler if it was paused due to QQ
+            if self.push_scheduler.is_paused and self.push_scheduler.paused_reason == "qq_offline":
+                self.push_scheduler.resume()
+                logger.info("[QQ State] QQ back online; push scheduler resumed")
+
+            # Fire boot greeting on FIRST login only
+            # (if start() already fired it synchronously when QQ was ready
+            #  at startup; this path covers the "QQ-started-later case)
+            if not self._boot_greeting_fired:
+                self._boot_greeting_fired = True
+                asyncio.create_task(self._boot_qq_greeting())
+
+        elif new_state == STATE_DISCONNECTED:
+            qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
+            if bool(qq_cfg.get("push_pause_when_offline", True)):
+                if self.push_scheduler.is_paused:
+                    return
+                self.push_scheduler.pause("qq_offline")
+                logger.info("[QQ State] QQ offline; push scheduler paused")
 
     # ── v13.9: 异步任务处理器注册 ──────────────────────────────
     def _register_async_task_handlers(self) -> None:
@@ -472,17 +546,30 @@ class Companion:
                 logger.debug("boot_qq_greeting: flag mtime check failed", exc_info=True)
 
         try:
-            # ── 步骤 2: 等 NapCat + 后端就绪 ──
-            await asyncio.sleep(8)
+            # ── 步骤 2: 等 QQ 真正登录就绪 ──
+            # R8.1+: 之前用固定 sleep(8) 只能保证 WS 层连接 (后端 <-> NapCat),
+            # 无法保证 QQ 账号已登录到腾讯服务器, 导致 boot_greeting 被
+            # NapCat "假发送" (WS 返回 ok 但消息实际未投递). 改为等待
+            # is_logged_in 信号 (lifecycle.connect 事件或 get_login_info 成功).
+            # 超时则跳过本次 greeting, 下次重启再试, 不硬发.
+            logged_in = await self.qq.wait_for_login(timeout=15.0)
+            if not logged_in:
+                logger.warning(
+                    "boot_qq_greeting: QQ not logged in after 15s, skip this "
+                    "launch (will retry on next restart)",
+                )
+                return
+            # 登录刚就绪时 NapCat 内部可能还在同步消息队列, 给一点缓冲.
+            await asyncio.sleep(2)
 
-            # ── 步骤 3: 再次检查 (防 8s 内另一进程已发) ──
+            # ── 步骤 3: 再次检查 (防等待期间另一进程已发) ──
             if flag_path.exists():
                 try:
                     import time
                     elapsed = time.time() - flag_path.stat().st_mtime
                     if elapsed < 60.0:
                         logger.info(
-                            "boot_qq_greeting: sent during sleep window, skip",
+                            "boot_qq_greeting: sent during wait window, skip",
                         )
                         return
                 except Exception:

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Python backend entry point.
+"""Aerie · 云栖 v13.9.8 — Python backend entry point.
 
 Launched by Electron via `python main.py`.
 Starts logging → config → Companion → API server → event loop.
@@ -91,6 +91,56 @@ async def _main() -> None:
     companion = Companion(settings=settings)
     await companion.start()
 
+    # v9.1: config hot-reloader — watches config/ YAML files and
+    # pushes changes to interested modules without a full restart.
+    try:
+        from config.persona_loader import (
+            get_config_reloader,
+            load_settings,
+            load_behavior_config,
+            load_proactive_config,
+        )
+        reloader = get_config_reloader()
+
+        def _reload_settings() -> None:
+            try:
+                new_settings = load_settings()
+                companion.settings = new_settings
+                logger.info("auto-reloaded settings.yaml")
+            except Exception:
+                logger.exception("auto-reload settings.yaml failed")
+
+        def _reload_behavior() -> None:
+            try:
+                new_behavior = load_behavior_config()
+                companion.behavior_cfg = new_behavior
+                if hasattr(companion, "emotion") and companion.emotion:
+                    companion.emotion.update_behavior_config(new_behavior)
+                logger.info("auto-reloaded persona_behavior.yaml")
+            except Exception:
+                logger.exception("auto-reload persona_behavior.yaml failed")
+
+        def _reload_proactive() -> None:
+            try:
+                if not hasattr(companion, "push_scheduler") or not companion.push_scheduler:
+                    return
+                new_proactive = load_proactive_config()
+                import asyncio as _asyncio
+                coro = companion.push_scheduler.reload_config(new_proactive)
+                if _asyncio.iscoroutine(coro):
+                    _asyncio.create_task(coro)
+                logger.info("auto-reloaded proactive.yaml")
+            except Exception:
+                logger.exception("auto-reload proactive.yaml failed")
+
+        reloader.subscribe("settings.yaml", _reload_settings)
+        reloader.subscribe("persona_behavior.yaml", _reload_behavior)
+        reloader.subscribe("proactive.yaml", _reload_proactive)
+        await reloader.start()
+        logger.info("config hot-reloader started (watching 3 files)")
+    except Exception:
+        logger.exception("config hot-reloader init failed, continuing without auto-reload")
+
     runner = await start_api(host=host, port=port)
     logger.info("[READY] Aerie ready at http://%s:%d", host, port)
 
@@ -110,6 +160,13 @@ async def _main() -> None:
         await stop_event.wait()
     finally:
         logger.info("shutting down...")
+        try:
+            from config.persona_loader import get_config_reloader
+            reloader = get_config_reloader()
+            await reloader.stop()
+            logger.info("config hot-reloader stopped")
+        except Exception:
+            pass
         await companion.stop()
         await runner.cleanup()
         logger.info("bye")

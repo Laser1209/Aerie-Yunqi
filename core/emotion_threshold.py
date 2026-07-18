@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Cumulative emotion threshold engine.
+"""Aerie · 云栖 v13.9.8 — Cumulative emotion threshold engine.
 
 Four hidden emotion slots with bursting behavior.
 Aligned with Ita.md §9 and System_Features.md §11.5.
@@ -194,6 +194,48 @@ class CumulativeEmotionEngine:
                 "emotion thresholds loaded from deprecated SLOTS_CONFIG; "
                 "please migrate to config/persona_behavior.yaml"
             )
+
+    def reload_config(self, behavior_cfg: dict | None) -> None:
+        """Hot-reload threshold config while preserving current slot values.
+
+        Only config parameters (threshold, decay_per_day, post_decay,
+        label, eruption_label, description) are updated. The current
+        accumulated value of each slot is kept intact so the user
+        doesn't lose progress when tweaking config.
+        """
+        cfg_map: dict[str, dict] | None = None
+        if behavior_cfg:
+            cfg_map = behavior_cfg.get("emotion", {}).get("thresholds")
+        if not cfg_map:
+            logger.debug("threshold reload: no new config found, skipping")
+            return
+
+        preserved: dict[str, float] = {name: slot.value for name, slot in self.slots.items()}
+        preserved_logs: dict[str, list] = {name: list(slot.event_log) for name, slot in self.slots.items()}
+        preserved_decay: dict[str, str] = {name: slot.last_decay_date for name, slot in self.slots.items()}
+
+        self._cfg_source = "persona_behavior.yaml (hot-reloaded)"
+        for name, cfg in cfg_map.items():
+            old_val = preserved.get(name, float(cfg.get("initial_value", 0)))
+            old_log = preserved_logs.get(name, [])
+            old_decay = preserved_decay.get(name, "")
+            self.slots[name] = EmotionSlot(
+                name=name,
+                label=cfg.get("label", name),
+                threshold=float(cfg.get("threshold", 100)),
+                decay_per_day=float(cfg.get("decay_per_day", 5)),
+                eruption_label=cfg.get("eruption_label", ""),
+                post_decay=float(cfg.get("post_decay", 0)),
+                description=cfg.get("description", ""),
+                value=old_val,
+            )
+            self.slots[name].event_log = old_log
+            self.slots[name].last_decay_date = old_decay
+
+        logger.info(
+            "emotion thresholds hot-reloaded (%d slots, values preserved)",
+            len(self.slots),
+        )
 
     def add(
         self, slot_name: str, value: float, trigger: str = ""

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.0.0 — HTTP API server (FastAPI + uvicorn).
+"""Aerie · 云栖 v13.9.8 — HTTP API server (FastAPI + uvicorn).
 
 Routes:
   GET  /api/health          — heartbeat + QQ WS status
@@ -61,7 +61,7 @@ from core.persona_hub import get_persona_manager
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Aerie · 云栖", version="13.9.2")
+app = FastAPI(title="Aerie · 云栖", version="13.9.8")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -128,20 +128,60 @@ def _get_permission_manager():
 @app.get("/api/health")
 async def health(request: Request) -> dict:
     comp = get_companion()
-    qq_connected = comp.qq.is_connected if comp else False
     uptime = int(time.time() - _START_TIME)
     # R6.6: also report whether the running process is stale (i.e. some
     # source file has been modified after this Python process started).
     stale_info = _check_stale_code()
+
+    # R9.0+: component-level health details
+    qq_state = "unknown"
+    qq_ws_connected = False
+    qq_logged_in = False
+    qq_self_id = 0
+    push_running = False
+    push_paused = False
+    push_paused_reason = ""
+
+    if comp:
+        qq_state = comp.qq.state
+        qq_ws_connected = comp.qq.is_connected
+        qq_logged_in = comp.qq.is_logged_in
+        qq_self_id = comp.qq.self_id
+        push_running = comp.push_scheduler.cron._running
+        push_paused = comp.push_scheduler.is_paused
+        push_paused_reason = comp.push_scheduler.paused_reason
+
+    # Overall status: healthy / degraded / unhealthy
+    if comp and qq_logged_in:
+        overall = "healthy"
+    elif comp:
+        overall = "degraded"
+    else:
+        overall = "unhealthy"
+
     return {
-        "status": "ok",
+        "status": overall,
         "app": "Aerie · 云栖",
-        "version": "13.9.2",
+        "version": "13.9.8",
         "uptime_seconds": uptime,
-        "qq_connected": qq_connected,
+        "qq_connected": qq_ws_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
         "process_started_at": getattr(main, "PROCESS_START_ISO", ""),
         "stale_code": stale_info,
+        "components": {
+            "backend": "healthy" if comp else "unhealthy",
+            "qq": {
+                "state": qq_state,
+                "ws_connected": qq_ws_connected,
+                "logged_in": qq_logged_in,
+                "self_id": qq_self_id,
+            },
+            "push_scheduler": {
+                "running": push_running,
+                "paused": push_paused,
+                "paused_reason": push_paused_reason,
+            },
+        },
     }
 
 
@@ -209,6 +249,80 @@ async def system_restart() -> dict:
     except Exception as e:
         return JSONResponse({"error": "spawn_failed", "detail": str(e)}, status_code=500)
     return {"status": "scheduled", "hint": "Backend will restart in ~3s"}
+
+
+@app.post("/api/system/reload-config")
+async def system_reload_config() -> dict:
+    """Hot-reload config files without restarting the backend.
+
+    Reloads settings.yaml, persona.yaml, persona_behavior.yaml, and
+    proactive.yaml from disk, then pushes updates to modules that
+    support runtime reconfiguration.
+
+    Returns a dict of which config files were reloaded and which
+    modules were updated.
+    """
+    import logging
+    import asyncio
+    log = logging.getLogger(__name__)
+    results: dict[str, Any] = {"reloaded": [], "updated": []}
+
+    async def _call_reload(obj, method_name, *args, label: str) -> None:
+        """Safely call a reload method (sync or async) on an object."""
+        if not hasattr(obj, method_name):
+            return
+        method = getattr(obj, method_name)
+        if not callable(method):
+            return
+        try:
+            r = method(*args)
+            if asyncio.iscoroutine(r):
+                await r
+            results["updated"].append(label)
+        except Exception as e:
+            log.warning("%s reload failed: %s", label, e)
+
+    try:
+        from config.persona_loader import (
+            load_settings,
+            load_behavior_config,
+            load_proactive_config,
+            load_persona,
+        )
+        comp = get_companion()
+        if comp:
+            new_settings = load_settings()
+            comp.settings = new_settings
+            results["reloaded"].append("settings.yaml")
+            results["updated"].append("companion.settings")
+
+            new_behavior = load_behavior_config()
+            comp.behavior_cfg = new_behavior
+            results["reloaded"].append("persona_behavior.yaml")
+            results["updated"].append("companion.behavior_cfg")
+
+            if hasattr(comp, "emotion") and comp.emotion:
+                await _call_reload(comp.emotion, "update_behavior_config", new_behavior, label="emotion_engine")
+
+            if hasattr(comp, "threshold_engine") and comp.threshold_engine:
+                await _call_reload(comp.threshold_engine, "reload_config", new_behavior, label="threshold_engine")
+
+            if hasattr(comp, "push_scheduler") and comp.push_scheduler:
+                new_proactive = load_proactive_config()
+                results["reloaded"].append("proactive.yaml")
+                await _call_reload(comp.push_scheduler, "reload_config", new_proactive, label="push_scheduler")
+
+            if hasattr(comp, "qq") and comp.qq:
+                qq_cfg = new_settings.get("qq", {}) if isinstance(new_settings, dict) else {}
+                await _call_reload(comp.qq, "update_config", qq_cfg, label="qq_client")
+
+        emit("config_reloaded", results)
+        log.info("config hot-reload complete: %s", results)
+    except Exception as e:
+        log.exception("config hot-reload failed")
+        return JSONResponse({"error": str(e), "results": results}, status_code=500)
+
+    return {"status": "ok", "results": results}
 
 
 # ── Chat ───────────────────────────────────────────

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Cron-based proactive push scheduler.
+"""Aerie · 云栖 v13.9.8 — Cron-based proactive push scheduler.
 
 Parses proactive.yaml, schedules 9 scenes via cron expressions,
 and dispatches push messages through the Companion's QQ client.
@@ -90,6 +90,38 @@ class CronScheduler:
         self.judge: Any = None
         # Optional: last Decision snapshot for observability (e2e + tests).
         self.last_decision: Any = None
+        # R9.0+: soft gate — pause all pushes when QQ is offline
+        self._paused = False
+        self._paused_reason = ""
+        self._resume_event = asyncio.Event()
+
+    def pause(self, reason: str = "manual") -> None:
+        """Pause all cron and trigger scenes.
+
+        Running sleeps will wake up on the next iteration and re-check.
+        Idempotent — calling pause() when already paused just updates
+        the reason.
+        """
+        self._paused = True
+        self._paused_reason = reason
+        logger.info("[PushScheduler] Paused: %s", reason)
+
+    def resume(self) -> None:
+        """Resume all scenes. Idempotent."""
+        if self._paused:
+            self._paused = False
+            self._paused_reason = ""
+            self._resume_event.set()
+            self._resume_event.clear()
+            logger.info("[PushScheduler] Resumed")
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
+    @property
+    def paused_reason(self) -> str:
+        return self._paused_reason
 
     def set_dispatcher(self, dispatcher) -> None:
         """Set the async dispatcher: dispatcher(scene_name, scene_config)."""
@@ -137,16 +169,33 @@ class CronScheduler:
         """
         while self._running:
             try:
+                # R9.0+: soft gate — if paused, wait for resume
+                if self._paused:
+                    await self._resume_event.wait()
+                    if not self._running:
+                        return
+                    continue
+
                 next_time = self._next_cron_time(cron_expr)
                 wait_seconds = (next_time - datetime.now()).total_seconds()
                 if wait_seconds < 0:
                     wait_seconds = 60  # already past, retry in 1 min
                 if wait_seconds > 86400:
                     wait_seconds = 86400  # cap at 1 day max sleep
-                await asyncio.sleep(wait_seconds)
+
+                # Sleep in small chunks so pause can take effect quickly
+                slept = 0.0
+                while slept < wait_seconds:
+                    if self._paused or not self._running:
+                        break
+                    chunk = min(5.0, wait_seconds - slept)
+                    await asyncio.sleep(chunk)
+                    slept += chunk
 
                 if not self._running:
                     return
+                if self._paused:
+                    continue
 
                 await self._dispatch(scene_name, scene_cfg)
             except asyncio.CancelledError:
@@ -183,6 +232,16 @@ class CronScheduler:
           cases where the user explicitly wants unconditional send on
           every launch (not timer-driven, not policy-gated).
         """
+        # R9.0+: soft gate — if paused, skip all dispatches
+        # (force=True scenes also respect pause, since pause is for
+        #  connectivity issues, not policy control)
+        if self._paused:
+            logger.debug(
+                "[PushScheduler] Skipped %s: scheduler paused (%s)",
+                scene_name, self._paused_reason,
+            )
+            return False
+
         force = bool(scene_cfg.get("force"))
 
         # ── R7.5+: Proactive judge gate ──
@@ -393,6 +452,22 @@ class PushScheduler:
     def set_dispatcher(self, dispatcher) -> None:
         self.cron.set_dispatcher(dispatcher)
 
+    def pause(self, reason: str = "manual") -> None:
+        """Pause all push scenes (cron + trigger)."""
+        self.cron.pause(reason)
+
+    def resume(self) -> None:
+        """Resume all push scenes."""
+        self.cron.resume()
+
+    @property
+    def is_paused(self) -> bool:
+        return self.cron.is_paused
+
+    @property
+    def paused_reason(self) -> str:
+        return self.cron.paused_reason
+
     async def start(self) -> None:
         await self.cron.start()
 
@@ -401,6 +476,27 @@ class PushScheduler:
 
     async def trigger(self, scene_name: str) -> bool:
         return await self.cron.trigger_scene(scene_name)
+
+    async def reload_config(self, new_config: dict) -> None:
+        """Hot-reload proactive config: restart cron tasks with new settings.
+
+        Stops all running cron tasks, updates config + scenes + policy,
+        then restarts the scheduler. The dispatcher and judge bindings
+        are preserved.
+        """
+        logger.info("[PushScheduler] reloading config...")
+        was_running = self.cron._running
+        if was_running:
+            await self.cron.stop()
+        self.cron.config = new_config
+        self.cron.scenes = new_config.get("scenes", {})
+        self.cron.policy = PushPolicy(new_config)
+        if was_running:
+            await self.cron.start()
+        logger.info(
+            "[PushScheduler] config reloaded: %d scenes",
+            len(self.cron.scenes),
+        )
 
     async def _dispatch(self, scene_name: str, scene_cfg: dict) -> bool:
         """R7.5+: 透传 CronScheduler._dispatch,用于启动 hook 等

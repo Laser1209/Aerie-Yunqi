@@ -7,6 +7,7 @@ class PersonaHubPanel {
     this._activeId = null;
     this._currentId = null;
     this._viewMode = "list"; // "list" | "editor"
+    this._isLoaded = false;
   }
 
   init() {
@@ -16,6 +17,22 @@ class PersonaHubPanel {
     this._buildDom(panel);
     this._bindEvents(panel);
     this._loadList();
+
+    if (window.aerie && window.aerie.electron && window.aerie.electron.onHealth) {
+      let wasReady = false;
+      window.aerie.electron.onHealth((data) => {
+        if (data.ready && !wasReady && !this._isLoaded) {
+          this._loadList();
+        }
+        wasReady = data.ready;
+      });
+    }
+  }
+
+  setVisible(visible) {
+    if (visible && this._viewMode === "list" && !this._isLoaded) {
+      this._loadList();
+    }
   }
 
   _buildDom(panel) {
@@ -30,10 +47,16 @@ class PersonaHubPanel {
               <h2 class="persona-hub__title">人设管理</h2>
               <p class="persona-hub__subtitle">自定义你专属的 AI 人设，随时切换</p>
             </div>
-            <button class="persona-btn persona-btn--primary" id="persona-hub-create-btn">
-              <span class="persona-btn__icon">+</span>
-              新建人设
-            </button>
+            <div class="persona-hub__header-actions">
+              <input type="file" id="persona-hub-import-input" accept=".json,application/json" hidden>
+              <button class="persona-btn persona-btn--ghost" id="persona-hub-import-btn">
+                导入人设
+              </button>
+              <button class="persona-btn persona-btn--primary" id="persona-hub-create-btn">
+                <span class="persona-btn__icon">+</span>
+                新建人设
+              </button>
+            </div>
           </div>
 
           <div class="persona-hub__grid" id="persona-hub-grid">
@@ -52,6 +75,7 @@ class PersonaHubPanel {
             </button>
             <div class="persona-hub__editor-actions">
               <button class="persona-btn persona-btn--ghost" id="persona-hub-delete-btn">删除</button>
+              <button class="persona-btn persona-btn--ghost" id="persona-hub-export-btn">导出</button>
               <button class="persona-btn persona-btn--primary" id="persona-hub-save-btn">保存</button>
             </div>
           </div>
@@ -219,6 +243,16 @@ class PersonaHubPanel {
       this._createNew();
     });
 
+    panel.querySelector("#persona-hub-import-btn").addEventListener("click", () => {
+      panel.querySelector("#persona-hub-import-input").click();
+    });
+
+    panel.querySelector("#persona-hub-import-input").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) this._importPersona(file);
+      e.target.value = "";
+    });
+
     // Editor view
     panel.querySelector("#persona-hub-back-btn").addEventListener("click", () => {
       this._showList();
@@ -230,6 +264,12 @@ class PersonaHubPanel {
 
     panel.querySelector("#persona-hub-delete-btn").addEventListener("click", () => {
       this._deleteCurrent();
+    });
+
+    panel.querySelector("#persona-hub-export-btn").addEventListener("click", () => {
+      if (this._currentId) {
+        this._exportPersona(this._currentId);
+      }
     });
 
     panel.querySelector("#persona-editor-upload-btn").addEventListener("click", () => {
@@ -258,6 +298,11 @@ class PersonaHubPanel {
   }
 
   async _loadList() {
+    const grid = document.getElementById("persona-hub-grid");
+    if (grid) {
+      grid.innerHTML = `<div class="persona-hub__loading">加载中…</div>`;
+    }
+
     try {
       const r = await window.aerie.api.request({
         method: "GET",
@@ -266,10 +311,30 @@ class PersonaHubPanel {
       if (r && r.data && r.data.personas) {
         this._personas = r.data.personas;
         this._activeId = r.data.active_id;
+        this._isLoaded = true;
         this._renderList();
+      } else {
+        this._showLoadError("返回数据格式异常");
       }
     } catch (e) {
       console.error("load persona list failed:", e);
+      this._showLoadError(e.message || "网络请求失败");
+    }
+  }
+
+  _showLoadError(message) {
+    const grid = document.getElementById("persona-hub-grid");
+    if (!grid) return;
+    grid.innerHTML = `
+      <div class="persona-hub__error">
+        <div class="persona-hub__error-icon">!</div>
+        <div class="persona-hub__error-text">加载失败：${message}</div>
+        <button class="persona-btn persona-btn--primary" id="persona-hub-retry-btn">重试</button>
+      </div>
+    `;
+    const retryBtn = document.getElementById("persona-hub-retry-btn");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => this._loadList());
     }
   }
 
@@ -293,7 +358,7 @@ class PersonaHubPanel {
         </div>
         <div class="persona-card__info">
           <h4 class="persona-card__name">${p.name || "未命名"}</h4>
-          <p class="persona-card__tagline">${p.tagline || p.english_name || ""}</p>
+          <p class="persona-card__tagline">${p.tagline || p.english_name || p.description || ""}</p>
         </div>
         <div class="persona-card__actions">
           ${p.id !== this._activeId
@@ -301,6 +366,7 @@ class PersonaHubPanel {
             : ""
           }
           <button class="persona-card__btn persona-card__btn--edit" data-action="edit">编辑</button>
+          <button class="persona-card__btn persona-card__btn--export" data-action="export">导出</button>
         </div>
       </div>
     `).join("");
@@ -317,6 +383,13 @@ class PersonaHubPanel {
         activateBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           this._activatePersona(id);
+        });
+      }
+      const exportBtn = card.querySelector('[data-action="export"]');
+      if (exportBtn) {
+        exportBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this._exportPersona(id);
         });
       }
     });
@@ -553,6 +626,65 @@ class PersonaHubPanel {
     if (listView) listView.classList.add("persona-hub__list-view--hidden");
     if (editorView) editorView.classList.remove("persona-hub__editor-view--hidden");
     this._viewMode = "editor";
+
+    const deleteBtn = document.getElementById("persona-hub-delete-btn");
+    const exportBtn = document.getElementById("persona-hub-export-btn");
+    if (deleteBtn) deleteBtn.style.display = this._currentId ? "" : "none";
+    if (exportBtn) exportBtn.style.display = this._currentId ? "" : "none";
+  }
+
+  async _exportPersona(personaId) {
+    try {
+      const r = await window.aerie.api.request({
+        method: "GET",
+        path: `/api/persona/hub/${personaId}/export`,
+      });
+      let data;
+      if (r && r.data) {
+        data = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+      }
+      if (!data || !data.id) {
+        throw new Error("导出数据无效");
+      }
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `persona_${data.id || personaId}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("export persona failed:", e);
+      alert("导出失败: " + (e.message || "unknown"));
+    }
+  }
+
+  async _importPersona(file) {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      const r = await window.aerie.api.upload({
+        path: "/api/persona/hub/import",
+        bytes: Array.from(uint8Array),
+        filename: file.name || "persona.json",
+        contentType: "application/json",
+      });
+
+      const data = (r && r.data) ? r.data : r;
+      if (data && data.status === "ok") {
+        await this._loadList();
+        alert("导入成功！");
+      } else {
+        throw new Error((data && data.error) || "导入失败");
+      }
+    } catch (e) {
+      console.error("import persona failed:", e);
+      alert("导入失败: " + (e.message || "unknown"));
+    }
   }
 }
 

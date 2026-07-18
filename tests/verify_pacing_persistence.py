@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Phase 9 Batch 7 verify: pacing persistence.
+"""Aerie · 云栖 v13.9.8 — Phase 9 Batch 7 verify: pacing persistence.
 
 Verifies that the pacing decisions made by the persona-aware decision
 tree actually land in the cognition_log table, for BOTH paths:

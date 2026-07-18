@@ -1,4 +1,4 @@
-"""Aerie v13.0 — Context Builder (Persona Hub 版)
+"""Aerie v13.9.8 — Context Builder (Persona Hub 版)
 
 从人设中心动态生成系统提示词，移除所有硬编码。
 支持多个人设切换，context 即时生效。

@@ -1,4 +1,4 @@
-"""Aerie v13.0 — Persona Validator
+"""Aerie v13.9.8 — Persona Validator
 校验人设配置的完整性和合法性。
 """
 

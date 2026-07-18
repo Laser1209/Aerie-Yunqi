@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Skill Loader (Block-4C R3.1).
+"""Aerie · 云栖 v13.9.8 — Skill Loader (Block-4C R3.1).
 
 Discovers skill directories under ``skills/local/`` and ``skills/data/``,
 parses their ``SKILL.md`` YAML frontmatter, and registers each

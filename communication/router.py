@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Three-tier message routing."""
+"""Aerie · 云栖 v13.9.8 — Three-tier message routing."""
 
 from __future__ import annotations
 from enum import Enum

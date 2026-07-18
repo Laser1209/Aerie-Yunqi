@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v11.3 — Multimodal Output Engine.
+"""Aerie · 云栖 v13.9.8 — Multimodal Output Engine.
 
 Unified TTS, image generation, and rich media output management.
 Extends the existing v9.0 TTSEngine with scene templates, caching,

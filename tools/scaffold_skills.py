@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Skill scaffold generator (Block-4C R3.3 + Block-5B).
+"""Aerie · 云栖 v13.9.8 — Skill scaffold generator (Block-4C R3.3 + Block-5B).
 
 Generates the 50 skeleton skills (12 local + 5 data + 33 cloud) under
 ``skills/{local,data,cloud}/<name>/``. Each skill gets:

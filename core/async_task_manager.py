@@ -1,4 +1,4 @@
-"""Aerie v13.9 — Async Task Manager（异步任务管理器）
+"""Aerie v13.9.8 — Async Task Manager（异步任务管理器）
 
 长任务后台执行，实时进度反馈。
 

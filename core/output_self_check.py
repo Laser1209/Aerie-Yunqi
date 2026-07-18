@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Output Self-Check (R8.1).
+"""Aerie · 云栖 v13.9.8 — Output Self-Check (R8.1).
 
 A conservative post-LLM safety net that scans outgoing text for:
 

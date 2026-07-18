@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Brain: multi-provider LLM call layer with fallback chain."""
+"""Aerie · 云栖 v13.9.8 — Brain: multi-provider LLM call layer with fallback chain."""
 
 from __future__ import annotations
 import json

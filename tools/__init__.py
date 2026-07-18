@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Built-in tools for the tool registry."""
+"""Aerie · 云栖 v13.9.8 — Built-in tools for the tool registry."""
 
 from __future__ import annotations
 import platform

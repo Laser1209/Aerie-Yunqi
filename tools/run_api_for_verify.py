@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Lightweight API server bootstrap (Block-5D R5).
+"""Aerie · 云栖 v13.9.8 — Lightweight API server bootstrap (Block-5D R5).
 
 Boots the FastAPI app on 7890 in a detached background process, sufficient
 for verify_* suites that only need HTTP endpoints. Avoids spinning up the

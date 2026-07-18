@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — NapCat launcher (manual control via API).
+"""Aerie · 云栖 v13.9.8 — NapCat launcher (manual control via API).
 
 Exposes status query and start/stop for the Electron NapCat panel.
 Does NOT auto-start — user clicks "Start" in the UI.

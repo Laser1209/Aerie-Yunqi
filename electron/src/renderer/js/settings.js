@@ -19,12 +19,18 @@ class SettingsPanel {
     // polling /api/health until the new backend is up.
     const restartBtn = document.getElementById("settings-restart-btn");
     if (restartBtn) {
-      // R7.0: preserve the original title so app.js can toggle a stale
-      // hint without losing the base tooltip.
       if (!restartBtn.getAttribute("data-original-title")) {
         restartBtn.setAttribute("data-original-title", restartBtn.title || "");
       }
       restartBtn.addEventListener("click", () => this.restartBackend());
+    }
+    const restartAppBtn = document.getElementById("settings-restart-app-btn");
+    if (restartAppBtn) {
+      restartAppBtn.addEventListener("click", () => this.restartApp());
+    }
+    const reloadConfigBtn = document.getElementById("settings-reload-config-btn");
+    if (reloadConfigBtn) {
+      reloadConfigBtn.addEventListener("click", () => this.reloadConfig());
     }
 
     const themeSel = document.getElementById("setting-theme");
@@ -82,15 +88,11 @@ class SettingsPanel {
   async restartBackend() {
     const st = document.getElementById("settings-status");
     const btn = document.getElementById("settings-restart-btn");
-    // v2.2: was `!window.aerie.invoke` which always triggered because
-    // preload.js never exposed a top-level `invoke`. The real bridge
-    // lives at window.aerie.electron.system.restartBackend
-    // (preload.js → ipcRenderer.invoke("system:restart-backend")
-    //  → main.js ipcMain.handle → POST /api/system/restart).
     if (!window.aerie || !window.aerie.electron || !window.aerie.electron.system || !window.aerie.electron.system.restartBackend) {
       if (st) st.textContent = "IPC 不可用";
       return;
     }
+    if (!confirm("确定要重启后端服务吗？\nRestart the backend service?")) return;
     if (btn) { btn.disabled = true; }
     if (st) { st.textContent = "正在重启后端…"; st.style.color = "var(--warning, #f39c12)"; }
     try {
@@ -104,6 +106,54 @@ class SettingsPanel {
       if (st) { st.textContent = "异常: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     } finally {
       setTimeout(() => { if (btn) btn.disabled = false; }, 5000);
+    }
+  }
+
+  async restartApp() {
+    const st = document.getElementById("settings-status");
+    const btn = document.getElementById("settings-restart-app-btn");
+    if (!window.aerie || !window.aerie.electron || !window.aerie.electron.system || !window.aerie.electron.system.restartApp) {
+      if (st) st.textContent = "IPC 不可用";
+      return;
+    }
+    if (!confirm("确定要重启整个应用吗？\nRestart the entire application?")) return;
+    if (btn) { btn.disabled = true; }
+    if (st) { st.textContent = "正在重启应用…"; st.style.color = "var(--warning, #f39c12)"; }
+    try {
+      await window.aerie.electron.system.restartApp();
+    } catch (e) {
+      if (st) { st.textContent = "异常: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async reloadConfig() {
+    const st = document.getElementById("settings-status");
+    const btn = document.getElementById("settings-reload-config-btn");
+    if (!window.aerie || !window.aerie.electron || !window.aerie.electron.system || !window.aerie.electron.system.reloadConfig) {
+      if (st) st.textContent = "IPC 不可用";
+      return;
+    }
+    if (btn) { btn.disabled = true; }
+    if (st) { st.textContent = "正在热重载配置…"; st.style.color = "var(--warning, #f39c12)"; }
+    try {
+      const r = await window.aerie.electron.system.reloadConfig();
+      if (r && r.error) {
+        if (st) { st.textContent = "热重载失败: " + r.error; st.style.color = "var(--danger, #e74c3c)"; }
+      } else {
+        const results = (r && r.results) || {};
+        const reloaded = (results.reloaded || []).join(", ");
+        const updated = (results.updated || []).join(", ");
+        if (st) {
+          st.textContent = "配置已热重载 ✓ " + (reloaded ? "[" + reloaded + "]" : "");
+          st.style.color = "var(--success, #2ecc71)";
+        }
+      }
+    } catch (e) {
+      if (st) { st.textContent = "异常: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+    } finally {
+      setTimeout(() => { if (btn) btn.disabled = false; }, 2000);
+      setTimeout(() => { if (st) st.textContent = ""; }, 5000);
     }
   }
 
@@ -833,13 +883,13 @@ class SettingsPanel {
 
   async _apiRequest({ method = "GET", path = "", body = null } = {}) {
     if (window.aerie?.api?.request) {
-      return await window.aerie.api.request({
+      const r = await window.aerie.api.request({
         method,
         path,
         body,
       });
+      return (r && r.data) ? r.data : r;
     }
-    // Fallback: fetch
     const opts = { method, headers: { "Content-Type": "application/json" } };
     if (body && method !== "GET") opts.body = JSON.stringify(body);
     const resp = await fetch(path, opts);

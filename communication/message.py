@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Incoming and outgoing message models."""
+"""Aerie · 云栖 v13.9.8 — Incoming and outgoing message models."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field

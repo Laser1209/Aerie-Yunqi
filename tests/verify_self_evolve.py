@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Phase 9 Batch 6 verify: self-evolution mechanism.
+"""Aerie · 云栖 v13.9.8 — Phase 9 Batch 6 verify: self-evolution mechanism.
 
 Verifies the high-sensitivity capability-gap detector and the
 5 new HTTP endpoints end-to-end. Tests:

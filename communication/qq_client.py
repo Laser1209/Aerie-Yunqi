@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — NapCat OneBot11 WebSocket client.
+"""Aerie · 云栖 v13.9.8 — NapCat OneBot11 WebSocket client.
 
 Connects to NapCat's OneBot11 WS server (port 3001).
 Receives QQ messages, passes them to the message handler.
@@ -14,6 +14,7 @@ import json
 import logging
 import re
 import socket
+import uuid
 from typing import Any, Callable, Optional
 
 import websockets
@@ -24,6 +25,11 @@ from communication.message import IncomingMessage
 logger = logging.getLogger(__name__)
 
 MessageHandler = Callable[[IncomingMessage], Any]
+StateHandler = Callable[[str], Any]
+
+STATE_DISCONNECTED = "disconnected"
+STATE_WS_CONNECTED = "ws_connected"
+STATE_LOGGED_IN = "logged_in"
 
 # ── v13.9: thought/action 标签过滤 ──
 
@@ -61,18 +67,109 @@ class QQClient:
         self._handler: Optional[MessageHandler] = None
         self._running = False
         self._connected = False
+        # R8.1+: QQ account login state. ``_connected`` only reflects the
+        # WS layer (backend <-> NapCat); ``_logged_in`` reflects whether
+        # the QQ account is actually online (NapCat <-> Tencent server).
+        # Without this distinction, proactive pushes (boot_greeting etc.)
+        # get "ghost-sent" while QQ is still logging in.
+        self._logged_in = False
+        self._login_event = asyncio.Event()
         # R7.5+: bot's own QQ, learned from OneBot11 self_id field.
         self.self_id: int = 0
         # v13.9: QQ whitelist manager (injected later via setter)
         self._whitelist = None
+        # R9.0+: state machine + change callbacks
+        self._state = STATE_DISCONNECTED
+        self._state_handlers: list[StateHandler] = []
 
     def set_whitelist(self, whitelist_manager) -> None:
         """设置白名单管理器。"""
         self._whitelist = whitelist_manager
 
+    def update_config(self, config: dict) -> None:
+        """Hot-reload QQ client config (port, host, etc.).
+
+        Note: changing port won't affect an already-established connection.
+        The new config will be used on the next reconnect.
+        """
+        new_port = int(config.get("napcat_ws_url", f"ws://127.0.0.1:{self.port}").split(":")[-1])
+        if "ws_port" in config:
+            new_port = int(config["ws_port"])
+        if new_port != self.port:
+            logger.info("QQ client config updated: port %s -> %s (will take effect on next reconnect)", self.port, new_port)
+            self.port = new_port
+        else:
+            logger.debug("QQ client config unchanged (port=%s)", self.port)
+
     @property
     def is_connected(self) -> bool:
         return self._connected and _port_is_open(self.host, self.port)
+
+    @property
+    def is_logged_in(self) -> bool:
+        """True only when the QQ account is actually online.
+
+        Distinct from ``is_connected`` (which only means the WS link to
+        NapCat is up). ``is_logged_in`` becomes True after either:
+          - ``get_login_info`` RPC succeeds (NapCat can reach Tencent), or
+          - a OneBot11 ``lifecycle.connect`` meta_event arrives.
+        Use this (or :meth:`wait_for_login`) before proactive pushes so
+        they don't get ghost-sent during QQ login warm-up.
+        """
+        return self._logged_in and self.is_connected
+
+    @property
+    def state(self) -> str:
+        """Current QQ client state: "disconnected" | "ws_connected" | "logged_in"."""
+        return self._state
+
+    def on_state_change(self, handler: StateHandler) -> None:
+        """Register a callback invoked on every state transition.
+
+        The handler receives the new state string. Exceptions in handlers
+        are caught and logged so one bad handler doesn't break the chain.
+        """
+        self._state_handlers.append(handler)
+
+    def _emit_state(self, new_state: str) -> None:
+        """Transition to a new state and notify handlers if changed."""
+        if new_state == self._state:
+            return
+        old_state = self._state
+        self._state = new_state
+        logger.info("QQ state: %s -> %s", old_state, new_state)
+        for h in self._state_handlers:
+            try:
+                result = h(new_state)
+                if asyncio.iscoroutine(result):
+                    asyncio.create_task(result)
+            except Exception:
+                logger.exception("state handler error for state=%s", new_state)
+
+    async def wait_until_ready(self, timeout: float = 30.0) -> bool:
+        """Block until QQ is fully logged in, or until timeout.
+
+        Alias of :meth:`wait_for_login` with a longer default timeout
+        suitable for startup-phase waiting. Returns True if ready within
+        the deadline, False on timeout.
+        """
+        return await self.wait_for_login(timeout=timeout)
+
+    async def wait_for_login(self, timeout: float = 15.0) -> bool:
+        """Block until QQ account is logged in, or until ``timeout``.
+
+        Returns True if logged in within the deadline, False on timeout.
+        Proactive callers (boot_greeting, scheduled pushes) should use
+        this instead of a fixed ``sleep`` so they don't fire while NapCat
+        is still handshaking with Tencent servers.
+        """
+        if self.is_logged_in:
+            return True
+        try:
+            await asyncio.wait_for(self._login_event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            pass
+        return self.is_logged_in
 
     def set_message_handler(self, handler: MessageHandler) -> None:
         self._handler = handler
@@ -90,6 +187,15 @@ class QQClient:
             try:
                 async with websockets.connect(url, ping_interval=20, ping_timeout=10) as ws:
                     self._connected = True
+                    # R8.1+: every (re)connect must re-confirm QQ login.
+                    # The WS link being up says nothing about whether the
+                    # QQ account is online on the Tencent side, and a
+                    # reconnect may happen after a QQ re-login. Clear the
+                    # flag so wait_for_login callers block until the next
+                    # lifecycle connect / get_login_info success.
+                    self._logged_in = False
+                    self._login_event.clear()
+                    self._emit_state(STATE_WS_CONNECTED)
                     logger.info("QQ WS connected to %s", url)
                     # R7.5+: ask NapCat for our own login info so we know
                     # which user_id to address push messages to. Run in
@@ -99,6 +205,9 @@ class QQClient:
             except Exception as e:
                 logger.warning("QQ WS connection error: %s", e)
                 self._connected = False
+                self._logged_in = False
+                self._login_event.clear()
+                self._emit_state(STATE_DISCONNECTED)
                 await asyncio.sleep(5)
 
     async def _listen(self, ws: ClientConnection) -> None:
@@ -118,6 +227,9 @@ class QQClient:
             logger.info("QQ WS connection closed")
         finally:
             self._connected = False
+            self._logged_in = False
+            self._login_event.clear()
+            self._emit_state(STATE_DISCONNECTED)
 
     async def _dispatch(self, event: dict) -> None:
         """Route OneBot11 events to handler."""
@@ -156,7 +268,22 @@ class QQClient:
                     except Exception:
                         logger.exception("handler error for user %s", msg.user_id)
         elif post_type == "meta_event":
-            logger.debug("QQ meta: %s", event.get("meta_event_type", "?"))
+            meta_type = event.get("meta_event_type", "")
+            sub_type = event.get("sub_type", "")
+            # R8.1+: lifecycle.connect is NapCat's "QQ account is online"
+            # signal. It fires after a successful QQ login (and on every
+            # OneBot11 (re)connect that follows). Treat it as a reliable
+            # login-ready signal so wait_for_login callers can proceed.
+            if meta_type == "lifecycle" and sub_type == "connect":
+                if not self._logged_in:
+                    self._logged_in = True
+                    self._login_event.set()
+                    self._emit_state(STATE_LOGGED_IN)
+                    logger.info(
+                        "QQ lifecycle connect: account online (self_id=%s)",
+                        self.self_id or "?",
+                    )
+            logger.debug("QQ meta: %s/%s", meta_type, sub_type)
         elif post_type == "notice":
             logger.debug("QQ notice: %s", event.get("notice_type", "?"))
 
@@ -178,7 +305,6 @@ class QQClient:
         # own response out of the inbound event stream. NapCat's
         # lifecycle meta_event is broadcast on every (re)connect and
         # would otherwise be mistaken for the send_private_msg reply.
-        import uuid
         echo_tag = f"send_msg_{uuid.uuid4().hex[:12]}"
         payload = {
             "action": "send_private_msg",
@@ -219,6 +345,49 @@ class QQClient:
             logger.warning("QQ send error: %s", e)
             return False
 
+    async def _rpc_call(
+        self, action: str, params: dict, timeout: float = 5.0
+    ) -> dict | None:
+        """Send a OneBot11 RPC on a fresh WS, loop recv until echo match.
+
+        NapCat pushes lifecycle/heartbeat events on every new WS connection.
+        We must loop recv() and skip non-matching frames (like send_message
+        does), otherwise the first frame received is a lifecycle event, not
+        our RPC reply.
+
+        Returns the full response dict (with echo/status/data fields), or
+        None on timeout/failure. Caller is responsible for checking
+        status/data.
+        """
+        if not self.is_connected:
+            return None
+        echo_tag = f"rpc_{uuid.uuid4().hex[:12]}"
+        payload = {"action": action, "params": params, "echo": echo_tag}
+        url = f"ws://{self.host}:{self.port}"
+        try:
+            async with websockets.connect(
+                url, ping_interval=None, close_timeout=2,
+            ) as ws:
+                await ws.send(json.dumps(payload))
+                deadline = asyncio.get_event_loop().time() + timeout
+                while asyncio.get_event_loop().time() < deadline:
+                    try:
+                        resp = await asyncio.wait_for(
+                            ws.recv(),
+                            timeout=max(0.5, deadline - asyncio.get_event_loop().time()),
+                        )
+                    except asyncio.TimeoutError:
+                        return None
+                    data = json.loads(resp)
+                    if data.get("echo") == echo_tag:
+                        return data
+                    # skip non-echo frames (lifecycle/heartbeat/unrelated)
+                    logger.debug("RPC %s: skip non-echo frame: %.80s", action, resp)
+        except Exception as e:
+            logger.debug("RPC %s failed: %s", action, e)
+            return None
+        return None
+
     async def _learn_self_id(self) -> None:
         """R7.5+: ask NapCat for our own login user_id.
 
@@ -227,35 +396,34 @@ class QQClient:
         any inbound message arrives (which would otherwise teach us via
         the ``self_id`` field of the event payload).
         """
-        # Retry a few times to ride out the WS handshake.
+        # Retry a few times to ride out the WS handshake. Each retry uses
+        # _rpc_call which loops recv() and matches by echo, so lifecycle
+        # events pushed by NapCat on each new WS connect are skipped.
         for attempt in range(5):
             await asyncio.sleep(1 + attempt)
             if not self.is_connected:
                 continue
-            try:
-                url = f"ws://{self.host}:{self.port}"
-                async with websockets.connect(
-                    url, ping_interval=None, close_timeout=2,
-                ) as ws:
-                    await ws.send(json.dumps({
-                        "action": "get_login_info",
-                        "params": {},
-                        "echo": "learn_self_id",
-                    }))
-                    resp = await asyncio.wait_for(ws.recv(), timeout=3)
-                    data = json.loads(resp)
-                    uid = (data.get("data") or {}).get("user_id")
-                    if uid:
-                        self.self_id = int(uid)
-                        logger.info(
-                            "QQ client learned self_id=%s via get_login_info",
-                            self.self_id,
-                        )
-                        return
-            except Exception as e:
-                logger.debug(
-                    "get_login_info attempt %s failed: %s", attempt + 1, e,
+            resp = await self._rpc_call("get_login_info", {}, timeout=3)
+            if resp is None:
+                continue
+            uid = (resp.get("data") or {}).get("user_id")
+            if uid:
+                self.self_id = int(uid)
+                # R8.1+: a successful get_login_info means NapCat can
+                # reach Tencent — QQ is logged in. Signal the login event
+                # so wait_for_login callers proceed.
+                if not self._logged_in:
+                    self._logged_in = True
+                    self._login_event.set()
+                    self._emit_state(STATE_LOGGED_IN)
+                logger.info(
+                    "QQ client learned self_id=%s via get_login_info",
+                    self.self_id,
                 )
+                return
+            logger.debug(
+                "get_login_info attempt %s: no user_id in resp", attempt + 1,
+            )
         logger.warning("QQ client could not learn self_id via get_login_info")
 
     async def recall_message(self, message_id: int) -> bool:
@@ -269,50 +437,28 @@ class QQClient:
         if not self.is_connected:
             logger.warning("Cannot recall: QQ WS not connected")
             return False
-
-        payload = {
-            "action": "delete_msg",
-            "params": {"message_id": int(message_id)},
-        }
-        url = f"ws://{self.host}:{self.port}"
-        try:
-            async with websockets.connect(url, ping_interval=None, close_timeout=2) as ws:
-                await ws.send(json.dumps(payload))
-                try:
-                    resp = await asyncio.wait_for(ws.recv(), timeout=5)
-                    data = json.loads(resp)
-                    if data.get("status") == "ok":
-                        logger.info("QQ recalled message_id=%s", message_id)
-                        return True
-                    logger.warning("QQ recall failed: %s", data)
-                    return False
-                except asyncio.TimeoutError:
-                    logger.warning("QQ recall timeout for message_id=%s", message_id)
-                    return False
-        except Exception as e:
-            logger.warning("QQ recall error: %s", e)
+        resp = await self._rpc_call(
+            "delete_msg", {"message_id": int(message_id)}, timeout=5,
+        )
+        if resp is None:
+            logger.warning("QQ recall timeout for message_id=%s", message_id)
             return False
+        if resp.get("status") == "ok":
+            logger.info("QQ recalled message_id=%s", message_id)
+            return True
+        logger.warning("QQ recall failed: %s", resp)
+        return False
 
     async def send_poke(self, user_id: int) -> bool:
         """Send a poke (戳一戳) to a user via NapCat OneBot11."""
         if not self.is_connected:
             return False
-        payload = {
-            "action": "send_poke",
-            "params": {"user_id": int(user_id), "type": "私人"},
-        }
-        url = f"ws://{self.host}:{self.port}"
-        try:
-            async with websockets.connect(url, ping_interval=None, close_timeout=2) as ws:
-                await ws.send(json.dumps(payload))
-                try:
-                    resp = await asyncio.wait_for(ws.recv(), timeout=3)
-                    data = json.loads(resp)
-                    return data.get("status") == "ok"
-                except asyncio.TimeoutError:
-                    return False
-        except Exception:
+        resp = await self._rpc_call(
+            "send_poke", {"user_id": int(user_id), "type": "私人"}, timeout=3,
+        )
+        if resp is None:
             return False
+        return resp.get("status") == "ok"
 
     async def send_message_with_segments(
         self,
@@ -346,30 +492,24 @@ class QQClient:
             logger.warning("QQ segments send: no usable content after stripping tags, skip")
             return False
 
-        payload = {
-            "action": "send_private_msg",
-            "params": {"user_id": int(user_id), "message": cleaned_segments},
-        }
-        url = f"ws://{self.host}:{self.port}"
-        try:
-            async with websockets.connect(url, ping_interval=None, close_timeout=2) as ws:
-                await ws.send(json.dumps(payload))
-                try:
-                    resp = await asyncio.wait_for(ws.recv(), timeout=5)
-                    data = json.loads(resp)
-                    if data.get("status") == "ok":
-                        # data.data.message_id is the new OneBot11 message_id
-                        # (currently logged for debugging; not consumed by caller)
-                        _msg_id = (data.get("data") or {}).get("message_id")
-                        return True
-                    return False
-                except asyncio.TimeoutError:
-                    return False
-        except Exception as e:
-            logger.warning("QQ segments send error: %s", e)
+        resp = await self._rpc_call(
+            "send_private_msg",
+            {"user_id": int(user_id), "message": cleaned_segments},
+            timeout=5,
+        )
+        if resp is None:
             return False
+        if resp.get("status") == "ok":
+            # data.data.message_id is the new OneBot11 message_id
+            # (currently logged for debugging; not consumed by caller)
+            _msg_id = (resp.get("data") or {}).get("message_id")
+            return True
+        return False
 
     async def stop(self) -> None:
         self._running = False
         self._connected = False
+        self._logged_in = False
+        self._login_event.clear()
+        self._emit_state(STATE_DISCONNECTED)
         logger.info("QQ client stopped")

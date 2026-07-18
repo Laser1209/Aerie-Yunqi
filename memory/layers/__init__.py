@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v11.2 — 四层记忆架构 (S3 M3.1).
+"""Aerie · 云栖 v13.9.8 — 四层记忆架构 (S3 M3.1).
 
 Transient → Working → Long-term → Permanent
 """

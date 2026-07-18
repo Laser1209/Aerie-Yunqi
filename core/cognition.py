@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — Cognition engine (Phase 9: brain center trace).
+"""Aerie · 云栖 v13.9.8 — Cognition engine (Phase 9: brain center trace).
 
 Provides a structured 9-stage trace for every incoming message:
   1. route

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — YAML config loader."""
+"""Aerie · 云栖 v13.9.8 — YAML config loader."""
 
 from __future__ import annotations
 import os
@@ -375,3 +375,92 @@ def get_napcat_config() -> dict[str, Any]:
 def get_http_config() -> dict[str, Any]:
     settings = load_settings()
     return dict(settings.get("http_api", {}))
+
+
+class ConfigHotReloader:
+    """Monitor config/ YAML files and notify subscribers on changes.
+
+    Usage::
+
+        reloader = ConfigHotReloader()
+        reloader.subscribe("settings.yaml", lambda: print("settings changed"))
+        await reloader.start()
+        # ... later, call reloader.stop() to shut down the watcher
+    """
+
+    def __init__(self) -> None:
+        self._callbacks: dict[str, list[callable]] = {}
+        self._mtimes: dict[str, float] = {}
+        self._running = False
+        self._task: asyncio.Task | None = None
+        self._poll_interval = 2.0
+
+    def subscribe(self, filename: str, callback: callable) -> None:
+        """Register a callback for when a specific yaml file changes."""
+        if filename not in self._callbacks:
+            self._callbacks[filename] = []
+        self._callbacks[filename].append(callback)
+        path = _CONFIG_DIR / filename
+        if path.exists():
+            try:
+                self._mtimes[filename] = path.stat().st_mtime
+            except OSError:
+                pass
+
+    async def start(self) -> None:
+        """Start the background polling loop."""
+        if self._running:
+            return
+        self._running = True
+        import asyncio as _asyncio
+        self._task = _asyncio.create_task(self._poll_loop())
+
+    async def stop(self) -> None:
+        """Stop the background polling loop."""
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            self._task = None
+
+    async def _poll_loop(self) -> None:
+        import asyncio as _asyncio
+        while self._running:
+            try:
+                self._check_once()
+            except Exception:
+                pass
+            await _asyncio.sleep(self._poll_interval)
+
+    def _check_once(self) -> None:
+        import logging
+        logger = logging.getLogger(__name__)
+        for filename in list(self._callbacks.keys()):
+            path = _CONFIG_DIR / filename
+            if not path.exists():
+                continue
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            prev = self._mtimes.get(filename)
+            if prev is not None and mtime > prev + 0.1:
+                self._mtimes[filename] = mtime
+                logger.info("config changed: %s", filename)
+                for cb in self._callbacks.get(filename, []):
+                    try:
+                        cb()
+                    except Exception:
+                        logger.exception("config reload callback failed for %s", filename)
+            elif prev is None:
+                self._mtimes[filename] = mtime
+
+
+_RELOADER: ConfigHotReloader | None = None
+
+
+def get_config_reloader() -> ConfigHotReloader:
+    """Get or create the singleton ConfigHotReloader."""
+    global _RELOADER
+    if _RELOADER is None:
+        _RELOADER = ConfigHotReloader()
+    return _RELOADER

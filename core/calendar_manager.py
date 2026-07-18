@@ -1,4 +1,4 @@
-"""Aerie v12.0.1 · 日历管理器
+"""Aerie v13.9.8 · 日历管理器
 
 支持：日程、纪念日、倒计时、日志
 与对话联动：Agent 可以通过工具调用创建事件
@@ -40,12 +40,12 @@ class CalendarManager:
     def _migrate_anniversaries(self):
         """从旧的 anniversary 表迁移数据到 calendar_events"""
         try:
-            rows = self._db.query_all(
+            rows = self._db.query(
                 "SELECT * FROM anniversary WHERE 1=1"
             ) or []
             if not rows:
                 return
-            existing = self._db.query_all(
+            existing = self._db.query(
                 "SELECT id FROM calendar_events WHERE source = 'migrated_anniversary'"
             ) or []
             if existing:
@@ -148,7 +148,7 @@ class CalendarManager:
             params.append(event_type)
         sql += " ORDER BY start_time ASC LIMIT ?"
         params.append(limit)
-        rows = self._db.query_all(sql, tuple(params)) or []
+        rows = self._db.query(sql, tuple(params)) or []
         return [dict(r) for r in rows]
 
     def get_stats(self) -> dict:

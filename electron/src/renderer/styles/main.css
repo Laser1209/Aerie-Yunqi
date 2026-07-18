@@ -1314,6 +1314,57 @@ body {
   margin-top: 16px;
 }
 
+.settings-group--office {
+  border-top: 1px solid var(--color-border, #eee);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.office-path-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.office-path-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  background: var(--color-bg-secondary, #f8f8fa);
+  border: 1px solid var(--color-border, #e5e5ea);
+  border-radius: 8px;
+  color: var(--color-text, #333);
+  cursor: default;
+  user-select: all;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.office-path-row input[type="text"]:focus {
+  outline: none;
+  border-color: var(--color-primary, #ff5b9c);
+  box-shadow: 0 0 0 3px rgba(255, 91, 156, 0.15);
+}
+
+.office-path-row .btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  font-size: 13px;
+  height: auto;
+}
+
+.office-dir-status--success {
+  color: var(--color-success, #34c759) !important;
+}
+
+.office-dir-status--error {
+  color: var(--color-error, #ff3b30) !important;
+}
+
 .settings-subgroup {
   margin-bottom: 14px;
 }

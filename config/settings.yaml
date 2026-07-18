@@ -1,3 +1,5 @@
+office:
+  dir: D:\AerieOffice
 proactive:
   enabled: true
 startup:

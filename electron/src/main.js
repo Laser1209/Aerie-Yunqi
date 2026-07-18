@@ -1159,6 +1159,31 @@ ipcMain.handle("window:close", (event) => {
   return true;
 });
 
+// 办公模式：选择文件夹对话框
+ipcMain.handle("dialog:openDirectory", async (event, opts = {}) => {
+  const { dialog } = require("electron");
+  const win = getSenderWindow(event);
+  const result = await dialog.showOpenDialog(win || BrowserWindow.getFocusedWindow(), {
+    title: opts.title || "选择文件夹",
+    defaultPath: opts.defaultPath || "",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (result.canceled || !result.filePaths?.length) return null;
+  return result.filePaths[0];
+});
+
+// 办公模式：在资源管理器中打开路径
+ipcMain.handle("shell:openPath", async (_event, path) => {
+  const { shell } = require("electron");
+  if (!path) return { success: false, error: "path is required" };
+  try {
+    await shell.openPath(path);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 // R7.0: Forward /api/health as-is so the renderer can read stale_code
 // without a second round-trip. The renderer's poll already calls
 // /api/health, so this IPC is mainly used by the very first paint

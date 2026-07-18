@@ -1028,6 +1028,45 @@
               </div>
             </div>
 
+            <!-- 办公模式设置 -->
+            <div class="settings-group settings-group--office">
+              <h3 class="settings-section-title">办公模式 · Office Mode</h3>
+              <p class="settings-hint">AI 办公相关的文件保存位置和默认行为 / Office file storage & behavior</p>
+
+              <div class="settings-subgroup">
+                <label>文件保存位置 / Save Path</label>
+                <div class="office-path-row">
+                  <input type="text" id="office-dir-input"
+                         placeholder="~/AerieOffice"
+                         autocomplete="off" readonly>
+                  <button type="button" id="office-dir-browse"
+                          class="btn btn-secondary"
+                          title="选择文件夹">
+                    <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    </svg>
+                    <span style="margin-left:4px;">浏览</span>
+                  </button>
+                  <button type="button" id="office-dir-open"
+                          class="btn btn-secondary"
+                          title="打开当前文件夹">
+                    <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                    <span style="margin-left:4px;">打开</span>
+                  </button>
+                </div>
+                <p id="office-dir-status" class="settings-hint" style="margin-top:6px; min-height:16px;"></p>
+              </div>
+
+              <div class="settings-actions">
+                <button id="office-dir-save" class="btn btn-primary" type="button">保存位置</button>
+                <button id="office-dir-reset" class="btn btn-secondary" type="button">恢复默认</button>
+              </div>
+            </div>
+
             <div class="settings-actions">
               <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
               <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>

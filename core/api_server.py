@@ -1681,6 +1681,43 @@ async def office_device_info(request: Request) -> dict:
         return {"error": str(e)}
 
 
+@app.get("/api/office/dir")
+async def office_dir_get() -> dict:
+    """获取当前办公文件保存目录。"""
+    try:
+        from core.office_tools import get_office_dir
+        p = get_office_dir()
+        return {
+            "success": True,
+            "path": str(p),
+            "exists": p.exists(),
+        }
+    except Exception as e:
+        logger.exception("office dir get error")
+        return {"success": False, "error": str(e)}
+
+
+@app.put("/api/office/dir")
+async def office_dir_set(request: Request) -> dict:
+    """设置办公文件保存目录。"""
+    try:
+        body = await request.json()
+        path = body.get("path", "") or ""
+        if not path:
+            return JSONResponse(
+                {"success": False, "error": "路径不能为空"},
+                status_code=400,
+            )
+        from core.office_tools import set_office_dir
+        result = set_office_dir(path)
+        if result.get("success"):
+            emit("office_dir_changed", {"path": result["path"]})
+        return result
+    except Exception as e:
+        logger.exception("office dir set error")
+        return {"success": False, "error": str(e)}
+
+
 # ── Response Validator ────────────────────────────
 
 @app.post("/api/validation/check")

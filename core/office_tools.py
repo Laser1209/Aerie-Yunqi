@@ -54,9 +54,64 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# 办公文件默认保存目录
-OFFICE_DIR = Path(os.path.expanduser("~/AerieOffice"))
-OFFICE_DIR.mkdir(parents=True, exist_ok=True)
+# 办公文件默认保存目录（可通过 settings.office.dir 自定义）
+_default_office_dir = Path(os.path.expanduser("~/AerieOffice"))
+OFFICE_DIR: Path = _default_office_dir
+
+
+def get_office_dir() -> Path:
+    """获取当前办公文件保存目录。
+
+    优先从 settings.yaml 的 office.dir 读取，未设置则使用默认 ~/AerieOffice。
+    每次调用都会重新读取 settings，确保设置变更后立即生效。
+    """
+    global OFFICE_DIR
+    try:
+        from config.persona_loader import load_settings
+        settings = load_settings()
+        custom_dir = (
+            settings.get("office", {}).get("dir")
+            if isinstance(settings, dict)
+            else None
+        )
+        if custom_dir and str(custom_dir).strip():
+            p = Path(os.path.expanduser(str(custom_dir).strip()))
+            p.mkdir(parents=True, exist_ok=True)
+            OFFICE_DIR = p
+            return OFFICE_DIR
+    except Exception:
+        logger.exception("get_office_dir: 读取 settings 失败，使用默认目录")
+    # 兜底：默认目录
+    _default_office_dir.mkdir(parents=True, exist_ok=True)
+    OFFICE_DIR = _default_office_dir
+    return OFFICE_DIR
+
+
+def set_office_dir(path: str | Path) -> dict:
+    """设置办公文件保存目录并持久化到 settings.yaml。
+
+    Args:
+        path: 目录路径（支持 ~ 展开）
+
+    Returns:
+        {"success": bool, "path": str, "error": str}
+    """
+    try:
+        from config.persona_loader import save_settings
+        p = Path(os.path.expanduser(str(path).strip()))
+        p.mkdir(parents=True, exist_ok=True)
+        save_settings({"office": {"dir": str(p.resolve())}})
+        global OFFICE_DIR
+        OFFICE_DIR = p.resolve()
+        logger.info("office dir set to %s", OFFICE_DIR)
+        return {"success": True, "path": str(OFFICE_DIR)}
+    except Exception as e:
+        logger.exception("set_office_dir error")
+        return {"success": False, "error": str(e)}
+
+
+# 启动时初始化一次
+get_office_dir()
 
 
 # ── 工具函数 ──────────────────────────────────────
@@ -93,7 +148,8 @@ def tool_document_create(
         if not safe_name.endswith(ext):
             safe_name += ext
 
-        file_path = OFFICE_DIR / safe_name
+        office_dir = get_office_dir()
+        file_path = office_dir / safe_name
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         file_path.write_text(content, encoding="utf-8")
@@ -122,9 +178,10 @@ def tool_document_read(filepath: str) -> dict:
         文档内容和元信息
     """
     try:
+        office_dir = get_office_dir()
         path = Path(filepath)
         if not path.is_absolute():
-            path = OFFICE_DIR / filepath
+            path = office_dir / filepath
 
         if not path.exists():
             return {"success": False, "error": f"文件不存在: {path}"}
@@ -132,9 +189,9 @@ def tool_document_read(filepath: str) -> dict:
         if not path.is_file():
             return {"success": False, "error": f"不是文件: {path}"}
 
-        # 安全检查：只允许读取 AerieOffice 和常见文档目录
+        # 安全检查：只允许读取办公目录和常见文档目录
         allowed_parents = [
-            OFFICE_DIR.resolve(),
+            office_dir.resolve(),
             Path(os.path.expanduser("~/Desktop")).resolve(),
             Path(os.path.expanduser("~/Documents")).resolve(),
             Path(os.path.expanduser("~/Downloads")).resolve(),
@@ -182,9 +239,10 @@ def tool_spreadsheet_analyze(filepath: str, max_rows: int = 100) -> dict:
         列名、行数、每列统计（数值列的均值/最大最小值）
     """
     try:
+        office_dir = get_office_dir()
         path = Path(filepath)
         if not path.is_absolute():
-            path = OFFICE_DIR / filepath
+            path = office_dir / filepath
 
         if not path.exists():
             return {"success": False, "error": f"文件不存在: {path}"}
@@ -287,7 +345,7 @@ def tool_file_search(
                 p = Path(os.path.expanduser(d))
                 if p.exists():
                     search_dirs.append(p.resolve())
-            search_dirs.append(OFFICE_DIR.resolve())
+            search_dirs.append(get_office_dir().resolve())
 
         # 文件类型过滤
         ext_map = {
@@ -508,12 +566,13 @@ def tool_directory_list(
         目录文件列表
     """
     try:
+        office_dir = get_office_dir()
         if directory:
             target = Path(directory)
             if not target.is_absolute():
-                target = OFFICE_DIR / directory
+                target = office_dir / directory
         else:
-            target = OFFICE_DIR
+            target = office_dir
 
         if not target.exists():
             return {"success": False, "error": f"目录不存在: {target}"}
@@ -662,9 +721,10 @@ def tool_directory_create(directory: str) -> dict:
         创建结果
     """
     try:
+        office_dir = get_office_dir()
         path = Path(directory)
         if not path.is_absolute():
-            path = OFFICE_DIR / directory
+            path = office_dir / directory
 
         path.mkdir(parents=True, exist_ok=True)
         return {
@@ -742,7 +802,8 @@ def tool_word_generate(
     """
     try:
         safe_name = "".join(c for c in filename if c.isalnum() or c in "._-  ") or f"doc_{int(datetime.now().timestamp())}"
-        file_path = OFFICE_DIR / f"{safe_name}.docx"
+        office_dir = get_office_dir()
+        file_path = office_dir / f"{safe_name}.docx"
 
         try:
             from docx import Document
@@ -765,7 +826,7 @@ def tool_word_generate(
             doc.save(str(file_path))
             fmt = "docx"
         except ImportError:
-            file_path = OFFICE_DIR / f"{safe_name}.md"
+            file_path = office_dir / f"{safe_name}.md"
             md_content = (f"# {title}\n\n" if title else "") + content
             file_path.write_text(md_content, encoding="utf-8")
             fmt = "markdown (python-docx 未安装)"
@@ -806,7 +867,8 @@ def tool_csv_generate(
         safe_name = "".join(c for c in filename if c.isalnum() or c in "._-  ") or f"data_{int(datetime.now().timestamp())}"
         if not safe_name.endswith(".csv"):
             safe_name += ".csv"
-        file_path = OFFICE_DIR / safe_name
+        office_dir = get_office_dir()
+        file_path = office_dir / safe_name
 
         cols = columns or list(rows[0].keys())
 
@@ -844,8 +906,9 @@ def tool_system_info() -> dict:
     """
     try:
         import psutil
+        office_dir = get_office_dir()
         mem = psutil.virtual_memory()
-        disk = psutil.disk_usage(str(OFFICE_DIR))
+        disk = psutil.disk_usage(str(office_dir))
         cpu_percent = psutil.cpu_percent(interval=0.1)
         info = {
             "os": platform.system(),
@@ -865,11 +928,12 @@ def tool_system_info() -> dict:
             "disk_used_gb": round(disk.used / 1024 / 1024 / 1024, 2),
             "disk_free_gb": round(disk.free / 1024 / 1024 / 1024, 2),
             "disk_usage_percent": disk.percent,
-            "office_dir": str(OFFICE_DIR),
+            "office_dir": str(office_dir),
             "current_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         return {"success": True, "info": info}
     except ImportError:
+        office_dir = get_office_dir()
         info = {
             "os": platform.system(),
             "os_version": platform.version(),
@@ -878,7 +942,7 @@ def tool_system_info() -> dict:
             "hostname": platform.node(),
             "python_version": sys.version,
             "cpu_cores": os.cpu_count(),
-            "office_dir": str(OFFICE_DIR),
+            "office_dir": str(office_dir),
             "current_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "note": "psutil 未安装，内存/磁盘/CPU 信息不可用",
         }
@@ -1246,7 +1310,8 @@ def tool_chart_generate(
 
         # 保存到文件
         safe_title = "".join(c for c in title if c.isalnum() or c in "._-  ") or "chart"
-        chart_path = OFFICE_DIR / f"{safe_title}.svg"
+        office_dir = get_office_dir()
+        chart_path = office_dir / f"{safe_title}.svg"
         chart_path.write_text(svg_content, encoding="utf-8")
 
         return {

@@ -63,6 +63,13 @@ contextBridge.exposeInMainWorld("aerie", {
     onBriefShow: (cb) => {
       ipcRenderer.on("brief:show", (_event, data) => cb(data || {}));
     },
+    // 办公模式：选择文件夹 / 打开路径
+    dialog: {
+      openDirectory: (opts) => ipcRenderer.invoke("dialog:openDirectory", opts || {}),
+    },
+    shell: {
+      openPath: (path) => ipcRenderer.invoke("shell:openPath", path),
+    },
     // Block-5A: brief popup/detail window IPC bridge
     brief: {
       openDetail: (data) => ipcRenderer.invoke("brief:open-detail", data || {}),

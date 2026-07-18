@@ -10,6 +10,7 @@ class SettingsPanel {
   init() {
     this.load();
     this._initIslandSettings();
+    this._initOfficeDir();
     // Form view
     document.getElementById("settings-save-btn").addEventListener("click", () => this.save());
     document.getElementById("settings-reset-btn").addEventListener("click", () => this.reset());
@@ -703,6 +704,146 @@ class SettingsPanel {
         await window.aerie.islandControl.setConfig(defaults);
       }
     } catch (_) {}
+  }
+
+  // ── 办公模式：文件保存位置 ──────────────────────────
+
+  async _initOfficeDir() {
+    const input = document.getElementById("office-dir-input");
+    const browseBtn = document.getElementById("office-dir-browse");
+    const openBtn = document.getElementById("office-dir-open");
+    const saveBtn = document.getElementById("office-dir-save");
+    const resetBtn = document.getElementById("office-dir-reset");
+    const status = document.getElementById("office-dir-status");
+    if (!input || !browseBtn || !openBtn || !saveBtn || !resetBtn || !status) return;
+
+    // 加载当前路径
+    await this._loadOfficeDir();
+
+    browseBtn.addEventListener("click", async () => {
+      try {
+        const current = input.value || "";
+        let selected = null;
+        if (window.aerie?.electron?.dialog?.openDirectory) {
+          selected = await window.aerie.electron.dialog.openDirectory({
+            title: "选择办公文件保存位置",
+            defaultPath: current,
+          });
+        }
+        if (selected) {
+          input.value = selected;
+          status.textContent = "";
+          status.className = "settings-hint";
+        }
+      } catch (e) {
+        status.textContent = "选择文件夹失败：" + (e.message || e);
+        status.className = "settings-hint office-dir-status--error";
+      }
+    });
+
+    openBtn.addEventListener("click", async () => {
+      const path = input.value;
+      if (!path) return;
+      try {
+        if (window.aerie?.electron?.shell?.openPath) {
+          await window.aerie.electron.shell.openPath(path);
+        }
+      } catch (e) {
+        status.textContent = "打开文件夹失败：" + (e.message || e);
+        status.className = "settings-hint office-dir-status--error";
+      }
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const path = input.value.trim();
+      if (!path) {
+        status.textContent = "请选择或输入一个路径";
+        status.className = "settings-hint office-dir-status--error";
+        return;
+      }
+      saveBtn.disabled = true;
+      const original = saveBtn.textContent;
+      saveBtn.textContent = "保存中...";
+      try {
+        const result = await this._apiRequest({
+          method: "PUT",
+          path: "/api/office/dir",
+          body: { path },
+        });
+        if (result?.success) {
+          status.textContent = "保存成功，新文件将保存到 " + result.path;
+          status.className = "settings-hint office-dir-status--success";
+          input.value = result.path;
+        } else {
+          status.textContent = "保存失败：" + (result?.error || "未知错误");
+          status.className = "settings-hint office-dir-status--error";
+        }
+      } catch (e) {
+        status.textContent = "保存失败：" + (e.message || e);
+        status.className = "settings-hint office-dir-status--error";
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = original;
+      }
+    });
+
+    resetBtn.addEventListener("click", async () => {
+      resetBtn.disabled = true;
+      const original = resetBtn.textContent;
+      resetBtn.textContent = "恢复中...";
+      try {
+        const result = await this._apiRequest({
+          method: "PUT",
+          path: "/api/office/dir",
+          body: { path: "~/AerieOffice" },
+        });
+        if (result?.success) {
+          status.textContent = "已恢复默认位置：" + result.path;
+          status.className = "settings-hint office-dir-status--success";
+          input.value = result.path;
+        } else {
+          status.textContent = "恢复失败：" + (result?.error || "未知错误");
+          status.className = "settings-hint office-dir-status--error";
+        }
+      } catch (e) {
+        status.textContent = "恢复失败：" + (e.message || e);
+        status.className = "settings-hint office-dir-status--error";
+      } finally {
+        resetBtn.disabled = false;
+        resetBtn.textContent = original;
+      }
+    });
+  }
+
+  async _loadOfficeDir() {
+    const input = document.getElementById("office-dir-input");
+    if (!input) return;
+    try {
+      const result = await this._apiRequest({
+        method: "GET",
+        path: "/api/office/dir",
+      });
+      if (result?.success) {
+        input.value = result.path;
+      }
+    } catch (_) {
+      // 静默失败，保持默认 placeholder
+    }
+  }
+
+  async _apiRequest({ method = "GET", path = "", body = null } = {}) {
+    if (window.aerie?.api?.request) {
+      return await window.aerie.api.request({
+        method,
+        path,
+        body,
+      });
+    }
+    // Fallback: fetch
+    const opts = { method, headers: { "Content-Type": "application/json" } };
+    if (body && method !== "GET") opts.body = JSON.stringify(body);
+    const resp = await fetch(path, opts);
+    return await resp.json();
   }
 }
 

@@ -338,8 +338,7 @@ function _showStaleBanner(stale) {
   });
   // Wire actions
   actionBtn.addEventListener("click", async () => {
-    if (!window.aerie || !window.aerie.invoke) {
-      // Fall back to opening the settings tab where the user can click restart
+    if (!window.aerie || !window.aerie.electron || !window.aerie.electron.system || !window.aerie.electron.system.restartBackend) {
       const tab = document.querySelector('.sidebar-tab[data-tab="settings"]');
       if (tab) tab.click();
       return;
@@ -347,8 +346,24 @@ function _showStaleBanner(stale) {
     try {
       actionBtn.disabled = true;
       actionBtn.textContent = "重启中… / Restarting…";
-      await window.aerie.invoke("system:restart-backend");
-    } catch (_) {}
+      const r = await window.aerie.electron.system.restartBackend();
+      if (r && r.error) {
+        actionBtn.textContent = "重启失败 / Failed";
+        actionBtn.style.background = "#e74c3c";
+        setTimeout(() => {
+          actionBtn.disabled = false;
+          actionBtn.textContent = "立即重启后端 / Restart now";
+          actionBtn.style.background = "";
+        }, 3000);
+      } else {
+        actionBtn.textContent = "已调度 / Scheduled";
+        actionBtn.style.background = "#2ecc71";
+        setTimeout(() => _hideStaleBanner(), 1500);
+      }
+    } catch (_) {
+      actionBtn.disabled = false;
+      actionBtn.textContent = "重试 / Retry";
+    }
   });
   closeBtn.addEventListener("click", () => _hideStaleBanner());
   document.body.appendChild(el);

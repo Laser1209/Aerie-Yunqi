@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — TTS engine using MiniMax TTS API.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — TTS engine using MiniMax TTS API.
 
 Generates WAV audio from text, styled as Yita's voice.
 """

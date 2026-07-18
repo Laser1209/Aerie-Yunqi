@@ -139,7 +139,7 @@ function healthCheck() {
       res.on("end", () => {
         try {
           const j = JSON.parse(d);
-          resolve(j.status === "ok");
+          resolve(j.status === "healthy" || j.status === "degraded");
         } catch (_) {
           resolve(false);
         }

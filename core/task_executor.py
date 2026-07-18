@@ -1,4 +1,4 @@
-"""Aerie v13.9.8 — Task Executor（任务执行引擎）
+﻿"""Aerie v0.1.0-beta.1 — Task Executor（任务执行引擎）
 
 与 TaskPlanner 配合，将规划好的步骤真正执行起来。
 

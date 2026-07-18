@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Message pipeline.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Message pipeline.
 
 Processes incoming messages through:
   route → emotion(text scan + cumulative trigger check) → history → context(with emotion+eruption) → LLM → emotion tune → persist → emit → reply.
@@ -335,7 +335,7 @@ class Pipeline:
             vr = await self.validator.validate(
                 reply_text,
                 user_message=msg.content,
-                context_history=history_msgs,
+                context_history=history,
                 route_mode="OFFICE" if is_office else route_mode,
             )
             if vr.issues:

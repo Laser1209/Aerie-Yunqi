@@ -1,4 +1,4 @@
-"""Aerie v13.9.8 — Persona Manager
+﻿"""Aerie v0.1.0-beta.1 — Persona Manager
 人设中心管理器：CRUD、切换、持久化、默认模板加载。
 
 设计原则：

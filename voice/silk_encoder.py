@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Silk v3 audio encoder.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Silk v3 audio encoder.
 
 NapCat QQ requires Silk-encoded audio for voice messages.
 Uses FFmpeg for the conversion: WAV → PCM → Silk.

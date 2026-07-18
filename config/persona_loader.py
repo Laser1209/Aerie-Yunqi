@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — YAML config loader."""
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — YAML config loader."""
 
 from __future__ import annotations
 import os
@@ -27,8 +27,15 @@ def _load_yaml(filename: str) -> dict[str, Any]:
     path = _CONFIG_DIR / filename
     if not path.exists():
         return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except yaml.YAMLError:
+        import logging
+        logging.getLogger(__name__).exception(
+            "YAML parse error in %s; returning empty config", filename
+        )
+        return {}
 
 
 def load_settings() -> dict[str, Any]:

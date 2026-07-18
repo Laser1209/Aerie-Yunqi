@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Phase 9 Batch 4 verify: zero-regression sweep.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Phase 9 Batch 4 verify: zero-regression sweep.
 
 Verifies that the previous-batch functionality still works:
   1. Backend health

@@ -1,4 +1,4 @@
-"""Aerie v13.9.8 — Screen Control Tools
+﻿"""Aerie v0.1.0-beta.1 — Screen Control Tools
 电脑操控工具集，注册到 tool_registry 供 AI function calling 调用。
 
 工具清单：

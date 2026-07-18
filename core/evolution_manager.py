@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Self-Evolution L1/L2/L3.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolution L1/L2/L3.
 
 升级自进化机制，从 v9.0 的工具提案扩展为三级进化：
 

@@ -1,4 +1,4 @@
-# Aerie · 云栖 v13.9.8 — Python Backend Dependencies
+﻿# Aerie · 云栖 v0.1.0-beta.1 — Python Backend Dependencies
 # Code-level elements (package names) must use pure English
 #
 # Install: pip install -r requirements.txt

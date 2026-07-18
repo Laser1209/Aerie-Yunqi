@@ -1,4 +1,4 @@
-# Aerie · 云栖 v13.9.8 — electron-builder configuration
+﻿# Aerie · 云栖 v0.1.0-beta.1 — electron-builder configuration
 # This file is the source of truth for Windows packaging.
 # `package.json` mirrors the same settings under `build` for npm run build:win.
 appId: com.laser.aerie

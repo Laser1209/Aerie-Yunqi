@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Emotion engine (PAD + 5 emotions + cumulative thresholds).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Emotion engine (PAD + 5 emotions + cumulative thresholds).
 
 Integrates:
   1. PAD 3D emotion model (Pleasure-Arousal-Dominance)

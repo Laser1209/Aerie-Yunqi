@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Skill Router (Block-4C R3.1).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Skill Router (Block-4C R3.1).
 
 Maps ``provider_hint`` (declared in SKILL.md frontmatter) to the
 top-level ``ai_options`` provider id (declared in

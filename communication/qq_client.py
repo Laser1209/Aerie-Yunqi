@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — NapCat OneBot11 WebSocket client.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — NapCat OneBot11 WebSocket client.
 
 Connects to NapCat's OneBot11 WS server (port 3001).
 Receives QQ messages, passes them to the message handler.

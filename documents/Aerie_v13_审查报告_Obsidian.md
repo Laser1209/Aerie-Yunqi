@@ -1,26 +1,30 @@
 ---
-title: Aerie · 云栖 v13.9.2 全量项目审查报告
-date: 2026-07-18
+title: Aerie · 云栖 v13.9.2 全量项目审查报告（更新版）
+date: 2026-07-19
 tags:
   - project-review
   - aerie-yunqi
   - code-quality
   - security
   - architecture
+  - v13.9.2-update
 aliases:
   - Aerie · 云栖审查报告
   - 项目代码审查 v13
+  - Aerie v13 审查更新
 cssclasses:
   - aerie-review
 ---
-# Aerie · 云栖 v13.9.2 — 项目全量审查报告
+# Aerie · 云栖 v13.9.2 — 项目全量审查报告（更新版）
 
 > **审查范围**: `e:\Agent_reply` 全部源代码、配置、资源与依赖
 > **审查基准版本**: v13.9.2 (CHANGELOG 2026-07-18)
 > **审查维度**: 文件结构 / 模块依赖 / 功能实现 / 架构设计 / 代码质量 / 安全性 / 可维护性
 > **审查者**: Claude Code（综合代码审查专家）
-> **审查日期**: 2026-07-18
+> **初版日期**: 2026-07-18
+> **更新日期**: 2026-07-19
 > **关联规范**: `OpenCloud_Companion_System_Features.md` v9.0 · `Ita.md` v9.0 · `.trae/specs/aerie-companion-v9-buildout/spec.md`
+> **更新说明**: 补充前端 JS 模块清单、Persona Hub / Memory Layers / Desire Engine / Skill Router / Agent 抽象等遗漏模块，修正代码度量指标，完善功能矩阵覆盖度
 
 ---
 
@@ -45,12 +49,12 @@ cssclasses:
 
 | 维度                   |    评级    | 关键结论                                                                                  |
 | :--------------------- | :---------: | ----------------------------------------------------------------------------------------- |
-| **整体代码质量** |   🟢 良好   | 64 个核心模块，约 14,000+ 行 Python + 2,000+ 行 JS，注释率 ≈ 35%，命名规范统一           |
-| **架构合理性**   |   🟢 良好   | 清晰的分层架构（Electron → API → Pipeline → Brain），依赖方向无反向依赖                |
-| **功能完整性**   |   🟢 优秀   | v13.9 三大核心（办公模式 / 双层回复校验 / 事件驱动推送）全部落地                          |
-| **可维护性**     | 🟡 中等偏高 | 模块耦合度低，但少数核心文件（`api_server.py` ≈ 2900 行）过长                          |
-| **安全性**       |   🟡 中等   | 整体采用纵深防御，但存在**3 处需要关注的安全风险点**（详见 §6）                    |
-| **先前问题闭环** |  🟢 已闭环  | v13.9.2 已修复 v13.0 的`is_office_mode` 上下文丢失、`safe_shell` 命令注入风险（部分） |
+| **整体代码质量** |   🟢 良好   | 70+ 个 Python 核心模块 + 19 个前端 JS 模块，约 18,000+ 行 Python + 5,000+ 行 JS，注释率 ≈ 35%，命名规范统一 |
+| **架构合理性**   |   🟢 良好   | 清晰的 7 层分层架构（表现层 → 接口层 → 编排层 → 业务层 → 数据层 → 基础设施 → 外部集成），依赖方向严格单向，无循环依赖 |
+| **功能完整性**   |   🟢 优秀   | v13.9 四大核心（细粒度权限 / 26 办公工具 / 任务规划执行 / 异步调度）全部落地；Agent 抽象 / 四层记忆 / 欲望引擎 / Persona Hub 等高级能力完整 |
+| **可维护性**     | 🟡 中等偏高 | 模块耦合度低，子系统边界清晰，但少数核心文件（`api_server.py` ≈ 2900 行、`companion.py` ≈ 770 行）偏大 |
+| **安全性**       |   🟡 中等   | 整体采用纵深防御（8 层防护），但存在**1 处 HIGH + 3 处 MEDIUM 安全风险点**（详见 §6） |
+| **先前问题闭环** |  🟢 已闭环  | 11 项历史问题中已闭环 8 项（73%），剩余 3 项为非阻塞 UI 遗留 |
 
 > [!warning] ⚠️ 三处需立即处理的安全关注点（按严重性）
 > 1. `RestrictedShell.execute()` 使用 `shell=True` + 模式黑名单（命令注入路径仍然存在，黑名单不全）
@@ -73,92 +77,195 @@ e:\Agent_reply/
 ├── .env.example                     # 环境变量模板
 ├── start-dev.bat / start-dev-silent.vbs  # 启动脚本
 │
-├── core/                            # 🧠 Python 智能内核（核心业务）
+├── core/                            # 🧠 Python 智能内核（核心业务，70+ 模块）
 │   ├── companion.py                 # 后端总编排器（773 行）
-│   ├── api_server.py                # FastAPI HTTP 服务（≈ 2900 行）
+│   ├── api_server.py                # FastAPI HTTP 服务（≈ 2900 行，60+ endpoint）
 │   ├── pipeline.py                  # 5 阶段消息处理管线（917 行）
 │   ├── brain.py                     # 多 Provider LLM 调度（≈ 1300 行）
 │   ├── database.py                  # SQLite 单例 + 8 张表
+│   │
+│   ├── 权限与安全
 │   ├── permission_manager.py        # 细粒度权限管理器（523 行）
 │   ├── computer_control.py          # 电脑操控 + 受限 Shell（1443 行）
-│   ├── emotion_engine.py            # PAD 情感引擎
-│   ├── emotion_threshold.py         # 4 槽累积阈值
 │   ├── prompt_injection.py          # 10 类 Prompt Injection 防御
 │   ├── screen_action_sanitizer.py   # 屏幕动作改写器
-│   ├── self_evolver.py              # 自进化 L4 引擎
-│   ├── file_organizer.py            # 文件整理模块
-│   ├── doc_writer.py                # 文档写作模块
+│   ├── response_validator.py        # 双层回复校验（Guard + Judge）
+│   ├── sandbox_runner.py            # 自进化沙箱预演
+│   ├── tool_isolation.py            # 工具调用隔离
+│   │
+│   ├── 情感与认知
+│   ├── emotion_engine.py            # PAD 三维情感引擎
+│   ├── emotion_threshold.py         # 4 槽累积阈值（patience/anxiety/desire/tenderness）
+│   ├── emotion_state_store.py       # 情感状态持久化（24h/7d/30d 历史曲线）
+│   ├── cognition.py                 # 认知链路追踪（9 阶段 trace）
+│   ├── context_builder.py           # 上下文构建器
+│   ├── decision.py                  # 决策引擎
+│   ├── desire_engine.py             # 24h 欲望引擎（Block-4B）
+│   ├── proactive_judge.py           # 主动推送判定器
+│   │
+│   ├── 任务与工具
+│   ├── tool_registry.py             # 工具注册表
 │   ├── office_mode.py               # 办公模式检测
 │   ├── office_tools.py              # 26 个办公工具
-│   ├── tool_registry.py             # 工具注册表
-│   ├── task_planner.py / executor.py / async_task_manager.py  # 任务调度三件套
-│   ├── response_validator.py        # 双层回复校验
-│   ├── push_scheduler.py / push_event_engine.py  # 主动推送
-│   ├── skill_loader.py              # Skill 自动发现
-│   ├── sandbox_runner.py            # 自进化沙箱预演
-│   └── ... （共 64 个文件）
+│   ├── task_planner.py              # 任务规划引擎（6 种任务类型）
+│   ├── task_executor.py             # 任务执行器（步骤级 + 重试）
+│   ├── async_task_manager.py        # 异步任务管理器（优先级 + 并发控制）
+│   ├── skill_loader.py              # Skill 自动发现与加载
+│   ├── skill_router.py              # Skill 路由器
+│   ├── skill_creator.py             # 自主 Skill 创建（5 类模板）
+│   ├── provider_router.py           # Provider 智能路由（5 维评估）
+│   ├── budget_tracker.py            # Token 预算跟踪
+│   ├── token_tracker.py             # Token 使用统计
+│   │
+│   ├── 自进化与成长
+│   ├── self_evolver.py              # 自进化 L4 引擎（缺口检测 + 提案）
+│   ├── self_evolve_l4.py            # L4 代码自修改引擎
+│   ├── evolution_manager.py         # 进化管理器
+│   ├── agent.py                     # Agent 抽象（6 步主循环：Perceive→Reason→Decide→Act→Reflect→Express）
+│   ├── agent_reflection_queue.py    # Agent 反射队列（异步 Reflect）
+│   │
+│   ├── 内容处理
+│   ├── file_organizer.py            # 文件整理模块（8 分类 + 4 模板 + 7 天撤销）
+│   ├── doc_writer.py                # 文档写作模块（5 模板 + 4 导出 + 3 样式）
+│   ├── output_self_check.py         # 输出自检（视角转换 + 括号修复）
+│   ├── multimodal_input.py          # 多模态输入处理
+│   ├── attachment_handler.py        # 附件处理器
+│   ├── message_pacing.py            # 消息节奏控制
+│   ├── persona_pacing.py            # 人设节奏（11 风格决策树）
+│   │
+│   ├── 推送与事件
+│   ├── push_scheduler.py            # 主动推送调度器
+│   ├── push_event_engine.py         # 事件驱动推送引擎（EventBus，19 种事件）
+│   ├── event_stream.py              # SSE 事件流
+│   ├── chat_events.py               # 聊天事件总线
+│   │
+│   ├── 实用工具
+│   ├── calendar_manager.py          # 日历管理器
+│   ├── todo_manager.py              # 待办管理器
+│   ├── brief_fetcher.py             # 每日简报（8 板块）
+│   ├── location_resolver.py         # 位置解析器
+│   ├── screen_tools.py              # 屏幕工具（截图等）
+│   ├── napcat_launcher.py           # NapCat 启动器
+│   ├── qq_deepening.py              # QQ 深耕能力
+│   ├── qq_whitelist.py              # QQ 白名单管理器
+│   │
+│   └── persona_hub/                 # 👤 Persona Hub 人设基础设施
+│       ├── persona_manager.py       # 人设管理器（创建/加载/切换）
+│       ├── persona_validator.py     # 人设校验器
+│       └── preset_templates/        # 预设模板（yita_default 等）
 │
-├── communication/                   # 📡 通信层（QQ 消息收发）
+├── communication/                   # 📡 通信层（QQ 消息收发，7 模块）
 │   ├── message.py                   # IncomingMessage / OutgoingReply DTO
 │   ├── qq_client.py                 # NapCat OneBot11 WS 客户端
 │   ├── router.py                    # 三级路由（FULL / AUTO / BASIC）
 │   ├── splitter.py                  # 语义消息分段器
 │   ├── send_queue.py                # 拟人化发送队列
-│   └── recall_manager.py            # 撤回机制
+│   ├── recall_manager.py            # 撤回机制
+│   └── __init__.py
 │
 ├── config/                          # ⚙️ 配置层
-│   ├── settings.yaml                # 主配置
-│   ├── persona.yaml                 # 伊塔人设
+│   ├── settings.yaml                # 主配置（HTTP/QQ/权限等）
+│   ├── persona.yaml                 # 伊塔人设（外貌/性格/背景）
 │   ├── persona_behavior.yaml        # 行为/情感阈值/PAD 中心
-│   ├── persona_loader.py            # 配置加载器
+│   ├── persona_loader.py            # 配置加载器（热重载支持）
 │   └── proactive.yaml               # 主动推送配置
 │
 ├── memory/                          # 💾 记忆子系统
 │   ├── memory_store.py              # 长期记忆（SQLite + 关键词检索）
-│   └── layers/                      # 四层记忆（transient/working/long/permanent）
+│   └── layers/                      # 四层记忆架构
+│       ├── memory_layers.py         # 记忆层入口
+│       ├── layered_memory.py        # 分层记忆管理器
+│       ├── base.py                  # 记忆层基类
+│       └── long_permanent.py        # 长期/永久记忆
 │
 ├── knowledge/                       # 📚 知识库
 │   └── kb.py                        # 4 类目（persona/user/world/task）
 │
-├── skills/                          # 🔧 技能系统（50+ Skills）
-│   ├── local/                       # 本地 Skills（11 个）
-│   ├── data/                        # 数据 Skills（obsidian/notion/figma 等）
-│   └── cloud/                       # 云端 Skills（40+）
+├── tools/                           # 🛠 工具脚本（21 个辅助脚本）
+│   ├── scaffold_skills.py           # Skill 脚手架
+│   ├── migrate_legacy.py            # 数据迁移
+│   ├── check_emojis.py              # Emoji 检查
+│   ├── check_tokens.py              # Token 检查
+│   ├── smoke.ps1 / live_smoke.ps1   # 冒烟测试
+│   └── ... （诊断、补丁、验证工具）
+│
+├── skills/                          # 🔧 技能系统（50+ Skills，3 大类）
+│   ├── local/                       # 本地 Skills（11 个：asr/ocr/tts/txt2img 等）
+│   ├── data/                        # 数据 Skills（obsidian/notion/figma/spec-to-impl）
+│   └── cloud/                       # 云端 Skills（40+：dashboard/doc-page/security-review 等）
 │
 ├── electron/                        # 🖥 Electron 桌面壳
 │   ├── src/
-│   │   ├── main.js                  # 主进程
-│   │   ├── preload.js               # contextBridge 安全桥
-│   │   └── renderer/                # 渲染层（HTML + CSS + JS）
-│   │       ├── js/                  # 15 个前端模块（chat / settings / cognition 等）
-│   │       ├── styles/              # 5 主题 CSS
-│   │       └── assets/icons/        # 30+ SVG sprite
+│   │   ├── main.js                  # 主进程（窗口管理 + Python 进程 + IPC）
+│   │   ├── preload.js               # contextBridge 安全桥（aerie API 暴露）
+│   │   └── renderer/                # 渲染层
+│   │       ├── index.html           # 主界面入口
+│   │       ├── dynamic-island.html  # 灵动岛入口
+│   │       ├── js/                  # 19 个前端模块
+│   │       │   ├── app.js           # 应用主逻辑
+│   │       │   ├── chat.js          # 聊天面板
+│   │       │   ├── chat-voice.js    # 语音消息
+│   │       │   ├── chat-uploader.js # 文件上传
+│   │       │   ├── dynamic-island.js  # 灵动岛交互
+│   │       │   ├── brief-drawer.js  # 简报抽屉
+│   │       │   ├── cognition-panel.js  # 认知面板 v2
+│   │       │   ├── emotion-dashboard.js # 情感仪表盘
+│   │       │   ├── emotion-history.js   # 情感历史曲线
+│   │       │   ├── office-mode.js   # 办公模式入口
+│   │       │   ├── persona-hub.js   # Persona Hub 面板
+│   │       │   ├── napcat-panel.js  # NapCat 状态面板
+│   │       │   ├── calendar-panel.js # 日历面板
+│   │       │   ├── proactive-manager.js # 主动推送管理
+│   │       │   ├── settings.js      # 设置页
+│   │       │   ├── theme-switcher.js # 主题切换
+│   │       │   ├── approval-modal.js # 权限确认弹窗
+│   │       │   ├── data-viewer.js   # 数据查看器
+│   │       │   └── memorial.js      # 纪念日
+│   │       ├── styles/              # 样式系统
+│   │       │   ├── main.css         # 主样式
+│   │       │   ├── themes/          # 5 套主题（伊塔粉/深夜紫/樱白/海蓝/森绿）
+│   │       │   └── ... （组件样式）
+│   │       ├── assets/
+│   │       │   └── icons/           # 30+ SVG sprite 图标
+│   │       └── vendor/              # 第三方库（marked/highlight/purify）
 │   ├── dist-new/                    # 最新打包输出（≈ 250 MB）
+│   ├── scripts/                     # 构建脚本（图标生成 / emoji 检查 / 后处理）
 │   └── electron-builder.yml         # 打包配置
 │
 ├── NapCat/                          # 🐱 QQ 协议客户端（第三方）
-│   └── NapCat.Shell/                # OneBot11 实现 + WebUI
+│   └── NapCat.Shell/                # OneBot11 实现 + WebUI + 原生模块
 │
 ├── douyin-mcp/                      # 📱 抖音 MCP 子项目（独立 Python 包）
+│   └── src/douyin_creator_mcp/      # 浏览器工具 / 指标 / 存储 / 安全 / 合规
+│
+├── tests/                           # 🧪 测试套件
+│   ├── e2e/                         # 端到端测试（5 个测试文件）
+│   └── conftest.py
 │
 ├── data/                            # 📦 运行时数据
 │   ├── briefs/                      # 每日简报（JSON + HTML）
 │   ├── backups/config/              # 配置备份（500+ YAML 快照）
 │   ├── audit/                       # 审计日志
-│   └── personas/                    # 人设模板
+│   ├── personas/                    # 人设模板
+│   ├── todos/                       # 待办数据
+│   └── persona_avatar/              # 头像历史
 │
 ├── documents/                       # 📖 设计文档与审查报告
-│   ├── Ita/                         # 伊塔人设文档
+│   ├── Ita/                         # 伊塔人设文档（v6.0/v8.0/v9.0）
 │   ├── Agent_v/                     # Agent 演进文档
-│   └── ERROR/                       # 错误日志归档
+│   ├── ERROR/                       # 错误日志归档
+│   └── NapCat_history/              # NapCat 历史记录
 │
 ├── .trae/                           # 🛠 Trae IDE 元数据
 │   ├── documents/                   # 60+ 计划文档与历史审查报告
 │   ├── rules/                       # git commit 风格规则
-│   └── specs/aerie-companion-v9-buildout/  # v9.0 实施规范
+│   └── specs/aerie-companion-v9-buildout/  # v9.0 实施规范（spec/tasks/checklist）
 │
 ├── logs/                            # 📜 运行日志
-└── bin/                             # 二进制工具（kimi-webbridge.exe 等）
+├── bin/                             # 二进制工具（kimi-webbridge.exe 等）
+├── voice/                           # 🎤 语音模块（TTS / 多模态输出）
+├── opencloud-companion-ui/          # 🎨 UI 设计参考
+└── scripts/                         # 实用脚本
 ```
 
 ## 1.2 关键文件清单与职责
@@ -570,6 +677,23 @@ graph LR
 | **撤回机制**             | [recall_manager.py](file:///e:/Agent_reply/communication/recall_manager.py)                                                                  | QQ 技术 120s 窗口 + 用户主动 + LLM 触发（闷骚后悔）                                 | max_recalls_per_session 7                  | DB+QQ 双写                                           |
 | **每日简报**             | [brief_fetcher.py](file:///e:/Agent_reply/core/brief_fetcher.py)                                                                             | 8 板块爬取 + AI 组稿 + HTML 渲染                                                    | 时间窗 1h/24h/7d/30d                       | 板块失败降级                                         |
 | **认知链路追踪**         | [cognition.py](file:///e:/Agent_reply/core/cognition.py)                                                                                     | 9 阶段 trace (route/emotion/threshold/context/brain/tools/split/postprocess/output) | SQLite 持久化                              | trace 缺失 best-effort                               |
+| **Agent 六步主循环**     | [agent.py](file:///e:/Agent_reply/core/agent.py) + [agent_reflection_queue.py](file:///e:/Agent_reply/core/agent_reflection_queue.py)         | Perceive→Reason→Decide→Act→Reflect→Express，异步 Reflect 队列                         | Reflect 不阻塞主循环                       | Reflect 失败降级为同步                                |
+| **Provider 智能路由**    | [provider_router.py](file:///e:/Agent_reply/core/provider_router.py) + [budget_tracker.py](file:///e:/Agent_reply/core/budget_tracker.py)       | 5 维复杂度评估 + 动态路由 + 全局预算跟踪 + 混合模式（规则为主 + LLM 仲裁）           | 预算超支自动降级 Provider                  | 路由失败回退默认链                                    |
+| **四层记忆架构**         | [memory/layers/](file:///e:/Agent_reply/memory/layers/) + [memory_store.py](file:///e:/Agent_reply/memory/memory_store.py)                    | transient / working / long-term / permanent 四层，SQLite 持久化 + 关键词检索         | 记忆容量上限 + 自动淘汰                     | 层间同步 best-effort                                  |
+| **24h 欲望引擎**         | [desire_engine.py](file:///e:/Agent_reply/core/desire_engine.py)                                                                             | 24h 轮询 + 欲望状态机 + 主动行为触发                                                 | 欲望值 ∈ [0, 100] 限幅                      | 启动失败不影响主流程（try/except 兜底）              |
+| **Persona Hub 人设基础设施** | [core/persona_hub/](file:///e:/Agent_reply/core/persona_hub/) + [persona_manager.py](file:///e:/Agent_reply/core/persona_hub/persona_manager.py) | 人设模板化 + 创建/加载/切换 + 预设模板库 + 校验器                                    | 人设参数 Schema 校验                        | 加载失败回退默认人设                                  |
+| **Skill 路由系统**       | [skill_router.py](file:///e:/Agent_reply/core/skill_router.py) + [skill_creator.py](file:///e:/Agent_reply/core/skill_creator.py)             | 5 类模板（utility/text_processing/data_query/transform/custom）+ 命名空间隔离 + 自动注册 | Skill 名称冲突自动加前缀                    | 沙箱验证失败拒绝注册                                  |
+| **事件驱动推送引擎**     | [push_event_engine.py](file:///e:/Agent_reply/core/push_event_engine.py) + [proactive_judge.py](file:///e:/Agent_reply/core/proactive_judge.py) | EventBus 发布/订阅 + 19 种事件类型 + 情绪/事件双触发 + ProactiveJudge 综合判定        | 5 频控检查 + 静默时段豁免                   | 事件订阅失败不阻塞发布者                              |
+| **QQ 白名单管理**        | [qq_whitelist.py](file:///e:/Agent_reply/core/qq_whitelist.py)                                                                               | 好友白名单 + 群白名单 + 动态增删 + DB 持久化                                          | 白名单外消息自动忽略                        | 白名单加载失败默认全量                                |
+| **QQ 深耕能力**          | [qq_deepening.py](file:///e:/Agent_reply/core/qq_deepening.py)                                                                               | 语音优化（Silk 编码 + 缓存）+ 视频管理 + 大文件传输（分块 + MD5 校验）                 | 大文件分块大小 256KB                        | 传输失败断点续传                                      |
+| **情感状态持久化**       | [emotion_state_store.py](file:///e:/Agent_reply/core/emotion_state_store.py)                                                                 | PAD + 阈值 24h/7d/30d 历史曲线 + SQLite 持久化                                       | 历史数据自动过期清理                        | 存储失败使用内存兜底                                  |
+| **输出自检机制**         | [output_self_check.py](file:///e:/Agent_reply/core/output_self_check.py)                                                                     | 视角转换检测 + 括号修复 + 保守错词字典                                                | 修复失败保留原文                           | 永不抛异常                                            |
+| **多模态输入处理**       | [multimodal_input.py](file:///e:/Agent_reply/core/multimodal_input.py) + [attachment_handler.py](file:///e:/Agent_reply/core/attachment_handler.py) | 图片输入 + 附件处理 + TTS 语音输出                                                      | 图片大小自动压缩                           | 模态解析失败回退纯文本                                |
+| **文档写作引擎**         | [doc_writer.py](file:///e:/Agent_reply/core/doc_writer.py)                                                                                   | 5 类模板（日记/报告/规格/研究/简历）+ 4 种导出（MD/HTML/PDF/Word）+ 3 种样式        | 导出格式自动降级                           | 大文档分页生成                                        |
+| **配置热重载**           | [persona_loader.py](file:///e:/Agent_reply/config/persona_loader.py)                                                                         | 文件系统 watcher + 3 文件订阅（settings/behavior/proactive）+ 增量推送                | 重载失败保留旧配置                         | 热加载异常日志记录                                    |
+| **SSE 事件流**           | [event_stream.py](file:///e:/Agent_reply/core/event_stream.py) + [chat_events.py](file:///e:/Agent_reply/core/chat_events.py)                 | Server-Sent Events + ChatEvents EventBus + 多客户端订阅                               | 客户端断线自动清理                         | 事件推送失败自动丢弃（不阻塞）                        |
+| **NapCat 启动器**        | [napcat_launcher.py](file:///e:/Agent_reply/core/napcat_launcher.py)                                                                         | CREATE_NO_WINDOW + 环境变量注入 + 启动前端口检测                                       | 启动超时 30s 自动重试                      | 启动失败友好提示                                      |
+| **工具调用隔离**         | [tool_isolation.py](file:///e:/Agent_reply/core/tool_isolation.py)                                                                           | 命名空间隔离 + 沙箱执行 + 资源限制                                                     | 执行超时自动终止                           | 隔离失败禁止调用                                      |
 
 ## 4.2 关键算法详解
 
@@ -700,13 +824,18 @@ graph LR
 
 | 指标               |                        数值 |  评估  |
 | ------------------ | --------------------------: | :-----: |
-| 总文件数（Python） |                          64 | 🟢 适度 |
-| 总文件数（JS）     |                          18 | 🟢 适度 |
-| 总代码行数         |                   ≈ 16,000 | 🟢 中等 |
-| 最大单文件行数     |    api_server.py ≈ 2900 行 | 🟡 偏大 |
-| 平均函数长度       |                    ≈ 18 行 | 🟢 健康 |
-| 平均圈复杂度       |                 估算 ≈ 4-6 | 🟢 健康 |
-| 测试覆盖率         | e2e 226/226（block5d 报告） | 🟢 充足 |
+| 总文件数（Python 核心） |                     70+（core/）+ 7（communication/）+ 4（memory/）+ 2（knowledge/）+ 21（tools/）+ 5（tests/）≈ **109** | 🟢 适度 |
+| 总文件数（JS 前端） |                          19（renderer/js/）+ 2（main/preload）= **21** | 🟢 适度 |
+| 总代码行数（Python） |                   ≈ **18,000-20,000** | 🟢 中等 |
+| 总代码行数（JS）     |                     ≈ **5,000-6,000** | 🟢 健康 |
+| 最大单文件行数       |    `api_server.py` ≈ 2900 行 | 🟡 偏大 |
+| 第二大文件           |     `computer_control.py` ≈ 1443 行 | 🟡 偏大 |
+| 平均函数长度         |                    ≈ 18-22 行 | 🟢 健康 |
+| 平均圈复杂度         |                 估算 ≈ 4-7 | 🟢 健康 |
+| 测试覆盖（e2e）      | 5 个 e2e 测试文件 + 冒烟测试脚本 | 🟡 基础 |
+| Skill 数量           |                  50+（3 大类：local/data/cloud） | 🟢 丰富 |
+| API 端点数量         |                        60+ | 🟢 充足 |
+| 数据库表数           |                           8 | 🟢 适度 |
 
 ## 5.3 发现的代码异味与改进建议
 
@@ -1478,7 +1607,8 @@ graph TB
 
 ---
 
-**报告完成时间**: 2026-07-18
-**审查耗时**: 全面静态审查（约 90 分钟有效审查时间）
-**审查方法**: 静态代码分析 + 架构逆向 + 威胁建模 + 历史闭环验证
+**初版完成时间**: 2026-07-18
+**更新版时间**: 2026-07-19
+**审查耗时**: 初版 90 分钟 + 更新版 30 分钟（补充模块清单与功能矩阵）
+**审查方法**: 静态代码分析 + 架构逆向 + 威胁建模 + 历史闭环验证 + 文件清单补全
 **下次审查建议**: v14.0 发布前 + 安全 Finding #1 修复后

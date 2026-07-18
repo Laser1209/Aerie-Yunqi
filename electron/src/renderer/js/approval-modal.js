@@ -16,9 +16,11 @@ class ApprovalModal {
 
     // SSE 实时推送（如果可用）
     if (window.aerie && window.aerie.sse && window.aerie.sse.subscribe) {
-      this._sseUnsub = window.aerie.sse.subscribe((ev) => {
-        if (ev && ev.event === "computer_control_approval_requested") {
-          this._onNewApproval(ev.data);
+      this._sseUnsub = window.aerie.sse.subscribe((raw) => {
+        let payload;
+        try { payload = JSON.parse(raw); } catch (_) { return; }
+        if (payload && payload.type === "computer_control_approval_requested") {
+          this._onNewApproval(payload);
         }
       });
     }

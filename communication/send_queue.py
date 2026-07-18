@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Send queue with frequency control and human-like pacing.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Send queue with frequency control and human-like pacing.
 
 Only receives QQ replies; local chat-bar replies skip this queue.
 

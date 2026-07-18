@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Theme tokenization patcher (Block-5D R5.1).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Theme tokenization patcher (Block-5D R5.1).
 
 Three CSS files (emotion-history / cognition-panel / daily-brief[-detail])
 contain hard-coded brand color hex values that should resolve through

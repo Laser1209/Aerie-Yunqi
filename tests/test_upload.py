@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Phase 5 Upload tests."""
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Phase 5 Upload tests."""
 import pytest
 from fastapi.testclient import TestClient
 from core.api_server import app, UPLOAD_DIR

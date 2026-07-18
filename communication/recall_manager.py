@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Message recall manager.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Message recall manager.
 
 Phase 4 upgrade: hooks into Companion + Pipeline + SendQueue. Supports
 personality-aware recall (Ita's 闷骚 trait triggers proactive recall).

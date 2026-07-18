@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Companion: orchestrator for all backend modules."""
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Companion: orchestrator for all backend modules."""
 
 from __future__ import annotations
 import asyncio
@@ -225,6 +225,10 @@ class Companion:
         except Exception:
             logger.exception("skill loader init failed; continuing without skills")
             self.skill_loader = None
+
+        # Start async task manager for background document generation etc.
+        self.async_task_manager.start()
+        logger.info("Async task manager started")
 
         # ── Phase 1b: 等待 QQ 就绪（有超时，不阻塞其他服务） ──
         qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
@@ -498,7 +502,7 @@ class Companion:
             logger.info("boot_brief: generating brief for %s", today)
             sections = await brief_fetcher.run_all()
             try:
-                md = await Brain().compose_brief(sections)
+                md = await self.brain.compose_brief(sections)
             except Exception as e:
                 logger.warning("boot_brief: compose_brief failed: %s", e)
                 md = ""
@@ -754,9 +758,8 @@ class Companion:
                 if snap_ticks >= 60:
                     snap_ticks = 0
                     try:
-                        from core.emotion_state_store import EmotionStateStore
                         st = self.emotion.get_state(0)
-                        EmotionStateStore(self.db).snapshot(
+                        self.state_store.snapshot(
                             0,
                             {"label": st.get("label"), "pad": st.get("pad")},
                             st.get("thresholds", {}),

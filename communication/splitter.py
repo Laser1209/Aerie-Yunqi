@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Semantic message splitter (atomic-aware, R8.1).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Semantic message splitter (atomic-aware, R8.1).
 
 Splits long messages at natural boundaries (sentence ends, line breaks)
 so multi-part sends feel human-like. R8.1+ adds atomic-aware splitting:

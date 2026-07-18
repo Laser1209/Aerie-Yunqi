@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Python backend entry point.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Python backend entry point.
 
 Launched by Electron via `python main.py`.
 Starts logging → config → Companion → API server → event loop.

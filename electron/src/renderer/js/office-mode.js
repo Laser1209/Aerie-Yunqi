@@ -41,9 +41,11 @@ class OfficeModeController {
 
     // 监听模式变更事件
     if (window.aerie && window.aerie.sse && window.aerie.sse.subscribe) {
-      window.aerie.sse.subscribe((ev) => {
-        if (ev && ev.event === "office_mode_changed") {
-          this._currentMode = (ev.data && ev.data.mode) || "auto";
+      window.aerie.sse.subscribe((raw) => {
+        let payload;
+        try { payload = JSON.parse(raw); } catch (_) { return; }
+        if (payload && payload.type === "office_mode_changed") {
+          this._currentMode = (payload.mode) || "auto";
           this._updateButtonState();
         }
       });

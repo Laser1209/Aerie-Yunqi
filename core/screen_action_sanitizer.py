@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Screen-Action Sanitizer.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Screen-Action Sanitizer.
 
 R7.5 屏幕隔空铁律的输出层兜底。LLM 哪怕没遵守提示词,这里也要
 在最终 reply 文本里把"在场动作"改写成"屏幕隔空动作"。

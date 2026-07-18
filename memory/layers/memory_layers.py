@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Transient + Working 记忆层 (S3 M3.1).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Transient + Working 记忆层 (S3 M3.1).
 
 Transient (瞬时层): 单会话临时状态，会话结束即清空。
     - 存储在内存 dict 中，按 user_id + session_id 隔离

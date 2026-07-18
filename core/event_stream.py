@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Process-wide chat event bus + SSE bridge (Phase 9).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Process-wide chat event bus + SSE bridge (Phase 9).
 
 Architecture
 ------------

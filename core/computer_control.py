@@ -1,4 +1,4 @@
-"""Aerie v13.9.8 · 电脑操控模块
+﻿"""Aerie v0.1.0-beta.1 · 电脑操控模块
 
 权限三档：
   - VIEW_ONLY (只读)：仅允许截图、查询窗口信息
@@ -1204,6 +1204,25 @@ class ComputerController:
                     "success" if result.success else f"failed: {result.error}")
         return result
 
+    # ---- UIA ----
+
+    def uia_action(self, action_type: str, params: dict | None = None) -> ControlResult:
+        """Execute a UIA action via UIAController."""
+        action = ControlAction.UIA_ACTION
+        if not self._pre_check(action):
+            self._audit(action, {"action_type": action_type, "params": params}, "blocked")
+            return ControlResult(success=False, action=action.value,
+                                 error="Permission denied: UIA_ACTION not allowed")
+        try:
+            result = UIAController.execute(action_type, params or {})
+            self._audit(action, {"action_type": action_type, "params": params},
+                        "success" if result and result.get("success", True) else "failed")
+            return ControlResult(success=True, action=action.value, data=result)
+        except Exception as e:
+            err = ControlResult(success=False, action=action.value, error=str(e))
+            self._audit(action, {"action_type": action_type, "params": params}, f"error: {e}")
+            return err
+
     # ---- 窗口 ----
 
     def list_windows(self) -> ControlResult:
@@ -1233,6 +1252,19 @@ class ComputerController:
         self._audit(action, {"hwnd": hwnd},
                     "success" if result.success else f"failed: {result.error}")
         return result
+
+    def _find_window_by_title(self, title: str) -> int:
+        """Find a window handle by partial title match."""
+        try:
+            wins = WindowManager.list_windows()
+            if wins and wins.data:
+                win_list = wins.data.get("windows", [])
+                for w in win_list:
+                    if title.lower() in w.get("title", "").lower():
+                        return w.get("hwnd", 0)
+        except Exception:
+            pass
+        return 0
 
     # ---- 审批 ----
 
@@ -1377,6 +1409,7 @@ class ComputerController:
         async def _cleanup():
             await asyncio.sleep(30)
             self._pending_approvals.pop(call_id, None)
+        asyncio.create_task(_cleanup())
 
         return True
 
@@ -1422,13 +1455,15 @@ class ComputerController:
         elif action == ControlAction.KEY_PRESS:
             return self.key_press(params.get("key", ""))
         elif action == ControlAction.KEY_TYPE:
-            return self.key_type(params.get("text", ""))
+            return self.type_text(params.get("text", ""))
         elif action == ControlAction.SHELL_CMD:
-            return self.run_shell(params.get("command", ""))
+            return self.shell_execute(params.get("command", ""))
         elif action == ControlAction.WINDOW_INFO:
             return self.list_windows()
         elif action == ControlAction.WINDOW_FOCUS:
-            return self.focus_window(params.get("title", ""))
+            title = params.get("title", "")
+            hwnd = self._find_window_by_title(title) if title else 0
+            return self.focus_window(hwnd)
         elif action == ControlAction.UIA_ACTION:
             return self.uia_action(
                 params.get("action_type", ""),

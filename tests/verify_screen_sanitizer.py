@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Phase 9 Batch 8 verify: 屏幕隔空动作 sanitizer.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Phase 9 Batch 8 verify: 屏幕隔空动作 sanitizer.
 
 固化"自然无违和感"的 evidence。每条用例同时校验：
   - sanitize() 后不含任何黑名单词 (has_blacklist == False)

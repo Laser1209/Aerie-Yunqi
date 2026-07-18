@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Tool registry with OpenAI function-calling schema.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Tool registry with OpenAI function-calling schema.
 
 Block-4C R3.2: each registered tool carries a ``provider_hint`` that the
 SkillRouter (or any future routing layer) can use to pick a real model

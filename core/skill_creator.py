@@ -1,4 +1,4 @@
-"""Aerie v13.9.8 · 自主 Skill 创建器
+﻿"""Aerie v0.1.0-beta.1 · 自主 Skill 创建器
 
 功能：
   - 模板化生成 Skill（SKILL.md + run.py）

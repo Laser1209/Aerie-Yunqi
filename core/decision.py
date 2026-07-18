@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Multi-layer decision system (Phase 9: §10.2).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Multi-layer decision system (Phase 9: §10.2).
 
 Implements the 4-layer weighted decision described in
 OpenCloud_Companion_System_Features.md §10.2:

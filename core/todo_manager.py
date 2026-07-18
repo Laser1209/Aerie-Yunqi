@@ -1,4 +1,4 @@
-"""Aerie · 云栖 — Todo Manager (v13.9.8)
+﻿"""Aerie · 云栖 — Todo Manager (v0.1.0-beta.1)
 
 Simple local JSON-based task manager for the daily brief.
 Stores per-day todos in data/todos/YYYY-MM-DD.json.

@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Prompt Injection 防御引擎 (S3 M3.4).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Prompt Injection 防御引擎 (S3 M3.4).
 
 10 类常见 Prompt Injection 攻击检测与防御：
 

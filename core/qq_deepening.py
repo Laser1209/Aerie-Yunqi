@@ -1,4 +1,4 @@
-"""Aerie v13.9.8 · QQ 深耕模块
+﻿"""Aerie v0.1.0-beta.1 · QQ 深耕模块
 
 聚焦 NapCat / OneBot 11 高级能力增强：
   - 视频发送与接收

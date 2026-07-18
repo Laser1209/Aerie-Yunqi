@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Database singleton.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Database singleton.
 
 Provides sqlite3-based Database with context-manager support and
 8 tables required by the v9.0 spec.

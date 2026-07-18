@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Desire Engine: 24h polling, 伊塔「想」发才发.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Desire Engine: 24h polling, 伊塔「想」发才发.
 
 Block-4B R2.1: 5 变量叠加 + 5min 心跳 + cooldown + 持久化.
 

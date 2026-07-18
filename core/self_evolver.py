@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Self-Evolver (Phase 9 Batch 6).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolver (Phase 9 Batch 6).
 
 Detects capability gaps in the live tool registry and proposes
 *new* tools for the user to approve. Proposals are surfaced as

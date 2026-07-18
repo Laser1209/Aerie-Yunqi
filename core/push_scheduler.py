@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Cron-based proactive push scheduler.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Cron-based proactive push scheduler.
 
 Parses proactive.yaml, schedules 9 scenes via cron expressions,
 and dispatches push messages through the Companion's QQ client.

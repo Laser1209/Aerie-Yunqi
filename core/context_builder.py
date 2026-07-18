@@ -1,4 +1,4 @@
-"""Aerie v13.9.8 — Context Builder (Persona Hub 版)
+﻿"""Aerie v0.1.0-beta.1 — Context Builder (Persona Hub 版)
 
 从人设中心动态生成系统提示词，移除所有硬编码。
 支持多个人设切换，context 即时生效。
@@ -105,10 +105,15 @@ class ContextBuilder:
             if thresholds:
                 system += "隐藏槽位：\n"
                 for name, info in thresholds.items():
-                    pc = info["value"] / info["threshold"] * 100
+                    threshold = info.get("threshold", 1)
+                    value = info.get("value", 0)
+                    if threshold != 0 and isinstance(threshold, (int, float)) and isinstance(value, (int, float)):
+                        pc = value / threshold * 100
+                    else:
+                        pc = 0
                     system += (
-                        f"  {info['label']}：{info['value']:.0f}/"
-                        f"{info['threshold']:.0f}（{pc:.0f}%）\n"
+                        f"  {info.get('label', name)}：{value:.0f}/"
+                        f"{threshold:.0f}（{pc:.0f}%）\n"
                     )
 
         # 情绪爆发模式注入

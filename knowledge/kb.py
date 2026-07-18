@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Knowledge base (lightweight SQLite-backed)."""
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Knowledge base (lightweight SQLite-backed)."""
 
 from __future__ import annotations
 from typing import Any

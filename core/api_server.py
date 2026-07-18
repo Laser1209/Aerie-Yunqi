@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — HTTP API server (FastAPI + uvicorn).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — HTTP API server (FastAPI + uvicorn).
 
 Routes:
   GET  /api/health          — heartbeat + QQ WS status
@@ -61,7 +61,7 @@ from core.persona_hub import get_persona_manager
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Aerie · 云栖", version="13.9.8")
+app = FastAPI(title="Aerie · 云栖", version="0.1.0-beta.1")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -162,7 +162,7 @@ async def health(request: Request) -> dict:
     return {
         "status": overall,
         "app": "Aerie · 云栖",
-        "version": "13.9.8",
+        "version": "0.1.0-beta.1",
         "uptime_seconds": uptime,
         "qq_connected": qq_ws_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),

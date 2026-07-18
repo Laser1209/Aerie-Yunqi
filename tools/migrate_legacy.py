@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Legacy file organization tool (Block-5D R4).
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Legacy file organization tool (Block-5D R4).
 
 Idempotent migration that consolidates scattered probes/debug logs/DBs
 into a unified ``tmp/`` and ``logs/`` tree. Safe to re-run: existing

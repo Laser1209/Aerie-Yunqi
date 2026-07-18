@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Office / PDF → Markdown conversion via markitdown.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Office / PDF → Markdown conversion via markitdown.
 
 Block-3 R0.2: when a user uploads a non-image file to chat, the backend
 runs it through markitdown and stores the extracted markdown under

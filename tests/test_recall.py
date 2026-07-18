@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v13.9.8 — Phase 4 Recall tests."""
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Phase 4 Recall tests."""
 import asyncio
 import time
 from communication.recall_manager import RecallManager, RecallConfig

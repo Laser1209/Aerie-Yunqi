@@ -104,19 +104,24 @@ class BriefDrawer {
                   title="关闭 / Close" aria-label="关闭">${_ICONS.close}</button>
         </div>
       </div>
-      <div class="brief-drawer__locpop" id="brief-drawer-locpop" role="dialog" aria-label="更改城市">
+      <div class="brief-drawer__locpop brief-drawer__locpop--wide" id="brief-drawer-locpop" role="dialog" aria-label="更改城市">
         <div class="brief-drawer__locpop-brand">
           <span class="brief-drawer__locpop-brand-mark">A</span>
-          <span class="brief-drawer__locpop-brand-text">更改定位 · Location</span>
+          <span class="brief-drawer__locpop-brand-text">定位与天气 · Location</span>
         </div>
-        <div class="brief-drawer__locpop-title">输入城市名（如 上海 / Beijing）</div>
-        <div class="brief-drawer__locpop-row">
+        <div class="brief-drawer__locpop-status" id="brief-drawer-locpop-status">正在读取定位状态...</div>
+        <label class="brief-drawer__locpop-title" for="brief-drawer-locpop-input">搜索城市库</label>
+        <div class="brief-drawer__locpop-search">
           <input class="brief-drawer__locpop-input" id="brief-drawer-locpop-input"
-                 type="text" maxlength="40" placeholder="上海" autocomplete="off">
+                 type="text" maxlength="40" placeholder="巴黎 / Paris" autocomplete="off">
           <button class="brief-drawer__locpop-save" id="brief-drawer-locpop-save">保存</button>
         </div>
+        <div class="brief-drawer__locpop-results" id="brief-drawer-locpop-results"></div>
+        <div class="brief-drawer__locpop-actions">
+          <button class="brief-drawer__locpop-secondary" id="brief-drawer-locpop-auto">恢复自动定位</button>
+        </div>
         <div class="brief-drawer__locpop-error" id="brief-drawer-locpop-error"></div>
-        <div class="brief-drawer__locpop-hint">保存后会立刻重拉天气；空值则恢复为 IP 自动定位。</div>
+        <div class="brief-drawer__locpop-hint">手动选择后会锁定城市，不会被自动定位回弹；清空则恢复 IP 自动定位。</div>
       </div>
       <div class="brief-drawer__body" id="brief-drawer-body">
         <div class="brief-drawer__skeleton" id="brief-drawer-skeleton">
@@ -146,12 +151,20 @@ class BriefDrawer {
     this._locpopInput = this._drawer.querySelector("#brief-drawer-locpop-input");
     this._locpopSave = this._drawer.querySelector("#brief-drawer-locpop-save");
     this._locpopError = this._drawer.querySelector("#brief-drawer-locpop-error");
+    this._locpopStatus = this._drawer.querySelector("#brief-drawer-locpop-status");
+    this._locpopResults = this._drawer.querySelector("#brief-drawer-locpop-results");
+    this._locpopAuto = this._drawer.querySelector("#brief-drawer-locpop-auto");
     this._locBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       this._toggleLocPop();
     });
     this._locpop.addEventListener("click", (e) => e.stopPropagation());
     this._locpopSave.addEventListener("click", () => this._onLocSave());
+    this._locpopAuto.addEventListener("click", () => this._applyLocation(""));
+    this._locpopInput.addEventListener("input", () => {
+      clearTimeout(this._locSearchTimer);
+      this._locSearchTimer = setTimeout(() => this._searchCities(this._locpopInput.value), 180);
+    });
     this._locpopInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); this._onLocSave(); }
       if (e.key === "Escape") { this._closeLocPop(); }
@@ -294,15 +307,12 @@ class BriefDrawer {
     } else {
       this._locpop.classList.add("is-open");
       this._locBtn && this._locBtn.classList.add("is-active");
-      try {
-        const cur = (this._cached && this._cached.weather && this._cached.weather.city) || "";
-        if (this._locpopInput && !this._locpopInput.value) {
-          this._locpopInput.value = cur;
-        }
-        if (this._locpopInput) {
-          setTimeout(() => { try { this._locpopInput.focus(); this._locpopInput.select(); } catch (_) {} }, 30);
-        }
-      } catch (_) {}
+      this._setLocError("");
+      this._loadLocationStatus();
+      this._searchCities(this._locpopInput ? this._locpopInput.value : "");
+      if (this._locpopInput) {
+        setTimeout(() => { try { this._locpopInput.focus(); this._locpopInput.select(); } catch (_) {} }, 30);
+      }
     }
   }
   _closeLocPop() {
@@ -310,36 +320,97 @@ class BriefDrawer {
     this._locpop.classList.remove("is-open");
     this._locBtn && this._locBtn.classList.remove("is-active");
   }
-  async _onLocSave() {
-    if (!this._locpopInput) return;
-    const city = (this._locpopInput.value || "").trim();
-    if (this._locpopError) {
-      this._locpopError.textContent = "";
-      this._locpopError.style.display = "none";
-    }
+  _setLocError(message) {
+    if (!this._locpopError) return;
+    this._locpopError.textContent = message || "";
+    this._locpopError.style.display = message ? "block" : "none";
+  }
+  _setLocLoading(on, text) {
     if (this._locpopSave) {
-      this._locpopSave.disabled = true;
-      this._locpopSave.textContent = "保存中...";
+      this._locpopSave.disabled = !!on;
+      this._locpopSave.textContent = on ? (text || "保存中...") : "保存";
     }
+    if (this._locpopAuto) this._locpopAuto.disabled = !!on;
+  }
+  _sourceLabel(source, manual) {
+    if (manual || source === "manual") return "手动锁定";
+    if (source === "ip") return "IP 自动定位";
+    if (source === "cache") return "缓存定位";
+    if (source === "fallback") return "兜底城市";
+    return "自动定位";
+  }
+  async _loadLocationStatus() {
     try {
       const api = this._api();
       if (!api) throw new Error("API not available");
-      const r = await api({ method: "POST", path: "/api/location/set", body: { city } });
-      if (r && r.error) throw new Error(r.error);
-      this._closeLocPop();
-      this.refresh();
+      const r = await api({ method: "GET", path: "/api/location/status" });
+      const data = (r && r.data) || r || {};
+      if (this._locpopStatus) {
+        this._locpopStatus.textContent = `当前：${data.city || "定位中"} · ${this._sourceLabel(data.source, data.manual)}`;
+      }
+      if (this._locpopInput) this._locpopInput.value = data.manual ? (data.city || "") : "";
     } catch (e) {
-      console.warn("brief-drawer: location save failed", e);
-      if (this._locpopError) {
-        this._locpopError.textContent = "保存失败：" + (e.message || String(e));
-        this._locpopError.style.display = "block";
-      }
-    } finally {
-      if (this._locpopSave) {
-        this._locpopSave.disabled = false;
-        this._locpopSave.textContent = "保存";
-      }
+      if (this._locpopStatus) this._locpopStatus.textContent = "定位状态暂时不可用";
     }
+  }
+  async _searchCities(query) {
+    if (!this._locpopResults) return;
+    this._locpopResults.innerHTML = `<div class="brief-drawer__locpop-loading">正在搜索城市...</div>`;
+    try {
+      const api = this._api();
+      if (!api) throw new Error("API not available");
+      const q = encodeURIComponent((query || "").trim());
+      const r = await api({ method: "GET", path: `/api/location/search?q=${q}` });
+      const data = (r && r.data) || r || {};
+      this._renderCityResults(data.items || []);
+    } catch (e) {
+      this._locpopResults.innerHTML = `<div class="brief-drawer__locpop-empty">城市库暂时不可用，可直接输入城市名保存。</div>`;
+    }
+  }
+  _renderCityResults(items) {
+    if (!this._locpopResults) return;
+    if (!items.length) {
+      this._locpopResults.innerHTML = `<div class="brief-drawer__locpop-empty">没有匹配城市，可直接输入后保存。</div>`;
+      return;
+    }
+    this._locpopResults.innerHTML = "";
+    items.forEach((item) => {
+      const btn = _el("button", { class: "brief-drawer__locpop-result", type: "button" });
+      btn.innerHTML = `
+        <span class="brief-drawer__locpop-result-main">${_esc(item.city || "")}</span>
+        <span class="brief-drawer__locpop-result-meta">${_esc(item.country || item.label || "")}</span>
+      `;
+      btn.addEventListener("click", () => this._applyLocation(item.city || ""));
+      this._locpopResults.appendChild(btn);
+    });
+  }
+  _refreshWeatherOnly(weather) {
+    if (!weather) return;
+    const base = this._cached || { ai_news: [], it_news: [], intl_news: [], cn_news: [] };
+    this._cached = Object.assign({}, base, { weather, _ts: Date.now(), _limit: base._limit || 3 });
+    this._renderData(this._cached);
+  }
+  async _applyLocation(city) {
+    this._setLocError("");
+    this._setLocLoading(true, city ? "应用中..." : "定位中...");
+    try {
+      const api = this._api();
+      if (!api) throw new Error("API not available");
+      const r = await api({ method: "POST", path: "/api/location/set", body: { city: (city || "").trim() } });
+      const data = (r && r.data) || r || {};
+      if (data.error) throw new Error(data.error);
+      this._refreshWeatherOnly(data.weather);
+      this._closeLocPop();
+    } catch (e) {
+      console.warn("brief-drawer: location apply failed", e);
+      this._setLocError("定位更新失败：" + (e.message || String(e)));
+    } finally {
+      this._setLocLoading(false);
+    }
+  }
+  async _onLocSave() {
+    if (!this._locpopInput) return;
+    await this._applyLocation(this._locpopInput.value || "");
   }
 
   _showSkeleton() {
@@ -735,17 +806,20 @@ class BriefDrawer {
       class: "brief-drawer__section brief-drawer__section--weather",
     });
     const w = weather || {};
-    const manualTag = w.manual ? "已设" : "自动";
+    const sourceTag = this._sourceLabel(w.source, w.manual);
+    const qualityTag = w.error ? "天气异常" : (w.stub ? "离线兜底" : sourceTag);
+    const forecast = Array.isArray(w.forecast) ? w.forecast.slice(0, 3) : [];
     section.innerHTML = `
       <div class="brief-drawer__weather-compact">
         <span class="brief-drawer__weather-icon">${_ICONS.pin}</span>
         <span class="brief-drawer__weather-city">${_esc(w.city || "定位中")}</span>
-        <span class="brief-drawer__weather-tag">· ${_esc(manualTag)}</span>
+        <span class="brief-drawer__weather-tag">· ${_esc(qualityTag)}</span>
         <span class="brief-drawer__weather-temp">${_esc(w.temp || "—")}°</span>
         <span class="brief-drawer__weather-desc">${_esc(w.desc || "")}</span>
         ${w.suggestion ? `<span class="brief-drawer__weather-sug">· ${_esc(w.suggestion)}</span>` : ""}
         <span class="brief-drawer__weather-edit">点击更改</span>
       </div>
+      ${forecast.length ? `<div class="brief-drawer__forecast">${forecast.map((f) => `<span class="brief-drawer__forecast-item">${_esc(f.date || f.day || "未来")} · ${_esc(f.weather || f.desc || "—")}</span>`).join("")}</div>` : ""}
     `;
     return section;
   }

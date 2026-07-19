@@ -1,0 +1,103 @@
+filters:
+  and:
+    - 'file.ext == "md"'
+    - 'file.hasTag("implementation-plan") || file.hasTag("plugin-architecture") || file.hasTag("creative-workshop")'
+
+properties:
+  file.name:
+    displayName: "计划文档"
+  file.folder:
+    displayName: "目录"
+  status:
+    displayName: "状态"
+  priority:
+    displayName: "优先级"
+  date:
+    displayName: "日期"
+  tags:
+    displayName: "标签"
+  related:
+    displayName: "关联文档"
+  subsystem:
+    displayName: "子系统"
+  plugin_id:
+    displayName: "插件ID"
+  architecture_stage:
+    displayName: "架构阶段"
+  trust_level:
+    displayName: "信任级别"
+  compatibility:
+    displayName: "兼容协议"
+  file.mtime:
+    displayName: "最近修改"
+
+views:
+  - type: table
+    name: "实施计划表格"
+    order:
+      - file.name
+      - status
+      - priority
+      - subsystem
+      - architecture_stage
+      - plugin_id
+      - trust_level
+      - compatibility
+      - date
+      - tags
+      - related
+      - file.mtime
+      - file.folder
+
+  - type: table
+    name: "插件架构"
+    filters:
+      and:
+        - 'file.hasTag("plugin-architecture")'
+    order:
+      - file.name
+      - plugin_id
+      - architecture_stage
+      - trust_level
+      - compatibility
+      - status
+      - priority
+      - file.mtime
+
+  - type: table
+    name: "世界服务"
+    filters:
+      and:
+        - 'subsystem == "aerie.world"'
+    order:
+      - file.name
+      - status
+      - architecture_stage
+      - compatibility
+      - priority
+      - file.mtime
+
+  - type: cards
+    name: "创意工坊"
+    filters:
+      and:
+        - 'file.hasTag("creative-workshop")'
+    order:
+      - file.name
+      - status
+      - plugin_id
+      - trust_level
+      - compatibility
+      - file.mtime
+
+  - type: cards
+    name: "实施计划卡片"
+    order:
+      - file.name
+      - status
+      - priority
+      - subsystem
+      - architecture_stage
+      - tags
+      - related
+      - file.mtime

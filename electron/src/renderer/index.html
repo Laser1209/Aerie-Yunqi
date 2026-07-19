@@ -761,14 +761,22 @@
             <div class="cal-modal-backdrop" data-close></div>
             <div class="cal-modal-content">
               <div class="cal-modal-header">
-                <h3 id="cal-modal-title">添加事件</h3>
-                <button class="cal-modal-close" data-close>×</button>
+                <div class="cal-modal-heading">
+                  <span class="cal-modal-eyebrow">Aerie Calendar</span>
+                  <h3 id="cal-modal-title">添加事件</h3>
+                  <p class="cal-modal-subtitle">把时间、提醒和重复规则一次设置好。</p>
+                </div>
+                <button class="cal-modal-close" data-close aria-label="关闭">×</button>
               </div>
               <div class="cal-modal-body">
                 <div class="cal-event-form">
-                  <div class="cal-form-field cal-form-field--wide">
+                  <div class="cal-form-field cal-form-field--wide cal-field-title">
                     <label for="cal-form-title">事件名称</label>
                     <input type="text" id="cal-form-title" placeholder="例：第一次见面" autocomplete="off">
+                    <span class="cal-field-hint">一个清晰的标题，会让日程列表更好读。</span>
+                  </div>
+                  <div class="cal-form-section cal-form-section--type">
+                    <div class="cal-form-section-title">类型与全天</div>
                   </div>
                   <div class="cal-form-field">
                     <label for="cal-form-type">类型</label>
@@ -779,6 +787,7 @@
                       <option value="journal">日志</option>
                       <option value="reminder">提醒</option>
                     </select>
+                    <span class="cal-field-hint">用于日历颜色、筛选和提醒语义。</span>
                   </div>
                   <div class="cal-form-field cal-form-toggle-field">
                     <span class="cal-form-label">时间设置</span>
@@ -787,6 +796,9 @@
                       <span class="cal-switch-track" aria-hidden="true"></span>
                       <span>全天</span>
                     </label>
+                  </div>
+                  <div class="cal-form-section cal-form-section--time">
+                    <div class="cal-form-section-title">开始与结束时间</div>
                   </div>
                   <div class="cal-form-field">
                     <label for="cal-form-date">开始日期</label>
@@ -804,6 +816,9 @@
                     <label for="cal-form-end-time">结束时间</label>
                     <input type="time" id="cal-form-end-time">
                   </div>
+                  <div class="cal-form-section cal-form-section--rules">
+                    <div class="cal-form-section-title">重复与提醒</div>
+                  </div>
                   <div class="cal-form-field">
                     <label for="cal-form-repeat">重复</label>
                     <select id="cal-form-repeat">
@@ -813,6 +828,7 @@
                       <option value="monthly">每月</option>
                       <option value="yearly">每年</option>
                     </select>
+                    <span class="cal-field-hint">重复事件会在时间线中自动展开。</span>
                   </div>
                   <div class="cal-form-field">
                     <label for="cal-form-remind">提前提醒</label>
@@ -825,6 +841,10 @@
                       <option value="60">提前 1 小时</option>
                       <option value="1440">提前 1 天</option>
                     </select>
+                    <span class="cal-field-hint">提醒会通过灵动岛和系统通知送达。</span>
+                  </div>
+                  <div class="cal-form-section cal-form-section--detail">
+                    <div class="cal-form-section-title">详情与颜色</div>
                   </div>
                   <div class="cal-form-field cal-form-field--wide">
                     <label for="cal-form-desc">描述（可选）</label>

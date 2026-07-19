@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Daily Brief Fetcher (Block-4A R1.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Daily Brief Fetcher (Block-4A R1.1).
 
 Fetches 5 categories of content for the daily brief popup:
   - AI 公司最新动向
@@ -34,10 +34,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from core.paths import briefs_dir
+
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_DATA_BRIEFS_DIR = _PROJECT_ROOT / "data" / "briefs"
+
+
+def _briefs_dir() -> Path:
+    return briefs_dir()
 
 # ══════════════════════════════════════════════════
 # RSS 源白名单（防 SSRF）
@@ -341,56 +346,21 @@ async def fetch_cn_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[di
 
 
 async def fetch_weather(city: str = "") -> dict | None:
-    """Try the Baidu map MCP tool; fall back to None on failure.
+    from core.location_resolver import resolve_location_async
+    from core.weather_service import fetch_weather_for_city, fetch_weather_for_current_location
 
-    R7.1: ``city`` defaults to empty so ``run_all`` (and any caller) can
-    pass ``city=None`` and the resolver kicks in. Hardcoding "上海" was
-    the root cause of the brief always saying 上海 for every user.
-    """
-    from core.location_resolver import resolve_city, _read_settings_city
-    manual_city = _read_settings_city()
-    city = (city or resolve_city()).strip() or "上海"
-    is_manual = bool(manual_city)
-    try:
-        # Local import — `mcp_Bai_Du_Di_Tu` is only available on this machine.
-        from mcp_Bai_Du_Di_Tu import map_weather  # type: ignore
-    except Exception:
-        logger.debug("brief_fetcher: map_weather MCP unavailable; using stub")
-        return {
-            "city": city,
-            "temp": "26",
-            "desc": "多云",
-            "suggestion": "穿合适的衣服。",
-            "ts": int(time.time()),
-            "stub": True,
-            "manual": is_manual,
-        }
-    try:
-        result = await asyncio.to_thread(map_weather, city=city)
-        return {
-            "city": city,
-            "temp": str(result.get("temperature", "—")),
-            "desc": str(result.get("weather", "—")),
-            "suggestion": str(result.get("suggestion", "")),
-            "ts": int(time.time()),
-            "manual": is_manual,
-        }
-    except Exception as e:
-        logger.warning("brief_fetcher: map_weather error: %s", e)
-        return {
-            "city": city,
-            "temp": "—",
-            "desc": "获取失败",
-            "suggestion": "稍后重试",
-            "ts": int(time.time()),
-            "error": str(e),
-            "manual": is_manual,
-        }
+    city = (city or "").strip()
+    if city:
+        location = await resolve_location_async()
+        if location.get("city") != city:
+            location = {"city": city, "source": "manual", "manual": False, "fallback": False, "error": ""}
+        return await fetch_weather_for_city(city, location)
+    return await fetch_weather_for_current_location()
 
 
 def _load_feedback(date_str: str) -> dict | None:
     """Read yesterday's feedback JSON; return None if missing/corrupt."""
-    p = _DATA_BRIEFS_DIR / f"{date_str}.feedback.json"
+    p = _briefs_dir() / f"{date_str}.feedback.json"
     if not p.exists():
         return None
     try:
@@ -430,8 +400,9 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
 
     Returns a dict ready for LLM compose_brief() consumption.
     """
-    from core.location_resolver import resolve_city
-    city = (city or resolve_city()).strip() or "上海"
+    from core.location_resolver import resolve_location_async
+    location = await resolve_location_async()
+    city = (city or location.get("city") or "上海").strip() or "上海"
     today = datetime.now().strftime("%Y-%m-%d")
     if feedback is None:
         # default: load yesterday's feedback to influence today's section depth
@@ -512,12 +483,12 @@ def save_brief(date_str: str, payload: dict, html: str = "") -> Path:
     import re
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         raise ValueError(f"invalid date_str: {date_str!r}")
-    _DATA_BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
-    json_path = _DATA_BRIEFS_DIR / f"{date_str}.json"
+    _briefs_dir().mkdir(parents=True, exist_ok=True)
+    json_path = _briefs_dir() / f"{date_str}.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     if html:
-        html_path = _DATA_BRIEFS_DIR / f"{date_str}.html"
+        html_path = _briefs_dir() / f"{date_str}.html"
         with open(html_path, "w", encoding="utf-8") as f:
             f.write(html)
         return html_path
@@ -529,7 +500,7 @@ def load_brief(date_str: str) -> dict | None:
     import re
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         return None
-    p = _DATA_BRIEFS_DIR / f"{date_str}.json"
+    p = _briefs_dir() / f"{date_str}.json"
     if not p.exists():
         return None
     try:
@@ -539,12 +510,22 @@ def load_brief(date_str: str) -> dict | None:
         return None
 
 
+def update_brief_weather(date_str: str, weather: dict) -> dict:
+    import re
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        raise ValueError(f"invalid date_str: {date_str!r}")
+    payload = load_brief(date_str) or {"date": date_str, "ai_news": []}
+    payload["weather"] = weather
+    save_brief(date_str, payload)
+    return payload
+
+
 def load_brief_html(date_str: str) -> str | None:
     """Read brief HTML; return None if missing."""
     import re
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         return None
-    p = _DATA_BRIEFS_DIR / f"{date_str}.html"
+    p = _briefs_dir() / f"{date_str}.html"
     if not p.exists():
         return None
     try:
@@ -558,8 +539,8 @@ def save_feedback(date_str: str, feedback: dict) -> Path:
     import re
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         raise ValueError(f"invalid date_str: {date_str!r}")
-    _DATA_BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
-    p = _DATA_BRIEFS_DIR / f"{date_str}.feedback.json"
+    _briefs_dir().mkdir(parents=True, exist_ok=True)
+    p = _briefs_dir() / f"{date_str}.feedback.json"
     payload = {**feedback, "date": date_str, "ts": int(time.time())}
     fd, tmp_path = _imports_tempfile(p)
     try:

@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -2441,6 +2442,12 @@ async def settings_put(request: Request) -> dict:
     try:
         body = await request.json()
         save_settings(body)
+        if isinstance(body, dict) and isinstance(body.get("weather"), dict) and "city" in body["weather"]:
+            try:
+                from core.location_resolver import clear_city_cache
+                clear_city_cache()
+            except Exception as e:
+                logger.warning("settings_put: location cache clear failed: %s", e)
         return {"status": "ok", "saved": list(body.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -2602,36 +2609,86 @@ async def self_check() -> dict:
 # write the weather city + bust the IP cache atomically. The previous
 # path (/api/settings PUT) does not clear data/cache/city.json, which
 # meant the next /api/brief/today still returned the cached IP city.
+_CITY_INDEX = [
+    {"city": "上海", "country": "中国", "keywords": "上海 shanghai china"},
+    {"city": "北京", "country": "中国", "keywords": "北京 beijing peking china"},
+    {"city": "广州", "country": "中国", "keywords": "广州 guangzhou canton china"},
+    {"city": "深圳", "country": "中国", "keywords": "深圳 shenzhen china"},
+    {"city": "济南", "country": "中国", "keywords": "济南 jinan china"},
+    {"city": "东京", "country": "日本", "keywords": "东京 tokyo japan"},
+    {"city": "首尔", "country": "韩国", "keywords": "首尔 seoul korea"},
+    {"city": "新加坡", "country": "新加坡", "keywords": "新加坡 singapore"},
+    {"city": "巴黎", "country": "法国", "keywords": "巴黎 paris france"},
+    {"city": "伦敦", "country": "英国", "keywords": "伦敦 london uk england"},
+    {"city": "纽约", "country": "美国", "keywords": "纽约 new york usa"},
+    {"city": "洛杉矶", "country": "美国", "keywords": "洛杉矶 los angeles usa"},
+    {"city": "悉尼", "country": "澳大利亚", "keywords": "悉尼 sydney australia"},
+    {"city": "柏林", "country": "德国", "keywords": "柏林 berlin germany"},
+    {"city": "多伦多", "country": "加拿大", "keywords": "多伦多 toronto canada"},
+]
+
+
+def _today_str() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+async def _fetch_current_weather(force_location: bool = False) -> dict:
+    from core.weather_service import fetch_weather_for_current_location
+    return await fetch_weather_for_current_location(force_location=force_location)
+
+
+def _search_city_items(query: str) -> list[dict]:
+    q = (query or "").strip().lower()
+    rows = _CITY_INDEX if not q else [r for r in _CITY_INDEX if q in r["city"].lower() or q in r["country"].lower() or q in r["keywords"].lower()]
+    return [{"city": r["city"], "country": r["country"], "label": f"{r['city']} · {r['country']}"} for r in rows[:12]]
+
+
+@app.get("/api/location/status")
+async def location_status(force: int = Query(default=0, ge=0, le=1)) -> dict:
+    from core.location_resolver import resolve_location_async
+    return await resolve_location_async(force_refresh=bool(force))
+
+
+@app.get("/api/location/search")
+async def location_search(q: str = Query(default="")) -> dict:
+    return {"items": _search_city_items(q)}
+
+
+@app.get("/api/weather/current")
+async def weather_current(force: int = Query(default=0, ge=0, le=1)) -> dict:
+    start = time.perf_counter()
+    weather = await _fetch_current_weather(force_location=bool(force))
+    weather["elapsed_ms"] = int((time.perf_counter() - start) * 1000)
+    return weather
+
+
 @app.post("/api/location/set")
 async def location_set(request: Request) -> dict:
-    """Set the manual city override used by the daily brief weather.
-
-    Body: ``{"city": "上海"}`` (empty string clears the override).
-    Side effects:
-      1. Writes ``settings.yaml.weather.city`` (partial merge).
-      2. Deletes ``data/cache/city.json`` so the next call to
-         ``location_resolver.resolve_city()`` re-evaluates from
-         manual → IP instead of returning the stale cache.
-    """
+    """Set the manual city override used by the daily brief weather."""
+    start = time.perf_counter()
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "invalid json body"}, status_code=400)
     city = str((body or {}).get("city") or "").strip()
     try:
-        save_settings({"weather": {"city": city}})
+        from core.location_resolver import set_manual_city
+        set_manual_city(city)
+        weather = await _fetch_current_weather(force_location=not bool(city))
+        from core import brief_fetcher
+        try:
+            brief_fetcher.update_brief_weather(_today_str(), weather)
+        except Exception as e:
+            logger.warning("location_set: brief weather update failed: %s", e)
+        return {
+            "status": "ok",
+            "city": weather.get("city") or city,
+            "manual": bool(city),
+            "weather": weather,
+            "elapsed_ms": int((time.perf_counter() - start) * 1000),
+        }
     except Exception as e:
-        return JSONResponse({"error": f"settings save failed: {e}"}, status_code=500)
-    # Bust the IP cache so resolve_city() picks up the new manual value
-    # immediately on the next /api/brief/today call.
-    try:
-        cache_file = Path("data/cache/city.json")
-        if cache_file.exists():
-            cache_file.unlink()
-            logger.info("location_set: cleared data/cache/city.json")
-    except Exception as e:
-        logger.warning("location_set: cache clear failed: %s", e)
-    return {"status": "ok", "city": city, "manual": bool(city)}
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── Anniversary ──────────────────────────────────────

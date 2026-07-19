@@ -13,6 +13,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from core.feature_flags import FeatureFlags
+from core.migrations import MigrationRunner
+
 
 # All 8 table schemas. Code-level comments are in English.
 SCHEMA_SQL: list[str] = [
@@ -313,6 +316,8 @@ class Database:
 
     def _init_schema(self) -> None:
         with self.connection() as conn:
+            if FeatureFlags().is_enabled("migration_framework_v1"):
+                MigrationRunner(conn).run([])
             for stmt in SCHEMA_SQL:
                 conn.execute(stmt)
             # Phase 4: idempotent migrations for chat_log extensions
@@ -414,6 +419,12 @@ class Database:
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
         )
         return [r["name"] for r in rows]
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Forget the singleton instance without changing runtime semantics."""
+        with cls._lock:
+            cls._instance = None
 
     def reset(self) -> None:
         """Drop and recreate all tables. For tests only."""

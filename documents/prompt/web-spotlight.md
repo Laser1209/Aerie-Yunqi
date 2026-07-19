@@ -14,10 +14,12 @@ date: 2026-07-20
 
 > [!note] 内容与事实来源
 > 本提示词由 [[web]]（深色电影感 liquid-glass 设计机构落地页 Codex 提示词）适配而来，展示对象替换为 **Aerie · 云栖**（本地优先 AI 桌面伴侣）。所有产品事实（功能点、数量、架构）以项目根目录 `README.md` 的特性表为准，不得虚构。
+>
+> 详细页面决策参见 [[Spotlight 六页面展示站规划]]。
 
 ## 目标
 
-在 `e:\Agent_reply\Spotlight` 目录下，使用 React + Vite + TypeScript + Tailwind CSS 构建一个单页站点，**恰好包含两个全屏 section（Hero 与 Capabilities）**。页面为黑色电影感的 Aerie · 云栖项目展示页，使用「liquid glass」液态玻璃拟态 UI 元素，并用 Framer Motion 实现平滑的模糊/淡入动画。
+在 `e:\Agent_reply\Spotlight` 目录下，使用 React + Vite + TypeScript + Tailwind CSS + Framer Motion + React Router 构建一个由 **六个独立全屏路由页面**组成的 Aerie · 云栖展示站。使用 HashRouter，页面包括 Hero 首页（`/#/`）以及 Features、Architecture、Capabilities、Journal、Download 五个导航页面。Hero 与 Capabilities 必须彼此隔离，不得在同一滚动界面连续渲染。页面保持黑色电影感和「liquid glass」液态玻璃视觉，每个页面使用独立的全屏背景视频。
 
 ---
 
@@ -144,6 +146,51 @@ body: ["'Barlow'", 'sans-serif'],
 - 顶行：图标放在嵌套的 `liquid-glass h-11 w-11 rounded-[0.75rem]` 方块中 + 标签组（flex-wrap，gap-1.5）右对齐，每个标签为 `liquid-glass rounded-full px-3 py-1 text-[11px] text-white/90 font-body whitespace-nowrap`
 - 间隔：`flex-1`
 - 底部：标题 `font-heading italic text-3xl md:text-4xl tracking-[-1px] leading-none` + 正文 `text-sm text-white/90 font-body font-light leading-snug max-w-[32ch]`
+
+---
+
+## 路由、共享导航与六页面结构
+
+- 使用 `HashRouter`，路由为：`/`、`/features`、`/architecture`、`/capabilities`、`/journal`、`/download`
+- `App.tsx` 只渲染当前路由页面，不得把 Hero 与 Capabilities 连续放进同一个 `<main>`
+- 全局 `SiteHeader` 保留源项目的三栏结构：左侧圆形 Logo（回首页）、中间 Liquid Glass 胶囊导航、右侧等宽占位
+- 五项导航使用 `NavLink` 并显示当前页面激活态；移动端提供 Liquid Glass 菜单
+- 导航文字 `Download` 进入详情页；白色「获取便携版」CTA 直接下载安装包
+- 六个页面均复用 `PageShell` + `FadingVideo` 的背景/前景层级
+
+### Hero 首页 `/#/`
+
+保留当前 Hero 的版本徽章、主标题、副文案、双 CTA、统计卡和技术栈信任条；Logo 由共享导航提供。背景使用原 Hero 视频。
+
+### Features `/#/features`
+
+- 标题：`Built for every part of your day`
+- 六张 Liquid Glass 功能卡：桌面壳、工具矩阵、主动关怀、Persona Hub、本地数据、故障自愈
+- 背景：`/videos/features.mp4`，Windows 桌面与漂浮玻璃面板的黑色电影感视频，无文字
+
+### Architecture `/#/architecture`
+
+- 标题：`Local intelligence, layered with intent`
+- 五层结构：Electron Desktop Shell、Python Intelligent Core、Providers/Tools/Emotion/Memory、NapCat OneBot11、Permission & Safety Gates
+- 使用 Liquid Glass 层级卡与细线连接
+- 背景：`/videos/architecture.mp4`，冰蓝数据流、黑色空间与少量深红节点，无文字
+
+### Capabilities `/#/capabilities`
+
+保留现有 `One companion, end to end` 与 Office Mode、Emotion、Control 三张能力卡，但作为独立路由页面；背景使用原 Capabilities 视频。
+
+### Journal `/#/journal`
+
+- 标题：`Built in public, refined in private`
+- 数据只来自项目 `CHANGELOG.md`：展示版本、日期、类型、标题和摘要
+- 背景：`/videos/journal.mp4`，版本时间线与代码/文档光轨，无文字
+
+### Download `/#/download`
+
+- 标题：`Bring Aerie home`
+- 展示 `0.1.0-beta.1` Windows 安装版、运行须知、系统要求
+- 主 CTA 下载 `/Aerie-Cloud-0.1.0-beta.1-Setup.exe`
+- 背景：`/videos/download.mp4`，冰蓝光线凝聚玻璃应用形态，无文字
 
 ---
 

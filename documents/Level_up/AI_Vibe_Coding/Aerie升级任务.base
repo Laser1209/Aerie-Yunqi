@@ -1,0 +1,66 @@
+filters:
+  and:
+    - 'file.inFolder("documents/Level_up/AI_Vibe_Coding/tasks")'
+    - 'kind == "task"'
+formulas:
+  phase_label: 'phase'
+  blocking_status: 'if(status == "blocked", "阻塞", "未阻塞")'
+  file_age: '(now() - file.mtime).days'
+  rollback_status: 'if(rollback_ready, "已就绪", "未就绪")'
+properties:
+  formula.phase_label:
+    displayName: "阶段标签"
+  formula.blocking_status:
+    displayName: "阻塞状态"
+  formula.file_age:
+    displayName: "文件年龄"
+  formula.rollback_status:
+    displayName: "回滚状态"
+views:
+  - type: table
+    name: "按阶段"
+    groupBy:
+      property: phase
+      direction: ASC
+    order: [file.name, phase, status, priority, formula.phase_label]
+  - type: table
+    name: "P0与阻塞"
+    filters:
+      or:
+        - 'priority == "P0"'
+        - 'status == "blocked"'
+    order: [file.name, phase, status, priority, formula.blocking_status]
+  - type: table
+    name: "迁移与高风险"
+    filters:
+      or:
+        - 'migration == true'
+        - 'risk == "high"'
+    order: [file.name, phase, migration, risk]
+  - type: table
+    name: "待决策"
+    filters:
+      and:
+        - 'decision_required == true'
+    order: [file.name, phase, decision_required, dependencies]
+  - type: table
+    name: "待验收"
+    filters:
+      or:
+        - 'status == "planned"'
+        - 'status == "in_progress"'
+        - 'status == "blocked"'
+    order: [file.name, phase, status, acceptance_ids]
+  - type: table
+    name: "世界与图片"
+    filters:
+      or:
+        - 'subsystem == "world"'
+        - 'subsystem == "image"'
+    order: [file.name, phase, subsystem, risk]
+  - type: table
+    name: "回滚未就绪"
+    filters:
+      and:
+        - 'rollback_ready == false'
+    order: [file.name, phase, formula.rollback_status, risk]

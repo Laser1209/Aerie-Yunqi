@@ -26,7 +26,6 @@
   "build": {
     "appId": "com.laser.aerie",
     "productName": "Aerie · 云栖",
-    "copyright": "Copyright © 2026 Laser",
     "directories": {
       "output": "dist",
       "buildResources": "builder"
@@ -34,99 +33,20 @@
     "files": [
       "src/**/*",
       "builder/icon.ico",
-      "package.json",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
-      "!**/node_modules/*.d.ts",
-      "!**/node_modules/.bin",
-      "!**/{__pycache__,*.pyc,*.pyo,*.pyd,*.egg-info}",
-      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
-      "!**/{.idea,.vscode,.editorconfig,.travis.yml,.npmrc}",
-      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+      "builder/icon-1024.png",
+      "package.json"
     ],
-    "asar": true,
-    "asarUnpack": ["**/*.node"],
     "win": {
       "icon": "builder/icon.ico",
-      "executableName": "Aerie 云栖",
       "target": [
         {
           "target": "nsis",
           "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
         }
       ],
-      "requestedExecutionLevel": "requireAdministrator",
-      "publisherName": "Laser",
-      "signAndEditExecutable": false,
-      "verifyUpdateCodeSignature": false
+      "requestedExecutionLevel": "requireAdministrator"
     },
-    "extraResources": [
-      {
-        "from": "../Aerie · 云栖.png",
-        "to": "icon.png"
-      },
-      {
-        "from": "../.env.example",
-        "to": ".env.example"
-      },
-      {
-        "from": "../",
-        "to": "python",
-        "filter": [
-          "main.py",
-          "core/**",
-          "config/**",
-          "communication/**",
-          "knowledge/**",
-          "memory/**",
-          "emotion/**",
-          "persona/**",
-          "scheduler/**",
-          "tools/__init__.py",
-          "tools/browser_tools.py",
-          "tools/douyin_tools.py",
-          "tools/compute_tools.py",
-          "tools/restart_helper.ps1",
-          "skills/local/*/SKILL.md",
-          "skills/local/*/run.py",
-          "skills/data/*/SKILL.md",
-          "skills/data/*/run.py",
-          "douyin-mcp/src/douyin_creator_mcp/**",
-          "NapCat/NapCat.Shell/**",
-          ".env.example",
-          "!**/__pycache__/**",
-          "!**/*.pyc",
-          "!**/*.pyo",
-          "!data/**",
-          "!logs/**",
-          "!NapCat/NapCat.Shell/cache/**",
-          "!NapCat/NapCat.Shell/config/**",
-          "!douyin-mcp/data/**",
-          "!douyin-mcp/.env"
-        ]
-      },
-      {
-        "from": "../.venv",
-        "to": "python/.venv",
-        "filter": [
-          "**/*",
-          "!Lib/site-packages/pip/**",
-          "!Lib/site-packages/setuptools/**",
-          "!Lib/site-packages/wheel/**",
-          "!Scripts/pip*",
-          "!Scripts/activate*",
-          "!**/__pycache__/**",
-          "!**/*.pyc",
-          "!**/*.pyo"
-        ]
-      }
-    ],
     "nsis": {
-      "artifactName": "${productName}-${version}-Setup.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowElevation": true,
@@ -134,22 +54,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Aerie · 云栖",
-      "deleteAppDataOnUninstall": false,
-      "include": "builder/installer.nsh",
-      "displayLanguageSelector": false,
-      "installerLanguages": ["zh_CN", "en_US"],
-      "language": "2052"
-    },
-    "portable": {
-      "artifactName": "${productName}-${version}-portable.${ext}"
-    },
-    "extraMetadata": {
-      "main": "src/main.js",
-      "author": {
-        "name": "Laser",
-        "email": "laser@local"
-      }
-    },
-    "publish": null
+      "include": "builder/installer.nsh"
+    }
   }
 }

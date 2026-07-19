@@ -113,18 +113,32 @@ class Brain:
         """Load provider configs from env vars."""
         providers = []
 
-        # Primary: SiliconFlow
-        sf_key = os.getenv("OPENAI_API_KEY", "")
-        sf_url = os.getenv("OPENAI_BASE_URL", "https://api.siliconflow.cn/v1")
-        sf_model = os.getenv("OPENAI_MODEL", "Qwen/Qwen2.5-7B-Instruct")
-        sf_supports_tools = os.getenv("SF_SUPPORTS_TOOLS", "false").lower() == "true"
-        if sf_key:
+        # Primary chat: Grok (OpenAI-compatible proxy)
+        grok_key = os.getenv("GROK_API_KEY", "")
+        grok_url = os.getenv("GROK_BASE_URL", "https://mysubapi.com/v1")
+        grok_model = os.getenv("GROK_MODEL", "grok-4.5")
+        grok_supports_tools = os.getenv("GROK_SUPPORTS_TOOLS", "false").lower() == "true"
+        if grok_key:
             providers.append({
-                "name": "siliconflow",
-                "url": sf_url,
-                "key": sf_key,
-                "model": sf_model,
-                "supports_tools": sf_supports_tools,
+                "name": "grok",
+                "url": grok_url,
+                "key": grok_key,
+                "model": grok_model,
+                "supports_tools": grok_supports_tools,
+            })
+
+        # GPT / OpenAI-compatible provider, reserved for article generation
+        openai_key = os.getenv("OPENAI_API_KEY", "")
+        openai_url = os.getenv("OPENAI_BASE_URL", "https://api.siliconflow.cn/v1")
+        openai_model = os.getenv("OPENAI_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+        openai_supports_tools = os.getenv("OPENAI_SUPPORTS_TOOLS", os.getenv("SF_SUPPORTS_TOOLS", "false")).lower() == "true"
+        if openai_key:
+            providers.append({
+                "name": "openai",
+                "url": openai_url,
+                "key": openai_key,
+                "model": openai_model,
+                "supports_tools": openai_supports_tools,
             })
 
         # Fallback: DeepSeek
@@ -143,11 +157,11 @@ class Brain:
 
         # Secondary fallback: SiliconFlow free models
         sf_free_model = os.getenv("SILICONFLOW_FREE_MODEL", "")
-        if sf_free_model and sf_key:
+        if sf_free_model and openai_key:
             providers.append({
                 "name": "siliconflow-free",
-                "url": sf_url,
-                "key": sf_key,
+                "url": openai_url,
+                "key": openai_key,
                 "model": sf_free_model,
                 "supports_tools": False,
             })
@@ -565,7 +579,7 @@ class Brain:
             {"role": "user", "content": user_msg},
         ]
         try:
-            resp = await self.chat(messages)
+            resp = await self.chat(messages, preferred_provider="openai")
             if resp.text and not resp.text.startswith("(伊塔"):
                 return resp.text.strip()
         except Exception as e:
@@ -687,7 +701,7 @@ class Brain:
             {"role": "user", "content": user_msg},
         ]
         try:
-            resp = await self.chat(messages)
+            resp = await self.chat(messages, preferred_provider="openai")
             if resp.text:
                 summaries = _parse_summary_json(resp.text)
                 if summaries:

@@ -1,4 +1,4 @@
-﻿﻿# Aerie · 云栖 v0.1.0-beta.1 — electron-builder configuration
+﻿# Aerie · 云栖 v0.1.0-beta.1 — electron-builder configuration
 # This file is the source of truth for Windows packaging.
 # `package.json` mirrors the same settings under `build` for npm run build:win.
 appId: com.laser.aerie
@@ -35,12 +35,11 @@ win:
     - target: nsis
       arch:
         - x64
-      artifactName: ${productName}-${version}-Setup.${ext}
     - target: portable
       arch:
         - x64
-      artifactName: ${productName}-${version}-portable.${ext}
   requestedExecutionLevel: requireAdministrator
+  artifactName: ${productName}-${version}-Setup.${ext}
   publisherName: Laser
   signAndEditExecutable: false
   verifyUpdateCodeSignature: false
@@ -57,45 +56,20 @@ extraResources:
       - "main.py"
       - "core/**"
       - "config/**"
-      - "communication/**"
-      - "knowledge/**"
-      - "memory/**"
-      - "emotion/**"
-      - "persona/**"
-      - "scheduler/**"
-      - "tools/__init__.py"
-      - "tools/browser_tools.py"
-      - "tools/douyin_tools.py"
-      - "tools/compute_tools.py"
-      - "tools/restart_helper.ps1"
-      - "skills/local/*/SKILL.md"
-      - "skills/local/*/run.py"
-      - "skills/data/*/SKILL.md"
-      - "skills/data/*/run.py"
-      - "douyin-mcp/src/douyin_creator_mcp/**"
-      - "NapCat/NapCat.Shell/**"
+      - "data/**"
+      - "prompts/**"
       - ".env.example"
+      - ".venv/**"
       - "!**/__pycache__/**"
       - "!**/*.pyc"
       - "!**/*.pyo"
-      - "!data/**"
-      - "!logs/**"
-      - "!NapCat/NapCat.Shell/cache/**"
-      - "!NapCat/NapCat.Shell/config/**"
-      - "!douyin-mcp/data/**"
-      - "!douyin-mcp/.env"
-  - from: "../.venv"
-    to: "python/.venv"
-    filter:
-      - "**/*"
-      - "!Lib/site-packages/pip/**"
-      - "!Lib/site-packages/setuptools/**"
-      - "!Lib/site-packages/wheel/**"
-      - "!Scripts/pip*"
-      - "!Scripts/activate*"
-      - "!**/__pycache__/**"
-      - "!**/*.pyc"
-      - "!**/*.pyo"
+      - "!data/aerie.db"
+      - "!data/cache/**"
+      - "!.venv/Lib/site-packages/pip/**"
+      - "!.venv/Lib/site-packages/setuptools/**"
+      - "!.venv/Lib/site-packages/wheel/**"
+      - "!.venv/Scripts/pip*"
+      - "!.venv/Scripts/activate*"
 
 # NSIS installer options
 nsis:

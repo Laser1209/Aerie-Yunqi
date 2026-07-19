@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 echo ============================================
 echo  Aerie (Yunqi) v0.1.0-beta.1 - Dev Startup
 echo ============================================

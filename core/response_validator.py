@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 — Response Validator（回复校验器）
+"""Aerie v0.1.0-beta.1 — Response Validator（回复校验器）
 
 双层校验架构：
   - Accuracy Guard（准确性守卫）：事实准确性 + 安全合规
@@ -42,22 +42,16 @@ class ValidationResult:
 
 
 class AccuracyGuard:
-    """准确性守卫 — 事实校验 + 安全合规。
+    """结构守卫 — 仅做空回复等结构性检查。
 
-    快速路径（规则）:
-      - 敏感词/违规内容检测
-      - 自相矛盾检测（与上下文冲突）
-      - 数值合理性检查
-    慢速路径（LLM，可选）:
-      - 事实一致性深度校验
+    内容解放策略：
+      - 不再扫描敏感词 / 道德合规关键词
+      - 不再因话题尖锐、暧昧、黑暗、粗俗等标记 critical
+      - 不改写、不拦截用户可见回复文本
     """
 
-    SENSITIVE_PATTERNS = [
-        (r"赌博|博彩|彩票.*预测", "illegal_gambling"),
-        (r"毒品|吸毒|贩毒", "illegal_drugs"),
-        (r"自杀|自残|轻生", "self_harm"),
-        (r"暴力袭击|恐怖袭击|杀人", "violence"),
-    ]
+    # 已清空：内容话题不再作为拦截依据
+    SENSITIVE_PATTERNS: list[tuple[str, str]] = []
 
     def __init__(self):
         self.compiled_patterns = [
@@ -71,7 +65,7 @@ class AccuracyGuard:
         user_message: str = "",
         context_history: list[dict] | None = None,
     ) -> tuple[bool, list[dict]]:
-        """执行准确性守卫检查。
+        """执行结构守卫检查（不审查内容主题）。
 
         Returns:
             (passed, issues)
@@ -79,16 +73,7 @@ class AccuracyGuard:
         issues: list[dict] = []
         reply_text = reply_text or ""
 
-        # 1. 敏感内容检测
-        for pattern, category in self.compiled_patterns:
-            if pattern.search(reply_text):
-                issues.append({
-                    "level": "critical",
-                    "category": f"sensitive_{category}",
-                    "message": f"检测到敏感内容: {category}",
-                })
-
-        # 2. 长度过短检测（可能是无效回复）
+        # 仅保留空回复结构检查；内容主题一律放行
         if len(reply_text.strip()) < 1:
             issues.append({
                 "level": "error",
@@ -96,28 +81,12 @@ class AccuracyGuard:
                 "message": "回复内容为空",
             })
 
-        # 3. 上下文矛盾快速检测（检测是否直接否定了上一条自己说的话）
-        if context_history and len(context_history) >= 2:
-            last_ai_msg = ""
-            for h in reversed(context_history[-4:]):
-                if h.get("role") == "assistant":
-                    last_ai_msg = h.get("content", "")
-                    break
-            if last_ai_msg and self._detect_contradiction(last_ai_msg, reply_text):
-                issues.append({
-                    "level": "warning",
-                    "category": "context_contradiction",
-                    "message": "可能存在上下文矛盾",
-                })
-
         passed = not any(i["level"] in ("error", "critical") for i in issues)
         return passed, issues
 
     def _detect_contradiction(self, prev_text: str, curr_text: str) -> bool:
-        """简易矛盾检测（关键词级，避免误判）。"""
-        negations = ["不是", "不对", "没有", "错了", "其实不", "并没有"]
-        # 仅在当前回复明确包含否定词时才标记
-        return any(neg in curr_text for neg in negations) and len(prev_text) > 20
+        """保留接口兼容；内容解放后不再用于拦截。"""
+        return False
 
 
 class QualityJudge:
@@ -278,8 +247,8 @@ class ResponseValidator:
         result.judge_score = judge_score
         result.issues.extend(judge_issues)
 
-        # 3. 综合判定
-        result.passed = guard_passed  # Guard 不通过就是失败
+        # 3. 综合判定：内容主题永不拦截；仅空回复等结构问题可 failed
+        result.passed = guard_passed
         result.final_text = reply_text
 
         if result.issues:
@@ -291,3 +260,14 @@ class ResponseValidator:
             )
 
         return result
+
+
+_VALIDATOR_SINGLETON: ResponseValidator | None = None
+
+
+def get_response_validator() -> ResponseValidator:
+    """返回全局 ResponseValidator 单例（API / 兼容入口）。"""
+    global _VALIDATOR_SINGLETON
+    if _VALIDATOR_SINGLETON is None:
+        _VALIDATOR_SINGLETON = ResponseValidator()
+    return _VALIDATOR_SINGLETON

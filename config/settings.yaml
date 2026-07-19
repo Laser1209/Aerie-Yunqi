@@ -1,7 +1,8 @@
+office:
+  dir: F:\文件\Aerie
+qq:
+  push_pause_when_offline: true
+  startup_wait_timeout: 1.0
 verify_batch4:
   ping: pong
   ts: 1784404889
-
-qq:
-  startup_wait_timeout: 1.0
-  push_pause_when_offline: true

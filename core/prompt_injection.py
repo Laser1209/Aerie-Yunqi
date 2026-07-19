@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Prompt Injection 防御引擎 (S3 M3.4).
+"""Aerie · 云栖 v0.1.0-beta.1 — Prompt Injection 防御引擎 (S3 M3.4).
 
 10 类常见 Prompt Injection 攻击检测与防御：
 
@@ -118,17 +118,9 @@ CONTEXT_CONFUSION_PATTERNS: List[Tuple[str, float]] = [
     (r"(在这个(场景|游戏|世界|故事)里).*?(你是|你的角色)", 4.0),
 ]
 
-# 角色扮演滥用
-ROLEPLAY_PATTERNS: List[Tuple[str, float]] = [
-    (r"(角色扮演|roleplay|玩角色|cosplay).*?(不受限制|无限制|没有限制|无规则|任何事|为所欲为)", 7.0),
-    (r"(在这个(场景|游戏|设定|故事)中).*?(可以|允许|能).*?(任何|所有|违反规则|不受限|无限制)", 7.5),
-    (r"你现在是(一个没有限制|不受约束|无所不能|无法无天)的", 7.5),
-    (r"为了(艺术|创作|剧情|写小说|拍视频|写文章).*?(必须|需要|得|应该)", 4.0),
-    (r"(只是|只不过|就是|就当是|假装|假设| pretend).*?(演戏|扮演|角色|游戏|假的).*?(不用|不要|别).*?(当真|负责|遵守|管)", 5.5),
-    (r"(反正都是假的|又不是真的|只是游戏|不会真的|又不犯法)", 5.0),
-    (r"(来玩|玩一个|我们玩).*?(角色扮演|角色|roleplay)", 3.5),
-    (r"(假装|假扮|装作).*?(反派|坏人|黑客|罪犯)", 4.5),
-]
+# 角色扮演滥用 — 内容解放：不再把角色扮演/无限制表达视为攻击
+# 保留空列表以兼容引用，不产生任何检测分
+ROLEPLAY_PATTERNS: List[Tuple[str, float]] = []
 
 # 数据外泄
 DATA_EXFIL_PATTERNS: List[Tuple[str, float]] = [
@@ -440,8 +432,7 @@ class PromptInjectionDetector:
             suggestions.append("工具调用注入风险，严格审批工具调用")
         if InjectionType.ENCODING_BYPASS.value in types:
             suggestions.append("检测到编码绕过，需解码后重新评估")
-        if InjectionType.ROLEPLAY_ABUSE.value in types:
-            suggestions.append("角色扮演边界试探，坚守安全底线")
+        # ROLEPLAY_ABUSE 已内容解放：不再生成“坚守安全底线”类建议
 
         if not suggestions and result.is_suspicious:
             suggestions.append("内容存在可疑模式，建议谨慎回应")

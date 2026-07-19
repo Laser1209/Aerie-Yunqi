@@ -1,0 +1,1721 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aerie · 云栖</title>
+<link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles/icons.css">
+<link rel="stylesheet" href="styles/approval-modal.css">
+<link rel="stylesheet" href="styles/persona-hub.css">
+<link rel="stylesheet" href="styles/office-mode.css">
+<link rel="stylesheet" id="theme-css" href="styles/themes/yita-pink.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+<!-- Phase 7: Icon sprite (inlined for offline / file:// protocol support) -->
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute; width:0; height:0; overflow:hidden;" aria-hidden="true">
+  <defs>
+    <symbol id="icon-ui-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18"/>
+      <path d="m6 6 12 12"/>
+    </symbol>
+    <symbol id="icon-ui-attach" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.57 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+    </symbol>
+    <symbol id="icon-ui-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+    </symbol>
+    <symbol id="icon-ui-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+      <path d="M12 9v4"/>
+      <path d="M12 17h.01"/>
+    </symbol>
+    <symbol id="icon-mood-neutral" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="8" x2="16" y1="15" y2="15"/>
+      <line x1="9" x2="9.01" y1="9" y2="9"/>
+      <line x1="15" x2="15.01" y1="9" y2="9"/>
+    </symbol>
+    <symbol id="icon-mood-joy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+      <line x1="9" x2="9.01" y1="9" y2="9"/>
+      <line x1="15" x2="15.01" y1="9" y2="9"/>
+    </symbol>
+    <symbol id="icon-mood-sad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M16 16s-1.5-2-4-2-4 2-4 2"/>
+      <line x1="9" x2="9.01" y1="9" y2="9"/>
+      <line x1="15" x2="15.01" y1="9" y2="9"/>
+    </symbol>
+    <symbol id="icon-mood-anger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M7 9l3 2"/>
+      <path d="M17 9l-3 2"/>
+      <line x1="8" x2="16" y1="15" y2="15"/>
+    </symbol>
+    <symbol id="icon-mood-fear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M8 8.5c1-1 2.5-1 3.5 0"/>
+      <path d="M12.5 8.5c1-1 2.5-1 3.5 0"/>
+      <ellipse cx="12" cy="15" rx="1.2" ry="1.5"/>
+    </symbol>
+    <!-- Block-5E R6.2: emoji replacements (thumb up/down, pause/play, broom, bolt). -->
+    <symbol id="icon-ui-thumb-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 10v12"/>
+      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/>
+    </symbol>
+    <symbol id="icon-ui-thumb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 14V2"/>
+      <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22h0a3.13 3.13 0 0 1-3-3.88Z"/>
+    </symbol>
+    <symbol id="icon-ui-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="4" width="4" height="16" rx="1"/>
+      <rect x="14" y="4" width="4" height="16" rx="1"/>
+    </symbol>
+    <symbol id="icon-ui-play" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M8 5v14l11-7z"/>
+    </symbol>
+    <symbol id="icon-ui-broom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19.36 2.72 14.7 7.38"/>
+      <path d="M5.64 16.36 14.7 7.38l4.66 4.66L10.3 21.1Z"/>
+      <path d="m9 17-3 3v3h3l3-3"/>
+      <path d="M14 14h6v3a3 3 0 0 1-3 3h-3"/>
+    </symbol>
+    <symbol id="icon-ui-bolt" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>
+    </symbol>
+    <!-- Block-5E R6.2: brief section icons + reply + crown. -->
+    <symbol id="icon-brief-ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
+      <circle cx="12" cy="12" r="3.5"/>
+    </symbol>
+    <symbol id="icon-brief-tech" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2"/>
+      <rect x="9" y="9" width="6" height="6"/>
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>
+    </symbol>
+    <symbol id="icon-brief-intl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="icon-brief-cn" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="m12 2 2.9 6.5 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.7L12 2z"/>
+    </symbol>
+    <symbol id="icon-brief-weather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+    </symbol>
+    <symbol id="icon-reply" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9 17 4 12 9 7"/>
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+    </symbol>
+    <symbol id="icon-crown" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/>
+      <path d="M5 21h14"/>
+    </symbol>
+    <!-- v13.9 Batch 2.1: 新增通用矢量图标（替换所有 emoji） -->
+    <symbol id="icon-ui-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9,22 9,12 15,12 15,22"/>
+    </symbol>
+    <symbol id="icon-ui-heart" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+    </symbol>
+    <symbol id="icon-ui-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04Z"/>
+      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04Z"/>
+    </symbol>
+    <symbol id="icon-ui-dna" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="2,13 6,13 10,7 14,7 18,13 22,13"/>
+      <polyline points="2,11 6,11 10,17 14,17 18,11 22,11"/>
+      <path d="M15 2v5"/>
+      <path d="M9 2v5"/>
+      <path d="M9 17v5"/>
+      <path d="M15 17v5"/>
+    </symbol>
+    <symbol id="icon-ui-mouse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="3" width="12" height="18" rx="6"/>
+      <path d="M12 7v4"/>
+    </symbol>
+    <symbol id="icon-ui-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <path d="m9 12 2 2 4-4"/>
+    </symbol>
+    <symbol id="icon-ui-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+    </symbol>
+    <symbol id="icon-ui-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+      <path d="M8 13h8"/>
+      <path d="M8 17h8"/>
+      <path d="M8 9h2"/>
+    </symbol>
+    <symbol id="icon-ui-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </symbol>
+    <symbol id="icon-ui-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </symbol>
+    <symbol id="icon-ui-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21,15 16,10 5,21"/>
+    </symbol>
+    <symbol id="icon-ui-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="23,7 16,12 23,17 23,7"/>
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+    </symbol>
+    <symbol id="icon-ui-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.27,6.96 12,12.01 20.73,6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </symbol>
+    <symbol id="icon-ui-lightbulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 18h6"/>
+      <path d="M10 22h4"/>
+      <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/>
+    </symbol>
+    <symbol id="icon-ui-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"/>
+      <line x1="8" y1="12" x2="21" y2="12"/>
+      <line x1="8" y1="18" x2="21" y2="18"/>
+      <line x1="3" y1="6" x2="3.01" y2="6"/>
+      <line x1="3" y1="12" x2="3.01" y2="12"/>
+      <line x1="3" y1="18" x2="3.01" y2="18"/>
+    </symbol>
+    <symbol id="icon-ui-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3,6 5,6 21,6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <line x1="10" y1="11" x2="10" y2="17"/>
+      <line x1="14" y1="11" x2="14" y2="17"/>
+    </symbol>
+    <symbol id="icon-ui-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23,4 23,10 17,10"/>
+      <polyline points="1,20 1,14 7,14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </symbol>
+    <symbol id="icon-ui-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="icon-ui-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
+      <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/>
+      <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+    </symbol>
+    <symbol id="icon-ui-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/>
+    </symbol>
+    <symbol id="icon-ui-flower" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 2v3"/>
+      <path d="M12 19v3"/>
+      <path d="M2 12h3"/>
+      <path d="M19 12h3"/>
+      <path d="m4.9 4.9 2.1 2.1"/>
+      <path d="m17 17 2.1 2.1"/>
+      <path d="m4.9 19.1 2.1-2.1"/>
+      <path d="m17 7 2.1-2.1"/>
+    </symbol>
+    <symbol id="icon-ui-briefcase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+    </symbol>
+    <symbol id="icon-ui-microscope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 21h12"/>
+      <path d="M9 21v-3"/>
+      <path d="M15 21v-3"/>
+      <path d="M12 11V5"/>
+      <path d="m9 8 3-3 3 3"/>
+      <path d="M9 11h6"/>
+      <circle cx="12" cy="14" r="3"/>
+    </symbol>
+    <symbol id="icon-ui-bar-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="20" x2="12" y2="10"/>
+      <line x1="18" y1="20" x2="18" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="16"/>
+    </symbol>
+    <symbol id="icon-ui-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+    </symbol>
+    <symbol id="icon-ui-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="icon-ui-thought" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="18" cy="18" r="2"/>
+      <circle cx="12" cy="16" r="2"/>
+      <circle cx="7" cy="15" r="2"/>
+      <path d="M7 15a4 4 0 0 1 .5-7.97A6 6 0 0 1 17 8a5 5 0 0 1 1 9.9"/>
+    </symbol>
+    <symbol id="icon-ui-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="12" r="6"/>
+      <circle cx="12" cy="12" r="2"/>
+    </symbol>
+    <symbol id="icon-ui-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20,6 9,17 4,12"/>
+    </symbol>
+    <symbol id="icon-ui-book-open" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+    </symbol>
+    <symbol id="icon-ui-book-blue" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+    </symbol>
+    <symbol id="icon-ui-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <line x1="4" y1="18" x2="20" y2="18"/>
+    </symbol>
+    <symbol id="icon-ui-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </symbol>
+  </defs>
+</svg>
+<div id="app" class="app">
+  <!-- App Header (titlebar + statusbar merged) -->
+  <header id="app-header" class="app-header">
+    <div class="app-header-left">
+      <img src="../../../Aerie · 云栖.svg" alt="" class="app-header-logo">
+      <span class="app-header-title">Aerie · 云栖</span>
+    </div>
+    <div class="app-header-right">
+      <span id="status-text" class="status-text status-text--loading">后端启动中...</span>
+      <span class="status-dot status-dot--loading" id="status-dot"></span>
+      <div class="app-header-controls">
+        <button id="btn-minimize" class="header-btn" title="最小化">─</button>
+        <button id="btn-maximize" class="header-btn" title="最大化">□</button>
+        <button id="btn-close" class="header-btn header-btn--close" title="关闭">
+          <svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-close"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <div class="main-layout">
+    <!-- Sidebar -->
+    <nav id="sidebar" class="sidebar">
+      <!-- 核心交互 -->
+      <button class="sidebar-tab active" data-tab="chat">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>聊天</span>
+      </button>
+      <button class="sidebar-tab" data-tab="emotion">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span>情绪</span>
+      </button>
+      <button class="sidebar-tab" data-tab="cognition">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/>
+          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/>
+        </svg>
+        <span>大脑</span>
+      </button>
+      <button class="sidebar-tab" data-tab="status">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        <span>状态</span>
+      </button>
+      <button class="sidebar-tab" data-tab="memorial">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>日历</span>
+      </button>
+      <!-- 运维连接（已合并到状态页）
+      <button class="sidebar-tab" data-tab="qq">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <span>QQ</span>
+      </button>
+      -->
+      <button class="sidebar-tab" data-tab="data">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>数据</span>
+      </button>
+      <button class="sidebar-tab" data-tab="persona-hub">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>人设</span>
+      </button>
+      <!-- 配置信息 -->
+      <button class="sidebar-tab" data-tab="settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>设置</span>
+      </button>
+      <button class="sidebar-tab" data-tab="about">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>关于</span>
+      </button>
+    </nav>
+
+    <!-- Tab panels -->
+    <div class="tab-content">
+      <!-- Chat panel -->
+      <section id="panel-chat" class="tab-panel active">
+        <div class="chat-container">
+          <div id="chat-messages" class="chat-messages">
+            <div class="chat-empty">Aerie · 云栖 已就绪，开始对话吧～</div>
+          </div>
+          <div class="chat-input-area">
+            <div class="chat-input-toolbar" id="chat-input-toolbar">
+              <button id="chat-brief-btn" class="chat-input-toolbar__btn" type="button" title="今日简报 / Daily Brief">
+                <svg class="icon icon--18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </button>
+              <button id="chat-attach-btn" class="chat-input-toolbar__btn" type="button" title="附件 / Attach">
+                <svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-attach"/></svg>
+              </button>
+              <button id="chat-mic-btn" class="chat-input-toolbar__btn" type="button" title="语音输入 / Voice (需联网)" aria-pressed="false">
+                <svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-mic"/></svg>
+              </button>
+              <button id="chat-office-btn" class="chat-input-toolbar__btn" type="button" title="办公模式 / Office Mode" aria-pressed="false">
+                <svg class="icon icon--18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              </button>
+            </div>
+            <div class="chat-input-row">
+              <input id="chat-input" type="text" placeholder="和伊塔说点什么..." autofocus>
+              <button id="chat-send-btn" class="btn-send">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+            <div id="chat-mic-status" class="chat-mic-status" hidden>
+              <span class="chat-mic-status__pulse" aria-hidden="true"></span>
+              <span class="chat-mic-status__text">正在听… / Listening…</span>
+              <span class="chat-mic-status__net">需联网 / Online required</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Emotion panel -->
+      <section id="panel-emotion" class="tab-panel">
+        <div class="emotion-dashboard">
+          <h2>伊塔 · 情绪仪表盘</h2>
+
+          <!-- Eruption banner -->
+          <div id="emotion-eruption-banner" class="emotion-eruption-banner hidden"></div>
+
+          <!-- Current emotion -->
+          <div class="emotion-label-section">
+            <span>当前情绪：</span>
+            <span id="emotion-label" class="emotion-label emotion-label--neutral"><svg class="icon icon--16 emotion-label__icon" id="emotion-label-icon" aria-hidden="true"><use href="#icon-mood-neutral"/></svg><span id="emotion-label-text">neutral</span></span>
+          </div>
+
+          <!-- PAD cards -->
+          <div class="emotion-pad-cards">
+            <div id="pad-p" class="pad-card">
+              <div class="pad-card-ring pad-card-ring--p">
+                <span class="pad-card-value">0.00</span>
+              </div>
+              <span class="pad-card-raw" data-raw="P">P=+0.000</span>
+              <span class="pad-card-label">愉悦度</span>
+            </div>
+            <div id="pad-a" class="pad-card">
+              <div class="pad-card-ring pad-card-ring--a">
+                <span class="pad-card-value">0.00</span>
+              </div>
+              <span class="pad-card-raw" data-raw="A">A=+0.000</span>
+              <span class="pad-card-label">唤醒度</span>
+            </div>
+            <div id="pad-d" class="pad-card">
+              <div class="pad-card-ring pad-card-ring--d">
+                <span class="pad-card-value">0.00</span>
+              </div>
+              <span class="pad-card-raw" data-raw="D">D=+0.000</span>
+              <span class="pad-card-label">支配度</span>
+            </div>
+          </div>
+
+          <!-- R7.5: Live-flow bars showing the derivative dP/dt, dA/dt, dD/dt.
+               Width encodes the magnitude; green = positive, red = negative. -->
+          <div class="emotion-flow-bars" id="emotion-flow-bars">
+            <h3 class="emotion-flow-title">实时流通量 / Live flow</h3>
+            <div class="emotion-flow-row" data-flow="P">
+              <span class="emotion-flow-key">dP/dt</span>
+              <div class="emotion-flow-track">
+                <div class="emotion-flow-center"></div>
+                <div class="emotion-flow-fill" data-side="pos"></div>
+                <div class="emotion-flow-fill" data-side="neg"></div>
+              </div>
+              <span class="emotion-flow-value" data-flow-val="P">+0.000</span>
+            </div>
+            <div class="emotion-flow-row" data-flow="A">
+              <span class="emotion-flow-key">dA/dt</span>
+              <div class="emotion-flow-track">
+                <div class="emotion-flow-center"></div>
+                <div class="emotion-flow-fill" data-side="pos"></div>
+                <div class="emotion-flow-fill" data-side="neg"></div>
+              </div>
+              <span class="emotion-flow-value" data-flow-val="A">+0.000</span>
+            </div>
+            <div class="emotion-flow-row" data-flow="D">
+              <span class="emotion-flow-key">dD/dt</span>
+              <div class="emotion-flow-track">
+                <div class="emotion-flow-center"></div>
+                <div class="emotion-flow-fill" data-side="pos"></div>
+                <div class="emotion-flow-fill" data-side="neg"></div>
+              </div>
+              <span class="emotion-flow-value" data-flow-val="D">+0.000</span>
+            </div>
+          </div>
+
+          <!-- Threshold bars -->
+          <h3>隐藏槽位</h3>
+          <div class="threshold-bars">
+            <div id="threshold-patience" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">忍耐值</span>
+                <span class="threshold-bar-value">0 / 100</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div id="threshold-anxiety" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">不安值</span>
+                <span class="threshold-bar-value">0 / 100</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div id="threshold-desire" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">渴望值</span>
+                <span class="threshold-bar-value">0 / 80</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div id="threshold-tenderness" class="threshold-bar-item">
+              <div class="threshold-bar-header">
+                <span class="threshold-bar-label">温柔透支值</span>
+                <span class="threshold-bar-value">0 / 60</span>
+              </div>
+              <div class="threshold-bar-track">
+                <div class="threshold-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Phase 9 Batch 5: emotion history curves -->
+          <div class="emotion-history">
+            <h3>
+              情绪历史曲线
+              <small>Emotion history · 1h / 24h / 7d / 30d</small>
+            </h3>
+
+            <div class="emotion-history-toolbar">
+              <div class="emotion-history-windows" role="tablist">
+                <button class="emh-window active" data-window="1h">1h</button>
+                <button class="emh-window" data-window="24h">24h</button>
+                <button class="emh-window" data-window="7d">7d</button>
+                <button class="emh-window" data-window="30d">30d</button>
+              </div>
+              <button id="emh-refresh" class="btn btn-secondary btn-sm" title="刷新">刷新</button>
+            </div>
+
+            <!-- PAD line chart -->
+            <div class="emh-card">
+              <div class="emh-card-title">
+                <span class="emh-pad-p">●</span>
+                <span class="emh-pad-a">●</span>
+                <span class="emh-pad-d">●</span>
+                <span class="emh-card-name">PAD 三色折线</span>
+                <span class="emh-card-sub">Pleasure / Arousal / Dominance</span>
+              </div>
+              <div id="emh-pad-chart" class="emh-chart emh-chart--pad">
+                <div class="emh-empty">加载中…</div>
+              </div>
+            </div>
+
+            <!-- Threshold area chart -->
+            <div class="emh-card">
+              <div class="emh-card-title">
+                <span class="emh-card-name">4 槽位面积图</span>
+                <span class="emh-card-sub">patience · anxiety · desire · tenderness</span>
+              </div>
+              <div id="emh-threshold-chart" class="emh-chart emh-chart--thresholds">
+                <div class="emh-empty">加载中…</div>
+              </div>
+            </div>
+
+            <!-- Radar heatmap -->
+            <div class="emh-card">
+              <div class="emh-card-title">
+                <span class="emh-card-name">情绪雷达热力图</span>
+                <span class="emh-card-sub">label × time bucket</span>
+              </div>
+              <div id="emh-radar-chart" class="emh-chart emh-chart--radar">
+                <div class="emh-empty">加载中…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Status panel -->
+      <section id="panel-status" class="tab-panel">
+        <div class="status-panel">
+          <h2>系统状态</h2>
+          <div class="status-grid">
+            <div class="status-card">
+              <div class="status-card-label">后端状态</div>
+              <div class="status-card-value" id="stats-backend">--</div>
+            </div>
+            <div class="status-card">
+              <div class="status-card-label">QQ 连接</div>
+              <div class="status-card-value" id="stats-qq">--</div>
+            </div>
+            <div class="status-card">
+              <div class="status-card-label">Token 消耗</div>
+              <div class="status-card-value" id="stats-tokens">--</div>
+            </div>
+            <div class="status-card">
+              <div class="status-card-label">API 调用次数</div>
+              <div class="status-card-value" id="stats-calls">--</div>
+            </div>
+          </div>
+
+          <div class="status-qq-section">
+            <div class="status-qq-header" id="status-qq-toggle">
+              <div class="status-qq-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <span>QQ 运维</span>
+                <span id="status-qq-badge" class="status-qq-badge status-qq-badge--idle">未连接</span>
+              </div>
+              <svg class="status-qq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="status-qq-body" id="status-qq-body">
+              <div class="napcat-status-card">
+                <div class="napcat-phase">
+                  <span id="napcat-phase-dot" class="phase-dot phase-dot--idle"></span>
+                  <span id="napcat-phase-text" class="phase-text">未连接</span>
+                </div>
+                <div class="napcat-actions">
+                  <button id="napcat-start-btn" class="btn btn-primary">启动 NapCat</button>
+                  <button id="napcat-stop-btn" class="btn btn-secondary">停止</button>
+                </div>
+              </div>
+              <div id="napcat-qr-zone" class="napcat-qr-zone hidden">
+                <h3>请用手机QQ扫码登录</h3>
+                <img id="napcat-qr-img" src="" alt="QR Code" class="napcat-qr-img">
+                <button id="napcat-qr-refresh" class="btn btn-secondary btn-sm">刷新二维码</button>
+              </div>
+              <h3 class="status-qq-log-title">运行日志</h3>
+              <pre id="napcat-logs" class="napcat-logs"></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- About panel -->
+      <section id="panel-about" class="tab-panel">
+        <div class="about-panel">
+          <div class="about-hero">
+            <img src="assets/logo.png" alt="" class="about-logo">
+            <h1>Aerie · 云栖</h1>
+            <p class="about-version">Aerie · 云栖 v0.1.0-beta.1</p>
+            <p class="about-desc">Always with you. Only for you.</p>
+            <p class="about-desc-sub">本地优先 · 私人专属 · Made Only for You</p>
+          </div>
+
+          <div class="about-section">
+            <h3 class="about-section-title">关于她</h3>
+            <p class="about-text">
+              Aerie（云栖）是一款完全本地化运行的 AI 伴侣应用。她不依赖云端、不上传数据、只为你一个人存在。
+              从情绪感知、自我进化到电脑操控，她会越来越懂你，越来越贴近你想要的样子。
+            </p>
+          </div>
+
+          <div class="about-section">
+            <h3 class="about-section-title">核心特性</h3>
+            <div class="about-features">
+              <div class="about-feature">
+                <span class="about-feature-icon"><svg class="icon icon--24 icon--primary"><use href="#icon-ui-home"/></svg></span>
+                <div>
+                  <div class="about-feature-name">本地优先</div>
+                  <div class="about-feature-desc">数据全部存本地，隐私完全属于你</div>
+                </div>
+              </div>
+              <div class="about-feature">
+                <span class="about-feature-icon"><svg class="icon icon--24 icon--danger"><use href="#icon-ui-heart"/></svg></span>
+                <div>
+                  <div class="about-feature-name">私人专属</div>
+                  <div class="about-feature-desc">人设可定制，记忆只属于你们</div>
+                </div>
+              </div>
+              <div class="about-feature">
+                <span class="about-feature-icon"><svg class="icon icon--24" style="color: var(--color-primary, #ff7eb6);"><use href="#icon-ui-brain"/></svg></span>
+                <div>
+                  <div class="about-feature-name">全栈 AI</div>
+                  <div class="about-feature-desc">情绪 / 记忆 / 自进化 / 工具调用</div>
+                </div>
+              </div>
+              <div class="about-feature">
+                <span class="about-feature-icon"><svg class="icon icon--24 icon--warning"><use href="#icon-ui-bolt"/></svg></span>
+                <div>
+                  <div class="about-feature-name">能力下放</div>
+                  <div class="about-feature-desc">纯对话即可操作全部功能</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="about-section">
+            <h3 class="about-section-title">技术栈</h3>
+            <div class="about-tech">
+              <span class="about-tech-tag">Electron</span>
+              <span class="about-tech-tag">Python</span>
+              <span class="about-tech-tag">FastAPI</span>
+              <span class="about-tech-tag">SQLite</span>
+              <span class="about-tech-tag">Vanilla JS</span>
+              <span class="about-tech-tag">FullCalendar</span>
+            </div>
+          </div>
+
+          <div class="about-section about-section--warning">
+            <h3 class="about-section-title">免责声明</h3>
+            <ul class="about-disclaimer">
+              <li>本软件仅供学习交流与个人使用，请勿用于商业用途</li>
+              <li>使用本软件需遵守所在国家/地区的法律法规</li>
+              <li>AI 生成的所有内容均为自动生成，不代表开发者立场</li>
+              <li>电脑操控等功能请谨慎使用，重要数据请提前备份</li>
+              <li>因使用本软件产生的任何直接或间接损失，由使用者自行承担</li>
+            </ul>
+          </div>
+
+          <div class="about-section about-section--small">
+            <p class="about-copyright">© 2026 Aerie · 云栖 — Made with <svg class="icon icon--14 icon--danger" style="vertical-align:-2px;"><use href="#icon-ui-heart"/></svg> for you</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Calendar panel -->
+      <section id="panel-memorial" class="tab-panel">
+        <div class="calendar-panel">
+          <div class="calendar-header">
+            <h2>日历 · 我们的时光</h2>
+            <button id="cal-add-btn" class="btn btn-primary">+ 添加事件</button>
+          </div>
+
+          <div class="calendar-stats">
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon"><svg class="icon icon--24 icon--danger"><use href="#icon-ui-heart"/></svg></div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-days-together">--</div>
+                <div class="cal-stat-label">相识天数</div>
+              </div>
+            </div>
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon"><svg class="icon icon--24 icon--primary"><use href="#icon-ui-message"/></svg></div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-user-msgs">--</div>
+                <div class="cal-stat-label">你说的话</div>
+              </div>
+            </div>
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon"><svg class="icon icon--24" style="color: var(--color-accent, #7c3aed);"><use href="#icon-ui-heart"/></svg></div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-companion-msgs">--</div>
+                <div class="cal-stat-label">她的回复</div>
+              </div>
+            </div>
+            <div class="cal-stat-card">
+              <div class="cal-stat-icon"><svg class="icon icon--24" style="color: var(--color-success, #10b981);"><use href="#icon-ui-calendar"/></svg></div>
+              <div class="cal-stat-body">
+                <div class="cal-stat-value" id="cal-total-events">--</div>
+                <div class="cal-stat-label">纪念与日程</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="calendar-main">
+            <div class="calendar-month">
+              <div class="cal-month-header">
+                <button id="cal-prev-month" class="cal-nav-btn">‹</button>
+                <div class="cal-month-title" id="cal-month-title">--</div>
+                <button id="cal-next-month" class="cal-nav-btn">›</button>
+                <button id="cal-today-btn" class="btn btn-secondary btn-sm">今天</button>
+              </div>
+              <div class="cal-weekdays">
+                <div class="cal-weekday">日</div>
+                <div class="cal-weekday">一</div>
+                <div class="cal-weekday">二</div>
+                <div class="cal-weekday">三</div>
+                <div class="cal-weekday">四</div>
+                <div class="cal-weekday">五</div>
+                <div class="cal-weekday">六</div>
+              </div>
+              <div class="cal-grid" id="cal-grid"></div>
+            </div>
+
+            <div class="calendar-events">
+              <div class="cal-events-header">
+                <h3 id="cal-events-date">今日事件</h3>
+                <div class="cal-event-filters">
+                  <button class="cal-filter-btn active" data-type="all">全部</button>
+                  <button class="cal-filter-btn" data-type="anniversary">纪念日</button>
+                  <button class="cal-filter-btn" data-type="schedule">日程</button>
+                  <button class="cal-filter-btn" data-type="countdown">倒计时</button>
+                  <button class="cal-filter-btn" data-type="journal">日志</button>
+                </div>
+              </div>
+              <div class="cal-events-list" id="cal-events-list"></div>
+            </div>
+          </div>
+
+          <div id="cal-event-modal" class="cal-modal hidden">
+            <div class="cal-modal-backdrop" data-close></div>
+            <div class="cal-modal-content">
+              <div class="cal-modal-header">
+                <h3 id="cal-modal-title">添加事件</h3>
+                <button class="cal-modal-close" data-close>×</button>
+              </div>
+              <div class="cal-modal-body">
+                <div class="settings-group">
+                  <label>事件名称</label>
+                  <input type="text" id="cal-form-title" placeholder="例：第一次见面">
+                  <label>类型</label>
+                  <select id="cal-form-type">
+                    <option value="anniversary">纪念日</option>
+                    <option value="schedule">日程</option>
+                    <option value="countdown">倒计时</option>
+                    <option value="journal">日志</option>
+                    <option value="reminder">提醒</option>
+                  </select>
+                  <label>开始日期</label>
+                  <input type="date" id="cal-form-date">
+                  <label>开始时间（可选）</label>
+                  <input type="time" id="cal-form-time">
+                  <label>描述（可选）</label>
+                  <textarea id="cal-form-desc" rows="3" placeholder="详细描述..."></textarea>
+                  <label>颜色</label>
+                  <div class="cal-color-picker" id="cal-color-picker">
+                    <span class="cal-color-dot cal-color-dot--pink" data-color="#ff9a9e"></span>
+                    <span class="cal-color-dot cal-color-dot--purple" data-color="#a18cd1"></span>
+                    <span class="cal-color-dot cal-color-dot--peach" data-color="#fad0c4"></span>
+                    <span class="cal-color-dot cal-color-dot--green" data-color="#84fab0"></span>
+                    <span class="cal-color-dot cal-color-dot--orange" data-color="#fccb90"></span>
+                    <span class="cal-color-dot cal-color-dot--blue" data-color="#a1c4fd"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="cal-modal-footer">
+                <button id="cal-delete-btn" class="btn btn-danger" style="display:none;">删除</button>
+                <div style="flex:1"></div>
+                <button id="cal-cancel-btn" class="btn btn-secondary" data-close>取消</button>
+                <button id="cal-save-btn" class="btn btn-primary">保存</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Persona Hub panel (v13.0) -->
+      <section id="panel-persona-hub" class="tab-panel">
+        <!-- JS will populate -->
+      </section>
+
+      <!-- Settings panel -->
+      <section id="panel-settings" class="tab-panel">
+        <div id="settings-content" class="settings-panel">
+          <h2>系统设置</h2>
+          <div class="settings-mode-tabs">
+            <button class="settings-mode-tab active" data-mode="form">常用</button>
+            <button class="settings-mode-tab" data-mode="apikey">API Key</button>
+            <button class="settings-mode-tab" data-mode="yaml">高级 (YAML)</button>
+          </div>
+
+          <!-- 常用 form 视图 -->
+          <div id="settings-form-view">
+            <!-- Block-2 A2: persona 头像 + 中英名 -->
+            <div class="settings-group settings-group--persona">
+              <h3 class="settings-section-title">她的样子 · Her Appearance</h3>
+              <p class="settings-hint">这是她在你眼中的样子。改完她就是这个人。/ This is who she is to you.</p>
+              <div class="persona-edit">
+                <div class="persona-avatar">
+                  <img id="persona-avatar-preview" src="assets/avatar_default.svg" alt="" data-default-src="assets/avatar_default.svg" onerror="this.src='assets/avatar_default.svg'">
+                  <input type="file" id="persona-avatar-file" accept="image/png,image/jpeg" hidden>
+                  <button id="persona-avatar-upload" class="btn btn-secondary" type="button">换头像 · Change</button>
+                </div>
+                <div class="persona-fields">
+                  <label>名字 · Name <input type="text" id="persona-name" maxlength="20" placeholder="伊塔"></label>
+                  <label>English Name <input type="text" id="persona-english-name" maxlength="20" placeholder="Ita"></label>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button id="persona-save-btn" class="btn btn-primary" type="button">保存她 · Save</button>
+              </div>
+              <div id="persona-status" class="settings-status" style="font-size:12px;color:var(--success);margin-top:6px;"></div>
+            </div>
+            <!-- R7.5: User (master) avatar + name. Pure UI — persisted in
+                 localStorage on the renderer side, no backend round-trip. -->
+            <div class="settings-group settings-group--user">
+              <h3 class="settings-section-title">你的样子 · Your Appearance</h3>
+              <p class="settings-hint">这是你在她眼中的样子。只影响聊天界面，不会上传到任何地方。/ Purely local. Not uploaded anywhere.</p>
+              <div class="persona-edit">
+                <div class="persona-avatar">
+                  <img id="user-avatar-preview" src="assets/avatar_default.svg" alt="" data-default-src="assets/avatar_default.svg" onerror="this.src='assets/avatar_default.svg'">
+                  <input type="file" id="user-avatar-file" accept="image/png,image/jpeg" hidden>
+                  <button id="user-avatar-upload" class="btn btn-secondary" type="button">换头像 · Change</button>
+                </div>
+                <div class="persona-fields">
+                  <label>你的名字 · Your Name <input type="text" id="user-name" maxlength="20" placeholder="你"></label>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button id="user-save-btn" class="btn btn-primary" type="button">保存我 · Save</button>
+              </div>
+              <div id="user-status" class="settings-status" style="font-size:12px;color:var(--success);margin-top:6px;"></div>
+            </div>
+            <!-- R7.1: my-location picker. Empty input ⇒ IP auto-detect. -->
+            <div class="settings-group settings-group--location">
+              <label>我的位置 / My Location</label>
+              <div class="settings-location-row">
+                <input type="text" id="setting-weather-city"
+                       placeholder="留空 = IP 自动定位 / empty = IP auto-detect"
+                       maxlength="40" autocomplete="off">
+                <button type="button" id="setting-weather-reset"
+                        class="btn btn-secondary btn-icon"
+                        title="恢复 IP 自动定位 / Reset to IP auto-detect">
+                  <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="settings-hint" id="setting-weather-hint">
+                留空时简报会显示通过 IP 自动检测到的城市。/ Leave empty for IP auto-detect.
+              </p>
+            </div>
+            <div class="settings-group">
+              <label>主题</label>
+              <select id="setting-theme">
+                <option value="yita-pink">伊塔粉</option>
+                <option value="midnight-purple">深夜紫</option>
+                <option value="sakura-white">樱白</option>
+                <option value="ocean-blue">海蓝</option>
+                <option value="forest-green">森绿</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label>开机自启</label>
+              <input type="checkbox" id="setting-auto-start">
+            </div>
+            <div class="settings-group">
+              <label>启动时最小化</label>
+              <input type="checkbox" id="setting-start-minimized">
+            </div>
+            <div class="settings-group">
+              <label>主动推送</label>
+              <input type="checkbox" id="setting-proactive" checked>
+            </div>
+
+            <div class="settings-group settings-group--dynamic-island">
+              <h3 class="settings-section-title">灵动岛 · Dynamic Island</h3>
+              <p class="settings-hint">桌面顶部灵动岛的外观、交互和组件配置 / Desktop Dynamic Island appearance & interaction</p>
+
+              <div class="di-settings-preview">
+                <div class="di-preview-capsule theme-dark" id="di-preview">
+                  <div class="di-preview-left"><svg class="icon icon--16" style="color: #ff7eb6;"><use href="#icon-ui-flower"/></svg></div>
+                  <div class="di-preview-center">预览效果</div>
+                  <div class="di-preview-right">3</div>
+                </div>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>主题风格</label>
+                <div class="di-theme-options">
+                  <label class="di-theme-option">
+                    <input type="radio" name="di-theme" value="dark" checked>
+                    <span class="di-theme-preview di-theme-dark"></span>
+                    <span class="di-theme-label">深色毛玻璃</span>
+                  </label>
+                  <label class="di-theme-option">
+                    <input type="radio" name="di-theme" value="pink">
+                    <span class="di-theme-preview di-theme-pink"></span>
+                    <span class="di-theme-label">恋粉治愈</span>
+                  </label>
+                  <label class="di-theme-option">
+                    <input type="radio" name="di-theme" value="light">
+                    <span class="di-theme-preview di-theme-light"></span>
+                    <span class="di-theme-label">浅白清新</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>触发方式</label>
+                <select id="di-interaction">
+                  <option value="click">点击展开</option>
+                  <option value="hover">悬停展开</option>
+                  <option value="longpress">长按展开</option>
+                  <option value="both">点击 + 悬停</option>
+                </select>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>胶囊态显示组件（左→右）</label>
+                <div class="di-component-checks">
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="companion" checked>
+                    <span>陪伴状态</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="status" checked>
+                    <span>状态文字</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="notifications" checked>
+                    <span>消息提醒</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="quickChat">
+                    <span>快捷对话</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="media">
+                    <span>媒体状态</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-comp="system">
+                    <span>系统状态</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>展开态显示模块</label>
+                <div class="di-component-checks">
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="quickActions" checked>
+                    <span>快捷操作</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="notifList" checked>
+                    <span>消息通知</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="companionDetail">
+                    <span>陪伴详情</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="mediaControl">
+                    <span>媒体控制</span>
+                  </label>
+                  <label class="di-comp-check">
+                    <input type="checkbox" data-excomp="systemStatus">
+                    <span>系统状态</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-actions">
+                <button id="di-settings-apply" class="btn btn-primary">应用到灵动岛</button>
+                <button id="di-settings-reset" class="btn btn-secondary">恢复默认</button>
+              </div>
+            </div>
+
+            <!-- 办公模式设置 -->
+            <div class="settings-group settings-group--office">
+              <h3 class="settings-section-title">办公模式 · Office Mode</h3>
+              <p class="settings-hint">AI 办公相关的文件保存位置和默认行为 / Office file storage & behavior</p>
+
+              <div class="settings-subgroup">
+                <label>文件保存位置 / Save Path</label>
+                <div class="office-path-row">
+                  <input type="text" id="office-dir-input"
+                         placeholder="~/AerieOffice"
+                         autocomplete="off" readonly>
+                  <button type="button" id="office-dir-browse"
+                          class="btn btn-secondary"
+                          title="选择文件夹">
+                    <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    </svg>
+                    <span style="margin-left:4px;">浏览</span>
+                  </button>
+                  <button type="button" id="office-dir-open"
+                          class="btn btn-secondary"
+                          title="打开当前文件夹">
+                    <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                    <span style="margin-left:4px;">打开</span>
+                  </button>
+                </div>
+                <p id="office-dir-status" class="settings-hint" style="margin-top:6px; min-height:16px;"></p>
+              </div>
+
+              <div class="settings-actions">
+                <button id="office-dir-save" class="btn btn-primary" type="button">保存位置</button>
+                <button id="office-dir-reset" class="btn btn-secondary" type="button">恢复默认</button>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
+              <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>
+              <!-- R6.6: one-click backend restart button. Triggers a
+                   self-restart of the Python main.py so any pending
+                   code edits / config changes take effect without
+                   manually closing the Electron window. -->
+              <button id="settings-restart-btn" class="btn btn-secondary" title="重启后端服务 / Restart Python backend">
+                <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+                </svg>
+                <span style="margin-left:4px;">重启后端</span>
+              </button>
+              <button id="settings-restart-app-btn" class="btn btn-secondary" title="重启整个应用 / Restart entire app">
+                <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+                </svg>
+                <span style="margin-left:4px;">重启应用</span>
+              </button>
+              <button id="settings-reload-config-btn" class="btn btn-secondary" title="热重载配置文件 / Hot-reload config files">
+                <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+                </svg>
+                <span style="margin-left:4px;">热重载配置</span>
+              </button>
+            </div>
+            <div id="settings-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
+          </div>
+
+          <!-- API Key 视图 -->
+          <div id="settings-apikey-view" style="display:none;">
+            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6;">
+              <strong style="color: var(--accent, #ff5b9c);">🔑 AI 服务配置</strong><br>
+              选择你常用的 AI 服务商，填入 API Key 就能开始对话了。所有密钥只保存在本地，不会上传到任何地方。
+            </div>
+            <div id="apikey-provider-list" class="apikey-provider-list">
+              <!-- JS 动态渲染 -->
+            </div>
+            <div id="apikey-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
+            <div class="settings-actions" style="margin-top:16px;">
+              <button id="apikey-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
+            </div>
+          </div>
+
+          <!-- 高级 YAML 视图 -->
+          <div id="settings-yaml-view" style="display:none;">
+            <div class="settings-yaml-warning" style="margin: 8px 0 12px; padding: 10px 12px; border: 1px solid rgba(255, 91, 156, 0.4); border-radius: 8px; background: rgba(255, 91, 156, 0.06); font-size: 12px; line-height: 1.5;">
+              <strong>改坏了她会不开心。修改前自动备份。/ A bad edit makes her sad. Auto-backup first.</strong>
+            </div>
+            <div class="settings-group">
+              <label>配置文件 · Config file</label>
+              <select id="yaml-file-select">
+                <option value="settings.yaml">settings.yaml</option>
+                <option value="persona.yaml">persona.yaml</option>
+                <option value="proactive.yaml">proactive.yaml</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label>直接编辑 YAML · 修改前自动备份</label>
+              <textarea id="yaml-editor" spellcheck="false" rows="20" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; width: 100%; box-sizing: border-box; background: #1a1a2e; color: #f5f5f5; border: 1px solid rgba(255,91,156,0.3); border-radius: 6px; padding: 10px;"></textarea>
+            </div>
+            <div class="settings-actions">
+              <button id="yaml-save-btn" class="btn btn-primary">保存 · Save</button>
+              <button id="yaml-reload-btn" class="btn btn-secondary">重新加载 · Reload</button>
+              <button id="yaml-backup-btn" class="btn btn-secondary">备份当前 · Backup</button>
+            </div>
+            <div id="yaml-status" style="margin-top:8px;font-size:12px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Data panel -->
+      <section id="panel-data" class="tab-panel">
+        <div id="data-content" class="settings-panel">
+          <h2>后台数据</h2>
+          <div class="data-subtabs">
+            <button class="data-subtab active" data-sub="chat">聊天记录</button>
+            <button class="data-subtab" data-sub="knowledge">知识库</button>
+            <button class="data-subtab" data-sub="system">系统状态</button>
+          </div>
+          <div id="data-chat-view" class="data-view">
+            <div id="chat-log-list" style="max-height:400px;overflow-y:auto;"></div>
+            <div class="data-pagination" style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+              <button id="data-prev-btn" class="btn btn-secondary btn-sm" disabled>上一页</button>
+              <span id="data-page-info" style="font-size:12px;">第 1 页</span>
+              <button id="data-next-btn" class="btn btn-secondary btn-sm">下一页</button>
+            </div>
+          </div>
+          <div id="data-knowledge-view" class="data-view" style="display:none;">
+            <div id="knowledge-list"></div>
+          </div>
+          <div id="data-system-view" class="data-view" style="display:none;">
+            <div class="status-grid">
+              <div class="status-card"><div class="status-card-label">运行时间</div><div class="status-card-value" id="ds-uptime">--</div></div>
+              <div class="status-card"><div class="status-card-label">CPU</div><div class="status-card-value" id="ds-cpu">--</div></div>
+              <div class="status-card"><div class="status-card-label">内存</div><div class="status-card-value" id="ds-memory">--</div></div>
+              <div class="status-card"><div class="status-card-label">消息总数</div><div class="status-card-value" id="ds-messages">--</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cognition panel v2 (Phase S6: brain center + 4 capability tabs) -->
+      <section id="panel-cognition" class="tab-panel">
+        <div class="cognition-panel">
+          <!-- 头部 · header -->
+          <div class="cog-header">
+            <div class="cog-header-text">
+              <h2>伊塔 · 认知中枢 <small>v2 · Cognition Backend</small></h2>
+              <p class="cog-header-sub">大脑、自进化、操控、整理、写作 — 她的全部内在。</p>
+            </div>
+            <div class="cog-header-stats">
+              <div class="cog-stat">
+                <span class="cog-stat-label">今日</span>
+                <span class="cog-stat-value" id="cog-stat-today">0</span>
+              </div>
+              <div class="cog-stat">
+                <span class="cog-stat-label">总 trace</span>
+                <span class="cog-stat-value" id="cog-stat-total">0</span>
+              </div>
+              <div class="cog-stat cog-stat--pulse">
+                <span class="cog-stat-label">live</span>
+                <span class="cog-stat-pulse" id="cog-stat-pulse"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- v2 Tab 导航 · tab nav -->
+          <div class="cog-tabs" role="tablist">
+            <button class="cog-tab active" data-cog-tab="brain" role="tab">
+              <span class="cog-tab-icon"><svg class="icon icon--18"><use href="#icon-ui-brain"/></svg></span>
+              <span class="cog-tab-label">大脑中枢</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="self-evolve" role="tab">
+              <span class="cog-tab-icon"><svg class="icon icon--18"><use href="#icon-ui-dna"/></svg></span>
+              <span class="cog-tab-label">自进化</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="computer" role="tab">
+              <span class="cog-tab-icon"><svg class="icon icon--18"><use href="#icon-ui-mouse"/></svg></span>
+              <span class="cog-tab-label">电脑操控</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="qq-whitelist" role="tab">
+              <span class="cog-tab-icon"><svg class="icon icon--18"><use href="#icon-ui-shield"/></svg></span>
+              <span class="cog-tab-label">QQ白名单</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="files" role="tab">
+              <span class="cog-tab-icon"><svg class="icon icon--18"><use href="#icon-ui-folder"/></svg></span>
+              <span class="cog-tab-label">文件整理</span>
+            </button>
+            <button class="cog-tab" data-cog-tab="docs" role="tab">
+              <span class="cog-tab-icon"><svg class="icon icon--18"><use href="#icon-ui-file-text"/></svg></span>
+              <span class="cog-tab-label">文档写作</span>
+            </button>
+          </div>
+
+          <!-- Tab 内容 · tab content -->
+          <div class="cog-tab-content">
+
+            <!-- Tab 1: 大脑中枢（原有内容） -->
+            <div class="cog-tab-pane active" id="cog-pane-brain" role="tabpanel">
+
+              <!-- 工具栏 · toolbar -->
+              <div class="cognition-toolbar">
+                <select id="cog-source-filter" title="来源过滤">
+                  <option value="">全部来源 / All sources</option>
+                  <option value="qq">QQ</option>
+                  <option value="local">本地 / Local</option>
+                </select>
+                <input id="cog-search" type="text" placeholder="搜索消息内容 / Search content">
+                <button id="cog-refresh" class="btn btn-secondary btn-sm" title="刷新历史">刷新 · Refresh</button>
+                <button id="cog-pause" class="btn btn-secondary btn-sm" title="暂停/继续实时流" data-paused="false"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-pause"/></svg> 暂停</button>
+                <button id="cog-clear" class="btn btn-secondary btn-sm" title="清屏实时区"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-broom"/></svg> 清屏</button>
+              </div>
+
+              <!-- 自进化提议卡片槽位 (B6 填充) -->
+              <div id="cog-proposal-card" class="cog-proposal-card hidden"></div>
+
+              <!-- 9 阶段时间轴 · latest trace timeline -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近一次 9 阶段时间轴</span>
+                  <span class="cog-section-sub">Last trace · 9 stages</span>
+                </h3>
+                <div id="cog-timeline" class="cog-timeline">
+                  <div class="cog-timeline-empty">还没有任何 trace。/ No trace yet. Send her a message first.</div>
+                </div>
+              </div>
+
+              <!-- 决策权重赛马图 · decision race -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">决策权重赛马</span>
+                  <span class="cog-section-sub">Decision race · L1+L2+L3+L4</span>
+                </h3>
+                <div id="cog-decision-race" class="cog-decision-race">
+                  <div class="cog-timeline-empty">等待决策 / Awaiting decision</div>
+                </div>
+              </div>
+
+              <!-- 实时 stream · live -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">实时 stream</span>
+                  <span class="cog-section-sub">最近 50 条 · last 50</span>
+                </h3>
+                <div id="cog-stream" class="cog-stream">
+                  <div class="cog-timeline-empty">等待事件 / Waiting for events…</div>
+                </div>
+              </div>
+
+              <!-- 历史 trace · history -->
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">历史 trace</span>
+                  <span class="cog-section-sub">Click row to expand</span>
+                </h3>
+                <ul id="cog-list" class="cog-list">
+                  <li class="cog-list-empty">暂无历史 / No history yet.</li>
+                </ul>
+              </div>
+
+            </div><!-- /#cog-pane-brain -->
+
+            <!-- Tab 2: 自进化 -->
+            <div class="cog-tab-pane" id="cog-pane-self-evolve" role="tabpanel">
+              <div class="cog-v2-hero">
+              <div class="cog-v2-hero-icon"><svg class="icon icon--40" style="color: var(--color-primary, #ff7eb6);"><use href="#icon-ui-dna"/></svg></div>
+                <div class="cog-v2-hero-text">
+                  <h3>自进化 L4 · Self-Evolution</h3>
+                  <p>代码自修改 · 4 道生存闸门 · 24h 回滚窗口</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">总提案</span>
+                    <span class="cog-v2-stat-value" id="cog-se-total">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已应用</span>
+                    <span class="cog-v2-stat-value" id="cog-se-applied">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已回滚</span>
+                    <span class="cog-v2-stat-value" id="cog-se-rolled">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">生存闸门状态</span>
+                  <span class="cog-section-sub">Viability gates</span>
+                </h3>
+                <div class="cog-gates-grid" id="cog-se-gates">
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">安全审查</div>
+                    <div class="cog-gate-desc">Security review</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">语法检查</div>
+                    <div class="cog-gate-desc">Syntax check</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">测试验证</div>
+                    <div class="cog-gate-desc">Test verify</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                  <div class="cog-gate-card">
+                    <div class="cog-gate-name">回滚准备</div>
+                    <div class="cog-gate-desc">Rollback ready</div>
+                    <div class="cog-gate-status cog-gate-status--idle">待机</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近提案</span>
+                  <span class="cog-section-sub">Recent proposals</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-se-refresh">刷新</button>
+                </h3>
+                <div id="cog-se-list" class="cog-se-list">
+                  <div class="cog-timeline-empty">暂无提案 / No proposals yet</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">审计日志</span>
+                  <span class="cog-section-sub">Audit journal</span>
+                </h3>
+                <div id="cog-se-journal" class="cog-se-journal">
+                  <div class="cog-timeline-empty">暂无日志 / No journal entries</div>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-self-evolve -->
+
+            <!-- Tab 3: 电脑操控 -->
+            <div class="cog-tab-pane" id="cog-pane-computer" role="tabpanel">
+              <div class="cog-v2-hero">
+              <div class="cog-v2-hero-icon"><svg class="icon icon--40" style="color: var(--color-accent, #7c3aed);"><use href="#icon-ui-mouse"/></svg></div>
+                <div class="cog-v2-hero-text">
+                  <h3>电脑操控 · Computer Control</h3>
+                  <p>3 级权限 · 键鼠/截图/UIA · 危险命令拦截</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">当前权限</span>
+                    <span class="cog-v2-stat-value" id="cog-cc-level">VIEW_ONLY</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">今日操作</span>
+                    <span class="cog-v2-stat-value" id="cog-cc-today">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已拦截</span>
+                    <span class="cog-v2-stat-value" id="cog-cc-blocked">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">权限档位</span>
+                  <span class="cog-section-sub">Permission level</span>
+                </h3>
+                <div class="cog-cc-levels">
+                  <div class="cog-cc-level" data-level="VIEW_ONLY">
+                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-eye"/></svg> 仅查看</div>
+                    <div class="cog-cc-level-desc">只能截图、查看窗口信息</div>
+                  </div>
+                  <div class="cog-cc-level" data-level="STANDARD">
+                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-hand"/></svg> 标准</div>
+                    <div class="cog-cc-level-desc">可键鼠操作、执行安全命令</div>
+                  </div>
+                  <div class="cog-cc-level" data-level="FULL">
+                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-bolt"/></svg> 完全</div>
+                    <div class="cog-cc-level-desc">完整控制，需用户持续确认</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">操作审计日志</span>
+                  <span class="cog-section-sub">Audit log</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-cc-refresh">刷新</button>
+                </h3>
+                <div id="cog-cc-log" class="cog-cc-log">
+                  <div class="cog-timeline-empty">暂无操作记录 / No operations yet</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">危险命令黑名单</span>
+                  <span class="cog-section-sub">Dangerous command blacklist</span>
+                </h3>
+                <div class="cog-cc-blacklist" id="cog-cc-blacklist">
+                  <span class="cog-tag">rm -rf /</span>
+                  <span class="cog-tag">format</span>
+                  <span class="cog-tag">del /s /q</span>
+                  <span class="cog-tag">mkfs</span>
+                  <span class="cog-tag">dd if=</span>
+                  <span class="cog-tag">reg delete</span>
+                  <span class="cog-tag">shutdown /s</span>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-computer -->
+
+            <!-- Tab: QQ 白名单 -->
+            <div class="cog-tab-pane" id="cog-pane-qq-whitelist" role="tabpanel">
+              <div class="cog-v2-hero">
+              <div class="cog-v2-hero-icon"><svg class="icon icon--40" style="color: var(--color-success, #10b981);"><use href="#icon-ui-shield"/></svg></div>
+                <div class="cog-v2-hero-text">
+                  <h3>QQ 白名单 · QQ Whitelist</h3>
+                  <p>仅白名单内 QQ 号可触发 Agent 回复</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">白名单数</span>
+                    <span class="cog-v2-stat-value" id="qq-wl-total">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已启用</span>
+                    <span class="cog-v2-stat-value" id="qq-wl-active">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">当前模式</span>
+                    <span class="cog-v2-stat-value" id="qq-wl-mode">兼容</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">白名单开关</span>
+                  <span class="cog-section-sub">Whitelist toggle</span>
+                </h3>
+                <div class="qq-wl-toggle-row">
+                  <label class="qq-wl-switch">
+                    <input type="checkbox" id="qq-wl-enabled">
+                    <span class="qq-wl-slider"></span>
+                  </label>
+                  <span class="qq-wl-toggle-label">启用 QQ 白名单（关闭时全部放行）</span>
+                </div>
+                <p class="qq-wl-hint">
+                  <svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;color: var(--color-warning, #f59e0b);"><use href="#icon-ui-lightbulb"/></svg> <strong>兼容模式</strong>：白名单为空时，所有 QQ 用户均可正常对话；
+                  添加白名单后自动切换为 <strong>严格模式</strong>，仅白名单内用户可触发回复。
+                </p>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">添加白名单</span>
+                  <span class="cog-section-sub">Add whitelist user</span>
+                </h3>
+                <div class="qq-wl-add-form">
+                  <input type="text" id="qq-wl-add-number" placeholder="输入 QQ 号" class="qq-wl-input">
+                  <input type="text" id="qq-wl-add-remark" placeholder="备注（可选）" class="qq-wl-input">
+                  <button class="btn btn-primary" id="qq-wl-add-btn">添加</button>
+                </div>
+                <div class="qq-wl-bulk-actions">
+                  <button class="btn btn-secondary btn-sm" id="qq-wl-bulk-btn"><svg class="icon icon--14" style="margin-right:4px;vertical-align:-1px;"><use href="#icon-ui-list"/></svg> 批量添加</button>
+                  <button class="btn btn-secondary btn-sm" id="qq-wl-clear-btn"><svg class="icon icon--14" style="margin-right:4px;vertical-align:-1px;"><use href="#icon-ui-trash"/></svg> 清空</button>
+                  <button class="btn btn-secondary btn-sm" id="qq-wl-refresh-btn"><svg class="icon icon--14" style="margin-right:4px;vertical-align:-1px;"><use href="#icon-ui-refresh"/></svg> 刷新</button>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">白名单列表</span>
+                  <span class="cog-section-sub">Whitelist users</span>
+                </h3>
+                <div id="qq-wl-list" class="qq-wl-list">
+                  <div class="cog-timeline-empty">暂无白名单用户，添加后会显示在这里</div>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-qq-whitelist -->
+
+            <!-- Tab 4: 文件整理 -->
+            <div class="cog-tab-pane" id="cog-pane-files" role="tabpanel">
+              <div class="cog-v2-hero">
+              <div class="cog-v2-hero-icon"><svg class="icon icon--40" style="color: var(--color-warning, #f59e0b);"><use href="#icon-ui-folder"/></svg></div>
+                <div class="cog-v2-hero-text">
+                  <h3>文件整理 · File Organizer</h3>
+                  <p>AI 智能分类 · 预览执行 · 7 天撤销</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已整理</span>
+                    <span class="cog-v2-stat-value" id="cog-fo-organized">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">可撤销</span>
+                    <span class="cog-v2-stat-value" id="cog-fo-undoable">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">节省空间</span>
+                    <span class="cog-v2-stat-value" id="cog-fo-saved">0 MB</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">快速整理</span>
+                  <span class="cog-section-sub">Quick organize</span>
+                </h3>
+                <div class="cog-fo-quick">
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon"><svg class="icon icon--24" style="color: #ec4899;"><use href="#icon-ui-image"/></svg></div>
+                    <div class="cog-fo-name">图片整理</div>
+                    <div class="cog-fo-desc">按日期/类型归档图片</div>
+                  </div>
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon"><svg class="icon icon--24" style="color: #3b82f6;"><use href="#icon-ui-file-text"/></svg></div>
+                    <div class="cog-fo-name">文档整理</div>
+                    <div class="cog-fo-desc">PDF/Word/Excel 分类</div>
+                  </div>
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon"><svg class="icon icon--24" style="color: #8b5cf6;"><use href="#icon-ui-video"/></svg></div>
+                    <div class="cog-fo-name">视频整理</div>
+                    <div class="cog-fo-desc">按大小/时长排序</div>
+                  </div>
+                  <div class="cog-fo-quick-item">
+                    <div class="cog-fo-icon"><svg class="icon icon--24" style="color: #f59e0b;"><use href="#icon-ui-package"/></svg></div>
+                    <div class="cog-fo-name">下载清理</div>
+                    <div class="cog-fo-desc">清理重复/过期文件</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近整理记录</span>
+                  <span class="cog-section-sub">Recent operations</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-fo-refresh">刷新</button>
+                </h3>
+                <div id="cog-fo-history" class="cog-fo-history">
+                  <div class="cog-timeline-empty">暂无整理记录 / No operations yet</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">撤销日志</span>
+                  <span class="cog-section-sub">Undo log · 7 天有效</span>
+                </h3>
+                <div id="cog-fo-undo" class="cog-fo-undo">
+                  <div class="cog-timeline-empty">暂无撤销记录 / No undo entries</div>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-files -->
+
+            <!-- Tab 5: 文档写作 -->
+            <div class="cog-tab-pane" id="cog-pane-docs" role="tabpanel">
+              <div class="cog-v2-hero">
+              <div class="cog-v2-hero-icon"><svg class="icon icon--40" style="color: var(--color-primary, #ff7eb6);"><use href="#icon-ui-file-text"/></svg></div>
+                <div class="cog-v2-hero-text">
+                  <h3>文档写作 · Doc Writer</h3>
+                  <p>5 类模板 · 4 种导出格式 · 3 种 HTML 样式</p>
+                </div>
+                <div class="cog-v2-hero-stats">
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">已生成</span>
+                    <span class="cog-v2-stat-value" id="cog-dw-count">0</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">模板使用</span>
+                    <span class="cog-v2-stat-value" id="cog-dw-templates">5</span>
+                  </div>
+                  <div class="cog-v2-stat">
+                    <span class="cog-v2-stat-label">导出格式</span>
+                    <span class="cog-v2-stat-value" id="cog-dw-formats">4</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">文档模板</span>
+                  <span class="cog-section-sub">Templates</span>
+                </h3>
+                <div class="cog-dw-templates">
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon"><svg class="icon icon--20" style="color: #f59e0b;"><use href="#icon-ui-book"/></svg></div>
+                    <div class="cog-dw-tpl-name">日记</div>
+                    <div class="cog-dw-tpl-desc">Diary</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon"><svg class="icon icon--20" style="color: #10b981;"><use href="#icon-ui-bar-chart"/></svg></div>
+                    <div class="cog-dw-tpl-name">报告</div>
+                    <div class="cog-dw-tpl-desc">Report</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon"><svg class="icon icon--20" style="color: #3b82f6;"><use href="#icon-ui-list"/></svg></div>
+                    <div class="cog-dw-tpl-name">规格</div>
+                    <div class="cog-dw-tpl-desc">Spec</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon"><svg class="icon icon--20" style="color: #8b5cf6;"><use href="#icon-ui-microscope"/></svg></div>
+                    <div class="cog-dw-tpl-name">研究</div>
+                    <div class="cog-dw-tpl-desc">Research</div>
+                  </div>
+                  <div class="cog-dw-tpl">
+                    <div class="cog-dw-tpl-icon"><svg class="icon icon--20" style="color: #ec4899;"><use href="#icon-ui-briefcase"/></svg></div>
+                    <div class="cog-dw-tpl-name">简历</div>
+                    <div class="cog-dw-tpl-desc">Resume</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">导出格式</span>
+                  <span class="cog-section-sub">Export formats</span>
+                </h3>
+                <div class="cog-dw-formats">
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon"><svg class="icon icon--16" style="color: #64748b;"><use href="#icon-ui-file-text"/></svg></span> Markdown</div>
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon"><svg class="icon icon--16" style="color: #0ea5e9;"><use href="#icon-ui-globe"/></svg></span> HTML</div>
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon"><svg class="icon icon--16" style="color: #ef4444;"><use href="#icon-ui-book-open"/></svg></span> PDF</div>
+                  <div class="cog-dw-fmt"><span class="cog-dw-fmt-icon"><svg class="icon icon--16" style="color: #2563eb;"><use href="#icon-ui-book-blue"/></svg></span> Word</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">最近文档</span>
+                  <span class="cog-section-sub">Recent documents</span>
+                  <button class="btn btn-secondary btn-sm cog-section-btn" id="cog-dw-refresh">刷新</button>
+                </h3>
+                <div id="cog-dw-list" class="cog-dw-list">
+                  <div class="cog-timeline-empty">暂无文档 / No documents yet</div>
+                </div>
+              </div>
+            </div><!-- /#cog-pane-docs -->
+
+          </div><!-- /.cog-tab-content -->
+        </div>
+      </section>
+
+      <!-- Cognition detail modal (Phase 9 Batch 4) -->
+      <div id="cog-modal" class="cog-modal hidden" role="dialog" aria-modal="true">
+        <div class="cog-modal-backdrop" data-close></div>
+        <div class="cog-modal-panel">
+          <div class="cog-modal-header">
+            <h3 id="cog-modal-title">Trace 详情 · Detail</h3>
+            <button class="cog-modal-close" data-close title="关闭">×</button>
+          </div>
+          <div class="cog-modal-body" id="cog-modal-body">
+            <div class="cog-modal-loading">加载中…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- R7.4: Markdown rendering stack for chat (marked + DOMPurify + highlight.js) -->
+<link rel="stylesheet" href="vendor/github.min.css">
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script src="vendor/highlight.min.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/chat-voice.js"></script>
+<script src="js/chat-uploader.js"></script>
+<script src="js/napcat-panel.js"></script>
+<script src="js/emotion-dashboard.js"></script>
+<script src="js/emotion-history.js"></script>
+<script src="js/theme-switcher.js"></script>
+<script src="js/cognition-panel.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/data-viewer.js"></script>
+    <script src="js/calendar-panel.js"></script>
+<script src="js/approval-modal.js"></script>
+<script src="js/persona-hub.js"></script>
+<script src="js/office-mode.js"></script>
+<link rel="stylesheet" href="styles/cognition-panel.css">
+<link rel="stylesheet" href="styles/calendar-panel.css">
+<link rel="stylesheet" href="styles/emotion-history.css">
+<!-- R7.1: brief drawer (replaces legacy iframe + popup + detail window) -->
+<link rel="stylesheet" href="styles/brief-drawer.css">
+<script src="js/brief-drawer.js" defer></script>
+<script src="js/app.js"></script>
+</body>
+</html>

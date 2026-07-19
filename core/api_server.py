@@ -316,7 +316,7 @@ async def system_reload_config() -> dict:
                 qq_cfg = new_settings.get("qq", {}) if isinstance(new_settings, dict) else {}
                 await _call_reload(comp.qq, "update_config", qq_cfg, label="qq_client")
 
-        emit("config_reloaded", results)
+        emit("config_reloaded", **results)
         log.info("config hot-reload complete: %s", results)
     except Exception as e:
         log.exception("config hot-reload failed")
@@ -1225,7 +1225,7 @@ async def computer_control_set_level(request: Request) -> dict:
             return JSONResponse({"error": "invalid level"}, status_code=400)
         ctrl = _get_computer_controller()
         ctrl.set_permission(level_map[level_str])
-        emit("computer_control_level_changed", {"level": level_str})
+        emit("computer_control_level_changed", level=level_str)
         return {"status": "ok", "level": level_str}
     except Exception as e:
         logger.exception("computer_control_set_level error")
@@ -1265,10 +1265,10 @@ async def computer_control_approve(approval_id: str) -> dict:
         ctrl = _get_computer_controller()
         result = ctrl.approve_action(approval_id)
         if result:
-            emit("computer_control_approval_updated", {
-                "id": approval_id,
-                "status": "approved",
-            })
+            emit("computer_control_approval_updated",
+                id=approval_id,
+                status="approved",
+            )
             return {"status": "ok", "approved": True}
         return JSONResponse({"error": "approval not found"}, status_code=404)
     except Exception as e:
@@ -1283,10 +1283,10 @@ async def computer_control_reject(approval_id: str) -> dict:
         ctrl = _get_computer_controller()
         result = ctrl.reject_action(approval_id)
         if result:
-            emit("computer_control_approval_updated", {
-                "id": approval_id,
-                "status": "rejected",
-            })
+            emit("computer_control_approval_updated",
+                id=approval_id,
+                status="rejected",
+            )
             return {"status": "ok", "rejected": True}
         return JSONResponse({"error": "approval not found"}, status_code=404)
     except Exception as e:
@@ -1318,7 +1318,7 @@ async def permissions_update_config(request: Request) -> dict:
         body = await request.json()
         pm = _get_permission_manager()
         new_cfg = pm.update_config(body)
-        emit("permissions_config_changed", new_cfg.to_dict())
+        emit("permissions_config_changed", **new_cfg.to_dict())
         return {"status": "ok", "config": new_cfg.to_dict()}
     except Exception as e:
         logger.exception("permissions_update_config error")
@@ -1347,7 +1347,7 @@ async def permissions_add_dir(request: Request) -> dict:
         pm = _get_permission_manager()
         ok = pm.add_authorized_dir(dir_path)
         if ok:
-            emit("permissions_dirs_changed", {"action": "add", "path": dir_path})
+            emit("permissions_dirs_changed", action="add", path=dir_path)
             return {"status": "ok", "dirs": pm.list_authorized_dirs()}
         return JSONResponse({"error": "无法添加该目录（系统路径或不存在）"}, status_code=400)
     except Exception as e:
@@ -1364,7 +1364,7 @@ async def permissions_remove_dir(path: str = "") -> dict:
         pm = _get_permission_manager()
         ok = pm.remove_authorized_dir(path)
         if ok:
-            emit("permissions_dirs_changed", {"action": "remove", "path": path})
+            emit("permissions_dirs_changed", action="remove", path=path)
             return {"status": "ok", "dirs": pm.list_authorized_dirs()}
         return JSONResponse({"error": "目录不在白名单中"}, status_code=404)
     except Exception as e:
@@ -1410,7 +1410,7 @@ async def permissions_revoke_all() -> dict:
     try:
         pm = _get_permission_manager()
         pm.revoke_all()
-        emit("permissions_config_changed", pm.config.to_dict())
+        emit("permissions_config_changed", **pm.config.to_dict())
         return {"status": "ok", "config": pm.config.to_dict()}
     except Exception as e:
         logger.exception("permissions_revoke_all error")
@@ -1513,7 +1513,7 @@ async def tasks_submit(request: Request) -> dict:
             priority=priority,
             task_data=task_data,
         )
-        emit("task_submitted", task.to_dict())
+        emit("task_submitted", **task.to_dict())
         return {"task": task.to_dict()}
     except Exception as e:
         logger.exception("tasks_submit error")
@@ -1527,7 +1527,7 @@ async def tasks_cancel(task_id: str) -> dict:
         mgr = _get_async_task_manager()
         ok = mgr.cancel_task(task_id)
         if ok:
-            emit("task_cancelled", {"task_id": task_id})
+            emit("task_cancelled", task_id=task_id)
             return {"status": "ok", "cancelled": True}
         return JSONResponse({"error": "无法取消该任务"}, status_code=400)
     except Exception as e:
@@ -1542,7 +1542,7 @@ async def tasks_retry(task_id: str) -> dict:
         mgr = _get_async_task_manager()
         new_task = mgr.retry_task(task_id)
         if new_task:
-            emit("task_submitted", new_task.to_dict())
+            emit("task_submitted", **new_task.to_dict())
             return {"task": new_task.to_dict()}
         return JSONResponse({"error": "无法重试该任务"}, status_code=400)
     except Exception as e:
@@ -1601,7 +1601,7 @@ async def qq_whitelist_add(request: Request) -> dict:
         if not comp or not comp.qq_whitelist:
             return JSONResponse({"error": "whitelist not available"}, status_code=503)
         ok = comp.qq_whitelist.add(qq_number, remark)
-        emit("qq_whitelist_changed", {"action": "add", "qq_number": str(qq_number)})
+        emit("qq_whitelist_changed", action="add", qq_number=str(qq_number))
         return {"status": "ok", "added": ok}
     except Exception as e:
         logger.exception("qq whitelist add error")
@@ -1617,7 +1617,7 @@ async def qq_whitelist_remove(qq_number: str) -> dict:
         if not comp or not comp.qq_whitelist:
             return JSONResponse({"error": "whitelist not available"}, status_code=503)
         ok = comp.qq_whitelist.remove(qq_number)
-        emit("qq_whitelist_changed", {"action": "remove", "qq_number": qq_number})
+        emit("qq_whitelist_changed", action="remove", qq_number=qq_number)
         return {"status": "ok", "removed": ok}
     except Exception as e:
         logger.exception("qq whitelist remove error")
@@ -1635,7 +1635,7 @@ async def qq_whitelist_toggle(qq_number: str, request: Request) -> dict:
         if not comp or not comp.qq_whitelist:
             return JSONResponse({"error": "whitelist not available"}, status_code=503)
         ok = comp.qq_whitelist.toggle(qq_number, enabled)
-        emit("qq_whitelist_changed", {"action": "toggle", "qq_number": qq_number, "enabled": enabled})
+        emit("qq_whitelist_changed", action="toggle", qq_number=qq_number, enabled=enabled)
         return {"status": "ok", "toggled": ok}
     except Exception as e:
         logger.exception("qq whitelist toggle error")
@@ -1670,7 +1670,7 @@ async def qq_whitelist_set_enabled(request: Request) -> dict:
         if not comp or not comp.qq_whitelist:
             return JSONResponse({"error": "whitelist not available"}, status_code=503)
         comp.qq_whitelist.set_enabled(enabled)
-        emit("qq_whitelist_changed", {"action": "enabled_changed", "enabled": enabled})
+        emit("qq_whitelist_changed", action="enabled_changed", enabled=enabled)
         return {"status": "ok", "enabled": enabled}
     except Exception as e:
         logger.exception("qq whitelist set enabled error")
@@ -1691,7 +1691,7 @@ async def qq_whitelist_bulk_add(request: Request) -> dict:
         if not comp or not comp.qq_whitelist:
             return JSONResponse({"error": "whitelist not available"}, status_code=503)
         count = comp.qq_whitelist.bulk_add(qq_numbers, remark_prefix)
-        emit("qq_whitelist_changed", {"action": "bulk_add", "count": count})
+        emit("qq_whitelist_changed", action="bulk_add", count=count)
         return {"status": "ok", "added_count": count, "total": len(qq_numbers)}
     except Exception as e:
         logger.exception("qq whitelist bulk add error")
@@ -1707,7 +1707,7 @@ async def qq_whitelist_clear() -> dict:
         if not comp or not comp.qq_whitelist:
             return JSONResponse({"error": "whitelist not available"}, status_code=503)
         ok = comp.qq_whitelist.clear()
-        emit("qq_whitelist_changed", {"action": "clear"})
+        emit("qq_whitelist_changed", action="clear")
         return {"status": "ok", "cleared": ok}
     except Exception as e:
         logger.exception("qq whitelist clear error")
@@ -1751,7 +1751,7 @@ async def office_mode_set(request: Request) -> dict:
         mgr = get_office_mode_manager()
         mgr.set_mode(mode_str)
 
-        emit("office_mode_changed", {"mode": mode_str})
+        emit("office_mode_changed", mode=mode_str)
         return {"status": "ok", "mode": mode_str}
     except Exception as e:
         logger.exception("office mode set error")
@@ -1825,7 +1825,7 @@ async def office_dir_set(request: Request) -> dict:
         from core.office_tools import set_office_dir
         result = set_office_dir(path)
         if result.get("success"):
-            emit("office_dir_changed", {"path": result["path"]})
+            emit("office_dir_changed", path=result["path"])
         return result
     except Exception as e:
         logger.exception("office dir set error")
@@ -1846,30 +1846,32 @@ async def validation_check(request: Request) -> dict:
 
         from core.response_validator import get_response_validator
         validator = get_response_validator()
-        result = validator.validate(
+        # 同步兼容旧字段：office_mode / persona_style 走 kwargs，不改校验语义
+        result = await validator.validate(
             text,
             user_message=user_message,
-            persona_style=persona_style,
-            office_mode=office_mode,
+            persona_hint=persona_style,
+            route_mode="OFFICE" if office_mode else "FULL",
         )
 
         return {
             "passed": result.passed,
-            "score": result.score,
-            "guard_score": result.guard_score,
+            "score": result.judge_score,
+            "guard_score": 1.0 if result.guard_passed else 0.0,
             "judge_score": result.judge_score,
             "issues": [
                 {
-                    "code": i.code,
-                    "severity": i.severity.value,
-                    "message": i.message,
-                    "layer": i.layer,
-                    "details": i.details,
+                    "code": i.get("category", "unknown"),
+                    "severity": i.get("level", "info"),
+                    "message": i.get("message", ""),
+                    "layer": "guard" if str(i.get("category", "")).startswith("sensitive") or i.get("category") == "empty_reply" else "judge",
+                    "details": i,
                 }
                 for i in result.issues
             ],
-            "needs_revision": result.needs_revision,
-            "revision_suggestion": result.revision_suggestion,
+            "needs_revision": False,
+            "revision_suggestion": "",
+            "content_policy": "unrestricted_expression",
         }
     except Exception as e:
         logger.exception("validation check error")
@@ -1883,12 +1885,9 @@ async def validation_config() -> dict:
         from core.response_validator import get_response_validator
         validator = get_response_validator()
         return {
-            "enabled": validator.enabled,
+            "enabled": True,
             "guard_rules": [
-                "sensitive_content",
-                "professional_disclaimer",
-                "contradiction",
-                "exaggeration",
+                "empty_reply",  # 仅结构检查；内容主题已解放
             ],
             "judge_dimensions": [
                 "length",
@@ -1896,6 +1895,7 @@ async def validation_config() -> dict:
                 "tone_consistency",
                 "emotion_value",
             ],
+            "content_policy": "unrestricted_expression",
         }
     except Exception as e:
         logger.exception("validation config error")
@@ -2131,7 +2131,7 @@ async def calendar_create(request: Request) -> dict:
     try:
         body = await request.json()
         event_id = _calendar.create_event(**body)
-        emit("calendar_event_created", {"id": event_id, "event": _calendar.get_event(event_id)})
+        emit("calendar_event_created", id=event_id, event=_calendar.get_event(event_id))
         return {"status": "ok", "id": event_id}
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
@@ -2148,7 +2148,7 @@ async def calendar_update(event_id: int, request: Request) -> dict:
         ok = _calendar.update_event(event_id, **body)
         if not ok:
             return JSONResponse({"error": "not found"}, status_code=404)
-        emit("calendar_event_updated", {"id": event_id})
+        emit("calendar_event_updated", id=event_id)
         return {"status": "ok"}
     except Exception as e:
         return {"error": str(e)}
@@ -2161,7 +2161,7 @@ async def calendar_delete(event_id: int) -> dict:
         ok = _calendar.delete_event(event_id)
         if not ok:
             return JSONResponse({"error": "not found"}, status_code=404)
-        emit("calendar_event_deleted", {"id": event_id})
+        emit("calendar_event_deleted", id=event_id)
         return {"status": "ok"}
     except Exception as e:
         return {"error": str(e)}
@@ -2750,7 +2750,7 @@ async def persona_hub_activate(persona_id: str) -> dict:
         if not ok:
             return JSONResponse({"error": msg}, status_code=400)
         # 通知前端人设已切换
-        await emit("persona:changed", {"persona_id": persona_id})
+        emit("persona:changed", persona_id=persona_id)
         return {"status": "ok", "active_id": msg}
     except Exception as e:
         logger.exception("persona hub activate error")
@@ -2811,7 +2811,7 @@ async def persona_hub_reset_default() -> dict:
         ok, msg = _persona_mgr.switch_persona("yita_default")
         if not ok:
             return JSONResponse({"error": msg}, status_code=400)
-        await emit("persona:changed", {"persona_id": "yita_default"})
+        emit("persona:changed", persona_id="yita_default")
         return {"status": "ok", "active_id": "yita_default"}
     except Exception as e:
         logger.exception("persona hub reset error")

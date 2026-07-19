@@ -1,0 +1,53 @@
+/* =========================================================================
+ * Aerie · 云栖 — Phase 7: SVG Icon Base Styles
+ * All UI icons share the same baseline: 24x24 viewBox, 2px stroke,
+ * currentColor, round caps. Use <use href="#icon-..."> to reference.
+ * Naming convention: .icon .icon--{size} .icon--{modifier}
+ * ======================================================================= */
+
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* Fixed sizes (in pixels) */
+.icon--12 { width: 12px; height: 12px; }
+.icon--14 { width: 14px; height: 14px; }
+.icon--16 { width: 16px; height: 16px; }
+.icon--18 { width: 18px; height: 18px; }
+.icon--20 { width: 20px; height: 20px; }
+.icon--24 { width: 24px; height: 24px; }
+.icon--32 { width: 32px; height: 32px; }
+
+/* Color modifiers */
+.icon--muted { color: var(--color-text-muted, #888); }
+.icon--primary { color: var(--color-primary, #ff7eb6); }
+.icon--danger { color: var(--color-danger, #e74c3c); }
+.icon--success { color: var(--color-success, #2ecc71); }
+.icon--warning { color: var(--color-warning, #f39c12); }
+
+/* Stroke width overrides */
+.icon--thin { stroke-width: 1.5; }
+.icon--bold { stroke-width: 2.5; }
+
+/* Inline alignment helpers */
+.icon--top { vertical-align: top; }
+.icon--middle { vertical-align: middle; }
+.icon--baseline { vertical-align: baseline; }
+
+/* Button integration: SVG inside button should be vertically centered */
+button > .icon,
+.btn > .icon,
+.chat-tool-btn > .icon {
+  vertical-align: middle;
+  pointer-events: none;
+}

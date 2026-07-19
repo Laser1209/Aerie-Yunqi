@@ -1,0 +1,12 @@
+{
+  "name": "aerie-companion",
+  "productName": "Aerie · 云栖",
+  "version": "0.1.0-beta.1",
+  "description": "Aerie · 云栖 — Local-first AI companion with auto-wake proactive messenger / 本地优先 AI 桌面伴侣",
+  "main": "src/main.js",
+  "author": {
+    "name": "Laser",
+    "email": "laser@local"
+  },
+  "license": "UNLICENSED"
+}

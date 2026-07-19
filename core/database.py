@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Database singleton.
+"""Aerie · 云栖 v0.1.0-beta.1 — Database singleton.
 
 Provides sqlite3-based Database with context-manager support and
 8 tables required by the v9.0 spec.
@@ -6,6 +6,7 @@ Provides sqlite3-based Database with context-manager support and
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -262,11 +263,12 @@ class Database:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, db_path: str | Path = "data/aerie.db") -> None:
+    def __init__(self, db_path: str | Path | None = None) -> None:
         if hasattr(self, "_initialized") and self._initialized:
             return
         self._initialized = True
-        self.db_path = Path(db_path)
+        configured_path = db_path or os.environ.get("AERIE_DB_PATH") or "data/aerie.db"
+        self.db_path = Path(configured_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn_lock = threading.Lock()
         self._init_schema()

@@ -1,0 +1,452 @@
+"use strict";
+/* App shell: tab switching, window controls, health monitoring, emotion dashboard */
+
+window.addEventListener("DOMContentLoaded", () => {
+  // ── Theme switcher ──────────────────────────────
+  if (window.themeSwitcher) {
+    window.themeSwitcher.init();
+  }
+
+  // ── Emotion dashboard ──────────────────────────
+  const emotionDashboard = new EmotionDashboard();
+  emotionDashboard.init();
+
+  // ── Emotion history curves (Phase 9 Batch 5) ───
+  if (window.emotionHistory) {
+    window.emotionHistory.init();
+  }
+
+  // ── Memorial panel ──────────────────────────────
+  if (window.memorialPanel) {
+    window.memorialPanel.init();
+  }
+
+  // ── Settings panel ──────────────────────────────
+  if (window.settingsPanel) {
+    window.settingsPanel.init();
+  }
+
+  // ── v13.9.9: First-run self-check → jump to API Key setup ─
+  _runFirstRunSelfCheck();
+
+  // ── Data viewer ─────────────────────────────────
+  if (window.dataViewer) {
+    window.dataViewer.init();
+  }
+
+  // ── Cognition panel (Phase 9 Batch 4: brain center) ─
+  if (window.cognitionPanel) {
+    window.cognitionPanel.init();
+  }
+
+  // ── v13.0: Permission approval modal ─
+  if (window.ApprovalModal) {
+    const approvalModal = new ApprovalModal();
+    approvalModal.init();
+    window.approvalModal = approvalModal;
+  }
+
+  // ── v13.0: Persona Hub panel ─
+  if (window.PersonaHubPanel) {
+    const personaHub = new PersonaHubPanel();
+    personaHub.init();
+    window.personaHub = personaHub;
+  }
+
+  // ── v13.0: Office Mode controller ─
+  if (window.OfficeModeController) {
+    const officeMode = new OfficeModeController();
+    officeMode.init();
+    window.officeMode = officeMode;
+  }
+
+  // ── Tab switching ──────────────────────────────
+  document.querySelectorAll(".sidebar-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".sidebar-tab").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+      const tab = btn.getAttribute("data-tab");
+      const panel = document.getElementById("panel-" + tab);
+      if (panel) panel.classList.add("active");
+
+      // Notify panels of visibility
+      emotionDashboard.setVisible(tab === "emotion");
+      if (window.emotionHistory) window.emotionHistory.setVisible(tab === "emotion");
+      if (window.cognitionPanel) {
+        window.cognitionPanel.setVisible(tab === "cognition");
+      }
+      if (window.personaHub) {
+        window.personaHub.setVisible(tab === "persona-hub");
+      }
+    });
+  });
+
+  // ── Status health monitoring ──────────────────
+  const statusText = document.getElementById("status-text");
+  const statusDot = document.getElementById("status-dot");
+  const statsBackend = document.getElementById("stats-backend");
+  const statsQQ = document.getElementById("stats-qq");
+  const statsTokens = document.getElementById("stats-tokens");
+  const statsCalls = document.getElementById("stats-calls");
+
+  const updateStatus = (ready) => {
+    if (ready) {
+      if (statusText) { statusText.textContent = "后端已连接"; statusText.className = "status-text"; }
+      if (statusDot) { statusDot.className = "status-dot status-dot--ok"; }
+    } else {
+      if (statusText) { statusText.textContent = "后端离线"; statusText.className = "status-text status-text--loading"; }
+      if (statusDot) { statusDot.className = "status-dot status-dot--error"; }
+    }
+  };
+
+  if (window.aerie && window.aerie.electron) {
+    window.aerie.electron.onHealth((data) => updateStatus(data.ready));
+    window.aerie.electron.getHealth().then((data) => updateStatus(data.ready));
+  }
+
+  // ── Window controls (min / max / close) ─────────
+  const winApi = (window.aerie && window.aerie.electron && window.aerie.electron.window) || null;
+  const btnMin = document.getElementById("btn-minimize");
+  const btnMax = document.getElementById("btn-maximize");
+  const btnClose = document.getElementById("btn-close");
+
+  if (btnMin && winApi) {
+    btnMin.addEventListener("click", (e) => {
+      e.stopPropagation();
+      winApi.minimize();
+    });
+  }
+  if (btnMax && winApi) {
+    btnMax.addEventListener("click", (e) => {
+      e.stopPropagation();
+      winApi.toggleMaximize().then((isMax) => {
+        btnMax.classList.toggle("header-btn--maximized", !!isMax);
+        btnMax.title = isMax ? "还原" : "最大化";
+      });
+    });
+    if (winApi.onMaximize) {
+      winApi.onMaximize((isMax) => {
+        btnMax.classList.toggle("header-btn--maximized", !!isMax);
+        btnMax.title = isMax ? "还原" : "最大化";
+      });
+    }
+  }
+  if (btnClose && winApi) {
+    btnClose.addEventListener("click", (e) => {
+      e.stopPropagation();
+      winApi.close();
+    });
+  }
+
+  // Double-click app-header to toggle maximize (Windows convention)
+  const appHeader = document.getElementById("app-header");
+  if (appHeader && winApi) {
+    appHeader.addEventListener("dblclick", (e) => {
+      // Ignore double-clicks on the buttons themselves
+      if (e.target.closest(".header-btn")) return;
+      winApi.toggleMaximize().then((isMax) => {
+        if (btnMax) {
+          btnMax.classList.toggle("header-btn--maximized", !!isMax);
+          btnMax.title = isMax ? "还原" : "最大化";
+        }
+      });
+    });
+  }
+
+  // Status panel poll
+  setInterval(async () => {
+    try {
+      if (window.aerie) {
+        // R7.0: use the IPC get-health so we get the full stale_code
+        // shape (the renderer's previous version only saw {ready,port}
+        // from the IPC bridge, which made stale_code invisible here).
+        const r = await window.aerie.electron.getHealth();
+        if (r) {
+          if (statsBackend) statsBackend.textContent = r.ready ? "运行中" : "异常";
+          // QQ status is managed by napcat-panel.js (authoritative source)
+          try {
+            const http = await window.aerie.api.request({ method: "GET", path: "/api/health" });
+            if (http && http.data) {
+              // Drive the stale-state machine from the authoritative
+              // backend value (covers both IPC and HTTP paths).
+              if (http.data.stale_code) {
+                _setStaleState({
+                  stale: !!http.data.stale_code.stale,
+                  modified: http.data.stale_code.modified || [],
+                  started_at: http.data.stale_code.started_at || http.data.process_started_at || "",
+                });
+              } else if (r.stale) {
+                // Fallback: IPC saw stale, fall through to banner.
+                _setStaleState({
+                  stale: true,
+                  modified: r.modified || [],
+                  started_at: r.started_at || "",
+                });
+              }
+            }
+          } catch (_) {}
+        }
+        const t = await window.aerie.api.request({ method: "GET", path: "/api/stats/tokens" });
+        if (t.data && !t.data.error) {
+          const today = t.data.today || {};
+          if (statsTokens) statsTokens.textContent = (today.total || 0).toLocaleString();
+          if (statsCalls) statsCalls.textContent = today.calls || 0;
+        }
+      }
+    } catch (_) {}
+  }, 5000);
+
+  // ── R7.1: daily brief drawer (replaces legacy iframe / popup / detail) ──
+  // The drawer is bootstrapped by js/brief-drawer.js (loaded before
+  // app.js) and exposes ``window.briefDrawer``. The topbar "今日简报"
+  // button dispatches ``bus.emit('brief:open')`` which the drawer
+  // listens for. The legacy ``onBriefShow`` IPC is still supported as
+  // a back-compat channel from the main process.
+  const emitBrief = (action) => {
+    try {
+      if (window.bus) window.bus.emit(action);
+      else if (window.briefDrawer) {
+        if (action === "brief:open")  window.briefDrawer.open();
+        if (action === "brief:close") window.briefDrawer.close();
+        if (action === "brief:refresh") window.briefDrawer.refresh();
+      }
+    } catch (_) {}
+  };
+  if (window.aerie && window.aerie.electron && window.aerie.electron.onBriefShow) {
+    window.aerie.electron.onBriefShow((data) => {
+      emitBrief("brief:open");
+      if (data && data.expanded && window.briefDrawer) {
+        setTimeout(() => {
+          try { window.briefDrawer.expand && window.briefDrawer.expand(); } catch (_) {}
+        }, 300);
+      }
+    });
+  }
+  if (window.aerie && window.aerie.electron && window.aerie.electron.onOpenTab) {
+    window.aerie.electron.onOpenTab((tab) => {
+      const btn = document.querySelector('.sidebar-tab[data-tab="' + tab + '"]');
+      if (btn) btn.click();
+    });
+  }
+  // Wire the topbar / statusbar "今日简报" trigger, if any.
+  document.querySelectorAll("[data-brief-open]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      emitBrief("brief:open");
+    });
+  });
+});
+
+// R6.6 → R7.0: stale-code strong prompt.
+// Two visual surfaces are kept in sync:
+//   1. A persistent top banner under the titlebar (cannot be missed).
+//   2. A small toast (kept for backward compatibility).
+// Both are idempotent — only one DOM element per kind. The state
+// transitions are driven by _setStaleState() which the status poll
+// calls whenever the latest /api/health response comes back.
+let _staleBannerEl = null;
+let _staleToastEl = null;
+let _staleActive = false;
+
+function _setStaleState(stale) {
+  const isStale = !!(stale && stale.stale);
+  if (isStale === _staleActive) {
+    // Same state — just refresh the file list in case it changed.
+    if (isStale) {
+      if (_staleBannerEl) {
+        _staleBannerEl.querySelector(".stale-list").textContent =
+          (stale.modified || []).slice(0, 3).join(", ");
+      }
+      if (_staleToastEl) {
+        _staleToastEl.querySelector(".stale-list").textContent =
+          (stale.modified || []).slice(0, 3).join(", ");
+      }
+      _updateRestartBtnDot(true, (stale.modified || []).slice(0, 3).join(", "));
+    }
+    return;
+  }
+  _staleActive = isStale;
+  if (isStale) {
+    _showStaleBanner(stale);
+    _showStaleCodeToast(stale);
+    _updateRestartBtnDot(true, (stale.modified || []).slice(0, 3).join(", "));
+  } else {
+    _hideStaleBanner();
+    _hideStaleCodeToast();
+    _updateRestartBtnDot(false, "");
+  }
+}
+
+function _updateRestartBtnDot(show, tip) {
+  const btn = document.getElementById("settings-restart-btn");
+  if (!btn) return;
+  if (show) {
+    btn.classList.add("btn-restart-stale");
+    btn.title = (btn.getAttribute("data-original-title") || "重启后端服务 / Restart Python backend")
+      + " · 代码已变更，请点击重启 / code changed, click to restart";
+  } else {
+    btn.classList.remove("btn-restart-stale");
+    btn.title = btn.getAttribute("data-original-title") || "重启后端服务 / Restart Python backend";
+  }
+}
+
+function _showStaleBanner(stale) {
+  if (_staleBannerEl) return;
+  const el = document.createElement("div");
+  el.className = "stale-banner";
+  el.innerHTML = (
+    '<div class="stale-banner__inner">'
+    + '<span class="stale-banner__icon" aria-hidden="true">'
+    + '<svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-warning"/></svg>'
+    + '</span>'
+    + '<span class="stale-banner__text">'
+    + '<strong>后端代码已更新</strong> · Backend code updated · 启动于 '
+    + (stale.started_at || "?")
+    + ' · 变更: <span class="stale-list">'
+    + (stale.modified || []).slice(0, 3).join(", ")
+    + "</span>"
+    + "</span>"
+    + '<button class="stale-banner__action" id="stale-banner-restart">立即重启后端 / Restart now</button>'
+    + '<button class="stale-banner__close" id="stale-banner-close" title="关闭">×</button>'
+    + "</div>"
+  );
+  Object.assign(el.style, {
+    position: "fixed",
+    top: "0", left: "0", right: "0",
+    zIndex: "10000",
+    background: "linear-gradient(180deg, #fff7e6 0%, #ffe8b3 100%)",
+    borderBottom: "1px solid #f5b042",
+    color: "#7a4a00",
+    fontSize: "13px",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+    fontFamily: "system-ui, sans-serif",
+  });
+  // Inline styles for children
+  const inner = el.querySelector(".stale-banner__inner");
+  Object.assign(inner.style, {
+    display: "flex", alignItems: "center", gap: "10px",
+    padding: "8px 14px", maxWidth: "100%",
+  });
+  const actionBtn = el.querySelector("#stale-banner-restart");
+  Object.assign(actionBtn.style, {
+    marginLeft: "auto",
+    padding: "4px 10px",
+    background: "#f5b042", color: "#fff",
+    border: "none", borderRadius: "4px",
+    cursor: "pointer", fontSize: "12px", fontWeight: "600",
+  });
+  const closeBtn = el.querySelector("#stale-banner-close");
+  Object.assign(closeBtn.style, {
+    background: "transparent", border: "none",
+    color: "#7a4a00", fontSize: "18px",
+    cursor: "pointer", padding: "0 4px", lineHeight: "1",
+  });
+  // Wire actions
+  actionBtn.addEventListener("click", async () => {
+    if (!window.aerie || !window.aerie.electron || !window.aerie.electron.system || !window.aerie.electron.system.restartBackend) {
+      const tab = document.querySelector('.sidebar-tab[data-tab="settings"]');
+      if (tab) tab.click();
+      return;
+    }
+    try {
+      actionBtn.disabled = true;
+      actionBtn.textContent = "重启中… / Restarting…";
+      const r = await window.aerie.electron.system.restartBackend();
+      if (r && r.error) {
+        actionBtn.textContent = "重启失败 / Failed";
+        actionBtn.style.background = "#e74c3c";
+        setTimeout(() => {
+          actionBtn.disabled = false;
+          actionBtn.textContent = "立即重启后端 / Restart now";
+          actionBtn.style.background = "";
+        }, 3000);
+      } else {
+        actionBtn.textContent = "已调度 / Scheduled";
+        actionBtn.style.background = "#2ecc71";
+        setTimeout(() => _hideStaleBanner(), 1500);
+      }
+    } catch (_) {
+      actionBtn.disabled = false;
+      actionBtn.textContent = "重试 / Retry";
+    }
+  });
+  closeBtn.addEventListener("click", () => _hideStaleBanner());
+  document.body.appendChild(el);
+  _staleBannerEl = el;
+}
+
+function _hideStaleBanner() {
+  if (_staleBannerEl && _staleBannerEl.parentNode) {
+    _staleBannerEl.parentNode.removeChild(_staleBannerEl);
+  }
+  _staleBannerEl = null;
+}
+
+// ── v13.9.9: First-run self-check ───────────────
+async function _runFirstRunSelfCheck() {
+  try {
+    // Wait for backend to be ready
+    let ready = false;
+    for (let i = 0; i < 30; i++) {
+      try {
+        const h = await window.aerie.api.request({ method: "GET", path: "/api/health" });
+        if (h && !h.error) { ready = true; break; }
+      } catch (_) { /* ignore */ }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!ready) return;
+
+    const r = await window.aerie.api.request({ method: "GET", path: "/api/self-check" });
+    if (r && r.data && !r.data.error && r.data.has_api_key === false) {
+      // No API key configured — switch to settings → API Key tab
+      const tab = document.querySelector('.sidebar-tab[data-tab="settings"]');
+      if (tab) tab.click();
+      // Small delay to let settings panel render
+      setTimeout(() => {
+        if (window.settingsPanel && typeof window.settingsPanel._switchMode === "function") {
+          window.settingsPanel._switchMode("apikey");
+        }
+      }, 200);
+    }
+  } catch (_) {
+    // Silent fail — self-check is best-effort
+  }
+}
+
+function _showStaleCodeToast(stale) {
+  if (_staleToastEl) {
+    const list = (stale.modified || []).slice(0, 3).join(", ");
+    _staleToastEl.querySelector(".stale-list").textContent = list;
+    return;
+  }
+  const el = document.createElement("div");
+  el.className = "stale-toast";
+  el.innerHTML = (
+    '<div class="stale-title"><svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-warning"/></svg> 后端代码已更新 · Backend code updated</div>'
+    + '<div class="stale-detail">启动于 ' + (stale.started_at || "?") + "，以下文件已变更：</div>"
+    + '<div class="stale-list">' + (stale.modified || []).slice(0, 3).join(", ") + "</div>"
+    + '<div class="stale-hint">请运行 tools/restart.bat 重启后端。</div>'
+  );
+  Object.assign(el.style, {
+    position: "fixed", bottom: "16px", right: "16px", zIndex: "9999",
+    background: "#fff7e6", border: "1px solid #f5b042", borderRadius: "8px",
+    padding: "10px 14px", fontSize: "12px", color: "#7a4a00",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.1)", maxWidth: "320px",
+    lineHeight: "1.5", fontFamily: "system-ui, sans-serif",
+  });
+  document.body.appendChild(el);
+  _staleToastEl = el;
+  setTimeout(() => {
+    if (_staleToastEl === el) {
+      el.style.display = "none";
+    }
+  }, 20000);
+}
+
+function _hideStaleCodeToast() {
+  if (_staleToastEl && _staleToastEl.parentNode) {
+    _staleToastEl.parentNode.removeChild(_staleToastEl);
+  }
+  _staleToastEl = null;
+}

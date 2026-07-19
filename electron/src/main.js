@@ -41,6 +41,30 @@ let _chatEventBuf = "";
 const CHAT_EVENT_PREFIX = "[CHAT_EVENT]";
 let _backendReady = false;
 let _pendingHealthInterval = null;
+let BACKEND_DB_PATH = null;
+let BACKEND_DATA_DIR = null;
+let BACKEND_LOG_DIR = null;
+
+function configureBackendDataPath() {
+  BACKEND_DATA_DIR = app.isPackaged
+    ? path.join(app.getPath("userData"), "data")
+    : path.join(PROJECT_ROOT, "data");
+  BACKEND_DB_PATH = path.join(BACKEND_DATA_DIR, "aerie.db");
+  BACKEND_LOG_DIR = app.isPackaged
+    ? path.join(app.getPath("userData"), "logs")
+    : path.join(PROJECT_ROOT, "logs");
+
+  fs.mkdirSync(BACKEND_DATA_DIR, { recursive: true });
+  fs.mkdirSync(BACKEND_LOG_DIR, { recursive: true });
+
+  if (app.isPackaged && !fs.existsSync(BACKEND_DB_PATH)) {
+    const legacyDbPath = path.join(PYTHON_ROOT, "data", "aerie.db");
+    if (fs.existsSync(legacyDbPath)) {
+      fs.copyFileSync(legacyDbPath, BACKEND_DB_PATH);
+      console.log("[main] migrated legacy database to persistent userData");
+    }
+  }
+}
 
 // ── Backend ────────────────────────────────────────
 function startPythonBackend() {
@@ -67,7 +91,14 @@ function _spawnNewPython() {
     cwd: PYTHON_ROOT,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
+    env: {
+      ...process.env,
+      PYTHONIOENCODING: "utf-8",
+      PYTHONUNBUFFERED: "1",
+      AERIE_DATA_DIR: BACKEND_DATA_DIR,
+      AERIE_DB_PATH: BACKEND_DB_PATH,
+      LOG_DIR: BACKEND_LOG_DIR,
+    },
   });
 
   pythonProc.stdout.on("data", (d) => { /* ignore */ });
@@ -223,7 +254,6 @@ function createMainWindow() {
     minHeight: 600,
     frame: false,
     transparent: true,
-    titleBarStyle: "hidden",
     backgroundColor: "#00000000",
     backgroundMaterial: "acrylic",
     webPreferences: {
@@ -1343,6 +1373,7 @@ ipcMain.handle("system:reload-config", async () => {
 
 // ── Lifecycle ──────────────────────────────────────
 app.whenReady().then(() => {
+  configureBackendDataPath();
   startPythonBackend();
   createMainWindow();
   createDynamicIsland();

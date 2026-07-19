@@ -1,0 +1,214 @@
+/* v13.0: Office Mode 办公模式样式 */
+
+/* 工具栏按钮激活态 */
+.chat-input-toolbar__btn[aria-pressed="true"] {
+  color: #ff4785;
+  background: rgba(255, 71, 133, 0.1);
+}
+
+.chat-input-toolbar__btn--office-active {
+  color: #ff6b00 !important;
+  background: rgba(255, 107, 0, 0.12) !important;
+}
+
+/* 办公模式指示器 */
+.office-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #fff4e5 0%, #ffedd5 100%);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #b86b00;
+  margin-right: auto;
+}
+
+.dark .office-mode-indicator {
+  background: linear-gradient(135deg, rgba(255, 107, 0, 0.18) 0%, rgba(255, 107, 0, 0.1) 100%);
+  color: #ff9f0a;
+}
+
+.office-mode-indicator__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff6b00;
+  animation: office-pulse 2s ease-in-out infinite;
+}
+
+@keyframes office-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.3); }
+}
+
+/* 办公模式消息气泡 */
+.chat-bubble--office {
+  border-left: 3px solid #ff9f0a;
+}
+
+/* 办公模式下拉菜单 */
+.office-menu {
+  position: fixed;
+  /* left / top 由 JS 根据按钮 getBoundingClientRect 设置 */
+  width: 220px;
+  background: var(--card, #fff);
+  border-radius: 14px;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  padding: 8px;
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.96);
+  transform-origin: bottom right;
+  transition:
+    opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0.18s;
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+}
+
+.office-menu--visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+/* 翻到按钮下方时：从顶部展开 */
+.office-menu--below {
+  transform-origin: top right;
+}
+
+/* 箭头：默认指下（菜单在按钮上方） */
+.office-menu::before,
+.office-menu::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  background: var(--card, #fff);
+  transform: rotate(45deg);
+  border-radius: 2px;
+  z-index: -1;
+}
+.office-menu::before {
+  bottom: -4px;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.04);
+}
+.office-menu::after {
+  bottom: -3px;
+  background: inherit;
+}
+/* 翻到下方时箭头指上 */
+.office-menu--below::before,
+.office-menu--below::after {
+  top: -4px;
+  bottom: auto;
+}
+.office-menu--below::after {
+  top: -3px;
+}
+
+.office-menu__header {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-500, #6e6e73);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.office-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-700, #3c3c43);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.office-menu__item:hover {
+  background: var(--bg-200, #f2f2f7);
+  transform: translateX(2px);
+}
+
+.office-menu__item:active {
+  transform: translateX(2px) scale(0.98);
+}
+
+.office-menu__item--active {
+  background: linear-gradient(135deg, rgba(255, 107, 0, 0.12) 0%, rgba(255, 71, 133, 0.08) 100%);
+  color: #ff6b00;
+  font-weight: 500;
+}
+
+.office-menu__item--active::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff6b00;
+  box-shadow: 0 0 8px rgba(255, 107, 0, 0.6);
+}
+
+.office-menu__item-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.office-menu__divider {
+  height: 1px;
+  background: var(--bg-200, #f2f2f7);
+  margin: 6px 0;
+}
+
+.office-menu__info {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-500, #6e6e73);
+  line-height: 1.5;
+}
+
+.office-menu__info strong {
+  color: var(--text-800, #1d1d1f);
+  font-weight: 600;
+}
+
+.dark .office-menu {
+  background: var(--card, #1c1c1e);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.dark .office-menu::before,
+.dark .office-menu::after {
+  background: var(--card, #1c1c1e);
+  box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dark .office-menu__item:hover {
+  background: var(--bg-700, #2c2c2e);
+}
+
+.dark .office-menu__divider {
+  background: var(--bg-600, #3a3a3c);
+}
+
+.dark .office-menu__info strong {
+  color: var(--text-100, #e3e3e8);
+}

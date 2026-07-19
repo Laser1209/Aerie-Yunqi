@@ -765,33 +765,83 @@
                 <button class="cal-modal-close" data-close>×</button>
               </div>
               <div class="cal-modal-body">
-                <div class="settings-group">
-                  <label>事件名称</label>
-                  <input type="text" id="cal-form-title" placeholder="例：第一次见面">
-                  <label>类型</label>
-                  <select id="cal-form-type">
-                    <option value="anniversary">纪念日</option>
-                    <option value="schedule">日程</option>
-                    <option value="countdown">倒计时</option>
-                    <option value="journal">日志</option>
-                    <option value="reminder">提醒</option>
-                  </select>
-                  <label>开始日期</label>
-                  <input type="date" id="cal-form-date">
-                  <label>开始时间（可选）</label>
-                  <input type="time" id="cal-form-time">
-                  <label>描述（可选）</label>
-                  <textarea id="cal-form-desc" rows="3" placeholder="详细描述..."></textarea>
-                  <div id="cal-form-error" class="cal-inline-error" hidden></div>
-                  <label>颜色</label>
-                  <div class="cal-color-picker" id="cal-color-picker">
-                    <span class="cal-color-dot cal-color-dot--pink" data-color="#ff9a9e"></span>
-                    <span class="cal-color-dot cal-color-dot--purple" data-color="#a18cd1"></span>
-                    <span class="cal-color-dot cal-color-dot--peach" data-color="#fad0c4"></span>
-                    <span class="cal-color-dot cal-color-dot--green" data-color="#84fab0"></span>
-                    <span class="cal-color-dot cal-color-dot--orange" data-color="#fccb90"></span>
-                    <span class="cal-color-dot cal-color-dot--blue" data-color="#a1c4fd"></span>
+                <div class="cal-event-form">
+                  <div class="cal-form-field cal-form-field--wide">
+                    <label for="cal-form-title">事件名称</label>
+                    <input type="text" id="cal-form-title" placeholder="例：第一次见面" autocomplete="off">
                   </div>
+                  <div class="cal-form-field">
+                    <label for="cal-form-type">类型</label>
+                    <select id="cal-form-type">
+                      <option value="anniversary">纪念日</option>
+                      <option value="schedule">日程</option>
+                      <option value="countdown">倒计时</option>
+                      <option value="journal">日志</option>
+                      <option value="reminder">提醒</option>
+                    </select>
+                  </div>
+                  <div class="cal-form-field cal-form-toggle-field">
+                    <span class="cal-form-label">时间设置</span>
+                    <label class="cal-switch" for="cal-form-all-day">
+                      <input type="checkbox" id="cal-form-all-day">
+                      <span class="cal-switch-track" aria-hidden="true"></span>
+                      <span>全天</span>
+                    </label>
+                  </div>
+                  <div class="cal-form-field">
+                    <label for="cal-form-date">开始日期</label>
+                    <input type="date" id="cal-form-date">
+                  </div>
+                  <div class="cal-form-field cal-time-field">
+                    <label for="cal-form-time">开始时间</label>
+                    <input type="time" id="cal-form-time">
+                  </div>
+                  <div class="cal-form-field">
+                    <label for="cal-form-end-date">结束日期</label>
+                    <input type="date" id="cal-form-end-date">
+                  </div>
+                  <div class="cal-form-field cal-time-field">
+                    <label for="cal-form-end-time">结束时间</label>
+                    <input type="time" id="cal-form-end-time">
+                  </div>
+                  <div class="cal-form-field">
+                    <label for="cal-form-repeat">重复</label>
+                    <select id="cal-form-repeat">
+                      <option value="none">不重复</option>
+                      <option value="daily">每天</option>
+                      <option value="weekly">每周</option>
+                      <option value="monthly">每月</option>
+                      <option value="yearly">每年</option>
+                    </select>
+                  </div>
+                  <div class="cal-form-field">
+                    <label for="cal-form-remind">提前提醒</label>
+                    <select id="cal-form-remind">
+                      <option value="-1">不提醒</option>
+                      <option value="0">事件发生时</option>
+                      <option value="5">提前 5 分钟</option>
+                      <option value="15">提前 15 分钟</option>
+                      <option value="30">提前 30 分钟</option>
+                      <option value="60">提前 1 小时</option>
+                      <option value="1440">提前 1 天</option>
+                    </select>
+                  </div>
+                  <div class="cal-form-field cal-form-field--wide">
+                    <label for="cal-form-desc">描述（可选）</label>
+                    <textarea id="cal-form-desc" rows="3" placeholder="写下事件详情..."></textarea>
+                  </div>
+                  <fieldset class="cal-form-field cal-form-field--wide cal-color-field">
+                    <legend>颜色</legend>
+                    <div class="cal-color-picker" id="cal-color-picker">
+                      <label class="cal-color-option" title="柔粉"><input type="radio" name="cal-event-color" class="cal-color-dot cal-color-dot--pink" data-color="#ff9a9e" aria-label="柔粉"></label>
+                      <label class="cal-color-option" title="淡紫"><input type="radio" name="cal-event-color" class="cal-color-dot cal-color-dot--purple" data-color="#a18cd1" aria-label="淡紫"></label>
+                      <label class="cal-color-option" title="蜜桃"><input type="radio" name="cal-event-color" class="cal-color-dot cal-color-dot--peach" data-color="#fad0c4" aria-label="蜜桃"></label>
+                      <label class="cal-color-option" title="薄荷"><input type="radio" name="cal-event-color" class="cal-color-dot cal-color-dot--green" data-color="#84fab0" aria-label="薄荷"></label>
+                      <label class="cal-color-option" title="暖橙"><input type="radio" name="cal-event-color" class="cal-color-dot cal-color-dot--orange" data-color="#fccb90" aria-label="暖橙"></label>
+                      <label class="cal-color-option" title="雾蓝"><input type="radio" name="cal-event-color" class="cal-color-dot cal-color-dot--blue" data-color="#a1c4fd" aria-label="雾蓝"></label>
+                    </div>
+                  </fieldset>
+                  <div id="cal-form-error" class="cal-form-error cal-form-field--wide" role="alert" hidden></div>
                 </div>
               </div>
               <div class="cal-modal-footer">

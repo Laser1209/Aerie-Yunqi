@@ -1,50 +1,120 @@
 {
   "date": "2026-07-19",
-  "time_of_day": "late_night",
+  "time_of_day": "evening",
   "ai_news": [
     {
-      "title": "WAIC看了一圈，这家公司的机器人在认真打工",
-      "summary": "机器人真正具备了干活的完整能力",
-      "url": "https://www.qbitai.com/2026/07/454040.html",
+      "title": "冷门的哲学，成了“治”AI的热门",
+      "summary": "智能进了社会，治理不能慢半拍",
+      "url": "https://www.qbitai.com/2026/07/455041.html",
       "source": "qbitai.com",
-      "ts": 1784392409
+      "ts": 1784473834
     },
     {
-      "title": "WAIC 2026现场直击：万兴科技旗下万兴剧厂“无限画布”、新品Filmora.AI与Virbo AI火爆首秀",
-      "summary": "",
-      "url": "https://www.qbitai.com/2026/07/454015.html",
+      "title": "围观WAIC模型「读心术」！现场火火火火火",
+      "summary": "主观世界模型",
+      "url": "https://www.qbitai.com/2026/07/455031.html",
       "source": "qbitai.com",
-      "ts": 1784392409
+      "ts": 1784473834
     },
     {
-      "title": "滴滴在WAIC分享：AI升级出行体验 好服务连接消费烟火气",
-      "summary": "",
-      "url": "https://www.qbitai.com/2026/07/454003.html",
+      "title": "不靠英伟达网卡，国产GPU直通方案实测出炉：吞吐飙升、延迟砍半",
+      "summary": "奇异摩尔首次亮相WAIC 2026",
+      "url": "https://www.qbitai.com/2026/07/454932.html",
       "source": "qbitai.com",
-      "ts": 1784392409
+      "ts": 1784473834
+    },
+    {
+      "title": "逛了趟WAIC，我只想说，AI在物理世界都快卷疯了……",
+      "summary": "还得是AI圈春晚",
+      "url": "https://www.qbitai.com/2026/07/454802.html",
+      "source": "qbitai.com",
+      "ts": 1784473834
+    },
+    {
+      "title": "聚焦WAIC｜端侧原生架构获产业共识，Om AI联汇正式发起物理AI协同发展倡议",
+      "summary": "",
+      "url": "https://www.qbitai.com/2026/07/454791.html",
+      "source": "qbitai.com",
+      "ts": 1784473834
+    },
+    {
+      "title": "2026世界人工智能大会“未来计算·未来算力”专题论坛在沪召开，共识凝聚五问",
+      "summary": "",
+      "url": "https://www.qbitai.com/2026/07/454774.html",
+      "source": "qbitai.com",
+      "ts": 1784473834
+    },
+    {
+      "title": "商汤大装置与国信数算达成战略合作，共建全国一体化算力网试验场",
+      "summary": "极响应全国一体化算力网建设部署",
+      "url": "https://www.qbitai.com/2026/07/454771.html",
+      "source": "qbitai.com",
+      "ts": 1784473834
+    },
+    {
+      "title": "危！GPT-5.6会自动删文件，AI初创老板痛失整台Mac",
+      "summary": "黎曼动力正式发布Rienmann-1.0",
+      "url": "https://www.qbitai.com/2026/07/454689.html",
+      "source": "qbitai.com",
+      "ts": 1784473834
     }
   ],
   "it_news": [
+    {
+      "title": "科氪 | 从生命预警到七诊合参，安顿“双核首发”的技术密码",
+      "summary": "<p>在2026世界人工智能大会（WAIC 2026）上，安顿健康以两项首发引发广泛关注：我国首个生命预警表标准，以及行业首个七诊合参中医机器人——安顿中医机器人。</p>\n  <p class=\"image-wrapper\"><img src=\"https://img.36krcdn.com/hsossms/20260719/v2_85bdc624ce684fc98a9d450b4b2090e5@517825446_oswg7073557oswg3004oswg1684_img_png?x-oss-process=image/quality,q_80/",
+      "url": "https://36kr.com/p/3902428274427525?f=rss",
+      "source": "36kr.com",
+      "ts": 1784473834
+    },
     {
       "title": "9点1氪丨ofo停更5年突然发文，运营主体仍处存续状态；苹果市值重返全球第一；乐事回应“蓝色薯片”来源",
       "summary": "<h2>今日热点导览</h2>\n  <p>月之暗面正式推出开源模型Kimi K3</p>\n  <p>智谱ARR达到10亿美元，半年增长15倍</p>\n  <p>国际足联：世界杯冠军将有戒指，每枚均有独立编号</p>\n  <p>国内成品油价7月17日晚上调</p>\n  <p>A股存储板块龙头股遭遇两个跌停</p>\n  <h2>TOP3大新闻</h2>\n  <p><strong>ofo停更5年突然发文，运营主体仍处存续状态</strong></p>\n  <p>7月15日，沉寂近5年的ofo小黄车官方微信公众号突然更新。此次公众号发布的内容，是一则皮肤病患者援",
       "url": "https://36kr.com/p/3900449325287305?f=rss",
       "source": "36kr.com",
-      "ts": 1784392410
+      "ts": 1784473834
     },
     {
       "title": "印奇在 WAIC 2026 开幕式主论坛发表主题演讲：当智能体走进物理世界",
       "summary": "<p>2026 世界人工智能大会（WAIC 2026）于 7 月 17 日正式开幕。作为全球人工智能领域的顶级盛会，本届大会以“智能伙伴 共创未来”为主题。阶跃星辰董事长、千里科技董事长印奇作为特邀嘉宾出席大会开幕式并在大会主论坛（上午场）发表主题演讲《当智能体进入物理世界》。回顾 15 年 AI 创业历程，他表示，AI 创业已从小众赛道成为全球重要共识。今天的 AI 研究者和创业者既站在几代科学家持续探索的肩膀上，也受益于信息技术、移动互联网、云计算、半导体、新能源等产业积累，能够参与这场时代变革无比幸运。</p>\n  <p>印奇判断，2026 年模型",
       "url": "https://36kr.com/p/3900439867147909?f=rss",
       "source": "36kr.com",
-      "ts": 1784392410
+      "ts": 1784473834
     },
     {
       "title": "氪星晚报｜阿里1688将推出AI时代B2B交易互联互通开放标准；英特尔与Google Cloud宣布深化战略合作；铁路部门试点提前60天预约购票服务",
       "summary": "<h2><strong>大公司：</strong></h2>\n  <p><a href=\"https://36kr.com/newsflashes/3899467569104512\" rel=\"noopener noreferrer\" target=\"_blank\"><strong>成大生物：流感病毒裂解疫苗（高剂量）进入I期临床试验</strong></a></p>\n  <p>36氪获悉，成大生物公告，公司全资子公司成大生物(本溪)研发的流感病毒裂解疫苗（高剂量）已获国家药监局临床试验批准，并完成I期临床试验筹备工作，正式进入I期临床试验阶段。该疫苗抗",
       "url": "https://36kr.com/p/3896564485572489?f=rss",
       "source": "36kr.com",
-      "ts": 1784392410
+      "ts": 1784473834
+    },
+    {
+      "title": "对话森博科技董事长于林义：AI应用拼的不只是技术，更是实证有效的业务闭环",
+      "summary": "<p class=\"image-wrapper\"><img src=\"https://img.36krcdn.com/hsossms/20260717/v2_605a8a8a4b8640158de83a7aa88b025f@6381723_oswg84170oswg1212oswg810_img_jpg?x-oss-process=image/quality,q_100/format,jpg/interlace,1\" /></p>\n  <p><strong>7月17日，2026世界人工智能大会在上海开场。作为36氪连续第三年深入WAIC现场的重要内容窗口",
+      "url": "https://36kr.com/p/3899556701128578?f=rss",
+      "source": "36kr.com",
+      "ts": 1784473834
+    },
+    {
+      "title": "2026最受投资人关注人工智能/具身智能企业50揭晓",
+      "summary": "<p class=\"image-wrapper\"><img src=\"https://img.36krcdn.com/hsossms/20260717/v2_11cad3dae776450b9505ddcb5be2a14b@5889148_oswg528857oswg900oswg480_img_000?x-oss-process=image/format,jpg/interlace,1\" /></p>\n  <p class=\"img-desc\">&nbsp;</p>\n  <p>人工智能正在进入一个新的产业周期。</p>\n  <p>过去一年，大模型能力持",
+      "url": "https://36kr.com/p/3899597215745664?f=rss",
+      "source": "36kr.com",
+      "ts": 1784473834
+    },
+    {
+      "title": "最前线｜中科天塔星载激光通信终端智能产线投产，一期年产能规划600套",
+      "summary": "<p>随着低轨卫星星座建设提速，卫星之间需要传输的数据量持续增长，星间激光通信正成为卫星互联网的重要基础设施。相比传统微波通信，激光通信具备更高带宽、更低时延以及更强抗干扰能力，已成为大型卫星星座组网的重要技术方向。</p>\n  <p>7月16日，中科天塔星载激光通信智能产线正式在西安投产，一期规划年产能600套，公司计划到2027年将年产能提升至千套以上。</p>\n  <p>据中科天塔总经理曾伟刚介绍，此次投产的智能产线占地约2000平方米，位于西安高新区曲率引擎光子制造园，覆盖零部件装调、整机集成、精密调试、空间环境模拟及自动化检测等生产环节，并配套",
+      "url": "https://36kr.com/p/3899439565325953?f=rss",
+      "source": "36kr.com",
+      "ts": 1784473834
+    },
+    {
+      "title": "我们有多久，没长久地喜欢过一个东西了？",
+      "summary": "<p>我们有多久没有长久地喜欢过一个东西了？</p>\n  <p>在这个注意力被成倍压缩、审美红利稍纵即逝的快消时代，新鲜感的贬值速度快得惊人。换一部手机，追一个新坑，或者刷完几个短视频，我们的注意力就被迅速瓜分干净，连喜爱都变得行色匆匆。</p>\n  <p>但在这个热闹又健忘的环境里，却存在着反常的例外——<strong>一个不说话，甚至从不微笑的潮流手办，竟然被人们安静地喜爱了整整二十年。 &nbsp;</strong></p>\n  <p>为什么不同年龄、不同背景的人，都愿意和她建立情感链接？为什么每个人眼里的她，好像都不太一样，却又都觉得她始终陪伴着",
+      "url": "https://36kr.com/p/3899428949132932?f=rss",
+      "source": "36kr.com",
+      "ts": 1784473834
     }
   ],
   "intl_news": [
@@ -53,52 +123,124 @@
       "summary": "All\nSelect\nTopic\nNewsPress\nReleaseVideo\nCountry\nAfghanistan\nAngola\nAntigua\nand\nBarbuda\nArgentina\nArmenia\nAustralia\nAustria\nAzerbaijan\nBahamas\nBahrain\nBangladesh\nBarbados\nBelarus\nBelize\nBenin\nBhutan\nBolivia,\nPlurinational\nState\nof\nBotswana\nBrazil\nBulgaria\nCabo\nVerde\nCameroon\nCanad",
       "url": "https://www.iarc.who.int/news-events?research-topic=534",
       "source": "World Health Organization",
-      "ts": 1784392417,
+      "ts": 1784473841,
       "source_kind": "bocha"
     },
     {
-      "title": "2026年7月18日新闻",
-      "summary": "2026年7月18日新闻\n2026-07-18\n来源:\n浏览次数:1\n打印\n2026年7月18日新闻",
-      "url": "https://sjzlq.gov.cn/columns/72d3f19d-42ba-4e4a-8525-200bcbf1dfef/202607/18/42548a51-7d31-44fc-bf15-45677a7c4692.html",
-      "source": "鹿泉区人民政府",
-      "ts": 1784392417,
+      "title": "现代AI新闻早班车_腾讯新闻",
+      "summary": "该视频疑似使用了AI生成技术,请谨慎甄别早上好!今天是2026年7月19日,欢迎观看现代+AI新闻早班车,一起速览热点资讯:C919将首次执飞国际商业航线记者从国航了解到,8月12日起,国航北京首都—乌兰巴托航线将启用C919国产大飞机执飞,每日1班,这是C919飞机首条常态化投入运营的定期国际客运航线。>>详情上半年我国邮政行业寄递业务量同比增长4.2%国家邮政局最新数据显示,上半年,邮政行业寄递业务量累计完成1088.9亿件,同比增长4.2%。其中,快递业务量超千亿件,累计完成1003.8亿件,同比增长5.0%。>>详情中东地区军事冲突持续国际油价1",
+      "url": "https://news.qq.com/rain/a/20260719A0347L00",
+      "source": "腾讯网",
+      "ts": 1784473841,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "Press Releases - IARC",
+      "summary": "All\nSelect\nTopic\nNewsPress\nReleaseVideo\nCountry\nArgentina\nAustralia\nBarbados\nBelarus\nBelize\nBenin\nBolivia,\nPlurinational\nState\nof\nBrazil\nCanada\nChile\nChina\nCosta\nRica\nCôte\nd'Ivoire\nCuba\nDenmark\nEgypt\nEthiopia\nFiji\nFrance\nFrance,\nMartinique\nFrance,\nNew\nCaledonia\nFrench\nGuiana\nFren",
+      "url": "https://www.iarc.who.int/pressrelease?research-topic=518",
+      "source": "World Health Organization",
+      "ts": 1784473841,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "烟台日报电子报刊",
+      "summary": "新华社柏林7月17日电\n德国总理默茨17日在北莱茵-威斯特法伦州说,德国今年将首次派遣常规部队参与法国武装部队核演习。\n德法部长理事会和德法防务与安全理事会会议16日至17日在德国北莱茵-威斯特法伦州举行。默茨和法国总统马克龙在会后共同会见记者时表示,两国将进一步加强防务合作。\n新华社北京7月18日电\n综合新华社驻外记者报道:美军中央司令部17日说,美军于美东时间当天21时30分完成了连续第七晚对伊朗的打击行动。据伊朗媒体18日报道,伊朗军方称对中东地区的多个美军基地发动打击。\n美军中央司令部17日在社交媒体上发布消息说,美军于美东时间当天21时30分完",
+      "url": "https://www.shm.com.cn/szb/ytrb/paper/pc/layout/202607/19/node_04.html",
+      "source": "水母网",
+      "ts": 1784473841,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "搜狐要闻小时报2026071900期_韩国股市再创新高_562万美元!82岁美国女作家称收到特朗普性侵和诽谤案赔偿金_中信证券预测2026-2027年民营商业航天企业IPO进程",
+      "summary": "TOP1热点:韩国股市再创新高\n韩国综合股价指数节后复市大涨。\n韩国Kosdaq小盘指数最大涨幅达3%,MSCI亚太指数上涨幅度高达0.4%。\n日本股市方面,受获利回吐影响,日经225指数在周一突破65000点后,今日出现回调。\n截至北京时间5月26日6:40,WTI原油跌破91美元/桶,日内跌超6.4%,布伦特原油昨夜收跌6.6%。\nhttps://www.sohu.com/a/1027644629_313170\nTOP2热点:562万美元!82岁美国女作家称收到特朗普性侵和诽谤案赔偿金\n美国总统特朗普在美国最高法院败诉后,已向指控他性侵的美国女作家珍",
+      "url": "https://www.sohu.com/a/1051960517_120078003?scm=10001.8085_13-8085_13.0.0-0-0-0-0.0",
+      "source": "搜狐",
+      "ts": 1784473841,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "Se escuchan potentes explosiones en Kiev, mientras Rusia lanza ataques con misiles",
+      "summary": "Políticos\nperuanos\ndestacan\nel\nllamado\nde\nChina\na\nfomentar\nla\ncooperación\ninternacional\nen\nIAFernando\nRospigliosi,\npresidente\nencargado\ndel\nCongreso\nde\nPerú,\ny\nJohnn\nValqui,\ndiputado\nelecto\nperuano,\ndestacaron\nel\nliderazgo\nde\nChina\nen\ninteligencia\nartificial\ny\nlos\nllamados\ndel\npa",
+      "url": "https://espanol.cri.cn/2026/07/19/ARTI1784443640967458",
+      "source": "国际在线",
+      "ts": 1784473841,
       "source_kind": "bocha"
     }
   ],
   "cn_news": [
     {
-      "title": "2026年7月18日新闻",
-      "summary": "2026年7月18日新闻\n2026-07-18\n来源:\n浏览次数:1\n打印\n2026年7月18日新闻",
-      "url": "https://sjzlq.gov.cn/columns/72d3f19d-42ba-4e4a-8525-200bcbf1dfef/202607/18/42548a51-7d31-44fc-bf15-45677a7c4692.html",
-      "source": "鹿泉区人民政府",
-      "ts": 1784392410,
+      "title": "2026年07月19日《桂林新闻》,桂视网,桂林视频新闻门户网站",
+      "summary": "2026年07月19日《桂林新闻》\n来源:\n所属分类:新闻\n发布:2026年07月19日\n20:08:20\n|\n投诉",
+      "url": "http://v.gltvs.com/202607/202607191934534c6c4ce28cae4f7a.shtml",
+      "source": "v.gltvs.com",
+      "ts": 1784473835,
       "source_kind": "bocha"
     },
     {
-      "title": "今日早报每日热点15条新闻简报每天一分钟知晓天下事 7月18日|今日早报|军机|有心人|热点|简报_手机网易网",
-      "summary": "今日早报每日热点15条新闻简报每天一分钟知晓天下事\n7月18日\n打开网易新闻\n查看精彩图片\n365资讯简报,每天精选15条热点资讯,每天一分钟,知晓天下事!2026年7月18日\n星期六\n农历六月初五1.世界人工智能合作组织在上海成立,29个创始成员国签署协定。2.三部门:9月1日起,我国分步对部分电池恢复征收消费税。3.重庆彭水山体崩塌现场已搜救出18人,其中8人死亡,还有34人失联。4.油价调整:自17日24时起,92号、95号汽油每升分别上调0.24元、0.25元。5.“拼豆”玩具新规:按年龄分级管理,电熨斗不得“客串”加热件。6.7月20日起,京沪",
-      "url": "https://m.163.com/dy/article/L23NR9V20534QBVQ.html",
+      "title": "要闻",
+      "summary": "http://wan-nnrbs.nnrbs.cn\n1\n2\n南宁晚报\n2026-07-19\ncol2.html",
+      "url": "http://nnwb.nnnews.net/pad/column/202607/19/col2.html",
+      "source": "nnwb.nnnews.net",
+      "ts": 1784473835,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "2026.07.19--《今日驻马店》--今日驻马店--驻马店新闻--驻马店广视网",
+      "summary": "2026.07.19——《今日驻马店》\n时间:2026-07-18\n点击量:146\n免责声明:凡本网注明“来源:XXX(非驻马店广视网、驻马店融媒、驻马店网络问政、掌上驻马店、驻马店头条、驻马店广播电视台)”的作品,均转载自其它媒体,转载目的在于传递更多信息,并不代表本网赞同其观点和对其真实性负责,作品版权归原作者所有,如有侵犯您的原创版权请告知,我们将尽快删除相关内容。凡是本网原创的作品,拒绝任何不保留版权的转载,如需转载请标注来源并添加本文链接,否则承担相应法律后果。\n来源\n/\n驻马店广视网\n责任编辑\n/\n刘洁琼\n审核\n/\n李俊杰\n刘晓明\n终审\n/\n",
+      "url": "http://m.zmdtvw.cn/showinfo-148-81549.html",
+      "source": "m.zmdtvw.cn",
+      "ts": 1784473835,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "2026.07.19--《今日驻马店》--今日驻马店--驻马店新闻--驻马店广视网",
+      "summary": "2026.07.19——《今日驻马店》\n时间:2026-07-18\n点击量:143\n免责声明:凡本网注明“来源:XXX(非驻马店广视网、驻马店融媒、驻马店网络问政、掌上驻马店、驻马店头条、驻马店广播电视台)”的作品,均转载自其它媒体,转载目的在于传递更多信息,并不代表本网赞同其观点和对其真实性负责,作品版权归原作者所有,如有侵犯您的原创版权请告知,我们将尽快删除相关内容。凡是本网原创的作品,拒绝任何不保留版权的转载,如需转载请标注来源并添加本文链接,否则承担相应法律后果。\n来源\n/\n驻马店广视网\n责任编辑\n/\n刘洁琼\n审核\n/\n李俊杰\n刘晓明\n终审\n/\n",
+      "url": "https://m.zmdtvw.cn/showinfo-148-81549.html",
+      "source": "m.zmdtvw.cn",
+      "ts": 1784473835,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "今日早报每日热点15条新闻简报每天一分钟知晓天下事 7月19日|乒乓球|唐纳德·特朗普|孙颖莎|热点|王艺迪|简报_手机网易网",
+      "summary": "今日早报每日热点15条新闻简报每天一分钟知晓天下事\n7月19日\n打开网易新闻\n查看精彩图片\n365资讯简报,每天精选15条热点资讯,每天一分钟,知晓天下事!2026年7月19日\n星期日\n农历六月初六1.工信部定调“造车新规矩”,强化组合驾驶辅助和自动驾驶功能的安全评估,并坚决抵制非理性竞争。2.我国建成全球领先的光热发电全产业链,光热发电装机规模全球第二。3.发改委:安排3000万元支持重庆山体崩塌灾害灾后应急恢复。4.四川发布高温黄色预警,绵阳、德阳、成都等多地最高气温可达40°C及以上。5.上海开出脑机接口首张处方并成功手术,助力患者恢复手部功能。6",
+      "url": "https://m.163.com/dy/article/L26A7V1K0534QBVQ.html",
       "source": "网易",
-      "ts": 1784392410,
+      "ts": 1784473835,
       "source_kind": "bocha"
     },
     {
-      "title": "现代+AI新闻早班车_腾讯新闻",
-      "summary": "该视频疑似使用了AI生成技术,请谨慎甄别早上好!今天是2026年7月18日,欢迎观看现代+AI新闻早班车,一起速览热点资讯:市场监管总局发布公告,严管“拼豆”产品市场监管总局7月17日发布“拼豆”产品质量安全有关事项公告,依据相关法律法规亮出多项硬约束举措,更好保护儿童安全。其中,提出面向14岁以下儿童使用属于CCC认证范围内的“拼豆”产品,不得以“搭售”“赠品”等方式,在玩具产品出厂时违规搭配家用电器。面向14岁以下儿童使用但不属于CCC认证范围内的“拼豆”产品,加热部件的电压不应超过24V。>>详情油价17日24时起上调,加满一箱油要多花12元7月1",
-      "url": "https://news.qq.com/rain/a/20260718A02FX900",
+      "title": "来了!新闻早班车7月19日-顶端新闻",
+      "summary": "要闻农业农村部决定组织实施奋战100天强田管抗灾害夺秋粮丰收行动,全力以赴夺取秋粮和全年粮食丰收。自然资源部部署全国地质灾害风险隐患巡查排查。“七下八上”防汛关键期,全国地质灾害防控形势严峻,大概率会出现南北同步发生灾情的情况。我国部署七大行动促进海水淡化产业发展,到2030年,全国海水淡化工程总规模将提升至450万吨/日以上,城市应急供水保障能力进一步增强。我国持续加大优质数据供给,截至今年6月底,已建成高质量数据集12万个,总体量相当于中国国家图书馆数字资源总量的547倍左右。国家发展改革委安排3000万元支持重庆山体崩塌灾害灾后应急恢复。遭受洪涝灾",
+      "url": "https://www.topnews.cn/news/145ED6E349BC4B70",
+      "source": "www.topnews.cn",
+      "ts": 1784473835,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "时事",
+      "summary": "版面导读\n1\nhttp://nnrb.nnnews.net/resource/templateRes/basic/\n1\n2026-07-19\nhttp://nnrb.nnnews.net/pad/column/202607/19/col4.html\n1版:要闻\n坚持开放共赢\n驱动创新发展\n以工作确定性应对极端天气造成的不确定性\n全力以赴恢复生产生活秩序和推进灾后重建工作\n全面恢复生产生活秩序\n有序推进灾后重建\n涤尽洪痕淤泥\n同心重建家园\n横州市镇龙乡完成通路通电通信任务\n2026年南宁市市区普通高中招生工作开启\n2026年南宁市市区普通高中招生首日顺利结",
+      "url": "http://nnrb.nnnews.net/pc/column/202607/19/col4.html",
+      "source": "南宁日报",
+      "ts": 1784473835,
+      "source_kind": "bocha"
+    },
+    {
+      "title": "现代AI新闻早班车_腾讯新闻",
+      "summary": "该视频疑似使用了AI生成技术,请谨慎甄别早上好!今天是2026年7月19日,欢迎观看现代+AI新闻早班车,一起速览热点资讯:C919将首次执飞国际商业航线记者从国航了解到,8月12日起,国航北京首都—乌兰巴托航线将启用C919国产大飞机执飞,每日1班,这是C919飞机首条常态化投入运营的定期国际客运航线。>>详情上半年我国邮政行业寄递业务量同比增长4.2%国家邮政局最新数据显示,上半年,邮政行业寄递业务量累计完成1088.9亿件,同比增长4.2%。其中,快递业务量超千亿件,累计完成1003.8亿件,同比增长5.0%。>>详情中东地区军事冲突持续国际油价1",
+      "url": "https://news.qq.com/rain/a/20260719A0347L00",
       "source": "腾讯网",
-      "ts": 1784392410,
+      "ts": 1784473835,
       "source_kind": "bocha"
     }
   ],
   "weather": {
-    "city": "济南",
+    "city": "上海",
     "temp": "26",
     "desc": "多云",
     "suggestion": "穿合适的衣服。",
-    "ts": 1784392409,
+    "ts": 1784473833,
     "stub": true,
-    "manual": true
+    "manual": false
   },
   "todos": [
     {
@@ -120,10 +262,10 @@
       "notes": "她今天又陪了我一整天，说点暖心的话",
       "due_time": null,
       "estimated_minutes": 20,
-      "completed": false,
-      "completed_at": null,
+      "completed": true,
+      "completed_at": "2026-07-19T03:46:00.970129",
       "created_at": "2026-07-19T00:33:36.999719",
-      "updated_at": "2026-07-19T00:33:36.999719"
+      "updated_at": "2026-07-19T03:46:00.970133"
     },
     {
       "id": "9a552ed6-e4c6-4551-a174-bffca235d75e",
@@ -132,35 +274,46 @@
       "notes": "把这周看的论文和教程整理成思维导图",
       "due_time": null,
       "estimated_minutes": 60,
-      "completed": false,
-      "completed_at": null,
+      "completed": true,
+      "completed_at": "2026-07-19T03:45:59.675625",
       "created_at": "2026-07-19T00:33:37.006565",
-      "updated_at": "2026-07-19T00:33:37.006565"
+      "updated_at": "2026-07-19T03:45:59.675630"
     }
   ],
   "todo_stats": {
     "total": 3,
-    "completed": 0,
-    "remaining": 3,
+    "completed": 2,
+    "remaining": 1,
     "high_priority_remaining": 1,
-    "percent": 0.0
+    "percent": 66.7
   },
   "trends": [
     {
       "id": 1,
       "title": "大模型 & AI Agent",
-      "summary": "今日相关新闻 1 条，印奇在 WAIC 2026 开幕式主论坛发表主题演讲：当智能体走进物理世界",
+      "summary": "今日相关新闻 2 条，危！GPT-5.6会自动删文件，AI初创老板痛失整台Mac",
       "keywords": [
         "大模型",
         "LLM",
         "GPT"
       ],
-      "related_count": 1
+      "related_count": 2
     },
     {
       "id": 2,
+      "title": "算力 & 芯片",
+      "summary": "今日相关新闻 3 条，不靠英伟达网卡，国产GPU直通方案实测出炉：吞吐飙升、延迟砍半",
+      "keywords": [
+        "芯片",
+        "算力",
+        "GPU"
+      ],
+      "related_count": 3
+    },
+    {
+      "id": 3,
       "title": "产品 & 应用",
-      "summary": "今日相关新闻 2 条，滴滴在WAIC分享：AI升级出行体验 好服务连接消费烟火气",
+      "summary": "今日相关新闻 2 条，氪星晚报｜阿里1688将推出AI时代B2B交易互联互通开放标准；英特尔与Google Cloud宣布深化战略合作；铁路部门试点提前60天预约购票服务",
       "keywords": [
         "产品",
         "应用",
@@ -170,6 +323,6 @@
     }
   ],
   "errors": {},
-  "ts": 1784392417,
+  "ts": 1784473842,
   "greeting": ""
 }

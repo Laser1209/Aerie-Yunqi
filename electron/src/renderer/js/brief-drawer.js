@@ -231,7 +231,8 @@ class BriefDrawer {
   async refresh() {
     if (this._loading) return;
     this._loading = true;
-    this._showSkeleton();
+    const hasVisibleContent = !!(this._cached && this._body().children.length > 0);
+    if (!hasVisibleContent) this._showSkeleton();
     this._spinRefresh(true);
     try {
       const api = (window.aerie && window.aerie.api && window.aerie.api.request) || null;
@@ -272,7 +273,7 @@ class BriefDrawer {
       const r = await api({ method: "GET", path: "/api/persona" });
       const data = (r && r.data) || {};
       const nm = (data.name || data.english_name || "").toString().trim();
-      if (nm) {
+      if (nm && nm !== this._displayName) {
         this._displayName = nm;
         if (this._cached) this._renderData(this._cached);
       }

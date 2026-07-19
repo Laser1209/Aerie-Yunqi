@@ -21,6 +21,7 @@ Routes:
 """
 
 from __future__ import annotations
+import asyncio
 import json
 import logging
 import time
@@ -91,8 +92,53 @@ _computer_controller = None
 _file_organizer = FileOrganizer()
 _doc_writer = DocWriter()
 _calendar = CalendarManager(_db)
+_calendar_reminder_task: asyncio.Task | None = None
 _persona_mgr = get_persona_manager()
 _audio_transcriber = None
+
+
+async def _calendar_reminder_loop() -> None:
+    """Scan due calendar reminders and emit them to Electron/SSE clients."""
+    while True:
+        try:
+            reminders = _calendar.collect_due_reminders(lookback_minutes=2)
+            for reminder in reminders:
+                emit(
+                    "calendar_reminder",
+                    title=reminder.get("title", "日程提醒"),
+                    description=reminder.get("description", ""),
+                    event_id=reminder.get("event_id"),
+                    instance_id=reminder.get("instance_id"),
+                    start_time=reminder.get("start_time"),
+                    remind_at=reminder.get("remind_at"),
+                    color=reminder.get("color"),
+                    event_type=reminder.get("event_type"),
+                )
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("calendar reminder loop error")
+            await asyncio.sleep(30)
+
+
+@app.on_event("startup")
+async def _start_calendar_reminders() -> None:
+    global _calendar_reminder_task
+    if _calendar_reminder_task is None or _calendar_reminder_task.done():
+        _calendar_reminder_task = asyncio.create_task(_calendar_reminder_loop())
+
+
+@app.on_event("shutdown")
+async def _stop_calendar_reminders() -> None:
+    global _calendar_reminder_task
+    if _calendar_reminder_task:
+        _calendar_reminder_task.cancel()
+        try:
+            await _calendar_reminder_task
+        except asyncio.CancelledError:
+            pass
+        _calendar_reminder_task = None
 
 
 def _get_audio_transcriber() -> AudioTranscriber:

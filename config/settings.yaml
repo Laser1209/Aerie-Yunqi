@@ -6,3 +6,5 @@ qq:
 verify_batch4:
   ping: pong
   ts: 1784404889
+weather:
+  city: 济南

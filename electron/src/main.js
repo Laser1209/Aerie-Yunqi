@@ -1,5 +1,5 @@
 "use strict";
-const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen, Menu, dialog } = require("electron");
+const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen, Menu, dialog, Notification } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -717,6 +717,30 @@ ipcMain.handle("island:notify", async (_event, data) => {
   if (!dynamicIsland || dynamicIsland.isDestroyed()) return { ok: false };
   try {
     dynamicIsland.webContents.send("island:notify", data || {});
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("system:notify", async (_event, data) => {
+  try {
+    if (!Notification.isSupported()) return { ok: false, error: "notification_not_supported" };
+    const notification = new Notification({
+      title: String(data?.title || "Aerie · 云栖"),
+      body: String(data?.body || data?.desc || ""),
+      icon: fs.existsSync(ICON_PATH) ? ICON_PATH : undefined,
+      silent: Boolean(data?.silent),
+    });
+    notification.on("click", () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.webContents.send("ui:open-tab", "calendar");
+      }
+    });
+    notification.show();
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };

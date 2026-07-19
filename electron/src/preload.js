@@ -116,6 +116,7 @@ contextBridge.exposeInMainWorld("aerie", {
     setIgnoreMouse: (ignore) => ipcRenderer.invoke("island:set-ignore-mouse", { ignore }),
     openMain: (tab) => ipcRenderer.invoke("island:open-main", { tab }),
     notify: (data) => ipcRenderer.invoke("island:notify", data || {}),
+    systemNotify: (data) => ipcRenderer.invoke("system:notify", data || {}),
     getSystemStatus: () => ipcRenderer.invoke("island:get-system-status"),
     onSystemStatus: (cb) => {
       ipcRenderer.on("island:system-status", (_event, data) => cb(data || {}));

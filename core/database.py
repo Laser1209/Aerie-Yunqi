@@ -236,6 +236,15 @@ SCHEMA_SQL: list[str] = [
         updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
     """,
+    """
+    CREATE TABLE IF NOT EXISTS calendar_reminder_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        instance_id TEXT NOT NULL,
+        remind_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
 ]
 
 
@@ -253,6 +262,7 @@ INDEX_SQL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_calendar_type ON calendar_events(event_type);",
     "CREATE INDEX IF NOT EXISTS idx_todo_due_status ON todo(due_at, status);",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_todo_external_id ON todo(external_id);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_reminder_instance ON calendar_reminder_log(instance_id);",
 ]
 
 

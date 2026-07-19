@@ -676,7 +676,28 @@
       api.sseSubscribe?.((payload) => {
         handleSseEvent(payload);
       });
+
+      // Calendar reminders may also be forwarded by the main window after it
+      // refreshes local calendar events; keep the island in sync with those
+      // renderer-originated events as well as SSE events.
+      api.onCalendarReminder?.((data) => {
+        handleCalendarReminder(data);
+      });
+      api.onCalendarEventRefresh?.((data) => {
+        const reminder = data?.reminder || data?.event || data;
+        handleCalendarReminder(reminder);
+      });
     } catch (_) {}
+  }
+
+  function handleCalendarReminder(data) {
+    if (!data) return;
+    const title = data.title || data.summary || data.name || "日程提醒";
+    const timeText = data.timeText || data.startText || data.time || data.startTime || data.start_time || "";
+    const location = data.location ? ` · ${data.location}` : "";
+    const desc = data.desc || data.description || (timeText ? `${timeText}${location}` : "你有一个日程即将开始");
+    addNotification(title, desc, data.icon || "ui-calendar", "calendar_reminder");
+    api?.systemNotify?.({ title: `日程提醒：${title}`, body: desc })?.catch?.(() => {});
   }
 
   function handleSseEvent(payload) {
@@ -692,6 +713,9 @@
             payload.type
           );
         }
+        break;
+      case "calendar_reminder":
+        handleCalendarReminder(payload.data || payload);
         break;
       case "emotion_update":
       case "mood_change":

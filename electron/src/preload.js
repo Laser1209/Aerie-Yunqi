@@ -101,6 +101,10 @@ contextBridge.exposeInMainWorld("aerie", {
     set: (data) => ipcRenderer.invoke("settings:set", data),
     reset: () => ipcRenderer.invoke("settings:reset"),
   },
+  startup: {
+    get: () => ipcRenderer.invoke("startup:get"),
+    set: (options) => ipcRenderer.invoke("startup:set", options || {}),
+  },
   islandControl: {
     setConfig: (cfg) => ipcRenderer.invoke("island:set-config", cfg || {}),
     getConfig: () => ipcRenderer.invoke("island:get-config"),

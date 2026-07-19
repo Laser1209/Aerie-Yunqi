@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Multimodal Input Processor.
+"""Aerie · 云栖 v0.1.0-beta.1 — Multimodal Input Processor.
 
 Handles image understanding, OCR, and audio transcription,
 seamlessly integrating with the Agent perception pipeline.
@@ -273,7 +273,7 @@ class AudioTranscriber:
     """Audio-to-text transcription service.
 
     Supports:
-    - OpenAI Whisper API
+    - Multiple OpenAI-compatible Whisper API providers (auto-fallback)
     - Local whisper (if installed)
     - Fallback: empty transcript
     """
@@ -284,56 +284,199 @@ class AudioTranscriber:
         api_base: Optional[str] = None,
         model: str = "whisper-1",
     ) -> None:
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
-        self.api_base = api_base or os.getenv("OPENAI_API_BASE", "")
-        self.model = model
-        self._client = None
+        self._providers: list[dict] = []
         self._local_model = None
+        self._init_providers(api_key, api_base, model)
+        self._init_local()
 
-        if self.api_key:
-            try:
-                from openai import AsyncOpenAI
-                kwargs = {"api_key": self.api_key}
-                if self.api_base:
-                    kwargs["base_url"] = self.api_base
-                self._client = AsyncOpenAI(**kwargs)
-            except ImportError:
-                pass
+    def _init_providers(self, api_key: Optional[str], api_base: Optional[str], model: str) -> None:
+        import os
 
-        if self._client is None:
-            try:
-                import whisper
-                self._local_model = whisper.load_model("base")
-                logger.debug("AudioTranscriber: local whisper available")
-            except ImportError:
-                logger.info("AudioTranscriber: no backend available")
+        explicit_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        explicit_base = api_base or os.getenv("OPENAI_API_BASE", "")
+        if explicit_key and explicit_base:
+            self._providers.append({
+                "name": "openai",
+                "key": explicit_key,
+                "base_url": explicit_base,
+                "model": model,
+            })
+
+        provider_specs = [
+            ("DASHSCOPE_API_KEY", "DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1",
+             "DASHSCOPE_WHISPER_MODEL", "qwen-long", "qwen"),
+        ]
+
+        for key_env, url_env, default_url, model_env, default_model, name in provider_specs:
+            key = os.getenv(key_env, "")
+            if not key:
+                continue
+            if any(p["name"] == name for p in self._providers):
+                continue
+            base_url = os.getenv(url_env, "") or default_url
+            model_name = os.getenv(model_env, "") or default_model
+            self._providers.append({
+                "name": name,
+                "key": key,
+                "base_url": base_url,
+                "model": model_name,
+            })
+
+        if self._providers:
+            logger.info("AudioTranscriber: %d API provider(s) configured: %s",
+                        len(self._providers),
+                        ", ".join(p["name"] for p in self._providers))
+
+    def _init_local(self) -> None:
+        try:
+            import os
+            ffmpeg_dir = Path(__file__).parent.parent / "ffmpeg" / "ffmpeg-7.1-essentials_build" / "bin"
+            if ffmpeg_dir.exists():
+                os.environ["PATH"] = str(ffmpeg_dir) + os.pathsep + os.environ.get("PATH", "")
+            import whisper
+            self._local_model = whisper.load_model("base")
+            logger.debug("AudioTranscriber: local whisper available (base model)")
+            return
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning("AudioTranscriber: local whisper init failed: %s", e)
+
+        try:
+            import vosk
+            model_path = Path(__file__).parent.parent / "models" / "vosk-cn" / "vosk-model-small-cn-0.22"
+            if model_path.exists():
+                self._local_model = vosk.Model(str(model_path))
+                logger.debug("AudioTranscriber: vosk local ASR available")
+            else:
+                logger.debug("AudioTranscriber: vosk model not found at %s", model_path)
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning("AudioTranscriber: vosk init failed: %s", e)
 
     @property
     def is_available(self) -> bool:
-        return self._client is not None or self._local_model is not None
+        return len(self._providers) > 0 or self._local_model is not None
+
+    @property
+    def providers(self) -> list[dict]:
+        return [{"name": p["name"], "model": p["model"]} for p in self._providers]
 
     async def transcribe(self, audio_path: str, language: str = "zh") -> str:
         if not Path(audio_path).exists():
             return ""
 
-        if self._client is not None:
-            try:
-                with open(audio_path, "rb") as f:
-                    resp = await self._client.audio.transcriptions.create(
-                        model=self.model,
-                        file=f,
-                        language=language if language != "zh" else "zh",
-                    )
-                return resp.text.strip()
-            except Exception as e:
-                logger.warning("Whisper API transcription failed: %s", e)
-
         if self._local_model is not None:
             try:
-                result = self._local_model.transcribe(audio_path, language=language)
-                return result.get("text", "").strip()
+                import vosk
+                if isinstance(self._local_model, vosk.Model):
+                    import wave
+                    wf = wave.open(audio_path, "rb")
+                    if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getcomptype() != "NONE":
+                        logger.warning("AudioTranscriber: vosk requires 16kHz mono PCM")
+                        wf.close()
+                    else:
+                        rec = vosk.KaldiRecognizer(self._local_model, wf.getframerate())
+                        rec.SetWords(True)
+                        text_parts = []
+                        while True:
+                            data = wf.readframes(4000)
+                            if len(data) == 0:
+                                break
+                            if rec.AcceptWaveform(data):
+                                result = rec.Result()
+                                text_parts.append(result)
+                        final_result = rec.FinalResult()
+                        if final_result:
+                            text_parts.append(final_result)
+                        wf.close()
+                        import json
+                        text = ""
+                        for part in text_parts:
+                            try:
+                                j = json.loads(part)
+                                text += j.get("text", "") + " "
+                            except:
+                                pass
+                        text = text.strip()
+                        if text:
+                            logger.debug("AudioTranscriber: vosk succeeded")
+                            return text
+                else:
+                    try:
+                        import numpy as np
+                        import soundfile as sf
+                        audio_data, sr = sf.read(audio_path)
+                        if len(audio_data.shape) > 1:
+                            audio_data = audio_data.mean(axis=1)
+                        if sr != 16000:
+                            import librosa
+                            audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=16000)
+                        audio_data = audio_data.astype(np.float32)
+                        logger.info("AudioTranscriber: whisper input: shape=%s, dtype=%s", audio_data.shape, audio_data.dtype)
+                        result = self._local_model.transcribe(audio_data, language=language)
+                        text = result.get("text", "").strip()
+                        logger.info("AudioTranscriber: whisper output: '%s'", text)
+                        if text:
+                            logger.debug("AudioTranscriber: whisper succeeded (local)")
+                            return text
+                    except Exception as e:
+                        logger.warning("AudioTranscriber: whisper with soundfile failed: %s", e)
+                        try:
+                            import av
+                            import numpy as np
+                            container = av.open(audio_path)
+                            sr = container.streams.audio[0].rate if container.streams.audio else 16000
+                            audio_frames = []
+                            for frame in container.decode(audio=0):
+                                arr = frame.to_ndarray()
+                                if arr.ndim > 1:
+                                    arr = arr.mean(axis=0)
+                                audio_frames.append(arr)
+                            container.close()
+                            if audio_frames:
+                                max_len = max(len(f) for f in audio_frames)
+                                padded = []
+                                for f in audio_frames:
+                                    if len(f) < max_len:
+                                        f = np.pad(f, (0, max_len - len(f)))
+                                    padded.append(f)
+                                audio_data = np.concatenate(padded)
+                                if sr != 16000:
+                                    import librosa
+                                    audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=16000)
+                                audio_data = audio_data.astype(np.float32)
+                                result = self._local_model.transcribe(audio_data, language=language)
+                                text = result.get("text", "").strip()
+                                if text:
+                                    logger.debug("AudioTranscriber: whisper succeeded (PyAV)")
+                                    return text
+                        except Exception as e2:
+                            logger.warning("AudioTranscriber: whisper with PyAV failed: %s", e2)
             except Exception as e:
-                logger.warning("Local whisper failed: %s", e)
+                logger.warning("AudioTranscriber: local fallback failed: %s", e)
+
+        for provider in self._providers:
+            try:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(
+                    api_key=provider["key"],
+                    base_url=provider["base_url"],
+                )
+                with open(audio_path, "rb") as f:
+                    resp = await client.audio.transcriptions.create(
+                        model=provider["model"],
+                        file=f,
+                        language=language if language and language != "auto" else "",
+                    )
+                text = resp.text.strip()
+                if text:
+                    logger.debug("AudioTranscriber: %s succeeded", provider["name"])
+                    return text
+            except Exception as e:
+                logger.warning("AudioTranscriber: %s failed: %s", provider["name"], e)
+                continue
 
         return ""
 

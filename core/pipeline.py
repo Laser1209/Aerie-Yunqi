@@ -198,6 +198,12 @@ class Pipeline:
         # ══════════════════════════════════════════════
         # 5. Build context for LLM (stage 4)
         # ══════════════════════════════════════════════
+        time_context = None
+        try:
+            from core.calendar_manager import CalendarManager
+            time_context = CalendarManager(self.db).get_agent_snapshot(msg.user_id)
+        except Exception:
+            logger.warning("calendar snapshot unavailable", exc_info=True)
         ctx_messages = self.ctx_builder.build(
             msg.user_id,
             msg.content,
@@ -207,6 +213,7 @@ class Pipeline:
             eruption_info=eruption_info,
             reply_to=reply_to_data,
             attachments=msg.attachments if msg.attachments else None,
+            time_context=time_context,
         )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
@@ -399,6 +406,7 @@ class Pipeline:
         # 9. Persist user message
         # ══════════════════════════════════════════════
         user_row_id = 0
+        persist_errors: list[str] = []
         try:
             user_row_id = self.db.insert("chat_log", {
                 "user_id": msg.user_id,
@@ -411,7 +419,8 @@ class Pipeline:
                 "reply_to_role": reply_to_data["role"] if reply_to_data else None,
                 "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
             })
-        except Exception:
+        except Exception as e:
+            persist_errors.append(f"user message: {e}")
             logger.exception("db insert user msg error")
 
         # ══════════════════════════════════════════════
@@ -443,7 +452,8 @@ class Pipeline:
                     "route_mode": route_mode,
                 })
                 ai_row_ids.append(rid)
-        except Exception:
+        except Exception as e:
+            persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
         # Phase 9: stage 9 — output
@@ -590,7 +600,7 @@ class Pipeline:
                     pass
             self.send_queue.enqueue(reply)
 
-        return {
+        result = {
             "reply": reply_text,
             "user_msg_id": user_row_id,
             "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
@@ -599,7 +609,11 @@ class Pipeline:
             "route_mode": route_mode,
             "emotion": emotion_info.get("label") if emotion_info else "unknown",
             "cognition_id": trace.get("id", 0),
+            "persisted": not persist_errors,
         }
+        if persist_errors:
+            result["persist_error"] = "; ".join(persist_errors)
+        return result
 
     # ── Helpers ────────────────────────────────────────
     async def _handle_basic_lightweight(
@@ -740,6 +754,7 @@ class Pipeline:
 
         # 7. 持久化用户消息
         user_row_id = 0
+        persist_errors: list[str] = []
         try:
             user_row_id = self.db.insert("chat_log", {
                 "user_id": msg.user_id,
@@ -748,7 +763,8 @@ class Pipeline:
                 "msg_type": msg.msg_type,
                 "route_mode": route_mode,
             })
-        except Exception:
+        except Exception as e:
+            persist_errors.append(f"user message: {e}")
             logger.exception("db insert user msg error")
 
         # 8. 持久化 AI 回复
@@ -763,7 +779,8 @@ class Pipeline:
                     "route_mode": route_mode,
                 })
                 ai_row_ids.append(rid)
-        except Exception:
+        except Exception as e:
+            persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
         self.cognition.record(trace, "output", {
@@ -813,7 +830,7 @@ class Pipeline:
             )
             self.send_queue.enqueue(reply)
 
-        return {
+        result = {
             "reply": reply_text,
             "user_msg_id": user_row_id,
             "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
@@ -823,7 +840,11 @@ class Pipeline:
             "emotion": emotion_info.get("label") if emotion_info else "unknown",
             "cognition_id": trace.get("id", 0),
             "lightweight": True,
+            "persisted": not persist_errors,
         }
+        if persist_errors:
+            result["persist_error"] = "; ".join(persist_errors)
+        return result
 
     @staticmethod
     def _extract_react(text: str) -> dict:

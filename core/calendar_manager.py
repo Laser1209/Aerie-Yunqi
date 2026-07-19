@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 · 日历管理器
+"""Aerie v0.1.0-beta.1 · 日历管理器
 
 支持：日程、纪念日、倒计时、日志
 与对话联动：Agent 可以通过工具调用创建事件
@@ -45,12 +45,13 @@ class CalendarManager:
             ) or []
             if not rows:
                 return
-            existing = self._db.query(
-                "SELECT id FROM calendar_events WHERE source = 'migrated_anniversary'"
-            ) or []
-            if existing:
-                return
             for row in rows:
+                legacy_source = f"migrated_anniversary:{row['id']}"
+                exists = self._db.query_one(
+                    "SELECT id FROM calendar_events WHERE source = ?", (legacy_source,)
+                )
+                if exists:
+                    continue
                 self.create_event(
                     title=row["name"],
                     description=row.get("description", ""),
@@ -59,7 +60,7 @@ class CalendarManager:
                     all_day=1,
                     color=EVENT_COLORS["anniversary"],
                     remind_before=row.get("remind_before_days", 0),
-                    source="migrated_anniversary",
+                    source=legacy_source,
                 )
             logger.info("calendar: migrated %d anniversaries", len(rows))
         except Exception as e:
@@ -99,6 +100,8 @@ class CalendarManager:
 
     def update_event(self, event_id: int, **kwargs) -> bool:
         """更新日历事件"""
+        if not self.get_event(event_id):
+            return False
         fields = []
         values = []
         allowed = [
@@ -121,8 +124,7 @@ class CalendarManager:
 
     def delete_event(self, event_id: int) -> bool:
         """删除日历事件"""
-        self._db.execute("DELETE FROM calendar_events WHERE id = ?", (event_id,))
-        return True
+        return self._db.delete("calendar_events", "id = ?", (event_id,)) > 0
 
     def get_event(self, event_id: int) -> Optional[dict]:
         """获取单个事件详情"""
@@ -133,7 +135,8 @@ class CalendarManager:
         return dict(row) if row else None
 
     def list_events(self, start_date: str = None, end_date: str = None,
-                    event_type: str = None, limit: int = 200) -> list[dict]:
+                    event_type: str = None, limit: int = 200,
+                    user_id: int | None = None) -> list[dict]:
         """列出指定时间范围内的事件"""
         sql = "SELECT * FROM calendar_events WHERE 1=1"
         params = []
@@ -146,10 +149,48 @@ class CalendarManager:
         if event_type and event_type in EVENT_TYPES:
             sql += " AND event_type = ?"
             params.append(event_type)
+        if user_id is not None:
+            sql += " AND (user_id = ? OR user_id = 0 OR user_id IS NULL)"
+            params.append(user_id)
         sql += " ORDER BY start_time ASC LIMIT ?"
         params.append(limit)
         rows = self._db.query(sql, tuple(params)) or []
         return [dict(r) for r in rows]
+
+    def get_timeline(self, start_date: str, end_date: str, user_id: int | None = None) -> dict:
+        events = self.list_events(start_date, end_date, limit=500, user_id=user_id)
+        params = [start_date, end_date]
+        sql = "SELECT * FROM todo WHERE due_at >= ? AND due_at <= ?"
+        if user_id is not None:
+            sql += " AND (user_id = ? OR user_id = 0)"
+            params.append(user_id)
+        todos = self._db.query(sql + " ORDER BY due_at ASC", tuple(params)) or []
+        items = []
+        for event in events:
+            items.append({"id": f"event:{event['id']}", "kind": "event", "type": event["event_type"],
+                          "title": event["title"], "description": event.get("description", ""),
+                          "start_time": event["start_time"], "end_time": event.get("end_time"),
+                          "all_day": bool(event.get("all_day")), "color": event.get("color"),
+                          "completed": None, "priority": None, "editable": True, "source": event.get("source", "manual")})
+        for todo in todos:
+            items.append({"id": f"todo:{todo['external_id']}", "kind": "todo", "type": "todo",
+                          "title": todo["title"], "description": todo.get("notes") or "",
+                          "start_time": todo.get("due_at"), "end_time": None, "all_day": False,
+                          "color": None, "completed": todo.get("status") == "done",
+                          "priority": todo.get("priority"), "editable": True, "source": "todo"})
+        items.sort(key=lambda item: item.get("start_time") or "")
+        return {"items": items, "counts": {"total": len(items), "events": len(events), "todos": len(todos),
+                "pending": sum(item["completed"] is False for item in items)}}
+
+    def get_agent_snapshot(self, user_id: int, now: datetime | None = None) -> dict:
+        now = now or datetime.now()
+        date = now.strftime("%Y-%m-%d")
+        end = (now + timedelta(days=7)).strftime("%Y-%m-%dT23:59:59")
+        today = self.get_timeline(date + "T00:00:00", date + "T23:59:59", user_id)
+        upcoming = self.list_events(date + "T00:00:00", end, "anniversary", 20, user_id)
+        return {"date": date, "today_events": [i for i in today["items"] if i["kind"] == "event"],
+                "today_todos": [i for i in today["items"] if i["kind"] == "todo" and not i["completed"]],
+                "upcoming_anniversaries": [{"title": i["title"], "start_time": i["start_time"]} for i in upcoming[:10]]}
 
     def get_stats(self) -> dict:
         """获取日历统计信息"""

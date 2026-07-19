@@ -54,14 +54,18 @@ SCHEMA_SQL: list[str] = [
     """
     CREATE TABLE IF NOT EXISTS todo (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
+        external_id TEXT UNIQUE,
+        user_id INTEGER NOT NULL DEFAULT 0,
         title TEXT NOT NULL,
         description TEXT,
+        notes TEXT,
         due_at TEXT,
         reminder_at TEXT,
-        priority INTEGER DEFAULT 5,         -- 0-10
+        priority TEXT DEFAULT 'medium',
         status TEXT DEFAULT 'pending',      -- pending | done | cancelled
+        estimated_minutes INTEGER,
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
         done_at TEXT
     );
     """,
@@ -245,8 +249,10 @@ INDEX_SQL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_emotion_user_ts ON emotion_state_snapshot(user_id, ts DESC);",
     "CREATE INDEX IF NOT EXISTS idx_emotion_label_ts ON emotion_state_snapshot(label, ts DESC);",
     # v12.0.1: calendar events indexes
-    "CREATE INDEX IF NOT EXISTS idx_calendar_start_time ON calendar_events(start_time);",
+    "CREATE INDEX IF NOT EXISTS idx_calendar_start_type ON calendar_events(start_time, event_type);",
     "CREATE INDEX IF NOT EXISTS idx_calendar_type ON calendar_events(event_type);",
+    "CREATE INDEX IF NOT EXISTS idx_todo_due_status ON todo(due_at, status);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_todo_external_id ON todo(external_id);",
 ]
 
 
@@ -301,6 +307,7 @@ class Database:
                 conn.execute(stmt)
             # Phase 4: idempotent migrations for chat_log extensions
             self._migrate_chat_log(conn)
+            self._migrate_todo(conn)
             # Phase 4 + Phase 9: indexes (centralized for idempotency)
             for stmt in INDEX_SQL:
                 conn.execute(stmt)
@@ -323,6 +330,34 @@ class Database:
         for col, decl in migrations:
             if col not in existing:
                 conn.execute(f"ALTER TABLE chat_log ADD COLUMN {col} {decl}")
+
+    def _migrate_todo(self, conn: sqlite3.Connection) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(todo)").fetchall()
+        }
+        migrations = [
+            ("external_id", "TEXT"),
+            ("notes", "TEXT"),
+            ("estimated_minutes", "INTEGER"),
+            ("updated_at", "TEXT"),
+        ]
+        for col, decl in migrations:
+            if col not in existing:
+                conn.execute(f"ALTER TABLE todo ADD COLUMN {col} {decl}")
+        conn.execute(
+            "UPDATE todo SET external_id = CAST(id AS TEXT) WHERE external_id IS NULL OR external_id = ''"
+        )
+        conn.execute(
+            "UPDATE todo SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = ''"
+        )
+        conn.execute(
+            """UPDATE todo SET priority = CASE CAST(priority AS TEXT)
+               WHEN '10' THEN 'high' WHEN '9' THEN 'high' WHEN '8' THEN 'high'
+               WHEN '1' THEN 'low' WHEN '2' THEN 'low' WHEN '3' THEN 'low'
+               ELSE 'medium' END
+               WHERE priority NOT IN ('high', 'medium', 'low')"""
+        )
 
     # ===== CRUD helpers =====
     def execute(self, sql: str, params: tuple | dict = ()) -> sqlite3.Cursor:

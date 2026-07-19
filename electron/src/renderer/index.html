@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -231,6 +231,11 @@
     <symbol id="icon-ui-briefcase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
       <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+    </symbol>
+    <symbol id="icon-ui-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
     </symbol>
     <symbol id="icon-ui-microscope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M6 21h12"/>
@@ -707,39 +712,15 @@
       <section id="panel-memorial" class="tab-panel">
         <div class="calendar-panel">
           <div class="calendar-header">
-            <h2>日历 · 我们的时光</h2>
+            <div><h2>我们的时光</h2><p>纪念、安排与每日任务</p></div>
             <button id="cal-add-btn" class="btn btn-primary">+ 添加事件</button>
           </div>
 
           <div class="calendar-stats">
-            <div class="cal-stat-card">
-              <div class="cal-stat-icon"><svg class="icon icon--24 icon--danger"><use href="#icon-ui-heart"/></svg></div>
-              <div class="cal-stat-body">
-                <div class="cal-stat-value" id="cal-days-together">--</div>
-                <div class="cal-stat-label">相识天数</div>
-              </div>
-            </div>
-            <div class="cal-stat-card">
-              <div class="cal-stat-icon"><svg class="icon icon--24 icon--primary"><use href="#icon-ui-message"/></svg></div>
-              <div class="cal-stat-body">
-                <div class="cal-stat-value" id="cal-user-msgs">--</div>
-                <div class="cal-stat-label">你说的话</div>
-              </div>
-            </div>
-            <div class="cal-stat-card">
-              <div class="cal-stat-icon"><svg class="icon icon--24" style="color: var(--color-accent, #7c3aed);"><use href="#icon-ui-heart"/></svg></div>
-              <div class="cal-stat-body">
-                <div class="cal-stat-value" id="cal-companion-msgs">--</div>
-                <div class="cal-stat-label">她的回复</div>
-              </div>
-            </div>
-            <div class="cal-stat-card">
-              <div class="cal-stat-icon"><svg class="icon icon--24" style="color: var(--color-success, #10b981);"><use href="#icon-ui-calendar"/></svg></div>
-              <div class="cal-stat-body">
-                <div class="cal-stat-value" id="cal-total-events">--</div>
-                <div class="cal-stat-label">纪念与日程</div>
-              </div>
-            </div>
+            <div class="cal-relationship"><span>一起走过</span><strong id="cal-days-together">--</strong><span>天</span></div>
+            <div class="cal-stat-card"><div><div class="cal-stat-value" id="cal-today-count">--</div><div class="cal-stat-label">今日安排</div></div></div>
+            <div class="cal-stat-card"><div><div class="cal-stat-value" id="cal-pending-count">--</div><div class="cal-stat-label">待完成任务</div></div></div>
+            <div class="cal-stat-card"><div><div class="cal-stat-value" id="cal-anniversary-count">--</div><div class="cal-stat-label">未来纪念日</div></div></div>
           </div>
 
           <div class="calendar-main">
@@ -764,13 +745,12 @@
 
             <div class="calendar-events">
               <div class="cal-events-header">
-                <h3 id="cal-events-date">今日事件</h3>
+                <h3 id="cal-events-date">今日议程</h3>
                 <div class="cal-event-filters">
                   <button class="cal-filter-btn active" data-type="all">全部</button>
-                  <button class="cal-filter-btn" data-type="anniversary">纪念日</button>
+                  <button class="cal-filter-btn" data-type="anniversary">纪念</button>
                   <button class="cal-filter-btn" data-type="schedule">日程</button>
-                  <button class="cal-filter-btn" data-type="countdown">倒计时</button>
-                  <button class="cal-filter-btn" data-type="journal">日志</button>
+                  <button class="cal-filter-btn" data-type="todo">任务</button>
                 </div>
               </div>
               <div class="cal-events-list" id="cal-events-list"></div>
@@ -802,6 +782,7 @@
                   <input type="time" id="cal-form-time">
                   <label>描述（可选）</label>
                   <textarea id="cal-form-desc" rows="3" placeholder="详细描述..."></textarea>
+                  <div id="cal-form-error" class="cal-inline-error" hidden></div>
                   <label>颜色</label>
                   <div class="cal-color-picker" id="cal-color-picker">
                     <span class="cal-color-dot cal-color-dot--pink" data-color="#ff9a9e"></span>
@@ -1152,15 +1133,31 @@
             <button class="data-subtab" data-sub="system">系统状态</button>
           </div>
           <div id="data-chat-view" class="data-view">
-            <div id="chat-log-list" style="max-height:400px;overflow-y:auto;"></div>
-            <div class="data-pagination" style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <div id="chat-log-list" class="data-list"></div>
+            <div class="data-pagination">
               <button id="data-prev-btn" class="btn btn-secondary btn-sm" disabled>上一页</button>
-              <span id="data-page-info" style="font-size:12px;">第 1 页</span>
-              <button id="data-next-btn" class="btn btn-secondary btn-sm">下一页</button>
+              <span id="data-page-info" class="data-page-info">第 1 / 1 页 · 共 0 条</span>
+              <button id="data-next-btn" class="btn btn-secondary btn-sm" disabled>下一页</button>
             </div>
           </div>
           <div id="data-knowledge-view" class="data-view" style="display:none;">
-            <div id="knowledge-list"></div>
+            <div class="knowledge-toolbar">
+              <input id="knowledge-search" class="data-control" type="search" placeholder="搜索标题、正文或标签" autocomplete="off">
+              <select id="knowledge-category-filter" class="data-control">
+                <option value="">全部分类</option>
+                <option value="world">世界知识</option>
+                <option value="persona">人设知识</option>
+                <option value="task">任务知识</option>
+              </select>
+              <button id="knowledge-add-btn" class="btn btn-primary btn-sm">新增知识</button>
+            </div>
+            <div id="knowledge-status" class="data-status" aria-live="polite"></div>
+            <div id="knowledge-list" class="knowledge-list"></div>
+            <div class="data-pagination">
+              <button id="knowledge-prev-btn" class="btn btn-secondary btn-sm" disabled>上一页</button>
+              <span id="knowledge-page-info" class="data-page-info">第 1 / 1 页 · 共 0 条</span>
+              <button id="knowledge-next-btn" class="btn btn-secondary btn-sm" disabled>下一页</button>
+            </div>
           </div>
           <div id="data-system-view" class="data-view" style="display:none;">
             <div class="status-grid">
@@ -1168,6 +1165,56 @@
               <div class="status-card"><div class="status-card-label">CPU</div><div class="status-card-value" id="ds-cpu">--</div></div>
               <div class="status-card"><div class="status-card-label">内存</div><div class="status-card-value" id="ds-memory">--</div></div>
               <div class="status-card"><div class="status-card-label">消息总数</div><div class="status-card-value" id="ds-messages">--</div></div>
+            </div>
+          </div>
+
+          <div id="knowledge-modal" class="data-modal hidden" role="dialog" aria-modal="true" aria-labelledby="knowledge-modal-title">
+            <div class="data-modal-backdrop" data-knowledge-close></div>
+            <div class="data-modal-panel">
+              <div class="data-modal-header">
+                <h3 id="knowledge-modal-title">新增知识</h3>
+                <button class="data-modal-close" type="button" data-knowledge-close aria-label="关闭">×</button>
+              </div>
+              <div class="data-modal-body">
+                <div class="settings-group">
+                  <label for="knowledge-form-category">分类</label>
+                  <input id="knowledge-form-category" type="text" maxlength="80" autocomplete="off">
+                </div>
+                <div class="settings-group">
+                  <label for="knowledge-form-title">标题</label>
+                  <input id="knowledge-form-title" type="text" maxlength="200" autocomplete="off">
+                </div>
+                <div class="settings-group">
+                  <label for="knowledge-form-content">正文</label>
+                  <textarea id="knowledge-form-content" rows="10"></textarea>
+                </div>
+                <div class="settings-group">
+                  <label for="knowledge-form-tags">标签</label>
+                  <input id="knowledge-form-tags" type="text" placeholder="多个标签用逗号分隔" autocomplete="off">
+                </div>
+                <div id="knowledge-form-error" class="data-status data-status--error" aria-live="polite"></div>
+              </div>
+              <div class="data-modal-footer">
+                <button class="btn btn-secondary" type="button" data-knowledge-close>取消</button>
+                <button id="knowledge-save-btn" class="btn btn-primary" type="button">保存</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="knowledge-delete-modal" class="data-modal hidden" role="dialog" aria-modal="true" aria-labelledby="knowledge-delete-title">
+            <div class="data-modal-backdrop" data-delete-close></div>
+            <div class="data-modal-panel data-modal-panel--confirm">
+              <div class="data-modal-header">
+                <h3 id="knowledge-delete-title">确认删除</h3>
+                <button class="data-modal-close" type="button" data-delete-close aria-label="关闭">×</button>
+              </div>
+              <div class="data-modal-body">
+                <p id="knowledge-delete-message" class="data-confirm-message"></p>
+              </div>
+              <div class="data-modal-footer">
+                <button class="btn btn-secondary" type="button" data-delete-close>取消</button>
+                <button id="knowledge-delete-confirm" class="btn btn-primary" type="button">删除</button>
+              </div>
             </div>
           </div>
         </div>

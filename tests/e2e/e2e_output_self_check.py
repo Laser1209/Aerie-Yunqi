@@ -148,65 +148,62 @@ def case_6_balanced_unchanged() -> bool:
     return ok_flag
 
 
-# ── Case 7: typo "了了" → "了" ────────────────────────────
-def case_7_typo_collapsed() -> bool:
+# ── Case 7: duplicate chars preserved ────────────────────────────
+def case_7_duplicate_chars_preserved() -> bool:
     c = OutputSelfCheck()
-    # 连续重复字符（2-gram duplicate）："了了" → "了"
     text = "我刚看到了了。"
     r = c.check(text)
     ok_flag = (
-        r.typo_fixes >= 1
-        and "了了" not in r.cleaned_text
+        r.typo_fixes == 0
+        and "了了" in r.cleaned_text
     )
     _check(
-        "Case 7 · typo '了了' → '了'",
+        "Case 7 · 重复字符 '了了' → 保留",
         ok_flag,
         f"typo_fixes={r.typo_fixes} text={r.cleaned_text!r}",
     )
     return ok_flag
 
 
-# ── Case 8: typo "的的" → "的" ─────────────────────────────────
-def case_8_typo_collapsed_2() -> bool:
+# ── Case 8: duplicate chars preserved ────────────────────────────
+def case_8_duplicate_chars_preserved_2() -> bool:
     c = OutputSelfCheck()
     text = "是你的的的微笑让我记住了这一刻。"
     r = c.check(text)
     ok_flag = (
-        r.typo_fixes >= 1
-        and "的的" not in r.cleaned_text
+        r.typo_fixes == 0
+        and "的的" in r.cleaned_text
     )
     _check(
-        "Case 8 · typo '的的' → '的'",
+        "Case 8 · 重复字符 '的的' → 保留",
         ok_flag,
         f"typo_fixes={r.typo_fixes} text={r.cleaned_text!r}",
     )
     return ok_flag
 
 
-# ── Case 9: keep dictionary "看看" → preserved ─────────────────
-def case_9_keep_dictionary_preserved() -> bool:
+# ── Case 9: duplicate word preserved ─────────────────────────────
+def case_9_duplicate_word_preserved() -> bool:
     c = OutputSelfCheck()
     text = "我看看你发的消息。"
     r = c.check(text)
-    # "看看" 出现在 keep 字典里，应该原样保留
-    ok_flag = "看看" in r.cleaned_text
+    ok_flag = "看看" in r.cleaned_text and r.typo_fixes == 0
     _check(
-        "Case 9 · keep 字典 '看看' → 不动",
+        "Case 9 · 重复词 '看看' → 保留",
         ok_flag,
         f"typo_fixes={r.typo_fixes} text={r.cleaned_text!r}",
     )
     return ok_flag
 
 
-# ── Case 10: keep dictionary "真的真的" → preserved ────────────
-def case_10_keep_dictionary_preserved_2() -> bool:
+# ── Case 10: duplicate phrase preserved ──────────────────────────
+def case_10_duplicate_phrase_preserved() -> bool:
     c = OutputSelfCheck()
     text = "我真的很想见你，真的真的很想。"
     r = c.check(text)
-    # "真的真的" 出现在 keep 字典里，应原样保留
-    ok_flag = "真的真的" in r.cleaned_text
+    ok_flag = "真的真的" in r.cleaned_text and r.typo_fixes == 0
     _check(
-        "Case 10 · keep 字典 '真的真的' → 不动",
+        "Case 10 · 重复短语 '真的真的' → 保留",
         ok_flag,
         f"typo_fixes={r.typo_fixes} text={r.cleaned_text!r}",
     )
@@ -274,7 +271,7 @@ def case_12_check_result_dataclass() -> bool:
 
 def main() -> int:
     print("=" * 60)
-    print("E2E T2 · C 节 OutputSelfCheck 3 规则验证 (12 用例)")
+    print("E2E T2 · C 节 OutputSelfCheck 2 规则验证 (12 用例)")
     print("=" * 60)
     results: list[bool] = [
         case_1_perspective_shift_triggered(),
@@ -283,10 +280,10 @@ def main() -> int:
         case_4_unclosed_open_appended(),
         case_5_orphan_close_stripped(),
         case_6_balanced_unchanged(),
-        case_7_typo_collapsed(),
-        case_8_typo_collapsed_2(),
-        case_9_keep_dictionary_preserved(),
-        case_10_keep_dictionary_preserved_2(),
+        case_7_duplicate_chars_preserved(),
+        case_8_duplicate_chars_preserved_2(),
+        case_9_duplicate_word_preserved(),
+        case_10_duplicate_phrase_preserved(),
         case_11_screenshot_repro_no_warning(),
         case_12_check_result_dataclass(),
     ]

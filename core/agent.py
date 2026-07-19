@@ -282,6 +282,12 @@ class Agent:
                 pass
 
         # 7. 上下文构建
+        time_context = None
+        try:
+            from core.calendar_manager import CalendarManager
+            time_context = CalendarManager(self.db).get_agent_snapshot(msg.user_id)
+        except Exception:
+            logger.warning("calendar snapshot unavailable", exc_info=True)
         ctx_messages = self.ctx_builder.build(
             msg.user_id,
             msg.content,
@@ -291,6 +297,7 @@ class Agent:
             eruption_info=eruption_info,
             reply_to=reply_to_data,
             attachments=msg.attachments if msg.attachments else None,
+            time_context=time_context,
         )
 
         # 7.5 Provider 复杂度评估 (S2 M2.1)

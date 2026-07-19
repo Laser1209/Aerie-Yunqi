@@ -58,8 +58,12 @@ from core.file_organizer import FileOrganizer
 from core.doc_writer import DocWriter
 from core.calendar_manager import CalendarManager
 from core.persona_hub import get_persona_manager
+from core.multimodal_input import AudioTranscriber
+from knowledge.kb import KnowledgeBase
 
 logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(main.PROJECT_ROOT).resolve()
 
 app = FastAPI(title="Aerie · 云栖", version="0.1.0-beta.1")
 
@@ -78,6 +82,7 @@ app.add_middleware(
 )
 
 _db = Database()
+_knowledge = KnowledgeBase(_db)
 _START_TIME = time.time()
 
 # v13.9: 使用 companion 中的共享 ComputerController 实例，确保权限设置全局生效
@@ -87,6 +92,14 @@ _file_organizer = FileOrganizer()
 _doc_writer = DocWriter()
 _calendar = CalendarManager(_db)
 _persona_mgr = get_persona_manager()
+_audio_transcriber = None
+
+
+def _get_audio_transcriber() -> AudioTranscriber:
+    global _audio_transcriber
+    if _audio_transcriber is None:
+        _audio_transcriber = AudioTranscriber()
+    return _audio_transcriber
 
 
 def _get_computer_controller():
@@ -167,6 +180,7 @@ async def health(request: Request) -> dict:
         "qq_connected": qq_ws_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
         "process_started_at": getattr(main, "PROCESS_START_ISO", ""),
+        "data_path_id": str(_db.db_path.resolve()).lower(),
         "stale_code": stale_info,
         "components": {
             "backend": "healthy" if comp else "unhealthy",
@@ -377,41 +391,52 @@ async def chat_send(request: Request) -> dict:
     if not result:
         return {"reply": "(已收到)", "status": "ok"}
 
-    return {
+    response = {
         "reply": result.get("reply", ""),
         "user_msg_id": result.get("user_msg_id", 0),
         "ai_msg_id": result.get("ai_msg_id", 0),
         "reply_to_id": reply_to_id,
         "status": "ok",
+        "persisted": result.get("persisted", True),
     }
+    if result.get("persist_error"):
+        response["persist_error"] = result["persist_error"]
+    return response
 
 
 @app.get("/api/chat/history")
 async def chat_history(
-    user_id: int = Query(default=None),
-    limit: int = Query(default=50),
+    user_id: int | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
-    if user_id is None:
-        user_id = get_master_qq()
     try:
+        where = " WHERE user_id = ?" if user_id is not None else ""
+        params = (user_id,) if user_id is not None else ()
+        count = _db.query_one(f"SELECT COUNT(*) AS cnt FROM chat_log{where}", params)
         rows = _db.query(
-            "SELECT * FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT ?",
-            (user_id, limit),
+            f"SELECT * FROM chat_log{where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            params + (limit, (page - 1) * limit),
         )
         rows.reverse()
-        # Parse attachments JSON
         import json as _json
-        for r in rows:
-            if r.get("attachments"):
+        for row in rows:
+            if row.get("attachments"):
                 try:
-                    r["attachments"] = _json.loads(r["attachments"])
+                    row["attachments"] = _json.loads(row["attachments"])
                 except Exception:
-                    r["attachments"] = []
+                    row["attachments"] = []
             else:
-                r["attachments"] = []
-        return {"history": rows, "user_id": user_id}
+                row["attachments"] = []
+        return {
+            "history": rows,
+            "total": int(count["cnt"] if count else 0),
+            "page": page,
+            "limit": limit,
+            "user_id": user_id,
+        }
     except Exception as e:
-        return {"history": [], "error": str(e)}
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/chat/poll")
@@ -572,6 +597,131 @@ async def upload_types() -> dict:
         "allowed_types": sorted(ALLOWED_TYPES),
         "max_size_bytes": MAX_UPLOAD_SIZE,
     }
+
+
+# ── Audio Transcription (Domestic ASR) ─────────────
+
+@app.get("/api/audio/status")
+async def audio_transcribe_status() -> dict:
+    """Check if audio transcription is available and list configured providers."""
+    transcriber = _get_audio_transcriber()
+    return {
+        "available": transcriber.is_available,
+        "providers": transcriber.providers,
+        "has_local": transcriber._local_model is not None,
+    }
+
+
+@app.post("/api/audio/transcribe")
+async def audio_transcribe(
+    file: UploadFile = File(...),
+    language: str = Query("zh", description="Language code: zh, en, auto"),
+) -> dict:
+    """Transcribe audio to text using domestic ASR providers.
+
+    Uses Whisper-compatible APIs with automatic fallback across
+    configured providers (SiliconFlow, Qwen, Doubao, DeepSeek, etc.).
+    """
+    import uuid
+    import tempfile
+    from pathlib import Path
+
+    transcriber = _get_audio_transcriber()
+    if not transcriber.is_available:
+        return JSONResponse({
+            "status": "error",
+            "error": "No ASR provider available. Configure an API key in settings.",
+        }, status_code=503)
+
+    try:
+        content = await file.read()
+        if not content:
+            return JSONResponse({
+                "status": "error",
+                "error": "Empty audio file",
+            }, status_code=400)
+
+        if len(content) > 25 * 1024 * 1024:
+            return JSONResponse({
+                "status": "error",
+                "error": "Audio file too large (max 25MB)",
+            }, status_code=413)
+
+        suffix = Path(file.filename or "audio.webm").suffix.lower()
+        if not suffix:
+            suffix = ".webm"
+        allowed_suffixes = {".mp3", ".wav", ".flac", ".m4a", ".ogg", ".aac", ".webm", ".mp4", ".wma", ".opus"}
+        if suffix not in allowed_suffixes:
+            suffix = ".webm"
+
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            logger.info("AudioTranscribe: received file %s, size=%d bytes, suffix=%s", file.filename, len(content), suffix)
+            
+            if suffix in (".webm", ".ogg", ".opus", ".mp4", ".m4a", ".aac", ".wma"):
+                try:
+                    import av
+                    import numpy as np
+                    import soundfile as sf
+                    wav_path = tmp_path.replace(suffix, ".wav")
+                    container = av.open(tmp_path)
+                    audio_frames = []
+                    for frame in container.decode(audio=0):
+                        arr = frame.to_ndarray()
+                        if arr.ndim > 1:
+                            arr = arr.mean(axis=0)
+                        audio_frames.append(arr)
+                    logger.info("AudioTranscribe: PyAV decoded %d frames", len(audio_frames))
+                    if audio_frames:
+                        max_len = max(len(f) for f in audio_frames)
+                        padded = []
+                        for f in audio_frames:
+                            if len(f) < max_len:
+                                f = np.pad(f, (0, max_len - len(f)))
+                            padded.append(f)
+                        data = np.concatenate(padded)
+                        sr = container.streams.audio[0].rate
+                        max_val = np.max(np.abs(data))
+                        if max_val > 0.001:
+                            data = data / max_val
+                        else:
+                            logger.info("AudioTranscribe: audio is mostly silent (max_val=%f), skipping normalization", max_val)
+                        logger.info("AudioTranscribe: decoded data shape=%s, sr=%d, max=%f, min=%f (after normalization)", data.shape, sr, np.max(data), np.min(data))
+                        sf.write(wav_path, data, sr)
+                        tmp_path = wav_path
+                        logger.info("AudioTranscribe: converted to WAV, size=%d bytes", Path(wav_path).stat().st_size)
+                    container.close()
+                except Exception as e:
+                    logger.warning("Failed to convert audio to WAV using PyAV: %s", e)
+
+            text = await transcriber.transcribe(tmp_path, language=language)
+            logger.info("AudioTranscribe: transcription result: '%s'", text)
+            return {
+                "status": "ok",
+                "text": text,
+                "language": language,
+                "duration_estimate": round(len(content) / 16000, 2),
+            }
+        finally:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+            try:
+                if wav_path and wav_path != tmp_path:
+                    Path(wav_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.exception("Audio transcription failed")
+        return JSONResponse({
+            "status": "error",
+            "error": str(e),
+        }, status_code=500)
 
 @app.post("/api/chat/recall/{msg_id}")
 async def chat_recall(msg_id: int) -> dict:
@@ -2100,17 +2250,29 @@ async def calendar_events(
     end: str = Query(default=None),
     event_type: str = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
+    user_id: int | None = Query(default=None),
 ) -> dict:
     """List calendar events in a date range."""
     try:
         events = _calendar.list_events(
             start_date=start, end_date=end,
-            event_type=event_type, limit=limit,
+            event_type=event_type, limit=limit, user_id=user_id,
         )
         return {"events": events}
     except Exception as e:
         logger.exception("calendar_events error")
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e), "code": "calendar_list_failed"}, status_code=500)
+
+
+@app.get("/api/calendar/timeline")
+async def calendar_timeline(start: str = Query(...), end: str = Query(...), user_id: int | None = Query(default=None)) -> dict:
+    try:
+        return _calendar.get_timeline(start, end, user_id)
+    except ValueError as e:
+        return JSONResponse({"error": str(e), "code": "invalid_range"}, status_code=400)
+    except Exception as e:
+        logger.exception("calendar_timeline error")
+        return JSONResponse({"error": str(e), "code": "timeline_failed"}, status_code=500)
 
 
 @app.get("/api/calendar/events/{event_id}")
@@ -2122,7 +2284,7 @@ async def calendar_event_detail(event_id: int) -> dict:
             return JSONResponse({"error": "not found"}, status_code=404)
         return event
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e), "code": "calendar_detail_failed"}, status_code=500)
 
 
 @app.post("/api/calendar/events")
@@ -2131,13 +2293,15 @@ async def calendar_create(request: Request) -> dict:
     try:
         body = await request.json()
         event_id = _calendar.create_event(**body)
-        emit("calendar_event_created", id=event_id, event=_calendar.get_event(event_id))
-        return {"status": "ok", "id": event_id}
+        event = _calendar.get_event(event_id)
+        emit("calendar_event_created", id=event_id, event=event)
+        emit("timeline_changed", date=event["start_time"][:10], kind="event", action="created", id=f"event:{event_id}")
+        return {"status": "ok", "id": event_id, "event": event}
     except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+        return JSONResponse({"error": str(e), "code": "invalid_event"}, status_code=400)
     except Exception as e:
         logger.exception("calendar_create error")
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e), "code": "calendar_create_failed"}, status_code=500)
 
 
 @app.put("/api/calendar/events/{event_id}")
@@ -2149,22 +2313,28 @@ async def calendar_update(event_id: int, request: Request) -> dict:
         if not ok:
             return JSONResponse({"error": "not found"}, status_code=404)
         emit("calendar_event_updated", id=event_id)
+        event = _calendar.get_event(event_id)
+        emit("timeline_changed", date=event["start_time"][:10], kind="event", action="updated", id=f"event:{event_id}")
         return {"status": "ok"}
+    except ValueError as e:
+        return JSONResponse({"error": str(e), "code": "invalid_event"}, status_code=400)
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e), "code": "calendar_update_failed"}, status_code=500)
 
 
 @app.delete("/api/calendar/events/{event_id}")
 async def calendar_delete(event_id: int) -> dict:
     """Delete a calendar event."""
     try:
+        event = _calendar.get_event(event_id)
         ok = _calendar.delete_event(event_id)
         if not ok:
             return JSONResponse({"error": "not found"}, status_code=404)
         emit("calendar_event_deleted", id=event_id)
+        emit("timeline_changed", date=event["start_time"][:10], kind="event", action="deleted", id=f"event:{event_id}")
         return {"status": "ok"}
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e), "code": "calendar_delete_failed"}, status_code=500)
 
 
 @app.get("/api/calendar/stats")
@@ -2173,16 +2343,18 @@ async def calendar_stats() -> dict:
     try:
         return _calendar.get_stats()
     except Exception as e:
-        return {"error": str(e)}
+        logger.exception("calendar_stats error")
+        return JSONResponse({"error": str(e), "code": "calendar_stats_failed"}, status_code=500)
 
 
 @app.get("/api/calendar/companion")
 async def calendar_companion() -> dict:
     """Companion stats: days together, message counts, etc."""
     try:
-        return _calendar.get_companion_stats(first_start_ts=int(_START_TIME))
+        return _calendar.get_companion_stats()
     except Exception as e:
-        return {"error": str(e)}
+        logger.exception("calendar_companion error")
+        return JSONResponse({"error": str(e), "code": "calendar_companion_failed"}, status_code=500)
 
 
 # ── Stats ───────────────────────────────────────────
@@ -2422,12 +2594,16 @@ async def location_set(request: Request) -> dict:
 async def anniversary_list() -> dict:
     """List all anniversaries with days_since calculated."""
     try:
-        rows = _db.query("SELECT * FROM anniversary ORDER BY date")
+        rows = _db.query("SELECT * FROM calendar_events WHERE event_type = 'anniversary' ORDER BY start_time")
         from datetime import datetime as dt
+        items = []
         for row in rows:
-            d = dt.strptime(row["date"], "%Y-%m-%d")
-            row["days_since"] = (dt.now() - d).days
-        return {"items": rows, "count": len(rows)}
+            item = dict(row)
+            item["name"] = item["title"]
+            item["date"] = item["start_time"][:10]
+            item["days_since"] = (dt.now() - dt.strptime(item["date"], "%Y-%m-%d")).days
+            items.append(item)
+        return {"items": items, "count": len(items)}
     except Exception as e:
         return {"items": [], "error": str(e)}
 
@@ -2437,12 +2613,15 @@ async def anniversary_add(request: Request) -> dict:
     """Add a new anniversary."""
     try:
         body = await request.json()
-        aid = _db.insert("anniversary", {
-            "name": body.get("name", ""),
-            "date": body.get("date", ""),
-            "type": body.get("type", "custom"),
-            "description": body.get("description", ""),
-        })
+        aid = _calendar.create_event(
+            title=body.get("name", ""),
+            start_time=body.get("date", "") + "T00:00:00",
+            event_type="anniversary",
+            description=body.get("description", ""),
+            all_day=1,
+            source="legacy_anniversary_api",
+        )
+        emit("timeline_changed", date=body.get("date", ""), kind="event", action="created", id=f"event:{aid}")
         return {"status": "ok", "id": aid}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -2492,24 +2671,72 @@ async def anniversary_upcoming(days: int = Query(default=7)) -> dict:
 
 @app.get("/api/knowledge/list")
 async def knowledge_list(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
     category: str = Query(default=""),
     search: str = Query(default=""),
 ) -> dict:
-    """List knowledge base entries with optional filters."""
     try:
-        sql = "SELECT id, category, title, tags, created_at FROM knowledge_base WHERE 1=1"
-        params = []
-        if category:
-            sql += " AND category = ?"
-            params.append(category)
-        if search:
-            sql += " AND (title LIKE ? OR content LIKE ?)"
-            params.extend([f"%{search}%", f"%{search}%"])
-        sql += " ORDER BY updated_at DESC LIMIT 100"
-        rows = _db.query(sql, tuple(params))
-        return {"items": rows, "count": len(rows)}
+        items, total = _knowledge.list(page, limit, category.strip(), search.strip())
+        return {"items": items, "total": total, "page": page, "limit": limit}
     except Exception as e:
-        return {"items": [], "error": str(e)}
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/knowledge/{item_id}")
+async def knowledge_get(item_id: int) -> dict:
+    try:
+        item = _knowledge.get(item_id)
+        if not item:
+            return JSONResponse({"error": "knowledge not found"}, status_code=404)
+        return item
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def _knowledge_fields(body: dict) -> tuple[str, str, str, str] | None:
+    category = str(body.get("category") or "").strip()
+    title = str(body.get("title") or "").strip()
+    content = str(body.get("content") or "").strip()
+    tags = str(body.get("tags") or "").strip()
+    if not category or not title or not content:
+        return None
+    return category, title, content, tags
+
+
+@app.post("/api/knowledge")
+async def knowledge_add(request: Request) -> dict:
+    fields = _knowledge_fields(await request.json())
+    if not fields:
+        return JSONResponse({"error": "category, title and content are required"}, status_code=400)
+    try:
+        item_id = _knowledge.add(*fields)
+        return JSONResponse(_knowledge.get(item_id), status_code=201)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.put("/api/knowledge/{item_id}")
+async def knowledge_update(item_id: int, request: Request) -> dict:
+    fields = _knowledge_fields(await request.json())
+    if not fields:
+        return JSONResponse({"error": "category, title and content are required"}, status_code=400)
+    try:
+        if not _knowledge.update(item_id, *fields):
+            return JSONResponse({"error": "knowledge not found"}, status_code=404)
+        return _knowledge.get(item_id)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.delete("/api/knowledge/{item_id}")
+async def knowledge_delete(item_id: int) -> dict:
+    try:
+        if not _knowledge.delete(item_id):
+            return JSONResponse({"error": "knowledge not found"}, status_code=404)
+        return {"status": "ok", "id": item_id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── System Stats ──────────────────────────────────────
@@ -2546,9 +2773,14 @@ async def system_stats() -> dict:
             "cpu": cpu_str,
             "memory": memory_str,
             "message_count": message_count,
+            "backend_started_at": time.strftime(
+                "%Y-%m-%dT%H:%M:%S%z", time.localtime(_START_TIME)
+            ),
+            "database_path": str(_db.db_path.resolve()),
+            "project_root": str(PROJECT_ROOT),
         }
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── Block-2 A2: Persona (name / english_name / avatar) ──────
@@ -2967,6 +3199,7 @@ async def add_todo(request: Request) -> dict:
             estimated_minutes=body.get("estimated_minutes"),
             date_str=body.get("date_str"),
         )
+        emit("timeline_changed", date=(todo.get("due_time") or body.get("date_str") or datetime.now().strftime("%Y-%m-%d"))[:10], kind="todo", action="created", id=f"todo:{todo['id']}")
         return {"status": "ok", "todo": todo}
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
@@ -2986,6 +3219,7 @@ async def update_todo(todo_id: str, request: Request, date: str | None = None) -
         updated = todo_manager.update_todo(todo_id, body, date)
         if updated is None:
             return JSONResponse({"error": "not found"}, status_code=404)
+        emit("timeline_changed", date=(updated.get("due_time") or date or datetime.now().strftime("%Y-%m-%d"))[:10], kind="todo", action="updated", id=f"todo:{todo_id}")
         return {"status": "ok", "todo": updated}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -2996,9 +3230,13 @@ async def delete_todo(todo_id: str, date: str | None = None) -> dict:
     """Delete a todo by id."""
     try:
         from core import todo_manager
+        todo = todo_manager.get_todo(todo_id)
+        if todo is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
         ok = todo_manager.delete_todo(todo_id, date)
         if not ok:
             return JSONResponse({"error": "not found"}, status_code=404)
+        emit("timeline_changed", date=(todo.get("due_time") or date or datetime.now().strftime("%Y-%m-%d"))[:10], kind="todo", action="deleted", id=f"todo:{todo_id}")
         return {"status": "ok"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -3012,6 +3250,7 @@ async def toggle_todo(todo_id: str, date: str | None = None) -> dict:
         updated = todo_manager.toggle_todo(todo_id, date)
         if updated is None:
             return JSONResponse({"error": "not found"}, status_code=404)
+        emit("timeline_changed", date=(updated.get("due_time") or date or datetime.now().strftime("%Y-%m-%d"))[:10], kind="todo", action="toggled", id=f"todo:{todo_id}")
         return {"status": "ok", "todo": updated}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

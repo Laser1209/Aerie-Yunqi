@@ -76,6 +76,9 @@ window.addEventListener("DOMContentLoaded", () => {
       if (window.cognitionPanel) {
         window.cognitionPanel.setVisible(tab === "cognition");
       }
+      if (window.dataViewer) {
+        window.dataViewer.setVisible(tab === "data");
+      }
       if (window.personaHub) {
         window.personaHub.setVisible(tab === "persona-hub");
       }

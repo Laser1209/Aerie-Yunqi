@@ -44,6 +44,72 @@ let _pendingHealthInterval = null;
 let BACKEND_DB_PATH = null;
 let BACKEND_DATA_DIR = null;
 let BACKEND_LOG_DIR = null;
+const START_MINIMIZED_ARG = "--start-minimized";
+
+function isStartMinimizedArgPresent() {
+  return process.argv.includes(START_MINIMIZED_ARG) || process.argv.includes("--hidden");
+}
+
+function getWindowsScriptHostPath() {
+  const systemRoot = process.env.SystemRoot || "C:\\Windows";
+  return path.join(systemRoot, "System32", "wscript.exe");
+}
+
+function getDevSilentLauncherPath() {
+  return path.join(PROJECT_ROOT, "start-dev-silent.vbs");
+}
+
+function getStartupLaunchConfig(startMinimized) {
+  if (app.isPackaged) {
+    return {
+      path: app.getPath("exe"),
+      args: startMinimized ? [START_MINIMIZED_ARG] : [],
+    };
+  }
+
+  const args = [getDevSilentLauncherPath()];
+  if (startMinimized) args.push(START_MINIMIZED_ARG);
+  return {
+    path: getWindowsScriptHostPath(),
+    args,
+  };
+}
+
+function getStartupSettings() {
+  const defaultConfig = getStartupLaunchConfig(false);
+  const minimizedConfig = getStartupLaunchConfig(true);
+  const defaultState = app.getLoginItemSettings(defaultConfig);
+  const minimizedState = app.getLoginItemSettings(minimizedConfig);
+  const autoStart = defaultState.openAtLogin === true || minimizedState.openAtLogin === true;
+  return {
+    autoStart,
+    openAtLogin: autoStart,
+    wasOpenedAtLogin: defaultState.wasOpenedAtLogin === true || minimizedState.wasOpenedAtLogin === true,
+    wasOpenedAsHidden: defaultState.wasOpenedAsHidden === true || minimizedState.wasOpenedAsHidden === true,
+    startMinimized: minimizedState.openAtLogin === true || isStartMinimizedArgPresent(),
+  };
+}
+
+function setStartupSettings(options) {
+  const autoStart = options && options.autoStart === true;
+  const startMinimized = options && options.startMinimized === true;
+  const launchConfig = getStartupLaunchConfig(startMinimized);
+
+  app.setLoginItemSettings({
+    openAtLogin: autoStart,
+    path: launchConfig.path,
+    args: launchConfig.args,
+  });
+
+  return {
+    ok: true,
+    autoStart,
+    startMinimized,
+    path: launchConfig.path,
+    args: launchConfig.args,
+    state: getStartupSettings(),
+  };
+}
 
 function configureBackendDataPath() {
   BACKEND_DATA_DIR = app.isPackaged
@@ -186,7 +252,9 @@ function healthCheck() {
       res.on("end", () => {
         try {
           const j = JSON.parse(d);
-          resolve(j.status === "healthy" || j.status === "degraded");
+          const expected = BACKEND_DB_PATH ? path.resolve(BACKEND_DB_PATH).toLowerCase() : null;
+          const actual = j.data_path_id ? path.resolve(j.data_path_id).toLowerCase() : null;
+          resolve((j.status === "healthy" || j.status === "degraded") && (!expected || expected === actual));
         } catch (_) {
           resolve(false);
         }
@@ -225,7 +293,16 @@ function apiRequest(opts) {
         } else {
           try { body = JSON.parse(d); } catch (_) { body = d; }
         }
-        resolve({ status: res.statusCode, data: body });
+        const result = { status: res.statusCode, data: body };
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          const message = body && body.error ? body.error : `HTTP ${res.statusCode}`;
+          const err = new Error(message);
+          err.status = res.statusCode;
+          err.data = body;
+          reject(err);
+          return;
+        }
+        resolve(result);
       });
     });
     req.on("error", (err) => reject(err));
@@ -256,6 +333,7 @@ function createMainWindow() {
     transparent: true,
     backgroundColor: "#00000000",
     backgroundMaterial: "acrylic",
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -264,7 +342,33 @@ function createMainWindow() {
     icon: ICON_PATH,
   });
 
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === "audio" || permission === "media" || permission === "microphone") {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
+  mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+    if (permission === "audio" || permission === "media" || permission === "microphone") {
+      return true;
+    }
+    return false;
+  });
+
+  mainWindow.webContents.on("console-message", (_event, level, message, line, source) => {
+    console.log(`[RENDERER] ${message} (${source}:${line})`);
+  });
+
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+  mainWindow.once("ready-to-show", () => {
+    if (isStartMinimizedArgPresent()) {
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+    }
+  });
   mainWindow.on("closed", () => { mainWindow = null; });
 
   // Broadcast maximize state changes to renderer so the button glyph can update
@@ -1319,6 +1423,22 @@ ipcMain.handle("settings:reset", async () => {
   }
 });
 
+ipcMain.handle("startup:get", async () => {
+  try {
+    return { ok: true, ...getStartupSettings() };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+});
+
+ipcMain.handle("startup:set", async (_event, options) => {
+  try {
+    return setStartupSettings(options || {});
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+});
+
 // R6.6: backend self-restart. Triggers tools/restart_helper.ps1 via the
 // Python /api/system/restart endpoint, which spawns a fresh main.py in
 // a detached process. The Electron window stays alive; its SSE / status
@@ -1372,35 +1492,51 @@ ipcMain.handle("system:reload-config", async () => {
 // webContents.send and the bus.emit("brief:open") channel.
 
 // ── Lifecycle ──────────────────────────────────────
-app.whenReady().then(() => {
-  configureBackendDataPath();
-  startPythonBackend();
-  createMainWindow();
-  createDynamicIsland();
-  // Delay tray creation to avoid flash
-  setTimeout(createTray, 2000);
-  // R7.1: after backend is ready, wait 8s and tell the main window
-  // to open the brief drawer once. Replaces the old
-  // ``showBriefPopup()`` which opened a separate BrowserWindow.
-  let _bootBriefShown = false;
-  const _bootBriefTimer = setInterval(async () => {
-    if (_bootBriefShown) {
-      clearInterval(_bootBriefTimer);
-      return;
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
     }
-    if (_backendReady) {
-      _bootBriefShown = true;
-      clearInterval(_bootBriefTimer);
-      setTimeout(() => {
-        try {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("brief:show");
-          }
-        } catch (e) { console.warn("[main] open-brief send failed:", e); }
-      }, 8000);
-    }
-  }, 1000);
-});
+  });
+}
+
+if (gotSingleInstanceLock) {
+  app.whenReady().then(() => {
+    configureBackendDataPath();
+    startPythonBackend();
+    createMainWindow();
+    createDynamicIsland();
+    // Delay tray creation to avoid flash
+    setTimeout(createTray, 2000);
+    // R7.1: after backend is ready, wait 8s and tell the main window
+    // to open the brief drawer once. Replaces the old
+    // ``showBriefPopup()`` which opened a separate BrowserWindow.
+    let _bootBriefShown = false;
+    const _bootBriefTimer = setInterval(async () => {
+      if (_bootBriefShown) {
+        clearInterval(_bootBriefTimer);
+        return;
+      }
+      if (_backendReady) {
+        _bootBriefShown = true;
+        clearInterval(_bootBriefTimer);
+        setTimeout(() => {
+          try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("brief:show");
+            }
+          } catch (e) { console.warn("[main] open-brief send failed:", e); }
+        }, 8000);
+      }
+    }, 1000);
+  });
+}
 
 app.on("window-all-closed", () => {
   // Keep app running if tray is available (background mode with Dynamic Island)

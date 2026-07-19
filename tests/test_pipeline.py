@@ -159,6 +159,15 @@ class TestPipelineHandle:
         # Should not crash, still return result
         assert result is not None
         assert "reply" in result
+        assert result["persisted"] is False
+        assert "DB error" in result["persist_error"]
+
+    @pytest.mark.asyncio
+    async def test_handle_reports_successful_persistence(self, pipeline):
+        msg = IncomingMessage.from_local("你好", 3998874040)
+        result = await pipeline.handle(msg, force_full=True)
+        assert result["persisted"] is True
+        assert "persist_error" not in result
 
     @pytest.mark.asyncio
     async def test_handle_emotion_error_graceful(self, pipeline):

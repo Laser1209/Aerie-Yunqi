@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Output Self-Check (R8.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Output Self-Check (R8.1).
 
 A conservative post-LLM safety net that scans outgoing text for:
 
@@ -55,16 +55,6 @@ _IN_PERSON_VERBS: tuple[str, ...] = (
     "吻他", "靠在他肩", "靠在他肩膀", "让他靠我肩", "让他靠我肩膀",
 )
 
-# ── conservative typo dictionary (2-gram duplicates) ──
-_DUP_2GRAM_RE = re.compile(r"([一-鿿])\1{1,}")
-# Only auto-fix if BOTH characters are non-meaningful particles/adverbs.
-# Words we keep duplicated (LLM sometimes legitimately repeats for emphasis):
-_KEEP_DUPLICATES: frozenset[str] = frozenset({
-    "看看", "听听", "想想", "说说", "找找", "聊聊", "试试", "问问",
-    "哈哈", "呵呵", "嘿嘿", "嘻嘻", "呜呜", "嗯嗯", "啊啊", "哦哦",
-    "真的真", "真的真的", "好好好", "非常非常", "特别特别", "很很",
-})
-
 
 @dataclass
 class CheckResult:
@@ -90,7 +80,7 @@ class OutputSelfCheck:
         self._in_person_re = re.compile("|".join(map(re.escape, _IN_PERSON_VERBS)))
 
     def check(self, text: str) -> CheckResult:
-        """Run all three rules and return a CheckResult."""
+        """Run output self-check rules and return a CheckResult."""
         if not text:
             return CheckResult(cleaned_text=text)
 
@@ -109,17 +99,12 @@ class OutputSelfCheck:
         if bracket_fixes:
             warnings.append(f"stray_brackets_fixed: {bracket_fixes}")
 
-        # ── 3. conservative typo fixes ──
-        cleaned, typo_fixes = self._fix_typos(cleaned)
-        if typo_fixes:
-            warnings.append(f"typo_fixes: {typo_fixes}")
-
         return CheckResult(
             cleaned_text=cleaned,
             warnings=warnings,
             perspective_shift=perspective_shift,
             stray_brackets_fixed=bracket_fixes,
-            typo_fixes=typo_fixes,
+            typo_fixes=0,
         )
 
     # ─────────────────────────────────────────
@@ -169,25 +154,3 @@ class OutputSelfCheck:
                     fixes += 1
         return text, fixes
 
-    # ─────────────────────────────────────────
-    # 3. Typo fix
-    # ─────────────────────────────────────────
-    @staticmethod
-    def _fix_typos(text: str) -> tuple[str, int]:
-        """Collapse duplicate CJK 2-grams that are not in the keep set."""
-        fixes = 0
-
-        def _sub(m: re.Match[str]) -> str:
-            nonlocal fixes
-            ch = m.group(1)
-            dup = m.group(0)
-            if dup in _KEEP_DUPLICATES:
-                return dup
-            # Only collapse 2-3 char duplicates, not 4+ (likely intentional)
-            if len(dup) >= 4:
-                return dup
-            fixes += 1
-            return ch
-
-        cleaned = _DUP_2GRAM_RE.sub(_sub, text)
-        return cleaned, fixes

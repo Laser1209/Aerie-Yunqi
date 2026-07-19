@@ -337,6 +337,12 @@ class SettingsPanel {
       document.getElementById("setting-theme").value = theme.current || "yita-pink";
       document.getElementById("setting-auto-start").checked = startup.auto_start === true;
       document.getElementById("setting-start-minimized").checked = startup.start_minimized === true;
+      if (window.aerie && window.aerie.startup && window.aerie.startup.get) {
+        const startupState = await window.aerie.startup.get();
+        if (startupState && startupState.ok) {
+          document.getElementById("setting-auto-start").checked = startupState.autoStart === true;
+        }
+      }
       document.getElementById("setting-proactive").checked = proactive.enabled !== false;
 
       // R7.1: my-location picker.
@@ -380,6 +386,18 @@ class SettingsPanel {
       const r = await window.aerie.api.request({ method: "PUT", path: "/api/settings", body: data });
       const st = document.getElementById("settings-status");
       if (r.data && !r.data.error) {
+        if (window.aerie && window.aerie.startup && window.aerie.startup.set) {
+          const startupResult = await window.aerie.startup.set({
+            autoStart: data.startup.auto_start,
+            startMinimized: data.startup.start_minimized,
+          });
+          if (!startupResult || startupResult.ok === false) {
+            st.textContent = "设置已保存，但开机启动项写入失败: " + (startupResult?.error || "unknown");
+            st.style.color = "var(--error)";
+            setTimeout(() => { st.textContent = ""; }, 5000);
+            return;
+          }
+        }
         st.textContent = "设置已保存";
         st.style.color = "var(--success)";
       } else {
@@ -398,6 +416,9 @@ class SettingsPanel {
     if (!confirm("确定恢复默认设置？")) return;
     try {
       await window.aerie.api.request({ method: "POST", path: "/api/settings/reset" });
+      if (window.aerie && window.aerie.startup && window.aerie.startup.set) {
+        await window.aerie.startup.set({ autoStart: false, startMinimized: false });
+      }
       this.load();
       const st = document.getElementById("settings-status");
       st.textContent = "已恢复默认设置";

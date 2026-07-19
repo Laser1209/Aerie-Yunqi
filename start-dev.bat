@@ -14,6 +14,9 @@ echo  Aerie Yunqi v0.1.0-beta.1 - Dev Startup
 echo ============================================
 echo Root: %ROOT_DIR%
 echo.
+echo Started: %DATE% %TIME%
+echo AERIE_SILENT=%AERIE_SILENT%
+echo.
 
 echo [1/4] Checking Python environment...
 if not exist "%PYTHON_EXE%" (
@@ -70,6 +73,11 @@ if not exist "%ELECTRON_BIN%" (
 
 echo.
 echo [4/4] Starting Electron...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '%ELECTRON_DIR%').Path; $p=Get-CimInstance Win32_Process -Filter \"Name='electron.exe'\" | Where-Object { $_.ExecutablePath -like ($root + '*') -or $_.CommandLine -like ('*' + $root + '*') }; if($p){ exit 0 } else { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+    echo Electron already running. Reusing existing instance.
+    goto :end
+)
 cd /d "%ELECTRON_DIR%" || goto :fail_cd
 call npm start
 set "EXIT_CODE=%ERRORLEVEL%"

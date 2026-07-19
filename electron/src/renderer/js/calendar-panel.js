@@ -11,6 +11,9 @@ class CalendarPanel {
     this._filterType = "all";
     this._editingId = null;
     this._selectedColor = "#ff9a9e";
+    this._requestVersion = 0;
+    this._loading = false;
+    this._error = "";
     this._init();
   }
 
@@ -19,6 +22,11 @@ class CalendarPanel {
     this._renderMonth();
     this._loadEvents();
     this._loadStats();
+    if (window.aerie.api.onMessage) {
+      window.aerie.api.onMessage((event) => {
+        if (event && event.type === "timeline_changed") this._loadEvents();
+      });
+    }
   }
 
   _bindEvents() {
@@ -120,16 +128,14 @@ class CalendarPanel {
       const isToday = dateStr === todayStr;
       const isSelected = dateStr === selectedStr;
       const dayEvents = this._getDayEvents(dateStr);
-      const hasEvents = dayEvents.length > 0;
-      const dots = dayEvents.slice(0, 3).map((e) =>
-        `<span class="cal-event-dot" style="background:${e.color || "#ff9a9e"}"></span>`
-      ).join("");
+      const labels = dayEvents.slice(0, 2).map((e) => `<span class="cal-day-label">${this._escape(e.title).slice(0, 8)}</span>`).join("");
+      const overflow = dayEvents.length > 2 ? `<span class="cal-day-more">+${dayEvents.length - 2}</span>` : "";
 
       html += `
         <div class="cal-day ${isToday ? "cal-day--today" : ""} ${isSelected ? "cal-day--selected" : ""}"
              data-date="${dateStr}">
           <span class="cal-day-num">${day}</span>
-          ${hasEvents ? `<div class="cal-day-dots">${dots}</div>` : ""}
+          <div class="cal-day-items">${labels}${overflow}</div>
         </div>
       `;
     }
@@ -166,40 +172,46 @@ class CalendarPanel {
       const endDate = new Date(year, month + 1, 0);
       const end = `${year}-${String(month + 1).padStart(2, "0")}-${endDate.getDate()}T23:59:59`;
 
+      const version = ++this._requestVersion;
+      this._loading = true;
       const r = await window.aerie.api.request({
         method: "GET",
-        path: `/api/calendar/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+        path: `/api/calendar/timeline?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
       });
-      this._events = (r.data && r.data.events) || [];
+      if (version !== this._requestVersion) return;
+      this._events = (r.data && r.data.items) || [];
+      this._loading = false;
+      this._error = "";
       this._renderMonth();
       this._renderEventList();
+      this._renderLocalStats();
     } catch (e) {
+      this._loading = false;
+      this._error = e.message || "加载失败";
+      this._renderEventList();
       console.warn("[calendar] load events failed", e);
     }
   }
 
   async _loadStats() {
     try {
-      const [companionR, statsR] = await Promise.all([
-        window.aerie.api.request({ method: "GET", path: "/api/calendar/companion" }).catch(() => null),
-        window.aerie.api.request({ method: "GET", path: "/api/calendar/stats" }).catch(() => null),
-      ]);
-
+      const companionR = await window.aerie.api.request({ method: "GET", path: "/api/calendar/companion" });
       const companion = (companionR && companionR.data) || {};
-      const stats = (statsR && statsR.data) || {};
-
       const daysEl = document.getElementById("cal-days-together");
-      const userEl = document.getElementById("cal-user-msgs");
-      const compEl = document.getElementById("cal-companion-msgs");
-      const totalEl = document.getElementById("cal-total-events");
-
       if (daysEl) daysEl.textContent = companion.days_together != null ? companion.days_together : 0;
-      if (userEl) userEl.textContent = companion.user_messages != null ? companion.user_messages : 0;
-      if (compEl) compEl.textContent = companion.companion_messages != null ? companion.companion_messages : 0;
-      if (totalEl) totalEl.textContent = stats.total != null ? stats.total : 0;
     } catch (e) {
       console.warn("[calendar] load stats failed", e);
     }
+  }
+
+  _renderLocalStats() {
+    const todayEl = document.getElementById("cal-today-count");
+    const pendingEl = document.getElementById("cal-pending-count");
+    const anniversaryEl = document.getElementById("cal-anniversary-count");
+    const today = this._dateStr(new Date());
+    if (todayEl) todayEl.textContent = this._getDayEvents(today).length;
+    if (pendingEl) pendingEl.textContent = this._events.filter((item) => item.kind === "todo" && !item.completed).length;
+    if (anniversaryEl) anniversaryEl.textContent = this._events.filter((item) => item.type === "anniversary").length;
   }
 
   _renderEventList() {
@@ -214,9 +226,11 @@ class CalendarPanel {
       titleEl.textContent = `${prefix}${dateStr} 的事件`;
     }
 
+    if (this._loading) { listEl.innerHTML = `<div class="cal-empty">正在加载议程…</div>`; return; }
+    if (this._error) { listEl.innerHTML = `<div class="cal-inline-error">${this._escape(this._error)}</div>`; return; }
     let events = this._getDayEvents(dateStr);
     if (this._filterType !== "all") {
-      events = events.filter((e) => e.event_type === this._filterType);
+      events = events.filter((e) => this._filterType === "todo" ? e.kind === "todo" : e.type === this._filterType);
     }
 
     if (!events.length) {
@@ -233,11 +247,12 @@ class CalendarPanel {
     };
 
     listEl.innerHTML = events.map((e) => {
-      const t = typeMap[e.event_type] || typeMap.schedule;
-      const time = e.start_time ? e.start_time.split("T")[1]?.slice(0, 5) || "全天" : "全天";
+      const t = e.kind === "todo" ? { label: "任务", cls: "todo" } : (typeMap[e.type] || typeMap.schedule);
+      const time = e.all_day ? "全天" : (e.start_time ? e.start_time.split("T")[1]?.slice(0, 5) || "全天" : "全天");
       return `
-        <div class="cal-event-item" data-id="${e.id}" style="border-left-color:${e.color || "#ff9a9e"}">
+        <div class="cal-event-item ${e.completed ? "is-completed" : ""}" data-id="${e.id}">
           <div class="cal-event-time">${time}</div>
+          ${e.kind === "todo" ? `<button class="cal-todo-toggle" aria-label="切换任务完成">${e.completed ? "✓" : "○"}</button>` : ""}
           <div class="cal-event-body">
             <div class="cal-event-title">${this._escape(e.title)}</div>
             ${e.description ? `<div class="cal-event-desc">${this._escape(e.description)}</div>` : ""}
@@ -247,11 +262,21 @@ class CalendarPanel {
       `;
     }).join("");
 
+    listEl.querySelectorAll(".cal-todo-toggle").forEach((button) => {
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const item = button.closest(".cal-event-item");
+        const id = item.dataset.id.replace("todo:", "");
+        await window.aerie.api.request({ method: "POST", path: `/api/todos/${encodeURIComponent(id)}/toggle` });
+        this._loadEvents();
+      });
+    });
     listEl.querySelectorAll(".cal-event-item").forEach((el) => {
       el.addEventListener("click", () => {
-        const id = parseInt(el.dataset.id, 10);
-        const event = this._events.find((e) => e.id === id);
-        if (event) this._openModal(event);
+        if (el.dataset.id.startsWith("todo:")) return;
+        const id = parseInt(el.dataset.id.replace("event:", ""), 10);
+        const event = this._events.find((e) => e.id === `event:${id}`);
+        if (event) this._openModal({...event, id, event_type: event.type});
       });
     });
   }
@@ -326,7 +351,10 @@ class CalendarPanel {
 
     const start_time = time ? `${date}T${time}:00` : `${date}T00:00:00`;
     const all_day = !time ? 1 : 0;
-
+    const saveBtn = document.getElementById("cal-save-btn");
+    const errorEl = document.getElementById("cal-form-error");
+    if (saveBtn) saveBtn.disabled = true;
+    if (errorEl) { errorEl.hidden = true; errorEl.textContent = ""; }
     try {
       if (this._editingId) {
         await window.aerie.api.request({
@@ -362,7 +390,9 @@ class CalendarPanel {
       this._loadEvents();
       this._loadStats();
     } catch (e) {
-      alert("保存失败: " + e.message);
+      if (errorEl) { errorEl.hidden = false; errorEl.textContent = `保存失败：${e.message}`; }
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
     }
   }
 

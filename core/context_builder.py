@@ -30,6 +30,7 @@ class ContextBuilder:
         eruption_info: dict | None = None,
         reply_to: dict | None = None,
         attachments: list[dict] | None = None,
+        time_context: dict | None = None,
     ) -> list[dict]:
         """Build message list for LLM based on route mode.
 
@@ -47,6 +48,14 @@ class ContextBuilder:
         persona = self._persona_mgr.get_active()
 
         system = self._build_system_prompt(persona, route_mode)
+        if route_mode in ("FULL", "AUTO") and time_context:
+            event_lines = [f"- {item['start_time'][11:16]} {item['title']}" for item in time_context.get("today_events", [])[:5]]
+            todo_lines = [f"- {item['title']}（{item.get('priority', 'medium')}）" for item in time_context.get("today_todos", [])[:5]]
+            anniversary_lines = [f"- {item['start_time'][:10]} {item['title']}" for item in time_context.get("upcoming_anniversaries", [])[:5]]
+            system += "\n\n【时间快照】\n日期：" + str(time_context.get("date", ""))
+            system += "\n今日事件：\n" + ("\n".join(event_lines) or "- 无")
+            system += "\n今日未完成任务：\n" + ("\n".join(todo_lines) or "- 无")
+            system += "\n未来 7 天纪念日：\n" + ("\n".join(anniversary_lines) or "- 无")
 
         # 撤回铁律 — only FULL mode
         if route_mode == "FULL" and persona.get("behavior", {}).get(

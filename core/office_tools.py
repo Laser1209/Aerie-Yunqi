@@ -478,8 +478,9 @@ def tool_calendar_list(
         事件列表
     """
     try:
-        from core.calendar_db import get_calendar_db
-        db = get_calendar_db()
+        from core.database import Database
+        from core.calendar_manager import CalendarManager
+        db = CalendarManager(Database())
 
         if not start_date:
             start_date = datetime.now().strftime("%Y-%m-%d")
@@ -487,7 +488,7 @@ def tool_calendar_list(
             from datetime import timedelta
             end_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
 
-        events = db.list_events(start_date=start_date, end_date=end_date, limit=max_results)
+        events = db.list_events(start_date=start_date + "T00:00:00", end_date=end_date + "T23:59:59", limit=max_results)
         return {
             "success": True,
             "start_date": start_date,
@@ -520,18 +521,20 @@ def tool_calendar_create(
         创建结果
     """
     try:
-        from core.calendar_db import get_calendar_db
-        db = get_calendar_db()
+        from core.database import Database
+        from core.calendar_manager import CalendarManager
+        db = CalendarManager(Database())
 
-        event_data = {
-            "title": title,
-            "date": date,
-            "time": time or None,
-            "description": description or None,
-            "category": category,
-        }
-
-        event_id = db.create_event(event_data)
+        event_type = "reminder" if category == "reminder" else "schedule"
+        start_time = f"{date}T{time}:00" if time else f"{date}T00:00:00"
+        event_id = db.create_event(
+            title=title,
+            description=description,
+            event_type=event_type,
+            start_time=start_time,
+            all_day=0 if time else 1,
+            source="agent",
+        )
         event = db.get_event(event_id)
 
         return {

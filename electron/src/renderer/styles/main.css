@@ -1153,6 +1153,72 @@ body {
 }
 .log-time { font-size: 11px; color: var(--color-text-muted); min-width: 140px; text-align: right; }
 
+.data-list { max-height: 400px; overflow-y: auto; }
+.data-pagination { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+.data-page-info { font-size: 12px; color: var(--color-text-muted); }
+.data-empty, .data-error { padding: 16px 0; font-size: 13px; }
+.data-empty { color: var(--color-text-muted); }
+.data-error, .data-status--error { color: var(--error); }
+.data-status { min-height: 20px; margin: 6px 0; font-size: 12px; color: var(--error); }
+.knowledge-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.data-control {
+  min-width: 180px;
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: 13px var(--font-sans);
+  outline: none;
+}
+.data-control:focus { border-color: var(--color-primary); }
+.knowledge-list { display: flex; flex-direction: column; gap: 8px; }
+.knowledge-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.knowledge-item-main { flex: 1; min-width: 0; }
+.knowledge-item-meta { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.knowledge-category { color: var(--color-primary); font-size: 11px; font-weight: 600; }
+.knowledge-time { color: var(--color-text-muted); font-size: 11px; }
+.knowledge-item h3 { margin: 0 0 5px; color: var(--color-text); font-size: 14px; }
+.knowledge-item p { margin: 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.knowledge-tags { margin-top: 5px; color: var(--color-text-muted); font-size: 11px; }
+.knowledge-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.data-modal { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; }
+.data-modal.hidden { display: none; }
+.data-modal-backdrop { position: absolute; inset: 0; background: var(--color-overlay); }
+.data-modal-panel {
+  position: relative;
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  box-shadow: var(--color-shadow-lg);
+}
+.data-modal-panel--confirm { width: min(420px, calc(100vw - 48px)); }
+.data-modal-header, .data-modal-footer { display: flex; align-items: center; gap: 8px; padding: 14px 18px; }
+.data-modal-header { justify-content: space-between; border-bottom: 1px solid var(--color-border); }
+.data-modal-header h3 { margin: 0; color: var(--color-text); }
+.data-modal-footer { justify-content: flex-end; border-top: 1px solid var(--color-border); }
+.data-modal-body { padding: 18px; }
+.data-modal-close { border: none; background: transparent; color: var(--color-text-muted); font-size: 20px; cursor: pointer; }
+.data-modal-body .settings-group input,
+.data-modal-body .settings-group textarea {
+  width: 100%; max-width: none; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font: 13px var(--font-sans); outline: none; resize: vertical;
+}
+.data-modal-body .settings-group input:focus,
+.data-modal-body .settings-group textarea:focus { border-color: var(--color-primary); }
+.data-confirm-message { color: var(--color-text); font-size: 13px; line-height: 1.6; }
+
 /* ===== Phase 4: Chat Action Menu (Recall / Quote / Copy) ===== */
 .chat-msg { position: relative; }
 .chat-msg-actions {
@@ -2013,6 +2079,26 @@ body {
   margin-left: auto;
   font-size: 11px;
   opacity: 0.7;
+}
+.chat-mic-status.phase-error {
+  color: #ff6b6b;
+}
+.chat-mic-status.phase-error .chat-mic-status__pulse {
+  background: #ff6b6b;
+  animation: mic-error-pulse 0.6s ease-in-out infinite;
+}
+@keyframes mic-error-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.2); opacity: 0.7; }
+}
+.chat-mic-status.phase-interim .chat-mic-status__text {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+.chat-mic-status.phase-audio .chat-mic-status__pulse,
+.chat-mic-status.phase-sound .chat-mic-status__pulse,
+.chat-mic-status.phase-speech .chat-mic-status__pulse {
+  animation-duration: 0.6s;
 }
 
 /* ===== Phase 5: Drag-and-drop visual feedback ===== */

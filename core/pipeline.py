@@ -11,17 +11,42 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
-from communication.message import IncomingMessage, OutgoingReply
+from communication.message import (
+    CancellationToken,
+    CancellationTooLate,
+    IncomingMessage,
+    OutgoingReply,
+)
 from communication.splitter import SemanticMessageSplitter
+from core.attachment_handler import extract_markdown
 from core.chat_events import emit
+from core.chat_request_repository import RequestContext
 from core.cognition import CognitionEngine
+from core.feature_flags import FeatureFlags
 from core.ids import generate_id
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _RequestRunState:
+    context: RequestContext | None
+    token: CancellationToken | None
+    terminal_side_effect_committed: bool = False
+    canonical_completed: bool = False
+    response_group_id: str | None = None
+    sequence: int = 0
+
+    def next_sequence(self) -> int:
+        self.sequence += 1
+        return self.sequence
 
 
 class Pipeline:
@@ -77,13 +102,38 @@ class Pipeline:
                     self._task_planner_enabled = False
 
     async def handle(
-        self, msg: IncomingMessage, force_full: bool = False
+        self,
+        msg: IncomingMessage | None = None,
+        force_full: bool = False,
+        *,
+        request_context: RequestContext | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> dict | None:
         """Handle one incoming message end-to-end.
 
         Returns dict with reply info, or None if skipped (BASIC stranger).
         """
-        if self.identity_resolver:
+        if msg is None and request_context is None:
+            raise ValueError("msg or request_context is required")
+        if request_context is not None:
+            msg = self._message_from_request_context(request_context, msg)
+        assert msg is not None
+
+        request_state = _RequestRunState(
+            context=request_context,
+            token=cancellation_token,
+        )
+        model_content = (
+            request_context.effective_content
+            if request_context is not None
+            else msg.content
+        )
+        context_attachments = self._context_attachments(
+            msg.attachments,
+            request_context=request_context,
+        )
+
+        if self.identity_resolver and request_context is None:
             self.identity_resolver.resolve_message(msg)
 
         # ══════════════════════════════════════════════
@@ -101,7 +151,14 @@ class Pipeline:
         if route_mode == "BASIC" and not force_full:
             logger.debug("BASIC lightweight mode for user %s", msg.user_id)
             self.cognition.record(trace, "route", {"mode": "BASIC", "skipped": False, "lightweight": True})
-            result = await self._handle_basic_lightweight(msg, trace, route_mode)
+            result = await self._handle_basic_lightweight(
+                msg,
+                trace,
+                route_mode,
+                model_content=model_content,
+                context_attachments=context_attachments,
+                request_state=request_state,
+            )
             self.cognition.commit(trace, route_mode)
             return result
 
@@ -144,7 +201,7 @@ class Pipeline:
         try:
             await self.emotion.update_trajectory_async(
                 msg.user_id,
-                msg.content,
+                model_content,
                 actor_id=msg.actor_id,
             )
         except Exception:
@@ -211,33 +268,48 @@ class Pipeline:
             time_context = CalendarManager(self.db).get_agent_snapshot(msg.user_id)
         except Exception:
             logger.warning("calendar snapshot unavailable", exc_info=True)
+        context_budget_enabled = self._context_budget_enabled()
+        context_budget_kwargs = (
+            self._context_budget_kwargs(msg)
+            if context_budget_enabled
+            else {}
+        )
         ctx_messages = self.ctx_builder.build(
             msg.user_id,
-            msg.content,
+            model_content,
             route_mode,
             history_msgs=history,
             emotion_info=emotion_info,
             eruption_info=eruption_info,
             reply_to=reply_to_data,
-            attachments=msg.attachments if msg.attachments else None,
+            attachments=context_attachments if context_attachments else None,
             time_context=time_context,
+            **context_budget_kwargs,
         )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
         history_chars = sum(len(m.get("content", "")) for m in ctx_messages[1:])
-        self.cognition.record(trace, "context", {
+        context_record = {
             "messages": len(ctx_messages),
             "system_prompt_chars": system_chars,
             "history_chars": history_chars,
             "tools_offered": bool(tools),
-        })
+        }
+        audit = (
+            self._context_budget_audit()
+            if context_budget_enabled
+            else None
+        )
+        if audit:
+            context_record["context_budget"] = audit
+        self.cognition.record(trace, "context", context_record)
 
         # ══════════════════════════════════════════════
         # v13.0: Office Mode 办公模式检测与增强
         # ══════════════════════════════════════════════
         office_mgr = get_office_mode_manager()
-        office_ctx = office_mgr.detect(msg.content, history)
+        office_ctx = office_mgr.detect(model_content, history)
         is_office = office_ctx.is_office_mode()
 
         if is_office and ctx_messages:
@@ -262,10 +334,10 @@ class Pipeline:
         task_plan_injected = False
         if (self._task_planner and self._task_planner_enabled
                 and route_mode == "FULL"
-                and msg.content
-                and self._task_planner.should_plan(msg.content)):
+                and model_content
+                and self._task_planner.should_plan(model_content)):
             try:
-                plan = self._task_planner.create_plan(msg.content)
+                plan = self._task_planner.create_plan(model_content)
                 if plan and plan.steps and len(plan.steps) > 1:
                     sys_content = ctx_messages[0].get("content", "") if ctx_messages else ""
                     ctx_messages[0]["content"] = self._inject_task_plan_into_context(sys_content, plan)
@@ -279,12 +351,14 @@ class Pipeline:
         # 6. Call LLM (stage 5)
         # ══════════════════════════════════════════════
         preferred_provider = office_mgr.get_preferred_provider() if is_office else None
+        self._checkpoint_cancel(request_state, "before_model")
         response = await self.brain.chat(
             ctx_messages,
             tools=tools,
             tool_registry=self.tool_registry,
             preferred_provider=preferred_provider,
         )
+        self._checkpoint_cancel(request_state, "after_model")
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None)
         tool_results = getattr(response, "tool_results", None) or []
@@ -390,7 +464,7 @@ class Pipeline:
             )
             vr = await self.validator.validate(
                 reply_text,
-                user_message=msg.content,
+                user_message=model_content,
                 context_history=history,
                 route_mode="OFFICE" if is_office else route_mode,
             )
@@ -418,6 +492,7 @@ class Pipeline:
         user_row_id = 0
         persist_errors: list[str] = []
         try:
+            self._checkpoint_cancel(request_state, "before_legacy_user")
             user_row_id = self.db.insert("chat_log", {
                 "user_id": msg.user_id,
                 "role": "user",
@@ -432,24 +507,26 @@ class Pipeline:
                 "channel": msg.channel,
                 "channel_account_id": msg.channel_account_id,
             })
+            if user_row_id:
+                request_state.terminal_side_effect_committed = True
+        except CancellationTooLate:
+            raise
         except Exception as e:
             persist_errors.append(f"user message: {e}")
             logger.exception("db insert user msg error")
 
-        # ══════════════════════════════════════════════
-        # 10. Emit user event
-        # ══════════════════════════════════════════════
-        try:
-            emit(
-                "user",
-                role="user",
-                id=user_row_id,
-                user_id=msg.user_id,
-                content=msg.content,
-                source=msg.source,
-            )
-        except Exception:
-            pass
+        if request_context is None:
+            try:
+                emit(
+                    "user",
+                    role="user",
+                    id=user_row_id,
+                    user_id=msg.user_id,
+                    content=msg.content,
+                    source=msg.source,
+                )
+            except Exception:
+                pass
 
         # ══════════════════════════════════════════════
         # 11. Persist AI reply — split into segments, one row per segment
@@ -457,6 +534,10 @@ class Pipeline:
         ai_row_ids: list[int] = []
         try:
             for seg in segments:
+                self._checkpoint_cancel(
+                    request_state,
+                    "before_legacy_assistant",
+                )
                 rid = self.db.insert("chat_log", {
                     "user_id": msg.user_id,
                     "role": "assistant",
@@ -468,12 +549,29 @@ class Pipeline:
                     "channel_account_id": msg.channel_account_id,
                 })
                 ai_row_ids.append(rid)
+                if rid:
+                    request_state.terminal_side_effect_committed = True
+        except CancellationTooLate:
+            raise
         except Exception as e:
             persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
+        canonical_result: dict[str, str] | None = None
         if user_row_id and len(ai_row_ids) == len(segments):
-            self._persist_canonical_turn(msg, segments)
+            self._checkpoint_cancel(request_state, "before_canonical")
+            canonical_result = self._persist_canonical_turn(
+                msg,
+                segments,
+                request_context=request_context,
+                user_legacy_chat_log_id=user_row_id or None,
+                assistant_legacy_chat_log_ids=ai_row_ids,
+            )
+            if canonical_result is not None:
+                request_state.canonical_completed = True
+                request_state.response_group_id = canonical_result.get(
+                    "response_group_id"
+                )
 
         # Phase 9: stage 9 — output
         self.cognition.record(trace, "output", {
@@ -501,6 +599,34 @@ class Pipeline:
             except Exception:
                 logger.exception("self_evolver error")
 
+        result = {
+            "reply": reply_text,
+            "user_msg_id": user_row_id,
+            "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
+            "ai_msg_ids": ai_row_ids,
+            "segments": segments,
+            "route_mode": route_mode,
+            "emotion": emotion_info.get("label") if emotion_info else "unknown",
+            "cognition_id": trace.get("id", 0),
+            "persisted": not persist_errors,
+            "canonical_completed": request_state.canonical_completed,
+        }
+        if request_context is not None:
+            result.update(
+                {
+                    "request_id": request_context.request_id,
+                    "conversation_id": request_context.conversation_id,
+                    "turn_id": request_context.turn_id,
+                }
+            )
+        if canonical_result:
+            result["canonical"] = canonical_result
+            result["response_group_id"] = canonical_result.get(
+                "response_group_id"
+            )
+        if persist_errors:
+            result["persist_error"] = "; ".join(persist_errors)
+
         # ══════════════════════════════════════════════
         # 12. Emit assistant event for each segment (UI gets one bubble per segment)
         # Phase 9 Batch 2: persona-aware pacing.
@@ -515,7 +641,30 @@ class Pipeline:
         is_eruption_local = bool(eruption_info and eruption_info.get("mode"))
         threshold_summary_local = (emotion_info or {}).get("thresholds", {}) or {}
         pacing_log: list[dict] = []
+        if request_context is not None:
+            if self._checkpoint_cancel(request_state, "before_event"):
+                result["event_sequence"] = request_state.sequence
+                return result
+            try:
+                emit(
+                    "user",
+                    role="user",
+                    id=user_row_id,
+                    user_id=msg.user_id,
+                    content=msg.content,
+                    source=msg.source,
+                    **self._event_contract(
+                        request_state,
+                        message_id=user_row_id,
+                    ),
+                )
+            except Exception:
+                pass
+
         for idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
+            if self._checkpoint_cancel(request_state, "before_event"):
+                result["event_sequence"] = request_state.sequence
+                return result
             try:
                 emit_kwargs = {
                     "role": "assistant",
@@ -523,6 +672,11 @@ class Pipeline:
                     "user_id": msg.user_id,
                     "content": seg,
                     "source": msg.source,
+                    **self._event_contract(
+                        request_state,
+                        message_id=rid,
+                        response_group_id=request_state.response_group_id,
+                    ),
                 }
                 if idx == 0:
                     if emotion_info:
@@ -617,29 +771,127 @@ class Pipeline:
                     setattr(reply, "eruption_mode", eruption_info["mode"])
                 except Exception:
                     pass
+            if self._checkpoint_cancel(request_state, "before_qq_enqueue"):
+                result["event_sequence"] = request_state.sequence
+                return result
             self.send_queue.enqueue(reply)
-
-        result = {
-            "reply": reply_text,
-            "user_msg_id": user_row_id,
-            "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
-            "ai_msg_ids": ai_row_ids,
-            "segments": segments,
-            "route_mode": route_mode,
-            "emotion": emotion_info.get("label") if emotion_info else "unknown",
-            "cognition_id": trace.get("id", 0),
-            "persisted": not persist_errors,
-        }
-        if persist_errors:
-            result["persist_error"] = "; ".join(persist_errors)
+        result["event_sequence"] = request_state.sequence
         return result
 
     # ── Helpers ────────────────────────────────────────
+    def _message_from_request_context(
+        self,
+        request_context: RequestContext,
+        msg: IncomingMessage | None,
+    ) -> IncomingMessage:
+        identity = request_context.identity
+        source = (
+            msg.source
+            if msg is not None
+            else ("local" if identity.channel == "desktop" else identity.channel)
+        )
+        return IncomingMessage(
+            user_id=identity.user_id,
+            content=request_context.input_content,
+            msg_type=msg.msg_type if msg is not None else "private",
+            source=source or "local",
+            raw_event=dict(msg.raw_event) if msg is not None else {},
+            reply_to_id=request_context.reply_to_id,
+            attachments=list(request_context.attachments),
+            actor_id=identity.actor_id,
+            channel=identity.channel,
+            channel_account_id=identity.channel_account_id,
+        )
+
+    def _context_attachments(
+        self,
+        attachments: list[dict],
+        *,
+        request_context: RequestContext | None,
+    ) -> list[dict]:
+        if request_context is None:
+            return attachments
+
+        prepared: list[dict] = []
+        for attachment in attachments:
+            if not isinstance(attachment, dict):
+                continue
+            trusted = {
+                key: value
+                for key, value in attachment.items()
+                if key not in {"content", "markdown", "path"}
+            }
+            markdown = self._extract_trusted_attachment_markdown(trusted)
+            if markdown:
+                trusted["markdown"] = markdown
+            prepared.append(trusted)
+        return prepared
+
+    def _extract_trusted_attachment_markdown(
+        self,
+        attachment: dict[str, Any],
+    ) -> str | None:
+        url = str(attachment.get("url") or "")
+        if not url:
+            return None
+        normalized = unquote(url).replace("\\", "/").lstrip("/")
+        parts = normalized.split("/")
+        if len(parts) != 2 or parts[0] != "uploads":
+            return None
+        filename = parts[1]
+        if not filename or filename in {".", ".."} or "/" in filename:
+            return None
+        upload_base = Path(__file__).resolve().parent.parent / "uploads"
+        upload_path = upload_base / filename
+        return extract_markdown(upload_path, upload_base=upload_base)
+
+    def _checkpoint_cancel(
+        self,
+        request_state: _RequestRunState,
+        boundary: str,
+    ) -> bool:
+        token = request_state.token
+        if token is None:
+            return False
+        token.throw_if_cancelled(
+            boundary=boundary,
+            terminal_side_effect_committed=(
+                request_state.terminal_side_effect_committed
+            ),
+            completed=request_state.canonical_completed,
+        )
+        return bool(request_state.canonical_completed and token.cancelled)
+
+    def _event_contract(
+        self,
+        request_state: _RequestRunState,
+        *,
+        message_id: int,
+        response_group_id: str | None = None,
+    ) -> dict[str, Any]:
+        context = request_state.context
+        if context is None:
+            return {}
+        return {
+            "event_id": generate_id("event"),
+            "request_id": context.request_id,
+            "conversation_id": context.conversation_id,
+            "turn_id": context.turn_id,
+            "message_id": str(message_id),
+            "response_group_id": response_group_id,
+            "sequence": request_state.next_sequence(),
+            "channel": context.identity.channel,
+        }
+
     async def _handle_basic_lightweight(
         self,
         msg: IncomingMessage,
         trace: dict,
         route_mode: str,
+        *,
+        model_content: str,
+        context_attachments: list[dict],
+        request_state: _RequestRunState,
     ) -> dict | None:
         """BASIC 模式轻量对话链路。
 
@@ -650,7 +902,7 @@ class Pipeline:
         try:
             self.emotion.update_trajectory(
                 msg.user_id,
-                msg.content,
+                model_content,
                 actor_id=msg.actor_id,
             )
         except Exception:
@@ -680,32 +932,49 @@ class Pipeline:
         history = self._load_history(msg, legacy_limit=10)
 
         # 3. 构建上下文（BASIC 精简系统提示词）
+        context_budget_enabled = self._context_budget_enabled()
+        context_budget_kwargs = (
+            self._context_budget_kwargs(msg)
+            if context_budget_enabled
+            else {}
+        )
         ctx_messages = self.ctx_builder.build(
             msg.user_id,
-            msg.content,
+            model_content,
             route_mode,  # "BASIC" — context_builder 会生成精简系统提示
             history_msgs=history,
             emotion_info=emotion_info,
             eruption_info=None,
             reply_to=None,
-            attachments=None,
+            attachments=context_attachments if context_attachments else None,
+            **context_budget_kwargs,
         )
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
-        self.cognition.record(trace, "context", {
+        context_record = {
             "messages": len(ctx_messages),
             "system_prompt_chars": system_chars,
             "tools_offered": False,
             "lightweight": True,
-        })
+        }
+        audit = (
+            self._context_budget_audit()
+            if context_budget_enabled
+            else None
+        )
+        if audit:
+            context_record["context_budget"] = audit
+        self.cognition.record(trace, "context", context_record)
 
         # 4. 调 LLM（无工具，纯对话）
+        self._checkpoint_cancel(request_state, "before_model")
         response = await self.brain.chat(
             ctx_messages,
             tools=None,
             tool_registry=self.tool_registry,
             preferred_provider=None,
         )
+        self._checkpoint_cancel(request_state, "after_model")
         raw_text = getattr(response, "text", "") or ""
         model_name = getattr(response, "model", "unknown")
         usage = getattr(response, "usage", None) or {}
@@ -749,7 +1018,7 @@ class Pipeline:
         try:
             vr = await self.validator.validate(
                 reply_text,
-                user_message=msg.content,
+                user_message=model_content,
                 context_history=history,
                 route_mode=route_mode,
             )
@@ -777,16 +1046,22 @@ class Pipeline:
         user_row_id = 0
         persist_errors: list[str] = []
         try:
+            self._checkpoint_cancel(request_state, "before_legacy_user")
             user_row_id = self.db.insert("chat_log", {
                 "user_id": msg.user_id,
                 "role": "user",
                 "content": msg.content,
                 "msg_type": msg.msg_type,
                 "route_mode": route_mode,
+                "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
                 "actor_id": msg.actor_id,
                 "channel": msg.channel,
                 "channel_account_id": msg.channel_account_id,
             })
+            if user_row_id:
+                request_state.terminal_side_effect_committed = True
+        except CancellationTooLate:
+            raise
         except Exception as e:
             persist_errors.append(f"user message: {e}")
             logger.exception("db insert user msg error")
@@ -795,6 +1070,10 @@ class Pipeline:
         ai_row_ids: list[int] = []
         try:
             for seg in segments:
+                self._checkpoint_cancel(
+                    request_state,
+                    "before_legacy_assistant",
+                )
                 rid = self.db.insert("chat_log", {
                     "user_id": msg.user_id,
                     "role": "assistant",
@@ -806,12 +1085,29 @@ class Pipeline:
                     "channel_account_id": msg.channel_account_id,
                 })
                 ai_row_ids.append(rid)
+                if rid:
+                    request_state.terminal_side_effect_committed = True
+        except CancellationTooLate:
+            raise
         except Exception as e:
             persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
+        canonical_result: dict[str, str] | None = None
         if user_row_id and len(ai_row_ids) == len(segments):
-            self._persist_canonical_turn(msg, segments)
+            self._checkpoint_cancel(request_state, "before_canonical")
+            canonical_result = self._persist_canonical_turn(
+                msg,
+                segments,
+                request_context=request_state.context,
+                user_legacy_chat_log_id=user_row_id or None,
+                assistant_legacy_chat_log_ids=ai_row_ids,
+            )
+            if canonical_result is not None:
+                request_state.canonical_completed = True
+                request_state.response_group_id = canonical_result.get(
+                    "response_group_id"
+                )
 
         self.cognition.record(trace, "output", {
             "ai_msg_ids": ai_row_ids,
@@ -821,7 +1117,39 @@ class Pipeline:
             "lightweight": True,
         })
 
+        result = {
+            "reply": reply_text,
+            "user_msg_id": user_row_id,
+            "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
+            "ai_msg_ids": ai_row_ids,
+            "segments": segments,
+            "route_mode": route_mode,
+            "emotion": emotion_info.get("label") if emotion_info else "unknown",
+            "cognition_id": trace.get("id", 0),
+            "lightweight": True,
+            "persisted": not persist_errors,
+            "canonical_completed": request_state.canonical_completed,
+        }
+        if request_state.context is not None:
+            result.update(
+                {
+                    "request_id": request_state.context.request_id,
+                    "conversation_id": request_state.context.conversation_id,
+                    "turn_id": request_state.context.turn_id,
+                }
+            )
+        if canonical_result:
+            result["canonical"] = canonical_result
+            result["response_group_id"] = canonical_result.get(
+                "response_group_id"
+            )
+        if persist_errors:
+            result["persist_error"] = "; ".join(persist_errors)
+
         # 9. Emit 事件（前端展示用）
+        if self._checkpoint_cancel(request_state, "before_event"):
+            result["event_sequence"] = request_state.sequence
+            return result
         try:
             emit(
                 "user",
@@ -830,11 +1158,18 @@ class Pipeline:
                 user_id=msg.user_id,
                 content=msg.content,
                 source=msg.source,
+                **self._event_contract(
+                    request_state,
+                    message_id=user_row_id,
+                ),
             )
         except Exception:
             pass
 
         for idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
+            if self._checkpoint_cancel(request_state, "before_event"):
+                result["event_sequence"] = request_state.sequence
+                return result
             try:
                 emit_kwargs = {
                     "role": "assistant",
@@ -842,6 +1177,11 @@ class Pipeline:
                     "user_id": msg.user_id,
                     "content": seg,
                     "source": msg.source,
+                    **self._event_contract(
+                        request_state,
+                        message_id=rid,
+                        response_group_id=request_state.response_group_id,
+                    ),
                 }
                 if idx == 0 and emotion_info:
                     emit_kwargs["emotion"] = emotion_info["label"]
@@ -858,22 +1198,11 @@ class Pipeline:
                 reply_to_qq_message_id=0,
                 cognition_id=int(trace.get("id") or 0),
             )
+            if self._checkpoint_cancel(request_state, "before_qq_enqueue"):
+                result["event_sequence"] = request_state.sequence
+                return result
             self.send_queue.enqueue(reply)
-
-        result = {
-            "reply": reply_text,
-            "user_msg_id": user_row_id,
-            "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
-            "ai_msg_ids": ai_row_ids,
-            "segments": segments,
-            "route_mode": route_mode,
-            "emotion": emotion_info.get("label") if emotion_info else "unknown",
-            "cognition_id": trace.get("id", 0),
-            "lightweight": True,
-            "persisted": not persist_errors,
-        }
-        if persist_errors:
-            result["persist_error"] = "; ".join(persist_errors)
+        result["event_sequence"] = request_state.sequence
         return result
 
     def _load_history(
@@ -916,20 +1245,72 @@ class Pipeline:
         except Exception:
             return []
 
+    @staticmethod
+    def _context_budget_enabled() -> bool:
+        try:
+            return FeatureFlags().is_enabled("context_budget_v1")
+        except Exception:
+            return False
+
+    @staticmethod
+    def _context_budget_kwargs(msg: IncomingMessage) -> dict[str, Any]:
+        return {
+            "actor_id": msg.actor_id,
+            "channel": msg.channel,
+            "channel_account_id": msg.channel_account_id,
+            "context_budget_enabled": True,
+        }
+
+    def _context_budget_audit(self) -> dict[str, Any] | None:
+        getter = getattr(self.ctx_builder, "get_last_context_audit", None)
+        if not callable(getter):
+            return None
+        try:
+            audit = getter()
+        except Exception:
+            return None
+        if not isinstance(audit, dict) or not audit.get("enabled"):
+            return None
+        allowed = {
+            "enabled",
+            "actor_id",
+            "channel",
+            "channel_account_id",
+            "memory_hits",
+            "knowledge_hits",
+            "history_messages",
+            "merged_history_messages",
+            "dropped_history_messages",
+            "truncated_system",
+            "estimated_tokens",
+            "total_chars",
+            "system_prompt_chars",
+        }
+        return {key: audit[key] for key in allowed if key in audit}
+
     def _persist_canonical_turn(
         self,
         msg: IncomingMessage,
         segments: list[str],
-    ) -> None:
+        *,
+        request_context: RequestContext | None = None,
+        user_legacy_chat_log_id: int | None = None,
+        assistant_legacy_chat_log_ids: list[int] | None = None,
+    ) -> dict[str, str] | None:
         if not self.conversation_repository or not getattr(
             self.conversation_repository,
             "enabled",
             False,
         ):
-            return
+            return None
+        request_id = (
+            request_context.request_id
+            if request_context is not None
+            else generate_id("req")
+        )
         try:
-            self.conversation_repository.persist_turn(
-                request_id=generate_id("req"),
+            return self.conversation_repository.persist_turn(
+                request_id=request_id,
                 user_id=msg.user_id,
                 actor_id=msg.actor_id,
                 channel=msg.channel,
@@ -937,9 +1318,24 @@ class Pipeline:
                 user_content=msg.content,
                 user_attachments=msg.attachments,
                 assistant_segments=segments,
+                user_legacy_chat_log_id=user_legacy_chat_log_id,
+                assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
+                conversation_id=(
+                    request_context.conversation_id
+                    if request_context is not None
+                    else None
+                ),
+                turn_id=(
+                    request_context.turn_id
+                    if request_context is not None
+                    else None
+                ),
             )
         except Exception:
+            if request_context is not None:
+                raise
             logger.exception("canonical conversation mirror write failed")
+            return None
 
     @staticmethod
     def _extract_react(text: str) -> dict:

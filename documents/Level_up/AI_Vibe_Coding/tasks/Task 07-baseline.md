@@ -5,18 +5,18 @@ kind: task
 task_id: TASK-07-001
 phase: Phase 07
 subsystem: core
-status: planned
+status: in_progress
 priority: P1
 dependencies: ["TASK-06-001"]
 risk: medium
 decision_required: false
 feature_flag: chat_stream_v1
 migration: false
-files: ["core/pipeline.py", "electron/src/renderer/js/chat.js"]
+files: ["electron/src/renderer/js/chat.js", "electron/src/renderer/styles/main.css", "electron/tests/chat-request-queue.test.js"]
 acceptance_ids: ["A-07-01", "A-07-02"]
 rollback_ready: false
 owner: core-team
-evidence: ["file:///E:/Agent_reply/core/pipeline.py", "file:///E:/Agent_reply/electron/src/renderer/js/chat.js"]
+evidence: ["file:///E:/Agent_reply/electron/src/renderer/js/chat.js", "file:///E:/Agent_reply/electron/src/renderer/styles/main.css", "file:///E:/Agent_reply/electron/tests/chat-request-queue.test.js"]
 ---
 # Task 07-baseline
 > [!todo] Phase 07

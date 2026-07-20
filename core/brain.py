@@ -16,6 +16,13 @@ from core.token_tracker import get_token_tracker
 logger = logging.getLogger(__name__)
 
 
+_TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in _TRUE_ENV_VALUES
+
+
 # ══════════════════════════════════════════════════
 # R7.5+: Tone prompt hints (consumed by generate_push)
 #
@@ -217,6 +224,17 @@ class Brain:
 
         On failure of all providers, returns a fallback response.
         """
+        if _env_flag("AERIE_DISABLE_MODEL_CALLS"):
+            logger.info("LLM provider calls disabled by AERIE_DISABLE_MODEL_CALLS")
+            return BrainResponse(
+                text=os.getenv(
+                    "AERIE_DISABLE_MODEL_CALLS_RESPONSE",
+                    "【smoke】模型调用已禁用，本地确定性回复。",
+                ),
+                provider="disabled",
+                model="aerie-local-smoke-stub",
+            )
+
         last_error = ""
         tracker = get_token_tracker()
         total_prompt_tokens = 0

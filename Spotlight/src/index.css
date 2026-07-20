@@ -4,12 +4,53 @@
 
 html,
 body {
+  min-width: 320px;
+  min-height: 100%;
   background: #000;
   color: #fff;
   font-family: 'Barlow', sans-serif;
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
 }
 
-/* Liquid Glass — subtle */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+button,
+a {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: rgba(183, 255, 217, 0.28);
+  color: #fff;
+}
+
+.page-media {
+  isolation: isolate;
+}
+
+.page-media video {
+  transform: translateZ(0);
+  will-change: opacity;
+}
+
+.page-media-vignette {
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 78% 18%, color-mix(in srgb, var(--page-accent) 12%, transparent) 0%, transparent 38%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0%, transparent 28%, rgba(0, 0, 0, 0.42) 100%);
+  opacity: 0.55;
+}
+
+/* Liquid Glass - subtle */
 .liquid-glass {
   background: rgba(255, 255, 255, 0.01);
   background-blend-mode: luminosity;
@@ -18,6 +59,7 @@ body {
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .liquid-glass::before {
@@ -42,7 +84,7 @@ body {
   pointer-events: none;
 }
 
-/* Liquid Glass — strong */
+/* Liquid Glass - strong */
 .liquid-glass-strong {
   background: rgba(255, 255, 255, 0.01);
   background-blend-mode: luminosity;
@@ -51,6 +93,7 @@ body {
   box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.15);
   position: relative;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .liquid-glass-strong::before {
@@ -73,4 +116,19 @@ body {
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

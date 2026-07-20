@@ -103,7 +103,7 @@ def test_submit_uses_trusted_desktop_local_identity_and_legacy_user_id(
     submitted = service.submit(
         text="  trusted input  ",
         attachments=[],
-        reply_to_id=17,
+        reply_to_id=0,
         user_id=7017,
     )
     row = repository.get_owned(
@@ -120,7 +120,7 @@ def test_submit_uses_trusted_desktop_local_identity_and_legacy_user_id(
     assert row["user_id"] == 7017
     assert row["input_content"] == "trusted input"
     assert row["effective_content"] == "trusted input"
-    assert row["reply_to_id"] == 17
+    assert row["reply_to_id"] == 0
     assert submitted.status == "queued"
 
 
@@ -692,6 +692,7 @@ def test_status_view_redacts_input_effective_attachments_lease_owner_and_error_s
         "can_retry",
         "user_message_id",
         "assistant_message_ids",
+        "retry_of_request_id",
     }
     assert all(
         field not in payload

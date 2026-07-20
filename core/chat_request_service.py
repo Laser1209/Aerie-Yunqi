@@ -56,6 +56,7 @@ class RequestStatusView:
     can_retry: bool
     user_message_id: int | None
     assistant_message_ids: tuple[int, ...]
+    retry_of_request_id: str | None = None
 
 
 class ChatRequestService:
@@ -120,6 +121,14 @@ class ChatRequestService:
             channel_account_id=request_identity.channel_account_id,
             user_id=request_identity.user_id,
         )
+        if normalized_reply_to_id and not self.repository.reply_to_belongs_to_context(
+            legacy_chat_log_id=normalized_reply_to_id,
+            actor_id=request_identity.actor_id,
+            channel=request_identity.channel,
+            channel_account_id=request_identity.channel_account_id,
+            conversation_id=conversation_id,
+        ):
+            raise RequestNotFound()
         context = RequestContext(
             request_id=self.id_factory("req"),
             conversation_id=conversation_id,
@@ -135,6 +144,7 @@ class ChatRequestService:
             reply_to_id=normalized_reply_to_id,
         )
         self.repository.submit(context=context)
+        self._notify_worker()
         row = self.repository.get_owned(
             request_id=context.request_id,
             actor_id=request_identity.actor_id,
@@ -217,6 +227,7 @@ class ChatRequestService:
             raise RequestConflict(
                 status=current["status"] if current else None
             ) from exc
+        self._notify_worker()
         return self._to_view(self._get_owned(new_request_id))
 
     def _get_owned(self, request_id: str) -> dict[str, Any]:
@@ -228,6 +239,11 @@ class ChatRequestService:
         if row is None:
             raise RequestNotFound()
         return row
+
+    def _notify_worker(self) -> None:
+        notify = getattr(self.worker, "notify", None)
+        if callable(notify):
+            notify()
 
     @staticmethod
     def _validate_attachments(attachments: Any) -> list[dict[str, Any]]:
@@ -298,4 +314,5 @@ class ChatRequestService:
             can_retry=status in ("failed", "cancelled"),
             user_message_id=row.get("user_message_id"),
             assistant_message_ids=tuple(row.get("assistant_message_ids", ())),
+            retry_of_request_id=row.get("retry_of_request_id"),
         )

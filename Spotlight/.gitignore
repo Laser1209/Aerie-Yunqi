@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Local QA screenshots and rendered stills
+desktop-home.png
+mobile-features-closed.png
+mobile-features-open.png
+video-*.png
+
+# Release binaries are uploaded as GitHub Release assets.
+public/*.exe

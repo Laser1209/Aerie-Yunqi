@@ -2,13 +2,13 @@
 title: Phase 04 - 持久 Request 队列、取消、重试与纯附件
 kind: phase
 phase: Phase 04
-status: in_progress
+status: done
 tags: [aerie, phase, phase04, chat, queue]
 ---
 # Phase 04：持久 Request 队列、取消、重试与纯附件
 
-> [!success] 设计、实施计划与 Task 1–6 门禁
-> 用户已批准本阶段书面规范；详细 TDD 实施计划已完成自审。Phase 00–03 门禁、006 Migration、测试 Fixture、ChatRequestRepository、ConversationRepository 完成路径与 ChatRequestService 均已按 Red → Green 收口；当前仍在 Phase 04，下一小节必须从 ChatRequestWorker 目标 Red 开始。
+> [!success] 设计、实施计划与 Task 1–12 门禁
+> 用户已批准本阶段书面规范；详细 TDD 实施计划已完成自审。Phase 00–03 门禁、006 Migration、测试 Fixture、ChatRequestRepository、ConversationRepository 完成路径、ChatRequestService、ChatRequestWorker、Pipeline RequestContext/取消边界、Companion 组合根与 API 双合同、Renderer/Electron 请求级状态与统一 ingest、端到端集成与 Electron smoke、生产一致性副本迁移/恢复与回滚演练均已按 Red → Green / current-state audit 收口。Phase 04 当前状态为 done；下一阶段开始前仍需按全局规则重新读取计划并复核 Phase 00–04 门禁。
 >
 > [Phase 04 持久 Request 队列实施计划](file:///E:/Agent_reply/documents/Level_up/AI_Vibe_Coding/plans/2026-07-20-Phase-04-%E6%8C%81%E4%B9%85Request%E9%98%9F%E5%88%97%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md)
 
@@ -125,14 +125,108 @@ tags: [aerie, phase, phase04, chat, queue]
 > - 完整 Python：`411 passed, 1 deselected, 7 warnings in 32.53s`；唯一被排除的办公目录环境用例继续在工作区临时目录单独通过。
 > - `ruff`、`py_compile` 与 `git diff --check` 通过。Service 尚未注入 Companion/API，旧同步 `/api/chat/send`、Pipeline、QQ 和 Renderer 行为均未改变。
 
-快速自检：Task 6 已完整收口；Worker、Pipeline、API、Renderer 与生产副本演练仍未完成；`rollback_ready=false`；下一小节先补 Repository 成功/取消严格终态接口并观察 ChatRequestWorker Red。
+快速自检：Task 6 收口时 Worker、Pipeline、API、Renderer 与生产副本演练仍未完成；当时的下一小节是补 Repository 严格终态并观察 ChatRequestWorker Red，现已由下节 Task 7 Evidence 收口。
+
+## ChatRequestWorker Evidence（2026-07-20）
+
+> [!success] Task 7 Red → Green 完成
+> - 接管 Red：Worker 专项为 `13 failed, 1 passed`；失败明确指向 `mark_completed()` 缺失、`mark_cancelled()` 错误允许 running 直接取消，以及 `core.chat_request_worker` 不存在。
+> - 风险复核追加 Red：`5 failed, 15 passed`，精确复现过期 lease 可复活/完成、failed 双表不守恒、heartbeat 丢 lease 后 Pipeline 继续、取消等待无界和 execution 首次运行前取消悬挂；后续又补齐 pre-start stop、deferred cancel + stop 及 done-before-slot 窗口。
+> - 最小 Green：Repository 新增严格 `running + matching lease -> completed`，并将取消收紧为 `cancelling + matching lease -> cancelled`；Request/Turn 在同一事务进入终态，取消时间与完成时间使用同一 UTC 值。
+> - Worker 保持未接线：启动先 recovery，再创建默认四个 slot；每次 claim 后先登记真实 execution `asyncio.Task` 再发 running 事件；heartbeat 使用独立 Task 且立即续租一次；同 Conversation 由 Repository 保持串行，跨 Conversation 最大 active=4，第五条等待。
+> - lease/failure 守恒：过期 lease 不能续租或提交 completed/cancelled；heartbeat false/异常会取消 execution 并尝试落 `failed/lease_lost`；带 owner 的 failed 也校验 active Request + running Turn 双 rowcount，失败整体回滚。
+> - 取消与停止：queued 取消不调用 Pipeline；running 用户取消最多等待 250ms，协作式 Task 收口为 cancelled；Pipeline 自发 `CancelledError` 记为 `failed/pipeline_cancelled`；stop 的 `worker_stopped` 优先级覆盖仍未完成的用户取消，并覆盖 running/cancelling 与 execution 首次运行前窗口；queued 保留；丢失 Task 的 cancelling 请求记为 `failed/cancel_task_missing`。
+> - 事件边界：running/completed/failed/cancelled 事件只在数据库状态提交后 best-effort emit；事件传输异常不反转数据库终态，生命周期事件不携带请求正文。
+> - Worker 专项：`23 passed in 5.09s`；取消确认断言 `<500ms`。Repository/Service/Worker/Conversation/Pipeline/API 加固关联回归：`136 passed, 4 warnings in 18.95s`。
+> - 完整 Python：排除唯一不可写办公目录环境用例后 `433 passed, 1 deselected, 6 warnings in 33.59s`；该用例通过运行时注入工作区临时办公目录后单独 `1 passed in 0.05s`，未修改生产配置。
+> - `py_compile` 与 `git diff --check` 通过；当前环境无 `ruff` 可执行文件，未重复运行 lint。未接线设计确保旧同步 API、现有 Pipeline、QQ 和 Renderer 行为不变，也未读写生产数据库。
+> - fail-closed 边界：若 heartbeat 的数据库异常与随后的终态写入同时失败，execution 会停止，但 Request 可能保持 active，依赖下次进程启动的 `recover_interrupted()` 收口；本阶段不宣称数据库恢复后的进程内自动终结。
+
+快速自检：Task 7 已收口但未接入组合根；`rollback_ready=false`；Task 8 已按保守默认裁决进入实现并收口，Task 9 前不得提前改 Renderer 或把 API 绕过 Service/Worker 直接拼装 Repository。
+
+## Pipeline RequestContext 与取消边界 Evidence（2026-07-20）
+
+> [!success] Task 8 Red → Green 完成
+> - 目标 Red：`python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task8-red tests/test_phase4_pipeline.py -q` 收集期失败为 `ImportError: cannot import name 'CancellationToken'`，明确指向 Message/Pipeline 取消合同缺失。
+> - 最小 Green：`communication.message` 新增 `CancellationToken` 与 `CancellationTooLate`；`Pipeline.handle()` 兼容旧 `handle(msg, force_full=True)`，并在队列路径接收 `RequestContext` 与取消令牌；`ChatRequestWorker` 传入 token，且当 Pipeline 已由 `ConversationRepository` 完成 canonical Request 时不再二次 `mark_completed()`。
+> - 可见性：队列路径中 `input_content` 继续作为 legacy user row、canonical user Message 和 user event 的可见内容；Context/Brain 使用 `effective_content`；FULL/BASIC 均向 Context Builder 传附件，BASIC legacy user row 也保存可见附件 JSON。
+> - 附件：队列附件会过滤客户端提交的 `content/markdown/path`，只按可信 `/uploads/<filename>` URL 重新调用后端 Markdown 提取；内部中性指令不写入可见 Message。
+> - 取消：模型前/后、legacy user 前、每个 legacy assistant 前、canonical 前、每个事件前、QQ enqueue 前均检查 token；终态副作用前取消抛 `asyncio.CancelledError`；legacy 已写但 canonical 未完成时抛 `CancellationTooLate("terminal_side_effect_committed")`；canonical 已完成后 completion-wins，并停止后续事件或 QQ 副作用。
+> - ID/事件：队列 canonical mirror 复用 `request_id/conversation_id/turn_id`；消息事件携带 `event_id/request_id/conversation_id/turn_id/message_id/response_group_id/sequence`，Pipeline 内 request-scoped sequence 单调递增。
+> - Task 8 专项：`13 passed in 1.59s`；Task 8 + 旧 Pipeline：`36 passed in 2.36s`；Phase 4 repository/service/worker/pipeline/API 关联：`135 passed, 4 warnings in 17.68s`。
+> - 完整 Python：仓库根收集曾因 `tmp/` 历史无权限目录触发 35 个 collection `WinError 5`，改用明确 `tests` 范围后 `447 passed, 6 warnings in 26.85s`；未清理历史临时目录。
+> - `py_compile` 和 `git diff --check` 通过；后者只有 LF→CRLF 工作区提示。未修改 Companion/API/Renderer，旧同步聊天入口仍未接入队列，生产数据库未读写。
+
+快速自检（Task 8 收口当时）：Task 8 已收口；`rollback_ready=false`；下一小节是 Task 9 Companion 唯一实例、依赖门禁与 API 双合同，当时不得提前声称 `/api/chat/send` 已异步化或 Renderer 已具备请求级状态。
+
+## Companion/API 双合同 Evidence（2026-07-20）
+
+> [!success] Task 9 Red → Green 完成
+> - 目标 Red：`python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task9-red tests/test_phase4_api.py tests/test_phase4_integration.py -q` 为 `13 failed, 2 passed`，失败明确指向 API 仍同步 200、新请求端点不存在、组合根没有 Service/Worker、依赖门禁不存在；其中 3 个 FK 失败是静态测试身份未插入 `actors` 的夹具问题，已在实现前修正。
+> - 最小 Green：`Companion` 在 queue Flag 开启且 `migration_framework_v1` + `conversation_model_v1` 均开启时只创建一个 `ChatRequestRepository`，并将同一实例注入 `ChatRequestService` 与 `ChatRequestWorker`；Pipeline 继续复用同一个 `ConversationRepository`。
+> - 依赖与生命周期：`chat_request_queue_v1=true` 但依赖缺失时 fail closed，设置 `queue_dependencies_unavailable` 且不创建 Service/Worker；Flag 关闭时不启动 Worker、不消费既有 queued 行。Worker 启动发生在 `qq.wait_until_ready()` 之前，桌面本地队列不受 QQ readiness 阻塞。
+> - API 双合同：Flag 关时 `/api/chat/send` 保持 legacy 同步 200 shape 与空消息 400；Flag 开时调用 `comp.chat_request_service.submit()` 返回 202 queued，不等待也不调用 Pipeline。新增 GET status、cancel、retry 端点，错误映射为 404/409/503/400 稳定 code，retry 成功返回 202 新 ID。
+> - 所有权与脱敏：API 不实例化 Repository，只取 `comp.chat_request_service`；Service 在提交前验证非零 `reply_to_id` 属于同一 Actor、Channel、Channel Account 与 Conversation，缺失和跨所有权引用同为 `request_not_found`；响应仅返回 `RequestStatusView` 字段，不泄露 actor、input/effective、attachments、lease 或 stack。
+> - Task 9 专项：`15 passed, 4 warnings in 5.06s`。
+> - 相关回归：旧 API、Service、Repository、Worker、Pipeline：`135 passed, 4 warnings in 18.46s`。
+> - 顺序无关回归：修复 integration 真实 `Companion` 与旧 API mock 的模块级污染后，按 `tests/test_phase4_api.py tests/test_phase4_integration.py tests/test_api.py tests/test_phase4_chat_request_service.py` 顺序复验 `67 passed, 4 warnings in 12.55s`。
+> - 完整回归：明确 `tests` 范围 `462 passed, 6 warnings in 35.41s`；`py_compile` 通过；`git diff --check` 通过且仅有 LF→CRLF 工作区提示。未读写生产数据库，未修改 Renderer。
+
+快速自检（Task 9 收口当时）：Task 9 已收口；`rollback_ready=false`；下一小节是 Task 10 Renderer/Electron 请求状态、统一 ingest 与纯附件最小修复。当时不得把 Renderer 或端到端验收提前标为完成；生产数据一致性副本演练仍待 Task 12。
+
+## Renderer/Electron 请求状态 Evidence（2026-07-20）
+
+> [!success] Task 10 Red → Green 完成
+> - 目标 Red：`node --test tests\chat-request-queue.test.js` 为 `10 failed, 0 passed`；第一项明确复现全局 `_loading` 只发出 1 个 POST，其余失败指向 `_requests/_ingestChatSignal/cancelRequest/retryRequest/restorePendingRequests/_handleSSEDisconnect` 缺失。
+> - 最小 Green：`chat.js` 移除发送入口全局 `_loading`，新增 `_requests`、`_clientToRequest`、`_seenEventIds`、`_requestSequences` 与 client id；每次 send 都独立 POST，202 后绑定真实 `request_id` 并维护请求状态。
+> - 统一 ingest：IPC/SSE/poll 均进入 `_ingestChatSignal(signal, transport)`；SSE 字符串先解析，`event_id` 去重，`request_id + sequence` 按序缓冲，legacy numeric `id` 仍走 `_seenIds` 与 `_sinceId`。
+> - 请求操作：Renderer 提供 request-scoped `cancelRequest()` 与 `retryRequest()`，分别调用 `/api/chat/requests/{id}/cancel` 和 `/api/chat/requests/{id}/retry`；retry 新请求不覆盖原请求状态。
+> - 页面恢复：非终态 Request id 写入 `localStorage`，`restorePendingRequests()` 通过 GET status 恢复后端真源；SSE 断线只保持 best-effort，不把 running 本地改 failed。
+> - 兼容：保留旧 IPC role guard `["user", "assistant"].includes(msg.role)`，无 chat role 的主动事件不会误渲染成聊天气泡；未修改 uploader/preload 合同，未引入新 npm/jsdom 依赖。
+> - Task 10 定向：`10 passed in 149.8285ms`；`node --check src\renderer\js\chat.js`、`chat-uploader.js`、`preload.js` 均通过。
+> - Electron 关联：`node --test tests\persona-hub.test.js tests\chat-request-queue.test.js` → `13 passed in 115.723ms`。
+> - Python 完整回归：明确 `tests` 范围 `462 passed, 6 warnings in 35.06s`；`git diff --check` 通过且仅有 LF→CRLF 工作区提示。未读写生产数据库，未连接真实 QQ。
+
+快速自检：Task 10 已收口；`rollback_ready=false`；下一小节是 Task 11 端到端集成、Electron smoke 与副作用守恒。不得声称 Phase 04 完成、生产数据副本演练完成或 QQ 入站队列化完成。
+
+## Task 11 端到端集成、Electron smoke 与副作用守恒 Evidence
+
+- Red：`python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task11-red tests/test_phase4_integration.py -q` → `3 failed, 12 passed, 4 warnings`；目标缺口为 status DTO 缺少 legacy/canonical 完成 ID、retry 响应缺少 `retry_of_request_id`。
+- Green：`tests/test_phase4_integration.py` 固定八个端到端场景已补齐并通过：提交→claim→Pipeline→completed/status/events，同 Conversation 三请求有序，跨 Conversation 四路并发且第五等待，queued/running cancel 无重复模型/Message/event/QQ，retry 新请求只增加一次模型执行，重启恢复 running→failed 且 queued 可领取，事件传输失败后 GET status 恢复，Flag-off 保留旧同步合同且不消费队列。
+- 最小实现：`ConversationRepository.persist_turn()` 可接收 legacy `chat_log.id` 并写回 canonical `messages.legacy_chat_log_id`；Pipeline 将 user/assistant legacy id 传入 canonical completion 并返回 `event_sequence`；Worker terminal request event 使用 Pipeline sequence+1，避免 Renderer 丢弃终态；Service status DTO 暴露 `retry_of_request_id` 并在 submit/retry 后唤醒 Worker。
+- Electron smoke 安全补线：`electron/src/main.js` 在开发/打包态尊重显式 `AERIE_DATA_DIR`、`AERIE_DB_PATH`、`LOG_DIR/AERIE_LOG_DIR`；`communication/qq_client.py` 新增 `AERIE_DISABLE_QQ`；`core/brain.py` 新增默认关闭的 `AERIE_DISABLE_MODEL_CALLS` 本地 stub，防止 `.env` 中真实 provider 在 smoke 中被调用。
+- Electron smoke（临时路径）：以 `AERIE_DB_PATH=E:\Agent_reply\tmp\aerie-phase4-smoke3.db`、`AERIE_DATA_DIR=E:\Agent_reply\tmp\aerie-phase4-smoke3-data`、`LOG_DIR=E:\Agent_reply\tmp\aerie-phase4-smoke3-logs`、`AERIE_DISABLE_QQ=true`、`AERIE_DISABLE_MODEL_CALLS=true` 和三个 Phase 04 Flag 启动 `npm start -- --start-minimized`。窗口 renderer 已加载；后端健康 `data_path_id=e:\agent_reply\tmp\aerie-phase4-smoke3.db`；QQ disconnected；日志明确 `QQ client disabled by AERIE_DISABLE_QQ` 与多次 `LLM provider calls disabled by AERIE_DISABLE_MODEL_CALLS`。
+- Smoke API 证据：真实 `/api/chat/send` 连续三次返回 `202,202,202`，request id 为 `req_3187f082a1ff42ffa0d4b03b1d014b37`、`req_053051d68d014695b4cc04f91783e7ae`、`req_cc591cbc388641e19b299415f261dddb`；后续 GET status 全部 completed，分别写回 legacy user `10/13/16` 与 assistant `11,12/14,15/17,18`。临时 DB 汇总：`requests=6`、`turns=6`、`messages=18`、`chat_log=18`，canonical 与 legacy 均为 `6 user + 12 assistant`，全部 request status 为 completed。
+- cancel/retry smoke：对已完成请求调用 cancel 返回 200 且保持 completed；retry 对 completed 返回 409，端点合同可达。真实 queued/running cancel 与 retry 成功路径已由 Task 11 端到端自动化覆盖，避免为了 smoke 引入真实模型或 QQ 副作用。
+- 回归：`tests/test_phase4_integration.py` → `15 passed, 4 warnings`；关联 Python（含 Brain provider routing）`188 passed, 4 warnings in 26.11s`；Electron Node `node --test tests\persona-hub.test.js tests\chat-request-queue.test.js` → `14 passed`；`py_compile` 与四个 Electron `node --check` 通过；完整显式 `tests` 收集 `471 passed, 6 warnings in 35.86s`。
+
+快速自检：Task 11 已收口；Electron smoke 使用临时 DB/临时 data/log，未连接真实 QQ，未调用真实模型 provider，未写生产数据库；事件失败不反转数据库终态已由端到端测试覆盖。`rollback_ready=false`，Task 12 生产数据一致性副本迁移、实际恢复与完整收口仍未完成；不得声称 Phase 04 done 或 QQ 入站队列化完成。
+
+## Task 12 生产数据一致性副本迁移、恢复与完整收口 Evidence
+
+- Current-state Red 裁决：按 Task 12 先只读检查默认生产库 `E:\Agent_reply\data\aerie.db`，发现当前源库已存在 `006_chat_request_queue` completed ledger、16 个 Phase 04 `requests` 字段和三个索引。因此原计划中“生产副本 006 pending/缺列”的 Red 不再适用于当前状态；未伪造 pre-006 生产副本，改为记录 current-state contradiction 并执行 idempotent/no-op rehearsal。
+- 生产源只读检查：`PRAGMA quick_check=ok`；ledger 002/003/004/005/006 均 completed；006 checksum `2e649f6834695ca7b9250c3e2f7c110ab9c5b2c4ed2a230d1cd4fb5e0654ea05`；主文件 SHA-256 前后均为 `db3dfe360508e30e0da671030288d9522843cf405c00c531127e2daf9accf526`，源库未被写入。
+- SQLite Backup API 副本：生成一致性快照 A、rehearsal B、restore C 于 `E:\Agent_reply\tmp\phase4-task12-rehearsal-20260720-233222`；A backup `0.031251s`，C restore `0.031510s`。
+- Rehearsal B：dry-run pending 为 `[]`，schema/count 均未改变；首次与二次 `MigrationRunner(...).run(phase4_request_queue_migrations())` pending 均为 `[]`，证明当前 006 已在源库完成且副本迁移幂等 no-op。B 上 16 列与 3 索引完整，`completed_snapshot_non_null=0`，`PRAGMA foreign_key_check` 为 0，`quick_check=ok`。
+- 数据守恒与实际恢复：A/B/C 六张关键表计数一致：`chat_log=1789`、`conversations=4`、`turns=299`、`messages=1754`、`requests=299`、`migration_ledger=5`；restore C 与 A 的脱敏有序摘要完全一致，数据损失 `0`。
+- Flag 回滚演练：新增 `test_task12_flag_rollback_matrix_reenables_queue_without_data_loss`，在同一临时 DB 验证 queue on 完成提交；停止 Worker 后 queue flag off 时旧 `/api/chat/send` 同步 `200`，既有 queued 不消费不删除；依赖缺失 + queue true 返回 `503 queue_dependencies_unavailable` 且不调用 Pipeline；依赖恢复并重新开启后，既有 queued 被 Worker 正常完成。
+- 回归：Task 12 flag rollback 单测 `1 passed, 4 warnings`；Phase 00–04 关联门禁 `259 passed, 4 warnings in 29.21s`；Electron Node `14 passed`；Electron `node --check` 四入口通过；Python `py_compile` 通过；完整显式 `tests` 收集 `472 passed, 6 warnings in 36.51s`。
+
+快速自检：Task 12 已收口；未直接写生产库，迁移/恢复只在 SQLite Backup API 生成的 A/B/C 副本上执行；未提交/推送，未修改无关 `Spotlight/` 或运行态 data 文件；进入 Phase 05 前已复核 Phase 00–04 关联门禁并通过。Phase 04 可标记为 done，`rollback_ready=true`；QQ 入站队列化仍是后续接线门禁，不属于 Phase 04 已完成范围。
 
 ## 当前代码证据
 
-- [chat.js](file:///E:/Agent_reply/electron/src/renderer/js/chat.js#L322-L377)：全局 `_loading` 阻止连续输入，发送端同步等待 `/api/chat/send`。
-- [api_server.py](file:///E:/Agent_reply/core/api_server.py#L391-L451)：聊天接口同步 `await comp.pipeline.handle(...)`，空文本直接 400。
+- [brain.py](file:///E:/Agent_reply/core/brain.py)：新增默认关闭的 `AERIE_DISABLE_MODEL_CALLS`，仅在 smoke/test 显式开启时返回本地确定性 `BrainResponse`，默认 provider fallback 不变。
+- [qq_client.py](file:///E:/Agent_reply/communication/qq_client.py)：新增 `AERIE_DISABLE_QQ`，smoke/test 可跳过真实 NapCat/QQ connect/wait/send。
+- [main.js](file:///E:/Agent_reply/electron/src/main.js)：后端启动尊重显式临时 data/db/log 环境变量，避免 Electron smoke 触碰默认 `data\aerie.db`。
+- [chat.js](file:///E:/Agent_reply/electron/src/renderer/js/chat.js)：已移除发送入口全局 `_loading`，改为请求级 Map、client→request 绑定、统一 ingest、事件去重、sequence 缓冲、cancel/retry 和 status restore。
+- [api_server.py](file:///E:/Agent_reply/core/api_server.py)：已按 `chat_request_queue_v1` 分支提供 `/api/chat/send` 202/200 双合同，以及 status/cancel/retry 队列端点；Flag 关闭仍走旧同步 Pipeline。
+- [companion.py](file:///E:/Agent_reply/core/companion.py)：组合根已接线单一 `ChatRequestRepository`、`ChatRequestService` 与 `ChatRequestWorker`，并在 QQ readiness wait 前启动 Worker；依赖缺失 fail closed。
 - [conversation_repository.py](file:///E:/Agent_reply/core/conversation_repository.py)：已支持完成预分配 running Request/Turn、可信快照校验、幂等冲突保护、SAVEPOINT 回滚和 completed-only history；legacy 同步路径保持兼容。
-- [chat_request_service.py](file:///E:/Agent_reply/core/chat_request_service.py)：新增且尚未接线的可信身份、纯附件、所有权、cancel/retry 与脱敏 DTO 编排层。
+- [chat_request_service.py](file:///E:/Agent_reply/core/chat_request_service.py)：可信身份、纯附件、所有权、`reply_to_id` 所属校验、cancel/retry 与脱敏 DTO 编排层，已由 API/Companion 接线。
+- [chat_request_worker.py](file:///E:/Agent_reply/core/chat_request_worker.py)：四槽 Worker、真实执行 Task、heartbeat、取消、stop、恢复、Pipeline token 传递与 canonical completed 跳过二次完成，已由 Companion 在 Flag/依赖就绪时接线。
+- [message.py](file:///E:/Agent_reply/communication/message.py)：新增队列路径取消令牌与过晚取消异常。
+- [pipeline.py](file:///E:/Agent_reply/core/pipeline.py)：已兼容 `RequestContext`、`effective_content`、可信附件重提取、取消边界、canonical ID 复用与 request-scoped 事件 sequence；旧同步调用保持兼容。
 - [migrations/__init__.py](file:///E:/Agent_reply/core/migrations/__init__.py#L154-L163)：现有 requests 表只有基础状态、时间与 error。
 - [event_contracts.py](file:///E:/Agent_reply/core/event_contracts.py#L10-L50)：已有 `event_id/request_id/conversation_id/turn_id/message_id/sequence` 信封。
 - [event_stream.py](file:///E:/Agent_reply/core/event_stream.py#L30-L113)：SSE 为有界 best-effort 广播，不是可靠任务队列。
@@ -364,16 +458,16 @@ Pipeline 增量接收取消令牌，在以下边界检查：
 
 ## 验收
 
-- [ ] 连续三条输入全部持久 queued，不丢失、不被全局 loading 阻止。
-- [ ] 同 Conversation 严格串行；不同 Conversation 默认最多四路并行。
-- [ ] queued/running 取消均保持真实终态，cancelled 不误记 completed。
-- [ ] retry 创建新 ID 并关联原请求，不产生重复模型、Message、事件或 QQ 副作用。
-- [ ] lease 过期与进程重启把遗留 running 标为 failed，不自动重排。
-- [ ] 纯附件可处理，用户历史不出现内部占位文本。
-- [ ] `event_id` 去重、`request_id + sequence` 有序，IPC/SSE/poll 不重复渲染。
-- [ ] Feature Flag 关闭恢复旧同步路径且不删除新数据。
-- [ ] 迁移 backup/dry-run/checksum/幂等/恢复/quick_check 通过。
-- [ ] 不产生历史串线、敏感值泄漏或无所有权访问。
+- [x] 连续三条输入全部持久 queued，不丢失、不被全局 loading 阻止。
+- [x] 同 Conversation 严格串行；不同 Conversation 默认最多四路并行。
+- [x] queued/running 取消均保持真实终态，cancelled 不误记 completed。
+- [x] retry 创建新 ID 并关联原请求，不产生重复模型、Message、事件或 QQ 副作用。
+- [x] lease 过期与进程重启把遗留 running 标为 failed，不自动重排。
+- [x] 纯附件可处理，用户历史不出现内部占位文本。
+- [x] `event_id` 去重、`request_id + sequence` 有序，IPC/SSE/poll 不重复渲染。
+- [x] Feature Flag 关闭恢复旧同步路径且不删除新数据。
+- [x] 迁移 backup/dry-run/checksum/幂等/恢复/quick_check 通过。
+- [x] 不产生历史串线、敏感值泄漏或无所有权访问。
 
 ## 回滚
 

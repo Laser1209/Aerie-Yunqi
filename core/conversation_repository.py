@@ -80,6 +80,8 @@ class ConversationRepository:
         assistant_segments: list[str],
         conversation_id: str | None = None,
         turn_id: str | None = None,
+        user_legacy_chat_log_id: int | None = None,
+        assistant_legacy_chat_log_ids: list[int] | None = None,
     ) -> dict[str, str] | None:
         if not self.enabled:
             return None
@@ -116,6 +118,8 @@ class ConversationRepository:
                         user_content=user_content,
                         attachments=attachments,
                         assistant_segments=assistant_segments,
+                        user_legacy_chat_log_id=user_legacy_chat_log_id,
+                        assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
                     )
                 else:
                     result = self._persist_legacy_turn(
@@ -129,6 +133,8 @@ class ConversationRepository:
                         user_content=user_content,
                         attachments=attachments,
                         assistant_segments=assistant_segments,
+                        user_legacy_chat_log_id=user_legacy_chat_log_id,
+                        assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
                     )
             except Exception:
                 conn.execute("ROLLBACK TO SAVEPOINT persist_conversation_turn")
@@ -152,6 +158,8 @@ class ConversationRepository:
         user_content: str,
         attachments: str | None,
         assistant_segments: list[str],
+        user_legacy_chat_log_id: int | None = None,
+        assistant_legacy_chat_log_ids: list[int] | None = None,
     ) -> dict[str, str]:
         existing_turn_id = request["turn_id"]
         if (
@@ -215,6 +223,8 @@ class ConversationRepository:
             attachments=attachments,
             assistant_segments=assistant_segments,
             response_group_id=response_group_id,
+            user_legacy_chat_log_id=user_legacy_chat_log_id,
+            assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
         )
         completed_at = datetime.now(timezone.utc).isoformat()
         request_updated = conn.execute(
@@ -320,6 +330,8 @@ class ConversationRepository:
         user_content: str,
         attachments: str | None,
         assistant_segments: list[str],
+        user_legacy_chat_log_id: int | None = None,
+        assistant_legacy_chat_log_ids: list[int] | None = None,
     ) -> dict[str, str]:
         rows = conn.execute(
             """SELECT role, content, attachments,
@@ -376,6 +388,8 @@ class ConversationRepository:
         user_content: str,
         attachments: str | None,
         assistant_segments: list[str],
+        user_legacy_chat_log_id: int | None = None,
+        assistant_legacy_chat_log_ids: list[int] | None = None,
     ) -> dict[str, str]:
         response_group_id = generate_id("group")
         self.ensure_conversation(
@@ -409,6 +423,8 @@ class ConversationRepository:
             attachments=attachments,
             assistant_segments=assistant_segments,
             response_group_id=response_group_id,
+            user_legacy_chat_log_id=user_legacy_chat_log_id,
+            assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
         )
         return {
             "conversation_id": conversation_id,
@@ -430,6 +446,8 @@ class ConversationRepository:
         attachments: str | None,
         assistant_segments: list[str],
         response_group_id: str,
+        user_legacy_chat_log_id: int | None,
+        assistant_legacy_chat_log_ids: list[int] | None,
     ) -> None:
         self._insert_message(
             conn,
@@ -443,8 +461,15 @@ class ConversationRepository:
             channel=channel,
             channel_account_id=channel_account_id,
             actor_id=actor_id,
+            legacy_chat_log_id=user_legacy_chat_log_id,
         )
+        legacy_ids = assistant_legacy_chat_log_ids or []
         for sequence, content in enumerate(assistant_segments, start=1):
+            legacy_chat_log_id = (
+                legacy_ids[sequence - 1]
+                if sequence - 1 < len(legacy_ids)
+                else None
+            )
             self._insert_message(
                 conn,
                 conversation_id=conversation_id,
@@ -457,6 +482,7 @@ class ConversationRepository:
                 channel=channel,
                 channel_account_id=channel_account_id,
                 actor_id=actor_id,
+                legacy_chat_log_id=legacy_chat_log_id,
             )
 
     def recent_turn_history(
@@ -508,13 +534,14 @@ class ConversationRepository:
         channel: str | None,
         channel_account_id: str | None,
         actor_id: str | None,
+        legacy_chat_log_id: int | None,
     ) -> None:
         conn.execute(
             """INSERT INTO messages
                (message_id, conversation_id, turn_id, role, content,
                 attachments, response_group_id, sequence, channel,
-                channel_account_id, actor_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                channel_account_id, actor_id, legacy_chat_log_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 generate_id("msg"),
                 conversation_id,
@@ -527,5 +554,6 @@ class ConversationRepository:
                 channel,
                 channel_account_id,
                 actor_id,
+                legacy_chat_log_id,
             ),
         )

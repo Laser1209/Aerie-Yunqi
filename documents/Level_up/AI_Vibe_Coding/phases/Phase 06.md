@@ -2,7 +2,7 @@
 title: Phase 06 - 完整 Turn Context、Token Budget、摘要与长期记忆
 kind: phase
 phase: Phase 06
-status: planned
+status: done
 tags: [aerie, phase, phase06]
 ---
 # Phase 06：完整 Turn Context、Token Budget、摘要与长期记忆
@@ -43,9 +43,9 @@ tags: [aerie, phase, phase06]
 4. 验证 Flag 关闭、迁移/协议恢复和 Evidence 脱敏。
 
 ## 验收
-- [ ] 多气泡合并为完整 assistant 响应，短期不跨 Channel
-- [ ] Feature Flag 关闭恢复旧路径且不丢新数据
-- [ ] 不产生重复副作用、历史串线或敏感值泄漏
+- [x] 多气泡合并为完整 assistant 响应，短期不跨 Channel
+- [x] Feature Flag 关闭恢复旧路径且不丢新数据
+- [x] 不产生重复副作用、历史串线或敏感值泄漏
 
 ## 回滚
 关闭 `context_budget_v1`，恢复备份或旧读路径；保留新表、元数据、Outbox、旧表和旧文件。
@@ -61,3 +61,11 @@ tags: [aerie, phase, phase06]
 - [context_builder.py](file:///E:/Agent_reply/core/context_builder.py)
 - [pipeline.py](file:///E:/Agent_reply/core/pipeline.py)
 - [[90_全局验收清单]] · [[92_回滚演练]]
+
+### Task 06 Evidence（2026-07-21）
+
+- Red：新增 `tests/test_phase6_context_budget.py` 后，目标测试失败 `3 failed, 1 passed in 1.92s`；失败点为 `ContextBuilder.build()` 缺少 `actor_id/context_budget_enabled` 等 Phase 06 参数，Pipeline 在 `context_budget_v1=true` 时未传 context budget identity，也未记录 audit。
+- Green：`core/context_builder.py` 增加 `context_budget_enabled` 兼容参数、actor/channel 标识、长期记忆与知识库检索注入、assistant 连续多气泡合并、估算 token/字符 budget 与脱敏 audit；`core/pipeline.py` 仅在 `context_budget_v1=true` 时传入 identity 并将 allowlist 后的 audit 写入 cognition context 阶段。
+- Flag 回滚：`context_budget_v1=false` 时 Pipeline 不传新增 kwargs、不读取 `get_last_context_audit()`，ContextBuilder 可继续按旧签名/旧行为使用；无 schema/data migration。
+- 验证：Phase 06 专项 `4 passed in 1.57s`；Context/Pipeline/Phase4/Phase5 关联 `66 passed, 4 warnings in 3.29s`；Phase 00–06 显式门禁 `289 passed, 4 warnings in 28.10s`；完整 `tests` 收集 `481 passed, 6 warnings in 36.25s`；Electron Node `16 passed`；`python -m py_compile core/context_builder.py core/pipeline.py` 通过；`git diff --check` 仅有 LF→CRLF 提示；无残留项目 Electron/Python/Node 进程。
+- 迁移：本阶段 `migration=false`，未创建新迁移，未修改生产数据库，未修改 004/005/006 checksum；audit 只记录计数、标识、字符和估算 token，不记录消息正文、记忆正文、知识正文或凭据。

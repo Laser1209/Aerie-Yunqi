@@ -468,10 +468,11 @@ def test_status_view_redacts_input_effective_attachments_lease_owner_and_error_s
 ## Task 7: ChatRequestWorker 四槽、真实 Task、heartbeat 与恢复
 
 **Files:**
+- Modify: `core/chat_request_repository.py`
 - Create: `core/chat_request_worker.py`
-- Create: `tests/test_phase4_chat_request_worker.py`
+- Modify: `tests/test_phase4_chat_request_worker.py`
 
-- [ ] **Red：写 Worker 并发/取消测试。** 固定测试函数：
+- [x] **Red：写 Worker 并发/取消测试。** 固定测试函数：
 
 ```python
 async def test_worker_recovers_before_first_claim(): ...
@@ -484,17 +485,22 @@ async def test_cancel_running_cancels_task_and_marks_cancelled(): ...
 async def test_cancelled_error_never_becomes_completed(): ...
 async def test_event_emit_failure_does_not_reverse_database_terminal_state(): ...
 async def test_stop_does_not_masquerade_as_user_cancel(): ...
+async def test_cancel_running_missing_task_fails_request_instead_of_hanging(): ...
 ```
 
-- [ ] **亲自观察目标 Red。** 运行 `python -m pytest tests/test_phase4_chat_request_worker.py -q`，预期 FAIL：Worker 不存在；并发测试必须用 Event 控制，不用概率性 sleep。
-- [ ] **最小 Green：四个 slot loop。** 构造函数固定包含 `repository`, `pipeline`, `emit`, `clock`, `max_concurrency=4`, `lease_seconds`, `heartbeat_seconds`, `worker_id`。`start()` 先 `recover_interrupted()`，再创建四个 slot task；每次 claim 后创建真实执行 task 并写入 `self._running_tasks[request_id]`，heartbeat 单独 task。第五个 Conversation 必须在前四个至少一个结束后才运行。
-- [ ] **取消与 stop 区分。** 用户 cancel：Service 先将 running 转 cancelling，再调用 `cancel_running()`；执行 task 捕获 `asyncio.CancelledError`，仅当数据库仍 cancelling 且尚无不可逆终态时标 cancelled。`stop()` 设置 stopping 标志、停止 claim、取消 heartbeat/slot 任务，并把仍由本 Worker 持有 lease 的 running/cancelling Request 原子标为 `failed/worker_stopped`；不得记录为用户 cancelled，queued 保持 queued。
-- [ ] **事件失败边界。** queued/running/completed/failed/cancelled 事件均在数据库提交后 best-effort emit；emit 抛错只记录结构化错误，不回滚数据库终态。
-- [ ] **定向回归。** 运行 Worker 测试，预期 PASS，并确认 `len(_running_tasks) <= 4`。
-- [ ] **关联/完整回归。** 运行 repository/service/worker/pipeline 相关测试，随后完整回归。
-- [ ] **Evidence。** 记录最大并发 4、第五等待、heartbeat 次数、取消时延和恢复计数；不得记录请求正文。
-- [ ] **文档更新。** 更新 Phase/Task/全局验收的串行、四槽、取消、恢复项与回滚停止策略。
-- [ ] **批后自检。** 确认恢复先于 claim、Worker stop 不伪造用户 cancel、真实 Task 可取消。
+风险复核另固定 Repository 严格 completed/cancelled、过期 lease、claimed failure 双表回滚，以及 Worker lease_lost、deferred cancel、cancelling stop、deferred cancel + stop、pre-start cancel/stop 和 done-before-slot stop 场景；连同 UTC Fixture 共 23 项。
+
+- [x] **亲自观察目标 Red。** 接管时 `13 failed, 1 passed`：严格完成接口和 Worker 缺失，且现有取消终态错误允许 running 直接 cancelled；并发测试均用 Event 控制。
+- [x] **最小 Green：四个 slot loop。** 构造函数固定包含 `repository`, `pipeline`, `emit`, `clock`, `max_concurrency=4`, `lease_seconds`, `heartbeat_seconds`, `worker_id`。`start()` 先 `recover_interrupted()`，再创建四个 slot task；每次 claim 后创建真实执行 task 并写入 `self._running_tasks[request_id]`，heartbeat 单独 task。第五个 Conversation 在前四个至少一个结束后才运行。
+- [x] **取消与 stop 区分。** 用户 cancel：Service 先将 running 转 cancelling，再调用 `cancel_running()`；执行 task 捕获 `asyncio.CancelledError`，仅 cancelling + matching lease 标 cancelled。`stop()` 先设置 stopping，再取消和等待执行，把本 Worker 持有的 running/cancelling 标为 `failed/worker_stopped`；queued 保持 queued。丢失 execution Task 的 cancelling 请求标为 `failed/cancel_task_missing`。
+- [x] **事件失败边界。** Worker 所有的 running/completed/failed/cancelled 事件均在数据库提交后 best-effort emit；emit 抛错只记录结构化错误，不回滚数据库终态。queued 提交事件归属后续 Service/API 接线，不在未接线 Worker 中伪造。
+- [x] **定向回归。** 初始 Green 后风险复核 Red 为 `5 failed, 15 passed`；最终 Worker 专项 `23 passed in 5.09s`，最大 active=4，`len(_running_tasks) <= 4`。
+- [x] **关联/完整回归。** 加固关联 `136 passed, 4 warnings`；完整 `433 passed, 1 deselected, 6 warnings`；被排除的办公目录环境用例在工作区临时目录单独通过。
+- [x] **Evidence。** 最大并发 4、第五等待、heartbeat 至少 1 次、用户取消等待上限 250ms/确认 `<500ms`、启动恢复 1 条遗留 active Request；过期 lease 不复活，lease_lost 停止 execution，stop 覆盖仍 active 的 deferred/pre-start cancel；未记录请求正文。
+- [x] **文档更新。** 已更新 Phase/Task/全局验收/回滚和当前移交；复合端到端验收仍保持未勾选。
+- [x] **批后自检。** recovery 先于首次 claim；Worker stop 不伪造用户 cancel；`_running_tasks` 保存并真实取消 execution Task。Worker 仍未接线，不影响旧 API/Pipeline/QQ/Renderer。
+
+> Fail-closed 限制：若 heartbeat 数据库异常与随后的 failed 终态写入同时失败，execution 已停止，但 Request 依赖下一次进程启动的 recovery；Task 7 不承诺进程内数据库恢复后自动收口。
 
 ## Task 8: Pipeline FULL/BASIC RequestContext 与取消边界
 
@@ -504,7 +510,7 @@ async def test_stop_does_not_masquerade_as_user_cancel(): ...
 - Create: `tests/test_phase4_pipeline.py`
 - Modify: `tests/test_pipeline.py`
 
-- [ ] **Red：分别覆盖 FULL 与 BASIC。** 固定参数化合同：
+- [x] **Red：分别覆盖 FULL 与 BASIC。** 固定参数化合同：
 
 ```python
 @pytest.mark.parametrize("route_mode", ["FULL", "BASIC"])
@@ -517,10 +523,11 @@ async def test_pipeline_cancellation_stops_before_named_side_effect(boundary): .
 async def test_pipeline_uses_existing_request_turn_and_conversation_for_canonical_mirror(): ...
 async def test_irreversible_terminal_side_effect_prevents_fake_cancelled(): ...
 async def test_request_events_include_complete_envelope_ids_and_monotonic_sequence(): ...
+async def test_document_markdown_is_reextracted_from_trusted_upload_url(): ...
 ```
 
-- [ ] **亲自观察目标 Red。** 运行 `python -m pytest tests/test_phase4_pipeline.py -q`，预期 FAIL：`Pipeline.handle` 不接受 context/token，镜像仍生成新 request ID，BASIC attachments 为 None。
-- [ ] **最小 Green：扩展入口但保持旧调用兼容。** 固定签名：
+- [x] **亲自观察目标 Red。** 已运行 `python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task8-red tests/test_phase4_pipeline.py -q`，观察到收集期 `ImportError: cannot import name 'CancellationToken'`，目标缺口明确为 Pipeline/Message 取消合同尚不存在。
+- [x] **最小 Green：扩展入口但保持旧调用兼容。** 固定签名：
 
 ```python
 async def handle(self, msg: IncomingMessage, force_full: bool = False, *,
@@ -529,25 +536,29 @@ async def handle(self, msg: IncomingMessage, force_full: bool = False, *,
 ```
 
 旧同步调用可传 None。队列调用中 `msg.content` 始终是 `input_content`；Context/Brain 的用户输入改用 `request_context.effective_content`，但 legacy user row、规范 user Message、user event 均使用 `msg.content`。FULL/BASIC 都必须传附件给 Context Builder。
-- [ ] **逐边界检查。** 在模型前/后、legacy user 持久化前、每个 legacy assistant 持久化前、canonical mirror 前、每个事件前、QQ enqueue 前调用 token。若取消发生在任何 legacy/规范/外部终态副作用之前，抛出 `asyncio.CancelledError` 并由 Worker 落 cancelled；若已提交任一不可逆终态副作用，则 Pipeline 抛出 `CancellationTooLate("terminal_side_effect_committed")`，Worker 必须把 Request/Turn 记为 `failed/terminal_side_effect_committed`，不得伪造 cancelled 或 completed，且不得继续后续副作用。
-- [ ] **ID 与 EventEnvelope。** `_persist_canonical_turn()` 在 request context 存在时传入 context 的 request/turn/conversation，不再 `generate_id("req")`。Request 生命周期和消息事件携带 `event_id/request_id/conversation_id/turn_id/message_id/response_group_id/sequence`；sequence 对单 Request 单调递增，由 Worker/Pipeline 共用 request-scoped sequencer，不依赖 legacy numeric id。
-- [ ] **定向回归。** 运行 `python -m pytest tests/test_phase4_pipeline.py tests/test_pipeline.py -q`，预期 PASS。
-- [ ] **关联/完整回归。** 运行 Phase 3 conversation、Phase 4 repository/service/worker/pipeline/API 相关测试，随后完整回归。
-- [ ] **Evidence。** 保存各 boundary 的副作用调用计数均为预期 0/1、ID 完整性和 sequence 列表；不保存 content。
-- [ ] **文档更新。** 更新 Phase/Task/全局验收的取消边界、可见 content、ID 复用和事件合同。
-- [ ] **批后自检。** 确认 FULL/BASIC 均覆盖，未整体重写 Pipeline，未实现 Phase 06 token streaming/pacing。
+- [x] **可信文档提取。** Request 附件只把 Task 6 已验证的服务端 URL/元数据传入 Pipeline；文档 Markdown 由后端按可信 `/uploads/<filename>` URL 重新提取，客户端提交的 `content/markdown/path` 字段会被过滤。
+- [x] **逐边界检查。** 在模型前/后、legacy user 持久化前、每个 legacy assistant 持久化前、canonical mirror 前、每个事件前、QQ enqueue 前调用 token。取消早于终态副作用时抛 `asyncio.CancelledError`；legacy 已写但 canonical 未完成时抛 `CancellationTooLate("terminal_side_effect_committed")`；canonical 已完成后采用 completion-wins，并停止后续事件/QQ 副作用。
+- [x] **ID 与 EventEnvelope。** `_persist_canonical_turn()` 在 request context 存在时复用 context 的 request/turn/conversation；消息事件携带 `event_id/request_id/conversation_id/turn_id/message_id/response_group_id/sequence`，Pipeline 内部 request-scoped sequence 单调递增。
+- [x] **定向回归。** `python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task8-post-doc-fix tests/test_phase4_pipeline.py tests/test_pipeline.py -q` → `36 passed in 2.36s`。
+- [x] **关联/完整回归。** Phase 4 repository/service/worker/pipeline/API 相关：`135 passed, 4 warnings in 17.68s`；完整 `tests` 收集：`447 passed, 6 warnings in 26.85s`。仓库根完整收集曾因 `tmp/` 历史无权限目录产生 35 个 collection `WinError 5`，改用明确 `tests` 范围复验通过，未清理历史目录。
+- [x] **Evidence。** `tests/test_phase4_pipeline.py` 覆盖 FULL/BASIC 可见输入隔离、各 boundary 副作用阻断、canonical ID 复用、事件完整 ID + 单调 sequence、可信 URL Markdown 重提取；测试不保存真实正文、真实路径或附件正文。
+- [x] **文档更新。** 更新 Phase/Task/全局验收/回滚/移交说明的取消边界、可见 content、ID 复用和事件合同。
+- [x] **批后自检。** FULL/BASIC 均覆盖；未整体重写 Pipeline；未实现 Phase 06 token streaming/pacing；Task 8 收口当时 Companion/API/Renderer 仍待 Task 9–11。
 
 ## Task 9: Companion 唯一实例、依赖门禁与 API 双合同
 
 **Files:**
 - Modify: `core/companion.py`
 - Modify: `core/api_server.py`
+- Modify: `core/chat_request_service.py`
+- Modify: `core/chat_request_repository.py`
 - Modify: `config/settings.yaml`
 - Create: `tests/test_phase4_api.py`
 - Create: `tests/test_phase4_integration.py`
+- Modify: `tests/test_phase4_chat_request_service.py`
 - Modify: `tests/test_api.py`
 
-- [ ] **Red：写组合根与 API 测试。** 固定测试函数：
+- [x] **Red：写组合根与 API 测试。** 固定测试函数：
 
 ```python
 def test_companion_injects_one_repository_instance_into_service_worker_and_pipeline(): ...
@@ -559,12 +570,14 @@ def test_api_pure_attachment_202_and_empty_no_attachment_400(): ...
 def test_api_unready_queue_returns_503_not_legacy_fallback(): ...
 def test_api_get_cancel_retry_404_409_200_202_contracts(): ...
 def test_api_non_owner_never_leaks_request_existence(): ...
+def test_reply_to_requires_owned_message_in_same_actor_channel_conversation(): ...
+def test_reply_to_missing_or_foreign_is_indistinguishable(): ...
 def test_api_server_never_constructs_chat_request_repository(): ...
 def test_flag_off_worker_does_not_consume_existing_queued_rows(): ...
 ```
 
-- [ ] **亲自观察目标 Red。** 运行 `python -m pytest tests/test_phase4_api.py tests/test_phase4_integration.py -q`，预期 FAIL：API 仍同步 200、组合根无 Service/Worker、门禁不存在。
-- [ ] **最小 Green：组合根和依赖策略。** `Companion` 只创建一个 `ConversationRepository` 和一个 `ChatRequestRepository`，并把同一对象注入 Service/Worker/Pipeline。启动条件：
+- [x] **亲自观察目标 Red。** 已运行 `python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task9-red tests/test_phase4_api.py tests/test_phase4_integration.py -q`，观察到 `13 failed, 2 passed`：API 仍同步 200、组合根无 Service/Worker、门禁不存在、新端点不存在；3 个静态身份 FK 失败为测试夹具缺 actor/foreign conversation，已先修正夹具。
+- [x] **最小 Green：组合根和依赖策略。** `Companion` 只创建一个 `ConversationRepository` 和一个 `ChatRequestRepository`，并把同一对象注入 Service/Worker/Pipeline。启动条件：
 
 ```python
 queue_requested = flags.is_enabled("chat_request_queue_v1")
@@ -582,7 +595,7 @@ else:
 ```
 
 Queue Flag 开启时 Worker 必须在 `await qq.wait_until_ready(...)` 之前启动，保证 desktop/local 不被 QQ readiness 阻塞。Flag 关闭不启动/消费 Worker，queued 行原样保留。
-- [ ] **API 路由。** `POST /api/chat/send`：Flag 关沿用现有同步代码与 200 shape；Flag 开调用 `comp.chat_request_service.submit()` 并 `JSONResponse(..., status_code=202)`。新增：
+- [x] **API 路由。** `POST /api/chat/send`：Flag 关沿用现有同步代码与 200 shape；Flag 开调用 `comp.chat_request_service.submit()` 并 `JSONResponse(..., status_code=202)`。新增：
 
 ```text
 GET  /api/chat/requests/{request_id}
@@ -590,13 +603,13 @@ POST /api/chat/requests/{request_id}/cancel
 POST /api/chat/requests/{request_id}/retry
 ```
 
-API 只取 `comp.chat_request_service`，不得导入/实例化 Repository。pure attachment 允许 202；空文本无附件 400；依赖或 Worker 未就绪 503。
-- [ ] **错误映射。** `RequestNotFound -> 404`，`RequestConflict -> 409`，`QueueUnavailable -> 503`，`InvalidChatInput -> 400`。终态 cancel 200；retry 成功 202 新 ID。响应不得包含 actor、输入快照、lease owner、堆栈。
-- [ ] **定向回归。** 运行 `python -m pytest tests/test_phase4_api.py tests/test_phase4_integration.py tests/test_api.py -q`，预期 PASS。
-- [ ] **关联/完整回归。** 运行 Phase 0–4 + API + Pipeline 定向套件，随后完整 Python 回归。
-- [ ] **Evidence。** 保存 HTTP 状态矩阵、响应 key 集合、实例 `id()` 相等性、启动调用顺序、Flag 关闭 queued 数不变；不保存正文。
-- [ ] **文档更新。** 更新 Phase/Task/全局验收/回滚：明确 fail closed、503、Flag 关旧路径和不消费 queued。
-- [ ] **批后自检。** 确认 006 与运行 Flag 解耦；queue Flag 开但依赖缺失绝不静默回退，Flag 关仍是旧同步路径。
+API 只取 `comp.chat_request_service`，不得导入/实例化 Repository。Service/Repository 在提交事务前验证非零 `reply_to_id` 对应 Message 属于同一 Actor、Channel、Channel Account 和 Conversation；不存在与跨所有权引用走同一错误路径。pure attachment 允许 202；空文本无附件 400；依赖或 Worker 未就绪 503。
+- [x] **错误映射。** `RequestNotFound -> 404`，`RequestConflict -> 409`，`QueueUnavailable -> 503`，`InvalidChatInput -> 400`。终态 cancel 200；retry 成功 202 新 ID。响应不得包含 actor、输入快照、lease owner、堆栈。
+- [x] **定向回归。** `python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task9-green tests/test_phase4_api.py tests/test_phase4_integration.py -q` → `15 passed, 4 warnings in 5.06s`。
+- [x] **关联/完整回归。** 旧 API、Service、Repository、Worker、Pipeline：`135 passed, 4 warnings in 18.46s`；修复 integration 真实 `Companion` 与旧 API mock 模块级污染后，按反向敏感顺序复验 `67 passed, 4 warnings in 12.55s`；完整明确 `tests` 范围：`462 passed, 6 warnings in 35.41s`；`py_compile` 与 `git diff --check` 通过。
+- [x] **Evidence。** HTTP 状态矩阵、响应 key 集合、单例对象身份、启动调用顺序、Flag 关闭 queued 数不变均由 `tests/test_phase4_api.py` 与 `tests/test_phase4_integration.py` 覆盖；不保存请求正文。
+- [x] **文档更新。** 更新 Phase/Task/全局验收/回滚/移交说明：明确 fail closed、503、Flag 关旧路径和不消费 queued。
+- [x] **批后自检。** 006 与运行 Flag 解耦；queue Flag 开但依赖缺失绝不静默回退，Flag 关仍是旧同步路径。Task 9 收口当时 Renderer 请求级状态、统一 ingest 与端到端 smoke 仍待 Task 10–11。
 
 ## Task 10: Renderer/Electron 请求状态、统一 ingest 与纯附件最小修复
 
@@ -606,7 +619,7 @@ API 只取 `comp.chat_request_service`，不得导入/实例化 Repository。pur
 - Modify: `electron/src/renderer/js/chat-uploader.js`（仅 ready/upload Red 需要时）
 - Create: `electron/tests/chat-request-queue.test.js`
 
-- [ ] **Red：用 Node VM 测试真实 `chat.js`。** 固定测试名：
+- [x] **Red：用 Node VM 测试真实 `chat.js`。** 固定测试名：
 
 ```javascript
 test("three rapid sends issue three POST requests without a global loading lock", async () => {});
@@ -622,15 +635,15 @@ test("sse disconnect is best effort and status polling recovers truth", async ()
 ```
 
 VM sandbox 提供最小 DOM、`window.aerie.api.request/onMessage`、`window.aerie.sse.subscribe`、localStorage 和 fake timers；不得引入 jsdom 新依赖。
-- [ ] **亲自观察目标 Red。** 运行：
+- [x] **亲自观察目标 Red。** 运行：
 
 ```powershell
 Set-Location E:\Agent_reply\electron
 node --test tests\chat-request-queue.test.js
 ```
 
-预期 FAIL：第二/第三次 send 被 `_loading` 阻止，缺 request Map/统一 ingest。
-- [ ] **最小 Green：请求级状态。** 删除 `_loading`；新增：
+已观察到 `10 failed, 0 passed`：第二/第三次 send 被 `_loading` 阻止，只发 1 个 POST；其余失败分别指向缺 request Map、统一 ingest、cancel/retry、页面恢复和 SSE best-effort 断线处理。
+- [x] **最小 Green：请求级状态。** 删除 `_loading`；新增：
 
 ```javascript
 this._requests = new Map();          // request_id -> RequestViewState
@@ -639,24 +652,27 @@ this._seenEventIds = new Set();
 this._requestSequences = new Map();  // request_id -> { next, pending }
 ```
 
-每次 send 生成稳定 client id，立即渲染独立用户气泡并 POST；202 后绑定真实 request id。每个气泡独立显示 queued/running/cancelling/failed/cancelled/completed，提供 cancel/retry；retry 新建视图，不覆盖原请求。
-- [ ] **统一 ingest。** 实现 `_ingestChatSignal(signal, transport)`：先解析 SSE 字符串；有 `event_id` 先去重；有 `request_id+sequence` 按 sequence 缓冲并顺序应用；legacy poll/IPC numeric `id` 继续通过 `_seenIds` 去重。SSE 为 best-effort，断线不伪造失败；页面启动和重连调用 GET status 恢复后端真源。
-- [ ] **Uploader 限界。** 只有测试证明现有 uploader 无法产生合法 ready 附件时，才把直连 `fetch(127.0.0.1)` 改为既有 `window.aerie.api.upload({filename, contentType, bytes})`，并只允许服务端成功响应后 `state="ready"`。不新增图片元数据、EXIF、哈希、缩略图、GC 或 Phase 07 类型扩展。
-- [ ] **定向回归。** 运行 `node --test tests\chat-request-queue.test.js`，预期全部 PASS；运行 `node --check src\renderer\js\chat.js`、`node --check src\renderer\js\chat-uploader.js`、`node --check src\preload.js`，预期无输出且退出码 0。
-- [ ] **关联/完整回归。** 运行 `node --test tests\persona-hub.test.js tests\chat-request-queue.test.js`；再从仓库根运行完整 Python 回归，确认 Renderer 修改未改变 API 旧合同测试。
-- [ ] **Evidence。** 记录三次 POST 数、event 去重计数、sequence 应用顺序、恢复 GET 数和 Node 测试结果；截图若使用必须无真实正文/账号。
-- [ ] **文档更新。** 更新 Phase/Task/全局验收的连续输入、请求级状态、统一 ingest、页面恢复和 SSE best-effort。
-- [ ] **批后自检。** 确认没有全局 loading、没有引入新 npm 依赖、没有扩展 Phase 07 资产系统、legacy numeric id 仍兼容。
+每次 send 生成稳定 client id，立即渲染独立用户气泡并 POST；202 后绑定真实 request id。每个请求独立跟踪 queued/running/cancelling/failed/cancelled/completed，提供 cancel/retry；retry 新建请求状态，不覆盖原请求。
+- [x] **统一 ingest。** 实现 `_ingestChatSignal(signal, transport)`：先解析 SSE 字符串；有 `event_id` 先去重；有 `request_id+sequence` 按 sequence 缓冲并顺序应用；legacy poll/IPC numeric `id` 继续通过 `_seenIds` 去重。SSE 为 best-effort，断线不伪造失败；页面启动和重连调用 GET status 恢复后端真源。
+- [x] **Uploader 限界。** 本批 Red 未证明 uploader 需要改动，因此未修改 `chat-uploader.js` 功能；仅运行 `node --check` 语法门禁。不新增图片元数据、EXIF、哈希、缩略图、GC 或 Phase 07 类型扩展。
+- [x] **定向回归。** `node --test tests\chat-request-queue.test.js` → `10 passed in 149.8285ms`；`node --check src\renderer\js\chat.js`、`src\renderer\js\chat-uploader.js`、`src\preload.js` 均通过。
+- [x] **关联/完整回归。** `node --test tests\persona-hub.test.js tests\chat-request-queue.test.js` → `13 passed in 115.723ms`；仓库根明确 `tests` 范围 `462 passed, 6 warnings in 35.06s`。
+- [x] **Evidence。** 记录三次 POST 数、event 去重计数、sequence 应用顺序、恢复 GET 数和 Node 测试结果；未使用截图，未保存真实正文/账号。
+- [x] **文档更新。** 更新 Phase/Task/全局验收/回滚/移交说明的连续输入、请求级状态、统一 ingest、页面恢复和 SSE best-effort。
+- [x] **批后自检。** 确认没有全局 loading、没有引入新 npm 依赖、没有扩展 Phase 07 资产系统、legacy numeric id 仍兼容；Electron smoke 和生产副本演练仍待 Task 11/12。
 
 ## Task 11: 端到端集成、Electron smoke 与副作用守恒
 
 **Files:**
 - Create: `tests/test_phase4_integration.py`
-- Modify: `tests/test_phase4_api.py`
+- Modify: `tests/test_phase4_chat_request_service.py`
 - Modify: `electron/tests/chat-request-queue.test.js`
+- Modify: `core/brain.py`
+- Modify: `communication/qq_client.py`
+- Modify: `electron/src/main.js`
 - Modify: `documents/Level_up/AI_Vibe_Coding/phases/Phase 04.md`
 
-- [ ] **Red：写端到端场景。** 固定测试函数：
+- [x] **Red：写端到端场景。** 固定测试函数：
 
 ```python
 async def test_submit_claim_pipeline_complete_status_and_events_end_to_end(): ...
@@ -669,25 +685,29 @@ async def test_event_transport_failure_recovers_via_get_status(): ...
 async def test_flag_off_preserves_old_sync_contract_and_does_not_consume_queue(): ...
 ```
 
-- [ ] **亲自观察目标 Red。** 在完成组件前先运行新增场景，预期至少一个业务断言 FAIL；若全部意外 PASS，补充缺失的副作用计数断言，不制造虚假失败。
-- [ ] **最小 Green：只修集成接线缺口。** 不重构已 Green 模块；修复仅限实例注入、生命周期顺序、事件字段或 API 映射。每个 request 的 model call、规范 user Message、assistant segments、完成事件和 QQ enqueue 均断言最多一次。
-- [ ] **Electron smoke。** 使用开发环境且临时 DB/Flag，不连接真实 QQ：启动后验证窗口加载、连续三次发送产生三个 202、请求状态可查询、取消/重试按钮调用正确端点、刷新后恢复。命令：
+- [x] **亲自观察目标 Red。** `python -m pytest --basetemp=E:\Agent_reply\tmp\pytest-task11-red tests/test_phase4_integration.py -q` → `3 failed, 12 passed, 4 warnings`；失败为 status DTO 和 retry DTO 的目标缺口，未制造虚假失败。
+- [x] **最小 Green：只修集成接线缺口。** 未重构已 Green 模块；修复限定在 legacy↔canonical id 接线、request event sequence、Service DTO/worker notify、Electron smoke 临时路径和 smoke 安全开关。Task 11 自动化断言每个 request 的 model call、规范 Message、事件和 QQ 副作用不重复。
+- [x] **Electron smoke。** 使用开发环境且临时 DB/Flag，不连接真实 QQ、不调用真实模型：启动后验证窗口加载、连续三次发送产生三个 202、请求状态可查询、cancel/retry 端点可达、GET status 作为恢复真源。实际命令：
 
 ```powershell
-$env:AERIE_DB_PATH = "$env:TEMP\aerie-phase4-smoke.db"
+$env:AERIE_DB_PATH = "E:\Agent_reply\tmp\aerie-phase4-smoke3.db"
+$env:AERIE_DATA_DIR = "E:\Agent_reply\tmp\aerie-phase4-smoke3-data"
+$env:LOG_DIR = "E:\Agent_reply\tmp\aerie-phase4-smoke3-logs"
+$env:AERIE_DISABLE_QQ = "true"
+$env:AERIE_DISABLE_MODEL_CALLS = "true"
 $env:AERIE_FEATURE_MIGRATION_FRAMEWORK_V1 = "true"
 $env:AERIE_FEATURE_CONVERSATION_MODEL_V1 = "true"
 $env:AERIE_FEATURE_CHAT_REQUEST_QUEUE_V1 = "true"
 Set-Location E:\Agent_reply\electron
-npm start
+npm start -- --start-minimized
 ```
 
-预期：应用启动，无第二 Repository/Worker 日志；不要登录真实 QQ，不发送真实模型内容。烟测完成后正常关闭应用并删除临时 DB；删除动作仅针对该明确临时文件。
-- [ ] **定向回归。** 运行 `python -m pytest tests/test_phase4_*.py tests/test_api.py tests/test_pipeline.py -q` 与 Node 两个测试文件，预期 PASS。
-- [ ] **关联/完整回归。** 运行 Phase 00–04 全门禁命令、`python -m pytest -q`、全部相关 `node --check`；预期全部 PASS。
-- [ ] **Evidence。** 保存调用计数、状态序列、HTTP 状态、smoke 步骤和脱敏截图；不保存模型正文、附件内容、账号或真实数据库路径。
-- [ ] **文档更新。** 更新 Phase/Task/全局验收；迁移与恢复未演练前不得把 Phase 04 标为 done。
-- [ ] **批后自检。** 确认 Electron smoke 使用临时 DB、无真实 QQ/生产库、事件失败不反转数据库终态。
+证据：renderer 窗口已加载；健康检查 `data_path_id=e:\agent_reply\tmp\aerie-phase4-smoke3.db`；日志确认 `QQ client disabled by AERIE_DISABLE_QQ` 与 `LLM provider calls disabled by AERIE_DISABLE_MODEL_CALLS`。三次 send 均 202，最终三个 request 均 completed；临时 DB 汇总 `requests=6`、`turns=6`、`messages=18`、`chat_log=18`。烟测完成后已按精确项目 PID 停止 node/electron/python 进程；保留临时 DB/log 作为本批 Evidence，未删除历史 pytest 临时目录。
+- [x] **定向回归。** `tests/test_phase4_integration.py` → `15 passed, 4 warnings`；关联 Python（含 Brain provider routing）`188 passed, 4 warnings in 26.11s`；Node 两个测试文件 `14 passed`。
+- [x] **关联/完整回归。** 完整显式 `tests` 收集 `471 passed, 6 warnings in 35.86s`；`py_compile` 与 `node --check src\renderer\js\chat.js`、`chat-uploader.js`、`preload.js`、`main.js` 通过。
+- [x] **Evidence。** 已记录调用计数、状态序列、HTTP 状态、smoke 步骤、日志和临时 DB 脱敏计数；未保存模型正文、附件内容、账号、凭据或真实数据库路径。未保存截图，采用 renderer load 日志、健康检查和 API/DB 脱敏证据替代，避免采集用户界面内容。
+- [x] **文档更新。** 更新 Phase/Task/全局验收/回滚/移交说明；迁移与恢复未演练前不得把 Phase 04 标为 done。
+- [x] **批后自检。** Electron smoke 使用临时 DB/临时 data/log，无真实 QQ、无真实模型 provider、无生产库写入；事件失败不反转数据库终态由自动化覆盖。Task 12 仍待完成。
 
 ## Task 12: 生产数据一致性副本迁移、恢复与完整收口
 
@@ -698,12 +718,12 @@ npm start
 - Modify: `documents/Level_up/AI_Vibe_Coding/91_数据迁移核对.md`
 - Modify: `documents/Level_up/AI_Vibe_Coding/92_回滚演练.md`
 
-- [ ] **Red：先定义副本演练断言并在未迁移副本上观察缺失。** 从生产库用 SQLite Backup API 生成只读一致性快照 A，再复制为 rehearsal B；记录源主文件 SHA-256。对 A 运行只读检查，预期 006 ledger/新列尚未存在或为 pending；不得对源库运行迁移。
-- [ ] **亲自观察目标缺失。** 在 rehearsal B 上先执行 dry-run，预期只报告 `006_chat_request_queue` pending 且 schema/ledger 无写入；运行 006 前字段断言 FAIL，证明演练目标真实存在。
-- [ ] **最小 Green：仅迁移 rehearsal B。** 使用应用 `MigrationRunner(...).run(..., dry_run=False)` 或受控脚本调用现有 migration API，不新建一次性生产脚本。验证：16 列、三个索引、旧 completed 新字段 NULL、记录数不变、二次运行不变、部分应用副本可恢复、`PRAGMA foreign_key_check` 空、`PRAGMA quick_check` 为 `ok`。
-- [ ] **实际恢复演练。** 从一致性快照 A 使用 SQLite Backup API 恢复到独立 restore C；比较关键表 `chat_log/conversations/turns/messages/requests/migration_ledger` 的记录数和脱敏有序摘要，数据损失 0。不得覆盖真实生产库。
-- [ ] **Flag 回滚演练。** 在临时数据库验证：queue Flag true 完成提交；停止 Worker；设 queue Flag false；旧 `/api/chat/send` 返回同步 200；既有 queued 不消费、不删除；重新开启且依赖完整后按恢复规则继续。依赖 Flag 缺失 + queue true 必须 503。
-- [ ] **完整回归。** 准确命令：
+- [x] **Red：先定义副本演练断言并在未迁移副本上观察缺失。** 当前只读生产检查发现源库已存在 006 completed ledger、新列和索引；原“006 pending/缺列”目标缺失不再适用于当前状态。未伪造 pre-006 生产副本；已记录 current-state contradiction，并继续对 SQLite Backup API 副本执行幂等/恢复演练。
+- [x] **亲自观察目标缺失。** rehearsal B dry-run 返回 `[]` 而不是 `["006_chat_request_queue"]`，且字段断言已通过；这是因为当前源库已经完成 006。该项以“已观察当前状态与原 Red 预期矛盾”收口，不制造虚假失败。
+- [x] **最小 Green：仅迁移 rehearsal B。** 使用现有 `MigrationRunner(...).run(phase4_request_queue_migrations())` 只作用于 B；dry-run、首次、二次 pending 均为 `[]`；16 列、三个索引、旧 completed 快照 NULL、记录数不变、`foreign_key_check=0`、`quick_check=ok`。
+- [x] **实际恢复演练。** 从一致性快照 A 使用 SQLite Backup API 恢复到独立 restore C；A/C 六张关键表计数和脱敏有序摘要一致，数据损失 0；未覆盖真实生产库。
+- [x] **Flag 回滚演练。** 新增 `test_task12_flag_rollback_matrix_reenables_queue_without_data_loss`，在临时数据库验证 queue Flag true 完成提交；停止 Worker；queue Flag false 旧 `/api/chat/send` 同步 200；既有 queued 不消费不删除；依赖缺失 + queue true 返回 503；重新开启且依赖完整后 queued 正常完成。
+- [x] **完整回归。** 准确命令：
 
 ```powershell
 Set-Location E:\Agent_reply
@@ -717,10 +737,10 @@ node --check src\preload.js
 node --check src\main.js
 ```
 
-预期：全部测试 PASS；`node --check` 无输出且退出码 0。
-- [ ] **脱敏 Evidence。** 记录源 SHA 前后相同、dry-run pending、迁移 checksum、表计数、NULL 计数、索引名、quick_check、恢复耗时、数据损失 0、回归计数；摘要使用 role/状态/长度/顺序哈希，不保存正文。
-- [ ] **文档收口。** 仅在 A-04-01 至 A-04-10 全部证据闭环、回滚演练成功、前序 Phase 00–03 再复核 PASS 后，将 Phase 04 设为 done、Task checkbox 勾选、`rollback_ready: true`，并更新 `90/91/92`。否则保持 review/未完成并写明具体失败门禁。
-- [ ] **批后自检。** 再回答七个快速自检问题；明确未直接写生产库、未提交/推送、未修改无关文件，且进入 Phase 05 前已复核 Phase 00–04。
+结果：Phase 00–04 关联门禁 `259 passed, 4 warnings in 29.21s`；完整显式 `tests` 收集 `472 passed, 6 warnings in 36.51s`；Electron Node `14 passed`；四个 `node --check` 无输出且退出码 0；`py_compile` 通过。裸 `python -m pytest -q` 未使用，因为当前工作区历史 `.pytest-task7-*` 权限目录会污染根收集，按批次约束改用显式 `tests` 范围。
+- [x] **脱敏 Evidence。** 记录源 SHA 前后相同、dry-run/migration pending、006 checksum、表计数、NULL 计数、索引名、quick_check、恢复耗时、数据损失 0、回归计数；摘要使用长度/哈希，不保存正文。
+- [x] **文档收口。** A-04-01 至 A-04-10 全部证据闭环、回滚演练成功、前序 Phase 00–04 关联门禁 PASS；已将 Phase 04 设为 done、Task checkbox 勾选、`rollback_ready: true`，并更新 `90/91/92`。
+- [x] **批后自检。** 已重新回答七个快速自检问题；未直接写生产库、未提交/推送、未修改无关文件，且进入 Phase 05 前已复核 Phase 00–04。
 
 ## 3. 关键 SQL 与一致性查询
 
@@ -834,18 +854,18 @@ WHERE status='completed'
 
 ## 6. 最终自审清单（实施计划作者与执行者均需执行）
 
-- [ ] 搜索计划和实施差异中是否出现模糊占位语句；若出现必须替换为具体接口、断言或命令。
-- [ ] 核对 `RequestIdentity`、`RequestContext`、`SubmittedRequest`、`ClaimedRequest`、`RequestStatusView` 的字段在 Repository、Service、Worker、Pipeline、API、Renderer 测试中完全同名。
-- [ ] 核对 Request 状态只使用 queued/running/cancelling/completed/failed/cancelled，Turn 使用 pending/running/completed/failed/cancelled；不得新增未迁移状态。
-- [ ] 核对 16 个 006 字段名与 Phase 04 权威文档完全一致，至少三个索引名和用途已测试。
-- [ ] 核对所有新队列时间为 UTC ISO 8601 且时钟可注入；不得在新逻辑使用 `datetime('now','localtime')`。
-- [ ] 核对 `migration_framework_v1` 控制 006 执行，`chat_request_queue_v1` 只控制运行路径；queue Flag 开启还必须依赖 migration + conversation 两 Flag。
-- [ ] 核对 API 非所有者统一 404、非法状态 409、终态 cancel 幂等 200、retry 仅 failed/cancelled 且 202 新 ID。
-- [ ] 核对 Flag 关闭保持旧 `/api/chat/send` 同步 200 和空消息 400，不启动 Worker、不消费 queued。
-- [ ] 核对 `api_server.py` 没有创建第二 Repository，Companion 注入对象身份一致。
-- [ ] 核对 Pipeline FULL/BASIC 都检查取消边界，visible `msg.content` 不被 effective content 替换，镜像不再生成第二 request ID。
-- [ ] 核对 Renderer 的 IPC/SSE/poll 只进入统一 ingest，SSE 仍为 best-effort，legacy numeric id 仍兼容。
-- [ ] 核对 uploader 修改若存在，仅解决本阶段 ready/IPC 合同，未实现 Phase 07 资产能力。
-- [ ] 核对所有测试和演练使用临时数据库或一致性副本，从未直接写生产库。
-- [ ] 核对每批均有真实 Red、最小 Green、定向回归、关联/完整回归、脱敏 Evidence 和五份控制文档更新记录。
-- [ ] 核对计划和实施均无 commit/push 步骤，最终进入 Phase 05 前重新复核 Phase 00–04 全部门禁。
+- [x] 搜索计划和实施差异中是否出现模糊占位语句；若出现必须替换为具体接口、断言或命令。
+- [x] 核对 `RequestIdentity`、`RequestContext`、`SubmittedRequest`、`ClaimedRequest`、`RequestStatusView` 的字段在 Repository、Service、Worker、Pipeline、API、Renderer 测试中完全同名。
+- [x] 核对 Request 状态只使用 queued/running/cancelling/completed/failed/cancelled，Turn 使用 pending/running/completed/failed/cancelled；不得新增未迁移状态。
+- [x] 核对 16 个 006 字段名与 Phase 04 权威文档完全一致，至少三个索引名和用途已测试。
+- [x] 核对所有新队列时间为 UTC ISO 8601 且时钟可注入；不得在新逻辑使用 `datetime('now','localtime')`。
+- [x] 核对 `migration_framework_v1` 控制 006 执行，`chat_request_queue_v1` 只控制运行路径；queue Flag 开启还必须依赖 migration + conversation 两 Flag。
+- [x] 核对 API 非所有者统一 404、非法状态 409、终态 cancel 幂等 200、retry 仅 failed/cancelled 且 202 新 ID。
+- [x] 核对 Flag 关闭保持旧 `/api/chat/send` 同步 200 和空消息 400，不启动 Worker、不消费 queued。
+- [x] 核对 `api_server.py` 没有创建第二 Repository，Companion 注入对象身份一致。
+- [x] 核对 Pipeline FULL/BASIC 都检查取消边界，visible `msg.content` 不被 effective content 替换，镜像不再生成第二 request ID。
+- [x] 核对 Renderer 的 IPC/SSE/poll 只进入统一 ingest，SSE 仍为 best-effort，legacy numeric id 仍兼容。
+- [x] 核对 uploader 修改若存在，仅解决本阶段 ready/IPC 合同，未实现 Phase 07 资产能力。
+- [x] 核对所有测试和演练使用临时数据库或一致性副本，从未直接写生产库。
+- [x] 核对每批均有真实 Red、最小 Green、定向回归、关联/完整回归、脱敏 Evidence 和五份控制文档更新记录；Task 12 的原 Red 预期因当前源库已完成 006 而以 current-state contradiction 记录。
+- [x] 核对计划和实施均无 commit/push 步骤，最终进入 Phase 05 前重新复核 Phase 00–04 全部门禁。

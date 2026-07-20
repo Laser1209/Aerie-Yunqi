@@ -9,7 +9,12 @@ class ChatManager {
       sendBtn: document.getElementById("chat-send-btn"),
     };
     this._seenIds = new Set();
-    this._loading = false;
+    this._requests = new Map();          // request_id -> RequestViewState
+    this._clientToRequest = new Map();   // client_id -> request_id
+    this._seenEventIds = new Set();
+    this._requestSequences = new Map();  // request_id -> { next, pending }
+    this._clientCounter = 0;
+    this._reducedMotion = this._prefersReducedMotion();
     this._masterQQ = opts.masterQQ || 3998874040;
     this._sinceId = 0;
     this._quotedMsg = null;            // Phase 4: currently quoted message
@@ -32,9 +37,11 @@ class ChatManager {
 
     this._bindEvents();
     this._listenIPC();
+    this._listenSSE();
     this._listenOpenTab();
     this._startPoll();
     this.loadHistory();
+    this.restorePendingRequests();
     // Phase 5: file uploader
     if (window.ChatUploader) {
       this._uploader = new window.ChatUploader(this);
@@ -103,18 +110,36 @@ class ChatManager {
   _listenIPC() {
     if (!window.aerie) return;
     window.aerie.api.onMessage((msg) => {
-      // msg can be either a normal chat message or a recall event
-      if (msg && msg.type === "recall") {
-        this._markRecalled(msg.id);
+      if (
+        !msg ||
+        (
+          !msg.request_id &&
+          !msg.event_id &&
+          msg.type !== "recall" &&
+          !["user", "assistant"].includes(msg.role)
+        )
+      ) {
         return;
       }
-      if (!msg || !["user", "assistant"].includes(msg.role)) {
-        return;
-      }
-      if (this._seenIds.has(msg.id)) return;
-      this._seenIds.add(msg.id);
-      this._render(msg);
+      this._ingestChatSignal(msg, "ipc");
     });
+  }
+
+  _listenSSE() {
+    if (
+      !window.aerie ||
+      !window.aerie.sse ||
+      typeof window.aerie.sse.subscribe !== "function"
+    ) {
+      return;
+    }
+    try {
+      this._sseUnsubscribe = window.aerie.sse.subscribe((signal) => {
+        this._ingestChatSignal(signal, "sse");
+      });
+    } catch (_) {
+      this._sseUnsubscribe = null;
+    }
   }
 
   // Block-2 T1 bridge: tray "设置" click → switch to settings tab
@@ -273,14 +298,7 @@ class ChatManager {
         });
         if (resp.data && resp.data.items) {
           for (const item of resp.data.items) {
-            if (item.is_recalled) {
-              this._markRecalled(item.id);
-              continue;
-            }
-            if (this._seenIds.has(item.id)) continue;
-            this._seenIds.add(item.id);
-            this._render(item);
-            if (item.id > this._sinceId) this._sinceId = item.id;
+            this._ingestChatSignal(item, "poll");
           }
         }
       } catch (_) {}
@@ -319,20 +337,554 @@ class ChatManager {
     this._el.messages.appendChild(div);
   }
 
+  _prefersReducedMotion() {
+    try {
+      return Boolean(
+        window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _clientIdForRequest(requestId) {
+    if (!requestId) return "";
+    for (const [clientId, mappedRequestId] of this._clientToRequest.entries()) {
+      if (mappedRequestId === requestId) return clientId;
+    }
+    return "";
+  }
+
+  _findBubbleForRequest(requestId, role) {
+    if (!requestId || !this._el.messages) return null;
+    const classes = role === "assistant"
+      ? [".chat-msg--assistant", ".chat-msg--typing"]
+      : [".chat-msg--user"];
+    for (const selector of classes) {
+      const candidates = this._el.messages.querySelectorAll(selector) || [];
+      for (const candidate of candidates) {
+        if (
+          candidate &&
+          typeof candidate.getAttribute === "function" &&
+          candidate.getAttribute("data-request-id") === requestId
+        ) {
+          return candidate;
+        }
+      }
+    }
+
+    const clientId = this._clientIdForRequest(requestId);
+    if (clientId) {
+      const bubble = this._el.messages.querySelector(`[data-id="${clientId}"]`);
+      if (bubble) return bubble;
+    }
+
+    if (role === "assistant") {
+      const typingBubbles = this._el.messages.querySelectorAll(".chat-msg--typing") || [];
+      if (typingBubbles.length === 1) {
+        return typingBubbles[0];
+      }
+    }
+    return null;
+  }
+
+  _requestTypingLabel(status) {
+    if (status === "queued") return "排队中";
+    if (status === "cancelling") return "取消中";
+    return "正在输入";
+  }
+
+  _buildTypingIndicator(status) {
+    const label = this._requestTypingLabel(status);
+    const reduced = this._reducedMotion || status !== "running";
+    if (reduced) {
+      return `<span class="chat-typing-indicator__label">${this._escapeHtml(label)}…</span>`;
+    }
+    return `
+      <span class="chat-typing-indicator" aria-label="${this._escapeHtml(label)}">
+        <span class="chat-typing-indicator__dot"></span>
+        <span class="chat-typing-indicator__dot"></span>
+        <span class="chat-typing-indicator__dot"></span>
+      </span>
+    `;
+  }
+
+  _buildMessageHtml(msg, { typing = false } = {}) {
+    const isAssistant = msg.role === "assistant";
+    const displayName = isAssistant
+      ? (this._personaCache && this._personaCache.name) || "伊塔"
+      : this._userName || "你";
+    const aiAvatar = (this._personaCache && this._personaCache.avatar_dataurl)
+      || (this._personaCache && this._personaCache.avatar_url)
+      || "";
+    const userAvatar = this._userDataurl || this._masterAvatar || "";
+    const avatarUrl = isAssistant ? aiAvatar : userAvatar;
+    const placeholderText = isAssistant ? "伊" : (this._userName || "你").slice(0, 1);
+    const avatarContent = avatarUrl
+      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(avatarUrl)}" alt="" onerror="this.parentNode.innerHTML='<span class=&quot;chat-msg__avatar chat-msg__avatar--placeholder&quot; aria-hidden=&quot;true&quot;>${this._escapeHtml(placeholderText)}</span>'">`
+      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${this._escapeHtml(placeholderText)}</span>`;
+    let html = "";
+    html += `<div class="chat-msg__avatar-wrap">${avatarContent}</div>`;
+    html += `<div class="chat-msg__body">`;
+    html += `<div class="chat-msg__name">${this._escapeHtml(displayName)}</div>`;
+    const tsText = this._formatTime(msg.ts);
+    if (tsText) {
+      html += `<span class="chat-msg__meta-time">${tsText}</span>`;
+    }
+    if (!typing && msg.reply_to_id && msg.reply_to_content) {
+      const role = msg.reply_to_role === "user" ? "你" : "伊塔";
+      html += `<div class="chat-quote-overlay" data-reply-to="${msg.reply_to_id}">
+        <span class="chat-quote-overlay__bar"></span>
+        <div class="chat-quote-overlay__text">
+          <span class="chat-quote-overlay__author">引用 ${role}</span>
+          <span class="chat-quote-overlay__preview">${this._escapeHtml((msg.reply_to_content || "").slice(0, 60))}</span>
+        </div>
+      </div>`;
+    }
+    if (!typing && msg.attachments && msg.attachments.length > 0) {
+      html += '<div class="chat-attachments">';
+      for (const att of msg.attachments) {
+        if (att.type === "image") {
+          html += `<div class="chat-attach-card" data-type="image"><img src="/uploads/${this._escapeHtml(att.url)}" alt=""></div>`;
+        } else {
+          html += `<div class="chat-attach-card" data-type="file"><svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>${this._escapeHtml(att.name || "文件")}</div>`;
+        }
+      }
+      html += "</div>";
+    }
+    if (typing) {
+      const typingStatus = msg.request_status || msg.status || "running";
+      html += `<div class="chat-bubble chat-bubble--typing" data-chat-typing="true" data-request-status="${this._escapeHtml(typingStatus)}">
+        ${this._buildTypingIndicator(typingStatus)}
+      </div>`;
+    } else {
+      html += this._parseMessage(msg.content || "");
+    }
+    html += `</div>`;
+    if (msg.id && !String(msg.id).startsWith("temp_") && !typing) {
+      html += `<div class="chat-msg-actions"><button class="chat-msg-actions__btn" data-msg-actions="${msg.id}">⋮</button></div>`;
+    }
+    return html;
+  }
+
+  _syncRequestTypingBubble(state) {
+    if (!state || !state.request_id || !this._el.messages) return null;
+    const requestId = String(state.request_id);
+    const bubbleId = "typing_" + requestId;
+    const bubble = this._el.messages.querySelector(`[data-id="${bubbleId}"]`);
+    const active = ["running", "cancelling"].includes(state.status);
+    if (!active) {
+      if (bubble && bubble.parentNode) {
+        bubble.remove();
+      }
+      return null;
+    }
+
+    const typingMsg = {
+      id: bubbleId,
+      role: "assistant",
+      request_id: requestId,
+      request_status: state.status,
+      status: state.status,
+      content: "",
+      source: state.channel || "local",
+    };
+    if (bubble) {
+      bubble.className = "chat-msg chat-msg--assistant chat-msg--typing";
+      if (this._reducedMotion) {
+        bubble.className += " chat-msg--typing--reduced";
+      }
+      bubble.setAttribute("data-id", bubbleId);
+      bubble.setAttribute("data-msg-id", bubbleId);
+      bubble.setAttribute("data-request-id", requestId);
+      bubble.setAttribute("data-request-status", state.status || "");
+      bubble.setAttribute("data-chat-typing", "true");
+      bubble.innerHTML = this._buildMessageHtml(typingMsg, { typing: true });
+      return bubble;
+    }
+
+    this._render({
+      ...typingMsg,
+      typing: true,
+    });
+    return this._el.messages.querySelector(`[data-id="${bubbleId}"]`);
+  }
+
+  _promoteBubbleIdentity(el, msg) {
+    if (!el || !msg) return;
+    el.setAttribute("data-id", msg.id);
+    el.setAttribute("data-msg-id", msg.id);
+    if (msg.request_id) {
+      el.setAttribute("data-request-id", msg.request_id);
+    }
+  }
+
+  _updateUserBubble(el, msg) {
+    this._promoteBubbleIdentity(el, msg);
+    if (msg.request_id) {
+      el.setAttribute("data-request-id", msg.request_id);
+    }
+    el.setAttribute("data-request-status", "");
+    if (msg.id && Number.isFinite(Number(msg.id))) {
+      const numericId = Number(msg.id);
+      if (numericId > this._sinceId) this._sinceId = numericId;
+    }
+    if (msg.id) {
+      this._seenIds.add(msg.id);
+    }
+  }
+
+  _updateTypingBubble(el, msg) {
+    if (!el) return;
+    el.className = "chat-msg chat-msg--assistant";
+    el.setAttribute("data-id", msg.id);
+    el.setAttribute("data-msg-id", msg.id);
+    if (msg.request_id) {
+      el.setAttribute("data-request-id", msg.request_id);
+    }
+    el.setAttribute("data-request-status", "");
+    el.setAttribute("data-chat-typing", "false");
+    el.innerHTML = this._buildMessageHtml(msg, { typing: false });
+    if (msg.id) {
+      this._seenIds.add(msg.id);
+      const numericId = Number(msg.id);
+      if (Number.isFinite(numericId) && numericId > this._sinceId) {
+        this._sinceId = numericId;
+      }
+    }
+  }
+
+  _requestTypingBubbleForRequest(requestId) {
+    if (!requestId || !this._el.messages) return null;
+    return this._el.messages.querySelector(`[data-id="typing_${requestId}"]`);
+  }
+
+  _newClientId() {
+    this._clientCounter += 1;
+    return "client_" + Date.now() + "_" + this._clientCounter;
+  }
+
+  _normalizeChatSignal(signal) {
+    if (!signal) return null;
+    if (typeof signal === "string") {
+      try {
+        return JSON.parse(signal);
+      } catch (_) {
+        return null;
+      }
+    }
+    if (signal && typeof signal.data === "string") {
+      try {
+        return JSON.parse(signal.data);
+      } catch (_) {
+        return null;
+      }
+    }
+    if (typeof signal === "object") return signal;
+    return null;
+  }
+
+  _ingestChatSignal(signal, transport = "unknown") {
+    const normalized = this._normalizeChatSignal(signal);
+    if (!normalized) return;
+
+    const eventId = normalized.event_id;
+    if (eventId) {
+      if (this._seenEventIds.has(eventId)) return;
+      this._seenEventIds.add(eventId);
+    }
+
+    const sequence = Number(normalized.sequence);
+    if (
+      normalized.request_id &&
+      Number.isInteger(sequence) &&
+      sequence >= 0
+    ) {
+      this._ingestSequencedSignal(normalized, transport, sequence);
+      return;
+    }
+    this._applyChatSignal(normalized, transport);
+  }
+
+  _ingestSequencedSignal(signal, transport, sequence) {
+    const requestId = signal.request_id;
+    let tracker = this._requestSequences.get(requestId);
+    if (!tracker) {
+      tracker = {
+        next: sequence === 0 ? 0 : 1,
+        pending: new Map(),
+      };
+      this._requestSequences.set(requestId, tracker);
+    }
+    if (sequence < tracker.next) return;
+    tracker.pending.set(sequence, { signal, transport });
+    while (tracker.pending.has(tracker.next)) {
+      const current = tracker.pending.get(tracker.next);
+      tracker.pending.delete(tracker.next);
+      this._applyChatSignal(current.signal, current.transport);
+      tracker.next += 1;
+    }
+  }
+
+  _applyChatSignal(signal, transport = "unknown") {
+    if (signal.type === "recall" || signal.is_recalled) {
+      if (signal.id) this._markRecalled(signal.id);
+      return;
+    }
+
+    if (signal.request_id || this._inferRequestStatus(signal)) {
+      this._upsertRequestState(signal);
+    }
+
+    if (signal.request_id && signal.role === "user") {
+      const existingUser = this._findBubbleForRequest(signal.request_id, "user");
+      if (existingUser) {
+        this._updateUserBubble(existingUser, signal);
+        return;
+      }
+    }
+
+    if (signal.request_id && signal.role === "assistant") {
+      const typingBubble = this._requestTypingBubbleForRequest(signal.request_id);
+      if (typingBubble) {
+        this._updateTypingBubble(typingBubble, signal);
+        const requestState = this._requests.get(signal.request_id);
+        if (
+          requestState &&
+          ["running", "cancelling"].includes(requestState.status)
+        ) {
+          this._syncRequestTypingBubble(requestState);
+        }
+        return;
+      }
+    }
+
+    if (!signal || !["user", "assistant"].includes(signal.role)) {
+      return;
+    }
+    if (signal.id && this._seenIds.has(signal.id)) return;
+    if (signal.id) {
+      this._seenIds.add(signal.id);
+      const numericId = Number(signal.id);
+      if (Number.isFinite(numericId) && numericId > this._sinceId) {
+        this._sinceId = numericId;
+      }
+    }
+    signal.transport = signal.transport || transport;
+    this._render(signal);
+  }
+
+  _inferRequestStatus(signal) {
+    if (signal.status) return signal.status;
+    const type = signal.type || "";
+    if (type === "chat_request_running") return "running";
+    if (type === "chat_request_completed") return "completed";
+    if (type === "chat_request_cancelled") return "cancelled";
+    if (type === "chat_request_failed") return "failed";
+    if (type === "chat_request_cancelling") return "cancelling";
+    if (type === "chat_request_queued") return "queued";
+    return "";
+  }
+
+  _isTerminalRequestStatus(status) {
+    return ["completed", "failed", "cancelled"].includes(status);
+  }
+
+  _readPendingRequestIds() {
+    try {
+      const raw = window.localStorage.getItem("aerie.chat.pending_requests");
+      const parsed = JSON.parse(raw || "[]");
+      return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  _writePendingRequestIds(ids) {
+    try {
+      window.localStorage.setItem(
+        "aerie.chat.pending_requests",
+        JSON.stringify(Array.from(new Set(ids))),
+      );
+    } catch (_) {}
+  }
+
+  _persistPendingRequestState() {
+    const ids = [];
+    for (const [requestId, state] of this._requests.entries()) {
+      if (!this._isTerminalRequestStatus(state.status)) {
+        ids.push(requestId);
+      }
+    }
+    this._writePendingRequestIds(ids);
+  }
+
+  _upsertRequestState(view) {
+    const requestId = view && view.request_id;
+    if (!requestId) return null;
+    const previous = this._requests.get(requestId) || {
+      request_id: requestId,
+      statusHistory: [],
+    };
+    const status = this._inferRequestStatus(view) || previous.status || "queued";
+    const next = {
+      ...previous,
+      ...view,
+      request_id: requestId,
+      status,
+      can_cancel: view.can_cancel ?? ["queued", "running"].includes(status),
+      can_retry: view.can_retry ?? ["failed", "cancelled"].includes(status),
+      statusHistory: previous.statusHistory ? previous.statusHistory.slice() : [],
+    };
+    if (next.statusHistory[next.statusHistory.length - 1] !== status) {
+      next.statusHistory.push(status);
+    }
+    this._requests.set(requestId, next);
+    if (next.client_id) {
+      this._clientToRequest.set(next.client_id, requestId);
+    }
+    this._renderRequestStatus(next);
+    this._syncRequestTypingBubble(next);
+    this._persistPendingRequestState();
+    return next;
+  }
+
+  _bindClientRequest(clientId, view) {
+    if (!view || !view.request_id) return null;
+    this._clientToRequest.set(clientId, view.request_id);
+    return this._upsertRequestState({ ...view, client_id: clientId });
+  }
+
+  _requestStatusLabel(status) {
+    return {
+      queued: "排队中",
+      running: "生成中",
+      cancelling: "取消中",
+      failed: "失败",
+      cancelled: "已取消",
+      completed: "已完成",
+    }[status] || status || "未知";
+  }
+
+  _renderRequestStatus(state) {
+    if (!this._el.messages || !state || !state.request_id) return;
+    const requestId = state.request_id;
+    const clientId = state.client_id || "";
+    const selector = `[data-request-id="${requestId}"]`;
+    let messageEl = this._el.messages.querySelector(selector);
+    if (!messageEl && clientId) {
+      messageEl = this._el.messages.querySelector(`[data-id="${clientId}"]`);
+    }
+    if (!messageEl) return;
+    messageEl.setAttribute("data-request-id", requestId);
+    messageEl.setAttribute("data-request-status", state.status || "");
+    let statusEl = messageEl.querySelector(".chat-request-status");
+    if (!statusEl) {
+      statusEl = document.createElement("div");
+      statusEl.className = "chat-request-status";
+      const body = messageEl.querySelector(".chat-msg__body") || messageEl;
+      body.appendChild(statusEl);
+    }
+    const cancelButton = state.can_cancel
+      ? `<button class="chat-request-status__btn chat-request-cancel" data-request-cancel="${requestId}">取消</button>`
+      : "";
+    const retryButton = state.can_retry
+      ? `<button class="chat-request-status__btn chat-request-retry" data-request-retry="${requestId}">重试</button>`
+      : "";
+    statusEl.setAttribute("data-status", state.status || "");
+    statusEl.innerHTML = `
+      <span class="chat-request-status__label">${this._escapeHtml(this._requestStatusLabel(state.status))}</span>
+      ${cancelButton}
+      ${retryButton}
+    `;
+    const cancel = statusEl.querySelector(".chat-request-cancel");
+    if (cancel) {
+      cancel.addEventListener("click", () => this.cancelRequest(requestId));
+    }
+    const retry = statusEl.querySelector(".chat-request-retry");
+    if (retry) {
+      retry.addEventListener("click", () => this.retryRequest(requestId));
+    }
+  }
+
+  async cancelRequest(requestId) {
+    const state = this._requests.get(requestId);
+    if (!state || !["queued", "running"].includes(state.status)) return null;
+    this._upsertRequestState({ ...state, status: "cancelling", can_cancel: false });
+    try {
+      const resp = await this._request({
+        method: "POST",
+        path: "/api/chat/requests/" + encodeURIComponent(requestId) + "/cancel",
+      });
+      if (resp && resp.data) {
+        return this._upsertRequestState(resp.data);
+      }
+    } catch (err) {
+      this._upsertRequestState({
+        ...state,
+        status: "failed",
+        error_code: "cancel_request_failed",
+        can_retry: true,
+      });
+    }
+    return null;
+  }
+
+  async retryRequest(requestId) {
+    const state = this._requests.get(requestId);
+    if (!state || !["failed", "cancelled"].includes(state.status)) return null;
+    try {
+      const resp = await this._request({
+        method: "POST",
+        path: "/api/chat/requests/" + encodeURIComponent(requestId) + "/retry",
+      });
+      if (resp && resp.data) {
+        return this._upsertRequestState(resp.data);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  async restorePendingRequests() {
+    const ids = new Set(this._readPendingRequestIds());
+    for (const [requestId, state] of this._requests.entries()) {
+      if (!this._isTerminalRequestStatus(state.status)) {
+        ids.add(requestId);
+      }
+    }
+    for (const requestId of ids) {
+      try {
+        const resp = await this._request({
+          method: "GET",
+          path: "/api/chat/requests/" + encodeURIComponent(requestId),
+        });
+        if (resp && resp.data && !resp.data.error) {
+          this._upsertRequestState(resp.data);
+        }
+      } catch (_) {}
+    }
+    this._persistPendingRequestState();
+  }
+
+  _handleSSEDisconnect() {
+    // SSE remains best-effort in Phase 04.  A disconnect must not turn
+    // a real backend request into failed UI state; status polling is the
+    // recovery source of truth.
+  }
+
   async send() {
-    if (this._loading) return;
     const text = this._el.input.value.trim();
     if (!text && this._pendingAttachments.length === 0) return;
     this._el.input.value = "";
-    this._loading = true;
 
     const replyToId = this._quotedMsg ? this._quotedMsg.id : 0;
     const attachments = this._pendingAttachments.slice();
+    const clientId = this._newClientId();
 
     // Optimistic render
-    const tempId = "temp_" + Date.now();
     this._render({
-      id: tempId,
+      id: clientId,
       role: "user",
       content: text,
       reply_to_id: replyToId,
@@ -357,9 +909,13 @@ class ChatManager {
           attachments,
         },
       });
+      if (resp.status === 202 || (resp.data && resp.data.request_id)) {
+        this._bindClientRequest(clientId, resp.data);
+        return;
+      }
       if (resp.data && resp.data.user_msg_id) {
         const realId = resp.data.user_msg_id;
-        const tempEl = this._el.messages.querySelector(`[data-id="${tempId}"]`);
+        const tempEl = this._el.messages.querySelector(`[data-id="${clientId}"]`);
         if (tempEl) {
           tempEl.setAttribute("data-id", realId);
           tempEl.setAttribute("data-msg-id", realId);
@@ -371,9 +927,7 @@ class ChatManager {
         // Server reply already pushed via IPC; this is a fallback
       }
     } catch (err) {
-      this._render({ id: tempId + "_err", role: "assistant", content: "发送失败: " + err.message });
-    } finally {
-      this._loading = false;
+      this._render({ id: clientId + "_err", role: "assistant", content: "发送失败: " + err.message });
     }
   }
 
@@ -538,79 +1092,19 @@ class ChatManager {
 
     const div = document.createElement("div");
     div.className = "chat-msg chat-msg--" + msg.role;
+    if (msg.typing) {
+      div.className += " chat-msg--typing";
+      if (this._reducedMotion) {
+        div.className += " chat-msg--typing--reduced";
+      }
+    }
     div.setAttribute("data-id", msg.id);
     if (msg.id) div.setAttribute("data-msg-id", msg.id);
     if (msg.id) div.setAttribute("data-temp-text", msg.content);
-
-    // Block-2 A1: avatar + name meta (above bubble)
-    const isAssistant = msg.role === "assistant";
-    // R7.5 fix: always use the dataURL form (or the per-user dataURL).
-    // The HTTP /api/persona/avatar path is unusable under file:// in
-    // Electron (it resolves to file:///api/... and 404s, which used to
-    // show a broken-image icon). dataURL is a self-contained string
-    // the browser can always render.
-    const displayName = isAssistant
-      ? (this._personaCache && this._personaCache.name) || "伊塔"
-      : this._userName || "你";
-    const aiAvatar = (this._personaCache && this._personaCache.avatar_dataurl)
-      || (this._personaCache && this._personaCache.avatar_url)
-      || "";
-    const userAvatar = this._userDataurl || this._masterAvatar || "";
-    const avatarUrl = isAssistant ? aiAvatar : userAvatar;
-
-    let html = "";
-    // Block-2 A1 + R6.4: avatar on outer side, name (small) above bubble,
-    // bubble below name. Outer-side flip via flex-direction: row-reverse.
-    // R7.5 fix: onerror used to set visibility:hidden which also hid
-    // the placeholder span. Instead, on error we remove the broken
-    // <img> and the wrapper rebuilds as a placeholder. The placeholder
-    // is also the initial render when no avatar is set.
-    const placeholderText = isAssistant ? "伊" : (this._userName || "你").slice(0, 1);
-    const avatarContent = avatarUrl
-      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(avatarUrl)}" alt="" onerror="this.parentNode.innerHTML='<span class=&quot;chat-msg__avatar chat-msg__avatar--placeholder&quot; aria-hidden=&quot;true&quot;>${this._escapeHtml(placeholderText)}</span>'">`
-      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${this._escapeHtml(placeholderText)}</span>`;
-    html += `<div class="chat-msg__avatar-wrap">${avatarContent}</div>`;
-    html += `<div class="chat-msg__body">`;
-    html += `<div class="chat-msg__name">${this._escapeHtml(displayName)}</div>`;
-    // R6.5: timestamp (hover-only, shown by CSS when the message is
-    // hovered). Format: HH:MM for today, MM-DD HH:MM for older messages.
-    const tsText = this._formatTime(msg.ts);
-    if (tsText) {
-      html += `<span class="chat-msg__meta-time">${tsText}</span>`;
-    }
-    // Phase 4: quote overlay (above bubble)
-    if (msg.reply_to_id && msg.reply_to_content) {
-      const role = msg.reply_to_role === "user" ? "你" : "伊塔";
-      html += `<div class="chat-quote-overlay" data-reply-to="${msg.reply_to_id}">
-        <span class="chat-quote-overlay__bar"></span>
-        <div class="chat-quote-overlay__text">
-          <span class="chat-quote-overlay__author">引用 ${role}</span>
-          <span class="chat-quote-overlay__preview">${this._escapeHtml((msg.reply_to_content || "").slice(0, 60))}</span>
-        </div>
-      </div>`;
-    }
-    // Phase 5: attachments
-    if (msg.attachments && msg.attachments.length > 0) {
-      html += '<div class="chat-attachments">';
-      for (const att of msg.attachments) {
-        if (att.type === "image") {
-          html += `<div class="chat-attach-card" data-type="image"><img src="/uploads/${this._escapeHtml(att.url)}" alt=""></div>`;
-        } else {
-          html += `<div class="chat-attach-card" data-type="file"><svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>${this._escapeHtml(att.name || "文件")}</div>`;
-        }
-      }
-      html += "</div>";
-    }
-    // R7.4: hand the bubble off to the new parser which splits out
-    // <action> / <thought> tags and runs markdown on the rest.
-    html += this._parseMessage(msg.content || "");
-    html += `</div>`;  // close .chat-msg__body
-    // Action menu trigger
-    if (msg.id && !String(msg.id).startsWith("temp_")) {
-      html += `<div class="chat-msg-actions"><button class="chat-msg-actions__btn" data-msg-actions="${msg.id}">⋮</button></div>`;
-    }
-
-    div.innerHTML = html;
+    if (msg.id) div.setAttribute("data-request-id", msg.request_id || "");
+    if (msg.id) div.setAttribute("data-request-status", msg.request_status || msg.status || "");
+    if (msg.typing) div.setAttribute("data-chat-typing", "true");
+    div.innerHTML = this._buildMessageHtml(msg, { typing: Boolean(msg.typing) });
     this._el.messages.appendChild(div);
 
     // Bind action button

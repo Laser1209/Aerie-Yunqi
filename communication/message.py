@@ -1,7 +1,45 @@
 """Aerie · 云栖 v0.1.0-beta.1 — Incoming and outgoing message models."""
 
 from __future__ import annotations
+import asyncio
 from dataclasses import dataclass, field
+
+
+class CancellationTooLate(RuntimeError):
+    def __init__(self, reason: str = "terminal_side_effect_committed") -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+class CancellationToken:
+    def __init__(self) -> None:
+        self._cancelled = False
+        self.reason = "user_cancel"
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled
+
+    def cancel(self, reason: str | None = None) -> None:
+        self._cancelled = True
+        if reason:
+            self.reason = reason
+
+    def throw_if_cancelled(
+        self,
+        *,
+        boundary: str | None = None,
+        terminal_side_effect_committed: bool = False,
+        completed: bool = False,
+    ) -> None:
+        del boundary
+        if not self._cancelled:
+            return
+        if completed:
+            return
+        if terminal_side_effect_committed:
+            raise CancellationTooLate("terminal_side_effect_committed")
+        raise asyncio.CancelledError(self.reason)
 
 
 @dataclass

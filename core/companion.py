@@ -3,7 +3,7 @@
 from __future__ import annotations
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,10 @@ from core.brain import Brain
 from core.cognition import CognitionEngine
 from core.computer_control import ComputerController, PermissionLevel
 from core.conversation_repository import ConversationRepository
+from core.chat_events import emit
+from core.chat_request_repository import ChatRequestRepository
+from core.chat_request_service import ChatRequestService
+from core.chat_request_worker import ChatRequestWorker
 from core.permission_manager import FineGrainedPermissionManager
 from core.context_builder import ContextBuilder
 from core.database import Database
@@ -179,6 +183,35 @@ class Companion:
             identity_resolver=self.identity_resolver,
             conversation_repository=self.conversation_repository,
         )
+        self.chat_request_queue_requested = self.feature_flags.is_enabled(
+            "chat_request_queue_v1",
+        )
+        chat_request_deps_ready = (
+            self.feature_flags.is_enabled("migration_framework_v1")
+            and self.feature_flags.is_enabled("conversation_model_v1")
+        )
+        self.chat_request_queue_ready = False
+        self.chat_request_queue_error: str | None = None
+        self.chat_request_repository: Any = None
+        self.chat_request_service: Any = None
+        self.chat_request_worker: Any = None
+        if self.chat_request_queue_requested:
+            if not chat_request_deps_ready:
+                self.chat_request_queue_error = "queue_dependencies_unavailable"
+            else:
+                self.chat_request_repository = ChatRequestRepository(self.db)
+                self.chat_request_service = ChatRequestService(
+                    repository=self.chat_request_repository,
+                    identity_repository=self.identity_repository,
+                )
+                self.chat_request_worker = ChatRequestWorker(
+                    repository=self.chat_request_repository,
+                    pipeline=self.pipeline,
+                    emit=emit,
+                    clock=lambda: datetime.now(timezone.utc),
+                )
+                self.chat_request_service.set_worker(self.chat_request_worker)
+                self.chat_request_queue_ready = True
 
         # Push scheduler
         proactive_cfg = load_proactive_config()
@@ -214,6 +247,13 @@ class Companion:
         if self._started:
             return
         self.queue.start()
+        if self.chat_request_worker is not None:
+            try:
+                await self.chat_request_worker.start()
+            except Exception:
+                self.chat_request_queue_ready = False
+                self.chat_request_queue_error = "queue_worker_start_failed"
+                logger.exception("chat request worker start failed")
         self.qq.set_message_handler(self._on_qq_message)
         await self._start_push_event_engine()
 
@@ -512,6 +552,11 @@ class Companion:
                 await self.desire.stop()
             except Exception:
                 logger.exception("desire stop error")
+        if self.chat_request_worker is not None:
+            try:
+                await self.chat_request_worker.stop()
+            except Exception:
+                logger.exception("chat request worker stop error")
         try:
             await self.queue.stop()
         except Exception:

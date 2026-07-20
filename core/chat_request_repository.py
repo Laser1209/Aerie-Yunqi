@@ -194,6 +194,35 @@ class ChatRequestRepository:
         )
         return result
 
+    def reply_to_belongs_to_context(
+        self,
+        *,
+        legacy_chat_log_id: int,
+        actor_id: str,
+        channel: str,
+        channel_account_id: str,
+        conversation_id: str,
+    ) -> bool:
+        with self.database.connection() as conn:
+            row = conn.execute(
+                """SELECT 1
+                   FROM messages
+                   WHERE legacy_chat_log_id = ?
+                     AND actor_id = ?
+                     AND channel = ?
+                     AND channel_account_id = ?
+                     AND conversation_id = ?
+                   LIMIT 1""",
+                (
+                    legacy_chat_log_id,
+                    actor_id,
+                    channel,
+                    channel_account_id,
+                    conversation_id,
+                ),
+            ).fetchone()
+        return row is not None
+
     def claim_next(
         self,
         *,
@@ -278,13 +307,15 @@ class ChatRequestRepository:
                    SET lease_expires_at = ?, last_heartbeat_at = ?,
                        updated_at = ?
                    WHERE request_id = ? AND lease_owner = ?
-                     AND status IN ('running', 'cancelling')""",
+                     AND status IN ('running', 'cancelling')
+                     AND lease_expires_at > ?""",
                 (
                     expiry_text,
                     now_text,
                     now_text,
                     request_id,
                     lease_owner,
+                    now_text,
                 ),
             ).rowcount
         return changed == 1
@@ -340,17 +371,34 @@ class ChatRequestRepository:
                 conn.execute("ROLLBACK")
                 raise
 
+    def mark_completed(
+        self,
+        *,
+        request_id: str,
+        lease_owner: str,
+        result: dict[str, Any],
+    ) -> None:
+        del result  # Canonical reply data is persisted by ConversationRepository.
+        self._mark_claimed_terminal(
+            request_id=request_id,
+            lease_owner=lease_owner,
+            source_status="running",
+            terminal_status="completed",
+            cancelled=False,
+        )
+
     def mark_cancelled(
         self,
         *,
         request_id: str,
         lease_owner: str | None,
     ) -> None:
-        self._mark_terminal(
+        self._mark_claimed_terminal(
             request_id=request_id,
             lease_owner=lease_owner,
-            status="cancelled",
-            error_code=None,
+            source_status="cancelling",
+            terminal_status="cancelled",
+            cancelled=True,
         )
 
     def mark_failed(
@@ -360,6 +408,13 @@ class ChatRequestRepository:
         lease_owner: str | None,
         error_code: str,
     ) -> None:
+        if lease_owner is not None:
+            self._mark_claimed_failed(
+                request_id=request_id,
+                lease_owner=lease_owner,
+                error_code=error_code,
+            )
+            return
         self._mark_terminal(
             request_id=request_id,
             lease_owner=lease_owner,
@@ -409,6 +464,103 @@ class ChatRequestRepository:
                        )""",
                     (status, now_text, request_id),
                 )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def _mark_claimed_terminal(
+        self,
+        *,
+        request_id: str,
+        lease_owner: str | None,
+        source_status: str,
+        terminal_status: str,
+        cancelled: bool,
+    ) -> None:
+        now_text = self._timestamp()
+        cancelled_at = now_text if cancelled else None
+        with self.database.connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                request_updated = conn.execute(
+                    """UPDATE requests
+                       SET status = ?, error = NULL, error_code = NULL,
+                           updated_at = ?, completed_at = ?,
+                           cancel_requested_at = CASE
+                             WHEN ? THEN cancel_requested_at ELSE NULL END,
+                           cancelled_at = ?, lease_owner = NULL,
+                           lease_expires_at = NULL
+                       WHERE request_id = ? AND lease_owner = ?
+                         AND status = ? AND lease_expires_at > ?""",
+                    (
+                        terminal_status,
+                        now_text,
+                        now_text,
+                        cancelled,
+                        cancelled_at,
+                        request_id,
+                        lease_owner,
+                        source_status,
+                        now_text,
+                    ),
+                ).rowcount
+                if request_updated != 1:
+                    raise ValueError("request is not claim-owned")
+
+                turn_updated = conn.execute(
+                    """UPDATE turns SET status = ?, completed_at = ?
+                       WHERE turn_id = (
+                         SELECT turn_id FROM requests WHERE request_id = ?
+                       ) AND status = 'running'""",
+                    (terminal_status, now_text, request_id),
+                ).rowcount
+                if turn_updated != 1:
+                    raise ValueError("request is not claim-owned")
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def _mark_claimed_failed(
+        self,
+        *,
+        request_id: str,
+        lease_owner: str,
+        error_code: str,
+    ) -> None:
+        now_text = self._timestamp()
+        with self.database.connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                request_updated = conn.execute(
+                    """UPDATE requests
+                       SET status = 'failed', error = NULL, error_code = ?,
+                           updated_at = ?, completed_at = ?,
+                           cancelled_at = NULL, lease_owner = NULL,
+                           lease_expires_at = NULL
+                       WHERE request_id = ? AND lease_owner = ?
+                         AND status IN ('running', 'cancelling')""",
+                    (
+                        error_code,
+                        now_text,
+                        now_text,
+                        request_id,
+                        lease_owner,
+                    ),
+                ).rowcount
+                if request_updated != 1:
+                    raise ValueError("request is not claim-owned")
+
+                turn_updated = conn.execute(
+                    """UPDATE turns SET status = 'failed', completed_at = ?
+                       WHERE turn_id = (
+                         SELECT turn_id FROM requests WHERE request_id = ?
+                       ) AND status = 'running'""",
+                    (now_text, request_id),
+                ).rowcount
+                if turn_updated != 1:
+                    raise ValueError("request is not claim-owned")
                 conn.execute("COMMIT")
             except Exception:
                 conn.execute("ROLLBACK")

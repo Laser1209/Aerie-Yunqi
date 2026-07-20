@@ -1,40 +1,50 @@
 ---
 title: Aerie 全面升级 Codex 移交说明
 date: 2026-07-20
-updated: 2026-07-20
+updated: 2026-07-21
 kind: handoff
 status: active
 project: Aerie
-phase: Phase 04
-current_task: ConversationRepository 完成预分配 Turn/Request
+phase: Phase 07
+current_task: Phase 07 前置门禁复核与 Task 07-baseline 启动
 branch: Aerie-Model-X
-head: 070e26d
+head: d9a327a
 tags:
   - aerie
   - handoff
   - codex
   - phase04
+  - phase05
+  - phase06
+  - phase07
   - request-queue
 aliases:
   - Aerie Codex 移交说明
-  - Phase 04 当前进度
+  - Phase 07 当前进度
 ---
 
 # Aerie 全面升级 Codex 移交说明
 
 > [!danger] 接手时的唯一准确断点
-> 当前不是 Phase 4 起点，也不是 Phase 4 已完成状态。正在执行 [[2026-07-20-Phase-04-持久Request队列实施计划#Task 5|Task 5：ConversationRepository 完成预分配 Turn/Request]]。
+> Phase 06 已完成，当前不是 Phase 4、Phase 5 或 Phase 6 起点，也不是 Phase 6 未完成状态。Phase 04 Task 1–12 已收口，`rollback_ready=true`；Phase 05 / [[Task 05-baseline]] 已收口，`rollback_ready=true`；Phase 06 / [[Task 06-baseline]] 已收口，`rollback_ready=true`；下一小节是 [[Phase 07|Phase 07：拟人化流式、Typing、多气泡与 Pacing]] / [[Task 07-baseline]] 的前置门禁复核与 Red 起步。
 >
-> `ChatRequestRepository`、006 Migration 和 Phase 4 Fixtures 已完成并通过回归；`ConversationRepository` 初步生产实现也已经存在。当前专项测试为 **15 passed, 1 failed**，唯一失败是测试缺少 Actor 外键前置数据，不是生产功能缺失。
+> `ChatRequestRepository`、`ConversationRepository`、`ChatRequestService`、`ChatRequestWorker`、Pipeline RequestContext/取消边界、Companion 组合根、API 双合同、Renderer 请求级状态、Task 11 端到端集成/Electron smoke、Task 12 生产一致性副本/恢复/Flag 回滚均已通过各自 Red → Green 或 current-state audit。Phase 00–04 关联门禁 **259 passed, 4 warnings**；Electron Node **14 passed**；完整显式 `tests` 收集 **472 passed, 6 warnings**。
 >
-> 在本移交批次中不要继续编码；Codex 接手后必须从修复该测试 Fixture 开始，完成 Task 5 的全部验证和文档收口后，才能进入 Service。
+> Task 12 已验证默认生产源库当前已有 006 completed；使用 SQLite Backup API 生成 A/B/C 副本，源 SHA 前后不变，A/C 关键表计数与脱敏摘要一致，数据损失 0。不要把 Phase 04/05 完成误解为 Phase 06 已开始；下一步仍必须先重读总计划、Phase 06、Task 06-baseline 和批次规约，再写 Phase 06 目标 Red。
+>
+> Phase 05 已验证 SSE `id:`、进程内 bounded recovery window、`Last-Event-ID` cursor reconnect、Renderer 既有 event_id/sequence 去重、`chat_stream_v1=false` legacy path 和 no-migration 回滚。Phase 00–05 关联门禁 **264 passed, 4 warnings**；Electron Node **16 passed**；完整显式 `tests` 收集 **477 passed, 6 warnings**。不要重做 Phase 05；下一步从 Phase 06 目标 Red 开始。
+>
+> Phase 06 已验证 `context_budget_v1=true` 时 actor-scoped 长期记忆检索、知识库检索、assistant 多气泡历史合并为完整 assistant 响应、Pipeline identity/audit 接线，以及 `context_budget_v1=false` legacy builder kwargs 回滚。Phase 00–06 关联门禁 **289 passed, 4 warnings**；Electron Node **16 passed**；完整显式 `tests` 收集 **481 passed, 6 warnings**。不要重做 Phase 06；下一步从 Phase 07 目标 Red 开始。
 
 > [!warning] 工作区与 Git 状态
 > - 分支：`Aerie-Model-X`
-> - HEAD：`070e26d feat(phase4): 完成持久请求队列核心开发与测试覆盖`
-> - 当前工作区唯一已知修改：`M tests/test_phase4_chat_request_repository.py`
+> - HEAD：`d9a327a Implement application updates and supporting changes`
+> - 当前 Phase 04/05/06 相关源码差异叠加存在：`M communication/message.py`、`M communication/qq_client.py`、`M core/brain.py`、`M core/pipeline.py`、`M core/chat_request_worker.py`、`M core/chat_request_repository.py`、`M core/chat_request_service.py`、`M core/companion.py`、`M core/api_server.py`、`M core/conversation_repository.py`、`M core/event_stream.py`、`M core/context_builder.py`、`M electron/src/main.js`、`M tests/test_brain_provider_routing.py`、`M tests/test_phase4_chat_request_service.py`、`M tests/test_phase4_integration.py`、`M electron/tests/chat-request-queue.test.js`、`?? tests/test_phase4_pipeline.py`、`?? tests/test_phase4_api.py`、`?? tests/test_phase5_event_stream.py`、`?? tests/test_phase6_context_budget.py`、`?? electron/tests/sse-bridge.test.js`，叠加本批文档更新。
+> - `data/desire_state.json` 是后台运行态刷新，不属于 Task 7；不得覆盖。
+> - 本轮后段出现多项 `Spotlight/` 修改与新文件，属于并行工作且与 Phase 04 无关；本批未读取或编辑，后续不得清理、暂存或回退。
+> - `.pytest-task7-*` 是本批测试临时目录。精确路径删除已通过安全检查，但自动审批服务返回 503 而拒绝执行；不得绕过，需用户明确授权后再清理。
 > - 不要 reset、restore、clean 或改写历史。
-> - HEAD 已经包含 `data/audit/computer_control.jsonl`，这与“不将无关审计日志混入版本控制”的执行原则有冲突。不要重写 `070e26d`；若以后需要纠正，只能使用新的正向提交。
+> - HEAD 已经包含运行态/审计与 Task 5/6 变更。不要重写 `d9a327a`；若以后需要纠正，只能使用新的正向提交。
 
 ## 1. 接手后的最短恢复路径
 
@@ -43,8 +53,8 @@ aliases:
 1. 阅读本说明。
 2. 阅读 [[实施计划]]，重新确认全局执行纪律。
 3. 阅读 [[06_AI_Vibe_Coding批次规约]]。
-4. 阅读 [[2026-07-20-Phase-04-持久Request队列实施计划]]，定位到 Task 5。
-5. 阅读 [[Phase 04]]、[[Task 04-baseline]]、[[91_数据迁移核对]]、[[92_回滚演练]]。
+4. 阅读 [[2026-07-20-Phase-04-持久Request队列实施计划]] 的 Task 12 Evidence，确认 Phase 04 已 done。
+5. 阅读 [[Phase 05]]、[[Task 05-baseline]]、[[Phase 06]]、[[Task 06-baseline]]、[[91_数据迁移核对]]、[[92_回滚演练]]，确认 Phase 05/06 均已 done 且无迁移。
 6. 审计当前 Git 状态：
 
 ```powershell
@@ -52,18 +62,20 @@ git status --short --branch
 git log -1 --oneline
 ```
 
-7. 阅读当前小节的真实代码：
+7. 阅读当前边界的真实代码：
    - `core/conversation_repository.py`
    - `core/chat_request_repository.py`
-   - `tests/test_phase4_chat_request_repository.py`
-   - `tests/conftest.py`
-8. 在失败测试中创建 `actor_phase4` 前置数据。
-9. 运行专项测试，确认全部 Green。
-10. 完成关联回归、完整回归、静态检查、数据库守恒查询和文档更新。
-11. Task 5 完整收口后，才能进入 `ChatRequestService`。
+   - `core/chat_request_service.py`
+   - `core/chat_request_worker.py`
+   - `core/pipeline.py`
+   - `communication/message.py`
+   - `tests/test_phase4_chat_request_worker.py`
+8. 不要重做 Phase 04 Task 1–12；先确认 Phase 04 文档、90/91/92 和 Task 12 Evidence 已收口。
+9. 从 Phase 07 固定 Red 开始：delta 临时气泡、最终语义拆分、Typing 与 Persona Pacing，`chat_stream_v1` Flag 回滚。
+10. Phase 07 仍不得整体重写 Pipeline、删除旧 poll/SSE 路径、让 Renderer 成为状态真源或引入 Sidecar 可靠总线语义。
 
 > [!tip] 接手者不要重复做的工作
-> 不要重新设计 Phase 4，不要重新创建 006 Migration，不要重新实现 ChatRequestRepository，也不要把 ConversationRepository 当成尚未开始。先以真实代码和测试为准，解决当前唯一失败并完成本小节验收。
+> 不要重做 Phase 04 Task 1–12，也不要重做 Phase 05 SSE id/replay/cursor/Flag 回滚或 Phase 06 Context Budget/Memory/Knowledge 接线。不要重新创建 006 Migration、Repository、Service、Worker、Pipeline 取消合同、API 双合同、Renderer ingest、Electron smoke 安全开关、Task 12 副本演练、Phase 05 event stream helper 或 Phase 06 context audit helper，也不要把测试临时目录或后台运行态文件当成业务改动。下一步按现有 TDD 计划进入 Phase 07。
 
 ## 2. 当前准确进度
 
@@ -75,8 +87,11 @@ git log -1 --oneline
 | Phase 01 | completed | 前序基础能力已完成 |
 | Phase 02 | done | Actor / Channel / Persona 等基础真源已完成 |
 | Phase 03 | done | Conversation / Turn / Message / Request 规范模型、迁移、回填与恢复演练已完成 |
-| Phase 04 | in_progress | 正在进行持久 Request 队列；当前停在 Task 5 |
-| Phase 05–15 | not started | Phase 4 全部门禁完成前禁止进入 |
+| Phase 04 | done | Task 1–12 已收口；rollback_ready=true；生产一致性副本恢复数据损失 0 |
+| Phase 05 | done | 事件统一、SSE 恢复窗口、Renderer 去重与 `chat_stream_v1` 回滚已完成 |
+| Phase 06 | done | 完整 Turn Context、Token Budget、长期记忆与知识库注入已完成 |
+| Phase 07 | planned | 下一步启动：拟人化流式、Typing、多气泡与 Pacing |
+| Phase 08–15 | not started | 进入每个后续 Phase 前仍需复核前序门禁 |
 
 进入 Phase 4 前已通过：
 
@@ -86,6 +101,32 @@ Phase 0–3 + API + Pipeline:
 
 完整 Python:
 353 passed, 6 warnings in 10.56s
+```
+
+进入 Phase 6 前已通过：
+
+```text
+Phase 00–05 + API + Pipeline:
+264 passed, 4 warnings in 27.60s
+
+完整 Python:
+477 passed, 6 warnings in 35.77s
+
+Electron Node:
+16 passed
+```
+
+进入 Phase 7 前已通过：
+
+```text
+Phase 00–06 + API + Pipeline:
+289 passed, 4 warnings in 28.10s
+
+完整 Python:
+481 passed, 6 warnings in 36.25s
+
+Electron Node:
+16 passed
 ```
 
 ### 2.2 Phase 3 已完成能力
@@ -246,66 +287,44 @@ Phase 3/4 关联: 36 passed in 2.99s
 完整 Python:    374 passed, 6 warnings in 18.17s
 ```
 
-### 2.4 当前 Task 5 状态
+### 2.4 当前 Task 7 完成状态
 
-ConversationRepository 的目标 Red 已真实观察：
-
-```text
-6 failed, 10 passed
-```
-
-目标失败原因正确：
-
-- 公共 `resolve_conversation_id` 不存在。
-- `ensure_conversation` 不存在。
-- `persist_turn()` 不支持预分配 `conversation_id` / `turn_id`。
-
-生产实现完成后曾达到：
+Task 5 与 Task 6 已完整收口。Task 7 接管时的目标 Red：
 
 ```text
-14 passed, 2 failed
+13 failed, 1 passed
 ```
 
-其中 history 测试的 Conversation ID 不一致已修复。当前真实结果：
+失败原因正确：
+
+- `ChatRequestRepository.mark_completed()` 不存在。
+- `mark_cancelled()` 错误允许 running 直接 cancelled，且未写 `cancelled_at`。
+- `core.chat_request_worker` 不存在。
+
+Task 7 最终 Evidence：
 
 ```text
-15 passed, 1 failed in 1.83s
+Worker 专项: 23 passed in 5.09s
+加固关联:   136 passed, 4 warnings in 18.95s
+完整 Python: 433 passed, 1 deselected, 6 warnings in 33.59s
+办公目录环境用例: 1 passed in 0.05s
 ```
 
-唯一失败：
+已证明：
 
-```text
-test_ensure_conversation_reuses_same_identity_key
-sqlite3.IntegrityError: FOREIGN KEY constraint failed
-```
+- `start()` recovery 先于首次 claim。
+- 不同 Conversation 最大 active=4，第五条等待；同 Conversation 最大 active=1。
+- `_running_tasks[request_id]` 保存真实 execution `asyncio.Task`。
+- heartbeat 在 Pipeline 运行期间立即续租并独立运行。
+- 过期 lease 不能复活或完成；lease 丢失会取消 execution，并使用 `lease_lost` 收口。
+- queued 取消不调用 Pipeline；running 用户取消等待最多 250ms，确认时延 `<500ms`。
+- Pipeline 自发取消、Worker stop 与丢失 Task 分别使用 `pipeline_cancelled`、`worker_stopped`、`cancel_task_missing`；stop 覆盖 deferred/pre-start 用户取消。
+- emit 失败不反转数据库终态。
 
-原因：
+风险复核曾追加 `5 failed, 15 passed`，目标均已 Green。若 heartbeat 数据库异常与终态写入同时失败，execution 会停止但 Request 依赖下次启动 recovery；当前不宣称进程内自动恢复。
 
-```sql
-conversations.actor_id REFERENCES actors(actor_id)
-```
-
-测试使用 `actor_phase4`，但没有先创建对应 Actor。
-
-> [!bug] 当前唯一需要先修的地方
-> 在 `test_ensure_conversation_reuses_same_identity_key` 中，调用 `ensure_conversation()` 前加入：
-
-```python
-phase4_db.insert(
-    "actors",
-    {
-        "actor_id": "actor_phase4",
-        "created_at": "2026-07-20T00:00:00+00:00",
-    },
-)
-```
-
-不要通过以下方式“修复”：
-
-- 不要删除或放宽外键。
-- 不要让 `ensure_conversation()` 自动创建或猜测 Actor。
-- 不要将测试中的 Actor 改为 NULL 来绕过合同。
-- 不要把这个 Fixture 错误当成新的生产 Red。
+> [!success] Task 8 完成权裁决已落实
+> `ConversationRepository.persist_turn()` 作为 canonical completion 唯一写入者；真实 Pipeline 返回 `canonical_completed=true` 时，Worker 不再二次 `mark_completed(running + matching lease)`。legacy 已写但 canonical 未完成时的过晚取消使用 `CancellationTooLate("terminal_side_effect_committed")`，Worker 记 `failed/terminal_side_effect_committed`；canonical 已完成后 completion-wins，并停止后续事件或 QQ 副作用。
 
 ## 3. 已批准且不可随意推翻的架构合同
 
@@ -523,13 +542,7 @@ def persist_turn(
 - 结果或归属不同：抛出 `RequestConflict`。
 - `recent_turn_history()` 只读取 `turns.status='completed'`。
 
-仍需审计但不能无 Red 直接改的风险：
-
-1. 新队列时间合同偏向 UTC，但当前完成路径仍有 `datetime('now', 'localtime')`。
-2. `_completed_result()` 对附件 JSON 使用字符串精确比较，可能受序列化顺序影响。
-3. 没有 assistant segment 时，completed 幂等结果返回空 `response_group_id`。
-4. completed 更新没有附加旧状态条件。
-5. 需要验证计划列出的 8 项行为是否都有等价测试覆盖，不能只按测试函数数量判断。
+Task 5 已验证只有 running/running 可完成、可信快照一致、SAVEPOINT 回滚、终态 lease/error 清理和 completed-only history。Task 8 已裁决 canonical completion 由 ConversationRepository 拥有；后续 Task 9 不要为适配 API 接线而放宽 Repository 终态门禁。
 
 ### 4.2 ChatRequestRepository
 
@@ -548,9 +561,11 @@ ClaimedRequest
 
 ```text
 submit
+get_owned
 claim_next
 heartbeat
 request_cancel
+mark_completed
 mark_cancelled
 mark_failed
 recover_interrupted
@@ -567,8 +582,8 @@ create_retry
 潜在风险：
 
 - `recover_interrupted()` 的 SQL 中第二个 lease 条件被第一个 running/cancelling 条件覆盖；结果是启动恢复会将所有遗留 running/cancelling 转失败。这与当前启动恢复合同一致，但 SQL 有冗余。
-- 原计划提到的 `mark_completed()`、`get_owned()` 尚未作为最终接口稳定出现。
-- Service/Worker 尚未实现，Repository 接口仍可能因严格测试而小幅演进。
+- `mark_completed()` 只允许 running + matching lease；`mark_cancelled()` 只允许 cancelling + matching lease。不得为适配真实 Pipeline 的二次完成而放宽这两个门禁。
+- Service/Worker 已实现但尚未接入 Companion/API；旧运行路径没有调用这些模块。
 - ChatRequestRepository 当前直接写 Conversation SQL，尚未复用 `ConversationRepository.ensure_conversation()`；不要在没有失败测试时提前重构。
 
 ### 4.3 SQLite 连接和事务边界
@@ -600,34 +615,16 @@ sqlite3.connect(
 
 ## 5. 当前小节完成标准
 
-Task 5 还缺以下全部步骤：
+Task 8 已按以下保守默认收口：
 
-- [ ] 在失败测试中创建 `actor_phase4`。
-- [ ] ConversationRepository 专项全部 Green。
-- [ ] Phase 3 + Phase 4 定向回归。
-- [ ] Phase 0–4 关联回归。
-- [ ] 完整 Python 回归。
-- [ ] `py_compile`。
-- [ ] diagnostics。
-- [ ] `git diff --check`。
-- [ ] Conversation / Turn / Request / Message 记录数守恒 Evidence。
-- [ ] orphan Turn 查询为 0。
-- [ ] orphan Request 查询为 0。
-- [ ] orphan Message 查询为 0。
-- [ ] 更新 [[Phase 04]]。
-- [ ] 更新 [[Task 04-baseline]]。
-- [ ] 更新 [[91_数据迁移核对]]。
-- [ ] 确认未提前进入 Service。
+- [x] canonical completion 的唯一写入者是 ConversationRepository。
+- [x] canonical 已 completed 后收到取消采用 completion-wins，并停止后续事件/QQ 副作用。
+- [x] FULL 的 PAD 分析和主回复调用按两类模型调用分别计数，不要求每 Request 总调用最多一次。
+- [x] Phase 04 队列本阶段先覆盖 desktop/local；QQ 入站队列化留给后续接线门禁。
+- [x] 所有 provider 失败后沿用现有可见 fallback 文本并记 completed；可重试 failed 另行按稳定错误处理。
+- [x] Feature Flag 生命周期第一版要求重启，不支持运行时 Worker 热启动/停止。
 
-推荐命令顺序：
-
-```powershell
-python -m pytest tests/test_phase4_chat_request_repository.py -q
-python -m pytest tests/test_phase3_conversation_model.py tests/test_phase4_chat_request_repository.py -q
-python -m pytest -q
-python -m py_compile core/conversation_repository.py tests/test_phase4_chat_request_repository.py
-git diff --check
-```
+Task 9 已完成：组合根与 API 固定 Red 已观察并收口；Companion 只创建一个 ConversationRepository 和 ChatRequestRepository，并注入 Service/Worker/Pipeline；`chat_request_queue_v1=true` 返回 202 queued，Flag off 保持旧同步 200 和空消息 400；依赖缺失 fail closed；所有权和 `reply_to_id` 外泄防护已纳入 Service/API 合同。当前完成标准转为 Task 10 Renderer 请求级状态与统一 ingest。
 
 > [!note] Evidence 纪律
 > Evidence 必须来自当前真实命令输出，不能复制旧数字冒充新结果。数据库 Evidence 只记录 ID、状态、计数和孤立记录数，不记录用户正文、附件正文、真实路径、密钥或隐私数据。
@@ -636,39 +633,30 @@ git diff --check
 
 ```mermaid
 graph TD
-    A[修复当前测试 Actor 前置数据] --> B[Task 5 专项 Green]
-    B --> C[关联与完整回归]
-    C --> D[数据库守恒与孤立记录 Evidence]
-    D --> E[更新 Phase 04 / Task 04 / 91]
-    E --> F[ChatRequestService]
-    F --> G[ChatRequestWorker]
-    G --> H[Pipeline FULL/BASIC RequestContext 与取消边界]
-    H --> I[Companion 组合根与 API]
+    H[Pipeline FULL/BASIC RequestContext 与取消边界 已完成] --> I[Companion 组合根与 API 已完成]
     I --> J[Renderer / Electron 请求级状态]
     J --> K[集成与 Electron Smoke]
     K --> L[生产一致性副本 006 迁移与恢复]
     L --> M[Phase 0–4 全部门禁复验]
     M --> N{Phase 4 完成?}
-    N -->|否| A
+    N -->|否| H
     N -->|是| O[允许进入 Phase 5]
 ```
 
 ### 6.1 ChatRequestService
 
-在 Task 5 收口后开始，必须先写失败测试。
-
-目标职责：
+Task 6 已完成，Task 9 已通过 Companion/API 接线：
 
 - submit 编排。
 - 状态查询。
 - cancel 编排。
 - retry 编排。
-- Flag 开关行为。
 - 将 Repository 细节与 API 隔离。
+- 可信 desktop/local 身份、纯附件输入分离、所有权、稳定错误码与脱敏 DTO 已 Green。
 
 ### 6.2 ChatRequestWorker
 
-目标：
+Task 7/8 已完成，Task 9 已通过 Companion 在 queue Flag 与依赖就绪时接线：
 
 - 数据库驱动领取。
 - 同 Conversation 串行。
@@ -677,6 +665,7 @@ graph TD
 - 启动恢复。
 - 真实取消 `asyncio.Task`。
 - 模型/Pipeline 阶段不持有 SQLite 事务。
+- stop、意外取消、用户取消和丢失 Task 使用不同稳定错误码；emit 为提交后的 best-effort。
 
 不要复用 `core/async_task_manager.py` 作为聊天 Worker，因为它：
 
@@ -742,28 +731,13 @@ POST /api/chat/requests/{request_id}/retry
 
 文件：`electron/src/renderer/js/chat.js`
 
-当前仍有单全局状态：
-
-```javascript
-this._loading = false;
-```
-
-当前已知命中 4 处：
-
-```text
-line 12
-line 323
-line 327
-line 376
-```
-
-后续目标：
+Task 10 已完成的目标：
 
 ```javascript
 Map<request_id, RequestViewState>
 ```
 
-必须支持：
+已支持：
 
 - 连续三次 send 产生三次 POST。
 - 每个 Request 独立显示 queued/running/cancelling/failed/cancelled/completed。
@@ -773,80 +747,35 @@ Map<request_id, RequestViewState>
 - 页面恢复时查询未终态 Request。
 - Renderer 本地状态不是权威真源。
 
+Task 11 已证明：
+
+- 端到端提交、claim、Pipeline 完成和事件投递的副作用计数。
+- Electron smoke：真实窗口加载、连续三次 send → 202、GET status 恢复后端真源、cancel/retry 端点可达。
+- 与 Worker/Repository 的真实并发、恢复和取消边界组合。
+- Smoke 安全：临时 DB/data/log、`AERIE_DISABLE_QQ=true`、`AERIE_DISABLE_MODEL_CALLS=true`，未连接真实 QQ、未调用真实模型、未写生产库。
+
 ## 7. 文档状态与真实代码的差异
 
-> [!warning] 不要盲信勾选状态
-> 部分 Phase 4 文档比真实代码落后。接手时必须同时看代码、测试和 Git，不能仅凭 checklist 判断。
+> [!success] Phase 04 复合验收已收口
+> Phase 04、Task 04、实施计划 Task 12、90、91 和 92 已同步到 Task 12。Phase 04 当前为 done，`rollback_ready=true`。
 
-### [[Phase 04]]
+当前仍未完成：
 
-仍写着：
+- Phase 07 拟人化流式、Typing、多气泡与 Pacing，`chat_stream_v1` 回滚。
 
-```text
-下一小节必须从 ConversationRepository 兼容性目标 Red 开始
-```
+独立 Worker stop、queue Flag 关闭旧路径、Task 11 端到端 smoke、Task 12 生产副本恢复与 Flag 回滚均已验证。全局验收中的 Phase 04 复合串行、取消、恢复项已勾选；Phase 05 以后能力仍按各自阶段推进。
 
-真实情况：
+> [!success] Phase 05 事件恢复与去重已收口
+> Phase 05、Task 05、90、91 和 92 已同步。后端 `event_stream` 默认保持 legacy data-only；`chat_stream_v1=true` 时 API 启用 SSE `id:`、bounded replay 和 `Last-Event-ID` cursor；Electron 主进程保存 webContents cursor 并用于重连；Renderer 继续使用既有 `event_id`、legacy id 和 `request_id + sequence` 去重排序。Phase 05 当前为 done，`rollback_ready=true`。
 
-- Red 已观察。
-- 初步生产实现已存在。
-- 当前为 15 passed / 1 failed。
-
-在当前 Task 5 真正 Green 前，不要把文档更新成“已完成”。
-
-### [[Task 04-baseline]]
-
-部分状态仍写：
-
-```markdown
-- [ ] Repository Red
-```
-
-但 ChatRequestRepository 已完成并有 Evidence。应在后续小节文档收口时整理状态，不能在当前失败未解决时提前将整个 Task 04 标记完成。
-
-### [[91_数据迁移核对]]
-
-当前 Phase 4：
-
-```markdown
-- [x] queued 提交的 Conversation / pending Turn / Request 原子创建
-- [ ] 完成路径更新同一 Request/Turn 并插入规范 Message
-- [ ] failed/cancelled/pending 不进入近期历史
-- [ ] 生产一致性副本迁移与恢复
-```
-
-Task 5 初步实现已覆盖中间两项，但尚未完成全部 Green 和 Evidence，因此暂不能勾选。
-
-### [[92_回滚演练]]
-
-已验证：
-
-- migration framework 与 queue Flag 的 Schema 边界。
-- Repository 不读取 queue Flag。
-- Repository 不自行启动 Worker。
-
-尚未验证：
-
-- queue Flag 关闭时旧 `/api/chat/send` 同步 200。
-- Worker 停止消费。
-- 生产一致性副本上的 006 迁移与实际恢复。
-
-`rollback_ready` 不得提前改为 true。
-
-### [[90_全局验收清单]]
-
-Phase 4 以下项目仍未完成：
-
-- 连续三条输入全部持久 queued；同 Conversation 串行、跨 Conversation 默认最多四路。
-- queued/running 真实取消；retry 新建 Request/Turn；重启与 lease 过期运行项转 failed。
-- Request/Turn/Message 状态守恒；纯附件内部中性指令不污染用户可见历史。
-- event_id 去重、request_id + sequence 有序、IPC/SSE/poll 恢复不重复。
+> [!success] Phase 06 Context Budget 与长期记忆/知识库接线已收口
+> Phase 06、Task 06、90、91 和 92 已同步。`context_budget_v1=true` 时 ContextBuilder 会检索 actor-scoped 长期记忆、知识库，并把连续 assistant 多气泡合并为完整 assistant 响应；Pipeline 仅在 Flag-on 时传入 actor/channel identity 并记录 allowlist audit。Flag off 不传新增 kwargs、不读取 audit。Phase 06 当前为 done，`rollback_ready=true`。
 
 ## 8. 最容易出错的地方
 
 ### 8.1 把测试前置数据错误误判为生产 Red
 
-当前唯一失败就是典型案例。Red 必须证明目标能力缺失；Fixture、语法、导入、外键前置数据错误不等于目标 Red。
+Task 5 曾出现该案例；现已修复并收口。后续 Red 仍必须证明目标能力缺失，Fixture、语法、导入、外键前置数据或沙箱输出目录错误不等于产品 Red。
 
 ### 8.2 在模型调用期间持有 SQLite 连接或事务
 
@@ -954,9 +883,11 @@ LF → CRLF 可能只是行尾提示，不一定是 whitespace error。要区分
 
 | 文件 | 价值 | 当前用途 |
 |---|---|---|
-| `core/conversation_repository.py` | 当前小节生产实现 | 检查预分配 Request/Turn 完成、幂等、冲突、SAVEPOINT、history |
-| `core/chat_request_repository.py` | 已完成队列核心状态机 | Service/Worker 后续接口基础 |
-| `tests/test_phase4_chat_request_repository.py` | 当前唯一已知工作区修改 | 修复 Actor 前置数据并完成 Task 5 验证 |
+| `core/conversation_repository.py` | Task 5 canonical 完成实现 | canonical completion 权威；后续不得放宽终态门禁 |
+| `core/chat_request_repository.py` | 队列核心状态机与严格终态 | 后续接线仍不得放宽 running/cancelling + lease 门禁 |
+| `core/chat_request_service.py` | Task 6 Service，Task 9 已接线 | 可信身份、纯附件、所有权、reply_to 所属校验、cancel/retry 与 DTO 合同 |
+| `core/chat_request_worker.py` | Task 7/8 Worker，Task 9 已接线 | 四槽、真实 Task、heartbeat、取消、stop、恢复、Pipeline token 传递和 canonical completed 跳过二次完成 |
+| `tests/test_phase4_chat_request_worker.py` | Task 7 主测试 | 23 个专项场景和 `<500ms` 取消确认 |
 | `tests/conftest.py` | Phase 4 隔离 Fixture | 复用 UTC 时钟、DB、附件和 Pipeline double |
 | `core/database.py` | SQLite 连接和迁移注册 | 审查 autocommit、锁和 migration 顺序 |
 | `core/migrations/__init__.py` | 004/005/006 固定迁移 | 不得随意修改 checksum |
@@ -965,11 +896,12 @@ LF → CRLF 可能只是行尾提示，不一定是 whitespace error。要区分
 
 | 文件 | 后续任务 |
 |---|---|
-| `core/api_server.py` | 202/200 双态、status/cancel/retry API |
-| `core/pipeline.py` | 沿用 RequestContext、取消边界、可见输入隔离 |
-| `core/companion.py` | Repository/Service/Worker 唯一组合根 |
+| `core/api_server.py` | Task 9 已完成：202/200 双态、status/cancel/retry API |
+| `communication/message.py`、`core/pipeline.py` | Task 8 已完成：RequestContext、取消边界、可见输入隔离 |
+| `core/companion.py` | Task 9 已完成：Repository/Service/Worker 唯一组合根 |
 | `electron/src/renderer/js/chat.js` | 从全局 `_loading` 改为请求级状态 Map |
-| `core/event_stream.py` | 复用 best-effort SSE，不扩展可靠协议 |
+| `core/event_stream.py` | Phase 05 已完成：legacy data-only 默认路径、Flag-on SSE `id:` 与进程内 bounded replay window；仍不扩展 ACK/Outbox 可靠协议 |
+| `core/context_builder.py` | Phase 06 已完成：Flag-on 长期记忆/知识库注入、多气泡历史合并、估算 token/字符 budget 和脱敏 audit；Flag off 保持旧行为 |
 | `core/async_task_manager.py` | 仅作为反例参考，不用于聊天队列 |
 
 ### 9.4 全局架构参考
@@ -1026,8 +958,8 @@ NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
 - 不删除已有 Schema、新数据或 Evidence 来伪造回滚。
 - Feature Flag 关闭只恢复旧执行路径，不破坏性删除新 Schema。
 - 不修改 004/005/006 固定 checksum。
-- 不在 Task 5 未收口时进入 Service。
-- 不在 Service/Worker 未完成时提前修改 `/api/chat/send`。
+- 不重做或推翻 Task 8 已落实的六项保守默认裁决，除非用户明确改裁决并要求补测试。
+- 不把 Task 9 后端 202 合同误当成 Renderer 请求级状态已完成。
 - 不在 Pipeline 中生成第二套 Request ID。
 - 不让 Renderer 成为状态权威真源。
 - 不自动恢复 running 请求为 queued。
@@ -1041,11 +973,11 @@ NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
 ### 当前移交内容
 
 - [x] 记录当前 Phase 与准确 Task。
-- [x] 记录唯一失败测试及真实原因。
+- [x] 记录 Task 7 Red、Green、关联和完整回归。
 - [x] 记录 Git 分支、HEAD 和工作区状态。
 - [x] 记录 Phase 0–3 完成情况。
-- [x] 记录 Phase 4 Migration、Fixture、Repository 已完成内容。
-- [x] 记录 ConversationRepository 当前实现和风险。
+- [x] 记录 Phase 4 Task 1–12 已完成内容。
+- [x] 记录 canonical completion 与 Worker 严格完成冲突的 Task 8 裁决和实现。
 - [x] 记录架构合同、状态机和事务边界。
 - [x] 记录易错点和历史经验。
 - [x] 记录关键文件阅读顺序。
@@ -1054,28 +986,29 @@ NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
 
 ### Codex 接手后的首个小节
 
-- [ ] 阅读本说明和五份当前状态文档。
-- [ ] 审计 Git 状态，确认没有新增未知修改。
-- [ ] 给失败测试补 `actor_phase4` 前置数据。
-- [ ] 专项测试全部 Green。
-- [ ] 关联测试通过。
-- [ ] 完整 Python 回归通过。
-- [ ] 静态检查通过。
-- [ ] 数据库守恒与孤立记录查询通过。
-- [ ] 更新 Phase 04、Task 04、91。
-- [ ] 确认 Task 5 完整收口。
-- [ ] 再开始 ChatRequestService 的新 Red。
+- [x] 阅读本说明和五份当前状态文档。
+- [x] 审计 Git 状态，确认无关修改需避开。
+- [x] 按保守默认落实 Task 8 六项产品边界。
+- [x] 明确唯一 completion 写入者和过晚取消终态。
+- [x] 明确模型调用计数、desktop/QQ 范围、provider fallback 和 Flag 生命周期。
+- [x] 写 Task 8 失败测试并观察目标 Red。
+- [x] 完成 Task 8 专项、关联、完整回归与文档收口。
+- [x] 完成 Task 9 组合根/API 目标 Red、Green、关联/完整回归与文档收口。
+- [x] 完成 Task 10 Renderer/Electron 目标 Red、Green、Node/Python 回归与文档收口。
+- [x] 完成 Task 11 端到端集成/Electron smoke 目标 Red、Green、真实 smoke、Node/Python 回归与文档收口。
+- [x] 完成 Task 12 生产数据一致性副本迁移、恢复、Flag 回滚、完整回归与文档收口。
+- [x] 完成 Phase 05 事件统一、SSE 恢复与 Renderer 去重目标 Red、Green、Python/Node 完整回归与文档收口。
+- [x] 完成 Phase 06 完整 Turn Context、Token Budget、摘要与长期记忆目标 Red、Green、Python/Node 完整回归与文档收口。
+- [ ] 下一小节从 Phase 07 拟人化流式、Typing、多气泡与 Pacing 目标 Red 开始。
 
 ## 13. 最终接手结论
 
 > [!success] 可以直接继续的位置
-> Codex 不需要重新理解全部项目后才开始，也不需要重做 Phase 4 前半段。完成必读文件审计后，直接在 `tests/test_phase4_chat_request_repository.py` 的 `test_ensure_conversation_reuses_same_identity_key` 中补齐 Actor 前置数据，跑到专项 Green，然后按本说明完成 Task 5 的全部回归、Evidence 和文档收口。
+> Codex 不需要重做 Phase 4 Task 1–12，也不需要重做 Phase 05 或 Phase 06。完成必读文件和当前 diff 审计后，从 Phase 07 的拟人化流式、Typing、多气泡与 Pacing 目标 Red 继续；不要把 Phase 05 的进程内 SSE recovery window 误认为 Sidecar 可靠总线或持久 Outbox，也不要把 Phase 06 的估算 token audit 误认为持久摘要表。
 
 > [!failure] 当前绝不能声称的状态
-> - 不能声称 ConversationRepository 小节已完成。
-> - 不能声称 Phase 4 已完成。
-> - 不能声称回滚已就绪。
-> - 不能声称 `/api/chat/send` 已异步化。
-> - 不能声称 Worker、真实取消、Renderer 请求级状态已实现。
+> - 不能声称 Phase 07 已开始或已完成。
+> - 不能声称 Typing、首 delta、临时气泡、Persona Pacing 或 reduced-motion 已按 Phase 07 完成。
+> - 不能声称 QQ 入站队列覆盖已实现。
 
 本说明记录的是 2026-07-20 移交时的真实工作区状态。后续每完成一个小节，应同步更新相关 Phase、Task、迁移、回滚、验收文档，并在新的进度记录中覆盖已变化的断点。

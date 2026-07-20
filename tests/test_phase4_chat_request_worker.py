@@ -194,6 +194,69 @@ def test_repository_mark_cancelled_requires_cancelling_and_sets_timestamp(
     assert row["completed_at"] == frozen_utc_clock.now().isoformat()
 
 
+def test_repository_expired_lease_cannot_heartbeat_or_complete(
+    phase4_db,
+    frozen_utc_clock,
+):
+    repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        repository,
+        request_id="req_worker_expired_lease",
+        conversation_id="conv_worker_expired_lease",
+    )
+    repository.claim_next(lease_owner="worker-phase4", lease_seconds=1)
+    frozen_utc_clock.advance(2)
+
+    assert repository.heartbeat(
+        request_id=context.request_id,
+        lease_owner="worker-phase4",
+        lease_seconds=30,
+    ) is False
+    with pytest.raises(ValueError, match="claim-owned"):
+        repository.mark_completed(
+            request_id=context.request_id,
+            lease_owner="worker-phase4",
+            result={},
+        )
+
+    assert phase4_db.query_one(
+        "SELECT status, lease_owner FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    ) == {"status": "running", "lease_owner": "worker-phase4"}
+
+
+def test_repository_mark_failed_rolls_back_on_turn_status_mismatch(
+    phase4_db,
+    frozen_utc_clock,
+):
+    repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        repository,
+        request_id="req_worker_failed_turn_mismatch",
+        conversation_id="conv_worker_failed_turn_mismatch",
+    )
+    repository.claim_next(lease_owner="worker-phase4", lease_seconds=30)
+    with phase4_db.connection() as connection:
+        connection.execute(
+            "UPDATE turns SET status = 'pending' WHERE turn_id = ?",
+            (context.turn_id,),
+        )
+
+    with pytest.raises(ValueError, match="claim-owned"):
+        repository.mark_failed(
+            request_id=context.request_id,
+            lease_owner="worker-phase4",
+            error_code="pipeline_failed",
+        )
+
+    assert phase4_db.query_one(
+        """SELECT r.status AS request_status, t.status AS turn_status
+           FROM requests r JOIN turns t ON t.turn_id = r.turn_id
+           WHERE r.request_id = ?""",
+        (context.request_id,),
+    ) == {"request_status": "running", "turn_status": "pending"}
+
+
 @pytest.mark.asyncio
 async def test_worker_recovers_before_first_claim(
     phase4_db,
@@ -463,6 +526,50 @@ async def test_worker_heartbeats_while_pipeline_is_running(
 
 
 @pytest.mark.asyncio
+async def test_worker_lost_lease_cancels_pipeline(
+    phase4_db,
+    frozen_utc_clock,
+    phase4_pipeline_double,
+):
+    base_repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        base_repository,
+        request_id="req_worker_lost_lease",
+        conversation_id="conv_worker_lost_lease",
+    )
+
+    class LostLeaseRepository:
+        def heartbeat(self, **_kwargs):
+            return False
+
+        def __getattr__(self, name):
+            return getattr(base_repository, name)
+
+    worker = _worker(
+        repository=LostLeaseRepository(),
+        pipeline=phase4_pipeline_double,
+        frozen_utc_clock=frozen_utc_clock,
+    )
+
+    await worker.start()
+    try:
+        await asyncio.wait_for(phase4_pipeline_double.started.wait(), timeout=1)
+        await asyncio.wait_for(
+            phase4_pipeline_double.cancel_seen.wait(),
+            timeout=1,
+        )
+        await _wait_for_status(phase4_db, context.request_id, "failed")
+    finally:
+        phase4_pipeline_double.release.set()
+        await worker.stop()
+
+    assert phase4_db.query_one(
+        "SELECT status, error_code FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    ) == {"status": "failed", "error_code": "lease_lost"}
+
+
+@pytest.mark.asyncio
 async def test_cancel_queued_never_calls_pipeline(
     phase4_db,
     frozen_utc_clock,
@@ -522,7 +629,9 @@ async def test_cancel_running_cancels_task_and_marks_cancelled(
         actor_id="actor_worker",
     ) == "cancelling"
 
+    cancel_started = asyncio.get_running_loop().time()
     assert await worker.cancel_running(context.request_id) is True
+    assert asyncio.get_running_loop().time() - cancel_started < 0.5
     await asyncio.wait_for(phase4_pipeline_double.cancel_seen.wait(), timeout=1)
     await worker.stop()
 
@@ -534,6 +643,63 @@ async def test_cancel_running_cancels_task_and_marks_cancelled(
     assert row["cancelled_at"] == frozen_utc_clock.now().isoformat()
     assert "chat_request_cancelled" in [event[0] for event in emitter.events]
     assert "chat_request_completed" not in [event[0] for event in emitter.events]
+
+
+@pytest.mark.asyncio
+async def test_cancel_running_returns_when_pipeline_defers_cancellation(
+    phase4_db,
+    frozen_utc_clock,
+):
+    repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        repository,
+        request_id="req_worker_deferred_cancel",
+        conversation_id="conv_worker_deferred_cancel",
+    )
+
+    class Pipeline:
+        def __init__(self):
+            self.started = asyncio.Event()
+            self.cancel_seen = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def handle(self, *_args, **_kwargs):
+            self.started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.cancel_seen.set()
+                await self.release.wait()
+                raise
+
+    pipeline = Pipeline()
+    worker = _worker(
+        repository=repository,
+        pipeline=pipeline,
+        frozen_utc_clock=frozen_utc_clock,
+    )
+
+    await worker.start()
+    await asyncio.wait_for(pipeline.started.wait(), timeout=1)
+    assert repository.request_cancel(
+        request_id=context.request_id,
+        actor_id="actor_worker",
+    ) == "cancelling"
+    cancel_call = asyncio.create_task(worker.cancel_running(context.request_id))
+    await asyncio.wait_for(pipeline.cancel_seen.wait(), timeout=1)
+    try:
+        done, _pending = await asyncio.wait({cancel_call}, timeout=0.5)
+        assert cancel_call in done
+        assert cancel_call.result() is True
+        assert phase4_db.query_one(
+            "SELECT status FROM requests WHERE request_id = ?",
+            (context.request_id,),
+        )["status"] == "cancelling"
+    finally:
+        pipeline.release.set()
+        await asyncio.gather(cancel_call, return_exceptions=True)
+        await _wait_for_status(phase4_db, context.request_id, "cancelled")
+        await worker.stop()
 
 
 @pytest.mark.asyncio
@@ -620,6 +786,7 @@ async def test_stop_does_not_masquerade_as_user_cancel(
         request_id="req_worker_stop_running",
         conversation_id="conv_worker_stop",
     )
+    frozen_utc_clock.advance(1)
     queued = _submit(
         repository,
         request_id="req_worker_stop_queued",
@@ -643,6 +810,243 @@ async def test_stop_does_not_masquerade_as_user_cancel(
     }
     assert rows[running.request_id] == ("failed", "worker_stopped")
     assert rows[queued.request_id] == ("queued", None)
+
+
+@pytest.mark.asyncio
+async def test_stop_marks_cancelling_as_worker_stopped(
+    phase4_db,
+    frozen_utc_clock,
+    phase4_pipeline_double,
+):
+    repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        repository,
+        request_id="req_worker_stop_cancelling",
+        conversation_id="conv_worker_stop_cancelling",
+    )
+    emitter = _RecordingEmitter()
+    worker = _worker(
+        repository=repository,
+        pipeline=phase4_pipeline_double,
+        frozen_utc_clock=frozen_utc_clock,
+        emit=emitter,
+    )
+
+    await worker.start()
+    await asyncio.wait_for(phase4_pipeline_double.started.wait(), timeout=1)
+    assert repository.request_cancel(
+        request_id=context.request_id,
+        actor_id="actor_worker",
+    ) == "cancelling"
+    await worker.stop()
+
+    assert phase4_db.query_one(
+        "SELECT status, error_code FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    ) == {"status": "failed", "error_code": "worker_stopped"}
+    event_types = [event[0] for event in emitter.events]
+    assert "chat_request_failed" in event_types
+    assert "chat_request_cancelled" not in event_types
+
+
+@pytest.mark.asyncio
+async def test_stop_overrides_deferred_user_cancellation(
+    phase4_db,
+    frozen_utc_clock,
+):
+    repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        repository,
+        request_id="req_worker_stop_deferred_cancel",
+        conversation_id="conv_worker_stop_deferred_cancel",
+    )
+
+    class Pipeline:
+        def __init__(self):
+            self.started = asyncio.Event()
+            self.cancel_seen = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def handle(self, *_args, **_kwargs):
+            self.started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.cancel_seen.set()
+                await self.release.wait()
+                raise
+
+    pipeline = Pipeline()
+    worker = _worker(
+        repository=repository,
+        pipeline=pipeline,
+        frozen_utc_clock=frozen_utc_clock,
+    )
+
+    await worker.start()
+    await asyncio.wait_for(pipeline.started.wait(), timeout=1)
+    assert repository.request_cancel(
+        request_id=context.request_id,
+        actor_id="actor_worker",
+    ) == "cancelling"
+    cancel_call = asyncio.create_task(worker.cancel_running(context.request_id))
+    await asyncio.wait_for(pipeline.cancel_seen.wait(), timeout=1)
+    try:
+        await worker.stop()
+    finally:
+        pipeline.release.set()
+        await asyncio.gather(cancel_call, return_exceptions=True)
+
+    assert phase4_db.query_one(
+        "SELECT status, error_code FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    ) == {"status": "failed", "error_code": "worker_stopped"}
+
+
+@pytest.mark.asyncio
+async def test_stop_before_execution_starts_marks_worker_stopped(
+    phase4_db,
+    frozen_utc_clock,
+    phase4_pipeline_double,
+):
+    base_repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        base_repository,
+        request_id="req_worker_stop_before_start",
+        conversation_id="conv_worker_stop_before_start",
+    )
+    claimed = asyncio.Event()
+
+    class ClaimSignalRepository:
+        def claim_next(self, **kwargs):
+            result = base_repository.claim_next(**kwargs)
+            if result is not None:
+                claimed.set()
+            return result
+
+        def __getattr__(self, name):
+            return getattr(base_repository, name)
+
+    worker = _worker(
+        repository=ClaimSignalRepository(),
+        pipeline=phase4_pipeline_double,
+        frozen_utc_clock=frozen_utc_clock,
+    )
+
+    await worker.start()
+
+    async def stop_after_claim():
+        await claimed.wait()
+        await worker.stop()
+
+    await asyncio.wait_for(
+        asyncio.create_task(stop_after_claim()),
+        timeout=1,
+    )
+
+    assert phase4_pipeline_double.started.is_set() is False
+    assert phase4_db.query_one(
+        "SELECT status, error_code FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    ) == {"status": "failed", "error_code": "worker_stopped"}
+
+
+@pytest.mark.asyncio
+async def test_stop_overrides_prestart_user_cancellation(
+    phase4_db,
+    frozen_utc_clock,
+):
+    repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        repository,
+        request_id="req_worker_stop_prestart_cancel",
+        conversation_id="conv_worker_stop_prestart_cancel",
+    )
+    holder = {}
+    stopped = asyncio.Event()
+
+    async def stop_worker():
+        await holder["worker"].stop()
+        stopped.set()
+
+    def cancel_and_stop_from_running_event(event_type, **_payload):
+        if event_type != "chat_request_running":
+            return
+        assert repository.request_cancel(
+            request_id=context.request_id,
+            actor_id="actor_worker",
+        ) == "cancelling"
+        holder["worker"]._running_tasks[context.request_id].cancel()
+        asyncio.create_task(stop_worker())
+
+    class Pipeline:
+        async def handle(self, *_args, **_kwargs):
+            raise AssertionError("pipeline must not start")
+
+    worker = _worker(
+        repository=repository,
+        pipeline=Pipeline(),
+        frozen_utc_clock=frozen_utc_clock,
+        emit=cancel_and_stop_from_running_event,
+    )
+    holder["worker"] = worker
+
+    await worker.start()
+    await asyncio.wait_for(stopped.wait(), timeout=1)
+
+    assert phase4_db.query_one(
+        "SELECT status, error_code FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    ) == {"status": "failed", "error_code": "worker_stopped"}
+
+
+@pytest.mark.asyncio
+async def test_cancel_before_execution_starts_closes_request(
+    phase4_db,
+    frozen_utc_clock,
+):
+    repository = _repository(phase4_db, frozen_utc_clock)
+    context = _submit(
+        repository,
+        request_id="req_worker_cancel_before_start",
+        conversation_id="conv_worker_cancel_before_start",
+    )
+    holder = {}
+
+    def cancel_from_running_event(event_type, **_payload):
+        if event_type != "chat_request_running":
+            return
+        assert repository.request_cancel(
+            request_id=context.request_id,
+            actor_id="actor_worker",
+        ) == "cancelling"
+        holder["worker"]._running_tasks[context.request_id].cancel()
+
+    class Pipeline:
+        async def handle(self, *_args, **_kwargs):
+            raise AssertionError("pipeline must not start")
+
+    worker = _worker(
+        repository=repository,
+        pipeline=Pipeline(),
+        frozen_utc_clock=frozen_utc_clock,
+        emit=cancel_from_running_event,
+    )
+    holder["worker"] = worker
+
+    await worker.start()
+    try:
+        await _wait_for_status(phase4_db, context.request_id, "cancelled")
+    finally:
+        await worker.stop()
+
+    assert phase4_db.query_one(
+        "SELECT status, cancelled_at FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    ) == {
+        "status": "cancelled",
+        "cancelled_at": frozen_utc_clock.now().isoformat(),
+    }
 
 
 @pytest.mark.asyncio

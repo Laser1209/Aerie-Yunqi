@@ -19,6 +19,7 @@ class ContextBuilder:
         self.memory = memory
         self.knowledge = knowledge
         self._persona_mgr = get_persona_manager()
+        self._last_context_audit: dict[str, Any] = {"enabled": False}
 
     def build(
         self,
@@ -31,6 +32,11 @@ class ContextBuilder:
         reply_to: dict | None = None,
         attachments: list[dict] | None = None,
         time_context: dict | None = None,
+        actor_id: str | None = None,
+        channel: str | None = None,
+        channel_account_id: str | None = None,
+        context_budget_enabled: bool = False,
+        context_budget: dict | None = None,
     ) -> list[dict]:
         """Build message list for LLM based on route mode.
 
@@ -46,6 +52,19 @@ class ContextBuilder:
         """
         messages: list[dict] = []
         persona = self._persona_mgr.get_active()
+        budget_cfg = self._context_budget_config(context_budget)
+        context_audit: dict[str, Any] = {
+            "enabled": bool(context_budget_enabled),
+            "actor_id": actor_id,
+            "channel": channel,
+            "channel_account_id": channel_account_id,
+            "memory_hits": 0,
+            "knowledge_hits": 0,
+            "history_messages": 0,
+            "merged_history_messages": 0,
+            "dropped_history_messages": 0,
+            "estimated_tokens": 0,
+        }
 
         system = self._build_system_prompt(persona, route_mode)
         if route_mode in ("FULL", "AUTO") and time_context:
@@ -125,6 +144,17 @@ class ContextBuilder:
                         f"{threshold:.0f}（{pc:.0f}%）\n"
                     )
 
+        if context_budget_enabled and route_mode in ("FULL", "AUTO"):
+            retrieval_section, retrieval_audit = self._build_retrieval_section(
+                user_id=user_id,
+                current_msg=current_msg,
+                actor_id=actor_id,
+                budget_cfg=budget_cfg,
+            )
+            if retrieval_section:
+                system += "\n\n" + retrieval_section
+            context_audit.update(retrieval_audit)
+
         # 情绪爆发模式注入
         if eruption_info:
             slot_name = eruption_info.get("slot", "")
@@ -143,8 +173,14 @@ class ContextBuilder:
 
         # History
         limit = {"FULL": 8, "AUTO": 5, "BASIC": 0}.get(route_mode, 5)
+        history_for_context = history_msgs or []
+        if context_budget_enabled:
+            history_for_context, merged = self._merge_complete_turn_history(
+                history_for_context
+            )
+            context_audit["merged_history_messages"] = merged
         if history_msgs and limit > 0:
-            for h in history_msgs[-limit:]:
+            for h in history_for_context[-limit:]:
                 messages.append(
                     {
                         "role": h.get("role", "user"),
@@ -155,7 +191,222 @@ class ContextBuilder:
         # Current user message
         messages.append({"role": "user", "content": current_msg})
 
+        if context_budget_enabled:
+            messages, dropped, truncated = self._apply_context_budget(
+                messages,
+                max_chars=budget_cfg["max_prompt_chars"],
+            )
+            context_audit["dropped_history_messages"] = dropped
+            context_audit["truncated_system"] = truncated
+
+        context_audit["history_messages"] = max(len(messages) - 2, 0)
+        context_audit["total_chars"] = sum(
+            len(item.get("content", "")) for item in messages
+        )
+        context_audit["system_prompt_chars"] = (
+            len(messages[0].get("content", "")) if messages else 0
+        )
+        context_audit["estimated_tokens"] = self._estimate_tokens(
+            "\n".join(item.get("content", "") for item in messages)
+        )
+        self._last_context_audit = context_audit
         return messages
+
+    def get_last_context_audit(self) -> dict[str, Any]:
+        return dict(self._last_context_audit)
+
+    # ── Phase 06 · Context Budget helpers ──────────────────
+
+    @staticmethod
+    def _context_budget_config(config: dict | None) -> dict[str, int]:
+        cfg = {
+            "memory_limit": 3,
+            "knowledge_limit": 3,
+            "max_item_chars": 360,
+            "max_prompt_chars": 12000,
+        }
+        if isinstance(config, dict):
+            for key in list(cfg):
+                value = config.get(key)
+                if isinstance(value, int) and value > 0:
+                    cfg[key] = value
+        return cfg
+
+    def _build_retrieval_section(
+        self,
+        *,
+        user_id: int,
+        current_msg: str,
+        actor_id: str | None,
+        budget_cfg: dict[str, int],
+    ) -> tuple[str, dict[str, Any]]:
+        memory_hits = self._retrieve_memories(
+            user_id=user_id,
+            current_msg=current_msg,
+            actor_id=actor_id,
+            limit=budget_cfg["memory_limit"],
+        )
+        knowledge_hits = self._retrieve_knowledge(
+            current_msg=current_msg,
+            limit=budget_cfg["knowledge_limit"],
+        )
+
+        sections: list[str] = []
+        if memory_hits:
+            lines = []
+            for row in memory_hits:
+                memory_type = row.get("memory_type", "memory")
+                importance = row.get("importance", "")
+                content = self._clip(
+                    row.get("content", ""),
+                    budget_cfg["max_item_chars"],
+                )
+                lines.append(f"- [{memory_type}·{importance}] {content}")
+            sections.append("**长期记忆 / Long-term Memory**：\n" + "\n".join(lines))
+
+        if knowledge_hits:
+            lines = []
+            for row in knowledge_hits:
+                category = row.get("category", "knowledge")
+                title = row.get("title", "untitled")
+                content = self._clip(
+                    row.get("content", ""),
+                    budget_cfg["max_item_chars"],
+                )
+                lines.append(f"- [{category}] {title}：{content}")
+            sections.append("**知识库 / Knowledge**：\n" + "\n".join(lines))
+
+        return "\n\n".join(sections), {
+            "memory_hits": len(memory_hits),
+            "knowledge_hits": len(knowledge_hits),
+        }
+
+    def _retrieve_memories(
+        self,
+        *,
+        user_id: int,
+        current_msg: str,
+        actor_id: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if not self.memory:
+            return []
+        retrieve = getattr(self.memory, "retrieve", None)
+        if callable(retrieve):
+            try:
+                hits = retrieve(
+                    user_id,
+                    current_msg,
+                    limit,
+                    actor_id=actor_id,
+                )
+                return [dict(row) for row in (hits or [])[:limit]]
+            except Exception:
+                logger.debug("long-term memory retrieve failed", exc_info=True)
+        return []
+
+    def _retrieve_knowledge(
+        self,
+        *,
+        current_msg: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if not self.knowledge:
+            return []
+        search = getattr(self.knowledge, "search", None)
+        if callable(search):
+            try:
+                hits = search(current_msg, limit=limit)
+                return [dict(row) for row in (hits or [])[:limit]]
+            except Exception:
+                logger.debug("knowledge search failed", exc_info=True)
+        return []
+
+    @staticmethod
+    def _merge_complete_turn_history(
+        history_msgs: list[dict],
+    ) -> tuple[list[dict[str, Any]], int]:
+        merged: list[dict[str, Any]] = []
+        merge_count = 0
+        for row in history_msgs:
+            role = row.get("role", "user")
+            content = row.get("content", "")
+            current = dict(row)
+            current["role"] = role
+            current["content"] = content
+            if (
+                role == "assistant"
+                and merged
+                and merged[-1].get("role") == "assistant"
+                and ContextBuilder._same_assistant_response(merged[-1], row)
+            ):
+                merged[-1]["content"] = (
+                    str(merged[-1].get("content", ""))
+                    + "\n"
+                    + str(content)
+                )
+                merge_count += 1
+            else:
+                merged.append(current)
+        return merged, merge_count
+
+    @staticmethod
+    def _same_assistant_response(
+        previous: dict[str, Any],
+        current: dict[str, Any],
+    ) -> bool:
+        previous_group = previous.get("response_group_id")
+        current_group = current.get("response_group_id")
+        if previous_group and current_group:
+            return previous_group == current_group
+        previous_turn = previous.get("turn_id")
+        current_turn = current.get("turn_id")
+        if previous_turn and current_turn:
+            return previous_turn == current_turn
+        return True
+
+    @staticmethod
+    def _apply_context_budget(
+        messages: list[dict],
+        *,
+        max_chars: int,
+    ) -> tuple[list[dict], int, bool]:
+        if max_chars <= 0:
+            return messages, 0, False
+
+        kept = [dict(item) for item in messages]
+        dropped = 0
+
+        def total_chars() -> int:
+            return sum(len(item.get("content", "")) for item in kept)
+
+        # Keep system + current user first, then drop oldest history.
+        while len(kept) > 2 and total_chars() > max_chars:
+            kept.pop(1)
+            dropped += 1
+
+        truncated = False
+        if len(kept) >= 2 and total_chars() > max_chars:
+            user_chars = len(kept[-1].get("content", ""))
+            allowance = max(max_chars - user_chars - 1, 0)
+            system = kept[0].get("content", "")
+            if allowance and len(system) > allowance:
+                kept[0]["content"] = system[:allowance] + "…"
+                truncated = True
+        return kept, dropped, truncated
+
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        if not text:
+            return 0
+        return max(1, (len(text) + 3) // 4)
+
+    @staticmethod
+    def _clip(value: Any, max_chars: int) -> str:
+        text = str(value or "")
+        if len(text) <= max_chars:
+            return text
+        return text[:max_chars] + "…"
 
     # ── 内部构建方法 ──────────────────────────────
 

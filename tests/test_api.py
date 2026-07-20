@@ -52,6 +52,12 @@ with patch("core.companion.get_companion", return_value=mock_companion):
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _use_mock_companion(monkeypatch):
+    monkeypatch.setattr(api_server, "get_companion", lambda: mock_companion)
+    yield
+
+
 class TestHealthEndpoint:
     """Test GET /api/health."""
 

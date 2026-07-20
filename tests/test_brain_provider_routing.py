@@ -46,6 +46,26 @@ async def test_compose_brief_keeps_openai_for_article_generation(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_disable_model_calls_returns_local_stub_without_provider_call(
+    monkeypatch,
+):
+    monkeypatch.setenv("AERIE_DISABLE_MODEL_CALLS", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    brain = Brain()
+
+    async def fail_provider_call(*args, **kwargs):
+        raise AssertionError("provider should not be called")
+
+    monkeypatch.setattr(brain, "_call_provider", fail_provider_call)
+
+    result = await brain.chat([{"role": "user", "content": "smoke"}])
+
+    assert result.provider == "disabled"
+    assert result.model == "aerie-local-smoke-stub"
+    assert result.text
+
+
+@pytest.mark.asyncio
 async def test_summarize_news_batch_keeps_openai_for_article_generation(monkeypatch):
     brain = Brain()
     captured = {}

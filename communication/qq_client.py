@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import socket
 import uuid
@@ -57,6 +58,15 @@ def _port_is_open(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
+def _qq_disabled_by_env() -> bool:
+    return os.environ.get("AERIE_DISABLE_QQ", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 class QQClient:
     def __init__(self, config: dict) -> None:
         self.host = "127.0.0.1"
@@ -81,6 +91,7 @@ class QQClient:
         # R9.0+: state machine + change callbacks
         self._state = STATE_DISCONNECTED
         self._state_handlers: list[StateHandler] = []
+        self._disabled = _qq_disabled_by_env()
 
     def set_whitelist(self, whitelist_manager) -> None:
         """设置白名单管理器。"""
@@ -163,6 +174,8 @@ class QQClient:
         this instead of a fixed ``sleep`` so they don't fire while NapCat
         is still handshaking with Tencent servers.
         """
+        if self._disabled:
+            return False
         if self.is_logged_in:
             return True
         try:
@@ -176,6 +189,11 @@ class QQClient:
 
     async def connect(self) -> None:
         """Connect to NapCat WS. Does NOT start NapCat — just waits for port."""
+        if self._disabled:
+            logger.info("QQ client disabled by AERIE_DISABLE_QQ")
+            self._running = False
+            self._set_state(STATE_DISCONNECTED)
+            return
         self._running = True
         url = f"ws://{self.host}:{self.port}"
 
@@ -291,6 +309,9 @@ class QQClient:
         self, user_id: int, content: str, render_mode: str = "plain"
     ) -> bool:
         """Send a private message via NapCat OneBot11 API."""
+        if self._disabled:
+            logger.info("QQ send skipped because AERIE_DISABLE_QQ is enabled")
+            return False
         if not self.is_connected:
             logger.warning("Cannot send: QQ WS not connected")
             return False

@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import time
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,14 @@ from core.companion import get_companion
 from core.database import Database
 from core.napcat_launcher import get_launcher
 from core.chat_events import emit
+from core.chat_request_service import (
+    InvalidChatInput,
+    QueueUnavailable,
+    RequestConflict,
+    RequestNotFound,
+    RequestStatusView,
+)
+from core.feature_flags import FeatureFlags
 from core.token_tracker import get_token_tracker
 from core.cognition import CognitionEngine
 from core.event_stream import stream as event_stream_generator
@@ -388,26 +397,111 @@ async def system_reload_config() -> dict:
 
 # ── Chat ───────────────────────────────────────────
 
+def _chat_request_queue_requested(comp: Any) -> bool:
+    requested = getattr(comp, "chat_request_queue_requested", None)
+    if isinstance(requested, bool):
+        return requested
+    flags = getattr(comp, "feature_flags", None)
+    is_enabled = getattr(flags, "is_enabled", None)
+    if not callable(is_enabled):
+        return False
+    try:
+        return is_enabled("chat_request_queue_v1") is True
+    except Exception:
+        return False
+
+
+def _chat_request_service_or_error(comp: Any):
+    if getattr(comp, "chat_request_queue_ready", False) is not True:
+        error = getattr(comp, "chat_request_queue_error", None)
+        if not isinstance(error, str) or not error:
+            error = "queue_dependencies_unavailable"
+        return None, JSONResponse({"error": error}, status_code=503)
+    service = getattr(comp, "chat_request_service", None)
+    if service is None:
+        return None, JSONResponse(
+            {"error": "queue_dependencies_unavailable"},
+            status_code=503,
+        )
+    return service, None
+
+
+def _chat_request_view_response(
+    view: RequestStatusView,
+    *,
+    status_code: int = 200,
+) -> JSONResponse:
+    return JSONResponse(asdict(view), status_code=status_code)
+
+
+def _chat_request_error_response(exc: Exception) -> JSONResponse:
+    if isinstance(exc, RequestNotFound):
+        return JSONResponse({"error": exc.error_code}, status_code=404)
+    if isinstance(exc, RequestConflict):
+        payload = {"error": exc.error_code}
+        if exc.status is not None:
+            payload["status"] = exc.status
+        return JSONResponse(payload, status_code=409)
+    if isinstance(exc, QueueUnavailable):
+        return JSONResponse({"error": exc.error_code}, status_code=503)
+    if isinstance(exc, InvalidChatInput):
+        return JSONResponse({"error": exc.error_code}, status_code=400)
+    raise exc
+
 @app.post("/api/chat/send")
-async def chat_send(request: Request) -> dict:
+async def chat_send(request: Request):
     body = await request.json()
-    text = (body.get("text") or body.get("content") or "").strip()
+    raw_text = body.get("text")
+    if raw_text is None:
+        raw_text = body.get("content")
+    text = raw_text if isinstance(raw_text, str) else ""
+    attachments = body.get("attachments") or []
+
+    comp = get_companion()
+    if not comp:
+        return JSONResponse({"error": "backend not ready"}, status_code=503)
+
+    try:
+        reply_to_id = int(body.get("reply_to_id", 0) or 0)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "invalid_message"}, status_code=400)
+
+    if _chat_request_queue_requested(comp):
+        service, error = _chat_request_service_or_error(comp)
+        if error is not None:
+            return error
+        try:
+            view = service.submit(
+                text=text,
+                attachments=attachments,
+                reply_to_id=reply_to_id,
+                user_id=body.get("user_id"),
+            )
+        except (
+            InvalidChatInput,
+            QueueUnavailable,
+            RequestConflict,
+            RequestNotFound,
+        ) as exc:
+            return _chat_request_error_response(exc)
+        return _chat_request_view_response(view, status_code=202)
+
+    text = text.strip()
     if not text:
-        return JSONResponse({"error": "empty message"}, status_code=400)
+        return JSONResponse({"error": "empty_message"}, status_code=400)
 
     user_id = body.get("user_id")
     if user_id is None:
         user_id = get_master_qq()
     else:
-        user_id = int(user_id)
-
-    comp = get_companion()
-    if not comp or not comp.pipeline:
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "invalid_message"}, status_code=400)
+    if not getattr(comp, "pipeline", None):
         return JSONResponse({"error": "backend not ready"}, status_code=503)
 
     # Phase 4: quote + attachments
-    reply_to_id = int(body.get("reply_to_id", 0) or 0)
-    attachments = body.get("attachments") or []
 
     # Block-3 R0.3: enrich attachments with extracted markdown (best-effort)
     if attachments:
@@ -449,6 +543,76 @@ async def chat_send(request: Request) -> dict:
     if result.get("persist_error"):
         response["persist_error"] = result["persist_error"]
     return response
+
+
+def _request_endpoint_service():
+    comp = get_companion()
+    if not comp:
+        return None, JSONResponse({"error": "backend not ready"}, status_code=503)
+    service, error = _chat_request_service_or_error(comp)
+    if error is not None:
+        return None, error
+    return service, None
+
+
+@app.get("/api/chat/requests/{request_id}")
+async def chat_request_get(
+    request_id: str,
+    user_id: int | None = Query(default=None),
+):
+    service, error = _request_endpoint_service()
+    if error is not None:
+        return error
+    try:
+        view = service.get(request_id=request_id, user_id=user_id)
+    except (
+        InvalidChatInput,
+        QueueUnavailable,
+        RequestConflict,
+        RequestNotFound,
+    ) as exc:
+        return _chat_request_error_response(exc)
+    return _chat_request_view_response(view)
+
+
+@app.post("/api/chat/requests/{request_id}/cancel")
+async def chat_request_cancel(
+    request_id: str,
+    user_id: int | None = Query(default=None),
+):
+    service, error = _request_endpoint_service()
+    if error is not None:
+        return error
+    try:
+        view = await service.cancel(request_id=request_id, user_id=user_id)
+    except (
+        InvalidChatInput,
+        QueueUnavailable,
+        RequestConflict,
+        RequestNotFound,
+    ) as exc:
+        return _chat_request_error_response(exc)
+    return _chat_request_view_response(view)
+
+
+@app.post("/api/chat/requests/{request_id}/retry")
+async def chat_request_retry(
+    request_id: str,
+    user_id: int | None = Query(default=None),
+):
+    service, error = _request_endpoint_service()
+    if error is not None:
+        return error
+    try:
+        view = service.retry(request_id=request_id, user_id=user_id)
+    except (
+        InvalidChatInput,
+        QueueUnavailable,
+        RequestConflict,
+        RequestNotFound,
+    ) as exc:
+        return _chat_request_error_response(exc)
+    return _chat_request_view_response(view, status_code=202)
 
 
 @app.get("/api/chat/history")
@@ -885,8 +1049,25 @@ async def events_stream(request: Request):
     cognition_committed / decision_made). Includes a 15s heartbeat
     comment to keep the connection alive through proxies.
     """
+    stream_kwargs: dict[str, Any] = {}
+    try:
+        stream_v1 = FeatureFlags().is_enabled("chat_stream_v1")
+    except Exception:
+        stream_v1 = False
+    if stream_v1:
+        last_event_id = (
+            request.headers.get("last-event-id")
+            or request.query_params.get("last_event_id")
+            or request.query_params.get("lastEventId")
+        )
+        stream_kwargs = {
+            "last_event_id": last_event_id,
+            "replay": True,
+            "include_event_id": True,
+        }
+
     async def gen():
-        async for line in event_stream_generator():
+        async for line in event_stream_generator(**stream_kwargs):
             if await request.is_disconnected():
                 break
             yield line

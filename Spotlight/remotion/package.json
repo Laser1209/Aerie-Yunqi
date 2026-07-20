@@ -1,0 +1,31 @@
+{
+  "name": "aerie-spotlight-backgrounds",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "node scripts/remotion.mjs studio src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "video:render": "npm run video:render:features && npm run video:render:architecture && npm run video:render:journal && npm run video:render:download",
+    "video:render:features": "node scripts/remotion.mjs render src/index.ts Features ../public/videos/features.mp4 --codec=h264 --pixel-format=yuv420p --crf=20 --muted --overwrite",
+    "video:render:architecture": "node scripts/remotion.mjs render src/index.ts Architecture ../public/videos/architecture.mp4 --codec=h264 --pixel-format=yuv420p --crf=20 --muted --overwrite",
+    "video:render:journal": "node scripts/remotion.mjs render src/index.ts Journal ../public/videos/journal.mp4 --codec=h264 --pixel-format=yuv420p --crf=20 --muted --overwrite",
+    "video:render:download": "node scripts/remotion.mjs render src/index.ts Download ../public/videos/download.mp4 --codec=h264 --pixel-format=yuv420p --crf=20 --muted --overwrite",
+    "video:still": "npm run video:still:features && npm run video:still:architecture && npm run video:still:journal && npm run video:still:download",
+    "video:still:features": "node scripts/remotion.mjs still src/index.ts Features render/stills/features.png --frame=150 --overwrite",
+    "video:still:architecture": "node scripts/remotion.mjs still src/index.ts Architecture render/stills/architecture.png --frame=150 --overwrite",
+    "video:still:journal": "node scripts/remotion.mjs still src/index.ts Journal render/stills/journal.png --frame=150 --overwrite",
+    "video:still:download": "node scripts/remotion.mjs still src/index.ts Download render/stills/download.png --frame=150 --overwrite"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.494"
+  },
+  "devDependencies": {
+    "@remotion/cli": "4.0.494",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "typescript": "5.7.3"
+  }
+}

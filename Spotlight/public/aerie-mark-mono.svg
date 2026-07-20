@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Aerie monochrome mark</title>
+  <desc id="desc">Monochrome Aerie mark for video and reduced-size contexts.</desc>
+  <path d="M22 78 47 18l9-10 22 70" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
+  <path d="M30 60c13 12 27 10 40-5" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="6"/>
+  <path d="m56 42 24-24" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="3"/>
+  <circle cx="73" cy="78" r="3.5" fill="#fff"/>
+</svg>

@@ -8,7 +8,15 @@ export default function HomePage() {
   return (
     <PageShell
       videoSrc={video}
-      videoClassName="absolute left-1/2 top-0 h-[120%] w-[120%] -translate-x-1/2 object-cover object-top"
+      videoClassName="absolute object-cover object-top"
+      videoStyle={{
+        left: '50%',
+        bottom: 0,
+        width: '120%',
+        maxWidth: 'none',
+        height: '120%',
+        transform: 'translateX(-50%) translateZ(0)',
+      }}
     >
       <Hero />
     </PageShell>

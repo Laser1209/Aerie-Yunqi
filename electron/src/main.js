@@ -112,18 +112,29 @@ function setStartupSettings(options) {
 }
 
 function configureBackendDataPath() {
-  BACKEND_DATA_DIR = app.isPackaged
+  const explicitDataDir = process.env.AERIE_DATA_DIR;
+  const explicitDbPath = process.env.AERIE_DB_PATH;
+  const explicitLogDir = process.env.LOG_DIR || process.env.AERIE_LOG_DIR;
+
+  BACKEND_DATA_DIR = explicitDataDir
+    ? path.resolve(explicitDataDir)
+    : app.isPackaged
     ? path.join(app.getPath("userData"), "data")
     : path.join(PROJECT_ROOT, "data");
-  BACKEND_DB_PATH = path.join(BACKEND_DATA_DIR, "aerie.db");
-  BACKEND_LOG_DIR = app.isPackaged
+  BACKEND_DB_PATH = explicitDbPath
+    ? path.resolve(explicitDbPath)
+    : path.join(BACKEND_DATA_DIR, "aerie.db");
+  BACKEND_LOG_DIR = explicitLogDir
+    ? path.resolve(explicitLogDir)
+    : app.isPackaged
     ? path.join(app.getPath("userData"), "logs")
     : path.join(PROJECT_ROOT, "logs");
 
   fs.mkdirSync(BACKEND_DATA_DIR, { recursive: true });
+  fs.mkdirSync(path.dirname(BACKEND_DB_PATH), { recursive: true });
   fs.mkdirSync(BACKEND_LOG_DIR, { recursive: true });
 
-  if (app.isPackaged && !fs.existsSync(BACKEND_DB_PATH)) {
+  if (app.isPackaged && !explicitDbPath && !fs.existsSync(BACKEND_DB_PATH)) {
     const legacyDbPath = path.join(PYTHON_ROOT, "data", "aerie.db");
     if (fs.existsSync(legacyDbPath)) {
       fs.copyFileSync(legacyDbPath, BACKEND_DB_PATH);
@@ -1191,67 +1202,79 @@ ipcMain.handle("api:upload", async (_event, opts) => {
 });
 
 // ── Phase 9 Batch 4: SSE → IPC bridge (brain center) ──
-const sseClients = new Map(); // webContents.id -> { req }
+const sseClients = new Map(); // webContents.id -> { req, closing }
+const sseCursors = new Map(); // webContents.id -> last SSE id
+
+function buildSseHeaders(lastEventId) {
+  const headers = { "Accept": "text/event-stream" };
+  if (lastEventId) {
+    headers["Last-Event-ID"] = String(lastEventId);
+  }
+  return headers;
+}
+
+function parseSseFrame(frame) {
+  if (!frame || !String(frame).trim()) return null;
+  const lines = String(frame).split(/\r?\n/);
+  const dataLines = [];
+  let id = "";
+
+  for (const line of lines) {
+    if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("id:")) {
+      id = line.slice(3).replace(/^ /, "");
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).replace(/^ /, ""));
+    }
+  }
+
+  if (!dataLines.length) return null;
+  const data = dataLines.join("\n");
+  if (!id) {
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed && parsed.event_id) id = String(parsed.event_id);
+    } catch (_) {}
+  }
+  return { id, data };
+}
+
+function findWindowByWebContentsId(senderId) {
+  return BrowserWindow.getAllWindows().find(
+    (w) => !w.isDestroyed() && w.webContents.id === senderId
+  );
+}
+
+function scheduleSseReconnect(senderId) {
+  setTimeout(() => {
+    if (findWindowByWebContentsId(senderId)) {
+      connectSseForWebContents(senderId);
+    }
+  }, 3000);
+}
+
+function forwardSseFrame(senderId, frame) {
+  const parsed = parseSseFrame(frame);
+  if (!parsed) return;
+  if (parsed.id) sseCursors.set(senderId, parsed.id);
+
+  const target = findWindowByWebContentsId(senderId);
+  if (target) {
+    try { target.webContents.send("sse:event", parsed.data); } catch (_) {}
+  }
+}
 
 ipcMain.handle("sse:subscribe", async (event) => {
   const senderId = event.sender.id;
   if (sseClients.has(senderId)) {
     return { ok: true, dedup: true };
   }
-  const req = http.request(
-    {
-      hostname: "127.0.0.1",
-      port: PY_PORT,
-      path: "/api/events/stream",
-      method: "GET",
-      headers: { "Accept": "text/event-stream" },
-    },
-    (res) => {
-      let buf = "";
-      res.on("data", (chunk) => {
-        buf += chunk.toString("utf-8");
-        let idx;
-        while ((idx = buf.indexOf("\n\n")) >= 0) {
-          const frame = buf.slice(0, idx);
-          buf = buf.slice(idx + 2);
-          if (frame.startsWith("data: ")) {
-            const payload = frame.slice(6);
-            const target = BrowserWindow.getAllWindows().find(
-              (w) => !w.isDestroyed() && w.webContents.id === senderId
-            );
-            if (target) {
-              try { target.webContents.send("sse:event", payload); } catch (_) {}
-            }
-          }
-        }
-      });
-    }
-  );
-  req.on("error", () => {
-    sseClients.delete(senderId);
-    setTimeout(() => {
-      const stillAlive = BrowserWindow.getAllWindows().some(
-        (w) => !w.isDestroyed() && w.webContents.id === senderId
-      );
-      if (stillAlive) {
-        // reconnect by re-invoking ourselves
-        const target = BrowserWindow.getAllWindows().find(
-          (w) => !w.isDestroyed() && w.webContents.id === senderId
-        );
-        if (target) {
-          // Recreate the connection
-          connectSseForWebContents(senderId);
-        }
-      }
-    }, 3000);
-  });
-  req.end();
-  sseClients.set(senderId, { req });
+  connectSseForWebContents(senderId);
   return { ok: true };
 });
 
 function connectSseForWebContents(senderId) {
-  // Internal helper: same logic as the ipcMain handler, but for auto-reconnect.
+  // Internal helper used for initial subscription and auto-reconnect.
   if (sseClients.has(senderId)) return;
   const req = http.request(
     {
@@ -1259,7 +1282,7 @@ function connectSseForWebContents(senderId) {
       port: PY_PORT,
       path: "/api/events/stream",
       method: "GET",
-      headers: { "Accept": "text/event-stream" },
+      headers: buildSseHeaders(sseCursors.get(senderId)),
     },
     (res) => {
       let buf = "";
@@ -1269,36 +1292,34 @@ function connectSseForWebContents(senderId) {
         while ((idx = buf.indexOf("\n\n")) >= 0) {
           const frame = buf.slice(0, idx);
           buf = buf.slice(idx + 2);
-          if (frame.startsWith("data: ")) {
-            const payload = frame.slice(6);
-            const target = BrowserWindow.getAllWindows().find(
-              (w) => !w.isDestroyed() && w.webContents.id === senderId
-            );
-            if (target) {
-              try { target.webContents.send("sse:event", payload); } catch (_) {}
-            }
-          }
+          forwardSseFrame(senderId, frame);
         }
+      });
+      res.on("end", () => {
+        handleSseDisconnect(senderId, client);
       });
     }
   );
   req.on("error", () => {
-    sseClients.delete(senderId);
-    setTimeout(() => {
-      const stillAlive = BrowserWindow.getAllWindows().some(
-        (w) => !w.isDestroyed() && w.webContents.id === senderId
-      );
-      if (stillAlive) connectSseForWebContents(senderId);
-    }, 3000);
+    handleSseDisconnect(senderId, client);
   });
+  const client = { req, closing: false };
   req.end();
-  sseClients.set(senderId, { req });
+  sseClients.set(senderId, client);
+}
+
+function handleSseDisconnect(senderId, client) {
+  if (!client || client.closing) return;
+  if (sseClients.get(senderId) !== client) return;
+  sseClients.delete(senderId);
+  scheduleSseReconnect(senderId);
 }
 
 ipcMain.handle("sse:unsubscribe", async (event) => {
   const senderId = event.sender.id;
   const client = sseClients.get(senderId);
   if (client) {
+    client.closing = true;
     try { client.req.destroy(); } catch (_) {}
     sseClients.delete(senderId);
   }
@@ -1309,9 +1330,11 @@ ipcMain.handle("sse:unsubscribe", async (event) => {
 app.on("web-contents-destroyed", (_event, contents) => {
   const client = sseClients.get(contents.id);
   if (client) {
+    client.closing = true;
     try { client.req.destroy(); } catch (_) {}
     sseClients.delete(contents.id);
   }
+  sseCursors.delete(contents.id);
 });
 
 // ── Window controls ───────────────────────────────

@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 — Event-Driven Push Engine 事件驱动推送引擎
+"""Aerie v0.1.0-beta.1 — Event-Driven Push Engine 事件驱动推送引擎
 
 三类主动推送触发源：
 ┌─────────────────────────────────────────────┐
@@ -296,7 +296,7 @@ class PushEventEngine:
             import random
             if event.priority >= 8 or random.random() < trigger_prob:
                 try:
-                    success = await self._scheduler.trigger_scene(scene_name)
+                    success = await self._scheduler.trigger(scene_name)
                     if success:
                         pushed = True
                         logger.info(

@@ -1139,6 +1139,11 @@ async def config_yaml_put(file: str = Query(...), request: Request = None) -> di
             {"error": "file not allowed", "allowed": sorted(_YAML_ALLOWED_FILES)},
             status_code=400,
         )
+    if file == "persona.yaml":
+        return JSONResponse(
+            {"error": "persona.yaml is read-only; update Persona Hub instead"},
+            status_code=409,
+        )
 
     raw = (await request.body()).decode("utf-8", errors="replace")
 
@@ -2116,9 +2121,9 @@ async def proactive_status() -> dict:
             if hasattr(comp, "push_scheduler") and comp.push_scheduler:
                 sched = comp.push_scheduler
                 status["scheduler"] = {
-                    "running": getattr(sched, "_running", False),
-                    "scene_count": len(getattr(sched, "scenes", {})),
-                    "daily_count": getattr(sched.policy, "daily_count", 0) if hasattr(sched, "policy") else 0,
+                    "running": sched.running,
+                    "scene_count": len(sched.scenes),
+                    "daily_count": sched.policy.daily_count,
                 }
         except Exception:
             pass
@@ -2138,7 +2143,7 @@ async def proactive_scenes() -> dict:
         scenes = {}
         if hasattr(comp, "push_scheduler") and comp.push_scheduler:
             sched = comp.push_scheduler
-            for name, cfg in getattr(sched, "scenes", {}).items():
+            for name, cfg in sched.scenes.items():
                 scenes[name] = {
                     "cron": cfg.get("cron"),
                     "trigger": cfg.get("trigger"),
@@ -2163,7 +2168,7 @@ async def proactive_trigger(request: Request) -> dict:
         from core.companion import get_companion
         comp = get_companion()
         if hasattr(comp, "push_scheduler") and comp.push_scheduler:
-            success = await comp.push_scheduler.trigger_scene(scene)
+            success = await comp.push_scheduler.trigger(scene)
             return {"success": success, "scene": scene}
         return {"success": False, "error": "scheduler not available"}
     except Exception as e:
@@ -3017,9 +3022,9 @@ async def persona_hub_list() -> dict:
 async def persona_hub_get(persona_id: str) -> dict:
     """获取指定人设的完整配置。"""
     try:
-        persona = _persona_mgr.get_persona(persona_id)
-        if not persona:
+        if not _persona_mgr.has_persona(persona_id):
             return JSONResponse({"error": "persona not found"}, status_code=404)
+        persona = _persona_mgr.get_persona(persona_id)
         return {"status": "ok", "persona": persona}
     except Exception as e:
         logger.exception("persona hub get error")
@@ -3127,8 +3132,7 @@ async def persona_hub_import(file: UploadFile = File(...)) -> dict:
     try:
         # 确保导入的 ID 不冲突
         import_id = persona_data.get("id", "imported")
-        existing = _persona_mgr.get_persona(import_id)
-        if existing:
+        if _persona_mgr.has_persona(import_id):
             persona_data["id"] = f"{import_id}_imported"
         ok, msg = _persona_mgr.create_persona(persona_data)
         if not ok:

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from core.feature_flags import FeatureFlags
-from core.migrations import MigrationRunner
+from core.migrations import MigrationRunner, phase2_identity_migrations
 
 
 # All 8 table schemas. Code-level comments are in English.
@@ -33,9 +33,26 @@ SCHEMA_SQL: list[str] = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS actors (
+        actor_id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS channel_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel TEXT NOT NULL,
+        channel_account_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL REFERENCES actors(actor_id),
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(channel, channel_account_id)
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS long_term_memory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
+        actor_id TEXT DEFAULT NULL,
         memory_type TEXT NOT NULL,          -- preference | event | fact | etc.
         content TEXT NOT NULL,
         importance INTEGER DEFAULT 5,       -- 0-10
@@ -266,6 +283,7 @@ INDEX_SQL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_todo_due_status ON todo(due_at, status);",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_todo_external_id ON todo(external_id);",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_reminder_instance ON calendar_reminder_log(instance_id);",
+    "CREATE INDEX IF NOT EXISTS idx_memory_actor_importance ON long_term_memory(actor_id, importance DESC, created_at DESC);",
 ]
 
 
@@ -316,12 +334,18 @@ class Database:
 
     def _init_schema(self) -> None:
         with self.connection() as conn:
-            if FeatureFlags().is_enabled("migration_framework_v1"):
-                MigrationRunner(conn).run([])
+            migrations_enabled = FeatureFlags().is_enabled(
+                "migration_framework_v1"
+            )
+            if migrations_enabled:
+                MigrationRunner(conn)
             for stmt in SCHEMA_SQL:
                 conn.execute(stmt)
-            # Phase 4: idempotent migrations for chat_log extensions
+            if migrations_enabled:
+                MigrationRunner(conn).run(phase2_identity_migrations())
+            # Compatibility migrations remain available when the framework flag is off.
             self._migrate_chat_log(conn)
+            self._migrate_long_term_memory(conn)
             self._migrate_todo(conn)
             # Phase 4 + Phase 9: indexes (centralized for idempotency)
             for stmt in INDEX_SQL:
@@ -341,10 +365,26 @@ class Database:
             ("recalled_at", "TEXT DEFAULT NULL"),
             ("attachments", "TEXT DEFAULT NULL"),
             ("msg_state", "TEXT DEFAULT 'normal'"),
+            ("actor_id", "TEXT DEFAULT NULL"),
+            ("channel", "TEXT DEFAULT NULL"),
+            ("channel_account_id", "TEXT DEFAULT NULL"),
         ]
         for col, decl in migrations:
             if col not in existing:
                 conn.execute(f"ALTER TABLE chat_log ADD COLUMN {col} {decl}")
+
+    def _migrate_long_term_memory(self, conn: sqlite3.Connection) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(long_term_memory)"
+            ).fetchall()
+        }
+        if "actor_id" not in existing:
+            conn.execute(
+                "ALTER TABLE long_term_memory "
+                "ADD COLUMN actor_id TEXT DEFAULT NULL"
+            )
 
     def _migrate_todo(self, conn: sqlite3.Connection) -> None:
         existing = {
@@ -413,6 +453,17 @@ class Database:
         with self.connection() as conn:
             row = conn.execute(sql, params).fetchone()
             return dict(row) if row else None
+
+    def backup_to(self, destination: str | Path) -> Path:
+        backup_path = Path(destination)
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.connection() as source:
+            target = sqlite3.connect(str(backup_path))
+            try:
+                source.backup(target)
+            finally:
+                target.close()
+        return backup_path
 
     def list_tables(self) -> list[str]:
         rows = self.query(

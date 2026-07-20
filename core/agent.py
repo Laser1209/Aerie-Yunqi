@@ -115,6 +115,11 @@ class Agent:
         self.self_evolver = companion.self_evolver
         self.router = companion.router
         self.db = companion.db
+        self.identity_resolver = getattr(
+            companion,
+            "identity_resolver",
+            None,
+        )
         self.ctx_builder = companion.pipeline.ctx_builder
 
         # 决策引擎 (Phase 9 §10.2 多层决策)
@@ -223,12 +228,19 @@ class Agent:
 
     async def perceive(self, msg: IncomingMessage) -> PerceivedInput:
         """感知阶段: 路由 → 情绪更新 → 历史 → 记忆 → 上下文构建."""
+        if getattr(self, "identity_resolver", None):
+            self.identity_resolver.resolve_message(msg)
+
         # 1. 路由
         route_mode = self.router.route(msg.user_id)
 
         # 2. 情绪更新 (异步，不阻塞主流程但我们等它完成)
         try:
-            await self.emotion.update_trajectory_async(msg.user_id, msg.content)
+            await self.emotion.update_trajectory_async(
+                msg.user_id,
+                msg.content,
+                actor_id=msg.actor_id,
+            )
         except Exception:
             logger.exception("emotion update error in perceive")
 
@@ -236,7 +248,10 @@ class Agent:
         emotion_info = {}
         eruption_info = None
         try:
-            state = self.emotion.get_state(msg.user_id)
+            state = self.emotion.get_state(
+                msg.user_id,
+                actor_id=msg.actor_id,
+            )
             emotion_info = {
                 "label": state.get("label", "neutral"),
                 "pad": state.get("pad", {}),
@@ -249,10 +264,19 @@ class Agent:
         # 4. 历史记录
         history = []
         try:
-            history = self.db.query(
-                "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 20",
-                (msg.user_id,),
-            )
+            if msg.actor_id and msg.channel:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log "
+                    "WHERE actor_id = ? AND channel = ? "
+                    "ORDER BY id DESC LIMIT 20",
+                    (msg.actor_id, msg.channel),
+                )
+            else:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log "
+                    "WHERE user_id = ? ORDER BY id DESC LIMIT 20",
+                    (msg.user_id,),
+                )
             history.reverse()
         except Exception:
             pass
@@ -485,7 +509,10 @@ class Agent:
                       thought: Thought, perceived: PerceivedInput) -> List[str]:
         """表达阶段: 情绪润色 + 屏幕动作净化 + 自检 + 语义分段."""
         # 1. 情绪润色
-        reply_text = self.emotion.tune(thought.reply_text)
+        reply_text = self.emotion.tune(
+            thought.reply_text,
+            actor_id=perceived.msg.actor_id,
+        )
 
         # 2. 屏幕隔空铁律净化
         try:
@@ -638,6 +665,9 @@ class Agent:
                     "reply_to_content": perceived.reply_to["content"] if perceived.reply_to else None,
                     "reply_to_role": perceived.reply_to["role"] if perceived.reply_to else None,
                     "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
+                    "actor_id": msg.actor_id,
+                    "channel": msg.channel,
+                    "channel_account_id": msg.channel_account_id,
                 })
             except Exception:
                 logger.exception("db insert user msg error")
@@ -666,6 +696,9 @@ class Agent:
                         "content": seg,
                         "msg_type": msg.msg_type,
                         "route_mode": perceived.route_mode,
+                        "actor_id": msg.actor_id,
+                        "channel": msg.channel,
+                        "channel_account_id": msg.channel_account_id,
                     })
                     ai_row_ids.append(rid)
             except Exception:

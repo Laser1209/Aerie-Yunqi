@@ -268,13 +268,28 @@ class CumulativeEmotionEngine:
     def scan_text(self, text: str) -> list[dict]:
         """Scan user message for emotion triggers. Returns list of eruptions."""
         eruptions = []
-        for keywords, slot_name, value in TEXT_TRIGGERS:
-            for kw in keywords:
-                if kw in text:
-                    result = self.add(slot_name, value, f"关键词: {kw}")
-                    if result:
-                        eruptions.append(result)
-                    break  # one trigger per keyword group
+        candidates = []
+        for group_index, (keywords, slot_name, value) in enumerate(TEXT_TRIGGERS):
+            matches = [
+                (text.find(kw), kw)
+                for kw in keywords
+                if text.find(kw) >= 0
+            ]
+            if matches:
+                start, keyword = min(matches, key=lambda match: (-len(match[1]), match[0]))
+                candidates.append((group_index, start, start + len(keyword), keyword, slot_name, value))
+
+        selected = []
+        for candidate in sorted(candidates, key=lambda item: (-(item[2] - item[1]), item[0])):
+            _, start, end, *_ = candidate
+            if any(start < chosen_end and end > chosen_start for _, chosen_start, chosen_end, *_ in selected):
+                continue
+            selected.append(candidate)
+
+        for group_index, _, _, keyword, slot_name, value in sorted(selected):
+            result = self.add(slot_name, value, f"关键词: {keyword}")
+            if result:
+                eruptions.append(result)
         return eruptions
 
     def daily_decay(self) -> None:

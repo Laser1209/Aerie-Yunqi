@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Emotion engine (PAD + 5 emotions + cumulative thresholds).
+"""Aerie · 云栖 v0.1.0-beta.1 — Emotion engine (PAD + 5 emotions + cumulative thresholds).
 
 Integrates:
   1. PAD 3D emotion model (Pleasure-Arousal-Dominance)
@@ -118,10 +118,12 @@ class EmotionEngine:
             "D": float(baseline_cfg.get("dominance", 0.0)),
         }
         self._state: dict[str, float] = dict(self._baseline)
+        self._states_by_actor: dict[str, dict[str, float]] = {}
         self._history: list[dict] = []
         # Pass behavior_cfg through to threshold engine so the same source
         # is used for both emotion and threshold configuration.
         self.threshold_engine: CumulativeEmotionEngine = get_threshold_engine(behavior_cfg)
+        self._thresholds_by_actor: dict[str, CumulativeEmotionEngine] = {}
 
     def update_behavior_config(self, behavior_cfg: dict) -> None:
         """Hot-reload behavior config without restarting.
@@ -156,20 +158,51 @@ class EmotionEngine:
             except Exception as e:
                 log.warning("threshold engine reload failed: %s", e)
 
+    def _runtime_state(
+        self,
+        actor_id: str | None,
+    ) -> tuple[dict[str, float], CumulativeEmotionEngine]:
+        if not actor_id:
+            return self._state, self.threshold_engine
+        state = self._states_by_actor.setdefault(
+            actor_id,
+            dict(self._baseline),
+        )
+        threshold = self._thresholds_by_actor.get(actor_id)
+        if threshold is None:
+            threshold = CumulativeEmotionEngine(self.behavior_cfg)
+            self._thresholds_by_actor[actor_id] = threshold
+        return state, threshold
+
     # ── PAD Analysis ───────────────────────────────
 
     def analyze(self, text: str) -> dict:
         """Keyword-based emotion analysis → PAD deltas."""
         p, a, d = 0.0, 0.0, 0.0
 
-        for keywords, emotion, weight in KEYWORD_DELTAS:
-            for kw in keywords:
-                if kw in text:
-                    center = self._emotion_centers.get(emotion, {"P": 0, "A": 0, "D": 0})
-                    p += center["P"] * weight * 0.15
-                    a += center["A"] * weight * 0.15
-                    d += center["D"] * weight * 0.15
-                    break
+        candidates = []
+        for group_index, (keywords, emotion, weight) in enumerate(KEYWORD_DELTAS):
+            matches = [
+                (text.find(kw), kw)
+                for kw in keywords
+                if text.find(kw) >= 0
+            ]
+            if matches:
+                start, keyword = min(matches, key=lambda match: (-len(match[1]), match[0]))
+                candidates.append((group_index, start, start + len(keyword), emotion, weight))
+
+        selected = []
+        for candidate in sorted(candidates, key=lambda item: (-(item[2] - item[1]), item[0])):
+            _, start, end, *_ = candidate
+            if any(start < chosen_end and end > chosen_start for _, chosen_start, chosen_end, *_ in selected):
+                continue
+            selected.append(candidate)
+
+        for _, _, _, emotion, weight in selected:
+            center = self._emotion_centers.get(emotion, {"P": 0, "A": 0, "D": 0})
+            p += center["P"] * weight * 0.15
+            a += center["A"] * weight * 0.15
+            d += center["D"] * weight * 0.15
 
         p = max(-0.95, min(0.95, p))
         a = max(-0.95, min(0.95, a))
@@ -177,7 +210,13 @@ class EmotionEngine:
 
         return {"pleasure": round(p, 3), "arousal": round(a, 3), "dominance": round(d, 3)}
 
-    def update_trajectory(self, user_id: int, text: str) -> None:
+    def update_trajectory(
+        self,
+        user_id: int,
+        text: str,
+        *,
+        actor_id: str | None = None,
+    ) -> None:
         """Apply PAD deltas from user text, with EMA smoothing.
 
         Synchronous keyword-only path. Kept for backward compatibility
@@ -185,9 +224,21 @@ class EmotionEngine:
         latency. New code should call update_trajectory_async().
         """
         pad = self.analyze(text)
-        self._apply_pad_and_persist(user_id, text, pad, source="keyword")
+        self._apply_pad_and_persist(
+            user_id,
+            text,
+            pad,
+            source="keyword",
+            actor_id=actor_id,
+        )
 
-    async def update_trajectory_async(self, user_id: int, text: str) -> None:
+    async def update_trajectory_async(
+        self,
+        user_id: int,
+        text: str,
+        *,
+        actor_id: str | None = None,
+    ) -> None:
         """R7.0: LLM-driven emotion trajectory update.
 
         Sequence:
@@ -212,10 +263,22 @@ class EmotionEngine:
                 "arousal":   round(0.6 * llm_pad["arousal"]   + 0.4 * kw_pad["arousal"],   3),
                 "dominance": round(0.6 * llm_pad["dominance"] + 0.4 * kw_pad["dominance"], 3),
             }
-            self._apply_pad_and_persist(user_id, text, blended, source="llm")
+            self._apply_pad_and_persist(
+                user_id,
+                text,
+                blended,
+                source="llm",
+                actor_id=actor_id,
+            )
         else:
             # Fallback to keyword-only (no brain wired, or LLM call failed).
-            self._apply_pad_and_persist(user_id, text, kw_pad, source="keyword")
+            self._apply_pad_and_persist(
+                user_id,
+                text,
+                kw_pad,
+                source="keyword",
+                actor_id=actor_id,
+            )
 
     async def infer_llm_pad(self, text: str) -> dict | None:
         """Call the LLM to extract a PAD triple from the user text.
@@ -323,7 +386,15 @@ class EmotionEngine:
         dom = max(-1.0, min(1.0, dom))
         return {"pleasure": round(p, 3), "arousal": round(a, 3), "dominance": round(dom, 3)}
 
-    def _apply_pad_and_persist(self, user_id: int, text: str, pad: dict, source: str = "keyword") -> None:
+    def _apply_pad_and_persist(
+        self,
+        user_id: int,
+        text: str,
+        pad: dict,
+        source: str = "keyword",
+        *,
+        actor_id: str | None = None,
+    ) -> None:
         """Apply PAD with EMA smoothing and persist a snapshot.
 
         R7.0: extracted from update_trajectory so the sync and async
@@ -331,13 +402,14 @@ class EmotionEngine:
         ``source`` is recorded in state_store so the dashboard can
         distinguish LLM-driven updates from keyword-only fallbacks.
         """
-        self._state["P"] = round(self._state["P"] * 0.7 + pad["pleasure"]  * 0.3, 3)
-        self._state["A"] = round(self._state["A"] * 0.7 + pad["arousal"]   * 0.3, 3)
-        self._state["D"] = round(self._state["D"] * 0.7 + pad["dominance"] * 0.3, 3)
-        self._history.append({"user_id": user_id, "text": text[:60], "source": source, **pad})
+        state, threshold_engine = self._runtime_state(actor_id)
+        state["P"] = round(state["P"] * 0.7 + pad["pleasure"]  * 0.3, 3)
+        state["A"] = round(state["A"] * 0.7 + pad["arousal"]   * 0.3, 3)
+        state["D"] = round(state["D"] * 0.7 + pad["dominance"] * 0.3, 3)
+        self._history.append({"user_id": user_id, "actor_id": actor_id, "text": text[:60], "source": source, **pad})
 
         # Scan for cumulative threshold triggers
-        eruptions = self.threshold_engine.scan_text(text)
+        eruptions = threshold_engine.scan_text(text)
         if eruptions:
             for e in eruptions:
                 logger.info("Threshold eruption: %s — %s", e["mode"], e["trigger"])
@@ -349,8 +421,8 @@ class EmotionEngine:
                 trigger = f"{source}_msg" if not eruptions else f"{source}_eruption"
                 self.state_store.snapshot(
                     user_id=user_id,
-                    state=self.get_state(user_id),
-                    threshold=self.threshold_engine.get_slots_summary(),
+                    state=self.get_state(user_id, actor_id=actor_id),
+                    threshold=threshold_engine.get_slots_summary(),
                     trigger_event=trigger,
                 )
             except Exception:
@@ -358,17 +430,18 @@ class EmotionEngine:
 
         logger.debug(
             "PAD(%s): P=%.2f A=%.2f D=%.2f",
-            source, *self._state.values(),
+            source, *state.values(),
         )
 
     # ── Emotion Classification ─────────────────────
 
-    def get_label(self) -> str:
+    def get_label(self, *, actor_id: str | None = None) -> str:
         """Classify current PAD into one of 5 basic emotions."""
-        p, a, _ = self._state["P"], self._state["A"], self._state["D"]
+        state, threshold_engine = self._runtime_state(actor_id)
+        p, a, _ = state["P"], state["A"], state["D"]
 
         # Check if eruption overrides
-        eruption = self.threshold_engine.get_active_eruption()
+        eruption = threshold_engine.get_active_eruption()
         if eruption:
             slot = eruption["slot"]
             if slot == "patience":
@@ -390,16 +463,22 @@ class EmotionEngine:
             return "fear"
         return "neutral"
 
-    def get_state(self, user_id: int = 0) -> dict:
+    def get_state(
+        self,
+        user_id: int = 0,
+        *,
+        actor_id: str | None = None,
+    ) -> dict:
         """Return full emotion state for API / context injection."""
-        label = self.get_label()
-        eruption = self.threshold_engine.get_active_eruption()
+        state, threshold_engine = self._runtime_state(actor_id)
+        label = self.get_label(actor_id=actor_id)
+        eruption = threshold_engine.get_active_eruption()
         return {
             "label": label,
-            "pad": dict(self._state),
-            "thresholds": self.threshold_engine.get_slots_summary(),
+            "pad": dict(state),
+            "thresholds": threshold_engine.get_slots_summary(),
             "eruption": eruption,
-            "panel": self.threshold_engine.get_panel_text(),
+            "panel": threshold_engine.get_panel_text(),
         }
 
     def idle_tick(self) -> dict:
@@ -423,12 +502,18 @@ class EmotionEngine:
 
     # ── Text Tuning ────────────────────────────────
 
-    def tune(self, text: str) -> str:
+    def tune(
+        self,
+        text: str,
+        *,
+        actor_id: str | None = None,
+    ) -> str:
         """Adjust reply text based on current emotion state."""
-        label = self.get_label()
+        label = self.get_label(actor_id=actor_id)
+        _, threshold_engine = self._runtime_state(actor_id)
 
         # Eruption modes first
-        eruption = self.threshold_engine.get_active_eruption()
+        eruption = threshold_engine.get_active_eruption()
         if eruption and eruption["slot"] == "patience":
             # Cold violence: very short replies
             text = text.strip()

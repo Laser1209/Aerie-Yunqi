@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Cron-based proactive push scheduler.
+"""Aerie · 云栖 v0.1.0-beta.1 — Cron-based proactive push scheduler.
 
 Parses proactive.yaml, schedules 9 scenes via cron expressions,
 and dispatches push messages through the Companion's QQ client.
@@ -459,6 +459,18 @@ class PushScheduler:
     def resume(self) -> None:
         """Resume all push scenes."""
         self.cron.resume()
+
+    @property
+    def running(self) -> bool:
+        return self.cron._running
+
+    @property
+    def scenes(self) -> dict[str, dict]:
+        return self.cron.scenes
+
+    @property
+    def policy(self) -> PushPolicy:
+        return self.cron.policy
 
     @property
     def is_paused(self) -> bool:

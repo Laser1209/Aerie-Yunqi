@@ -417,13 +417,10 @@ class FineGrainedPermissionManager:
         needs_confirm = False
         confirm_reason = ""
 
-        # v0.1.0-beta.1: SHELL_CMD and UIA_ACTION always require confirmation
-        # even in trust_mode, because they control the user's system at a deep
-        # level. trust_mode relaxes file-system confirmation only.
-        # ZERO-BREAKING: trust_mode users receive extra confirmation dialogs
-        # for Shell/UIA — a security improvement.
+        # 系统控制操作在非信任模式下始终需要确认；显式信任模式沿用
+        # “跳过二次确认”的既有合同。
         always_confirm_ops = {OperationType.SHELL_CMD, OperationType.UIA_ACTION}
-        if operation in always_confirm_ops:
+        if operation in always_confirm_ops and not self._config.trust_mode:
             needs_confirm = True
             confirm_reason = (
                 f"系统控制操作（{operation.value}）需要用户确认"

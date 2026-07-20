@@ -23,7 +23,11 @@ from core.database import Database
 from core.emotion_engine import EmotionEngine
 from core.emotion_state_store import EmotionStateStore
 from core.emotion_threshold import get_threshold_engine
+from core.feature_flags import FeatureFlags
+from core.ids import generate_id
+from core.identity import IdentityRepository, IdentityResolver
 from core.pipeline import Pipeline
+from core.push_event_engine import get_event_engine
 from core.push_scheduler import PushScheduler
 from core.qq_whitelist import QQWhitelistManager
 from core.self_evolver import SelfEvolver
@@ -46,12 +50,18 @@ class Companion:
     def __init__(self, settings: dict | None = None) -> None:
         global _COMPANION
         self.settings = settings or load_settings()
+        self.feature_flags = FeatureFlags()
 
         # R0.3.7: load centralized behavior config (single source of truth).
         self.behavior_cfg = load_behavior_config()
 
         # Data layer
         self.db = Database()
+        self.identity_repository = IdentityRepository(self.db)
+        self.identity_resolver = IdentityResolver.from_feature_flags(
+            self.identity_repository,
+            self.feature_flags,
+        )
 
         # ── Core engines (single instantiation — no duplicates) ──
         # Phase 9 Batch 1: emotion state store persists PAD + threshold
@@ -156,12 +166,15 @@ class Companion:
             self_evolver=self.self_evolver,
             cognition=self.cognition,
             settings=self.settings,
+            identity_resolver=self.identity_resolver,
         )
 
         # Push scheduler
         proactive_cfg = load_proactive_config()
         self.push_scheduler = PushScheduler(proactive_cfg)
         self.push_scheduler.set_dispatcher(self._dispatch_push)
+        self.push_event_engine = get_event_engine()
+        self.push_event_engine.bind_scheduler(self.push_scheduler)
         # R7.5+: bind a ProactiveJudge so every dispatch consults
         # 心情 / 想法 / 用户上下文 before sending.
         try:
@@ -191,6 +204,7 @@ class Companion:
             return
         self.queue.start()
         self.qq.set_message_handler(self._on_qq_message)
+        await self._start_push_event_engine()
 
         # ── Phase 1: 基础设施启动 ──
 
@@ -239,6 +253,8 @@ class Companion:
         qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
         wait_timeout = float(qq_cfg.get("startup_wait_timeout", 30.0))
         push_pause_when_offline = bool(qq_cfg.get("push_pause_when_offline", True))
+        if self.feature_flags.is_enabled("proactive_delivery_v2"):
+            push_pause_when_offline = False
 
         logger.info("[Startup] Waiting for QQ readiness (timeout=%ss)", wait_timeout)
         qq_ready = await self.qq.wait_until_ready(timeout=wait_timeout)
@@ -301,6 +317,11 @@ class Companion:
                 asyncio.create_task(self._boot_qq_greeting())
 
         elif new_state == STATE_DISCONNECTED:
+            if self.feature_flags.is_enabled("proactive_delivery_v2"):
+                logger.info(
+                    "[QQ State] QQ offline; local proactive delivery remains active"
+                )
+                return
             qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
             if bool(qq_cfg.get("push_pause_when_offline", True)):
                 if self.push_scheduler.is_paused:
@@ -439,9 +460,23 @@ class Companion:
             # Warm-up is best-effort: a missing table is not fatal.
             logger.debug("threshold warm-up skipped (no history or table missing)")
 
+    async def _start_push_event_engine(self) -> None:
+        try:
+            self.push_event_engine.bind_scheduler(self.push_scheduler)
+            await self.push_event_engine.start()
+        except Exception:
+            logger.exception("push event engine start failed; continuing without it")
+
+    async def _stop_push_event_engine(self) -> None:
+        try:
+            await self.push_event_engine.stop()
+        except Exception:
+            logger.exception("push event engine stop error")
+
     async def stop(self) -> None:
         if not self._started:
             return
+        await self._stop_push_event_engine()
         if self._push_task:
             self._push_task.cancel()
             try:
@@ -521,7 +556,7 @@ class Companion:
             brief_fetcher.save_brief(today, sections, html=md)
             # Dispatch via push scheduler (uses custom_dispatcher=brief branch).
             try:
-                await self.push_scheduler.trigger_scene("morning_brief_9am")
+                await self.push_scheduler.trigger("morning_brief_9am")
             except Exception:
                 logger.exception("boot_brief: push dispatch failed")
         except asyncio.CancelledError:
@@ -699,6 +734,10 @@ class Companion:
                 self.desire.mark_user_active()
             except Exception:
                 logger.debug("desire.mark_user_active failed")
+        try:
+            self.push_event_engine.record_user_activity()
+        except Exception:
+            logger.debug("push event activity record failed", exc_info=True)
 
     async def _run_daily_decay(self) -> None:
         """Background task: apply daily emotion decay at midnight."""
@@ -728,6 +767,26 @@ class Companion:
 
             # Small pause to avoid double-fire
             await asyncio.sleep(60)
+
+    def get_primary_emotion_state(self) -> dict:
+        """Return emotion state for the configured primary Actor."""
+        try:
+            master_id = int(
+                self.settings.get("qq", {}).get("self_qq", 0)
+            )
+        except (TypeError, ValueError):
+            master_id = 0
+        if not master_id:
+            return {}
+
+        identity = self.identity_resolver.resolve(
+            "qq",
+            str(master_id),
+        )
+        return self.emotion.get_state(
+            master_id,
+            actor_id=identity.actor_id,
+        )
 
     async def _emotion_tick_loop(self) -> None:
         """R7.5+: background tick loop for emotion dashboard liveness.
@@ -770,7 +829,9 @@ class Companion:
                 if snap_ticks >= 60:
                     snap_ticks = 0
                     try:
-                        st = self.emotion.get_state(0)
+                        st = self.get_primary_emotion_state()
+                        if not st:
+                            continue
                         self.state_store.snapshot(
                             0,
                             {"label": st.get("label"), "pad": st.get("pad")},
@@ -783,70 +844,137 @@ class Companion:
             return
 
     async def _dispatch_push(self, scene_name: str, scene_cfg: dict) -> bool:
-        """Called by PushScheduler when a scene triggers.
-
-        Generates push content via Brain and sends via QQ client.
-        Returns True on success.
-
-        R7.5+: forwards the ProactiveJudge's ``tone_hint`` and
-        ``judge_context`` to ``Brain.generate_push`` so the LLM-side
-        prompt picks up the per-scene tone (warm_with_light_flirt /
-        collapse_seeking / ...) and the screen-aware rewriting rules
-        rather than the legacy static mood. Falls back to
-        ``scene_cfg.get("mood_aware")``-driven mood when no judge
-        context is present.
-        """
+        """Generate one proactive message and deliver it independently."""
         try:
             master_id = int(self.settings.get("qq", {}).get("self_qq", 0))
             if not master_id:
-                # R7.5+: fallback to SELF_QQ env (NapCat login user).
                 import os
                 env_qq = os.environ.get("SELF_QQ") or os.environ.get("MASTER_QQ")
                 if env_qq and env_qq.isdigit() and env_qq != "123456789":
                     master_id = int(env_qq)
             if not master_id:
-                # R7.5+: last resort — ask the QQ client what its own id is
-                # (learned from OneBot11 self_id field on first inbound msg).
-                sid = getattr(self.qq, "self_id", 0)
-                if sid:
-                    master_id = int(sid)
-            if not master_id:
-                logger.warning("[Push] No master QQ configured (settings.yaml qq.self_qq + SELF_QQ env + qq.self_id all empty)")
+                master_id = int(getattr(self.qq, "self_id", 0) or 0)
+
+            delivery_v2 = self.feature_flags.is_enabled("proactive_delivery_v2")
+            if not master_id and not delivery_v2:
+                logger.warning("[Push] No master QQ configured")
                 return False
 
-            template = scene_cfg.get("template", "")
-            mood_aware = scene_cfg.get("mood_aware", False)
-
             mood = "neutral"
-            if mood_aware:
+            if scene_cfg.get("mood_aware"):
                 state = self.emotion.get_state(master_id)
                 mood = state.get("label", "neutral")
 
-            # Fill template variables
-            kwargs = {}
-            now = datetime.now()
-            kwargs["date"] = now.strftime("%Y年%m月%d日")
-
-            # R7.5+: judge-driven tone (preferred) beats mood_aware mood.
-            tone_hint = scene_cfg.get("tone_hint")
-            judge_context = scene_cfg.get("judge_context")
-
             content = await self.brain.generate_push(
-                template=template,
+                template=scene_cfg.get("template", ""),
                 mood=mood,
-                tone_hint=tone_hint,
-                judge_context=judge_context,
-                **kwargs,
+                tone_hint=scene_cfg.get("tone_hint"),
+                judge_context=scene_cfg.get("judge_context"),
+                date=datetime.now().strftime("%Y年%m月%d日"),
             )
-
             if not content:
                 return False
 
-            # Send via QQ
-            success = await self.qq.send_message(master_id, content)
-            if success:
-                logger.info("[Push] Sent scene=%s: %s", scene_name, content[:50])
-            return success
+            if not delivery_v2:
+                success = await self.qq.send_message(master_id, content)
+                if success:
+                    logger.info("[Push] Sent legacy QQ scene=%s", scene_name)
+                return success
+
+            delivered = False
+            delivery_results = {
+                "qq": "offline",
+                "desktop": "failed",
+                "notification": "failed",
+            }
+            if master_id and getattr(self.qq, "is_logged_in", False):
+                try:
+                    qq_sent = await self.qq.send_message(master_id, content)
+                    delivery_results["qq"] = "sent" if qq_sent else "failed"
+                    delivered = bool(qq_sent)
+                except Exception:
+                    delivery_results["qq"] = "failed"
+                    logger.warning("[Push] QQ delivery failed scene=%s", scene_name, exc_info=True)
+            elif not master_id:
+                delivery_results["qq"] = "skipped"
+
+            from core import chat_events
+
+            message_id: int | str = generate_id("message")
+            try:
+                message_id = self.db.insert(
+                    "chat_log",
+                    {
+                        "user_id": master_id,
+                        "role": "assistant",
+                        "content": content,
+                        "msg_type": "proactive",
+                        "route_mode": "PROACTIVE",
+                        "scene": scene_name,
+                    },
+                )
+            except Exception:
+                logger.warning(
+                    "[Push] proactive persistence failed scene=%s",
+                    scene_name,
+                    exc_info=True,
+                )
+
+            try:
+                chat_events.emit(
+                    "assistant",
+                    role="assistant",
+                    id=message_id,
+                    user_id=master_id,
+                    content=content,
+                    source="proactive",
+                    scene=scene_name,
+                    channel="desktop",
+                )
+                delivery_results["desktop"] = "queued"
+                delivered = True
+            except Exception:
+                logger.warning("[Push] desktop delivery failed scene=%s", scene_name, exc_info=True)
+
+            proactive_settings = self.settings.get("proactive", {})
+            notify_system = bool(
+                proactive_settings.get("system_notifications", True)
+            )
+            try:
+                chat_events.emit(
+                    "proactive_message",
+                    title="云栖",
+                    text=content,
+                    content=content,
+                    scene=scene_name,
+                    tone=scene_cfg.get("tone_hint"),
+                    notify_system=notify_system,
+                    channel="notification",
+                )
+                delivery_results["notification"] = (
+                    "queued" if notify_system else "disabled"
+                )
+                delivered = True
+            except Exception:
+                logger.warning("[Push] notification delivery failed scene=%s", scene_name, exc_info=True)
+
+            try:
+                chat_events.emit(
+                    "proactive_delivery",
+                    scene=scene_name,
+                    results=delivery_results,
+                    channel="delivery",
+                )
+            except Exception:
+                logger.warning(
+                    "[Push] delivery telemetry failed scene=%s",
+                    scene_name,
+                    exc_info=True,
+                )
+
+            if delivered:
+                logger.info("[Push] Delivered scene=%s", scene_name)
+            return delivered
         except Exception:
             logger.exception("[Push] dispatch error: %s", scene_name)
             return False
@@ -856,11 +984,11 @@ class Companion:
 
         Triggers idle_care scene if configured.
         """
-        self.push_scheduler.trigger("idle_care")
+        return await self.push_scheduler.trigger("idle_care")
 
-    async def check_threshold_break(self) -> None:
+    async def check_threshold_break(self) -> bool:
         """Called when cumulative emotion threshold is exceeded.
 
         Triggers emotion_comfort scene if configured.
         """
-        self.push_scheduler.trigger("emotion_comfort")
+        return await self.push_scheduler.trigger("emotion_comfort")

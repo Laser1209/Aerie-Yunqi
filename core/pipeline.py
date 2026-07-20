@@ -38,6 +38,7 @@ class Pipeline:
         decision_engine: Any = None,         # Phase 9: §10.2 multi-layer
         self_evolver: Any = None,            # Phase 9: capability gap detector
         settings: dict | None = None,
+        identity_resolver: Any = None,
     ) -> None:
         self.router = router
         self.emotion = emotion_engine
@@ -50,6 +51,7 @@ class Pipeline:
         self.cognition = cognition or CognitionEngine(db)
         self.decision_engine = decision_engine
         self.self_evolver = self_evolver
+        self.identity_resolver = identity_resolver
         self._splitter = SemanticMessageSplitter()
         # v13.9: 回复校验器（准确性 Guard + 质量 Judge）
         self.validator = ResponseValidator()
@@ -78,6 +80,9 @@ class Pipeline:
 
         Returns dict with reply info, or None if skipped (BASIC stranger).
         """
+        if self.identity_resolver:
+            self.identity_resolver.resolve_message(msg)
+
         # ══════════════════════════════════════════════
         # Phase 9: Begin cognition trace
         # ══════════════════════════════════════════════
@@ -134,7 +139,11 @@ class Pipeline:
         #    call fails or no brain is wired.
         # ══════════════════════════════════════════════
         try:
-            await self.emotion.update_trajectory_async(msg.user_id, msg.content)
+            await self.emotion.update_trajectory_async(
+                msg.user_id,
+                msg.content,
+                actor_id=msg.actor_id,
+            )
         except Exception:
             logger.exception("emotion update error")
 
@@ -145,10 +154,17 @@ class Pipeline:
         # ══════════════════════════════════════════════
         history = []
         try:
-            history = self.db.query(
-                "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 20",
-                (msg.user_id,),
-            )
+            if msg.actor_id and msg.channel:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log "
+                    "WHERE actor_id = ? AND channel = ? ORDER BY id DESC LIMIT 20",
+                    (msg.actor_id, msg.channel),
+                )
+            else:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 20",
+                    (msg.user_id,),
+                )
             history.reverse()
         except Exception:
             pass
@@ -159,7 +175,10 @@ class Pipeline:
         emotion_info = None
         eruption_info = None
         try:
-            state = self.emotion.get_state(msg.user_id)
+            state = self.emotion.get_state(
+                msg.user_id,
+                actor_id=msg.actor_id,
+            )
             emotion_info = {
                 "label": state.get("label", "neutral"),
                 "pad": state.get("pad", {}),
@@ -337,7 +356,10 @@ class Pipeline:
         # R8.1: also run OutputSelfCheck (perspective-shift / stray
         # brackets / typos) as a second line of defense.
         # ══════════════════════════════════════════════
-        reply_text = self.emotion.tune(reply_text_raw)
+        reply_text = self.emotion.tune(
+            reply_text_raw,
+            actor_id=msg.actor_id,
+        )
         try:
             from core.screen_action_sanitizer import sanitize as _sanitize_action
             reply_text = _sanitize_action(reply_text)
@@ -418,6 +440,9 @@ class Pipeline:
                 "reply_to_content": reply_to_data["content"] if reply_to_data else None,
                 "reply_to_role": reply_to_data["role"] if reply_to_data else None,
                 "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
+                "actor_id": msg.actor_id,
+                "channel": msg.channel,
+                "channel_account_id": msg.channel_account_id,
             })
         except Exception as e:
             persist_errors.append(f"user message: {e}")
@@ -450,6 +475,9 @@ class Pipeline:
                     "content": seg,
                     "msg_type": msg.msg_type,
                     "route_mode": route_mode,
+                    "actor_id": msg.actor_id,
+                    "channel": msg.channel,
+                    "channel_account_id": msg.channel_account_id,
                 })
                 ai_row_ids.append(rid)
         except Exception as e:
@@ -629,14 +657,21 @@ class Pipeline:
         """
         # 1. 情绪更新（轻量：仅关键词路径，不调 LLM PAD 以省 Token）
         try:
-            self.emotion.update_trajectory(msg.user_id, msg.content)
+            self.emotion.update_trajectory(
+                msg.user_id,
+                msg.content,
+                actor_id=msg.actor_id,
+            )
         except Exception:
             logger.exception("BASIC emotion update error")
 
         # 获取情绪状态（用于回复语气调整）
         emotion_info = None
         try:
-            state = self.emotion.get_state(msg.user_id)
+            state = self.emotion.get_state(
+                msg.user_id,
+                actor_id=msg.actor_id,
+            )
             emotion_info = {
                 "label": state.get("label", "neutral"),
                 "pad": state.get("pad", {}),
@@ -653,10 +688,17 @@ class Pipeline:
         # 2. 获取历史（精简：最近 10 条）
         history = []
         try:
-            history = self.db.query(
-                "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 10",
-                (msg.user_id,),
-            )
+            if msg.actor_id and msg.channel:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log "
+                    "WHERE actor_id = ? AND channel = ? ORDER BY id DESC LIMIT 10",
+                    (msg.actor_id, msg.channel),
+                )
+            else:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 10",
+                    (msg.user_id,),
+                )
             history.reverse()
         except Exception:
             pass
@@ -703,7 +745,10 @@ class Pipeline:
         })
 
         # 5. 情绪润色 + 自检
-        reply_text = self.emotion.tune(reply_text_raw)
+        reply_text = self.emotion.tune(
+            reply_text_raw,
+            actor_id=msg.actor_id,
+        )
         try:
             from core.screen_action_sanitizer import sanitize as _sanitize_action
             reply_text = _sanitize_action(reply_text)
@@ -762,6 +807,9 @@ class Pipeline:
                 "content": msg.content,
                 "msg_type": msg.msg_type,
                 "route_mode": route_mode,
+                "actor_id": msg.actor_id,
+                "channel": msg.channel,
+                "channel_account_id": msg.channel_account_id,
             })
         except Exception as e:
             persist_errors.append(f"user message: {e}")
@@ -777,6 +825,9 @@ class Pipeline:
                     "content": seg,
                     "msg_type": msg.msg_type,
                     "route_mode": route_mode,
+                    "actor_id": msg.actor_id,
+                    "channel": msg.channel,
+                    "channel_account_id": msg.channel_account_id,
                 })
                 ai_row_ids.append(rid)
         except Exception as e:

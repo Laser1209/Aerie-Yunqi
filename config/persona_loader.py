@@ -10,6 +10,10 @@ from typing import Any
 
 import yaml
 
+from core.feature_flags import FeatureFlags
+from core.persona_hub.legacy_projector import project_persona_to_legacy
+from core.persona_hub.persona_manager import get_persona_manager
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CONFIG_DIR = _PROJECT_ROOT / "config"
 _DATA_DIR = _PROJECT_ROOT / "data"
@@ -51,13 +55,15 @@ def load_settings() -> dict[str, Any]:
 
 
 def load_persona() -> dict[str, Any]:
-    """Load persona from config/persona.yaml."""
+    """Load the active persona through the configured compatibility source."""
     try:
+        if FeatureFlags().is_enabled("persona_hub_source_v1"):
+            return project_persona_to_legacy(get_persona_manager().get_active())
         return _load_yaml("persona.yaml") or {}
     except Exception:
         import logging
         logging.getLogger(__name__).exception(
-            "Unexpected error loading persona.yaml; returning empty dict"
+            "Unexpected error loading persona; returning empty dict"
         )
         return {}
 
@@ -202,6 +208,19 @@ def save_persona(patch: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("persona patch must be a dict")
     allowed_top = {"name", "english_name"}
     safe_patch = {k: v for k, v in patch.items() if k in allowed_top}
+    if FeatureFlags().is_enabled("persona_hub_source_v1"):
+        manager = get_persona_manager()
+        ok, result = manager.update_persona(
+            manager.get_active_id(),
+            {"basic": safe_patch},
+        )
+        if not ok:
+            raise ValueError(result)
+        return {
+            key: manager.get_active().get("basic", {}).get(key)
+            for key in allowed_top
+        }
+
     path = _CONFIG_DIR / "persona.yaml"
     current = load_persona() or {}
     persona = dict(current.get("persona") or {})

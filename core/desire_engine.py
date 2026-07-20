@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Desire Engine: 24h polling, 伊塔「想」发才发.
+"""Aerie · 云栖 v0.1.0-beta.1 — Desire Engine: 24h polling, 伊塔「想」发才发.
 
 Block-4B R2.1: 5 变量叠加 + 5min 心跳 + cooldown + 持久化.
 
@@ -227,7 +227,7 @@ class DesireEngine:
         try:
             if not self.companion or not self.companion.push_scheduler:
                 return
-            await self.companion.push_scheduler.trigger_scene(scene_name)
+            await self.companion.push_scheduler.trigger(scene_name)
         except Exception:
             logger.exception("desire trigger scene %s failed", scene_name)
 

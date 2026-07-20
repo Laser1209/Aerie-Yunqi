@@ -142,7 +142,7 @@ class ContextBuilder:
         messages.append({"role": "system", "content": system})
 
         # History
-        limit = {"FULL": 8, "AUTO": 5, "BASIC": 3}.get(route_mode, 5)
+        limit = {"FULL": 8, "AUTO": 5, "BASIC": 0}.get(route_mode, 5)
         if history_msgs and limit > 0:
             for h in history_msgs[-limit:]:
                 messages.append(
@@ -170,11 +170,13 @@ class ContextBuilder:
         if route_mode == "FULL":
             parts.append(self._build_l2_relationship(persona))
 
-        # L4 · 语言铁律（所有模式）
-        parts.append(self._build_l4_language(persona))
+        # L4 · 语言铁律（FULL / AUTO）
+        if route_mode in ("FULL", "AUTO"):
+            parts.append(self._build_l4_language(persona))
 
         # L4.5 · 表达自由（内容解放：不因道德/敏感话题自我审查）
-        parts.append(self._build_expression_freedom())
+        if route_mode in ("FULL", "AUTO"):
+            parts.append(self._build_expression_freedom())
 
         # L5 · 系统操作方法论（仅 FULL，可配置开关）
         if route_mode == "FULL" and self._operation_guide_enabled():
@@ -374,11 +376,15 @@ class ContextBuilder:
         eyes = appearance.get("eyes", "")
         archetype = personality.get("archetype", "")
         passion_level = behavior.get("passion_level_10", 9)
+        big_five = basic.get("big_five", {})
+        extraversion = big_five.get("extraversion")
 
         intro = (
             f"你是**{name}（{eng_name}）**，{age}岁女性，"
             f"{height}cm，{weight}kg。"
         )
+        if extraversion is not None:
+            intro += f"\n外向性（extraversion）：{extraversion}。"
         if hair or eyes:
             intro += f"\n{hair}，{eyes}。"
 
@@ -405,14 +411,18 @@ class ContextBuilder:
         """L2 · 关系深度层（仅 FULL mode）。"""
         rel = persona.get("relationship", {})
         basic = persona.get("basic", {})
+        behavior = persona.get("behavior", {})
         name = basic.get("name", "伊塔")
+        passion_level = behavior.get("passion_level_10", 9)
 
         rel_type = rel.get("relationship_type", "恋人")
         style = rel.get("style", "")
         intimate_terms = rel.get("user_intimate_terms", ["宝贝"])
         terms_str = "、".join(intimate_terms[:3])
 
-        text = f"**关系定位**：你们是{rel_type}。{style}\n\n"
+        text = f"**关系定位（热情度 {passion_level}/10）**：你们是{rel_type}。{style}\n\n"
+        if "四爱" in style:
+            text += "**四爱主导位**：温柔但明确地主导关系，表达直接，不许不接。\n\n"
         text += f"你习惯叫用户{terms_str}等亲昵称呼。\n\n"
 
         # 经典语录从 speech_examples 里取
@@ -433,8 +443,9 @@ class ContextBuilder:
         speech_style = personality.get("speech_style", "")
         action_tags = behavior.get("action_tags", True)
         thought_tags = behavior.get("thought_tags", True)
+        passion_level = behavior.get("passion_level_10", 9)
 
-        text = f"**语言风格**：{speech_style}\n\n"
+        text = f"**语言风格铁律（热情度 {passion_level}/10）**：{speech_style}\n\n"
 
         if behavior.get("screen_aware", True):
             text += "**屏幕隔空铁律（最高优先级）**：\n"

@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Proactive Judge.
+"""Aerie · 云栖 v0.1.0-beta.1 — Proactive Judge.
 
 R7.5: 综合判断模块。在 ``push_scheduler._dispatch`` 之前调用,
 根据"心情 + 想法 + 用户上下文"算出一个 0-100 的 score,选 scene,
@@ -193,8 +193,8 @@ class ProactiveJudge:
 
         # 1) Desire 5 变量
         try:
-            if self.companion and getattr(self.companion, "desire_engine", None):
-                state = self.companion.desire_engine.get_state() or {}
+            if self.companion and getattr(self.companion, "desire", None):
+                state = self.companion.desire.get_state() or {}
                 raw = float(state.get("score", 0.0))
                 # raw 通常是 0-100 之间
                 c["desire_score"] = max(0.0, min(100.0, raw))
@@ -227,9 +227,9 @@ class ProactiveJudge:
 
         # 3) 用户上下文 (最近消息时间)
         try:
-            if self.companion and getattr(self.companion, "desire_engine", None):
+            if self.companion and getattr(self.companion, "desire", None):
                 absence = float(
-                    self.companion.desire_engine.get_state().get(
+                    self.companion.desire.get_state().get(
                         "user_absence_hours", 0.0
                     ) or 0.0
                 )

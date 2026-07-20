@@ -720,13 +720,12 @@ async def emotion_state(user_id: int | None = None) -> dict:
 
 # ── Phase 4: Static file serving for uploads ────────────────
 
-@app.get("/uploads/{filename}")
+@app.get("/uploads/{filename:path}")
 async def serve_upload(filename: str):
     """Serve uploaded files. Restricts to uploads/ directory (no traversal)."""
-    from pathlib import Path
-    if "/" in filename or "\\" in filename or ".." in filename:
+    target = _resolve_upload_target(filename)
+    if target is None:
         return JSONResponse({"error": "invalid filename"}, status_code=400)
-    target = Path(UPLOAD_DIR) / filename
     if not target.exists() or not target.is_file():
         return JSONResponse({"error": "not found"}, status_code=404)
     return FileResponse(str(target))
@@ -741,7 +740,7 @@ UPLOAD_DIR = "uploads"
 ALLOWED_TYPES = {
     # Block-3 R0.3: full office + document coverage
     # images
-    "image/png", "image/jpeg", "image/gif",
+    "image/png", "image/jpeg", "image/gif", "image/webp",
     # plain text / data
     "text/plain", "text/html", "text/csv", "text/xml", "application/json", "application/xml",
     # pdf + office (markitdown covers all of these)
@@ -756,6 +755,40 @@ ALLOWED_TYPES = {
     "application/rtf", "application/vnd.oasis.opendocument.text",                  # .odt (markitdown via)
 }
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB
+IMAGE_UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+
+def _upload_root() -> Path:
+    return Path(UPLOAD_DIR).resolve()
+
+
+def _resolve_upload_target(filename: str) -> Path | None:
+    """Resolve an uploads-relative path without allowing traversal."""
+    if not filename or "\\" in filename or "\x00" in filename:
+        return None
+    base = _upload_root()
+    try:
+        target = (base / filename).resolve()
+    except OSError:
+        return None
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return None
+    return target
+
+
+def _image_assets_enabled() -> bool:
+    try:
+        return FeatureFlags().is_enabled("image_assets_v1")
+    except Exception:
+        logger.exception("failed to read image_assets_v1 feature flag")
+        return False
+
+
+def _is_image_upload(filename: str, content_type: str | None) -> bool:
+    suffix = Path(filename or "").suffix.lower()
+    return suffix in IMAGE_UPLOAD_EXTS or str(content_type or "").lower().startswith("image/")
 
 
 @app.post("/api/upload")
@@ -784,9 +817,23 @@ async def upload_file(request: Request) -> dict:
             )
 
         import uuid
-        from pathlib import Path
 
-        upload_path = Path(UPLOAD_DIR)
+        if _image_assets_enabled() and _is_image_upload(file.filename, file.content_type):
+            try:
+                from core.attachment_handler import process_image_upload
+
+                return process_image_upload(
+                    filename=file.filename,
+                    content=content,
+                    content_type=file.content_type or "",
+                    upload_base=_upload_root(),
+                )
+            except ValueError as e:
+                return JSONResponse({"error": str(e)}, status_code=400)
+            except RuntimeError as e:
+                return JSONResponse({"error": str(e)}, status_code=503)
+
+        upload_path = _upload_root()
         upload_path.mkdir(parents=True, exist_ok=True)
 
         ext = Path(file.filename).suffix.lower()
@@ -814,6 +861,49 @@ async def upload_types() -> dict:
         "allowed_types": sorted(ALLOWED_TYPES),
         "max_size_bytes": MAX_UPLOAD_SIZE,
     }
+
+
+@app.post("/api/upload/gc")
+async def upload_gc(request: Request) -> dict:
+    """Scan image assets, report or delete orphaned files."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if body is None:
+        body = {}
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a dict"}, status_code=400)
+
+    dry_run = bool(body.get("dry_run", True))
+    min_age_hours = body.get("min_age_hours", 24)
+    try:
+        min_age_seconds = int(float(min_age_hours) * 3600)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "invalid min_age_hours"}, status_code=400)
+    if min_age_seconds < 0:
+        return JSONResponse({"error": "min_age_hours must be non-negative"}, status_code=400)
+
+    try:
+        from core.attachment_handler import gc_image_assets
+
+        result = gc_image_assets(
+            _db,
+            upload_base=_upload_root(),
+            dry_run=dry_run,
+            min_age_seconds=min_age_seconds,
+        )
+    except Exception as e:
+        logger.exception("image asset GC failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    emit(
+        "image_assets_gc",
+        dry_run=dry_run,
+        orphan_count=result.get("orphan_count", 0),
+        deleted_count=result.get("deleted_count", 0),
+    )
+    return result
 
 
 # ── Audio Transcription (Domestic ASR) ─────────────

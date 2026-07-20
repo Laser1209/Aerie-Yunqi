@@ -17,7 +17,11 @@ import io
 import hashlib
 import json
 import logging
+import re
+import sqlite3
+import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -76,13 +80,14 @@ _IMAGE_FORMAT_TO_MIME = {
 }
 _MAX_IMAGE_PIXELS = 64_000_000
 _THUMBNAIL_SIZE = (512, 512)
+SAFE_UPLOAD_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def _image_asset_root(upload_base: str | Path) -> Path:
     base = Path(upload_base)
     if not base.is_absolute():
         base = _PROJECT_ROOT / base
-    return base.resolve().parent / ".image_assets"
+    return base.resolve() / ".image_assets"
 
 
 def _image_index_path(upload_base: str | Path) -> Path:
@@ -123,39 +128,48 @@ def _sanitize_image_bytes(raw: bytes, original_name: str) -> dict:
     if Image is None or ImageOps is None:
         raise RuntimeError("Pillow unavailable")
 
-    with Image.open(io.BytesIO(raw)) as img:
-        img = ImageOps.exif_transpose(img)
-        img.load()
-        width, height = img.size
-        if width <= 0 or height <= 0:
-            raise ValueError("invalid image dimensions")
-        if width * height > _MAX_IMAGE_PIXELS:
-            raise ValueError("image too large")
+    try:
+        with Image.open(io.BytesIO(raw)) as img:
+            try:
+                img = ImageOps.exif_transpose(img)
+                img.load()
+            except Exception as e:
+                raise ValueError("invalid image data") from e
 
-        fmt = (img.format or "").upper()
-        if fmt not in _IMAGE_FORMAT_TO_EXT:
-            suffix = Path(original_name).suffix.lower()
-            fmt = {
-                ".png": "PNG",
-                ".jpg": "JPEG",
-                ".jpeg": "JPEG",
-                ".gif": "GIF",
-                ".webp": "WEBP",
-            }.get(suffix, "PNG")
+            width, height = img.size
+            if width <= 0 or height <= 0:
+                raise ValueError("invalid image dimensions")
+            if width * height > _MAX_IMAGE_PIXELS:
+                raise ValueError("image too large")
 
-        if fmt in {"JPEG", "JPG"} and img.mode not in {"RGB", "L"}:
-            img = img.convert("RGB")
-        elif fmt == "GIF" and img.mode not in {"P", "L", "RGB"}:
-            img = img.convert("RGB")
+            fmt = (img.format or "").upper()
+            if fmt not in _IMAGE_FORMAT_TO_EXT:
+                suffix = Path(original_name).suffix.lower()
+                fmt = {
+                    ".png": "PNG",
+                    ".jpg": "JPEG",
+                    ".jpeg": "JPEG",
+                    ".gif": "GIF",
+                    ".webp": "WEBP",
+                }.get(suffix, "PNG")
 
-        cleaned = io.BytesIO()
-        img.save(cleaned, format=fmt)
-        sanitized = cleaned.getvalue()
+            if fmt in {"JPEG", "JPG"} and img.mode not in {"RGB", "L"}:
+                img = img.convert("RGB")
+            elif fmt == "GIF" and img.mode not in {"P", "L", "RGB"}:
+                img = img.convert("RGB")
 
-        thumb = img.copy()
-        thumb.thumbnail(_THUMBNAIL_SIZE)
-        thumb_buf = io.BytesIO()
-        thumb.save(thumb_buf, format="PNG")
+            cleaned = io.BytesIO()
+            img.save(cleaned, format=fmt)
+            sanitized = cleaned.getvalue()
+
+            thumb = img.copy()
+            thumb.thumbnail(_THUMBNAIL_SIZE)
+            thumb_buf = io.BytesIO()
+            thumb.save(thumb_buf, format="PNG")
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError("invalid image data") from e
 
     sha256 = hashlib.sha256(sanitized).hexdigest()
     return {
@@ -249,6 +263,158 @@ def process_image_upload(
         "url": f"/uploads/{unique_name}",
         "deduplicated": False,
         "duplicate_of": "",
+    }
+
+
+@contextmanager
+def _db_connection(database: object):
+    if isinstance(database, sqlite3.Connection):
+        yield database
+        return
+    connection = getattr(database, "connection", None)
+    if callable(connection):
+        with connection() as conn:
+            yield conn
+        return
+    raise TypeError("database must expose connection() or be a sqlite3.Connection")
+
+
+def _extract_upload_filename(value: object) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value[1:] if value.startswith("/") else value
+    if normalized.startswith("uploads/"):
+        normalized = normalized[len("uploads/") :]
+    if "/" in normalized or "\\" in normalized:
+        return None
+    if SAFE_UPLOAD_FILENAME.fullmatch(normalized) is None:
+        return None
+    return normalized
+
+
+def collect_image_asset_references(database: object) -> set[str]:
+    referenced: set[str] = set()
+    try:
+        with _db_connection(database) as conn:
+            for table in ("chat_log", "messages", "requests"):
+                try:
+                    rows = conn.execute(
+                        f"SELECT attachments FROM {table} WHERE attachments IS NOT NULL"
+                    ).fetchall()
+                except Exception:
+                    continue
+                for row in rows:
+                    raw = row[0] if row else None
+                    if not raw:
+                        continue
+                    try:
+                        payload = json.loads(raw)
+                    except Exception:
+                        continue
+                    if not isinstance(payload, list):
+                        continue
+                    for attachment in payload:
+                        if not isinstance(attachment, dict):
+                            continue
+                        for key in ("saved_as", "url"):
+                            filename = _extract_upload_filename(attachment.get(key))
+                            if filename:
+                                referenced.add(filename)
+    except TypeError:
+        return set()
+    return referenced
+
+
+def gc_image_assets(
+    database: object,
+    upload_base: str | Path = "uploads",
+    *,
+    dry_run: bool = True,
+    min_age_seconds: int = 24 * 60 * 60,
+) -> dict:
+    if min_age_seconds < 0:
+        raise ValueError("min_age_seconds must be non-negative")
+
+    base = Path(upload_base)
+    if not base.is_absolute():
+        base = _PROJECT_ROOT / base
+    base = base.resolve()
+    asset_root = _image_asset_root(base)
+
+    index = _load_image_index(base)
+    files = index.get("files", {})
+    if not isinstance(files, dict):
+        files = {}
+        index["files"] = files
+
+    referenced = collect_image_asset_references(database)
+    now = time.time()
+    orphaned: list[dict[str, str]] = []
+    scanned = 0
+
+    for digest, record in list(files.items()):
+        if not isinstance(record, dict):
+            continue
+        saved_as = record.get("saved_as")
+        if not isinstance(saved_as, str) or not saved_as.strip():
+            continue
+        scanned += 1
+        if saved_as in referenced:
+            continue
+
+        original_path = base / saved_as
+        thumb_url = record.get("thumbnail_url")
+        thumb_path = None
+        if isinstance(thumb_url, str):
+            normalized_thumb = thumb_url[1:] if thumb_url.startswith("/") else thumb_url
+            if normalized_thumb.startswith("uploads/"):
+                thumb_rel = normalized_thumb[len("uploads/") :]
+                thumb_path = base / thumb_rel
+
+        newest_mtime = 0.0
+        for candidate in (original_path, thumb_path):
+            if candidate is None:
+                continue
+            try:
+                newest_mtime = max(newest_mtime, candidate.stat().st_mtime)
+            except OSError:
+                continue
+
+        age = now - newest_mtime if newest_mtime else now
+        if age < min_age_seconds:
+            continue
+
+        orphaned.append(
+            {
+                "sha256": str(digest),
+                "saved_as": saved_as,
+            }
+        )
+
+        if dry_run:
+            continue
+
+        for candidate in (original_path, thumb_path):
+            if candidate is None:
+                continue
+            try:
+                candidate.unlink()
+            except OSError:
+                pass
+        files.pop(digest, None)
+
+    if not dry_run:
+        _save_image_index(base, index)
+
+    return {
+        "status": "ok",
+        "dry_run": dry_run,
+        "scanned": scanned,
+        "referenced_count": len(referenced),
+        "orphan_count": len(orphaned),
+        "deleted_count": 0 if dry_run else len(orphaned),
+        "asset_root": str(asset_root),
+        "orphans": orphaned,
     }
 
 

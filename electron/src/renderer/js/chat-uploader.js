@@ -25,6 +25,20 @@ function classifyType(ext) {
   return "file";
 }
 
+function uploadsContractPath(value) {
+  const normalized = String(value || "").trim().replace(/^\/+/, "");
+  if (!normalized) return "";
+  return normalized.startsWith("uploads/") ? normalized : "uploads/" + normalized;
+}
+
+function uploadsFileName(value) {
+  const normalized = String(value || "").trim().replace(/^\/+/, "");
+  if (!normalized) return "";
+  const withoutUploadsPrefix = normalized.replace(/^uploads\//, "");
+  const parts = withoutUploadsPrefix.split("/");
+  return parts[parts.length - 1] || "";
+}
+
 class ChatUploader {
   constructor(chat) {
     this._chat = chat;
@@ -123,12 +137,21 @@ class ChatUploader {
       }
       // Append to pending attachments
       const isDoc = (classifyType(ext) === "file") && (ext !== "zip" && ext !== "rar" && ext !== "7z" && ext !== "exe" && ext !== "apk");
+      const uploadedPath = uploadsContractPath(respData.saved_as || respData.url);
+      const thumbnailPath = uploadsContractPath(respData.thumbnail_url || "");
+      const savedAs = respData.saved_as || uploadsFileName(respData.url);
       this._chat._pendingAttachments.push({
         name: file.name,
         size: file.size,
         type: classifyType(ext),
-        url: respData.url.replace(/^\//, ""),   // strip leading slash
-        content_type: file.type || "",
+        url: uploadedPath,
+        saved_as: savedAs,
+        thumbnail_url: thumbnailPath,
+        content_type: respData.mime_type || respData.content_type || file.type || "",
+        sha256: respData.sha256 || "",
+        width: respData.width || 0,
+        height: respData.height || 0,
+        deduplicated: respData.deduplicated === true,
         is_doc: isDoc,
         state: isDoc ? "converting" : "ready",  // Block-3 R0.2: 4 态
       });

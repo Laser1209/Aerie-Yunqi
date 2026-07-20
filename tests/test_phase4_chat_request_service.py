@@ -21,6 +21,59 @@ def test_ready_attachment_fixture_contains_only_server_metadata(
     assert "content" not in ready_attachment
 
 
+def test_submit_accepts_image_asset_metadata_extensions(
+    phase4_db,
+    frozen_utc_clock,
+    ready_attachment,
+):
+    service, repository, identity_repository = _service_components(
+        phase4_db,
+        frozen_utc_clock,
+    )
+    attachment = dict(ready_attachment)
+    attachment.update(
+        {
+            "content_type": "image/png",
+            "saved_as": "00000000-0000-4000-8000-000000000004.png",
+            "thumbnail_url": (
+                "uploads/.image_assets/thumbs/"
+                "00000000-0000-4000-8000-000000000005.png"
+            ),
+            "sha256": "0" * 64,
+            "width": 640,
+            "height": 480,
+            "deduplicated": False,
+            "duplicate_of": "",
+            "is_image": True,
+        }
+    )
+
+    submitted = service.submit(
+        text="",
+        attachments=[attachment],
+        reply_to_id=0,
+        user_id=None,
+    )
+    actor_id = identity_repository.resolve("desktop", "local").actor_id
+    row = repository.get_owned(
+        request_id=submitted.request_id,
+        actor_id=actor_id,
+    )
+
+    request_row = phase4_db.query_one(
+        "SELECT attachments FROM requests WHERE request_id = ?",
+        (submitted.request_id,),
+    )
+
+    assert submitted.status in ("queued", "running", "completed")
+    assert row["request_id"] == submitted.request_id
+    assert request_row is not None
+    stored_attachments = json.loads(request_row["attachments"])
+    assert stored_attachments[0]["saved_as"] == attachment["saved_as"]
+    assert stored_attachments[0]["thumbnail_url"] == attachment["thumbnail_url"]
+    assert stored_attachments[0]["sha256"] == attachment["sha256"]
+
+
 class _FixedIdFactory:
     def __init__(self):
         self.counts = {}

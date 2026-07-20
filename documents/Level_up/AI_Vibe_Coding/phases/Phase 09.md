@@ -1,63 +1,68 @@
 ---
-title: Phase 09 - Core 图片资产
+title: Phase 09 - Core 鍥剧墖璧勪骇
 kind: phase
 phase: Phase 09
-status: planned
+status: done
+progress_note: "2026-07-21: Core image assets are green for magic decode, pixel limit, metadata, dedupe, thumbnail serving, frontend/queue URL compatibility, reference-preserving orphan GC, and flag-off rollback."
 tags: [aerie, phase, phase09]
 ---
-# Phase 09：Core 图片资产
-> [!info] 执行边界
-> 只按获批实施计划执行；当前阶段未通过验收时停止后续阶段。
+# Phase 09锛欳ore 鍥剧墖璧勪骇
+> [!info] 鎵ц杈圭晫
+> 鍙寜鑾锋壒瀹炴柦璁″垝鎵ц锛涘綋鍓嶉樁娈垫湭閫氳繃楠屾敹鏃跺仠姝㈠悗缁樁娈点€?
 
-## 目标
-魔数/MIME、尺寸、EXIF/GPS 清理、哈希、缩略图、引用与 GC；保持兼容、可观测与可回滚。
+## 鐩爣
+榄旀暟/MIME銆佸昂瀵搞€丒XIF/GPS 娓呯悊銆佸搱甯屻€佺缉鐣ュ浘銆佸紩鐢ㄤ笌 GC锛涗繚鎸佸吋瀹广€佸彲瑙傛祴涓庡彲鍥炴粴銆?
 
-## 非目标
-不整体重写 Pipeline；不删除旧表或旧文件；不创建平行 v2；不复制疑似凭据。
+## 闈炵洰鏍?
+涓嶆暣浣撻噸鍐?Pipeline锛涗笉鍒犻櫎鏃ц〃鎴栨棫鏂囦欢锛涗笉鍒涘缓骞宠 v2锛涗笉澶嶅埗鐤戜技鍑嵁銆?
 
-## 依赖
+## 渚濊禆
 - Phase 08
-- [[05_Feature_Flag与回滚矩阵]]、[[06_AI_Vibe_Coding批次规约]]
+- [[05_Feature_Flag涓庡洖婊氱煩闃礭]銆乕[06_AI_Vibe_Coding鎵规瑙勭害]]
 
-## 当前代码证据
+## 褰撳墠浠ｇ爜璇佹嵁
 - [attachment_handler.py](file:///E:/Agent_reply/core/attachment_handler.py)
+- [api_server.py](file:///E:/Agent_reply/core/api_server.py)
 - [chat-uploader.js](file:///E:/Agent_reply/electron/src/renderer/js/chat-uploader.js)
 - [pipeline.py](file:///E:/Agent_reply/core/pipeline.py)
-- [api_server.py](file:///E:/Agent_reply/core/api_server.py)
 
-## 文件范围
-- 计划修改或演进：`core/attachment_handler.py`、`electron/src/renderer/js/chat-uploader.js`
-- 新文件仅限计划列明的模块、迁移和测试。
-- 执行任务：[[Task 09-baseline]]
+## 鏂囦欢鑼冨洿
+- 璁″垝淇敼鎴栨紨杩涳細`core/attachment_handler.py`銆乣core/api_server.py`銆乣electron/src/renderer/js/chat-uploader.js`
+- 鏂版枃浠朵粎闄愯鍒掑垪鏄庣殑妯″潡銆佽縼绉诲拰娴嬭瘯銆?
+- 鎵ц浠诲姟锛歔[Task 09-baseline]]
 
-## 数据/API 合同
-- Feature Flag：`image_assets_v1`。
-- 魔数/MIME、尺寸、EXIF/GPS 清理、哈希、缩略图、引用与 GC。
-- ID、状态、sequence、幂等键和所有权边界必须可审计。
-- 涉及迁移时支持 backup、dry-run、checksum、幂等、cursor、断点续跑与守恒。
+## 鏁版嵁/API 鍚堝悓
+- Feature Flag锛歚image_assets_v1`銆?
+- 榄旀暟/MIME銆佸昂瀵搞€丒XIF/GPS 娓呯悊銆佸搱甯屻€佺缉鐣ュ浘銆佸紩鐢ㄤ笌 GC銆?
+- ID銆佺姸鎬併€乻equence銆佸箓绛夐敭鍜屾墍鏈夋潈杈圭晫蹇呴』鍙璁°€?
+- 娑夊強杩佺Щ鏃舵敮鎸?backup銆乨ry-run銆乧hecksum銆佸箓绛夈€乧ursor銆佹柇鐐圭画璺戜笌瀹堟亽銆?
 
-## TDD 步骤
-1. 先新增失败测试覆盖主路径、异常路径与回滚路径。
-2. 实现最小变更使测试通过，保留兼容适配器。
-3. 运行受影响模块测试与完整回归。
-4. 验证 Flag 关闭、迁移/协议恢复和 Evidence 脱敏。
+## TDD 姝ラ
+1. 鍏堟柊澧炲け璐ユ祴璇曡鐩栦富璺緞銆佸紓甯歌矾寰勪笌鍥炴粴璺緞銆?
+2. 瀹炵幇鏈€灏忓彉鏇翠娇娴嬭瘯閫氳繃锛屼繚鐣欏吋瀹归€傞厤鍣ㄣ€?
+3. 杩愯鍙楀奖鍝嶆ā鍧楁祴璇曚笌瀹屾暣鍥炲綊銆?
+4. 楠岃瘉 Flag 鍏抽棴銆佽縼绉?鍗忚鎭㈠鍜?Evidence 鑴辨晱銆?
 
-## 验收
-- [ ] 伪扩展、像素炸弹、穿越、重复图和孤儿 GC 通过
-- [ ] Feature Flag 关闭恢复旧路径且不丢新数据
-- [ ] 不产生重复副作用、历史串线或敏感值泄漏
+## 楠屾敹
+- [x] 浼墿灞曘€佸儚绱犵偢寮广€佺┛瓒娿€侀噸澶嶅浘鍜屽鍎?GC 閫氳繃
+- [x] Feature Flag 鍏抽棴鎭㈠鏃ц矾寰勪笖涓嶄涪鏂版暟鎹?
+- [x] 涓嶄骇鐢熼噸澶嶅壇浣滅敤銆佸巻鍙蹭覆绾挎垨鏁忔劅鍊兼硠婕?
 
-## 回滚
-关闭 `image_assets_v1`，恢复备份或旧读路径；保留新表、元数据、Outbox、旧表和旧文件。
+## 鍥炴粴
+鍏抽棴 `image_assets_v1`锛屾仮澶嶅浠芥垨鏃ц璺緞锛涗繚鐣欐柊琛ㄣ€佸厓鏁版嵁銆丱utbox銆佹棫琛ㄥ拰鏃ф枃浠躲€?
 
-## 指标
-成功率、延迟、重复计数、守恒差异、恢复时间和回滚耗时；禁止记录消息正文、个人数据或凭据。
+## 鎸囨爣
+鎴愬姛鐜囥€佸欢杩熴€侀噸澶嶈鏁般€佸畧鎭掑樊寮傘€佹仮澶嶆椂闂村拰鍥炴粴鑰楁椂锛涚姝㈣褰曟秷鎭鍚?鍒朵汉鏁版嵁鎴栧嚑鏍稿寲鍒檯鎬с€?
 
-## 提交边界
-只提交 Phase 09 相关源码、测试、迁移与文档；不混入无关重构、格式化或构建产物。
+## 鎻愪氦杈圭晫
+鍙彁浜?Phase 09 鐩稿叧婧愮爜銆佹祴璇曘€佽縼绉讳笌鏂囨。锛涗笉娣峰叆鏃犲叧閲嶆瀯銆佹牸寮忓寲鎴栨瀯寤轰骇鐗┿€?
 
 ## Evidence
-- [实施计划](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_全面升级实施计划.md)
+- [瀹炴柦璁″垝](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_鍏ㄩ潰鍗囩骇瀹炴柦璁″垝.md)
 - [attachment_handler.py](file:///E:/Agent_reply/core/attachment_handler.py)
+- [api_server.py](file:///E:/Agent_reply/core/api_server.py)
 - [chat-uploader.js](file:///E:/Agent_reply/electron/src/renderer/js/chat-uploader.js)
-- [[90_全局验收清单]] · [[92_回滚演练]]
+- [test_upload.py](file:///E:/Agent_reply/tests/test_upload.py)
+- [[90_鍏ㄥ眬楠屾敹娓呭崟]] 路 [[92_鍥炴粴婕旂粌]]
+- 2026-07-21: `pytest -q tests/test_upload.py` -> `11 passed, 4 warnings`; `pytest -q tests/test_upload.py tests/test_api.py tests/test_phase8_proactive_feedback.py tests/test_phase1_proactive_baseline.py` -> `62 passed, 4 warnings`; `python -m py_compile core/api_server.py core/attachment_handler.py` passed; `node --check electron/src/renderer/js/chat-uploader.js` passed.
+- 2026-07-21: `pytest -q tests/test_upload.py tests/test_api.py tests/test_phase4_chat_request_service.py tests/test_phase4_api.py tests/test_phase8_proactive_feedback.py tests/test_phase1_proactive_baseline.py` -> `98 passed, 4 warnings`; `python -m py_compile core/api_server.py core/attachment_handler.py core/chat_request_service.py` passed; `node --check electron/src/renderer/js/chat.js` and `node --check electron/src/renderer/js/chat-uploader.js` passed.

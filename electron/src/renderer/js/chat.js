@@ -1,6 +1,15 @@
 "use strict";
 /* Chat manager: Phase 4 — recall + quote + attachment support */
 
+function attachmentPublicUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw) || raw.startsWith("data:")) return raw;
+  const normalized = raw.replace(/^\/+/, "");
+  if (normalized.startsWith("uploads/")) return "/" + normalized;
+  return "/uploads/" + normalized;
+}
+
 class ChatManager {
   constructor(opts = {}) {
     this._el = {
@@ -446,7 +455,7 @@ class ChatManager {
       html += '<div class="chat-attachments">';
       for (const att of msg.attachments) {
         if (att.type === "image") {
-          html += `<div class="chat-attach-card" data-type="image"><img src="/uploads/${this._escapeHtml(att.url)}" alt=""></div>`;
+          html += `<div class="chat-attach-card" data-type="image"><img src="${this._escapeHtml(attachmentPublicUrl(att.thumbnail_url || att.url))}" alt=""></div>`;
         } else {
           html += `<div class="chat-attach-card" data-type="file"><svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>${this._escapeHtml(att.name || "文件")}</div>`;
         }
@@ -996,7 +1005,7 @@ class ChatManager {
         }[state] || "";
         const stateClass = "chat-attach-thumb--state-" + state;
         if (a.type === "image") {
-          return `<div class="chat-attach-thumb ${stateClass}" data-i="${i}"><img src="/uploads/${this._escapeHtml(a.url)}" alt=""><span class="chat-attach-thumb__state">${this._escapeHtml(stateLabel)}</span></div>`;
+          return `<div class="chat-attach-thumb ${stateClass}" data-i="${i}"><img src="${this._escapeHtml(attachmentPublicUrl(a.thumbnail_url || a.url))}" alt=""><span class="chat-attach-thumb__state">${this._escapeHtml(stateLabel)}</span></div>`;
         }
         return `<div class="chat-attach-thumb ${stateClass}" data-i="${i}"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-attach"/></svg><span class="chat-attach-thumb__name">${this._escapeHtml(a.name)}</span><span class="chat-attach-thumb__state">${this._escapeHtml(stateLabel)}</span></div>`;
       })

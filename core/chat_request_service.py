@@ -12,7 +12,43 @@ from core.ids import generate_id
 
 PURE_ATTACHMENT_EFFECTIVE_CONTENT = "请结合用户提供的附件内容进行回应。"
 ATTACHMENT_FIELDS = ("name", "url", "state", "size", "type")
+ATTACHMENT_OPTIONAL_FIELDS = (
+    "content_type",
+    "mime_type",
+    "saved_as",
+    "thumbnail_url",
+    "sha256",
+    "width",
+    "height",
+    "deduplicated",
+    "duplicate_of",
+    "is_image",
+)
+ATTACHMENT_ALLOWED_FIELDS = ATTACHMENT_FIELDS + ATTACHMENT_OPTIONAL_FIELDS
 SAFE_UPLOAD_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+SAFE_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _is_safe_upload_file_url(url: str) -> bool:
+    normalized = url[1:] if url.startswith("/") else url
+    parts = normalized.split("/")
+    return (
+        len(parts) == 2
+        and parts[0] == "uploads"
+        and SAFE_UPLOAD_FILENAME.fullmatch(parts[1]) is not None
+    )
+
+
+def _is_safe_thumbnail_url(url: str) -> bool:
+    normalized = url[1:] if url.startswith("/") else url
+    parts = normalized.split("/")
+    return (
+        len(parts) == 4
+        and parts[0] == "uploads"
+        and parts[1] == ".image_assets"
+        and parts[2] == "thumbs"
+        and SAFE_UPLOAD_FILENAME.fullmatch(parts[3]) is not None
+    )
 
 
 class ChatRequestError(RuntimeError):
@@ -258,7 +294,10 @@ class ChatRequestService:
                 raise InvalidChatInput("invalid_attachment")
             if attachment.get("state") != "ready":
                 raise InvalidChatInput("attachment_not_ready")
-            if set(attachment) != set(ATTACHMENT_FIELDS):
+            keys = set(attachment)
+            if not keys.issubset(set(ATTACHMENT_ALLOWED_FIELDS)):
+                raise InvalidChatInput("invalid_attachment")
+            if not set(ATTACHMENT_FIELDS).issubset(keys):
                 raise InvalidChatInput("invalid_attachment")
             name = attachment.get("name")
             size = attachment.get("size")
@@ -280,21 +319,65 @@ class ChatRequestService:
             url = attachment.get("url")
             if not isinstance(url, str):
                 raise InvalidChatInput("invalid_attachment")
-            normalized = url[1:] if url.startswith("/") else url
-            parts = normalized.split("/")
-            if (
-                "\\" in url
-                or "\x00" in url
-                or ".." in url
-                or len(parts) != 2
-                or parts[0] != "uploads"
-                or not parts[1]
-                or SAFE_UPLOAD_FILENAME.fullmatch(parts[1]) is None
+            if "\\" in url or "\x00" in url or ".." in url or not _is_safe_upload_file_url(url):
+                raise InvalidChatInput("invalid_attachment")
+
+            content_type = attachment.get("content_type")
+            if content_type is not None and (
+                not isinstance(content_type, str) or not content_type.strip()
             ):
                 raise InvalidChatInput("invalid_attachment")
-            validated.append(
-                {field: attachment[field] for field in ATTACHMENT_FIELDS}
-            )
+
+            mime_type = attachment.get("mime_type")
+            if mime_type is not None and (
+                not isinstance(mime_type, str) or not mime_type.strip()
+            ):
+                raise InvalidChatInput("invalid_attachment")
+
+            saved_as = attachment.get("saved_as")
+            if saved_as is not None and (
+                not isinstance(saved_as, str)
+                or not saved_as.strip()
+                or SAFE_UPLOAD_FILENAME.fullmatch(saved_as) is None
+            ):
+                raise InvalidChatInput("invalid_attachment")
+
+            thumbnail_url = attachment.get("thumbnail_url")
+            if thumbnail_url is not None and (
+                not isinstance(thumbnail_url, str)
+                or not _is_safe_thumbnail_url(thumbnail_url)
+            ):
+                raise InvalidChatInput("invalid_attachment")
+
+            sha256 = attachment.get("sha256")
+            if sha256 is not None and (
+                not isinstance(sha256, str)
+                or SAFE_SHA256.fullmatch(sha256) is None
+            ):
+                raise InvalidChatInput("invalid_attachment")
+
+            for dimension_name in ("width", "height"):
+                dimension = attachment.get(dimension_name)
+                if dimension is not None and (
+                    isinstance(dimension, bool)
+                    or not isinstance(dimension, int)
+                    or dimension < 0
+                ):
+                    raise InvalidChatInput("invalid_attachment")
+
+            for flag_name in ("deduplicated", "is_image"):
+                flag_value = attachment.get(flag_name)
+                if flag_value is not None and not isinstance(flag_value, bool):
+                    raise InvalidChatInput("invalid_attachment")
+
+            duplicate_of = attachment.get("duplicate_of")
+            if duplicate_of is not None and (
+                not isinstance(duplicate_of, str)
+                or (duplicate_of and SAFE_UPLOAD_FILENAME.fullmatch(duplicate_of) is None)
+            ):
+                raise InvalidChatInput("invalid_attachment")
+
+            validated.append({field: attachment[field] for field in attachment})
         return validated
 
     @staticmethod

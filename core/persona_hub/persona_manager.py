@@ -249,6 +249,13 @@ class PersonaManager:
     def get_active(self) -> Dict[str, Any]:
         return self.get_persona(self._active_id)
 
+    def get_active_persona(self) -> Dict[str, Any]:
+        return self.get_active()
+
+    def has_persona(self, persona_id: str) -> bool:
+        with self._rw_lock:
+            return persona_id in self._personas
+
     # ── 便捷读取方法（各模块常用）──────────────────
 
     def get_name(self) -> str:
@@ -329,8 +336,8 @@ class PersonaManager:
                 return False, f"人设 ID 已存在: {persona_id}"
 
             persona_data["is_builtin"] = False
-            self._personas[persona_id] = persona_data
             self._save_persona(persona_id, persona_data)
+            self._personas[persona_id] = persona_data
 
         return True, persona_id
 
@@ -350,8 +357,8 @@ class PersonaManager:
             if not ok:
                 return False, "; ".join(errors)
 
-            self._personas[persona_id] = merged
             self._save_persona(persona_id, merged)
+            self._personas[persona_id] = merged
 
         return True, persona_id
 
@@ -380,12 +387,14 @@ class PersonaManager:
             if persona_id not in self._personas:
                 return False, f"人设不存在: {persona_id}"
 
-            self._active_id = persona_id
             try:
-                with open(self._active_file, "w", encoding="utf-8") as fp:
-                    json.dump({"active_id": persona_id}, fp, ensure_ascii=False, indent=2)
+                self._write_json_atomic(
+                    self._active_file,
+                    {"active_id": persona_id},
+                )
             except OSError as e:
                 return False, f"写入激活状态失败: {e}"
+            self._active_id = persona_id
 
         return True, persona_id
 
@@ -402,8 +411,23 @@ class PersonaManager:
 
     def _save_persona(self, persona_id: str, data: Dict[str, Any]):
         target = self._personas_dir / f"{persona_id}.json"
-        with open(target, "w", encoding="utf-8") as fp:
-            json.dump(data, fp, ensure_ascii=False, indent=2)
+        self._write_json_atomic(target, data)
+
+    @staticmethod
+    def _write_json_atomic(target: Path, data: Dict[str, Any]) -> None:
+        temp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        try:
+            with open(temp, "w", encoding="utf-8") as fp:
+                json.dump(data, fp, ensure_ascii=False, indent=2)
+                fp.flush()
+                os.fsync(fp.fileno())
+            os.replace(temp, target)
+        except Exception:
+            try:
+                temp.unlink()
+            except OSError:
+                pass
+            raise
 
     @staticmethod
     def _deep_merge(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:

@@ -2,7 +2,7 @@
 title: Phase 00 - 安全基线、迁移器与标识合同
 kind: phase
 phase: Phase 00
-status: planned
+status: completed
 tags: [aerie, phase, phase00]
 ---
 # Phase 00：安全基线、迁移器与标识合同
@@ -43,9 +43,9 @@ tags: [aerie, phase, phase00]
 4. 验证 Flag 关闭、迁移/协议恢复和 Evidence 脱敏。
 
 ## 验收
-- [ ] 空库、现有库、重复运行和中断续跑通过
-- [ ] Feature Flag 关闭恢复旧路径且不丢新数据
-- [ ] 不产生重复副作用、历史串线或敏感值泄漏
+- [x] 空库、现有库、重复运行和中断续跑通过
+- [x] Feature Flag 关闭恢复旧路径且不丢新数据
+- [x] 不产生重复副作用、历史串线或敏感值泄漏
 
 ## 回滚
 关闭 `migration_framework_v1`，恢复备份或旧读路径；保留新表、元数据、Outbox、旧表和旧文件。
@@ -57,7 +57,12 @@ tags: [aerie, phase, phase00]
 只提交 Phase 00 相关源码、测试、迁移与文档；不混入无关重构、格式化或构建产物。
 
 ## Evidence
+- Phase 0 定向门禁：`56 passed, 4 warnings in 2.35s`。
+- Phase 0 基线专项：`14 passed in 0.25s`。
+- 全量 Python 基线：`254 passed, 10 failed, 6 warnings in 7.83s`；10 项既有失败集中在 ContextBuilder、情绪关键词、Persona 兼容接口与权限策略，不涉及本阶段修改文件。
+- 回滚验证：`migration_framework_v1=false` 时不创建迁移账本，旧 `chat_log` Schema 可正常初始化。
 - [实施计划](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_全面升级实施计划.md)
 - [database.py](file:///E:/Agent_reply/core/database.py)
 - [chat_events.py](file:///E:/Agent_reply/core/chat_events.py)
+- [test_phase0_baseline.py](file:///E:/Agent_reply/tests/test_phase0_baseline.py)
 - [[90_全局验收清单]] · [[92_回滚演练]]

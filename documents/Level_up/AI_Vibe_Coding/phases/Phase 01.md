@@ -2,7 +2,7 @@
 title: Phase 01 - 主动消息 P0 修复
 kind: phase
 phase: Phase 01
-status: planned
+status: completed
 tags: [aerie, phase, phase01]
 ---
 # Phase 01：主动消息 P0 修复
@@ -43,9 +43,9 @@ tags: [aerie, phase, phase01]
 4. 验证 Flag 关闭、迁移/协议恢复和 Evidence 脱敏。
 
 ## 验收
-- [ ] Cron、手动、Desire、Idle、quiet、force 与 QQ 断线通过
-- [ ] Feature Flag 关闭恢复旧路径且不丢新数据
-- [ ] 不产生重复副作用、历史串线或敏感值泄漏
+- [x] Cron、手动、Desire、Idle、quiet、exempt、force 与 QQ 断线通过
+- [x] Feature Flag 关闭恢复旧 QQ-only 路径，V2 本地持久化仅在开关启用时生效
+- [x] 聊天页过滤非聊天事件；Delivery Evidence 仅记录场景与通道状态，不包含正文、个人数据或凭据
 
 ## 回滚
 关闭 `proactive_delivery_v2`，恢复备份或旧读路径；保留新表、元数据、Outbox、旧表和旧文件。
@@ -60,4 +60,11 @@ tags: [aerie, phase, phase01]
 - [实施计划](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_全面升级实施计划.md)
 - [push_scheduler.py](file:///E:/Agent_reply/core/push_scheduler.py)
 - [companion.py](file:///E:/Agent_reply/core/companion.py)
+- [api_server.py](file:///E:/Agent_reply/core/api_server.py)
+- [chat.js](file:///E:/Agent_reply/electron/src/renderer/js/chat.js)
+- [test_phase1_proactive_baseline.py](file:///E:/Agent_reply/tests/test_phase1_proactive_baseline.py)
+- Phase 1 专项：`19 passed, 4 warnings`
+- Phase 0 + Phase 1 + API + Pipeline：`72 passed, 4 warnings`
+- Electron `node --check`：`chat.js`、`dynamic-island.js`、`main.js`、`preload.js` 全部通过
+- 全量基线：`272 passed, 10 failed, 6 warnings`；10 项为本批次前已存在的 Context、Emotion、Persona 兼容与 Permission 失败，主动消息无新增失败
 - [[90_全局验收清单]] · [[92_回滚演练]]

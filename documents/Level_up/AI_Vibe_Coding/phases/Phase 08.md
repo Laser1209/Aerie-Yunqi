@@ -2,7 +2,8 @@
 title: Phase 08 - 主动反馈、频控与用户设置
 kind: phase
 phase: Phase 08
-status: planned
+status: done
+progress_note: "2026-07-21: PushPolicy optional JSON persistence and proactive policy APIs are green; rollback rehearsal and flag-off checks passed."
 tags: [aerie, phase, phase08]
 ---
 # Phase 08：主动反馈、频控与用户设置
@@ -43,9 +44,9 @@ tags: [aerie, phase, phase08]
 4. 验证 Flag 关闭、迁移/协议恢复和 Evidence 脱敏。
 
 ## 验收
-- [ ] 设置与频控跨重启，负反馈降频
-- [ ] Feature Flag 关闭恢复旧路径且不丢新数据
-- [ ] 不产生重复副作用、历史串线或敏感值泄漏
+- [x] 设置与频控跨重启，负反馈降频
+- [x] Feature Flag 关闭恢复旧路径且不丢新数据
+- [x] 不产生重复副作用、历史串线或敏感值泄漏
 
 ## 回滚
 关闭 `proactive_delivery_v2`，恢复备份或旧读路径；保留新表、元数据、Outbox、旧表和旧文件。
@@ -60,4 +61,8 @@ tags: [aerie, phase, phase08]
 - [实施计划](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_全面升级实施计划.md)
 - [proactive_judge.py](file:///E:/Agent_reply/core/proactive_judge.py)
 - [push_scheduler.py](file:///E:/Agent_reply/core/push_scheduler.py)
+- [proactive.yaml](file:///E:/Agent_reply/config/proactive.yaml)
 - [[90_全局验收清单]] · [[92_回滚演练]]
+- 2026-07-21：`pytest -q tests/test_phase8_proactive_feedback.py` → `3 passed`；`pytest -q tests/test_phase8_proactive_feedback.py tests/test_phase1_proactive_baseline.py` → `22 passed, 4 warnings`。
+- 2026-07-21：`pytest -q tests/test_phase8_proactive_feedback.py tests/test_phase1_proactive_baseline.py` → `24 passed, 4 warnings`。
+- 2026-07-21：`python -m py_compile core/push_scheduler.py core/api_server.py` 通过。

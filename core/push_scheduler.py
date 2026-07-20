@@ -6,9 +6,14 @@ and dispatches push messages through the Companion's QQ client.
 
 from __future__ import annotations
 import asyncio
+import json
 import logging
+import os
 from datetime import datetime, time, date, timedelta
+from pathlib import Path
 from typing import Any
+
+from core.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,256 @@ class PushPolicy:
         self.daily_count = 0
         self.last_push_at: datetime | None = None
         self.today = date.today()
+        self.mute_until: datetime | None = None
+        self.scene_blocks: dict[str, dict[str, Any]] = {}
+        self.feedback: dict[str, dict[str, Any]] = {}
+        self.state_path = self._resolve_state_path(proactive)
+        self._load_state()
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> datetime | None:
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_date(value: Any) -> date | None:
+        if not value:
+            return None
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return value
+        try:
+            return date.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _resolve_state_path(proactive: dict) -> Path | None:
+        raw = (
+            proactive.get("state_path")
+            or os.environ.get("AERIE_PROACTIVE_POLICY_STATE")
+        )
+        if not raw:
+            return None
+        path = Path(str(raw))
+        if path.is_absolute():
+            return path
+        return data_dir() / path
+
+    def _load_state(self) -> None:
+        if not self.state_path or not self.state_path.exists():
+            return
+        try:
+            state = json.loads(self.state_path.read_text(encoding="utf-8"))
+        except Exception:
+            logger.warning("proactive policy state could not be loaded", exc_info=True)
+            return
+        if not isinstance(state, dict):
+            return
+        if "enabled" in state:
+            self.enabled = bool(state.get("enabled"))
+        self.daily_count = int(state.get("daily_count") or 0)
+        self.today = self._parse_date(state.get("today")) or date.today()
+        self.last_push_at = self._parse_datetime(state.get("last_push_at"))
+        self.mute_until = self._parse_datetime(state.get("mute_until"))
+        raw_blocks = state.get("scene_blocks") or {}
+        if isinstance(raw_blocks, dict):
+            for scene, block in raw_blocks.items():
+                if not isinstance(block, dict):
+                    continue
+                until = self._parse_datetime(block.get("until"))
+                if not until:
+                    continue
+                self.scene_blocks[str(scene)] = {
+                    "until": until,
+                    "reason": str(block.get("reason") or "postponed"),
+                }
+        raw_feedback = state.get("feedback") or {}
+        if isinstance(raw_feedback, dict):
+            self.feedback = {
+                str(scene): dict(value)
+                for scene, value in raw_feedback.items()
+                if isinstance(value, dict)
+            }
+
+    def _state_payload(self) -> dict[str, Any]:
+        def dt(value: datetime | None) -> str | None:
+            return value.isoformat() if value else None
+
+        return {
+            "enabled": bool(self.enabled),
+            "daily_count": int(self.daily_count),
+            "today": self.today.isoformat(),
+            "last_push_at": dt(self.last_push_at),
+            "mute_until": dt(self.mute_until),
+            "scene_blocks": {
+                scene: {
+                    "until": dt(block.get("until")),
+                    "reason": block.get("reason") or "postponed",
+                }
+                for scene, block in self.scene_blocks.items()
+            },
+            "feedback": self.feedback,
+        }
+
+    def _persist(self) -> None:
+        if not self.state_path:
+            return
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.state_path.with_name(self.state_path.name + ".tmp")
+            tmp.write_text(
+                json.dumps(
+                    self._state_payload(),
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            tmp.replace(self.state_path)
+        except Exception:
+            logger.warning("proactive policy state could not be saved", exc_info=True)
+
+    def _expire_elapsed_blocks(self, now: datetime) -> None:
+        changed = False
+        if self.mute_until and now >= self.mute_until:
+            self.mute_until = None
+            changed = True
+        for scene, block in list(self.scene_blocks.items()):
+            until = block.get("until")
+            if isinstance(until, datetime) and now >= until:
+                self.scene_blocks.pop(scene, None)
+                changed = True
+        if changed:
+            self._persist()
+
+    def snapshot(self) -> dict[str, Any]:
+        return self._state_payload()
+
+    def set_enabled(self, enabled: bool) -> dict[str, Any]:
+        self.enabled = bool(enabled)
+        self._persist()
+        return self.snapshot()
+
+    def mute(self, hours: float = 12.0) -> dict[str, Any]:
+        self.mute_until = datetime.now() + timedelta(hours=float(hours))
+        self._persist()
+        return {
+            "muted_until": self.mute_until.isoformat(),
+        }
+
+    def clear_mute(self) -> dict[str, Any]:
+        self.mute_until = None
+        self._persist()
+        return self.snapshot()
+
+    def postpone(self, scene: str, hours: float = 2.0) -> dict[str, Any]:
+        return self._set_scene_block(scene, hours, "postponed")
+
+    def _set_scene_block(
+        self,
+        scene: str,
+        hours: float,
+        reason: str,
+        *,
+        persist: bool = True,
+    ) -> dict[str, Any]:
+        until = datetime.now() + timedelta(hours=float(hours))
+        scene_id = str(scene)
+        self.scene_blocks[scene_id] = {
+            "until": until,
+            "reason": reason,
+        }
+        if persist:
+            self._persist()
+        return {
+            "scene": scene_id,
+            "reason": reason,
+            "until": until.isoformat(),
+        }
+
+    def record_feedback(
+        self,
+        scene: str,
+        action: str,
+        *,
+        hours: float | None = None,
+    ) -> dict[str, Any]:
+        scene_id = str(scene)
+        normalized = str(action or "").strip().lower()
+        entry = self.feedback.setdefault(
+            scene_id,
+            {
+                "positive": 0,
+                "negative": 0,
+                "last_action": "",
+            },
+        )
+        if normalized in {"positive", "like", "ok"}:
+            entry["positive"] = int(entry.get("positive") or 0) + 1
+            entry["last_action"] = normalized
+            block = self.scene_blocks.get(scene_id)
+            if block and block.get("reason") == "feedback_cooldown":
+                self.scene_blocks.pop(scene_id, None)
+            self._persist()
+            return {
+                "scene": scene_id,
+                "action": normalized,
+                "positive_count": entry["positive"],
+                "negative_count": int(entry.get("negative") or 0),
+            }
+
+        if normalized in {"mute", "muted"}:
+            result = self.mute(hours or 12.0)
+            result.update(
+                {
+                    "scene": scene_id,
+                    "action": normalized,
+                    "positive_count": int(entry.get("positive") or 0),
+                    "negative_count": int(entry.get("negative") or 0),
+                }
+            )
+            return result
+
+        if normalized in {"postpone", "later"}:
+            result = self.postpone(scene_id, hours or 2.0)
+            result.update(
+                {
+                    "action": normalized,
+                    "positive_count": int(entry.get("positive") or 0),
+                    "negative_count": int(entry.get("negative") or 0),
+                }
+            )
+            return result
+
+        # Default unknown/non-positive feedback to a scene-level cooldown.
+        entry["negative"] = int(entry.get("negative") or 0) + 1
+        entry["last_action"] = normalized or "negative"
+        cooldown_hours = float(hours) if hours is not None else min(
+            24.0,
+            max(1.0, 2.0 ** max(0, entry["negative"] - 1)),
+        )
+        result = self._set_scene_block(
+            scene_id,
+            cooldown_hours,
+            "feedback_cooldown",
+            persist=False,
+        )
+        self._persist()
+        result.update(
+            {
+                "action": normalized or "negative",
+                "positive_count": int(entry.get("positive") or 0),
+                "negative_count": entry["negative"],
+            }
+        )
+        return result
 
     @staticmethod
     def _parse_time(s: str) -> time:
@@ -44,14 +299,24 @@ class PushPolicy:
 
     def can_push(self, scene: str) -> tuple[bool, str]:
         """Check if a push is allowed. Returns (allowed, reason)."""
+        now_dt = datetime.now()
+        self._expire_elapsed_blocks(now_dt)
         if not self.enabled:
             return False, "globally_disabled"
+        if self.mute_until and now_dt < self.mute_until:
+            return False, "muted"
+        block = self.scene_blocks.get(scene)
+        if block:
+            until = block.get("until")
+            if isinstance(until, datetime) and now_dt < until:
+                return False, str(block.get("reason") or "postponed")
         if self.pause_until and datetime.now() < self.pause_until:
             return False, "paused"
         today = date.today()
         if today != self.today:
             self.daily_count = 0
             self.today = today
+            self._persist()
         if self.daily_count >= self.max_per_day:
             return False, "daily_limit"
         now = datetime.now().time()
@@ -72,6 +337,7 @@ class PushPolicy:
     def record(self, scene: str) -> None:
         self.daily_count += 1
         self.last_push_at = datetime.now()
+        self._persist()
 
 
 class CronScheduler:

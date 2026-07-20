@@ -2395,11 +2395,100 @@ async def proactive_toggle(request: Request) -> dict:
         from core.companion import get_companion
         comp = get_companion()
         if hasattr(comp, "push_scheduler") and comp.push_scheduler:
-            comp.push_scheduler.policy.enabled = enabled
+            policy = comp.push_scheduler.policy
+            if hasattr(policy, "set_enabled"):
+                policy.set_enabled(enabled)
+            else:
+                policy.enabled = enabled
             return {"enabled": enabled}
         return {"error": "scheduler not available"}
     except Exception as e:
         logger.exception("proactive toggle error")
+        return {"error": str(e)}
+
+
+def _current_proactive_policy():
+    from core.companion import get_companion
+
+    comp = get_companion()
+    if not hasattr(comp, "push_scheduler") or not comp.push_scheduler:
+        return None
+    return getattr(comp.push_scheduler, "policy", None)
+
+
+@app.get("/api/proactive/policy")
+async def proactive_policy() -> dict:
+    """Return persistent proactive policy state for settings UI."""
+    try:
+        policy = _current_proactive_policy()
+        if not policy:
+            return {"error": "scheduler not available"}
+        if hasattr(policy, "snapshot"):
+            return {"policy": policy.snapshot()}
+        return {
+            "policy": {
+                "enabled": bool(getattr(policy, "enabled", False)),
+                "daily_count": int(getattr(policy, "daily_count", 0)),
+            }
+        }
+    except Exception as e:
+        logger.exception("proactive policy error")
+        return {"error": str(e)}
+
+
+@app.post("/api/proactive/feedback")
+async def proactive_feedback(request: Request) -> dict:
+    """Record user feedback for a proactive scene."""
+    try:
+        body = await request.json()
+        scene = str(body.get("scene") or "")
+        if not scene:
+            return {"error": "scene required"}
+        action = str(body.get("action") or "negative")
+        hours = body.get("hours")
+
+        policy = _current_proactive_policy()
+        if not policy or not hasattr(policy, "record_feedback"):
+            return {"error": "scheduler not available"}
+        kwargs = {}
+        if hours is not None:
+            kwargs["hours"] = float(hours)
+        return policy.record_feedback(scene, action, **kwargs)
+    except Exception as e:
+        logger.exception("proactive feedback error")
+        return {"error": str(e)}
+
+
+@app.post("/api/proactive/mute")
+async def proactive_mute(request: Request) -> dict:
+    """Mute proactive delivery globally for a bounded window."""
+    try:
+        body = await request.json()
+        hours = float(body.get("hours", 12))
+        policy = _current_proactive_policy()
+        if not policy or not hasattr(policy, "mute"):
+            return {"error": "scheduler not available"}
+        return policy.mute(hours=hours)
+    except Exception as e:
+        logger.exception("proactive mute error")
+        return {"error": str(e)}
+
+
+@app.post("/api/proactive/postpone")
+async def proactive_postpone(request: Request) -> dict:
+    """Postpone one proactive scene for a bounded window."""
+    try:
+        body = await request.json()
+        scene = str(body.get("scene") or "")
+        if not scene:
+            return {"error": "scene required"}
+        hours = float(body.get("hours", 2))
+        policy = _current_proactive_policy()
+        if not policy or not hasattr(policy, "postpone"):
+            return {"error": "scheduler not available"}
+        return policy.postpone(scene, hours=hours)
+    except Exception as e:
+        logger.exception("proactive postpone error")
         return {"error": str(e)}
 
 

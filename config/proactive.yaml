@@ -6,6 +6,7 @@ proactive:
   enabled: true                            # Global kill-switch
   max_per_day: 5                           # Daily cap across all scenes
   min_interval_min: 30                     # Min minutes between any two pushes
+  state_path: "proactive_policy_state.json" # Persist Phase 08 policy state under AERIE_DATA_DIR/data
   quiet_start: "23:30"                     # Quiet period start (HH:MM)
   quiet_end: "07:00"                       # Quiet period end (HH:MM)
   exempt_scenes:                           # Scenes that bypass quiet period

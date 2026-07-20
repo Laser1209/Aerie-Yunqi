@@ -2,7 +2,7 @@
 title: Phase 03 - Conversation、Turn、Message、Request 四表与回填
 kind: phase
 phase: Phase 03
-status: in_progress
+status: done
 tags: [aerie, phase, phase03]
 ---
 # Phase 03：Conversation、Turn、Message、Request 四表与回填
@@ -55,12 +55,14 @@ tags: [aerie, phase, phase03]
 - 005 cursor/断点续跑：先观察回填不接受 `after_id/limit`、批次边界拆裂 Turn、第二批失败后 Ledger cursor 为 NULL 的三条 Red；随后以每批 500 行有界读取推进，按已回填 Message 恢复最后 Turn/sequence，并在每批成功后持久化 Ledger cursor。故障移除后重复运行只补剩余行，005 已发布 checksum 未变。相关回归 `40 passed`，跨阶段相关 `85 passed, 4 warnings`，完整 Python `353 passed, 6 warnings`，修改文件诊断与 `git diff --check` 均通过。
 - 生产数据副本演练：以 SQLite 在线备份 API 从默认生产库生成一致性快照和独立 rehearsal 副本；源库只读且主文件 SHA-256 前后保持 `2f050106…`。副本 dry-run 报告 005 pending 且四张规范表与 Ledger 零写入；执行后 `chat_log=1754`、`messages=1754`、Conversation=4、Turn/Request=299、cursor=`1754`、重复 legacy id=0、脱敏有序载荷摘要一致、重复运行计数不变、`PRAGMA quick_check=ok`。
 - 历史 Evidence：规范双写小节定向回归 `28 passed`；此前完整 Python `334 passed, 6 warnings`。
-- 当前尚未执行用户生产运行态的 Feature Flag 开关、真实恢复时间/数据损失验证与生产库恢复；Phase 03 保持 `in_progress`。
+- 生产运行态回滚演练：用户授权后以环境变量分别启动真实 Companion。Flag 开启态 `enabled=true` 且 Pipeline 注入同一 Repository，完整生命周期耗时 `4.476s`；关闭态恢复 legacy 路径，完整生命周期耗时 `4.189s`。两态均在 QQ 未就绪时按既有降级策略启动并正常停止，未发送聊天消息或调用模型。
+- 生产库实际恢复：使用 SQLite Backup API 从一致性备份回写默认生产库，耗时 `0.047860s`；恢复后 `PRAGMA quick_check=ok`，`chat_log=1754`、`messages=1754`、Conversation=4、Turn/Request=299、Ledger=4，六张关键表逐表脱敏摘要与备份一致，数据损失 0。
+- 最终回归：完整 Python `353 passed, 6 warnings`，工作区诊断为空；Electron 默认关闭态 smoke 成功打开 `Aerie · 云栖` 主窗口和 Dynamic Island，并通过 CDP 读取主窗口导航、聊天输入与附件/语音控件后正常关闭，未执行任何 UI 写操作。启动日志仍含既有 SVG 编码、CSP 与后端就绪前请求告警，均未由 Phase 03 引入。Phase 03 验收和回滚门禁通过，状态更新为 `done`。
 
 ## 验收
-- [ ] 记录、附件、角色顺序和 Channel 守恒
-- [ ] Feature Flag 关闭恢复旧路径且不丢新数据
-- [ ] 不产生重复副作用、历史串线或敏感值泄漏
+- [x] 记录、附件、角色顺序和 Channel 守恒
+- [x] Feature Flag 关闭恢复旧路径且不丢新数据
+- [x] 不产生重复副作用、历史串线或敏感值泄漏
 
 ## 回滚
 关闭 `conversation_model_v1`，恢复备份或旧读路径；保留新表、元数据、Outbox、旧表和旧文件。

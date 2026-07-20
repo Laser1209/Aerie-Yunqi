@@ -238,6 +238,12 @@ class Companion:
             logger.exception("ProactiveJudge init failed; push will run judge-less")
             self.proactive_judge = None
 
+        # Phase 14: lazy one-shot consumer for world ImageCandidate events.
+        # It is not started as a background loop here; callers explicitly
+        # invoke process_world_image_candidates_once() so the old chat/push
+        # paths stay unchanged while the contract hardens behind a flag.
+        self.world_image_candidate_consumer: Any = None
+
         self._started = False
         self._daily_decay_task: asyncio.Task | None = None
         self._push_task: asyncio.Task | None = None
@@ -388,6 +394,67 @@ class Companion:
                     return
                 self.push_scheduler.pause("qq_offline")
                 logger.info("[QQ State] QQ offline; push scheduler paused")
+
+    async def process_world_image_candidates_once(
+        self,
+        *,
+        last_seq: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Consume replayed world ImageCandidate events once.
+
+        Phase 14 keeps this explicit and pull-based: no new background loop,
+        no renderer direct sidecar access, and no change to legacy image or
+        proactive paths when ``world_image_candidates_v1`` is off.
+        """
+
+        consumer = self._get_world_image_candidate_consumer()
+        return await consumer.consume_replay(last_seq=last_seq)
+
+    def _get_world_image_candidate_consumer(self) -> Any:
+        existing = getattr(self, "world_image_candidate_consumer", None)
+        if existing is not None:
+            return existing
+
+        from core.image_service import (
+            BrainImageGenerationProvider,
+            BrainImageVisionProvider,
+            ImageWorkflow,
+        )
+        from core.paths import data_dir
+        from core.world_image_candidates import (
+            JsonWorldImageCandidateStore,
+            WorldImageCandidateConsumer,
+        )
+
+        scheduler = getattr(self, "push_scheduler", None)
+        push_policy = getattr(scheduler, "policy", None)
+        cron = getattr(scheduler, "cron", None)
+        if push_policy is None and cron is not None:
+            push_policy = getattr(cron, "policy", None)
+
+        workflow = ImageWorkflow(
+            upload_base=(Path.cwd() / "uploads").resolve(),
+            feature_enabled=self.feature_flags.is_enabled("image_assets_v1"),
+            generation_provider=BrainImageGenerationProvider(getattr(self, "brain", None)),
+            vision_provider=BrainImageVisionProvider(getattr(self, "brain", None)),
+        )
+
+        def delivery_online() -> bool:
+            try:
+                return not bool(getattr(scheduler, "is_paused", False))
+            except Exception:
+                return True
+
+        self.world_image_candidate_consumer = WorldImageCandidateConsumer(
+            feature_flags=self.feature_flags,
+            image_workflow=workflow,
+            world_port=getattr(self, "world_port", None),
+            push_policy=push_policy,
+            proactive_judge=getattr(self, "proactive_judge", None),
+            store=JsonWorldImageCandidateStore(data_dir() / "world_image_candidates.json"),
+            delivery_online=delivery_online,
+        )
+        return self.world_image_candidate_consumer
 
     def _world_snapshot_for_context(self) -> dict | None:
         provider = getattr(self.world_port, "get_world_snapshot", None)

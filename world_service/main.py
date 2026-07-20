@@ -30,6 +30,7 @@ class LocalWorldSidecarService:
             "world.control",
             "events.subscribe",
             "checkpoint",
+            "message.candidate.publish",
         )
         self.store.heartbeat(status="ready", detail={"instance_id": self.instance_id})
 
@@ -100,6 +101,10 @@ class LocalWorldSidecarService:
     def checkpoint(self, *, checkpoint_id: str, state: dict[str, Any]) -> dict[str, Any]:
         self._ensure_running()
         return self.store.checkpoint(checkpoint_id=checkpoint_id, state=state)
+
+    def publish_image_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        self._ensure_running()
+        return self.store.append_image_candidate(candidate)
 
     def crash(self) -> None:
         self.running = False

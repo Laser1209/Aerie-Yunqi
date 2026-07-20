@@ -26,6 +26,7 @@ class WorldSidecarStore:
         event_type: str,
         payload: dict[str, Any],
         idempotency_key: str,
+        redact_payload: bool = True,
     ) -> dict[str, Any]:
         idem = str(idempotency_key or "").strip()
         if not idem:
@@ -38,7 +39,7 @@ class WorldSidecarStore:
             if existing:
                 return self._event_from_row(existing)
 
-            sanitized = _redacted_payload(payload)
+            sanitized = _redacted_payload(payload) if redact_payload else dict(payload or {})
             event_id = f"world_evt_{uuid.uuid4().hex}"
             now = _now_ms()
             cursor = conn.execute(
@@ -77,6 +78,24 @@ class WorldSidecarStore:
                 (seq,),
             ).fetchone()
             return self._event_from_row(row)
+
+    def append_image_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        """Append a public ImageCandidate event for Core approval.
+
+        Candidate events are not blanket-redacted like observations because
+        Core must read prompt_key, scene, expiry, and ownership fields to
+        approve or suppress them.  Raw prompt/message fields are never stored;
+        they are collapsed into sensitive_keys plus a digest.
+        """
+
+        payload = _image_candidate_payload(candidate)
+        return self.append_event(
+            topic="image_candidates",
+            event_type="world.image_candidate.published",
+            payload=payload,
+            idempotency_key=payload["idempotency_key"],
+            redact_payload=False,
+        )
 
     def events_after(
         self,
@@ -251,6 +270,50 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _image_candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
+    payload = candidate if isinstance(candidate, dict) else {}
+    candidate_id = _safe_text(payload.get("candidate_id") or payload.get("id") or f"cand_{uuid.uuid4().hex}")
+    idempotency_key = _safe_text(payload.get("idempotency_key") or candidate_id)
+    sensitive = {
+        key: payload.get(key)
+        for key in (
+            "prompt",
+            "raw_prompt",
+            "message_text",
+            "raw_text",
+            "caption",
+            "credential",
+            "token",
+        )
+        if key in payload
+    }
+    public = {
+        "candidate_id": candidate_id,
+        "idempotency_key": idempotency_key,
+        "scene": _safe_text(payload.get("scene") or "idle_care"),
+        "owner_id": _safe_text(payload.get("owner_id") or "master"),
+        "channel": _safe_text(payload.get("channel") or "local_chat"),
+        "target": _safe_text(payload.get("target") or ""),
+        "prompt_key": _safe_text(payload.get("prompt_key") or "default"),
+        "reason_code": _safe_text(payload.get("reason_code") or ""),
+        "source": _safe_text(payload.get("source") or "generated"),
+        "score": _safe_float(payload.get("score"), 0.0),
+        "expires_at": _safe_text(payload.get("expires_at") or ""),
+        "created_at": _safe_text(payload.get("created_at") or ""),
+    }
+    if sensitive:
+        public["sensitive_keys"] = sorted(str(key) for key in sensitive.keys())
+        public["sensitive_sha256"] = hashlib.sha256(
+            json.dumps(
+                sensitive,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+    return public
+
+
 def _redacted_payload(payload: dict[str, Any]) -> dict[str, Any]:
     keys = sorted(str(key) for key in (payload or {}).keys())
     raw = json.dumps(payload or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -258,3 +321,14 @@ def _redacted_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "payload_keys": keys,
         "payload_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
     }
+
+
+def _safe_text(value: Any, limit: int = 200) -> str:
+    return str(value or "").replace("\x00", "").strip()[:limit]
+
+
+def _safe_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default

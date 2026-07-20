@@ -13,9 +13,9 @@
   --cog-shell-text: var(--color-text, #333);
   --cog-glass-bg: rgba(20, 14, 32, 0.78);
   --cog-glass-border: rgba(255, 105, 180, 0.22);
-  --cog-glass-code: #0d0a1a;
-  --cog-glass-text: #f3e6f0;
-  --cog-glass-muted: #b29ab4;
+  --cog-glass-code: var(--color-static-0d0a1a, #0d0a1a);
+  --cog-glass-text: var(--color-static-f3e6f0, #f3e6f0);
+  --cog-glass-muted: var(--color-static-b29ab4, #b29ab4);
   --cog-bar-track: rgba(255, 105, 180, 0.10);
   --cog-bar-fill: linear-gradient(90deg, var(--color-pad-pleasure, #ff5b9c)0%, var(--color-eruption-grad-2, #9c27b0)100%);
   --cog-pulse: var(--color-pad-pleasure, #ff5b9c);
@@ -999,15 +999,15 @@
 }
 .cog-gate-status--pass {
   background: rgba(76, 175, 80, 0.20);
-  color: #81c784;
+  color: var(--color-static-81c784, #81c784);
 }
 .cog-gate-status--fail {
   background: rgba(244, 67, 54, 0.20);
-  color: #ef9a9a;
+  color: var(--color-static-ef9a9a, #ef9a9a);
 }
 .cog-gate-status--running {
   background: rgba(255, 193, 7, 0.20);
-  color: #ffd54f;
+  color: var(--color-static-ffd54f, #ffd54f);
   animation: cogPulse 1.5s ease-in-out infinite;
 }
 @keyframes cogPulse {
@@ -1060,10 +1060,10 @@
   font-size: 10px;
   font-weight: 500;
 }
-.cog-se-item-badge--applied { background: rgba(76,175,80,0.2); color: #81c784; }
-.cog-se-item-badge--pending { background: rgba(255,193,7,0.2); color: #ffd54f; }
-.cog-se-item-badge--rejected { background: rgba(244,67,54,0.2); color: #ef9a9a; }
-.cog-se-item-badge--rolled { background: rgba(156,39,176,0.2); color: #ce93d8; }
+.cog-se-item-badge--applied { background: rgba(76,175,80,0.2); color: var(--color-static-81c784, #81c784); }
+.cog-se-item-badge--pending { background: rgba(255,193,7,0.2); color: var(--color-static-ffd54f, #ffd54f); }
+.cog-se-item-badge--rejected { background: rgba(244,67,54,0.2); color: var(--color-static-ef9a9a, #ef9a9a); }
+.cog-se-item-badge--rolled { background: rgba(156,39,176,0.2); color: var(--color-static-ce93d8, #ce93d8); }
 
 /* ── 电脑操控 Tab ─────────────────────────────── */
 .cog-cc-levels {
@@ -1130,11 +1130,11 @@
   font-size: 10px;
   font-weight: 500;
 }
-.cog-cc-type--mouse { background: rgba(33,150,243,0.2); color: #64b5f6; }
-.cog-cc-type--keyboard { background: rgba(156,39,176,0.2); color: #ce93d8; }
-.cog-cc-type--shell { background: rgba(255,193,7,0.2); color: #ffd54f; }
-.cog-cc-type--screenshot { background: rgba(76,175,80,0.2); color: #81c784; }
-.cog-cc-type--blocked { background: rgba(244,67,54,0.2); color: #ef9a9a; }
+.cog-cc-type--mouse { background: rgba(33,150,243,0.2); color: var(--color-static-64b5f6, #64b5f6); }
+.cog-cc-type--keyboard { background: rgba(156,39,176,0.2); color: var(--color-static-ce93d8, #ce93d8); }
+.cog-cc-type--shell { background: rgba(255,193,7,0.2); color: var(--color-static-ffd54f, #ffd54f); }
+.cog-cc-type--screenshot { background: rgba(76,175,80,0.2); color: var(--color-static-81c784, #81c784); }
+.cog-cc-type--blocked { background: rgba(244,67,54,0.2); color: var(--color-static-ef9a9a, #ef9a9a); }
 .cog-cc-desc {
   flex: 1;
   color: var(--cog-glass-text);
@@ -1157,7 +1157,7 @@
   padding: 4px 10px;
   border-radius: 6px;
   background: rgba(244, 67, 54, 0.12);
-  color: #ef9a9a;
+  color: var(--color-static-ef9a9a, #ef9a9a);
   font-size: 11px;
   font-family: var(--font-mono, monospace);
 }
@@ -1405,7 +1405,7 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 .qq-wl-switch input:checked + .qq-wl-slider {
-  background: linear-gradient(135deg, #ff5b9c, #9c27b0);
+  background: linear-gradient(135deg, var(--color-static-ff5b9c, #ff5b9c), var(--color-static-9c27b0, #9c27b0));
   border-color: transparent;
 }
 .qq-wl-switch input:checked + .qq-wl-slider:before {
@@ -1468,7 +1468,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ff5b9c, #9c27b0);
+  background: linear-gradient(135deg, var(--color-static-ff5b9c, #ff5b9c), var(--color-static-9c27b0, #9c27b0));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1521,17 +1521,17 @@
 .qq-wl-item-btn.danger:hover {
   background: rgba(244, 67, 54, 0.2);
   border-color: rgba(244, 67, 54, 0.5);
-  color: #ff6b6b;
+  color: var(--color-static-ff6b6b, #ff6b6b);
 }
 .qq-wl-status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #4caf50;
+  background: var(--color-static-4caf50, #4caf50);
   box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
 }
 .qq-wl-status-dot.off {
-  background: #9e9e9e;
+  background: var(--color-static-9e9e9e, #9e9e9e);
   box-shadow: none;
 }
 

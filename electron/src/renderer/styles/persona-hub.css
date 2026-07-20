@@ -66,8 +66,8 @@
 }
 
 .persona-btn--primary {
-  background: linear-gradient(135deg, #ff6b9d 0%, #ff4785 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-static-ff6b9d, #ff6b9d) 0%, var(--color-static-ff4785, #ff4785) 100%);
+  color: var(--color-static-fff, #fff);
   box-shadow: 0 2px 8px rgba(255, 107, 157, 0.35);
 }
 
@@ -126,8 +126,8 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ffb3cc 0%, #ff8fb1 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-static-ffb3cc, #ffb3cc) 0%, var(--color-static-ff8fb1, #ff8fb1) 100%);
+  color: var(--color-static-fff, #fff);
   font-size: 24px;
   font-weight: 700;
   display: flex;
@@ -155,14 +155,14 @@
 }
 
 .persona-card:hover {
-  border-color: #ffb3cc;
+  border-color: var(--color-static-ffb3cc, #ffb3cc);
   box-shadow: 0 4px 12px rgba(255, 107, 157, 0.15);
   transform: translateY(-2px);
 }
 
 .persona-card--active {
-  border-color: #ff6b9d;
-  background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%);
+  border-color: var(--color-static-ff6b9d, #ff6b9d);
+  background: linear-gradient(135deg, var(--color-static-fff5f8, #fff5f8) 0%, var(--color-static-ffffff, #ffffff) 100%);
 }
 
 .persona-card__avatar {
@@ -170,7 +170,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ffb3cc 0%, #ff8fb1 100%);
+  background: linear-gradient(135deg, var(--color-static-ffb3cc, #ffb3cc) 0%, var(--color-static-ff8fb1, #ff8fb1) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,7 +185,7 @@
 }
 
 .persona-card__avatar span {
-  color: #fff;
+  color: var(--color-static-fff, #fff);
   font-size: 22px;
   font-weight: 600;
 }
@@ -194,8 +194,8 @@
   position: absolute;
   bottom: -4px;
   right: -4px;
-  background: #ff4785;
-  color: #fff;
+  background: var(--color-static-ff4785, #ff4785);
+  color: var(--color-static-fff, #fff);
   font-size: 10px;
   font-weight: 500;
   padding: 2px 8px;
@@ -243,8 +243,8 @@
 }
 
 .persona-card__btn--activate {
-  background: linear-gradient(135deg, #ff6b9d 0%, #ff4785 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-static-ff6b9d, #ff6b9d) 0%, var(--color-static-ff4785, #ff4785) 100%);
+  color: var(--color-static-fff, #fff);
 }
 
 .persona-card__btn--activate:hover {
@@ -347,7 +347,7 @@
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ffb3cc 0%, #ff8fb1 100%);
+  background: linear-gradient(135deg, var(--color-static-ffb3cc, #ffb3cc) 0%, var(--color-static-ff8fb1, #ff8fb1) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -362,7 +362,7 @@
 }
 
 .persona-avatar-card__img span {
-  color: #fff;
+  color: var(--color-static-fff, #fff);
   font-size: 32px;
   font-weight: 600;
 }
@@ -407,7 +407,7 @@
 
 .persona-nav-item--active {
   background: var(--card, #fff);
-  color: #ff4785;
+  color: var(--color-static-ff4785, #ff4785);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
@@ -461,7 +461,7 @@
 .persona-form-input:focus,
 .persona-form-textarea:focus {
   outline: none;
-  border-color: #ff8fb1;
+  border-color: var(--color-static-ff8fb1, #ff8fb1);
   box-shadow: 0 0 0 3px rgba(255, 143, 177, 0.15);
 }
 
@@ -522,7 +522,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #ff6b9d;
+  background: var(--color-static-ff6b9d, #ff6b9d);
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(255, 107, 157, 0.4);
   transition: transform 0.15s ease;
@@ -548,11 +548,11 @@
 }
 
 .dark .persona-card:hover {
-  border-color: #ff6b9d;
+  border-color: var(--color-static-ff6b9d, #ff6b9d);
 }
 
 .dark .persona-card--active {
-  background: linear-gradient(135deg, #2c1c22 0%, #1c1c1e 100%);
+  background: linear-gradient(135deg, var(--color-static-2c1c22, #2c1c22) 0%, var(--color-static-1c1c1e, #1c1c1e) 100%);
 }
 
 .dark .persona-card__badge {
@@ -583,7 +583,7 @@
 
 .dark .persona-nav-item--active {
   background: var(--card, #1c1c1e);
-  color: #ff8fb1;
+  color: var(--color-static-ff8fb1, #ff8fb1);
 }
 
 .dark .persona-form-input,
@@ -595,7 +595,7 @@
 
 .dark .persona-form-input:focus,
 .dark .persona-form-textarea:focus {
-  border-color: #ff6b9d;
+  border-color: var(--color-static-ff6b9d, #ff6b9d);
   box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
 }
 

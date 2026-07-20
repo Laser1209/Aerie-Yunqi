@@ -150,7 +150,7 @@ class SettingsPanel {
         const reloaded = (results.reloaded || []).join(", ");
         const updated = (results.updated || []).join(", ");
         if (st) {
-          st.textContent = "配置已热重载 ✓ " + (reloaded ? "[" + reloaded + "]" : "");
+          st.textContent = "配置已热重载。 " + (reloaded ? "[" + reloaded + "]" : "");
           st.style.color = "var(--success, #2ecc71)";
         }
       }
@@ -218,7 +218,7 @@ class SettingsPanel {
                      value="${p.configured ? p.api_key_masked : ''}" placeholder="请输入 API Key"
                      ${p.configured ? '' : ''}>
               <button type="button" class="apikey-toggle-btn" data-provider="${p.key}" title="显示/隐藏">
-                👁
+                <svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-eye"/></svg>
               </button>
             </div>
           </label>
@@ -306,7 +306,7 @@ class SettingsPanel {
         body,
       });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
-      if (st) { st.textContent = "保存成功 ✓ 重启后端后生效"; st.style.color = "var(--success, #2ecc71)"; }
+      if (st) { st.textContent = "保存成功，重启后端后生效"; st.style.color = "var(--success, #2ecc71)"; }
       await this.loadApiKeys();
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }

@@ -33,13 +33,13 @@
 }
 
 .proactive-status.active {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-static-dcfce7, #dcfce7);
+  color: var(--color-static-166534, #166534);
 }
 
 .proactive-status.inactive {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--color-static-fee2e2, #fee2e2);
+  color: var(--color-static-991b1b, #991b1b);
 }
 
 /* Stats */
@@ -147,13 +147,13 @@
 }
 
 .badge.mood {
-  background: #fce7f3;
-  color: #be185d;
+  background: var(--color-static-fce7f3, #fce7f3);
+  color: var(--color-static-be185d, #be185d);
 }
 
 .badge.exempt {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--color-static-fef3c7, #fef3c7);
+  color: var(--color-static-b45309, #b45309);
 }
 
 .scene-template {
@@ -200,11 +200,11 @@
   font-weight: 600;
 }
 
-.event-priority.critical { background: #fecaca; color: #991b1b; }
-.event-priority.high { background: #fed7aa; color: #c2410c; }
-.event-priority.medium { background: #fef3c7; color: #b45309; }
-.event-priority.low { background: #d1fae5; color: #065f46; }
-.event-priority.info { background: #dbeafe; color: #1e40af; }
+.event-priority.critical { background: var(--color-static-fecaca, #fecaca); color: var(--color-static-991b1b, #991b1b); }
+.event-priority.high { background: var(--color-static-fed7aa, #fed7aa); color: var(--color-static-c2410c, #c2410c); }
+.event-priority.medium { background: var(--color-static-fef3c7, #fef3c7); color: var(--color-static-b45309, #b45309); }
+.event-priority.low { background: var(--color-static-d1fae5, #d1fae5); color: var(--color-static-065f46, #065f46); }
+.event-priority.info { background: var(--color-static-dbeafe, #dbeafe); color: var(--color-static-1e40af, #1e40af); }
 
 .event-source {
   color: var(--text-tertiary, #9ca3af);
@@ -267,12 +267,12 @@
 }
 
 .toast-success {
-  background: #16a34a;
+  background: var(--color-static-16a34a, #16a34a);
   color: white;
 }
 
 .toast-error {
-  background: #dc2626;
+  background: var(--color-static-dc2626, #dc2626);
   color: white;
 }
 

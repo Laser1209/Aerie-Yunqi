@@ -242,7 +242,7 @@ body {
 
 .header-btn--close:hover {
   background: var(--color-error, #e74c3c);
-  color: #fff;
+  color: var(--color-static-fff, #fff);
 }
 
 /* Status indicators */
@@ -627,19 +627,19 @@ body {
 }
 .status-qq-badge--idle {
   background: rgba(149, 165, 166, 0.15);
-  color: #95a5a6;
+  color: var(--color-static-95a5a6, #95a5a6);
 }
 .status-qq-badge--starting {
   background: rgba(243, 156, 18, 0.15);
-  color: #f39c12;
+  color: var(--color-static-f39c12, #f39c12);
 }
 .status-qq-badge--qr_pending {
   background: rgba(52, 152, 219, 0.15);
-  color: #3498db;
+  color: var(--color-static-3498db, #3498db);
 }
 .status-qq-badge--connected {
   background: rgba(46, 204, 113, 0.15);
-  color: #2ecc71;
+  color: var(--color-static-2ecc71, #2ecc71);
 }
 .status-qq-chevron {
   transition: transform .2s;
@@ -1794,7 +1794,7 @@ body {
 
 .di-preview-capsule.theme-pink {
   background: linear-gradient(135deg, rgba(255, 182, 193, 0.9) 0%, rgba(255, 105, 180, 0.85) 100%);
-  color: #fff;
+  color: var(--color-static-fff, #fff);
 }
 
 .di-preview-capsule.theme-light {
@@ -1861,7 +1861,7 @@ body {
 }
 
 .di-theme-pink {
-  background: linear-gradient(135deg, #ffb6c1 0%, #ff69b4 100%);
+  background: linear-gradient(135deg, var(--color-static-ffb6c1, #ffb6c1) 0%, var(--color-static-ff69b4, #ff69b4) 100%);
 }
 
 .di-theme-light {
@@ -2130,10 +2130,10 @@ body {
   opacity: 0.7;
 }
 .chat-mic-status.phase-error {
-  color: #ff6b6b;
+  color: var(--color-static-ff6b6b, #ff6b6b);
 }
 .chat-mic-status.phase-error .chat-mic-status__pulse {
-  background: #ff6b6b;
+  background: var(--color-static-ff6b6b, #ff6b6b);
   animation: mic-error-pulse 0.6s ease-in-out infinite;
 }
 @keyframes mic-error-pulse {

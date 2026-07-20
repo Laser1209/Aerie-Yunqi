@@ -144,7 +144,7 @@ class PersonaHubPanel {
                     <option value="ENTP">ENTP - 辩论家</option>
                     <option value="INFJ">INFJ - 提倡者</option>
                     <option value="INFP">INFP - 调停者</option>
-                    <option value="ENFJ">ENFJ - 主人公</option>
+                    <option value="ENFJ">ENFJ - 引导者</option>
                     <option value="ENFP">ENFP - 竞选者</option>
                     <option value="ISTJ">ISTJ - 物流师</option>
                     <option value="ISFJ">ISFJ - 守卫者</option>
@@ -205,7 +205,7 @@ class PersonaHubPanel {
                 <h3 class="persona-section__title">行为规范</h3>
                 <div class="persona-form-row">
                   <label class="persona-form-label">对用户的称呼</label>
-                  <input type="text" class="persona-form-input" id="persona-field-user_address" placeholder="例如：宝贝、亲爱的、主人">
+                  <input type="text" class="persona-form-input" id="persona-field-user_address" placeholder="例如：宝贝、亲爱的、你">
                 </div>
                 <div class="persona-form-row">
                   <label class="persona-form-label">口头禅 / 常用语</label>

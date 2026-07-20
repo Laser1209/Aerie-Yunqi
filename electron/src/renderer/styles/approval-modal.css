@@ -55,9 +55,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #ff9f0a 0%, #ff6b00 100%);
+  background: linear-gradient(135deg, var(--color-static-ff9f0a, #ff9f0a) 0%, var(--color-static-ff6b00, #ff6b00) 100%);
   border-radius: 12px;
-  color: #fff;
+  color: var(--color-static-fff, #fff);
 }
 
 .approval-modal__icon svg {
@@ -140,28 +140,28 @@
 }
 
 .approval-risk-badge--safe {
-  background: #e9f9ee;
-  color: #248a3d;
+  background: var(--color-static-e9f9ee, #e9f9ee);
+  color: var(--color-static-248a3d, #248a3d);
 }
 
 .approval-risk-badge--low {
-  background: #e8f2ff;
-  color: #0066cc;
+  background: var(--color-static-e8f2ff, #e8f2ff);
+  color: var(--color-static-0066cc, #0066cc);
 }
 
 .approval-risk-badge--medium {
-  background: #fff4e5;
-  color: #b86b00;
+  background: var(--color-static-fff4e5, #fff4e5);
+  color: var(--color-static-b86b00, #b86b00);
 }
 
 .approval-risk-badge--high {
-  background: #ffecea;
-  color: #d9382e;
+  background: var(--color-static-ffecea, #ffecea);
+  color: var(--color-static-d9382e, #d9382e);
 }
 
 .approval-risk-badge--critical {
-  background: #ffe5e5;
-  color: #c92020;
+  background: var(--color-static-ffe5e5, #ffe5e5);
+  color: var(--color-static-c92020, #c92020);
 }
 
 /* Params */
@@ -234,8 +234,8 @@
 }
 
 .approval-btn--approve {
-  background: linear-gradient(135deg, #007aff 0%, #0066d6 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-static-007aff, #007aff) 0%, var(--color-static-0066d6, #0066d6) 100%);
+  color: var(--color-static-fff, #fff);
   box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
 }
 

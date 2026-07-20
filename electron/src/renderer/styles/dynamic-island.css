@@ -61,12 +61,12 @@ button {
   --di-text: rgba(255, 255, 255, 0.95);
   --di-text-secondary: rgba(255, 255, 255, 0.6);
   --di-text-tertiary: rgba(255, 255, 255, 0.4);
-  --di-accent: #66abff;
+  --di-accent: var(--color-static-66abff, #66abff);
   --di-accent-soft: rgba(102, 171, 255, 0.2);
   --di-glow: rgba(102, 171, 255, 0.35);
-  --di-success: #34d399;
-  --di-warning: #fbbf24;
-  --di-danger: #f87171;
+  --di-success: var(--color-static-34d399, #34d399);
+  --di-warning: var(--color-static-fbbf24, #fbbf24);
+  --di-danger: var(--color-static-f87171, #f87171);
   --di-blur: 24px;
   --di-radius: 18px;
   --di-radius-expanded: 20px;
@@ -79,15 +79,15 @@ button {
   --di-bg-hover: linear-gradient(135deg, rgba(255, 182, 193, 0.95) 0%, rgba(255, 105, 180, 0.9) 100%);
   --di-border: rgba(255, 255, 255, 0.3);
   --di-border-strong: rgba(255, 255, 255, 0.45);
-  --di-text: #ffffff;
+  --di-text: var(--color-static-ffffff, #ffffff);
   --di-text-secondary: rgba(255, 255, 255, 0.85);
   --di-text-tertiary: rgba(255, 255, 255, 0.65);
-  --di-accent: #ff69b4;
+  --di-accent: var(--color-static-ff69b4, #ff69b4);
   --di-accent-soft: rgba(255, 105, 180, 0.3);
   --di-glow: rgba(255, 105, 180, 0.45);
-  --di-success: #6ee7b7;
-  --di-warning: #fcd34d;
-  --di-danger: #fca5a5;
+  --di-success: var(--color-static-6ee7b7, #6ee7b7);
+  --di-warning: var(--color-static-fcd34d, #fcd34d);
+  --di-danger: var(--color-static-fca5a5, #fca5a5);
   --di-blur: 24px;
   --di-radius: 18px;
   --di-radius-expanded: 20px;
@@ -103,12 +103,12 @@ button {
   --di-text: rgba(30, 30, 40, 0.95);
   --di-text-secondary: rgba(30, 30, 40, 0.55);
   --di-text-tertiary: rgba(30, 30, 40, 0.35);
-  --di-accent: #007aff;
+  --di-accent: var(--color-static-007aff, #007aff);
   --di-accent-soft: rgba(0, 122, 255, 0.12);
   --di-glow: rgba(0, 122, 255, 0.2);
-  --di-success: #10b981;
-  --di-warning: #f59e0b;
-  --di-danger: #ef4444;
+  --di-success: var(--color-static-10b981, #10b981);
+  --di-warning: var(--color-static-f59e0b, #f59e0b);
+  --di-danger: var(--color-static-ef4444, #ef4444);
   --di-blur: 20px;
   --di-radius: 18px;
   --di-radius-expanded: 20px;
@@ -300,7 +300,7 @@ button {
   padding: 0 5px;
   border-radius: 9px;
   background: var(--di-accent);
-  color: #fff;
+  color: var(--color-static-fff, #fff);
   font-size: 10px;
   font-weight: 600;
   display: flex;
@@ -712,7 +712,7 @@ button {
   height: 34px;
   font-size: 14px;
   background: var(--di-accent);
-  color: #fff;
+  color: var(--color-static-fff, #fff);
 }
 
 .di-media-play:hover {

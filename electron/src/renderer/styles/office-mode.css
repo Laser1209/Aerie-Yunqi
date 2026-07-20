@@ -2,12 +2,12 @@
 
 /* 工具栏按钮激活态 */
 .chat-input-toolbar__btn[aria-pressed="true"] {
-  color: #ff4785;
+  color: var(--color-static-ff4785, #ff4785);
   background: rgba(255, 71, 133, 0.1);
 }
 
 .chat-input-toolbar__btn--office-active {
-  color: #ff6b00 !important;
+  color: var(--color-static-ff6b00, #ff6b00) !important;
   background: rgba(255, 107, 0, 0.12) !important;
 }
 
@@ -17,24 +17,24 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  background: linear-gradient(135deg, #fff4e5 0%, #ffedd5 100%);
+  background: linear-gradient(135deg, var(--color-static-fff4e5, #fff4e5) 0%, var(--color-static-ffedd5, #ffedd5) 100%);
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  color: #b86b00;
+  color: var(--color-static-b86b00, #b86b00);
   margin-right: auto;
 }
 
 .dark .office-mode-indicator {
   background: linear-gradient(135deg, rgba(255, 107, 0, 0.18) 0%, rgba(255, 107, 0, 0.1) 100%);
-  color: #ff9f0a;
+  color: var(--color-static-ff9f0a, #ff9f0a);
 }
 
 .office-mode-indicator__dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #ff6b00;
+  background: var(--color-static-ff6b00, #ff6b00);
   animation: office-pulse 2s ease-in-out infinite;
 }
 
@@ -45,7 +45,7 @@
 
 /* 办公模式消息气泡 */
 .chat-bubble--office {
-  border-left: 3px solid #ff9f0a;
+  border-left: 3px solid var(--color-static-ff9f0a, #ff9f0a);
 }
 
 /* 办公模式下拉菜单 */
@@ -148,7 +148,7 @@
 
 .office-menu__item--active {
   background: linear-gradient(135deg, rgba(255, 107, 0, 0.12) 0%, rgba(255, 71, 133, 0.08) 100%);
-  color: #ff6b00;
+  color: var(--color-static-ff6b00, #ff6b00);
   font-weight: 500;
 }
 
@@ -159,7 +159,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #ff6b00;
+  background: var(--color-static-ff6b00, #ff6b00);
   box-shadow: 0 0 8px rgba(255, 107, 0, 0.6);
 }
 

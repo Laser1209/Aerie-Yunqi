@@ -92,15 +92,27 @@ flowchart LR
 
 供 API 使用：
 
-- `submit()`：验证文本/附件，解析 Conversation，创建输入快照并返回 queued Request。
-- `cancel()`：执行 queued 或 running 取消。
-- `retry()`：仅从 failed/cancelled 创建新 Request，并关联原请求。
+- `submit()`：验证文本/附件，按 Phase 03 的确定性规则解析或创建 Conversation，同时预分配 pending Turn，创建输入快照并返回 queued Request。
+- `cancel()`：执行 queued 或 running 取消，并同步终结尚未完成的预分配 Turn。
+- `retry()`：仅从 failed/cancelled 创建新 Request；重试复用 Conversation，但分配新的 `request_id` 与 `turn_id`，并关联原请求。
 - `get()`：返回脱敏状态，不返回内部错误堆栈或敏感输入。
 - Flag 关闭时 API 完全绕过 Service/Worker，继续旧同步路径。
 
 ## 数据模型与迁移
 
 Phase 04 从 `migration: false` 改为 `migration: true`。新增版本化迁移，不修改已发布 004/005 checksum。
+
+### Request 与 Turn 生命周期裁决
+
+为保持现有 `requests.turn_id NOT NULL` 外键合同，Phase 04 不把 `turn_id` 改为可空，也不新建平行 queue payload 表：
+
+1. `submit()` 在同一短事务中确定 `conversation_id`，创建状态为 `pending` 的 Turn，再创建指向该 Turn 的 queued Request。
+2. queued Request 的不可变输入快照只保存在 Request；此时不创建规范 user Message，也不写 legacy `chat_log`，避免取消前产生可见半轮次。
+3. Worker claim 后沿用同一 `request_id/turn_id/conversation_id` 调用 Pipeline。
+4. `ConversationRepository.persist_turn()` 演进为“完成预分配 Turn”：当 Request 已存在时更新该 Request 和 Turn，并插入 Message；仅 legacy 同步路径仍允许按原合同创建完整 Turn/Request。
+5. Request、Turn 与规范 Message 的完成写入继续处于同一 SAVEPOINT；任一步失败全部回滚，不允许重复主键、孤立 Turn 或半完成 Request。
+6. queued 取消、启动恢复失败或运行失败必须同步把预分配 Turn 置为对应终态；失败/取消 Turn 不进入 `recent_turn_history()` 的完成历史。
+7. retry 复用原 Conversation，但必须创建新的 Request 和新的 pending Turn；原 Request/Turn 保持原终态。
 
 现有 `requests` 表最小扩展：
 
@@ -123,7 +135,9 @@ Phase 04 从 `migration: false` 改为 `migration: true`。新增版本化迁移
 | `last_heartbeat_at` | 最近续租时间 |
 | `error_code` | 稳定机器可读错误码 |
 
-迁移要求：backup、dry-run、固定 checksum、重复运行幂等、旧行兼容、`PRAGMA quick_check`、失败状态可审计。现有历史 completed Request 不反推或猜测输入快照。
+迁移要求：backup、dry-run、固定 checksum、重复运行幂等、旧行兼容、`PRAGMA quick_check`、失败状态可审计。现有历史 completed Request 不反推或猜测输入快照。为 claim 与互斥增加必要索引，至少覆盖 `status + created_at`、`conversation_id + status` 与 `lease_expires_at`；不修改 004/005 定义。
+
+Conversation 解析唯一采用 Phase 03 的确定性键：`actor_id + channel + channel_account_id + legacy user_id`。不得由 Renderer 自行指定任意 Conversation，也不得在缺少规范身份来源时猜测 Actor/Channel。
 
 ## 状态机
 
@@ -148,7 +162,9 @@ stateDiagram-v2
 - 原 Request 不原地重试。
 - 同一 Conversation 不得同时有两个 running/cancelling Request。
 - lease 过期只转失败，不自动重排。
-- completed/failed/cancelled 为终态。
+- completed/failed/cancelled 为 Request 终态。
+- Request 状态与其预分配 Turn 状态必须守恒：queued 对应 pending，running/cancelling 对应 running，completed/failed/cancelled 对应同名 Turn 终态。
+- 只有 completed Turn 可进入规范近期历史；pending/running/failed/cancelled Turn 不得污染模型上下文。
 
 ## API 合同
 

@@ -48,6 +48,7 @@ views:
     filters:
       or:
         - 'status == "planned"'
+        - 'status == "review"'
         - 'status == "in_progress"'
         - 'status == "blocked"'
     order: [file.name, phase, status, acceptance_ids]

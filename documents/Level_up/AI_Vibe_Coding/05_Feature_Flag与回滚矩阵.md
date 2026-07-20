@@ -10,7 +10,7 @@ tags: [aerie, rollback]
 |主动消息|proactive_delivery_v2|QQ-only|
 |身份|identity_contract_v1|legacy user_id|
 |四表|conversation_model_v1|chat_log 读路径|
-|队列|chat_request_queue_v1|旧 send|
+|队列|chat_request_queue_v1|停止 Worker claim，`/api/chat/send` 恢复旧同步 200；保留新列、pending/queued/failed 记录与预分配 Turn，不破坏性降级|
 |流式|chat_stream_v1|完整响应与 poll|
 |Context|context_budget_v1|旧 Builder|
 |Persona|persona_hub_source_v1|旧只读投影|

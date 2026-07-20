@@ -40,7 +40,8 @@ evidence: ["file:///E:/Agent_reply/core/database.py", "file:///E:/Agent_reply/co
 - 组合根批次回归：Phase 3 + Pipeline `37 passed`；Phase 0/2/3 + Pipeline `82 passed, 4 warnings`；完整 Python `350 passed, 6 warnings`；修改文件诊断为空。
 - 005 cursor：每批最多 500 行；批次成功后写 Ledger cursor；失败保留最后成功 cursor；续跑恢复跨批 Turn 与 sequence，并只补剩余 Message；固定 005 checksum 未修改。
 - cursor 批次回归：Phase 3 + Pipeline `40 passed`；Phase 0/2/3 + Pipeline `85 passed, 4 warnings`；完整 Python `353 passed, 6 warnings`；诊断与 `git diff --check` 通过。
-- 未完成：真实库 backup/dry-run/守恒报告、生产库备份恢复与迁移回滚；不得将本 Task 标记为 done。
+- 生产数据副本演练：在线一致性备份成功；独立 rehearsal 上 dry-run 零写入；1754 条 legacy/canonical Message 数量与脱敏有序载荷摘要守恒；4 个 Conversation、299 个 Turn/Request；cursor=`1754`；重复 id=0；幂等二次运行计数不变；quick check 通过；源库哈希未变。
+- 未完成：用户生产运行态 Flag 开关、恢复时间/数据损失记录与生产库恢复；不得将本 Task 标记为 done。
 
 ## 链接
 [[Phase 03]] · [[90_全局验收清单]] · [[92_回滚演练]]

@@ -41,6 +41,7 @@ _REPLAY_BUFFER_SIZE = 500
 
 
 _replay_buffer: deque[dict[str, Any]] = deque(maxlen=_REPLAY_BUFFER_SIZE)
+_world_event_ids: set[str] = set()
 
 
 async def _add_subscriber() -> asyncio.Queue[dict[str, Any]]:
@@ -175,7 +176,34 @@ def publish(event_type: str, payload: dict) -> None:
         logger.exception("event stream publish error")
 
 
+def publish_world_event_once(event: dict[str, Any]) -> bool:
+    """Publish a sidecar world event once by ``event_id``.
+
+    Sidecar delivery is at-least-once; this helper provides a process-local
+    dedupe guard before forwarding events into the Core UI stream.  It does
+    not replace persistent ACK cursors in ``world.db``.
+    """
+    event_id = _event_id(event)
+    if not event_id:
+        return False
+    if event_id in _world_event_ids:
+        return False
+    _world_event_ids.add(event_id)
+    publish(
+        "world_event",
+        {
+            "event_id": event_id,
+            "topic": event.get("topic", "world"),
+            "event_type": event.get("event_type", "world.event"),
+            "sequence": event.get("sequence") or event.get("seq") or 0,
+            "payload": event.get("payload") if isinstance(event.get("payload"), dict) else {},
+        },
+    )
+    return True
+
+
 def _reset_for_tests() -> None:
     """Clear process-local stream state for deterministic unit tests."""
     _subscribers.clear()
     _replay_buffer.clear()
+    _world_event_ids.clear()

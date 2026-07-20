@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const http = require("http");
 const { createCapabilityBroker } = require("./capability-broker");
+const { createPluginSupervisor } = require("./plugin-supervisor");
 
 // ── Config ──────────────────────────────────────────
 const PY_PORT = 7890;
@@ -47,6 +48,7 @@ let BACKEND_DATA_DIR = null;
 let BACKEND_LOG_DIR = null;
 const START_MINIMIZED_ARG = "--start-minimized";
 const worldCapabilityBroker = createCapabilityBroker();
+const worldPluginSupervisor = createPluginSupervisor();
 
 function isStartMinimizedArgPresent() {
   return process.argv.includes(START_MINIMIZED_ARG) || process.argv.includes("--hidden");

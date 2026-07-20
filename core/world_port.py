@@ -443,6 +443,26 @@ def build_world_port(
     relationship_config: dict[str, Any] | None = None,
 ) -> WorldPort:
     try:
+        sidecar_enabled = bool(feature_flags.is_enabled("world_sidecar_v1"))
+    except Exception:
+        logger.exception("failed to read world_sidecar_v1 feature flag")
+        sidecar_enabled = False
+    if sidecar_enabled:
+        try:
+            from pathlib import Path
+
+            from core.world_adapters.remote import RemoteWorldAdapter
+            from world_service.main import LocalWorldSidecarService
+
+            service = LocalWorldSidecarService(
+                data_dir=Path("data") / "world_sidecar",
+            )
+            return RemoteWorldAdapter(service)
+        except Exception:
+            logger.exception("failed to initialize remote world adapter")
+            return NullWorldAdapter(reason="sidecar_init_failed")
+
+    try:
         enabled = bool(feature_flags.is_enabled("world_inprocess_v1"))
     except Exception:
         logger.exception("failed to read world_inprocess_v1 feature flag")

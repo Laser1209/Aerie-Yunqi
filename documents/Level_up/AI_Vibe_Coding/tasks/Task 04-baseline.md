@@ -33,8 +33,8 @@ evidence:
 ---
 # Task 04-baseline
 
-> [!success] Phase 04 已进入严格 TDD 实施
-> 书面规范和逐批实施计划已批准；Phase 00–03 门禁、006 Migration 与测试 Fixture 批次均已通过真实 Red → Green 和完整回归。当前下一小节为 Repository Red，`rollback_ready` 继续保持 false。
+> [!success] Phase 04 Task 1–6 已按严格 TDD 收口
+> 书面规范和逐批实施计划已批准；Phase 00–03 门禁、006 Migration、测试 Fixture、ChatRequestRepository、ConversationRepository 完成路径与 ChatRequestService 均已通过真实 Red → Green 和完整回归。当前下一小节为 ChatRequestWorker Red，`rollback_ready` 继续保持 false。
 >
 > [Phase 04 持久 Request 队列实施计划](file:///E:/Agent_reply/documents/Level_up/AI_Vibe_Coding/plans/2026-07-20-Phase-04-%E6%8C%81%E4%B9%85Request%E9%98%9F%E5%88%97%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md)
 
@@ -61,8 +61,9 @@ evidence:
 ## TDD 批次
 
 - [x] Migration Red/Green：独立 `006_chat_request_queue` 已由真实失败测试驱动完成；16 个字段、3 个索引、固定 checksum、dry-run、幂等、部分应用恢复、旧库兼容与 quick_check 均通过。
-- [ ] Repository Red：验证提交原子性、预分配 Turn、claim、Conversation 互斥、lease/heartbeat 与状态守恒。
-- [ ] Service Red：验证 202 提交、纯附件、所有权、取消与新 ID 重试。
+- [x] Repository Red/Green：验证提交原子性、预分配 Turn、claim、Conversation 互斥、lease/heartbeat、恢复、retry 与状态守恒。
+- [x] ConversationRepository Red/Green：完成同一预分配 Request/Turn、可信输入快照、幂等冲突、SAVEPOINT 回滚、completed-only history 和 orphan 守恒。
+- [x] Service Red/Green：验证可信提交、纯附件、所有权、取消竞态、稳定错误合同、脱敏 DTO 与新 ID 重试；HTTP 202 映射保留至 API Task 9。
 - [ ] Worker Red：验证四路槽、同 Conversation 串行、真实 Task 取消、启动恢复与 lease 过期失败。
 - [ ] Pipeline Red：在模型、持久化、规范镜像、事件和外部投递边界检查取消，禁止重复副作用。
 - [ ] API Red：Flag 开启为异步 202；Flag 关闭保持原同步 200 与空消息 400 合同。
@@ -86,6 +87,28 @@ evidence:
 - 并发与租约：同 Conversation 第二请求保持 queued；不同 Conversation 可继续 claim；错误 lease owner heartbeat 返回 false，正确 owner 延长 UTC lease。
 - retry：原 request 保持 failed/error_code，新 request 与新 pending turn 使用独立 ID 并写入 `retry_of_request_id`。
 - 安全边界：Repository 无 Brain/Pipeline/chat_events/QQ 依赖；Evidence 不记录 input/effective content；`rollback_ready=false` 保持不变。
+
+## ConversationRepository Task 5 Evidence
+
+- 接管基线为 `16 passed`，但缺 3 个固定测试名且允许 queued 直接完成；补齐状态、快照和终态清理合同后观察到目标 Red：`6 failed, 18 passed`。
+- Green：Repository 专项 `24 passed in 4.18s`；Phase 3 + Phase 4 migration/repository `50 passed in 6.07s`；Phase 00–04 + API + Pipeline `174 passed, 5 warnings in 11.84s`。
+- 完整 Python：`387 passed, 1 deselected, 7 warnings in 28.35s`；被排除的办公目录环境用例在工作区临时目录中单独 `1 passed`。
+- 状态与原子性：仅 running/running 可完成；queued/cancelling 不可覆盖；Message、Request、Turn 在同一 SAVEPOINT 内提交，注入失败后保持 running/running 且 Message=0。
+- 不可变快照：conversation/turn、Actor、Channel、Channel Account、legacy user_id、可见输入与附件不一致统一抛 `RequestConflict`；completed 幂等返回原 ID，不同结果不覆盖。
+- 终态清理：completed 同时清 `lease_owner`、`lease_expires_at`、`error`、`error_code`；failed/cancelled/pending 不进入近期完成历史。
+- 只读生产审计：四表计数 `4/299/299/1754`；`quick_check=ok`，FK、活跃 Conversation、Request/Turn 状态错配、orphan Turn/Request/Message 均为 0；未写生产库。
+- Python `py_compile`、Electron Persona `3 passed`、相关 Node 语法检查与 `git diff --check` 通过；`rollback_ready=false`，下一批从 Service Red 开始。
+
+## ChatRequestService Task 6 Evidence
+
+- 首轮 Red：`15 failed, 1 passed`，目标缺口为 Service 模块不存在；未修改 API。首轮 Green 后风险复核补出 cancel/附件边界 Red：`5 failed, 18 passed`。
+- 最终 Green：Service 专项 `25 passed in 4.40s`；身份/Conversation/migration/Repository/Service/upload 关联 `114 passed, 5 warnings`；Phase 00–04 + API + Pipeline `199 passed, 5 warnings`。
+- 完整 Python：`411 passed, 1 deselected, 7 warnings`；办公目录环境用例在工作区临时目录单独通过。
+- 可信身份：只调用 `IdentityRepository.resolve("desktop", "local")`；公开 submit 签名不含 actor/conversation/turn，legacy user_id 仅作兼容寻址。
+- 纯附件与安全：空可见输入和内部中性输入分离；只接收 ready、五字段、单层 safe-name 上传元数据，拒绝非 ready、穿越、编码分隔符和客户端正文/路径/Markdown。
+- 所有权与 DTO：get/cancel/retry 对缺失和非所有者完全等价；响应不含 input/effective/attachments/lease/error，序列化值扫描也不含敏感测试值。
+- cancel/retry：三种终态 cancel 幂等；非法状态 retry 冲突；failed/cancelled 创建新 Request/Turn；事务返回状态消除 queued→running 与 running→completed 的 cancel TOCTOU。
+- 兼容边界：Service 尚未注入 Companion/API，旧同步聊天、Pipeline、QQ 和 Renderer 没有行为变化；`rollback_ready=false`，下一批从 Worker Red 开始。
 
 ## 测试 Fixture Evidence
 

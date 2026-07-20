@@ -1,5 +1,20 @@
+feature_flags:
+  chat_request_queue_v1: false
+  chat_stream_v1: false
+  context_budget_v1: false
+  conversation_model_v1: false
+  identity_contract_v1: false
+  image_assets_v1: false
+  migration_framework_v1: true
+  persona_hub_source_v1: false
+  proactive_delivery_v2: false
+  world_image_candidates_v1: false
+  world_inprocess_v1: false
+  world_sidecar_v1: false
 office:
   dir: F:\文件\Aerie
+proactive:
+  system_notifications: true
 qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0
@@ -8,18 +23,3 @@ verify_batch4:
   ts: 1784404889
 weather:
   city: 济南
-proactive:
-  system_notifications: true
-feature_flags:
-  migration_framework_v1: true
-  proactive_delivery_v2: false
-  identity_contract_v1: false
-  conversation_model_v1: false
-  chat_request_queue_v1: false
-  chat_stream_v1: false
-  context_budget_v1: false
-  persona_hub_source_v1: false
-  image_assets_v1: false
-  world_inprocess_v1: false
-  world_sidecar_v1: false
-  world_image_candidates_v1: false

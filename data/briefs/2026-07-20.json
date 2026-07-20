@@ -92,13 +92,19 @@
     }
   ],
   "weather": {
-    "city": "上海",
+    "city": "济南",
+    "source": "manual",
+    "manual": true,
+    "fallback": false,
     "temp": "26",
     "desc": "多云",
+    "humidity": "",
+    "wind": "",
     "suggestion": "穿合适的衣服。",
-    "ts": 1784477009,
-    "stub": true,
-    "manual": false
+    "forecast": [],
+    "ts": 1784543278,
+    "error": "",
+    "stub": true
   },
   "todos": [
     {

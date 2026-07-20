@@ -7,8 +7,8 @@ tags: [aerie, phase, phase04, chat, queue]
 ---
 # Phase 04：持久 Request 队列、取消、重试与纯附件
 
-> [!success] 设计、实施计划与前三批门禁
-> 用户已批准本阶段书面规范；详细 TDD 实施计划已完成自审。Phase 00–03 门禁、006 Migration、测试 Fixture 与 ChatRequestRepository 批次均已按 Red → Green 完成；当前仍在 Phase 04，下一小节必须从 ConversationRepository 兼容性目标 Red 开始。
+> [!success] 设计、实施计划与 Task 1–6 门禁
+> 用户已批准本阶段书面规范；详细 TDD 实施计划已完成自审。Phase 00–03 门禁、006 Migration、测试 Fixture、ChatRequestRepository、ConversationRepository 完成路径与 ChatRequestService 均已按 Red → Green 收口；当前仍在 Phase 04，下一小节必须从 ChatRequestWorker 目标 Red 开始。
 >
 > [Phase 04 持久 Request 队列实施计划](file:///E:/Agent_reply/documents/Level_up/AI_Vibe_Coding/plans/2026-07-20-Phase-04-%E6%8C%81%E4%B9%85Request%E9%98%9F%E5%88%97%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md)
 
@@ -97,13 +97,42 @@ tags: [aerie, phase, phase04, chat, queue]
 > - 已验证：Conversation 复用、pending Turn + queued Request 原子提交、请求插入失败全回滚、同 Conversation claim 互斥、created_at/request_id 排序、UTC lease/heartbeat、running/cancelling 恢复为 `failed/process_interrupted`、queued 保持 queued、Request/Turn 状态守恒、新 Request/Turn retry 且原请求不变、claim 后数据库连接已释放。
 > - `py_compile`、相关 VS Code diagnostics、依赖边界扫描与 `git diff --check` 均通过；未写生产数据库。
 
-快速自检：当前仍在 Phase 04；Repository 批次已 Green，但 ConversationRepository 尚未演进为完成预分配 Turn/Request，Service、Worker、Pipeline、API、Renderer 与生产副本演练仍未完成；`rollback_ready` 继续为 false；下一小节必须先写并观察 ConversationRepository 兼容性 Red。
+快速自检：当前仍在 Phase 04；ChatRequestRepository 批次已 Green；ConversationRepository、Service、Worker、Pipeline、API、Renderer 与生产副本演练仍按后续 Task 顺序推进；`rollback_ready` 继续为 false。
+
+## ConversationRepository 完成路径 Evidence（2026-07-20）
+
+> [!success] Task 5 Red → Green 完成
+> - 接管基线：既有专项 `16 passed`，但固定 Task 5 测试缺 3 个，且完成测试绕过状态机直接执行 queued → completed。
+> - 目标 Red：补齐固定测试名并增加状态/快照/lease 守恒后为 `6 failed, 18 passed`；失败明确指向 queued/cancelling 可误完成、可信输入快照未校验以及 completed 后 lease/error_code 未清理。
+> - 最小 Green：只允许预分配 Request/Turn 从 running/running 原子完成；在同一 SAVEPOINT 内校验 conversation/turn、Actor/Channel/user_id、可见输入与附件快照，以带旧状态条件的 UPDATE 完成并清理 lease/error；legacy 同步创建完整 Turn 的路径保持兼容。
+> - Task 5 专项：`24 passed in 4.18s`；Phase 3 + Phase 4 migration/repository：`50 passed in 6.07s`；Phase 00–04 + API + Pipeline：`174 passed, 5 warnings in 11.84s`。
+> - 完整 Python：排除唯一不可写办公目录环境用例后 `387 passed, 1 deselected, 7 warnings in 28.35s`；该用例改用工作区临时办公目录后单独 `1 passed`。
+> - Electron Persona 合同 `3 passed`；`main.js`、`preload.js`、`chat.js` 语法检查通过；Python `py_compile` 与 `git diff --check` 无错误，后者仅有 LF→CRLF 提示。
+> - 生产库仅以 SQLite read-only URI 审计：`quick_check=ok`、FK 违规 0、活跃 Conversation 违规 0、Request/Turn 状态错配 0、orphan Turn/Request/Message 均为 0；Conversation/Turn/Request/Message=`4/299/299/1754`，299 个 Request 全部为 completed。未写生产库。
+
+快速自检：Task 5 已完整收口；Service、Worker、Pipeline、API、Renderer 与生产副本演练仍未完成；`rollback_ready=false`；下一小节必须先写并观察 ChatRequestService Red，不提前修改 API。
+
+## ChatRequestService Evidence（2026-07-20）
+
+> [!success] Task 6 Red → Green 完成
+> - 目标 Red：计划固定 Service 测试首次为 `15 failed, 1 passed`，失败统一指向 `core.chat_request_service` 不存在；未先修改 API。
+> - 最小 Green：新增未接线的 `ChatRequestService` 与脱敏 `RequestStatusView`；Repository 只新增所有权读取。Service 只信任后端 `desktop/local` IdentityRepository，Renderer 不能提交 Actor/Conversation/Turn ID。
+> - 风险复核追加 Red：`5 failed, 18 passed`，明确复现 cancel TOCTOU、编码文件名和客户端伪造附件字段；修复后最终 Service 专项 `25 passed in 4.40s`。
+> - 输入边界：空文本且无附件为 `empty_message`；纯 ready 附件保持 `input_content=""`，内部中性 `effective_content` 只写 Request 快照；附件限定现有 `name/url/state/size/type` 五字段和单层安全上传名，拒绝 converting、穿越、编码分隔符及客户端 `path/content/markdown`。
+> - 所有权与错误：不存在和非所有者对 get/cancel/retry 统一 `request_not_found`；非法 retry 为 `request_state_conflict`；completed/failed/cancelled 重复 cancel 保持真实终态；Worker 缺失时非终态 cancel fail closed，不提前改写状态。
+> - 竞态：Service 以 Repository 事务返回状态决定是否调用 Worker；queued 在取消间隙被 claim 时会取消真实 Task，running 在间隙完成时返回 completed 且不再误调用 Worker。
+> - 关联回归：身份/Conversation/migration/Repository/Service/upload `114 passed, 5 warnings in 17.89s`；Phase 00–04 + API + Pipeline `199 passed, 5 warnings in 21.16s`。
+> - 完整 Python：`411 passed, 1 deselected, 7 warnings in 32.53s`；唯一被排除的办公目录环境用例继续在工作区临时目录单独通过。
+> - `ruff`、`py_compile` 与 `git diff --check` 通过。Service 尚未注入 Companion/API，旧同步 `/api/chat/send`、Pipeline、QQ 和 Renderer 行为均未改变。
+
+快速自检：Task 6 已完整收口；Worker、Pipeline、API、Renderer 与生产副本演练仍未完成；`rollback_ready=false`；下一小节先补 Repository 成功/取消严格终态接口并观察 ChatRequestWorker Red。
 
 ## 当前代码证据
 
 - [chat.js](file:///E:/Agent_reply/electron/src/renderer/js/chat.js#L322-L377)：全局 `_loading` 阻止连续输入，发送端同步等待 `/api/chat/send`。
 - [api_server.py](file:///E:/Agent_reply/core/api_server.py#L391-L451)：聊天接口同步 `await comp.pipeline.handle(...)`，空文本直接 400。
-- [conversation_repository.py](file:///E:/Agent_reply/core/conversation_repository.py#L43-L130)：当前 Request 只在完整 Turn 镜像结束时以 `completed` 写入，尚不能承载 queued/running/cancel/retry。
+- [conversation_repository.py](file:///E:/Agent_reply/core/conversation_repository.py)：已支持完成预分配 running Request/Turn、可信快照校验、幂等冲突保护、SAVEPOINT 回滚和 completed-only history；legacy 同步路径保持兼容。
+- [chat_request_service.py](file:///E:/Agent_reply/core/chat_request_service.py)：新增且尚未接线的可信身份、纯附件、所有权、cancel/retry 与脱敏 DTO 编排层。
 - [migrations/__init__.py](file:///E:/Agent_reply/core/migrations/__init__.py#L154-L163)：现有 requests 表只有基础状态、时间与 error。
 - [event_contracts.py](file:///E:/Agent_reply/core/event_contracts.py#L10-L50)：已有 `event_id/request_id/conversation_id/turn_id/message_id/sequence` 信封。
 - [event_stream.py](file:///E:/Agent_reply/core/event_stream.py#L30-L113)：SSE 为有界 best-effort 广播，不是可靠任务队列。

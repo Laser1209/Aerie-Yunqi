@@ -506,6 +506,13 @@ def test_ensure_conversation_reuses_same_identity_key(
         channel_account_id="local",
         user_id=7,
     )
+    phase4_db.insert(
+        "actors",
+        {
+            "actor_id": "actor_phase4",
+            "created_at": "2026-07-20T00:00:00+00:00",
+        },
+    )
 
     with phase4_db.connection() as conn:
         repository.ensure_conversation(
@@ -537,6 +544,11 @@ def test_persist_turn_completes_existing_request_and_turn_without_duplicate_pk(
     request_repository = _repository(phase4_db, frozen_utc_clock)
     context = _context(request_id="req_complete_existing")
     request_repository.submit(context=context)
+    claimed = request_repository.claim_next(
+        lease_owner="worker-complete",
+        lease_seconds=30,
+    )
+    assert claimed.context.request_id == context.request_id
     conversation_repository = ConversationRepository(
         phase4_db,
         enabled=True,
@@ -558,9 +570,14 @@ def test_persist_turn_completes_existing_request_and_turn_without_duplicate_pk(
     assert result["request_id"] == context.request_id
     assert result["turn_id"] == context.turn_id
     assert phase4_db.query_one(
-        "SELECT status FROM requests WHERE request_id = ?",
+        """SELECT status, lease_owner, lease_expires_at
+           FROM requests WHERE request_id = ?""",
         (context.request_id,),
-    )["status"] == "completed"
+    ) == {
+        "status": "completed",
+        "lease_owner": None,
+        "lease_expires_at": None,
+    }
     assert phase4_db.query_one(
         "SELECT status FROM turns WHERE turn_id = ?",
         (context.turn_id,),
@@ -580,6 +597,11 @@ def test_existing_request_completion_rolls_back_messages_and_status_on_failure(
     request_repository = _repository(phase4_db, frozen_utc_clock)
     context = _context(request_id="req_complete_rollback")
     request_repository.submit(context=context)
+    claimed = request_repository.claim_next(
+        lease_owner="worker-rollback",
+        lease_seconds=30,
+    )
+    assert claimed.context.request_id == context.request_id
     with phase4_db.connection() as conn:
         conn.execute(
             """CREATE TRIGGER fail_phase4_assistant_message
@@ -614,11 +636,11 @@ def test_existing_request_completion_rolls_back_messages_and_status_on_failure(
     assert phase4_db.query_one(
         "SELECT status FROM requests WHERE request_id = ?",
         (context.request_id,),
-    )["status"] == "queued"
+    )["status"] == "running"
     assert phase4_db.query_one(
         "SELECT status FROM turns WHERE turn_id = ?",
         (context.turn_id,),
-    )["status"] == "pending"
+    )["status"] == "running"
     assert phase4_db.query_one(
         "SELECT COUNT(*) AS count FROM messages WHERE turn_id = ?",
         (context.turn_id,),
@@ -646,8 +668,14 @@ def test_recent_turn_history_reads_completed_turns_only(
     context = _context(
         request_id="req_history_completed",
         conversation_id=conversation_id,
+        input_content="已完成问题",
     )
     request_repository.submit(context=context)
+    claimed = request_repository.claim_next(
+        lease_owner="worker-history",
+        lease_seconds=30,
+    )
+    assert claimed.context.request_id == context.request_id
     conversation_repository.persist_turn(
         request_id=context.request_id,
         user_id=context.identity.user_id,
@@ -655,7 +683,7 @@ def test_recent_turn_history_reads_completed_turns_only(
         channel=context.identity.channel,
         channel_account_id=context.identity.channel_account_id,
         user_content="已完成问题",
-        user_attachments=None,
+        user_attachments=context.attachments,
         assistant_segments=["已完成回复"],
         conversation_id=context.conversation_id,
         turn_id=context.turn_id,
@@ -711,6 +739,11 @@ def test_completion_is_idempotent_and_conflict_does_not_overwrite_completed_data
     request_repository = _repository(phase4_db, frozen_utc_clock)
     context = _context(request_id="req_idempotent_completion")
     request_repository.submit(context=context)
+    claimed = request_repository.claim_next(
+        lease_owner="worker-idempotent",
+        lease_seconds=30,
+    )
+    assert claimed.context.request_id == context.request_id
     conversation_repository = ConversationRepository(
         phase4_db,
         enabled=True,
@@ -722,7 +755,7 @@ def test_completion_is_idempotent_and_conflict_does_not_overwrite_completed_data
         channel=context.identity.channel,
         channel_account_id=context.identity.channel_account_id,
         user_content=context.input_content,
-        user_attachments=None,
+        user_attachments=context.attachments,
         assistant_segments=["固定回复"],
         conversation_id=context.conversation_id,
         turn_id=context.turn_id,
@@ -734,7 +767,7 @@ def test_completion_is_idempotent_and_conflict_does_not_overwrite_completed_data
         channel=context.identity.channel,
         channel_account_id=context.identity.channel_account_id,
         user_content=context.input_content,
-        user_attachments=None,
+        user_attachments=context.attachments,
         assistant_segments=["固定回复"],
         conversation_id=context.conversation_id,
         turn_id=context.turn_id,
@@ -754,7 +787,7 @@ def test_completion_is_idempotent_and_conflict_does_not_overwrite_completed_data
             channel=context.identity.channel,
             channel_account_id=context.identity.channel_account_id,
             user_content=context.input_content,
-            user_attachments=None,
+            user_attachments=context.attachments,
             assistant_segments=["不同回复"],
             conversation_id=context.conversation_id,
             turn_id=context.turn_id,
@@ -765,3 +798,384 @@ def test_completion_is_idempotent_and_conflict_does_not_overwrite_completed_data
         "AND role = 'assistant'",
         (context.turn_id,),
     )["content"] == "固定回复"
+
+
+def test_persist_turn_legacy_path_still_creates_completed_request_and_turn(
+    phase4_db,
+    frozen_utc_clock,
+):
+    from core.conversation_repository import ConversationRepository
+
+    phase4_db.insert(
+        "actors",
+        {
+            "actor_id": "actor_phase4",
+            "created_at": frozen_utc_clock.now().isoformat(),
+        },
+    )
+    repository = ConversationRepository(phase4_db, enabled=True)
+
+    result = repository.persist_turn(
+        request_id="req_legacy_completion",
+        user_id=7,
+        actor_id="actor_phase4",
+        channel="desktop",
+        channel_account_id="local",
+        user_content="兼容输入",
+        user_attachments=None,
+        assistant_segments=["兼容回复"],
+    )
+
+    assert phase4_db.query_one(
+        "SELECT status, turn_id FROM requests WHERE request_id = ?",
+        (result["request_id"],),
+    ) == {
+        "status": "completed",
+        "turn_id": result["turn_id"],
+    }
+    assert phase4_db.query_one(
+        "SELECT status FROM turns WHERE turn_id = ?",
+        (result["turn_id"],),
+    )["status"] == "completed"
+    assert phase4_db.query_one(
+        "SELECT COUNT(*) AS count FROM messages WHERE turn_id = ?",
+        (result["turn_id"],),
+    )["count"] == 2
+
+
+def test_failed_cancelled_pending_turns_never_enter_history(
+    phase4_db,
+    frozen_utc_clock,
+):
+    from core.conversation_repository import ConversationRepository
+    from core.conversation_repository import resolve_conversation_id
+
+    request_repository = _repository(phase4_db, frozen_utc_clock)
+    repository = ConversationRepository(phase4_db, enabled=True)
+    conversation_id = resolve_conversation_id(
+        actor_id="actor_phase4",
+        channel="desktop",
+        channel_account_id="local",
+        user_id=7,
+    )
+    completed = _context(
+        request_id="req_history_visible",
+        conversation_id=conversation_id,
+    )
+    request_repository.submit(context=completed)
+    request_repository.claim_next(
+        lease_owner="worker-history-visible",
+        lease_seconds=30,
+    )
+    repository.persist_turn(
+        request_id=completed.request_id,
+        user_id=completed.identity.user_id,
+        actor_id=completed.identity.actor_id,
+        channel=completed.identity.channel,
+        channel_account_id=completed.identity.channel_account_id,
+        user_content=completed.input_content,
+        user_attachments=completed.attachments,
+        assistant_segments=["可见回复"],
+        conversation_id=completed.conversation_id,
+        turn_id=completed.turn_id,
+    )
+
+    for status in ("pending", "failed", "cancelled"):
+        turn_id = f"turn_history_hidden_{status}"
+        with phase4_db.connection() as conn:
+            conn.execute(
+                "INSERT INTO turns (turn_id, conversation_id, status) "
+                "VALUES (?, ?, ?)",
+                (turn_id, conversation_id, status),
+            )
+            conn.execute(
+                """INSERT INTO messages
+                   (message_id, conversation_id, turn_id, role, content, sequence)
+                   VALUES (?, ?, ?, 'user', ?, 0)""",
+                (
+                    f"msg_history_hidden_{status}",
+                    conversation_id,
+                    turn_id,
+                    f"hidden-{status}",
+                ),
+            )
+
+    history = repository.recent_turn_history(
+        actor_id="actor_phase4",
+        channel="desktop",
+        channel_account_id="local",
+        user_id=7,
+        limit=20,
+    )
+
+    assert [row["content"] for row in history] == ["你好", "可见回复"]
+
+
+def test_completion_never_leaves_orphan_turn_or_half_completed_request(
+    phase4_db,
+    frozen_utc_clock,
+):
+    from core.conversation_repository import ConversationRepository
+
+    request_repository = _repository(phase4_db, frozen_utc_clock)
+    context = _context(request_id="req_completion_invariant")
+    request_repository.submit(context=context)
+    request_repository.claim_next(
+        lease_owner="worker-invariant",
+        lease_seconds=30,
+    )
+    with phase4_db.connection() as conn:
+        conn.execute(
+            """CREATE TRIGGER fail_phase4_request_completion
+               BEFORE UPDATE OF status ON requests
+               WHEN NEW.status = 'completed'
+               BEGIN
+                   SELECT RAISE(ABORT, 'request completion failed');
+               END"""
+        )
+    repository = ConversationRepository(phase4_db, enabled=True)
+
+    with pytest.raises(
+        sqlite3.IntegrityError,
+        match="request completion failed",
+    ):
+        repository.persist_turn(
+            request_id=context.request_id,
+            user_id=context.identity.user_id,
+            actor_id=context.identity.actor_id,
+            channel=context.identity.channel,
+            channel_account_id=context.identity.channel_account_id,
+            user_content=context.input_content,
+            user_attachments=context.attachments,
+            assistant_segments=["不应半完成"],
+            conversation_id=context.conversation_id,
+            turn_id=context.turn_id,
+        )
+
+    assert phase4_db.query_one(
+        "SELECT status FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    )["status"] == "running"
+    assert phase4_db.query_one(
+        "SELECT status FROM turns WHERE turn_id = ?",
+        (context.turn_id,),
+    )["status"] == "running"
+    assert phase4_db.query_one(
+        "SELECT COUNT(*) AS count FROM messages WHERE turn_id = ?",
+        (context.turn_id,),
+    )["count"] == 0
+    with phase4_db.connection() as conn:
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert conn.execute(
+            """SELECT conversation_id, COUNT(*) AS active_count
+               FROM requests
+               WHERE status IN ('running', 'cancelling')
+               GROUP BY conversation_id
+               HAVING COUNT(*) > 1"""
+        ).fetchall() == []
+        assert conn.execute(
+            """SELECT r.request_id
+               FROM requests r
+               JOIN turns t ON t.turn_id = r.turn_id
+               WHERE NOT (
+                   (r.status = 'queued' AND t.status = 'pending') OR
+                   (r.status IN ('running', 'cancelling')
+                       AND t.status = 'running') OR
+                   (r.status IN ('completed', 'failed', 'cancelled')
+                       AND t.status = r.status)
+               )"""
+        ).fetchall() == []
+        assert conn.execute(
+            """SELECT t.turn_id FROM turns t
+               LEFT JOIN conversations c
+                 ON c.conversation_id = t.conversation_id
+               WHERE c.conversation_id IS NULL"""
+        ).fetchall() == []
+        assert conn.execute(
+            """SELECT r.request_id FROM requests r
+               LEFT JOIN turns t ON t.turn_id = r.turn_id
+               WHERE t.turn_id IS NULL"""
+        ).fetchall() == []
+        assert conn.execute(
+            """SELECT m.message_id FROM messages m
+               LEFT JOIN turns t ON t.turn_id = m.turn_id
+               WHERE t.turn_id IS NULL"""
+        ).fetchall() == []
+        counts = {
+            table: conn.execute(
+                f"SELECT COUNT(*) FROM {table}"
+            ).fetchone()[0]
+            for table in ("conversations", "turns", "requests", "messages")
+        }
+        assert counts == {
+            "conversations": 1,
+            "turns": 1,
+            "requests": 1,
+            "messages": 0,
+        }
+
+
+def test_existing_request_completion_requires_running_not_queued_or_cancelling(
+    phase4_db,
+    frozen_utc_clock,
+):
+    from core.conversation_repository import ConversationRepository
+    from core.conversation_repository import RequestConflict
+
+    request_repository = _repository(phase4_db, frozen_utc_clock)
+    repository = ConversationRepository(phase4_db, enabled=True)
+    queued = _context(request_id="req_completion_queued")
+    request_repository.submit(context=queued)
+
+    with pytest.raises(RequestConflict, match="status conflict"):
+        repository.persist_turn(
+            request_id=queued.request_id,
+            user_id=queued.identity.user_id,
+            actor_id=queued.identity.actor_id,
+            channel=queued.identity.channel,
+            channel_account_id=queued.identity.channel_account_id,
+            user_content=queued.input_content,
+            user_attachments=queued.attachments,
+            assistant_segments=["不能越过 running"],
+            conversation_id=queued.conversation_id,
+            turn_id=queued.turn_id,
+        )
+
+    running = _context(
+        request_id="req_completion_cancelling",
+        conversation_id="conv_completion_cancelling",
+    )
+    request_repository.submit(context=running)
+    claimed = request_repository.claim_next(
+        lease_owner="worker-cancelling",
+        lease_seconds=30,
+    )
+    assert claimed.context.request_id == running.request_id
+    assert request_repository.request_cancel(
+        request_id=running.request_id,
+        actor_id=running.identity.actor_id,
+    ) == "cancelling"
+
+    with pytest.raises(RequestConflict, match="status conflict"):
+        repository.persist_turn(
+            request_id=running.request_id,
+            user_id=running.identity.user_id,
+            actor_id=running.identity.actor_id,
+            channel=running.identity.channel,
+            channel_account_id=running.identity.channel_account_id,
+            user_content=running.input_content,
+            user_attachments=running.attachments,
+            assistant_segments=["不能覆盖取消"],
+            conversation_id=running.conversation_id,
+            turn_id=running.turn_id,
+        )
+
+    assert phase4_db.query_one(
+        "SELECT status FROM requests WHERE request_id = ?",
+        (running.request_id,),
+    )["status"] == "cancelling"
+    assert phase4_db.query_one(
+        "SELECT COUNT(*) AS count FROM messages WHERE turn_id = ?",
+        (running.turn_id,),
+    )["count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("user_content", "被替换的输入"),
+        ("user_attachments", [{"name": "different.txt", "state": "ready"}]),
+        ("actor_id", "actor_other"),
+    ],
+)
+def test_existing_request_completion_validates_trusted_input_snapshot(
+    phase4_db,
+    frozen_utc_clock,
+    field,
+    replacement,
+):
+    from core.conversation_repository import ConversationRepository
+    from core.conversation_repository import RequestConflict
+
+    request_repository = _repository(phase4_db, frozen_utc_clock)
+    context = _context(request_id=f"req_snapshot_{field}")
+    request_repository.submit(context=context)
+    claimed = request_repository.claim_next(
+        lease_owner=f"worker-snapshot-{field}",
+        lease_seconds=30,
+    )
+    assert claimed.context.request_id == context.request_id
+    repository = ConversationRepository(phase4_db, enabled=True)
+    arguments = {
+        "request_id": context.request_id,
+        "user_id": context.identity.user_id,
+        "actor_id": context.identity.actor_id,
+        "channel": context.identity.channel,
+        "channel_account_id": context.identity.channel_account_id,
+        "user_content": context.input_content,
+        "user_attachments": context.attachments,
+        "assistant_segments": ["快照回复"],
+        "conversation_id": context.conversation_id,
+        "turn_id": context.turn_id,
+    }
+    arguments[field] = replacement
+
+    with pytest.raises(RequestConflict, match="snapshot conflict"):
+        repository.persist_turn(**arguments)
+
+    assert phase4_db.query_one(
+        "SELECT status FROM requests WHERE request_id = ?",
+        (context.request_id,),
+    )["status"] == "running"
+    assert phase4_db.query_one(
+        "SELECT COUNT(*) AS count FROM messages WHERE turn_id = ?",
+        (context.turn_id,),
+    )["count"] == 0
+
+
+def test_existing_request_completion_clears_lease_and_error_metadata(
+    phase4_db,
+    frozen_utc_clock,
+):
+    from core.conversation_repository import ConversationRepository
+
+    request_repository = _repository(phase4_db, frozen_utc_clock)
+    context = _context(request_id="req_completion_cleanup")
+    request_repository.submit(context=context)
+    request_repository.claim_next(
+        lease_owner="worker-cleanup",
+        lease_seconds=30,
+    )
+    with phase4_db.connection() as conn:
+        conn.execute(
+            """UPDATE requests
+               SET error = 'redacted-test-error', error_code = 'transient'
+               WHERE request_id = ?""",
+            (context.request_id,),
+        )
+    repository = ConversationRepository(phase4_db, enabled=True)
+
+    repository.persist_turn(
+        request_id=context.request_id,
+        user_id=context.identity.user_id,
+        actor_id=context.identity.actor_id,
+        channel=context.identity.channel,
+        channel_account_id=context.identity.channel_account_id,
+        user_content=context.input_content,
+        user_attachments=context.attachments,
+        assistant_segments=["清理完成"],
+        conversation_id=context.conversation_id,
+        turn_id=context.turn_id,
+    )
+
+    assert phase4_db.query_one(
+        """SELECT status, error, error_code, lease_owner, lease_expires_at
+           FROM requests WHERE request_id = ?""",
+        (context.request_id,),
+    ) == {
+        "status": "completed",
+        "error": None,
+        "error_code": None,
+        "lease_owner": None,
+        "lease_expires_at": None,
+    }

@@ -154,6 +154,46 @@ class ChatRequestRepository:
             reply_to_id=int(row["reply_to_id"] or 0),
         )
 
+    def get_owned(
+        self,
+        *,
+        request_id: str,
+        actor_id: str,
+    ) -> dict[str, Any] | None:
+        with self.database.connection() as conn:
+            row = conn.execute(
+                """SELECT * FROM requests
+                   WHERE request_id = ? AND actor_id = ?""",
+                (request_id, actor_id),
+            ).fetchone()
+            if row is None:
+                return None
+            messages = conn.execute(
+                """SELECT role, legacy_chat_log_id, sequence
+                   FROM messages
+                   WHERE turn_id = ?
+                   ORDER BY sequence ASC""",
+                (row["turn_id"],),
+            ).fetchall()
+
+        result = dict(row)
+        result["user_message_id"] = next(
+            (
+                int(message["legacy_chat_log_id"])
+                for message in messages
+                if message["role"] == "user"
+                and message["legacy_chat_log_id"] is not None
+            ),
+            None,
+        )
+        result["assistant_message_ids"] = tuple(
+            int(message["legacy_chat_log_id"])
+            for message in messages
+            if message["role"] == "assistant"
+            and message["legacy_chat_log_id"] is not None
+        )
+        return result
+
     def claim_next(
         self,
         *,

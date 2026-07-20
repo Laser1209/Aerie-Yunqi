@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any, Iterator
 
 from core.ids import generate_id
@@ -106,6 +107,7 @@ class ConversationRepository:
                         conn,
                         request=request,
                         request_id=request_id,
+                        user_id=user_id,
                         conversation_id=resolved_conversation_id,
                         turn_id=turn_id,
                         actor_id=actor_id,
@@ -141,6 +143,7 @@ class ConversationRepository:
         *,
         request: sqlite3.Row,
         request_id: str,
+        user_id: int,
         conversation_id: str,
         turn_id: str | None,
         actor_id: str | None,
@@ -157,7 +160,25 @@ class ConversationRepository:
         ):
             raise RequestConflict("request identity conflict")
 
+        self._validate_request_snapshot(
+            request,
+            user_id=user_id,
+            actor_id=actor_id,
+            channel=channel,
+            channel_account_id=channel_account_id,
+            user_content=user_content,
+            attachments=attachments,
+        )
+        turn = conn.execute(
+            "SELECT conversation_id, status FROM turns WHERE turn_id = ?",
+            (existing_turn_id,),
+        ).fetchone()
+        if turn is None or turn["conversation_id"] != conversation_id:
+            raise RequestConflict("request identity conflict")
+
         if request["status"] == "completed":
+            if turn["status"] != "completed":
+                raise RequestConflict("request status conflict")
             return self._completed_result(
                 conn,
                 request_id=request_id,
@@ -167,8 +188,8 @@ class ConversationRepository:
                 attachments=attachments,
                 assistant_segments=assistant_segments,
             )
-        if request["status"] in ("failed", "cancelled"):
-            raise RequestConflict("request terminal status conflict")
+        if request["status"] != "running" or turn["status"] != "running":
+            raise RequestConflict("request status conflict")
         if conn.execute(
             "SELECT 1 FROM messages WHERE turn_id = ? LIMIT 1",
             (existing_turn_id,),
@@ -195,28 +216,99 @@ class ConversationRepository:
             assistant_segments=assistant_segments,
             response_group_id=response_group_id,
         )
-        conn.execute(
-            """UPDATE turns
-               SET status = 'completed',
-                   completed_at = datetime('now', 'localtime')
-               WHERE turn_id = ?""",
-            (existing_turn_id,),
-        )
-        conn.execute(
+        completed_at = datetime.now(timezone.utc).isoformat()
+        request_updated = conn.execute(
             """UPDATE requests
                SET status = 'completed',
-                   updated_at = datetime('now', 'localtime'),
-                   completed_at = datetime('now', 'localtime'),
-                   error = NULL
-               WHERE request_id = ?""",
-            (request_id,),
-        )
+                   updated_at = ?, completed_at = ?,
+                   error = NULL, error_code = NULL,
+                   lease_owner = NULL, lease_expires_at = NULL,
+                   cancel_requested_at = NULL, cancelled_at = NULL
+               WHERE request_id = ?
+                 AND conversation_id = ?
+                 AND turn_id = ?
+                 AND status = 'running'""",
+            (
+                completed_at,
+                completed_at,
+                request_id,
+                conversation_id,
+                existing_turn_id,
+            ),
+        ).rowcount
+        if request_updated != 1:
+            raise RequestConflict("request status conflict")
+        turn_updated = conn.execute(
+            """UPDATE turns
+               SET status = 'completed', completed_at = ?
+               WHERE turn_id = ?
+                 AND conversation_id = ?
+                 AND status = 'running'""",
+            (completed_at, existing_turn_id, conversation_id),
+        ).rowcount
+        if turn_updated != 1:
+            raise RequestConflict("request status conflict")
         return {
             "conversation_id": conversation_id,
             "turn_id": existing_turn_id,
             "request_id": request_id,
             "response_group_id": response_group_id,
         }
+
+    @staticmethod
+    def _validate_request_snapshot(
+        request: sqlite3.Row,
+        *,
+        user_id: int,
+        actor_id: str | None,
+        channel: str | None,
+        channel_account_id: str | None,
+        user_content: str,
+        attachments: str | None,
+    ) -> None:
+        keys = set(request.keys())
+        snapshot_columns = {
+            "actor_id",
+            "channel",
+            "channel_account_id",
+            "user_id",
+            "input_content",
+            "attachments",
+        }
+        if not snapshot_columns.issubset(keys):
+            return
+        if not any(request[column] is not None for column in snapshot_columns):
+            return
+
+        try:
+            stored_attachments = json.loads(request["attachments"] or "[]")
+            supplied_attachments = json.loads(attachments or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RequestConflict("request snapshot conflict") from exc
+        if not isinstance(stored_attachments, list) or not isinstance(
+            supplied_attachments,
+            list,
+        ):
+            raise RequestConflict("request snapshot conflict")
+
+        expected = (
+            request["actor_id"],
+            request["channel"],
+            request["channel_account_id"],
+            int(request["user_id"]),
+            request["input_content"] or "",
+            stored_attachments,
+        )
+        supplied = (
+            actor_id,
+            channel,
+            channel_account_id,
+            int(user_id),
+            user_content,
+            supplied_attachments,
+        )
+        if expected != supplied:
+            raise RequestConflict("request snapshot conflict")
 
     def _completed_result(
         self,

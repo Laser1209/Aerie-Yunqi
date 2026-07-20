@@ -143,6 +143,62 @@ def test_generate_image_without_explicit_provider_keeps_stub(monkeypatch):
     assert result["output_path"] is None
 
 
+def test_speak_text_uses_explicit_openai_compatible_tts_provider(monkeypatch):
+    monkeypatch.setenv("AERIE_TTS_API_KEY", "tts-provider-key")
+    monkeypatch.setenv("AERIE_TTS_BASE_URL", "https://tts.example/v1")
+    monkeypatch.setenv("AERIE_TTS_MODEL", "tts-test-model")
+    monkeypatch.setenv("AERIE_TTS_VOICE", "verse")
+    monkeypatch.setenv("AERIE_TTS_FORMAT", "wav")
+    brain = Brain()
+    calls = []
+
+    class Response:
+        content = b"RIFFfake-wav"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("core.brain.httpx.post", fake_post)
+
+    result = brain.speak_text("给我一句短语音")
+
+    assert result["status"] == "ok"
+    assert result["provider"] == "openai_compatible_tts"
+    assert result["model"] == "tts-test-model"
+    assert result["voice"] == "verse"
+    assert result["mime_type"] == "audio/wav"
+    assert base64.b64decode(result["audio_bytes_b64"]) == b"RIFFfake-wav"
+    assert result["wav_path"] is None
+    assert calls[0]["url"] == "https://tts.example/v1/audio/speech"
+    assert calls[0]["headers"]["Authorization"] == "Bearer tts-provider-key"
+    assert calls[0]["json"] == {
+        "model": "tts-test-model",
+        "input": "给我一句短语音",
+        "voice": "verse",
+        "response_format": "wav",
+    }
+
+
+def test_speak_text_without_explicit_provider_keeps_stub(monkeypatch):
+    monkeypatch.delenv("AERIE_TTS_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_TTS_API_KEY", raising=False)
+    brain = Brain()
+
+    def fail_post(*args, **kwargs):
+        raise AssertionError("TTS provider should not be called without explicit TTS key")
+
+    monkeypatch.setattr("core.brain.httpx.post", fail_post)
+
+    result = brain.speak_text("给我一句短语音")
+
+    assert result["status"] == "stub"
+    assert result["wav_path"] is None
+
+
 def test_see_image_uses_explicit_openai_compatible_vision_provider(tmp_path, monkeypatch):
     monkeypatch.setenv("AERIE_VISION_API_KEY", "vision-provider-key")
     monkeypatch.setenv("AERIE_VISION_BASE_URL", "https://vision.example/v1")

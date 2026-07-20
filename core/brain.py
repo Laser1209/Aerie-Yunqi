@@ -1182,6 +1182,26 @@ def _provider_timeout_seconds() -> float:
         return 60.0
 
 
+def _tts_timeout_seconds() -> float:
+    raw = os.getenv("AERIE_TTS_PROVIDER_TIMEOUT_SECONDS", "60").strip()
+    try:
+        return max(1.0, min(float(raw), 300.0))
+    except ValueError:
+        return 60.0
+
+
+def _audio_mime_type(fmt: str) -> str:
+    normalized = (fmt or "mp3").strip().lower()
+    return {
+        "mp3": "audio/mpeg",
+        "wav": "audio/wav",
+        "opus": "audio/opus",
+        "aac": "audio/aac",
+        "flac": "audio/flac",
+        "pcm": "audio/wav",
+    }.get(normalized, "application/octet-stream")
+
+
 def _brain_generate_image(self, prompt: str) -> dict:
     """Generate an image via the ``image_sdxl`` provider.
 
@@ -1264,14 +1284,77 @@ def _brain_generate_image(self, prompt: str) -> dict:
 def _brain_speak_text(self, text: str) -> dict:
     """Synthesize speech via the ``voice_tts`` provider.
 
-    Stub today: returns metadata without a wav path. The local
-    OpenVINO Qwen3-TTS adapter can be wired in later.
+    Uses an explicit OpenAI-compatible TTS provider only when
+    ``AERIE_TTS_API_KEY`` or ``OPENAI_TTS_API_KEY`` is configured.  Without
+    that opt-in it keeps the historical structured stub, so existing chat,
+    proactive and smoke-test paths do not make surprise external calls.
     """
     opts = self._load_ai_options()
     provider = next(
         (o for o in opts if o.get("id") == "voice_tts"),
         {"id": "voice_tts", "label": "语音合成", "model": "qwen3-tts"},
     )
+    api_key = _first_env("AERIE_TTS_API_KEY", "OPENAI_TTS_API_KEY")
+    if api_key:
+        base_url = (
+            _first_env("AERIE_TTS_BASE_URL", "OPENAI_TTS_BASE_URL")
+            or "https://api.openai.com/v1"
+        )
+        model = _first_env("AERIE_TTS_MODEL", "OPENAI_TTS_MODEL") or "gpt-4o-mini-tts"
+        voice = _first_env("AERIE_TTS_VOICE", "OPENAI_TTS_VOICE") or "alloy"
+        response_format = (
+            _first_env("AERIE_TTS_FORMAT", "OPENAI_TTS_FORMAT") or "mp3"
+        ).strip().lower()
+        try:
+            response = httpx.post(
+                _openai_compatible_url(base_url, "audio/speech"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "input": text or "",
+                    "voice": voice,
+                    "response_format": response_format,
+                },
+                timeout=_tts_timeout_seconds(),
+            )
+            response.raise_for_status()
+            audio_bytes = bytes(getattr(response, "content", b"") or b"")
+            if not audio_bytes:
+                return {
+                    "status": "unavailable",
+                    "provider": "openai_compatible_tts",
+                    "model": model,
+                    "voice": voice,
+                    "wav_path": None,
+                    "audio_path": None,
+                    "error_code": "missing_audio_bytes",
+                }
+            return {
+                "status": "ok",
+                "provider": "openai_compatible_tts",
+                "model": model,
+                "voice": voice,
+                "format": response_format,
+                "mime_type": _audio_mime_type(response_format),
+                "text": (text or "")[:200],
+                "audio_bytes_b64": base64.b64encode(audio_bytes).decode("ascii"),
+                "wav_path": None,
+                "audio_path": None,
+            }
+        except Exception:
+            logger.warning("TTS provider call failed", exc_info=True)
+            return {
+                "status": "failed",
+                "provider": "openai_compatible_tts",
+                "model": model,
+                "voice": voice,
+                "wav_path": None,
+                "audio_path": None,
+                "error_code": "provider_failed",
+            }
     return {
         "status": "stub",
         "provider": provider.get("id", "voice_tts"),

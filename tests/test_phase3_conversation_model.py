@@ -338,3 +338,49 @@ def test_phase3_repository_is_noop_when_feature_flag_is_disabled():
     ) is None
     assert conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 0
     assert conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 0
+
+
+def test_phase3_repository_reads_recent_complete_turns_without_splitting_segments():
+    from core.conversation_repository import ConversationRepository
+
+    conn = _conversation_fixture()
+    repository = ConversationRepository(conn, enabled=True)
+    for index in range(3):
+        repository.persist_turn(
+            request_id=f"request_history_{index}",
+            user_id=7,
+            actor_id="actor_shared",
+            channel="qq",
+            channel_account_id="7",
+            user_content=f"问题 {index}",
+            user_attachments=None,
+            assistant_segments=[f"回复 {index}A", f"回复 {index}B"],
+        )
+    repository.persist_turn(
+        request_id="request_other_channel",
+        user_id=7,
+        actor_id="actor_shared",
+        channel="desktop",
+        channel_account_id="local",
+        user_content="桌面隔离",
+        user_attachments=None,
+        assistant_segments=["桌面回复"],
+    )
+
+    history = repository.recent_turn_history(
+        actor_id="actor_shared",
+        channel="qq",
+        channel_account_id="7",
+        user_id=7,
+        limit=2,
+    )
+
+    assert [(row["role"], row["content"], row["sequence"]) for row in history] == [
+        ("user", "问题 1", 0),
+        ("assistant", "回复 1A", 1),
+        ("assistant", "回复 1B", 2),
+        ("user", "问题 2", 0),
+        ("assistant", "回复 2A", 1),
+        ("assistant", "回复 2B", 2),
+    ]
+    assert all(row["channel"] == "qq" for row in history)

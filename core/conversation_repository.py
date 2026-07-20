@@ -122,6 +122,40 @@ class ConversationRepository:
             "response_group_id": response_group_id,
         }
 
+    def recent_turn_history(
+        self,
+        *,
+        actor_id: str | None,
+        channel: str | None,
+        channel_account_id: str | None,
+        user_id: int,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        if not self.enabled:
+            return []
+        conversation_id = _conversation_id(
+            actor_id,
+            channel,
+            channel_account_id,
+            user_id,
+        )
+        with self._connection() as conn:
+            rows = conn.execute(
+                """WITH recent_turns AS (
+                       SELECT turn_id, created_at, rowid AS turn_order
+                       FROM turns
+                       WHERE conversation_id = ?
+                       ORDER BY created_at DESC, turn_order DESC
+                       LIMIT ?
+                   )
+                   SELECT m.role, m.content, m.sequence, m.channel
+                   FROM recent_turns rt
+                   JOIN messages m ON m.turn_id = rt.turn_id
+                   ORDER BY rt.created_at ASC, rt.turn_order ASC, m.sequence ASC""",
+                (conversation_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def _insert_message(
         self,
         conn: sqlite3.Connection,

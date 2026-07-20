@@ -91,7 +91,9 @@ class TestPipelineHandle:
 
     @pytest.fixture
     def conversation_repository(self):
-        return MagicMock()
+        repository = MagicMock()
+        repository.enabled = False
+        return repository
 
     @pytest.fixture
     def pipeline(
@@ -117,6 +119,111 @@ class TestPipelineHandle:
             identity_resolver=identity_resolver,
             conversation_repository=conversation_repository,
         )
+
+    @pytest.mark.asyncio
+    async def test_handle_reads_complete_turn_history_from_repository(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        conversation_repository.enabled = True
+        conversation_repository.recent_turn_history.return_value = [
+            {"role": "user", "content": "上一问", "sequence": 0},
+            {"role": "assistant", "content": "上一段", "sequence": 1},
+            {"role": "assistant", "content": "下一段", "sequence": 2},
+        ]
+        msg = IncomingMessage.from_local("继续", 3998874040)
+
+        await pipeline.handle(msg, force_full=True)
+
+        conversation_repository.recent_turn_history.assert_called_once_with(
+            actor_id="actor_primary",
+            channel="desktop",
+            channel_account_id="local",
+            user_id=3998874040,
+            limit=20,
+        )
+        assert pipeline.ctx_builder.build.call_args.kwargs["history_msgs"] == [
+            {"role": "user", "content": "上一问", "sequence": 0},
+            {"role": "assistant", "content": "上一段", "sequence": 1},
+            {"role": "assistant", "content": "下一段", "sequence": 2},
+        ]
+        assert not any(
+            "FROM chat_log" in call.args[0]
+            for call in pipeline.db.query.call_args_list
+        )
+
+    @pytest.mark.asyncio
+    async def test_basic_path_reads_complete_turn_history_from_repository(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        pipeline.router.route.return_value = "BASIC"
+        conversation_repository.enabled = True
+        conversation_repository.recent_turn_history.return_value = [
+            {"role": "user", "content": "轻量上一问", "sequence": 0},
+            {"role": "assistant", "content": "轻量上一答", "sequence": 1},
+        ]
+        msg = IncomingMessage.from_local("继续轻量", 3998874040)
+
+        await pipeline.handle(msg)
+
+        conversation_repository.recent_turn_history.assert_called_once_with(
+            actor_id="actor_primary",
+            channel="desktop",
+            channel_account_id="local",
+            user_id=3998874040,
+            limit=10,
+        )
+        assert pipeline.ctx_builder.build.call_args.kwargs["history_msgs"] == [
+            {"role": "user", "content": "轻量上一问", "sequence": 0},
+            {"role": "assistant", "content": "轻量上一答", "sequence": 1},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_canonical_history_failure_falls_back_to_legacy_history(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        conversation_repository.enabled = True
+        conversation_repository.recent_turn_history.side_effect = RuntimeError(
+            "canonical read down"
+        )
+        pipeline.db.query.return_value = [
+            {"role": "assistant", "content": "旧回复"},
+            {"role": "user", "content": "旧问题"},
+        ]
+        msg = IncomingMessage.from_local("继续", 3998874040)
+
+        await pipeline.handle(msg, force_full=True)
+
+        history_sql, history_params = pipeline.db.query.call_args_list[0].args
+        assert "FROM chat_log" in history_sql
+        assert "LIMIT 20" in history_sql
+        assert history_params == ("actor_primary", "desktop")
+        assert pipeline.ctx_builder.build.call_args.kwargs["history_msgs"] == [
+            {"role": "user", "content": "旧问题"},
+            {"role": "assistant", "content": "旧回复"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_disabled_conversation_repository_uses_only_legacy_path(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        msg = IncomingMessage.from_local("保持旧路径", 3998874040)
+
+        await pipeline.handle(msg, force_full=True)
+
+        conversation_repository.recent_turn_history.assert_not_called()
+        conversation_repository.persist_turn.assert_not_called()
+        history_sql, history_params = pipeline.db.query.call_args_list[0].args
+        assert "FROM chat_log" in history_sql
+        assert "LIMIT 20" in history_sql
+        assert history_params == ("actor_primary", "desktop")
 
     @pytest.mark.asyncio
     async def test_handle_scopes_history_and_persistence_to_channel_identity(
@@ -158,6 +265,7 @@ class TestPipelineHandle:
         pipeline,
         conversation_repository,
     ):
+        conversation_repository.enabled = True
         pipeline._splitter.split = MagicMock(return_value=["第一段", "第二段"])
         msg = IncomingMessage.from_local("完整轮次", 3998874040)
         msg.attachments = [{"path": "a.png"}]
@@ -181,6 +289,7 @@ class TestPipelineHandle:
         pipeline,
         conversation_repository,
     ):
+        conversation_repository.enabled = True
         pipeline.db.insert.side_effect = RuntimeError("legacy down")
         msg = IncomingMessage.from_local("旧存储失败", 3998874040)
 
@@ -194,6 +303,7 @@ class TestPipelineHandle:
         pipeline,
         conversation_repository,
     ):
+        conversation_repository.enabled = True
         conversation_repository.persist_turn.side_effect = RuntimeError("mirror down")
         msg = IncomingMessage.from_local("兼容旧路径", 3998874040)
 
@@ -239,6 +349,7 @@ class TestPipelineHandle:
         conversation_repository,
     ):
         pipeline.router.route.return_value = "BASIC"
+        conversation_repository.enabled = True
         pipeline._splitter.split = MagicMock(return_value=["轻量一", "轻量二"])
         msg = IncomingMessage.from_local("轻量轮次", 3998874040)
 

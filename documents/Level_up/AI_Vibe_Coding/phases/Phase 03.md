@@ -47,10 +47,11 @@ tags: [aerie, phase, phase03]
 - 自动化守恒：记录数、正文、附件、角色顺序、Actor/Channel 原值、QQ/Desktop 隔离和重复运行幂等已在隔离数据库验证。
 - 迁移安全：最小旧库缺少附件/身份列时 005 先补可空列；未知身份保持 NULL；缺少 `chat_log` 时显式失败。
 - live 双写：`ConversationRepository` 支持 SQLite connection 与 `Database.connection()` 提供者；`Companion` 按 `conversation_model_v1` 注入；FULL/BASIC 仅在 legacy 用户行与全部助手分段成功后镜像一次完整 Turn。
-- 兼容路径：规范镜像异常只记录错误，不中断已成功的 legacy 回复、事件或投递；legacy 持久化失败时不制造孤立规范 Turn。
-- 本批 TDD Evidence：先观察 `Pipeline.__init__()` 不接受 Repository 的 Red，以及 legacy 失败时仍镜像的行为 Red；最小实现后 Phase 3 + Pipeline 定向回归 `28 passed`，修改文件诊断为空。
-- 历史 Evidence：相关回归 `51 passed, 4 warnings`；完整 Python `334 passed, 6 warnings`。
-- 当前未对真实生产库执行迁移，且完整 Turn 历史读取、真实 Flag 回滚、cursor 与迁移回滚尚未完成，Phase 03 保持 `in_progress`。
+- 完整 Turn 读取：规范仓储先选最近 N 个 Turn，再按 Turn 时间与 Message `sequence` 返回全部分段；FULL 使用 20 Turn、BASIC 使用 10 Turn，并按 Actor + Channel + Channel Account 隔离。
+- 兼容路径：规范镜像异常只记录错误，不中断已成功的 legacy 回复、事件或投递；规范历史读取异常自动回退 legacy；Flag 关闭时 Pipeline 不调用规范读写入口，并保持原 literal `LIMIT` 与参数合同。
+- 本批 TDD Evidence：先观察仓储缺少 `recent_turn_history()`、Pipeline 未调用规范历史、Flag 关闭仍调用规范写入口，以及 legacy SQL 参数合同漂移的行为 Red；最小实现后 Phase 3 + Pipeline 回归 `33 passed`，Phase 0/2/3 + Pipeline 回归 `78 passed, 4 warnings`，完整 Python `346 passed, 6 warnings`，修改文件诊断为空。
+- 历史 Evidence：规范双写小节定向回归 `28 passed`；此前完整 Python `334 passed, 6 warnings`。
+- 当前未对真实生产库执行 backup/dry-run/守恒迁移，005 尚无批量 cursor/断点续跑，真实组合根 Flag 演练与迁移回滚尚未完成，Phase 03 保持 `in_progress`。
 
 ## 验收
 - [ ] 记录、附件、角色顺序和 Channel 守恒

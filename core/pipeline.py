@@ -155,22 +155,7 @@ class Pipeline:
         #    Variable `history` is used consistently (not `history_rows`
         #    or `history_msgs`) for passing to ContextBuilder.build().
         # ══════════════════════════════════════════════
-        history = []
-        try:
-            if msg.actor_id and msg.channel:
-                history = self.db.query(
-                    "SELECT role, content FROM chat_log "
-                    "WHERE actor_id = ? AND channel = ? ORDER BY id DESC LIMIT 20",
-                    (msg.actor_id, msg.channel),
-                )
-            else:
-                history = self.db.query(
-                    "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 20",
-                    (msg.user_id,),
-                )
-            history.reverse()
-        except Exception:
-            pass
+        history = self._load_history(msg, legacy_limit=20)
 
         # ══════════════════════════════════════════════
         # 4. Gather emotion info for context injection
@@ -692,22 +677,7 @@ class Pipeline:
         })
 
         # 2. 获取历史（精简：最近 10 条）
-        history = []
-        try:
-            if msg.actor_id and msg.channel:
-                history = self.db.query(
-                    "SELECT role, content FROM chat_log "
-                    "WHERE actor_id = ? AND channel = ? ORDER BY id DESC LIMIT 10",
-                    (msg.actor_id, msg.channel),
-                )
-            else:
-                history = self.db.query(
-                    "SELECT role, content FROM chat_log WHERE user_id = ? ORDER BY id DESC LIMIT 10",
-                    (msg.user_id,),
-                )
-            history.reverse()
-        except Exception:
-            pass
+        history = self._load_history(msg, legacy_limit=10)
 
         # 3. 构建上下文（BASIC 精简系统提示词）
         ctx_messages = self.ctx_builder.build(
@@ -906,12 +876,56 @@ class Pipeline:
             result["persist_error"] = "; ".join(persist_errors)
         return result
 
+    def _load_history(
+        self,
+        msg: IncomingMessage,
+        *,
+        legacy_limit: int,
+    ) -> list[dict]:
+        if self.conversation_repository and getattr(
+            self.conversation_repository,
+            "enabled",
+            False,
+        ):
+            try:
+                return self.conversation_repository.recent_turn_history(
+                    actor_id=msg.actor_id,
+                    channel=msg.channel,
+                    channel_account_id=msg.channel_account_id,
+                    user_id=msg.user_id,
+                    limit=legacy_limit,
+                )
+            except Exception:
+                logger.exception("canonical history read failed; using legacy history")
+        try:
+            if msg.actor_id and msg.channel:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log "
+                    "WHERE actor_id = ? AND channel = ? "
+                    f"ORDER BY id DESC LIMIT {legacy_limit}",
+                    (msg.actor_id, msg.channel),
+                )
+            else:
+                history = self.db.query(
+                    "SELECT role, content FROM chat_log WHERE user_id = ? "
+                    f"ORDER BY id DESC LIMIT {legacy_limit}",
+                    (msg.user_id,),
+                )
+            history.reverse()
+            return history
+        except Exception:
+            return []
+
     def _persist_canonical_turn(
         self,
         msg: IncomingMessage,
         segments: list[str],
     ) -> None:
-        if not self.conversation_repository:
+        if not self.conversation_repository or not getattr(
+            self.conversation_repository,
+            "enabled",
+            False,
+        ):
             return
         try:
             self.conversation_repository.persist_turn(

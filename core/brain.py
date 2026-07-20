@@ -1190,6 +1190,14 @@ def _tts_timeout_seconds() -> float:
         return 60.0
 
 
+def _embedding_timeout_seconds() -> float:
+    raw = os.getenv("AERIE_EMBEDDING_PROVIDER_TIMEOUT_SECONDS", "60").strip()
+    try:
+        return max(1.0, min(float(raw), 300.0))
+    except ValueError:
+        return 60.0
+
+
 def _audio_mime_type(fmt: str) -> str:
     normalized = (fmt or "mp3").strip().lower()
     return {
@@ -1200,6 +1208,106 @@ def _audio_mime_type(fmt: str) -> str:
         "flac": "audio/flac",
         "pcm": "audio/wav",
     }.get(normalized, "application/octet-stream")
+
+
+def _brain_bge_embed(self, texts: list, **kwargs) -> dict:
+    """Create embeddings via the ``bge_embedding`` provider.
+
+    Uses an explicit OpenAI-compatible embeddings provider only when
+    ``AERIE_EMBEDDING_API_KEY`` or ``OPENAI_EMBEDDING_API_KEY`` is configured.
+    It intentionally does not read the generic ``OPENAI_API_KEY`` so existing
+    memory/search flows cannot start making surprise external calls.
+    """
+    opts = self._load_ai_options()
+    provider = next(
+        (o for o in opts if o.get("id") == "bge_embedding"),
+        {"id": "bge_embedding", "label": "中文嵌入", "model": "bge-large-zh"},
+    )
+    if isinstance(texts, list):
+        text_items = [str(t) for t in texts]
+    elif texts is None:
+        text_items = []
+    else:
+        text_items = [str(texts)]
+
+    api_key = _first_env("AERIE_EMBEDDING_API_KEY", "OPENAI_EMBEDDING_API_KEY")
+    if api_key:
+        base_url = (
+            _first_env("AERIE_EMBEDDING_BASE_URL", "OPENAI_EMBEDDING_BASE_URL")
+            or "https://api.openai.com/v1"
+        )
+        model = (
+            _first_env("AERIE_EMBEDDING_MODEL", "OPENAI_EMBEDDING_MODEL")
+            or "text-embedding-3-large"
+        )
+        if not text_items:
+            return {
+                "status": "ok",
+                "provider": "openai_compatible_embedding",
+                "model": model,
+                "texts_count": 0,
+                "dim": 0,
+                "embeddings": [],
+            }
+        try:
+            response = httpx.post(
+                _openai_compatible_url(base_url, "embeddings"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "input": text_items,
+                },
+                timeout=_embedding_timeout_seconds(),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            data = payload.get("data") if isinstance(payload, dict) else None
+            embeddings = []
+            if isinstance(data, list):
+                for item in data:
+                    embedding = item.get("embedding") if isinstance(item, dict) else None
+                    if isinstance(embedding, list):
+                        embeddings.append(list(embedding))
+            if not embeddings or len(embeddings) != len(text_items):
+                return {
+                    "status": "unavailable",
+                    "provider": "openai_compatible_embedding",
+                    "model": model,
+                    "texts_count": len(text_items),
+                    "dim": 0,
+                    "embeddings": [],
+                    "error_code": "missing_embeddings",
+                }
+            return {
+                "status": "ok",
+                "provider": "openai_compatible_embedding",
+                "model": model,
+                "texts_count": len(text_items),
+                "dim": len(embeddings[0]) if embeddings else 0,
+                "embeddings": embeddings,
+            }
+        except Exception:
+            logger.warning("embedding provider call failed", exc_info=True)
+            return {
+                "status": "failed",
+                "provider": "openai_compatible_embedding",
+                "model": model,
+                "texts_count": len(text_items),
+                "dim": 0,
+                "embeddings": [],
+                "error_code": "provider_failed",
+            }
+    return {
+        "status": "stub",
+        "provider": provider.get("id", "bge_embedding"),
+        "model": provider.get("model", "bge-large-zh"),
+        "texts_count": len(text_items),
+        "dim": 1024,
+        "note": "BGE 本地未跑; 向量检索走关键词兜底",
+    }
 
 
 def _brain_generate_image(self, prompt: str) -> dict:
@@ -1587,6 +1695,7 @@ def _brain_safe_shell(self, command: str, args: list | None = None) -> dict:
 # Mix the new methods into the existing Brain class (monkey patch).
 Brain._load_ai_options = _brain_load_ai_options
 Brain.get_ai_options = _brain_get_ai_options
+Brain.bge_embed = _brain_bge_embed
 Brain.generate_image = _brain_generate_image
 Brain.speak_text = _brain_speak_text
 Brain.see_image = _brain_see_image

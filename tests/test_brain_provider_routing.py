@@ -231,3 +231,64 @@ def test_see_image_uses_explicit_openai_compatible_vision_provider(tmp_path, mon
     content = calls[0]["json"]["messages"][0]["content"]
     assert content[0] == {"type": "text", "text": "describe"}
     assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_bge_embed_uses_explicit_openai_compatible_embedding_provider(monkeypatch):
+    monkeypatch.setenv("AERIE_EMBEDDING_API_KEY", "embedding-provider-key")
+    monkeypatch.setenv("AERIE_EMBEDDING_BASE_URL", "https://embedding.example/v1")
+    monkeypatch.setenv("AERIE_EMBEDDING_MODEL", "embedding-test-model")
+    brain = Brain()
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": [
+                    {"embedding": [0.1, 0.2, 0.3]},
+                    {"embedding": [0.4, 0.5, 0.6]},
+                ]
+            }
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("core.brain.httpx.post", fake_post)
+
+    result = brain.bge_embed(["第一段", "第二段"])
+
+    assert result["status"] == "ok"
+    assert result["provider"] == "openai_compatible_embedding"
+    assert result["model"] == "embedding-test-model"
+    assert result["texts_count"] == 2
+    assert result["dim"] == 3
+    assert result["embeddings"] == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+    assert calls[0]["url"] == "https://embedding.example/v1/embeddings"
+    assert calls[0]["headers"]["Authorization"] == "Bearer embedding-provider-key"
+    assert calls[0]["json"] == {
+        "model": "embedding-test-model",
+        "input": ["第一段", "第二段"],
+    }
+
+
+def test_bge_embed_without_explicit_provider_keeps_stub(monkeypatch):
+    monkeypatch.delenv("AERIE_EMBEDDING_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_EMBEDDING_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "generic-openai-key")
+    brain = Brain()
+
+    def fail_post(*args, **kwargs):
+        raise AssertionError(
+            "embedding provider should not be called without explicit embedding key"
+        )
+
+    monkeypatch.setattr("core.brain.httpx.post", fail_post)
+
+    result = brain.bge_embed(["第一段"])
+
+    assert result["status"] == "stub"
+    assert result["provider"] == "bge_embedding"
+    assert result["texts_count"] == 1

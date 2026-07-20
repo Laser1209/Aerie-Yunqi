@@ -22,8 +22,9 @@ tags: [aerie, phase, phase06]
 ## 当前代码证据
 - [context_builder.py](file:///E:/Agent_reply/core/context_builder.py)
 - [pipeline.py](file:///E:/Agent_reply/core/pipeline.py)
-- [pipeline.py](file:///E:/Agent_reply/core/pipeline.py)
+- [brain.py](file:///E:/Agent_reply/core/brain.py)
 - [api_server.py](file:///E:/Agent_reply/core/api_server.py)
+- [test_brain_provider_routing.py](file:///E:/Agent_reply/tests/test_brain_provider_routing.py)
 
 ## 文件范围
 - 计划修改或演进：`core/context_builder.py`、`core/pipeline.py`
@@ -69,3 +70,10 @@ tags: [aerie, phase, phase06]
 - Flag 回滚：`context_budget_v1=false` 时 Pipeline 不传新增 kwargs、不读取 `get_last_context_audit()`，ContextBuilder 可继续按旧签名/旧行为使用；无 schema/data migration。
 - 验证：Phase 06 专项 `4 passed in 1.57s`；Context/Pipeline/Phase4/Phase5 关联 `66 passed, 4 warnings in 3.29s`；Phase 00–06 显式门禁 `289 passed, 4 warnings in 28.10s`；完整 `tests` 收集 `481 passed, 6 warnings in 36.25s`；Electron Node `16 passed`；`python -m py_compile core/context_builder.py core/pipeline.py` 通过；`git diff --check` 仅有 LF→CRLF 提示；无残留项目 Electron/Python/Node 进程。
 - 迁移：本阶段 `migration=false`，未创建新迁移，未修改生产数据库，未修改 004/005/006 checksum；audit 只记录计数、标识、字符和估算 token，不记录消息正文、记忆正文、知识正文或凭据。
+
+### Provider Hardening Evidence（2026-07-21）
+
+- Red：新增 `tests/test_brain_provider_routing.py::test_bge_embed_uses_explicit_openai_compatible_embedding_provider` 后，目标测试按预期失败，`Brain.bge_embed()` 仍返回 `status="stub"`。
+- Green：`core/brain.py` 增加显式 `AERIE_EMBEDDING_*` / `OPENAI_EMBEDDING_*` OpenAI-compatible `/embeddings` 接线；未配置显式 embedding key 时继续返回 `bge_embedding` stub，且即使存在通用 `OPENAI_API_KEY` 也不调用 `httpx.post`。
+- 回滚：删除 monkey-patch 接线或移除显式 embedding env 即回到旧 stub 路径；本批无 schema/data migration，无生产 DB 写入。
+- 验证：`python -m py_compile core/brain.py` 通过；`python -m pytest tests/test_brain_provider_routing.py -q` → `11 passed`；`python -m pytest tests -q` → `542 passed, 6 warnings`；`node --test electron/tests/*.test.js` → `23 passed`；`npm run check:all` 通过；`python tools/scan_provider_key_patterns.py` → `PROVIDER_KEY_SCAN_OK`。

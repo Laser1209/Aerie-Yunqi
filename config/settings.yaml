@@ -8,6 +8,8 @@ verify_batch4:
   ts: 1784404889
 weather:
   city: 济南
+proactive:
+  system_notifications: true
 feature_flags:
   migration_framework_v1: true
   proactive_delivery_v2: false

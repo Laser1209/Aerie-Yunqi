@@ -247,6 +247,60 @@ preserve actor/channel/attachments/order
     ]
 
 
+def _apply_phase4_request_queue(conn: sqlite3.Connection) -> None:
+    columns = (
+        ("actor_id", "TEXT DEFAULT NULL"),
+        ("channel", "TEXT DEFAULT NULL"),
+        ("channel_account_id", "TEXT DEFAULT NULL"),
+        ("user_id", "INTEGER DEFAULT NULL"),
+        ("input_content", "TEXT DEFAULT NULL"),
+        ("effective_content", "TEXT DEFAULT NULL"),
+        ("attachments", "TEXT DEFAULT NULL"),
+        ("reply_to_id", "INTEGER DEFAULT NULL"),
+        (
+            "retry_of_request_id",
+            "TEXT DEFAULT NULL REFERENCES requests(request_id)",
+        ),
+        ("cancel_requested_at", "TEXT DEFAULT NULL"),
+        ("cancelled_at", "TEXT DEFAULT NULL"),
+        ("started_at", "TEXT DEFAULT NULL"),
+        ("lease_owner", "TEXT DEFAULT NULL"),
+        ("lease_expires_at", "TEXT DEFAULT NULL"),
+        ("last_heartbeat_at", "TEXT DEFAULT NULL"),
+        ("error_code", "TEXT DEFAULT NULL"),
+    )
+    for name, declaration in columns:
+        _add_column_if_missing(conn, "requests", name, declaration)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_requests_status_created "
+        "ON requests(status, created_at, request_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_requests_conversation_status "
+        "ON requests(conversation_id, status, created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_requests_lease_expires "
+        "ON requests(lease_expires_at) "
+        "WHERE lease_expires_at IS NOT NULL"
+    )
+
+
+def phase4_request_queue_migrations() -> list[Migration]:
+    contract = """006_chat_request_queue
+requests(actor_id,channel,channel_account_id,user_id,input_content,effective_content,attachments,reply_to_id,retry_of_request_id,cancel_requested_at,cancelled_at,started_at,lease_owner,lease_expires_at,last_heartbeat_at,error_code)
+indexes(status+created_at+request_id,conversation_id+status+created_at,lease_expires_at)
+preserve legacy completed rows and nullable snapshots
+"""
+    return [
+        Migration(
+            version="006_chat_request_queue",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_phase4_request_queue,
+        )
+    ]
+
+
 def phase2_identity_migrations() -> list[Migration]:
     contract = """002_actor_channel_identity
 actors(actor_id)

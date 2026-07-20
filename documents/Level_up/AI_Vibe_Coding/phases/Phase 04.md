@@ -2,13 +2,18 @@
 title: Phase 04 - 持久 Request 队列、取消、重试与纯附件
 kind: phase
 phase: Phase 04
-status: review
+status: in_progress
 tags: [aerie, phase, phase04, chat, queue]
 ---
 # Phase 04：持久 Request 队列、取消、重试与纯附件
 
+> [!success] 设计、实施计划与前三批门禁
+> 用户已批准本阶段书面规范；详细 TDD 实施计划已完成自审。Phase 00–03 门禁、006 Migration、测试 Fixture 与 ChatRequestRepository 批次均已按 Red → Green 完成；当前仍在 Phase 04，下一小节必须从 ConversationRepository 兼容性目标 Red 开始。
+>
+> [Phase 04 持久 Request 队列实施计划](file:///E:/Agent_reply/documents/Level_up/AI_Vibe_Coding/plans/2026-07-20-Phase-04-%E6%8C%81%E4%B9%85Request%E9%98%9F%E5%88%97%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md)
+
 > [!info] 执行边界
-> 只按获批设计与后续 TDD 实施计划执行；当前阶段未通过验收时停止后续阶段。
+> 只按获批设计与 TDD 实施计划执行；当前阶段未通过验收时停止后续阶段。
 
 ## 已批准决策
 
@@ -39,6 +44,60 @@ tags: [aerie, phase, phase04, chat, queue]
 - Phase 03 提供 Conversation / Turn / Message / Request 四表和稳定 ID 合同。
 - 依赖 [[05_Feature_Flag与回滚矩阵]]、[[06_AI_Vibe_Coding批次规约]]、[[90_全局验收清单]]、[[91_数据迁移核对]]、[[92_回滚演练]]。
 - 执行任务：[[Task 04-baseline]]。
+
+## Phase 04 执行基线（2026-07-20）
+
+> [!success] Phase 00–03 门禁复验通过
+> - 关联门禁：`141 passed, 4 warnings in 4.64s`。
+> - 完整 Python：`353 passed, 6 warnings in 10.56s`。
+> - `core/migrations/__init__.py` 尚无 `006_chat_request_queue`。
+> - Renderer `chat.js` 仍有 4 处 `_loading`，Phase 04 行为尚未被提前实现。
+> - 本次只读取源码、运行测试并更新文档；未触碰生产数据库、构建产物或无关文件。
+
+快速自检：已重读总计划与批次规约；当前仍在 Phase 04；尚未写生产实现；Flag 关闭旧同步路径未改；Phase 00–03 门禁 Green；下一步必须先观察 Migration Red。
+
+## 006 Migration 批次 Evidence（2026-07-20）
+
+> [!success] Red → Green 完成
+> - 首次目标 Red：`8 failed, 1 passed in 0.39s`；失败原因是 `phase4_request_queue_migrations` 不存在且 Database 未注册 006，不是 Fixture/语法错误。
+> - 最小 Green：新增固定 `006_chat_request_queue`，仅扩展 16 个可空字段和 3 个 claim/互斥/lease 索引；Database 只在 `migration_framework_v1=true` 时于 002/003→004→005 后运行 006，且不依赖 `chat_request_queue_v1`。
+> - Phase 4 迁移专项：`9 passed in 0.24s`。
+> - 迁移 + Phase 0/3：`40 passed in 1.82s`。
+> - Phase 0/2/3 + API/Pipeline：`112 passed, 4 warnings in 4.72s`。
+> - 完整 Python：`362 passed, 6 warnings in 12.47s`。
+> - `py_compile`、VS Code diagnostics、`git diff --check` 均通过。
+> - 固定 checksum：`2e649f6834695ca7b9250c3e2f7c110ab9c5b2c4ed2a230d1cd4fb5e0654ea05`；004/005 checksum 保持原值。
+> - 自动化已证明 dry-run 零 schema 写入、二次运行幂等、部分字段/索引应用后可恢复、legacy completed 快照列保持 `NULL`、`PRAGMA quick_check=ok`。
+> - 本批只使用内存/pytest 临时数据库，未读写生产库。生产数据一致性副本迁移和实际恢复仍待最终演练，不能提前关闭完整回滚门禁。
+
+快速自检：已重读总计划；仍在 Phase 04；先观察了正确 Red；未改变 queue Flag 关闭旧同步路径；未写生产库或无关源码；已更新 Phase/Task/迁移/回滚文档；Phase 00–03 门禁仍 Green；下一小节必须先写并观察测试 Fixture 与 UTC 时钟批次 Red。
+
+## 测试 Fixture 与 UTC 时钟批次 Evidence（2026-07-20）
+
+> [!success] Red → Green 完成
+> - 目标 Red：`2 errors in 0.07s`；两个 setup 错误分别明确指向 `fixture 'phase4_db' not found` 与 `fixture 'ready_attachment' not found`，不是导入、语法或建库错误。
+> - 最小 Green：在共享测试配置中增加临时 `phase4.db` Fixture、可推进的 timezone-aware UTC 时钟、只含服务端脱敏元数据的 ready 附件，以及显式暴露 `started/release/cancel_seen` 的异步 Pipeline double。
+> - 三个 Fixture 探针：`3 passed in 0.20s`。
+> - Phase 0/3/4 关联回归：`43 passed in 2.03s`。
+> - 完整 Python：`365 passed, 6 warnings in 14.83s`；警告均为既有 FastAPI/asyncio 弃用警告。
+> - `py_compile`、四个相关文件 VS Code diagnostics、`git diff --check` 均通过；后者只有既有 LF→CRLF 工作区提示，无 whitespace error。
+> - Evidence 仅记录固定 UTC `2026-07-20T00:00:00+00:00`、临时数据库文件名 `phase4.db` 与附件状态 `ready`；未记录临时绝对路径、真实文件路径或正文。
+> - 本批未访问网络、QQ、真实模型或生产数据库，也未使用真实长等待。
+
+快速自检：当前仍在 Phase 04；Fixture 只为后续 TDD 提供隔离设施，尚未实现 Repository/Service/Worker 行为；`rollback_ready` 继续为 false；下一小节必须先写并观察 Repository 状态机 Red。
+
+## ChatRequestRepository 批次 Evidence（2026-07-20）
+
+> [!success] Red → Green 完成
+> - 目标 Red：测试收集阶段明确失败为 `ModuleNotFoundError: No module named 'core.chat_request_repository'`，不是测试语法或 Fixture 错误。
+> - 最小 Green：新增 `ChatRequestRepository`，仅负责短事务持久化、claim、lease、取消、恢复和 retry，不导入 Brain、Pipeline、chat events 或 QQ。
+> - Repository 专项：`10 passed in 1.01s`。
+> - Phase 3/4 关联回归：`36 passed in 2.99s`。
+> - 完整 Python：`374 passed, 6 warnings in 18.17s`；警告为既有 FastAPI/asyncio 弃用警告。
+> - 已验证：Conversation 复用、pending Turn + queued Request 原子提交、请求插入失败全回滚、同 Conversation claim 互斥、created_at/request_id 排序、UTC lease/heartbeat、running/cancelling 恢复为 `failed/process_interrupted`、queued 保持 queued、Request/Turn 状态守恒、新 Request/Turn retry 且原请求不变、claim 后数据库连接已释放。
+> - `py_compile`、相关 VS Code diagnostics、依赖边界扫描与 `git diff --check` 均通过；未写生产数据库。
+
+快速自检：当前仍在 Phase 04；Repository 批次已 Green，但 ConversationRepository 尚未演进为完成预分配 Turn/Request，Service、Worker、Pipeline、API、Renderer 与生产副本演练仍未完成；`rollback_ready` 继续为 false；下一小节必须先写并观察 ConversationRepository 兼容性 Red。
 
 ## 当前代码证据
 

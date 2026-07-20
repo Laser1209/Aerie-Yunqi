@@ -3,7 +3,9 @@
 import os
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -42,3 +44,82 @@ def sample_config():
     return {
         "qq": {"self_qq": 3998874040, "friends": [12345678]},
     }
+
+
+@pytest.fixture
+def frozen_utc_clock():
+    current = datetime(
+        2026,
+        7,
+        20,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    def now() -> datetime:
+        return current
+
+    def advance(seconds: int) -> None:
+        nonlocal current
+        current += timedelta(seconds=seconds)
+
+    return SimpleNamespace(now=now, advance=advance)
+
+
+@pytest.fixture
+def phase4_db(tmp_path, monkeypatch):
+    from core.database import Database
+
+    monkeypatch.setenv(
+        "AERIE_FEATURE_MIGRATION_FRAMEWORK_V1",
+        "true",
+    )
+    Database.reset_instance()
+    db = Database(tmp_path / "phase4.db")
+    try:
+        yield db
+    finally:
+        Database.reset_instance()
+
+
+@pytest.fixture
+def ready_attachment():
+    return {
+        "name": "phase4-attachment.txt",
+        "url": (
+            "/uploads/"
+            "00000000-0000-4000-8000-000000000004.txt"
+        ),
+        "state": "ready",
+        "size": 128,
+        "type": "text/plain",
+    }
+
+
+@pytest.fixture
+def phase4_pipeline_double():
+    import asyncio
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    cancel_seen = asyncio.Event()
+
+    async def handle(*args, **kwargs):
+        started.set()
+        try:
+            await release.wait()
+        except asyncio.CancelledError:
+            cancel_seen.set()
+            raise
+        return {
+            "reply": "fixture reply",
+            "persisted": True,
+        }
+
+    return SimpleNamespace(
+        handle=handle,
+        started=started,
+        release=release,
+        cancel_seen=cancel_seen,
+    )

@@ -48,6 +48,7 @@ views:
     filters:
       or:
         - 'status == "planned"'
+        - 'status == "ready"'
         - 'status == "review"'
         - 'status == "in_progress"'
         - 'status == "blocked"'

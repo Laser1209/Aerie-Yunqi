@@ -19,6 +19,7 @@ from core.migrations import (
     phase2_identity_migrations,
     phase3_backfill_migrations,
     phase3_conversation_migrations,
+    phase4_request_queue_migrations,
 )
 
 
@@ -353,6 +354,7 @@ class Database:
                 runner.run(phase2_identity_migrations())
                 runner.run(phase3_conversation_migrations())
                 runner.run(phase3_backfill_migrations())
+                runner.run(phase4_request_queue_migrations())
             # Compatibility migrations remain available when the framework flag is off.
             self._migrate_chat_log(conn)
             self._migrate_long_term_memory(conn)

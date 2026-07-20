@@ -791,6 +791,39 @@ def _is_image_upload(filename: str, content_type: str | None) -> bool:
     return suffix in IMAGE_UPLOAD_EXTS or str(content_type or "").lower().startswith("image/")
 
 
+def _build_image_workflow():
+    from core.image_service import (
+        BrainImageGenerationProvider,
+        BrainImageVisionProvider,
+        ImageWorkflow,
+    )
+
+    brain = getattr(get_companion(), "brain", None)
+    return ImageWorkflow(
+        upload_base=_upload_root(),
+        feature_enabled=_image_assets_enabled(),
+        generation_provider=BrainImageGenerationProvider(brain),
+        vision_provider=BrainImageVisionProvider(brain),
+    )
+
+
+def _image_workflow_error_response(exc: Exception) -> JSONResponse:
+    status_code = int(getattr(exc, "status_code", 500) or 500)
+    code = str(getattr(exc, "code", "image_workflow_error"))
+    message = str(getattr(exc, "public_message", "image workflow failed"))
+    return JSONResponse({"error": message, "code": code}, status_code=status_code)
+
+
+async def _read_json_object(request: Request) -> dict[str, Any]:
+    try:
+        body = await request.json()
+    except Exception:
+        raise ValueError("invalid json") from None
+    if not isinstance(body, dict):
+        raise ValueError("body must be a dict")
+    return body
+
+
 @app.post("/api/upload")
 async def upload_file(request: Request) -> dict:
     """Upload a file to the uploads directory.
@@ -902,6 +935,86 @@ async def upload_gc(request: Request) -> dict:
         dry_run=dry_run,
         orphan_count=result.get("orphan_count", 0),
         deleted_count=result.get("deleted_count", 0),
+    )
+    return result
+
+
+@app.post("/api/images/generate")
+async def image_generate(request: Request) -> dict:
+    """Run the Phase 10 auditable image generation workflow."""
+    try:
+        body = await _read_json_object(request)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    try:
+        workflow = _build_image_workflow()
+        result = workflow.generate_image(
+            prompt=str(body.get("prompt") or ""),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+            owner_id=str(body.get("owner_id") or "master"),
+            delivery=body.get("delivery") if isinstance(body.get("delivery"), dict) else None,
+            conversation_id=(
+                str(body.get("conversation_id"))
+                if body.get("conversation_id") is not None
+                else None
+            ),
+        )
+    except Exception as e:
+        try:
+            from core.image_service import ImageWorkflowError
+        except Exception:  # pragma: no cover - import failure fallback
+            ImageWorkflowError = ()  # type: ignore[assignment]
+        if isinstance(e, ImageWorkflowError):
+            return _image_workflow_error_response(e)
+        logger.exception("image generation workflow failed")
+        return JSONResponse(
+            {"error": "image workflow failed", "code": "image_workflow_error"},
+            status_code=500,
+        )
+
+    emit(
+        "image_generation_workflow",
+        request_id=result.get("request_id", ""),
+        status=result.get("status", ""),
+        delivery_created=bool((result.get("side_effects") or {}).get("delivery_created")),
+    )
+    return result
+
+
+@app.post("/api/images/vision")
+async def image_vision(request: Request) -> dict:
+    """Run the Phase 10 auditable image understanding workflow."""
+    try:
+        body = await _read_json_object(request)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    try:
+        workflow = _build_image_workflow()
+        result = workflow.understand_image(
+            image_ref=str(body.get("image_ref") or body.get("url") or ""),
+            question=str(body.get("question") or "describe"),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+            owner_id=str(body.get("owner_id") or "master"),
+        )
+    except Exception as e:
+        try:
+            from core.image_service import ImageWorkflowError
+        except Exception:  # pragma: no cover - import failure fallback
+            ImageWorkflowError = ()  # type: ignore[assignment]
+        if isinstance(e, ImageWorkflowError):
+            return _image_workflow_error_response(e)
+        logger.exception("image vision workflow failed")
+        return JSONResponse(
+            {"error": "image workflow failed", "code": "image_workflow_error"},
+            status_code=500,
+        )
+
+    emit(
+        "image_vision_workflow",
+        request_id=result.get("request_id", ""),
+        status=result.get("status", ""),
     )
     return result
 

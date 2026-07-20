@@ -19,6 +19,7 @@ ENV/
 # Data & logs (runtime artifacts)
 data/*.db
 data/*.db-journal
+data/world_sidecar/
 data/backups/*.zip
 logs/*.log
 logs/*.log.*

@@ -14,7 +14,12 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from core.feature_flags import FeatureFlags
-from core.migrations import MigrationRunner, phase2_identity_migrations
+from core.migrations import (
+    MigrationRunner,
+    phase2_identity_migrations,
+    phase3_backfill_migrations,
+    phase3_conversation_migrations,
+)
 
 
 # All 8 table schemas. Code-level comments are in English.
@@ -195,6 +200,7 @@ SCHEMA_SQL: list[str] = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ts INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
+        actor_id TEXT DEFAULT NULL,
         pleasure REAL,
         arousal REAL,
         dominance REAL,
@@ -276,6 +282,7 @@ INDEX_SQL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_cognition_user_ts ON cognition_log(user_id, ts DESC);",
     # Phase 9: emotion snapshot lookups
     "CREATE INDEX IF NOT EXISTS idx_emotion_user_ts ON emotion_state_snapshot(user_id, ts DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_emotion_actor_ts ON emotion_state_snapshot(actor_id, ts DESC);",
     "CREATE INDEX IF NOT EXISTS idx_emotion_label_ts ON emotion_state_snapshot(label, ts DESC);",
     # v12.0.1: calendar events indexes
     "CREATE INDEX IF NOT EXISTS idx_calendar_start_type ON calendar_events(start_time, event_type);",
@@ -342,10 +349,14 @@ class Database:
             for stmt in SCHEMA_SQL:
                 conn.execute(stmt)
             if migrations_enabled:
-                MigrationRunner(conn).run(phase2_identity_migrations())
+                runner = MigrationRunner(conn)
+                runner.run(phase2_identity_migrations())
+                runner.run(phase3_conversation_migrations())
+                runner.run(phase3_backfill_migrations())
             # Compatibility migrations remain available when the framework flag is off.
             self._migrate_chat_log(conn)
             self._migrate_long_term_memory(conn)
+            self._migrate_emotion_state_snapshot(conn)
             self._migrate_todo(conn)
             # Phase 4 + Phase 9: indexes (centralized for idempotency)
             for stmt in INDEX_SQL:
@@ -383,6 +394,22 @@ class Database:
         if "actor_id" not in existing:
             conn.execute(
                 "ALTER TABLE long_term_memory "
+                "ADD COLUMN actor_id TEXT DEFAULT NULL"
+            )
+
+    def _migrate_emotion_state_snapshot(
+        self,
+        conn: sqlite3.Connection,
+    ) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(emotion_state_snapshot)"
+            ).fetchall()
+        }
+        if "actor_id" not in existing:
+            conn.execute(
+                "ALTER TABLE emotion_state_snapshot "
                 "ADD COLUMN actor_id TEXT DEFAULT NULL"
             )
 

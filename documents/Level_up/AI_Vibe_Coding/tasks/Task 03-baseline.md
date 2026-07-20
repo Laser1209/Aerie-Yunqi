@@ -5,7 +5,7 @@ kind: task
 task_id: TASK-03-001
 phase: Phase 03
 subsystem: core
-status: planned
+status: in_progress
 priority: P0
 dependencies: ["TASK-02-001"]
 risk: high

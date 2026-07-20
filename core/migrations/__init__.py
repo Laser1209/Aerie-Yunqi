@@ -91,6 +91,143 @@ def _apply_phase2_identity(conn: sqlite3.Connection) -> None:
     )
 
 
+def _apply_phase2_emotion_snapshot(conn: sqlite3.Connection) -> None:
+    table_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master "
+        "WHERE type = 'table' AND name = ?",
+        ("emotion_state_snapshot",),
+    ).fetchone()
+    if not table_exists:
+        raise sqlite3.OperationalError(
+            "required table emotion_state_snapshot is missing"
+        )
+    _add_column_if_missing(
+        conn,
+        "emotion_state_snapshot",
+        "actor_id",
+        "TEXT DEFAULT NULL",
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_emotion_actor_ts "
+        "ON emotion_state_snapshot(actor_id, ts DESC)"
+    )
+
+
+def _apply_phase3_conversation_model(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS conversations (
+            conversation_id TEXT PRIMARY KEY,
+            actor_id TEXT DEFAULT NULL REFERENCES actors(actor_id),
+            channel TEXT DEFAULT NULL,
+            channel_account_id TEXT DEFAULT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS turns (
+            turn_id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id),
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            completed_at TEXT
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS messages (
+            message_id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id),
+            turn_id TEXT NOT NULL REFERENCES turns(turn_id),
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            attachments TEXT,
+            response_group_id TEXT,
+            sequence INTEGER NOT NULL DEFAULT 0,
+            channel TEXT DEFAULT NULL,
+            actor_id TEXT DEFAULT NULL REFERENCES actors(actor_id),
+            legacy_chat_log_id INTEGER UNIQUE,
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS requests (
+            request_id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id),
+            turn_id TEXT NOT NULL REFERENCES turns(turn_id),
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            completed_at TEXT,
+            error TEXT
+        )"""
+    )
+
+
+def phase3_conversation_migrations() -> list[Migration]:
+    contract = """004_conversation_model
+conversations(conversation_id,actor_id,channel,channel_account_id,status)
+turns(turn_id,conversation_id,status)
+messages(message_id,conversation_id,turn_id,role,response_group_id,sequence)
+requests(request_id,conversation_id,turn_id,status)
+"""
+    return [
+        Migration(
+            version="004_conversation_model",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_phase3_conversation_model,
+        )
+    ]
+
+
+def _apply_phase3_conversation_backfill(conn: sqlite3.Connection) -> None:
+    table_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master "
+        "WHERE type = 'table' AND name = ?",
+        ("chat_log",),
+    ).fetchone()
+    if not table_exists:
+        raise sqlite3.OperationalError(
+            "required table chat_log is missing"
+        )
+    for column, declaration in (
+        ("attachments", "TEXT DEFAULT NULL"),
+        ("actor_id", "TEXT DEFAULT NULL"),
+        ("channel", "TEXT DEFAULT NULL"),
+        ("channel_account_id", "TEXT DEFAULT NULL"),
+    ):
+        _add_column_if_missing(
+            conn,
+            "chat_log",
+            column,
+            declaration,
+        )
+    _add_column_if_missing(
+        conn,
+        "messages",
+        "channel_account_id",
+        "TEXT DEFAULT NULL",
+    )
+    from core.conversation_backfill import backfill_chat_log
+
+    backfill_chat_log(conn)
+
+
+def phase3_backfill_migrations() -> list[Migration]:
+    contract = """005_conversation_backfill
+chat_log -> conversations/turns/messages/requests
+legacy_chat_log_id idempotency
+preserve actor/channel/attachments/order
+"""
+    return [
+        Migration(
+            version="005_conversation_backfill",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_phase3_conversation_backfill,
+        )
+    ]
+
+
 def phase2_identity_migrations() -> list[Migration]:
     contract = """002_actor_channel_identity
 actors(actor_id)
@@ -98,12 +235,22 @@ channel_accounts(channel,channel_account_id,actor_id)
 chat_log(actor_id,channel,channel_account_id)
 long_term_memory(actor_id)
 """
+    emotion_contract = """003_actor_emotion_snapshot
+emotion_state_snapshot(actor_id)
+"""
     return [
         Migration(
             version="002_actor_channel_identity",
             checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
             apply=_apply_phase2_identity,
-        )
+        ),
+        Migration(
+            version="003_actor_emotion_snapshot",
+            checksum=hashlib.sha256(
+                emotion_contract.encode("utf-8")
+            ).hexdigest(),
+            apply=_apply_phase2_emotion_snapshot,
+        ),
     ]
 
 

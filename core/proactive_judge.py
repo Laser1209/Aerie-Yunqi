@@ -204,7 +204,7 @@ class ProactiveJudge:
         # 2) 情绪 + 隐藏槽位
         try:
             if self.companion and getattr(self.companion, "emotion", None):
-                est = self.companion.emotion.get_state(0) or {}
+                est = self.companion.get_primary_emotion_state() or {}
                 pad = est.get("pad", {}) or {}
                 # 情绪驱动 = |A| * 30 + |D| * 20 + (1 - P) * 50
                 P = float(pad.get("P", 0.0))
@@ -303,7 +303,7 @@ class ProactiveJudge:
         # Eruption 优先
         try:
             if self.companion and getattr(self.companion, "emotion", None):
-                est = self.companion.emotion.get_state(0) or {}
+                est = self.companion.get_primary_emotion_state() or {}
                 th = est.get("thresholds", {}) or {}
                 # 任一槽位接近阈值 → 爆发态
                 for slot_name, slot_info in th.items():

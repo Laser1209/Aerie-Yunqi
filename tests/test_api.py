@@ -27,6 +27,9 @@ mock_companion.emotion.get_state = MagicMock(return_value={
     "eruption": None,
     "panel": "伊塔·情绪面板\n...",
 })
+mock_companion.get_primary_emotion_state = MagicMock(
+    side_effect=mock_companion.emotion.get_state
+)
 mock_companion.qq = MagicMock()
 mock_companion.qq.is_connected = False
 mock_companion.pipeline = MagicMock()

@@ -426,38 +426,27 @@ class Companion:
 
     # ── R6.6: warm-up threshold engine from history ───────────────
     def _warmup_threshold_from_history(self) -> None:
-        """Restore the 4 cumulative slot values from the latest non-zero snapshot.
-
-        Without this, every backend restart would reset slot.value back to
-        the initial_value (60/15/35/25) configured in persona_behavior.yaml,
-        masking whatever real emotion state the user had built up. The fix:
-        read the most recent emotion_state_snapshot row, and if any of the
-        four slot values is non-zero, copy them into the live engine.
-        """
+        """Restore the primary Actor's cumulative slots from its latest snapshot."""
         try:
-            row = self.db.query_one(
-                "SELECT patience_value, anxiety_value, desire_value, tenderness_value "
-                "FROM emotion_state_snapshot "
-                "ORDER BY id DESC LIMIT 1"
+            primary = self.get_primary_identity()
+            if not primary:
+                return
+            master_id, identity = primary
+            row = self.state_store.latest(
+                master_id,
+                actor_id=identity.actor_id,
             )
             if not row:
                 return
-            slots = self.threshold_engine.slots
-            updates = {
-                "patience":   float(row.get("patience_value")   or 0.0),
-                "anxiety":    float(row.get("anxiety_value")    or 0.0),
-                "desire":     float(row.get("desire_value")     or 0.0),
-                "tenderness": float(row.get("tenderness_value") or 0.0),
-            }
-            for name, val in updates.items():
-                if name in slots and val > 0:
-                    slots[name].value = val
+            self.emotion.restore_threshold_snapshot(
+                row,
+                actor_id=identity.actor_id,
+            )
             logger.info(
-                "threshold warm-up restored: %s",
-                {k: v for k, v in updates.items() if v > 0},
+                "threshold warm-up restored for actor=%s",
+                identity.actor_id,
             )
         except Exception:
-            # Warm-up is best-effort: a missing table is not fatal.
             logger.debug("threshold warm-up skipped (no history or table missing)")
 
     async def _start_push_event_engine(self) -> None:
@@ -754,7 +743,12 @@ class Companion:
 
             # Apply decay
             try:
-                self.threshold_engine.daily_decay()
+                primary = self.get_primary_identity()
+                if primary:
+                    _, identity = primary
+                    self.emotion.daily_decay(
+                        actor_id=identity.actor_id,
+                    )
                 logger.info("Daily emotion decay applied")
             except Exception:
                 logger.exception("daily decay error")
@@ -768,8 +762,8 @@ class Companion:
             # Small pause to avoid double-fire
             await asyncio.sleep(60)
 
-    def get_primary_emotion_state(self) -> dict:
-        """Return emotion state for the configured primary Actor."""
+    def get_primary_identity(self):
+        """Return configured primary QQ user id and normalized identity."""
         try:
             master_id = int(
                 self.settings.get("qq", {}).get("self_qq", 0)
@@ -777,12 +771,21 @@ class Companion:
         except (TypeError, ValueError):
             master_id = 0
         if not master_id:
-            return {}
-
-        identity = self.identity_resolver.resolve(
-            "qq",
-            str(master_id),
+            return None
+        return (
+            master_id,
+            self.identity_resolver.resolve(
+                "qq",
+                str(master_id),
+            ),
         )
+
+    def get_primary_emotion_state(self) -> dict:
+        """Return emotion state for the configured primary Actor."""
+        primary = self.get_primary_identity()
+        if not primary:
+            return {}
+        master_id, identity = primary
         return self.emotion.get_state(
             master_id,
             actor_id=identity.actor_id,
@@ -818,12 +821,21 @@ class Companion:
                 thr_ticks += 1
                 snap_ticks += 1
                 try:
+                    primary = self.get_primary_identity()
+                    if not primary:
+                        continue
+                    master_id, identity = primary
                     if pad_ticks >= 3:
                         pad_ticks = 0
-                        self.emotion.idle_tick()
+                        self.emotion.idle_tick(
+                            actor_id=identity.actor_id,
+                        )
                     if thr_ticks >= 30:
                         thr_ticks = 0
-                        self.emotion.threshold_engine.tick_decay(30.0)
+                        self.emotion.tick_decay(
+                            30.0,
+                            actor_id=identity.actor_id,
+                        )
                 except Exception as e:
                     logger.debug("emotion tick error: %s", e)
                 if snap_ticks >= 60:
@@ -833,10 +845,11 @@ class Companion:
                         if not st:
                             continue
                         self.state_store.snapshot(
-                            0,
+                            master_id,
                             {"label": st.get("label"), "pad": st.get("pad")},
                             st.get("thresholds", {}),
                             trigger_event="idle_tick",
+                            actor_id=identity.actor_id,
                         )
                     except Exception as e:
                         logger.debug("emotion snapshot error: %s", e)
@@ -862,7 +875,7 @@ class Companion:
 
             mood = "neutral"
             if scene_cfg.get("mood_aware"):
-                state = self.emotion.get_state(master_id)
+                state = self.get_primary_emotion_state()
                 mood = state.get("label", "neutral")
 
             content = await self.brain.generate_push(

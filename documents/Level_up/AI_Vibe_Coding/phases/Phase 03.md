@@ -2,7 +2,7 @@
 title: Phase 03 - Conversation、Turn、Message、Request 四表与回填
 kind: phase
 phase: Phase 03
-status: planned
+status: in_progress
 tags: [aerie, phase, phase03]
 ---
 # Phase 03：Conversation、Turn、Message、Request 四表与回填

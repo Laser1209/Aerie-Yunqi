@@ -1,4 +1,4 @@
-﻿﻿"""Aerie · 云栖 v0.1.0-beta.1 — Cumulative emotion threshold engine.
+﻿"""Aerie · 云栖 v0.1.0-beta.1 — Cumulative emotion threshold engine.
 
 Four hidden emotion slots with bursting behavior.
 Aligned with Ita.md §9 and System_Features.md §11.5.

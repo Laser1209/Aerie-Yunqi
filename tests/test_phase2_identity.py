@@ -123,6 +123,14 @@ def test_identity_migration_adds_nullable_columns_without_guessing_legacy_source
         )"""
     )
     conn.execute(
+        """CREATE TABLE emotion_state_snapshot (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            label TEXT
+        )"""
+    )
+    conn.execute(
         "INSERT INTO chat_log (user_id, role, content) VALUES (7, 'user', 'legacy')"
     )
     conn.commit()
@@ -196,6 +204,14 @@ def test_phase2_identity_migration_is_ledgered_and_idempotent(tmp_path):
         )"""
     )
     conn.execute(
+        """CREATE TABLE emotion_state_snapshot (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            label TEXT
+        )"""
+    )
+    conn.execute(
         "INSERT INTO chat_log (user_id, role, content) VALUES (7, 'user', 'legacy')"
     )
     conn.execute(
@@ -205,12 +221,18 @@ def test_phase2_identity_migration_is_ledgered_and_idempotent(tmp_path):
     runner = MigrationRunner(conn)
     migrations = phase2_identity_migrations()
 
-    assert runner.run(migrations, dry_run=True) == ["002_actor_channel_identity"]
+    assert runner.run(migrations, dry_run=True) == [
+        "002_actor_channel_identity",
+        "003_actor_emotion_snapshot",
+    ]
     assert "actor_id" not in {
         row["name"] for row in conn.execute("PRAGMA table_info(chat_log)")
     }
 
-    assert runner.run(migrations) == ["002_actor_channel_identity"]
+    assert runner.run(migrations) == [
+        "002_actor_channel_identity",
+        "003_actor_emotion_snapshot",
+    ]
     assert runner.run(migrations) == []
     assert tuple(conn.execute(
         "SELECT actor_id, channel, channel_account_id FROM chat_log"
@@ -224,6 +246,53 @@ def test_phase2_identity_migration_is_ledgered_and_idempotent(tmp_path):
     ).fetchone()
     assert ledger["checksum"]
     assert ledger["status"] == "completed"
+    assert "actor_id" in {
+        row["name"]
+        for row in conn.execute(
+            "PRAGMA table_info(emotion_state_snapshot)"
+        )
+    }
+    emotion_ledger = conn.execute(
+        "SELECT checksum, status FROM migration_ledger WHERE version = ?",
+        ("003_actor_emotion_snapshot",),
+    ).fetchone()
+    assert emotion_ledger["checksum"]
+    assert emotion_ledger["status"] == "completed"
+
+
+def test_phase2_emotion_migration_fails_instead_of_false_completion_when_table_missing():
+    from core.migrations import MigrationRunner, phase2_identity_migrations
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE chat_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE long_term_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            memory_type TEXT NOT NULL,
+            content TEXT NOT NULL,
+            importance INTEGER DEFAULT 5,
+            created_at TEXT,
+            accessed_at TEXT
+        )"""
+    )
+    runner = MigrationRunner(conn)
+
+    with pytest.raises(sqlite3.OperationalError, match="emotion_state_snapshot"):
+        runner.run(phase2_identity_migrations())
+
+    assert conn.execute(
+        "SELECT status FROM migration_ledger WHERE version = ?",
+        ("003_actor_emotion_snapshot",),
+    ).fetchone()["status"] == "failed"
 
 
 def test_database_runs_phase2_identity_migration_through_ledger(tmp_path):
@@ -233,8 +302,216 @@ def test_database_runs_phase2_identity_migration_through_ledger(tmp_path):
             "SELECT status FROM migration_ledger WHERE version = ?",
             ("002_actor_channel_identity",),
         ) == {"status": "completed"}
+        assert db.query_one(
+            "SELECT status FROM migration_ledger WHERE version = ?",
+            ("003_actor_emotion_snapshot",),
+        ) == {"status": "completed"}
     finally:
         Database.reset_instance()
+
+
+def test_database_adds_emotion_actor_column_when_migration_flag_is_off(
+    tmp_path,
+    monkeypatch,
+):
+    db_path = tmp_path / "legacy-emotion.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """CREATE TABLE emotion_state_snapshot (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            label TEXT
+        )"""
+    )
+    conn.execute(
+        """INSERT INTO emotion_state_snapshot
+           (ts, user_id, label) VALUES (1, 7, 'joy')"""
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("AERIE_FEATURE_MIGRATION_FRAMEWORK_V1", "false")
+
+    db = _fresh_database(db_path)
+    try:
+        assert db.query_one(
+            "SELECT actor_id FROM emotion_state_snapshot WHERE id = 1"
+        ) == {"actor_id": None}
+        assert "idx_emotion_actor_ts" in {
+            row["name"]
+            for row in db.query(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            )
+        }
+    finally:
+        Database.reset_instance()
+
+
+def test_emotion_idle_tick_and_threshold_decay_are_actor_scoped():
+    from core.emotion_engine import EmotionEngine
+    from core.emotion_threshold import reset_threshold_engine
+
+    reset_threshold_engine()
+    engine = EmotionEngine()
+    engine.update_trajectory(10001, "想你了", actor_id="actor_primary")
+    before = engine.get_state(10001, actor_id="actor_primary")
+
+    engine.idle_tick(actor_id="actor_primary")
+    engine.tick_decay(86400, actor_id="actor_primary")
+
+    after = engine.get_state(10001, actor_id="actor_primary")
+    other = engine.get_state(20002, actor_id="actor_other")
+    assert after["pad"] != before["pad"]
+    assert after["thresholds"]["desire"]["value"] < before["thresholds"]["desire"]["value"]
+    assert other["thresholds"]["desire"]["value"] == 0.0
+
+
+def test_emotion_actor_thresholds_reload_with_behavior_config():
+    from core.emotion_engine import EmotionEngine
+    from core.emotion_threshold import reset_threshold_engine
+
+    reset_threshold_engine()
+    engine = EmotionEngine()
+    engine.update_trajectory(10001, "想你了", actor_id="actor_primary")
+    config = {
+        "emotion": {
+            "baseline": {"pleasure": 0, "arousal": 0, "dominance": 0},
+            "thresholds": {
+                "desire": {
+                    "label": "渴望值",
+                    "threshold": 40,
+                    "decay_per_day": 2,
+                    "eruption_label": "索求模式",
+                    "post_decay": 0,
+                },
+            },
+        },
+    }
+
+    engine.update_behavior_config(config)
+
+    assert engine.get_state(10001, actor_id="actor_primary")["thresholds"]["desire"]["threshold"] == 40.0
+
+
+def test_emotion_snapshot_carries_actor_id():
+    from core.emotion_state_store import EmotionStateStore
+
+    db = MagicMock()
+    db.insert.return_value = 7
+    store = EmotionStateStore(db)
+
+    assert store.snapshot(
+        10001,
+        {"label": "joy", "pad": {"P": 0.2, "A": 0.1, "D": 0}},
+        {"desire": {"value": 3}},
+        actor_id="actor_primary",
+    ) == 7
+    row = db.insert.call_args.args[1]
+    assert row["actor_id"] == "actor_primary"
+
+
+def test_emotion_store_reads_history_by_actor_without_cross_channel_leakage():
+    from core.emotion_state_store import EmotionStateStore
+
+    db = MagicMock()
+    db.query.return_value = []
+    store = EmotionStateStore(db)
+
+    assert store.history(
+        0,
+        123,
+        actor_id="actor_primary",
+    ) == []
+
+    sql, params = db.query.call_args.args
+    assert "actor_id = ?" in sql
+    assert params == ("actor_primary", 123, 2000)
+
+
+def test_emotion_store_reads_latest_by_actor():
+    from core.emotion_state_store import EmotionStateStore
+
+    db = MagicMock()
+    db.query_one.return_value = {"actor_id": "actor_primary"}
+    store = EmotionStateStore(db)
+
+    assert store.latest(
+        0,
+        actor_id="actor_primary",
+    ) == {"actor_id": "actor_primary"}
+
+    sql, params = db.query_one.call_args.args
+    assert "actor_id = ?" in sql
+    assert params == ("actor_primary",)
+
+
+def test_emotion_engine_restores_threshold_snapshot_by_actor():
+    from core.emotion_engine import EmotionEngine
+    from core.emotion_threshold import reset_threshold_engine
+
+    reset_threshold_engine()
+    engine = EmotionEngine()
+
+    engine.restore_threshold_snapshot(
+        {
+            "patience_value": 24,
+            "anxiety_value": 8,
+            "desire_value": 27,
+            "tenderness_value": 13,
+        },
+        actor_id="actor_primary",
+    )
+
+    primary = engine.get_state(0, actor_id="actor_primary")
+    other = engine.get_state(0, actor_id="actor_other")
+    assert primary["thresholds"]["desire"]["value"] == 27
+    assert other["thresholds"]["desire"]["value"] == 0
+
+
+def test_companion_warmup_restores_primary_actor_thresholds():
+    from core.companion import Companion
+
+    companion = object.__new__(Companion)
+    identity = MagicMock(actor_id="actor_primary")
+    companion.get_primary_identity = MagicMock(
+        return_value=(10001, identity)
+    )
+    companion.state_store = MagicMock()
+    companion.state_store.latest.return_value = {
+        "desire_value": 27,
+    }
+    companion.emotion = MagicMock()
+
+    companion._warmup_threshold_from_history()
+
+    companion.state_store.latest.assert_called_once_with(
+        10001,
+        actor_id="actor_primary",
+    )
+    companion.emotion.restore_threshold_snapshot.assert_called_once_with(
+        {"desire_value": 27},
+        actor_id="actor_primary",
+    )
+
+
+def test_emotion_engine_persists_actor_id_with_snapshot():
+    from core.emotion_engine import EmotionEngine
+    from core.emotion_threshold import reset_threshold_engine
+
+    reset_threshold_engine()
+    state_store = MagicMock()
+    engine = EmotionEngine(state_store=state_store)
+
+    engine.update_trajectory(
+        10001,
+        "想你了",
+        actor_id="actor_primary",
+    )
+
+    assert (
+        state_store.snapshot.call_args.kwargs["actor_id"]
+        == "actor_primary"
+    )
 
 
 def test_emotion_runtime_state_is_isolated_by_actor():
@@ -266,6 +543,119 @@ def test_emotion_runtime_state_is_shared_by_actor_across_channels():
 
     assert desktop == qq
     assert desktop["thresholds"]["desire"]["value"] == 15.0
+
+
+def test_desire_engine_reads_primary_actor_emotion_state():
+    from core.desire_engine import DesireEngine
+
+    companion = MagicMock()
+    companion.get_primary_emotion_state.return_value = {
+        "pad": {"A": 0.5},
+        "thresholds": {
+            "patience": {"value": 24},
+        },
+    }
+    engine = DesireEngine.__new__(DesireEngine)
+    engine.companion = companion
+
+    assert engine._read_one("emotion_overdraft") == 15.0
+    assert engine._read_one("patience_loss") == 24.0
+    assert companion.get_primary_emotion_state.call_count == 2
+    companion.emotion.get_state.assert_not_called()
+
+
+def test_proactive_judge_reads_primary_actor_emotion_state():
+    from core.proactive_judge import ProactiveJudge
+
+    companion = MagicMock()
+    companion.desire.get_state.return_value = {
+        "score": 0,
+        "user_absence_hours": 0,
+    }
+    companion.push_scheduler = None
+    companion.get_primary_emotion_state.return_value = {
+        "label": "joy",
+        "pad": {"P": 0.8, "A": 0.2, "D": 0.1},
+        "thresholds": {},
+    }
+    judge = ProactiveJudge(companion=companion)
+
+    components = judge._read_components(None)
+    tone = judge._select_tone(components, "idle_care")
+
+    assert components["emotion_score"] < 50.0
+    assert tone == "warm_with_light_flirt"
+    assert companion.get_primary_emotion_state.call_count == 2
+    companion.emotion.get_state.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_push_uses_primary_actor_emotion_state():
+    from core.companion import Companion
+
+    companion = object.__new__(Companion)
+    companion.settings = {"qq": {"self_qq": 10001}}
+    companion.feature_flags = MagicMock()
+    companion.feature_flags.is_enabled.return_value = False
+    companion.qq = MagicMock()
+    companion.qq.send_message = AsyncMock(return_value=True)
+    companion.get_primary_emotion_state = MagicMock(
+        return_value={"label": "joy"}
+    )
+    companion.emotion = MagicMock()
+    companion.brain = MagicMock()
+    companion.brain.generate_push = AsyncMock(return_value="记得休息。")
+
+    result = await companion._dispatch_push(
+        "idle_care",
+        {"template": "在干嘛。", "mood_aware": True},
+    )
+
+    assert result is True
+    companion.get_primary_emotion_state.assert_called_once_with()
+    companion.emotion.get_state.assert_not_called()
+    companion.brain.generate_push.assert_awaited_once()
+    assert companion.brain.generate_push.await_args.kwargs["mood"] == "joy"
+
+
+@pytest.mark.asyncio
+async def test_emotion_history_api_defaults_to_primary_actor(monkeypatch):
+    from core import api_server
+
+    companion = MagicMock()
+    identity = MagicMock(actor_id="actor_primary")
+    companion.get_primary_identity.return_value = (10001, identity)
+    companion.state_store.history.return_value = []
+    monkeypatch.setattr(api_server, "get_companion", lambda: companion)
+
+    result = await api_server.emotion_history(
+        window="1h",
+        downsample=False,
+    )
+
+    assert result["actor_id"] == "actor_primary"
+    assert result["user_id"] == 10001
+    assert result["items"] == []
+    companion.state_store.history.assert_called_once()
+    assert (
+        companion.state_store.history.call_args.kwargs["actor_id"]
+        == "actor_primary"
+    )
+
+
+@pytest.mark.asyncio
+async def test_emotion_state_api_defaults_to_primary_actor(monkeypatch):
+    from core import api_server
+
+    companion = MagicMock()
+    companion.get_primary_emotion_state.return_value = {"label": "joy"}
+    monkeypatch.setattr(api_server, "get_companion", lambda: companion)
+
+    result = await api_server.emotion_state()
+
+    assert result == {"label": "joy"}
+    companion.get_primary_emotion_state.assert_called_once_with()
+    companion.emotion.get_state.assert_not_called()
 
 
 def test_companion_primary_emotion_state_uses_master_qq_actor():

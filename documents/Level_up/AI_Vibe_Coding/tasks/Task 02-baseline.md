@@ -5,7 +5,7 @@ kind: task
 task_id: TASK-02-001
 phase: Phase 02
 subsystem: core
-status: review
+status: done
 priority: P1
 dependencies: ["TASK-01-001"]
 risk: medium
@@ -37,8 +37,8 @@ evidence: ["file:///E:/Agent_reply/tests/test_phase2_identity.py", "file:///E:/A
 > - `node --check src/renderer/js/persona-hub.js`：通过
 > - VS Code diagnostics：`memory_store.py`、`database.py`、`api_server.py` 均为零
 
-> [!warning] 完整回归未关闭
-> `python -m pytest -q`：`294 passed, 10 failed, 6 warnings`。失败位于 Context Builder（5）、Emotion（3）、旧 Persona API 测试（1）、Permission（1）；Phase 02 保持 `review`。
+> [!warning] 恢复审计后的当前门禁
+> 2026-07-20 中断恢复审计确认旧测试数字已过期。当前代码已增加 Migration Ledger、Actor Emotion、Pipeline/Agent Actor 合同与规范身份双写；但主动消息、情绪 API、后台 idle/decay 和 Actor 持久化仍未闭环。完成修复并重新执行全部门禁前，Phase 02 保持 `review`。
 
 ### TDD Red 证据
 - 长期记忆：`LongTermMemory.store/retrieve()` 不接受 `actor_id`，2 failed、6 passed。

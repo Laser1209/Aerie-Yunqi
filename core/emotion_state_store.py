@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Emotion state persistence store (Phase 9 Batch 1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Emotion state persistence store (Phase 9 Batch 1).
 
 Persists emotion state + threshold values into ``emotion_state_snapshot``
 so the dashboard can show 24h / 7d / 30d curves and we survive restarts.
@@ -46,6 +46,8 @@ class EmotionStateStore:
         state: dict,
         threshold: dict,
         trigger_event: str = "user_msg",
+        *,
+        actor_id: str | None = None,
     ) -> int:
         """Insert one snapshot row. Returns row id (0 on failure)."""
         try:
@@ -58,6 +60,7 @@ class EmotionStateStore:
             row = {
                 "ts": int(time.time() * 1000),
                 "user_id": int(user_id or 0),
+                "actor_id": actor_id,
                 "pleasure": float(pad.get("P", pad.get("pleasure", 0.0)) or 0.0),
                 "arousal": float(pad.get("A", pad.get("arousal", 0.0)) or 0.0),
                 "dominance": float(pad.get("D", pad.get("dominance", 0.0)) or 0.0),
@@ -80,9 +83,18 @@ class EmotionStateStore:
         user_id: int,
         since_ts: int,
         limit: int = 2000,
+        *,
+        actor_id: str | None = None,
     ) -> list[dict]:
         """Return snapshots newer than since_ts, ascending by ts."""
         try:
+            if actor_id:
+                return self._db.query(
+                    "SELECT * FROM emotion_state_snapshot "
+                    "WHERE actor_id = ? AND ts >= ? "
+                    "ORDER BY ts ASC LIMIT ?",
+                    (actor_id, int(since_ts), int(limit)),
+                )
             return self._db.query(
                 "SELECT * FROM emotion_state_snapshot "
                 "WHERE user_id = ? AND ts >= ? "
@@ -93,8 +105,19 @@ class EmotionStateStore:
             logger.exception("emotion_state_store.history error")
             return []
 
-    def latest(self, user_id: int) -> Optional[dict]:
+    def latest(
+        self,
+        user_id: int,
+        *,
+        actor_id: str | None = None,
+    ) -> Optional[dict]:
         try:
+            if actor_id:
+                return self._db.query_one(
+                    "SELECT * FROM emotion_state_snapshot "
+                    "WHERE actor_id = ? ORDER BY id DESC LIMIT 1",
+                    (actor_id,),
+                )
             return self._db.query_one(
                 "SELECT * FROM emotion_state_snapshot "
                 "WHERE user_id = ? ORDER BY id DESC LIMIT 1",
@@ -110,13 +133,20 @@ class EmotionStateStore:
         since_ts: int,
         bucket_ms: int = 60_000,
         limit: int = 2000,
+        *,
+        actor_id: str | None = None,
     ) -> list[dict]:
         """Bucket-aggregated history. Each bucket averages PAD + 4 slots.
 
         Useful for the 7d/30d line chart so 5k+ points collapse to ~hundreds.
         """
         try:
-            rows = self.history(user_id, since_ts, limit=limit)
+            rows = self.history(
+                user_id,
+                since_ts,
+                limit=limit,
+                actor_id=actor_id,
+            )
             if not rows:
                 return []
             buckets: dict[int, dict] = {}

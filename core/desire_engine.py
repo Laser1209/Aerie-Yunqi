@@ -248,7 +248,7 @@ class DesireEngine:
             return (time.time() - self._last_user_ts) / 3600.0
         if name == "emotion_overdraft":
             try:
-                state = self.companion.emotion.get_state(0) if self.companion else {}
+                state = self.companion.get_primary_emotion_state() if self.companion else {}
                 pad = state.get("pad", {}) or {}
                 # High arousal + low pleasure = "overdraft"
                 return max(0.0, (pad.get("A", 0.0) - 0.0) * 30.0)
@@ -256,7 +256,7 @@ class DesireEngine:
                 return 0.0
         if name == "patience_loss":
             try:
-                state = self.companion.emotion.get_state(0) if self.companion else {}
+                state = self.companion.get_primary_emotion_state() if self.companion else {}
                 th = state.get("thresholds", {}) or {}
                 v = th.get("patience", {}).get("value", 0) if isinstance(th.get("patience"), dict) else 0
                 return float(v or 0)

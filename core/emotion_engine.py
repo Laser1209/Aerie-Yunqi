@@ -157,6 +157,15 @@ class EmotionEngine:
                 self.threshold_engine.reload_config(behavior_cfg)
             except Exception as e:
                 log.warning("threshold engine reload failed: %s", e)
+        for actor_id, threshold_engine in self._thresholds_by_actor.items():
+            try:
+                threshold_engine.reload_config(behavior_cfg)
+            except Exception as e:
+                log.warning(
+                    "actor threshold reload failed actor=%s: %s",
+                    actor_id,
+                    e,
+                )
 
     def _runtime_state(
         self,
@@ -424,6 +433,7 @@ class EmotionEngine:
                     state=self.get_state(user_id, actor_id=actor_id),
                     threshold=threshold_engine.get_slots_summary(),
                     trigger_event=trigger,
+                    actor_id=actor_id,
                 )
             except Exception:
                 logger.exception("emotion state snapshot error")
@@ -481,24 +491,57 @@ class EmotionEngine:
             "panel": threshold_engine.get_panel_text(),
         }
 
-    def idle_tick(self) -> dict:
-        """R7.5: periodic background tick for dashboard liveness.
-
-        - EMA: 0.98 * current + 0.02 * baseline (gentle pull toward
-          neutral so PAD eventually settles without strong signals).
-        - plus tiny Gaussian noise (sigma=0.01) so the dashboard never
-          looks frozen.
-        - No LLM call, no DB write here (caller decides when to snapshot
-          via state_store.snapshot(trigger_event="idle_tick")).
-        Returns the new state for inspection.
-        """
+    def idle_tick(
+        self,
+        *,
+        actor_id: str | None = None,
+    ) -> dict:
+        """Apply one idle PAD drift to the selected runtime state."""
+        state, _ = self._runtime_state(actor_id)
         for k in ("P", "A", "D"):
-            cur = float(self._state.get(k, 0.0))
+            cur = float(state.get(k, 0.0))
             base = float(self._baseline.get(k, 0.0))
             ema = 0.98 * cur + 0.02 * base
             noise = random.gauss(0.0, 0.01)
-            self._state[k] = max(-0.95, min(0.95, ema + noise))
-        return dict(self._state)
+            state[k] = max(-0.95, min(0.95, ema + noise))
+        return dict(state)
+
+    def tick_decay(
+        self,
+        seconds: float,
+        *,
+        actor_id: str | None = None,
+    ) -> None:
+        """Apply proportional threshold decay to one runtime state."""
+        _, threshold_engine = self._runtime_state(actor_id)
+        threshold_engine.tick_decay(seconds)
+
+    def daily_decay(
+        self,
+        *,
+        actor_id: str | None = None,
+    ) -> None:
+        """Apply calendar-day threshold decay to one runtime state."""
+        _, threshold_engine = self._runtime_state(actor_id)
+        threshold_engine.daily_decay()
+
+    def restore_threshold_snapshot(
+        self,
+        snapshot: dict,
+        *,
+        actor_id: str | None = None,
+    ) -> None:
+        """Restore persisted cumulative slots for one runtime state."""
+        _, threshold_engine = self._runtime_state(actor_id)
+        for name in (
+            "patience",
+            "anxiety",
+            "desire",
+            "tenderness",
+        ):
+            value = float(snapshot.get(f"{name}_value") or 0.0)
+            if name in threshold_engine.slots and value > 0:
+                threshold_engine.slots[name].value = value
 
     # ── Text Tuning ────────────────────────────────
 

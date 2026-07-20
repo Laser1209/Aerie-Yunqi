@@ -541,11 +541,17 @@ async def napcat_qrcode() -> Response:
 # ── Emotion ─────────────────────────────────────────
 
 @app.get("/api/emotion/state")
-async def emotion_state(user_id: int = Query(default=0)) -> dict:
+async def emotion_state(user_id: int | None = None) -> dict:
     comp = get_companion()
     if not comp:
         return {"error": "backend not ready"}
-    return comp.emotion.get_state(user_id)
+    if user_id is None:
+        return comp.get_primary_emotion_state()
+    identity = comp.identity_resolver.resolve("qq", str(user_id))
+    return comp.emotion.get_state(
+        user_id,
+        actor_id=identity.actor_id,
+    )
 
 
 # ── Phase 4: Static file serving for uploads ────────────────
@@ -937,8 +943,20 @@ async def emotion_history(
     size is chosen to keep the returned series at ~120-336 points
     regardless of the window.
     """
+    companion = get_companion()
+    actor_id = None
+    if user_id is None and companion:
+        primary = companion.get_primary_identity()
+        if primary:
+            user_id, identity = primary
+            actor_id = identity.actor_id
     if user_id is None:
         user_id = get_master_qq()
+    if actor_id is None and companion and user_id:
+        actor_id = companion.identity_resolver.resolve(
+            "qq",
+            str(user_id),
+        ).actor_id
     window_ms = {
         "1h": 3600 * 1000,
         "24h": 24 * 3600 * 1000,
@@ -946,18 +964,27 @@ async def emotion_history(
         "30d": 30 * 24 * 3600 * 1000,
     }[window]
     since = int(time.time() * 1000) - window_ms
-    raw_rows = _db.query(
-        "SELECT ts, pleasure, arousal, dominance, label, "
-        "patience_value, anxiety_value, desire_value, tenderness_value, "
-        "active_eruption, trigger_event "
-        "FROM emotion_state_snapshot WHERE user_id = ? AND ts >= ? "
-        "ORDER BY ts ASC LIMIT 5000",
-        (user_id, since),
-    )
+    if actor_id and companion:
+        raw_rows = companion.state_store.history(
+            user_id,
+            since,
+            limit=5000,
+            actor_id=actor_id,
+        )
+    else:
+        raw_rows = _db.query(
+            "SELECT ts, pleasure, arousal, dominance, label, "
+            "patience_value, anxiety_value, desire_value, tenderness_value, "
+            "active_eruption, trigger_event "
+            "FROM emotion_state_snapshot WHERE user_id = ? AND ts >= ? "
+            "ORDER BY ts ASC LIMIT 5000",
+            (user_id, since),
+        )
 
     if not downsample or len(raw_rows) <= 120:
         return {
             "user_id": user_id,
+            "actor_id": actor_id,
             "window": window,
             "since_ts": since,
             "count": len(raw_rows),
@@ -1041,6 +1068,7 @@ async def emotion_history(
 
     return {
         "user_id": user_id,
+        "actor_id": actor_id,
         "window": window,
         "since_ts": since,
         "count": len(items),

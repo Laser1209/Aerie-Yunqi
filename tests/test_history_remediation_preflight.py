@@ -13,7 +13,9 @@ def test_history_preflight_collects_read_only_release_blocker(monkeypatch):
         lambda *args, **kwargs: {
             ("rev-parse", "HEAD"): ["abcdef1234567890"],
             ("rev-parse", "--abbrev-ref", "HEAD"): ["Aerie-Model-X"],
-            ("status", "--porcelain"): [],
+            ("diff", "--cached", "--name-status", "--"): [],
+            ("diff", "--name-status", "--"): [],
+            ("ls-files", "--others", "--exclude-standard"): [],
             ("remote", "-v"): [],
         }.get(args, []),
     )
@@ -45,6 +47,55 @@ def test_history_preflight_collects_read_only_release_blocker(monkeypatch):
     assert report["release_gate"]["can_close_credential_history_gate"] is False
     assert any("Rotate" in item for item in report["required_user_actions"])
     assert all("force push" not in item.lower() for item in report["pre_authorization_commands"])
+
+
+def test_git_state_ignores_status_stat_cache_false_positive(monkeypatch):
+    from tools import history_remediation_preflight as preflight
+
+    monkeypatch.setattr(
+        preflight,
+        "_git_lines",
+        lambda *args, **kwargs: {
+            ("rev-parse", "HEAD"): ["abcdef1234567890"],
+            ("rev-parse", "--abbrev-ref", "HEAD"): ["Aerie-Model-X"],
+            ("status", "--porcelain"): [" M core/companion.py"],
+            ("diff", "--cached", "--name-status", "--"): [],
+            ("diff", "--name-status", "--"): [],
+            ("ls-files", "--others", "--exclude-standard"): [],
+            ("remote", "-v"): [],
+        }.get(args, []),
+    )
+
+    state = preflight._git_state()
+
+    assert state["clean"] is True
+    assert state["dirty_entries"] == []
+
+
+def test_git_state_reports_content_and_untracked_changes(monkeypatch):
+    from tools import history_remediation_preflight as preflight
+
+    monkeypatch.setattr(
+        preflight,
+        "_git_lines",
+        lambda *args, **kwargs: {
+            ("rev-parse", "HEAD"): ["abcdef1234567890"],
+            ("rev-parse", "--abbrev-ref", "HEAD"): ["Aerie-Model-X"],
+            ("diff", "--cached", "--name-status", "--"): ["M\tstaged.py"],
+            ("diff", "--name-status", "--"): ["M\tworking.py"],
+            ("ls-files", "--others", "--exclude-standard"): ["new.txt"],
+            ("remote", "-v"): ["origin https://example.invalid/repo.git (fetch)"],
+        }.get(args, []),
+    )
+
+    state = preflight._git_state()
+
+    assert state["clean"] is False
+    assert state["dirty_entries"] == [
+        "staged:M\tstaged.py",
+        "unstaged:M\tworking.py",
+        "untracked:new.txt",
+    ]
 
 
 def test_history_preflight_exit_code_blocks_when_history_findings(monkeypatch, capsys):

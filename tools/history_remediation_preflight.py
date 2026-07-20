@@ -45,15 +45,30 @@ def _git_lines(*args: str, timeout: int = 30) -> list[str]:
 def _git_state() -> dict[str, Any]:
     head = _first(_git_lines("rev-parse", "HEAD"), "")
     branch = _first(_git_lines("rev-parse", "--abbrev-ref", "HEAD"), "")
-    status = [line for line in _git_lines("status", "--porcelain") if line.strip()]
+    staged = [
+        f"staged:{line}"
+        for line in _git_lines("diff", "--cached", "--name-status", "--")
+        if line.strip()
+    ]
+    unstaged = [
+        f"unstaged:{line}"
+        for line in _git_lines("diff", "--name-status", "--")
+        if line.strip()
+    ]
+    untracked = [
+        f"untracked:{line}"
+        for line in _git_lines("ls-files", "--others", "--exclude-standard")
+        if line.strip()
+    ]
+    dirty_entries = [*staged, *unstaged, *untracked]
     remotes = _git_lines("remote", "-v")
     remote_names = sorted({line.split()[0] for line in remotes if line.split()})
     return {
         "head": head,
         "head_short": head[:7] if head else "",
         "branch": branch,
-        "clean": not status,
-        "dirty_entries": status,
+        "clean": not dirty_entries,
+        "dirty_entries": dirty_entries,
         "remote_names": remote_names,
         "has_remote": bool(remote_names),
     }

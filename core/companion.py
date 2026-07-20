@@ -62,10 +62,14 @@ class Companion:
         global _COMPANION
         self.settings = settings or load_settings()
         self.feature_flags = FeatureFlags()
-        self.world_port = build_world_port(feature_flags=self.feature_flags)
 
         # R0.3.7: load centralized behavior config (single source of truth).
         self.behavior_cfg = load_behavior_config()
+        self.world_port = build_world_port(
+            feature_flags=self.feature_flags,
+            world_config=self.behavior_cfg.get("world_simulation", {}),
+            relationship_config=self.behavior_cfg.get("relationship", {}),
+        )
 
         # Data layer
         self.db = database or Database()
@@ -185,6 +189,9 @@ class Companion:
             identity_resolver=self.identity_resolver,
             conversation_repository=self.conversation_repository,
         )
+        self.pipeline.world_snapshot_provider = self._world_snapshot_for_context
+        self.pipeline.relationship_snapshot_provider = self._relationship_snapshot_for_context
+        self.pipeline.self_model_snapshot_provider = self._self_model_snapshot_for_context
         self.chat_request_queue_requested = self.feature_flags.is_enabled(
             "chat_request_queue_v1",
         )
@@ -381,6 +388,51 @@ class Companion:
                     return
                 self.push_scheduler.pause("qq_offline")
                 logger.info("[QQ State] QQ offline; push scheduler paused")
+
+    def _world_snapshot_for_context(self) -> dict | None:
+        provider = getattr(self.world_port, "get_world_snapshot", None)
+        if not callable(provider):
+            return None
+        try:
+            return provider()
+        except Exception:
+            logger.debug("world snapshot unavailable", exc_info=True)
+            return None
+
+    def _relationship_snapshot_for_context(self, user_id: int) -> dict | None:
+        provider = getattr(self.world_port, "get_relationship_snapshot", None)
+        if not callable(provider):
+            return None
+        try:
+            persona_id = self._active_persona_id()
+            return provider(user_id, persona_id=persona_id)
+        except Exception:
+            logger.debug("relationship snapshot unavailable", exc_info=True)
+            return None
+
+    def _self_model_snapshot_for_context(
+        self,
+        world_snapshot: dict | None,
+        relationship_snapshot: dict | None,
+    ) -> dict | None:
+        provider = getattr(self.world_port, "get_self_model_snapshot", None)
+        if not callable(provider):
+            return None
+        try:
+            return provider(world_snapshot, relationship_snapshot)
+        except Exception:
+            logger.debug("self model snapshot unavailable", exc_info=True)
+            return None
+
+    def _active_persona_id(self) -> str:
+        try:
+            from core.persona_hub import get_persona_manager
+
+            active = get_persona_manager().get_active() or {}
+            basic = active.get("basic", {}) if isinstance(active, dict) else {}
+            return str(active.get("id") or basic.get("id") or basic.get("name") or "default")
+        except Exception:
+            return "default"
 
     # ── v13.9: 异步任务处理器注册 ──────────────────────────────
     def _register_async_task_handlers(self) -> None:
@@ -770,6 +822,20 @@ class Companion:
             return {"status": "error", "reason": str(e)}
 
     async def _on_qq_message(self, msg: IncomingMessage) -> None:
+        relationship_observer = getattr(
+            getattr(self, "world_port", None),
+            "relationship",
+            None,
+        )
+        if relationship_observer is not None:
+            try:
+                relationship_observer.observe_user_message(
+                    user_id=msg.user_id,
+                    persona_id=self._active_persona_id(),
+                    text=msg.content,
+                )
+            except Exception:
+                logger.debug("relationship observation failed", exc_info=True)
         if self.pipeline:
             try:
                 await self.pipeline.handle(msg)

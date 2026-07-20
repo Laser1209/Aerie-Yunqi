@@ -177,6 +177,19 @@ class NullWorldAdapter:
     async def resume(self) -> None:
         return None
 
+    def get_world_snapshot(self) -> dict[str, Any] | None:
+        return None
+
+    def get_relationship_snapshot(self, user_id: int | str, persona_id: str = "default") -> dict[str, Any] | None:
+        return None
+
+    def get_self_model_snapshot(
+        self,
+        world_snapshot: dict[str, Any] | None,
+        relationship_snapshot: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        return None
+
 
 class InProcessWorldAdapter:
     """In-memory adapter for Phase 11 host contracts.
@@ -191,7 +204,22 @@ class InProcessWorldAdapter:
         *,
         instance_id: str | None = None,
         capabilities: tuple[str, ...] | None = None,
+        world: Any | None = None,
+        relationship: Any | None = None,
+        self_model: Any | None = None,
     ) -> None:
+        if world is None:
+            from core.world_simulation import WorldSimulation
+
+            world = WorldSimulation()
+        if relationship is None:
+            from core.relationship_engine import RelationshipEngine
+
+            relationship = RelationshipEngine()
+        if self_model is None:
+            from core.self_model import SelfModel
+
+            self_model = SelfModel()
         requested = capabilities or (
             "world.read",
             "world.control",
@@ -202,6 +230,9 @@ class InProcessWorldAdapter:
             cap for cap in requested if cap in WORLD_CAPABILITY_WHITELIST
         )
         self.instance_id = instance_id or f"world_{uuid.uuid4().hex}"
+        self.world = world
+        self.relationship = relationship
+        self.self_model = self_model
         self._revision = 0
         self._sequence = 0
         self._paused = False
@@ -212,16 +243,17 @@ class InProcessWorldAdapter:
     async def get_state(self) -> WorldSnapshot:
         async with self._lock:
             status = "paused" if self._paused else "running"
+            world_snapshot = self.get_world_snapshot() or {}
             return WorldSnapshot(
                 status=status,
                 source="in_process",
                 instance_id=self.instance_id,
-                revision=self._revision,
+                revision=max(self._revision, int(world_snapshot.get("revision") or 0)),
                 sequence=self._sequence,
                 paused=self._paused,
-                phase="unknown",
-                location="unknown",
-                activity="idle",
+                phase=str(world_snapshot.get("phase") or "unknown"),
+                location=str(world_snapshot.get("location") or "unknown"),
+                activity=str(world_snapshot.get("activity") or "idle"),
                 capabilities=self.capabilities,
             )
 
@@ -251,6 +283,19 @@ class InProcessWorldAdapter:
             if idem:
                 self._observed_keys[idem] = event.event_id
             subscribers = list(self._subscribers.values())
+
+        if observation.observation_type == "user_message":
+            try:
+                persona_id = str(observation.payload.get("persona_id") or "default")
+                text = str(observation.payload.get("text") or "")
+                if text:
+                    self.relationship.observe_user_message(
+                        user_id=observation.actor_id or "unknown",
+                        persona_id=persona_id,
+                        text=text,
+                    )
+            except Exception:
+                logger.exception("world relationship observation failed")
 
         self._publish(event, subscribers)
         return None
@@ -304,6 +349,36 @@ class InProcessWorldAdapter:
                 "status": "paused" if self._paused else "running",
                 "revision": self._revision,
             },
+        )
+
+    def tick(self) -> dict[str, Any]:
+        return dict(self.world.tick())
+
+    def get_world_snapshot(self) -> dict[str, Any] | None:
+        return dict(self.world.get_snapshot())
+
+    def get_relationship_snapshot(
+        self,
+        user_id: int | str,
+        persona_id: str = "default",
+    ) -> dict[str, Any] | None:
+        return dict(
+            self.relationship.get_state(
+                user_id=user_id,
+                persona_id=persona_id,
+            )
+        )
+
+    def get_self_model_snapshot(
+        self,
+        world_snapshot: dict[str, Any] | None,
+        relationship_snapshot: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        return dict(
+            self.self_model.snapshot(
+                world_snapshot=world_snapshot,
+                relationship_snapshot=relationship_snapshot,
+            )
         )
 
     @staticmethod
@@ -364,6 +439,8 @@ def build_world_port(
     *,
     feature_flags: Any,
     instance_id: str | None = None,
+    world_config: dict[str, Any] | None = None,
+    relationship_config: dict[str, Any] | None = None,
 ) -> WorldPort:
     try:
         enabled = bool(feature_flags.is_enabled("world_inprocess_v1"))
@@ -372,7 +449,22 @@ def build_world_port(
         enabled = False
     if not enabled:
         return NullWorldAdapter(reason="flag_off")
-    return InProcessWorldAdapter(instance_id=instance_id)
+    from core.relationship_engine import RelationshipEngine
+    from core.self_model import SelfModel
+    from core.world_simulation import WorldSimulation
+
+    rel_cfg = relationship_config or {}
+    defaults = rel_cfg.get("defaults") if isinstance(rel_cfg, dict) else None
+    learning_rate = rel_cfg.get("learning_rate", 0.08) if isinstance(rel_cfg, dict) else 0.08
+    return InProcessWorldAdapter(
+        instance_id=instance_id,
+        world=WorldSimulation(config=world_config or {}),
+        relationship=RelationshipEngine(
+            defaults=defaults if isinstance(defaults, dict) else None,
+            learning_rate=float(learning_rate),
+        ),
+        self_model=SelfModel(),
+    )
 
 
 def _normalize_topics(topics: list[str] | tuple[str, ...]) -> set[str]:

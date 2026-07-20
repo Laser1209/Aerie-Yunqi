@@ -14,6 +14,13 @@ from .persona_hub import get_persona_manager
 logger = logging.getLogger(__name__)
 
 
+def _safe_float(value: Any, default: float = 0.5) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class ContextBuilder:
     def __init__(self, memory: Any = None, knowledge: Any = None) -> None:
         self.memory = memory
@@ -37,6 +44,9 @@ class ContextBuilder:
         channel_account_id: str | None = None,
         context_budget_enabled: bool = False,
         context_budget: dict | None = None,
+        world_snapshot: dict | None = None,
+        relationship_snapshot: dict | None = None,
+        self_model_snapshot: dict | None = None,
     ) -> list[dict]:
         """Build message list for LLM based on route mode.
 
@@ -75,6 +85,44 @@ class ContextBuilder:
             system += "\n今日事件：\n" + ("\n".join(event_lines) or "- 无")
             system += "\n今日未完成任务：\n" + ("\n".join(todo_lines) or "- 无")
             system += "\n未来 7 天纪念日：\n" + ("\n".join(anniversary_lines) or "- 无")
+
+        if route_mode == "FULL" and world_snapshot:
+            system += (
+                "\n\n【世界状态·模拟】\n"
+                f"时段：{world_snapshot.get('phase', 'unknown')}\n"
+                f"地点：{world_snapshot.get('location', 'unknown')}\n"
+                f"活动：{world_snapshot.get('activity', 'idle')}\n"
+                f"精力：{_safe_float(world_snapshot.get('energy', 0.5)):.2f}\n"
+                f"社交场景：{world_snapshot.get('social', 'private')}\n"
+                "这是内部连续性模拟，不得把模拟内容声称为现实世界已验证事实。"
+            )
+
+        if route_mode == "FULL" and relationship_snapshot:
+            agent_side = relationship_snapshot.get("agent_to_user", {})
+            user_side = relationship_snapshot.get("user_to_agent", {})
+            user_emotion = relationship_snapshot.get("user_emotion", {})
+            system += (
+                "\n\n【双向关系状态】\n"
+                f"Agent→用户：依恋 {_safe_float(agent_side.get('attachment', 0.5)):.2f}，"
+                f"信任 {_safe_float(agent_side.get('trust', 0.5)):.2f}，"
+                f"关心 {_safe_float(agent_side.get('care', 0.5)):.2f}\n"
+                f"用户→Agent：温度 {_safe_float(user_side.get('warmth', 0.5)):.2f}，"
+                f"参与 {_safe_float(user_side.get('engagement', 0.5)):.2f}，"
+                f"信任 {_safe_float(user_side.get('trust', 0.5)):.2f}\n"
+                f"用户情绪估计：{user_emotion.get('label', 'neutral')}\n"
+                f"安全感：{_safe_float(relationship_snapshot.get('security', 0.5)):.2f}；"
+                f"冲突：{_safe_float(relationship_snapshot.get('conflict', 0.0)):.2f}\n"
+                "关系数值只用于调节语气、主动性和边界，不得直接向用户报数。"
+            )
+
+        if route_mode == "FULL" and self_model_snapshot:
+            system += (
+                "\n\n【SelfModel·计算状态】\n"
+                f"专注：{_safe_float(self_model_snapshot.get('focus', 0.5)):.2f}\n"
+                f"社交需求：{_safe_float(self_model_snapshot.get('social_need', 0.5)):.2f}\n"
+                f"稳定度：{_safe_float(self_model_snapshot.get('stability', 0.5)):.2f}\n"
+                "SelfModel 是计算状态，只用于内部连续性和语气调节。"
+            )
 
         # 撤回铁律 — only FULL mode
         if route_mode == "FULL" and persona.get("behavior", {}).get(

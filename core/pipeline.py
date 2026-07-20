@@ -274,6 +274,18 @@ class Pipeline:
             if context_budget_enabled
             else {}
         )
+        world_snapshot = self._call_optional_context_provider(
+            "world_snapshot_provider",
+        )
+        relationship_snapshot = self._call_optional_context_provider(
+            "relationship_snapshot_provider",
+            msg.user_id,
+        )
+        self_model_snapshot = self._call_optional_context_provider(
+            "self_model_snapshot_provider",
+            world_snapshot,
+            relationship_snapshot,
+        )
         ctx_messages = self.ctx_builder.build(
             msg.user_id,
             model_content,
@@ -284,6 +296,9 @@ class Pipeline:
             reply_to=reply_to_data,
             attachments=context_attachments if context_attachments else None,
             time_context=time_context,
+            world_snapshot=world_snapshot,
+            relationship_snapshot=relationship_snapshot,
+            self_model_snapshot=self_model_snapshot,
             **context_budget_kwargs,
         )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
@@ -779,6 +794,16 @@ class Pipeline:
         return result
 
     # ── Helpers ────────────────────────────────────────
+    def _call_optional_context_provider(self, name: str, *args) -> Any:
+        provider = getattr(self, name, None)
+        if not callable(provider):
+            return None
+        try:
+            return provider(*args)
+        except Exception:
+            logger.warning("%s unavailable", name, exc_info=True)
+            return None
+
     def _message_from_request_context(
         self,
         request_context: RequestContext,

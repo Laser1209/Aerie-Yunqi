@@ -192,6 +192,120 @@ def _get_permission_manager():
     return _permission_manager
 
 
+# ── Phase 15: World Dashboard backend contract ─────────────────────────
+
+_WORLD_DASHBOARD_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
+
+
+def _world_dashboard_safe_text(value: Any, limit: int = 200) -> str:
+    return str(value or "").replace("\x00", "").strip()[:limit]
+
+
+def _sanitize_world_candidate_approval(payload: Any) -> dict[str, str]:
+    data = payload if isinstance(payload, dict) else {}
+    action = _world_dashboard_safe_text(data.get("action") or "approve").lower()
+    if action not in _WORLD_DASHBOARD_APPROVAL_ACTIONS:
+        action = "reject"
+    candidate_id = _world_dashboard_safe_text(
+        data.get("candidate_id") or data.get("candidateId") or ""
+    )
+    idempotency_key = _world_dashboard_safe_text(
+        data.get("idempotency_key")
+        or data.get("idempotencyKey")
+        or candidate_id
+    )
+    reason_code = _world_dashboard_safe_text(
+        data.get("reason_code") or data.get("reasonCode") or ""
+    )
+    return {
+        "candidate_id": candidate_id,
+        "action": action,
+        "idempotency_key": idempotency_key,
+        "reason_code": reason_code,
+    }
+
+
+def _world_candidate_approval_response(
+    *,
+    status: str,
+    candidate_id: str,
+    ack: bool,
+    handler_called: bool,
+    reason: str = "",
+    error_code: str = "",
+) -> dict[str, Any]:
+    response: dict[str, Any] = {
+        "status": _world_dashboard_safe_text(status or "unknown"),
+        "candidateId": _world_dashboard_safe_text(candidate_id),
+        "ack": bool(ack),
+        "sideEffects": {"handler_called": bool(handler_called)},
+    }
+    if reason:
+        response["reason"] = _world_dashboard_safe_text(reason)
+    if error_code:
+        response["error_code"] = _world_dashboard_safe_text(error_code)
+    return response
+
+
+@app.post("/api/world/candidates/approve")
+async def world_candidate_approve(request: Request) -> dict[str, Any]:
+    """Dashboard-only candidate approval contract.
+
+    The API layer deliberately remains a thin, redacted adapter.  It accepts
+    only the public approval fields, respects ``world_sidecar_v1`` as a hard
+    feature gate, and delegates actual world/image side effects to Companion
+    when a handler is available.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    approval = _sanitize_world_candidate_approval(payload)
+
+    if not FeatureFlags().is_enabled("world_sidecar_v1"):
+        return _world_candidate_approval_response(
+            status="disabled",
+            candidate_id=approval["candidate_id"],
+            ack=False,
+            handler_called=False,
+        )
+
+    comp = get_companion()
+    handler = getattr(comp, "approve_world_image_candidate", None)
+    if not callable(handler):
+        return _world_candidate_approval_response(
+            status="backend_unavailable",
+            candidate_id=approval["candidate_id"],
+            ack=False,
+            handler_called=False,
+            error_code="approval_handler_missing",
+        )
+
+    try:
+        result = handler(dict(approval))
+        if hasattr(result, "__await__"):
+            result = await result
+    except Exception:
+        logger.warning("world candidate approval handler failed", exc_info=True)
+        return _world_candidate_approval_response(
+            status="failed",
+            candidate_id=approval["candidate_id"],
+            ack=False,
+            handler_called=True,
+            error_code="approval_handler_failed",
+        )
+
+    result = result if isinstance(result, dict) else {}
+    return _world_candidate_approval_response(
+        status=_world_dashboard_safe_text(result.get("status") or "submitted"),
+        candidate_id=approval["candidate_id"],
+        ack=bool(result.get("ack") or result.get("acked")),
+        handler_called=True,
+        reason=_world_dashboard_safe_text(result.get("reason") or ""),
+        error_code=_world_dashboard_safe_text(result.get("error_code") or ""),
+    )
+
+
 # ── Health ──────────────────────────────────────────
 
 @app.get("/api/health")

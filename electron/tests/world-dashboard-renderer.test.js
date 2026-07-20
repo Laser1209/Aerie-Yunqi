@@ -175,9 +175,9 @@ test("world dashboard renderer uses narrow preload API and redacted display", as
           state: "running",
           crashCount: 0,
           configKeys: ["apiKey"],
-          hiddenValue: "redacted-provider-token",
+          hiddenValue: "redacted-token-should-not-render",
         },
-        backend: { status: "healthy", secretValue: "redacted-provider-token" },
+        backend: { status: "healthy", secretValue: "redacted-token-should-not-render" },
         panels: ["world_summary", "image_candidates", "creative_workshop"],
         errors: [],
         chatPublishAvailable: true,
@@ -236,7 +236,7 @@ test("world dashboard renderer uses narrow preload API and redacted display", as
 
   document.getElementById("world-creative-kind").value = "world_note";
   document.getElementById("world-creative-title").value = "晨间世界摘要";
-  document.getElementById("world-creative-payload").value = '{"scene":"morning","secret":"redacted-provider-token"}';
+  document.getElementById("world-creative-payload").value = '{"scene":"morning","secret":"redacted-token-should-not-render"}';
   await document.getElementById("world-creative-preview").click();
 
   const previewPayload = calls.find((call) => call[0] === "previewCreative")[1];
@@ -245,7 +245,7 @@ test("world dashboard renderer uses narrow preload API and redacted display", as
     JSON.stringify({
       kind: "world_note",
       title: "晨间世界摘要",
-      payload: { scene: "morning", secret: "redacted-provider-token" },
+      payload: { scene: "morning", secret: "redacted-token-should-not-render" },
     }),
   );
   assert.equal(
@@ -256,5 +256,5 @@ test("world dashboard renderer uses narrow preload API and redacted display", as
   const rendered = Array.from(document.elements.values())
     .map((element) => `${element.textContent}\n${element.innerHTML}`)
     .join("\n");
-  assert.doesNotMatch(rendered, /sk-secret/);
+  assert.doesNotMatch(rendered, /redacted-token/);
 });

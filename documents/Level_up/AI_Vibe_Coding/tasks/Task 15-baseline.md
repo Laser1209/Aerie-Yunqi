@@ -6,18 +6,18 @@ task_id: TASK-15-001
 phase: Phase 15
 subsystem: world
 status: done
-progress_note: "2026-07-21: implemented feature-flagged Electron world dashboard host contract and real renderer shell with redacted plugin/health status, hide/show continuity, sanitized candidate approval IPC, creative preview metadata, and preload exposure; no background plugin window was introduced."
+progress_note: "2026-07-21: implemented feature-flagged Electron world dashboard host contract, real renderer shell, and backend candidate approval API contract with redacted plugin/health status, hide/show continuity, sanitized candidate approval IPC, creative preview metadata, and preload exposure; no background plugin window was introduced."
 priority: P1
 dependencies: ["TASK-14-001"]
 risk: high
 decision_required: false
 feature_flag: world_sidecar_v1
 migration: false
-files: ["electron/src/main.js", "electron/src/preload.js", "electron/src/world-dashboard-host.js", "electron/src/renderer/index.html", "electron/src/renderer/js/app.js", "electron/src/renderer/js/world-dashboard.js", "electron/src/renderer/styles/world-dashboard.css", "tests/test_phase15_world_dashboard_host.py", "electron/tests/world-dashboard-renderer.test.js"]
+files: ["electron/src/main.js", "electron/src/preload.js", "electron/src/world-dashboard-host.js", "electron/src/renderer/index.html", "electron/src/renderer/js/app.js", "electron/src/renderer/js/world-dashboard.js", "electron/src/renderer/styles/world-dashboard.css", "core/api_server.py", "tests/test_phase15_world_dashboard_host.py", "electron/tests/world-dashboard-renderer.test.js", "tests/test_phase15_world_dashboard_api.py"]
 acceptance_ids: ["A-15-01", "A-15-02", "A-15-03"]
 rollback_ready: true
 owner: world-team
-evidence: ["file:///E:/Agent_reply/electron/src/main.js", "file:///E:/Agent_reply/electron/src/preload.js", "file:///E:/Agent_reply/electron/src/world-dashboard-host.js", "file:///E:/Agent_reply/electron/src/renderer/index.html", "file:///E:/Agent_reply/electron/src/renderer/js/app.js", "file:///E:/Agent_reply/electron/src/renderer/js/world-dashboard.js", "file:///E:/Agent_reply/electron/src/renderer/styles/world-dashboard.css", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_host.py", "file:///E:/Agent_reply/electron/tests/world-dashboard-renderer.test.js"]
+evidence: ["file:///E:/Agent_reply/electron/src/main.js", "file:///E:/Agent_reply/electron/src/preload.js", "file:///E:/Agent_reply/electron/src/world-dashboard-host.js", "file:///E:/Agent_reply/electron/src/renderer/index.html", "file:///E:/Agent_reply/electron/src/renderer/js/app.js", "file:///E:/Agent_reply/electron/src/renderer/js/world-dashboard.js", "file:///E:/Agent_reply/electron/src/renderer/styles/world-dashboard.css", "file:///E:/Agent_reply/core/api_server.py", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_host.py", "file:///E:/Agent_reply/electron/tests/world-dashboard-renderer.test.js", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_api.py"]
 ---
 # Task 15-baseline
 > [!todo] Phase 15
@@ -45,3 +45,10 @@ evidence: ["file:///E:/Agent_reply/electron/src/main.js", "file:///E:/Agent_repl
 - Green：新增实际 renderer 页面壳，展示 status/plugin/backend/chat publish/panels/errors，支持 show/hide/refresh、图片候选审批和 Creative Workshop 元数据预览；renderer 只调用 `window.aerie.worldDashboard` 窄 API，不包含 `world-dashboard:raw`，不展示原始 secret 文本。
 - 验证：目标 `2 passed`；Electron Node `25 passed`；`node --check electron/src/renderer/js/world-dashboard.js`、`node --check electron/src/renderer/js/app.js` 通过；`npm run check:all` 通过；完整 Python `542 passed, 6 warnings`；当前工作区 provider-key 扫描通过。
 - 回滚：移除新增 renderer tab/panel/script/style 即恢复上一批 host-only 状态；`world_sidecar_v1=false` 时 host 仍返回 disabled/hidden 且无 backend side effect，聊天发布路径未被修改。
+
+## Backend API Contract Evidence（2026-07-21）
+
+- Red：`python -m pytest tests/test_phase15_world_dashboard_api.py -q` 初跑 `3 failed`，失败点均为 `/api/world/candidates/approve` 返回 `404 Not Found`。
+- Green：`core/api_server.py` 新增 dashboard-only approval endpoint；Flag off 返回 `disabled` 且不调用 handler；Flag on 只把白名单 approval payload 传给 `companion.approve_world_image_candidate()`；handler 缺失降级为 `backend_unavailable`，异常降级为 `approval_handler_failed`，响应不包含 raw prompt、secret 或异常详情。
+- 验证：目标 API `3 passed, 4 warnings`；Phase 14/15 相关 `15 passed, 4 warnings`；`python -m py_compile core/api_server.py` 通过；完整 Python `545 passed, 6 warnings`；Electron Node `25 passed`；`npm run check:all` 与当前工作区 provider-key 扫描通过。
+- 回滚：关闭 `world_sidecar_v1` 保持 no-side-effect disabled；移除 endpoint 只影响 Dashboard 手动候选审批 API，不影响 Phase 14 自动候选消费或旧聊天发布路径。

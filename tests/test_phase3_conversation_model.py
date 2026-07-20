@@ -293,6 +293,42 @@ def test_phase3_repository_persists_one_turn_with_ordered_assistant_messages():
     assert rows[1]["response_group_id"] == rows[2]["response_group_id"]
 
 
+def test_phase3_repository_rolls_back_entire_turn_when_message_write_fails():
+    from core.conversation_repository import ConversationRepository
+
+    conn = _conversation_fixture()
+    conn.execute(
+        """CREATE TRIGGER fail_assistant_message
+           BEFORE INSERT ON messages
+           WHEN NEW.role = 'assistant'
+           BEGIN
+               SELECT RAISE(ABORT, 'assistant write failed');
+           END"""
+    )
+    repository = ConversationRepository(conn, enabled=True)
+
+    try:
+        repository.persist_turn(
+            request_id="request_atomic_1",
+            user_id=7,
+            actor_id="actor_shared",
+            channel="qq",
+            channel_account_id="7",
+            user_content="原子写入",
+            user_attachments=None,
+            assistant_segments=["触发失败"],
+        )
+    except sqlite3.IntegrityError as exc:
+        assert str(exc) == "assistant write failed"
+    else:
+        raise AssertionError("expected assistant message write to fail")
+
+    assert conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM turns").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 0
+
+
 def test_phase3_repository_supports_database_connection_provider(tmp_path):
     from core.conversation_repository import ConversationRepository
     from core.database import Database

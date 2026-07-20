@@ -34,7 +34,9 @@ evidence: ["file:///E:/Agent_reply/core/database.py", "file:///E:/Agent_reply/co
 - 完整 Turn 读取：规范仓储按最近 N 个完整 Turn 返回全部 Message 分段；FULL/BASIC 均切换到规范历史；读取异常回退 legacy。
 - Flag 自动化合同：`enabled=false` 时 Pipeline 绕过规范读写并保留旧 SQL 参数合同；该证据不等同于真实 Companion 组合根演练，因此任务仍未完成。
 - 迁移安全：固定 004 已发布 checksum；最小旧库缺失附件/身份列时 005 先幂等补列；缺少 `chat_log` 时迁移失败而非伪完成。
-- 本批回归：Phase 3 + Pipeline `33 passed`；Phase 0/2/3 + Pipeline `78 passed, 4 warnings`；完整 Python `346 passed, 6 warnings`；修改文件诊断为空。
+- Turn 事务：Conversation、Turn、Request、用户 Message 与全部助手 Message 置于同一 SQLite SAVEPOINT；任一 Message 写失败时四表均无残留。
+- 历史读取批次回归：Phase 3 + Pipeline `33 passed`；Phase 0/2/3 + Pipeline `78 passed, 4 warnings`；完整 Python `346 passed, 6 warnings`。
+- 事务批次回归：Phase 3 + Pipeline `34 passed`；Phase 0/2/3 + Pipeline `79 passed, 4 warnings`；完整 Python `347 passed, 6 warnings`；修改文件诊断为空。
 - 未完成：真实库 backup/dry-run/cursor 守恒报告、`conversation_model_v1` 关闭后的真实组合根回滚与迁移回滚；不得将本 Task 标记为 done。
 
 ## 链接

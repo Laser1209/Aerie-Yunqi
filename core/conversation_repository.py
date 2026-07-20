@@ -69,52 +69,59 @@ class ConversationRepository:
             else None
         )
         with self._connection() as conn:
-            conn.execute(
-                """INSERT OR IGNORE INTO conversations
-                   (conversation_id, actor_id, channel, channel_account_id, status)
-                   VALUES (?, ?, ?, ?, 'active')""",
-                (conversation_id, actor_id, channel, channel_account_id),
-            )
-            conn.execute(
-                """INSERT INTO turns
-                   (turn_id, conversation_id, status, completed_at)
-                   VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
-                (turn_id, conversation_id),
-            )
-            conn.execute(
-                """INSERT INTO requests
-                   (request_id, conversation_id, turn_id, status,
-                    completed_at)
-                   VALUES (?, ?, ?, 'completed', datetime('now', 'localtime'))""",
-                (request_id, conversation_id, turn_id),
-            )
-            self._insert_message(
-                conn,
-                conversation_id=conversation_id,
-                turn_id=turn_id,
-                role="user",
-                content=user_content,
-                attachments=attachments,
-                response_group_id=None,
-                sequence=0,
-                channel=channel,
-                channel_account_id=channel_account_id,
-                actor_id=actor_id,
-            )
-            for sequence, content in enumerate(assistant_segments, start=1):
+            conn.execute("SAVEPOINT persist_conversation_turn")
+            try:
+                conn.execute(
+                    """INSERT OR IGNORE INTO conversations
+                       (conversation_id, actor_id, channel, channel_account_id, status)
+                       VALUES (?, ?, ?, ?, 'active')""",
+                    (conversation_id, actor_id, channel, channel_account_id),
+                )
+                conn.execute(
+                    """INSERT INTO turns
+                       (turn_id, conversation_id, status, completed_at)
+                       VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
+                    (turn_id, conversation_id),
+                )
+                conn.execute(
+                    """INSERT INTO requests
+                       (request_id, conversation_id, turn_id, status,
+                        completed_at)
+                       VALUES (?, ?, ?, 'completed', datetime('now', 'localtime'))""",
+                    (request_id, conversation_id, turn_id),
+                )
                 self._insert_message(
                     conn,
                     conversation_id=conversation_id,
                     turn_id=turn_id,
-                    role="assistant",
-                    content=content,
-                    attachments=None,
-                    response_group_id=response_group_id,
-                    sequence=sequence,
+                    role="user",
+                    content=user_content,
+                    attachments=attachments,
+                    response_group_id=None,
+                    sequence=0,
                     channel=channel,
                     channel_account_id=channel_account_id,
                     actor_id=actor_id,
                 )
+                for sequence, content in enumerate(assistant_segments, start=1):
+                    self._insert_message(
+                        conn,
+                        conversation_id=conversation_id,
+                        turn_id=turn_id,
+                        role="assistant",
+                        content=content,
+                        attachments=None,
+                        response_group_id=response_group_id,
+                        sequence=sequence,
+                        channel=channel,
+                        channel_account_id=channel_account_id,
+                        actor_id=actor_id,
+                    )
+            except Exception:
+                conn.execute("ROLLBACK TO SAVEPOINT persist_conversation_turn")
+                conn.execute("RELEASE SAVEPOINT persist_conversation_turn")
+                raise
+            conn.execute("RELEASE SAVEPOINT persist_conversation_turn")
         return {
             "conversation_id": conversation_id,
             "turn_id": turn_id,

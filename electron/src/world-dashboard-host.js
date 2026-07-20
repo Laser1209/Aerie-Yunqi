@@ -135,6 +135,50 @@ function createWorldDashboardHost({
     };
   }
 
+  async function getSnapshot() {
+    if (!isEnabled()) {
+      return sanitizedSnapshot({
+        status: "disabled",
+        worldSummary: {},
+        relationshipState: {},
+        selfModel: {},
+        actionTimeline: [],
+        imageCandidates: [],
+      }, { apiCalled: false });
+    }
+    const sideEffects = { apiCalled: false };
+    if (typeof apiRequest !== "function") {
+      return sanitizedSnapshot({
+        status: "backend_unavailable",
+        worldSummary: {},
+        relationshipState: {},
+        selfModel: {},
+        actionTimeline: [],
+        imageCandidates: [],
+      }, sideEffects);
+    }
+    sideEffects.apiCalled = true;
+    try {
+      const response = await apiRequest({
+        method: "GET",
+        path: "/api/world/dashboard/snapshot",
+      });
+      const data = response && response.data && typeof response.data === "object"
+        ? response.data
+        : {};
+      return sanitizedSnapshot(data, sideEffects);
+    } catch (_) {
+      return sanitizedSnapshot({
+        status: "backend_unreachable",
+        worldSummary: {},
+        relationshipState: {},
+        selfModel: {},
+        actionTimeline: [],
+        imageCandidates: [],
+      }, sideEffects);
+    }
+  }
+
   async function show() {
     if (isEnabled()) visible = true;
     return getStatus();
@@ -207,6 +251,7 @@ function createWorldDashboardHost({
 
   return {
     getStatus,
+    getSnapshot,
     show,
     hide,
     approveCandidate,
@@ -234,6 +279,114 @@ function stableDigest(value) {
     .createHash("sha256")
     .update(JSON.stringify(sortJson(value)))
     .digest("hex");
+}
+
+function sanitizedSnapshot(data = {}, sideEffects = { apiCalled: false }) {
+  const snapshot = data && typeof data === "object" ? data : {};
+  const result = {
+    status: safeText(snapshot.status || "unknown"),
+    worldSummary: pickPublic(snapshot.worldSummary || snapshot.world_summary, [
+      ["status", "status"],
+      ["source", "source"],
+      ["instanceId", "instanceId", "instance_id"],
+      ["protocol", "protocol"],
+      ["protocolVersion", "protocolVersion", "protocol_version"],
+      ["phase", "phase"],
+      ["location", "location"],
+      ["activity", "activity"],
+      ["sequence", "sequence"],
+      ["revision", "revision"],
+      ["paused", "paused"],
+      ["generatedAt", "generatedAt", "generated_at"],
+      ["capabilities", "capabilities"],
+    ]),
+    relationshipState: pickPublic(snapshot.relationshipState || snapshot.relationship_state, [
+      ["user_id", "user_id", "userId"],
+      ["persona_id", "persona_id", "personaId"],
+      ["warmth", "warmth"],
+      ["trust", "trust"],
+      ["affinity", "affinity"],
+      ["tension", "tension"],
+      ["familiarity", "familiarity"],
+      ["conflict", "conflict"],
+      ["closeness", "closeness"],
+      ["summary", "summary"],
+      ["updated_at", "updated_at", "updatedAt"],
+    ]),
+    selfModel: pickPublic(snapshot.selfModel || snapshot.self_model, [
+      ["mood", "mood"],
+      ["energy", "energy"],
+      ["focus", "focus"],
+      ["stability", "stability"],
+      ["summary", "summary"],
+      ["updated_at", "updated_at", "updatedAt"],
+    ]),
+    actionTimeline: publicList(snapshot.actionTimeline || snapshot.action_timeline, [
+      ["eventId", "eventId", "event_id"],
+      ["topic", "topic"],
+      ["eventType", "eventType", "event_type"],
+      ["sequence", "sequence"],
+      ["occurredAt", "occurredAt", "occurred_at"],
+      ["payloadKeys", "payloadKeys", "payload_keys"],
+      ["payloadSha256", "payloadSha256", "payload_sha256"],
+    ]),
+    imageCandidates: publicList(snapshot.imageCandidates || snapshot.image_candidates, [
+      ["candidateId", "candidateId", "candidate_id"],
+      ["idempotencyKey", "idempotencyKey", "idempotency_key"],
+      ["scene", "scene"],
+      ["ownerId", "ownerId", "owner_id"],
+      ["channel", "channel"],
+      ["target", "target"],
+      ["promptKey", "promptKey", "prompt_key"],
+      ["reasonCode", "reasonCode", "reason_code"],
+      ["source", "source"],
+      ["score", "score"],
+      ["expiresAt", "expiresAt", "expires_at"],
+      ["createdAt", "createdAt", "created_at"],
+      ["sequence", "sequence"],
+      ["eventId", "eventId", "event_id"],
+      ["payloadKeys", "payloadKeys", "payload_keys"],
+      ["sensitiveKeys", "sensitiveKeys", "sensitive_keys"],
+      ["sensitiveSha256", "sensitiveSha256", "sensitive_sha256"],
+    ]),
+    sideEffects: { apiCalled: !!sideEffects.apiCalled },
+  };
+  const updatedAt = publicScalar(snapshot.updatedAt || snapshot.updated_at);
+  if (updatedAt !== "") result.updatedAt = updatedAt;
+  return result;
+}
+
+function publicList(value, fields) {
+  const rows = Array.isArray(value) ? value : [];
+  return rows.slice(0, 25)
+    .filter((item) => item && typeof item === "object")
+    .map((item) => pickPublic(item, fields));
+}
+
+function pickPublic(value, fields) {
+  const source = value && typeof value === "object" ? value : {};
+  const result = {};
+  fields.forEach(([outputKey, ...inputKeys]) => {
+    const raw = firstValue(source, inputKeys);
+    const publicValue = publicScalar(raw);
+    if (publicValue !== "" && !(Array.isArray(publicValue) && publicValue.length === 0)) {
+      result[outputKey] = publicValue;
+    }
+  });
+  return result;
+}
+
+function firstValue(source, keys) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) return source[key];
+  }
+  return "";
+}
+
+function publicScalar(value) {
+  if (typeof value === "boolean" || typeof value === "number") return value;
+  if (Array.isArray(value)) return value.slice(0, 25).map((item) => safeText(item, 120));
+  return safeText(value);
 }
 
 function sortJson(value) {

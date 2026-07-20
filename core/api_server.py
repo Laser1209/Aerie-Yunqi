@@ -196,6 +196,14 @@ def _get_permission_manager():
 
 _WORLD_DASHBOARD_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
 
+_WORLD_DASHBOARD_EMPTY_SNAPSHOT = {
+    "worldSummary": {},
+    "relationshipState": {},
+    "selfModel": {},
+    "actionTimeline": [],
+    "imageCandidates": [],
+}
+
 
 def _world_dashboard_safe_text(value: Any, limit: int = 200) -> str:
     return str(value or "").replace("\x00", "").strip()[:limit]
@@ -245,6 +253,223 @@ def _world_candidate_approval_response(
     if error_code:
         response["error_code"] = _world_dashboard_safe_text(error_code)
     return response
+
+
+def _world_dashboard_public_snapshot(
+    snapshot: Any,
+    *,
+    status: str = "",
+    handler_called: bool,
+) -> dict[str, Any]:
+    data = snapshot if isinstance(snapshot, dict) else {}
+    public = {
+        "status": _world_dashboard_safe_text(status or data.get("status") or "unknown"),
+        "worldSummary": _world_dashboard_public_world_summary(data.get("worldSummary") or data.get("world_summary")),
+        "relationshipState": _world_dashboard_public_relationship(data.get("relationshipState") or data.get("relationship_state")),
+        "selfModel": _world_dashboard_public_self_model(data.get("selfModel") or data.get("self_model")),
+        "actionTimeline": _world_dashboard_public_timeline(data.get("actionTimeline") or data.get("action_timeline")),
+        "imageCandidates": _world_dashboard_public_candidates(data.get("imageCandidates") or data.get("image_candidates")),
+        "sideEffects": {"handler_called": bool(handler_called)},
+    }
+    updated_at = _world_dashboard_public_scalar(data.get("updatedAt") or data.get("updated_at"))
+    if updated_at not in ("", None):
+        public["updatedAt"] = updated_at
+    error_code = _world_dashboard_safe_text(data.get("error_code") or data.get("errorCode") or "")
+    if error_code:
+        public["error_code"] = error_code
+    return public
+
+
+def _world_dashboard_public_world_summary(value: Any) -> dict[str, Any]:
+    return _world_dashboard_public_map(
+        value,
+        (
+            ("status", "status"),
+            ("source", "source"),
+            ("instanceId", "instanceId", "instance_id"),
+            ("protocol", "protocol"),
+            ("protocolVersion", "protocolVersion", "protocol_version"),
+            ("phase", "phase"),
+            ("location", "location"),
+            ("activity", "activity"),
+            ("sequence", "sequence"),
+            ("revision", "revision"),
+            ("paused", "paused"),
+            ("generatedAt", "generatedAt", "generated_at"),
+            ("capabilities", "capabilities"),
+        ),
+    )
+
+
+def _world_dashboard_public_relationship(value: Any) -> dict[str, Any]:
+    return _world_dashboard_public_map(
+        value,
+        (
+            ("user_id", "user_id", "userId"),
+            ("persona_id", "persona_id", "personaId"),
+            ("warmth", "warmth"),
+            ("trust", "trust"),
+            ("affinity", "affinity"),
+            ("tension", "tension"),
+            ("familiarity", "familiarity"),
+            ("conflict", "conflict"),
+            ("closeness", "closeness"),
+            ("summary", "summary"),
+            ("updated_at", "updated_at", "updatedAt"),
+        ),
+    )
+
+
+def _world_dashboard_public_self_model(value: Any) -> dict[str, Any]:
+    return _world_dashboard_public_map(
+        value,
+        (
+            ("mood", "mood"),
+            ("energy", "energy"),
+            ("focus", "focus"),
+            ("stability", "stability"),
+            ("summary", "summary"),
+            ("updated_at", "updated_at", "updatedAt"),
+        ),
+    )
+
+
+def _world_dashboard_public_timeline(value: Any) -> list[dict[str, Any]]:
+    rows = value if isinstance(value, list) else []
+    return [
+        _world_dashboard_public_map(
+            row,
+            (
+                ("eventId", "eventId", "event_id"),
+                ("topic", "topic"),
+                ("eventType", "eventType", "event_type"),
+                ("sequence", "sequence"),
+                ("occurredAt", "occurredAt", "occurred_at"),
+                ("payloadKeys", "payloadKeys", "payload_keys"),
+                ("payloadSha256", "payloadSha256", "payload_sha256"),
+            ),
+        )
+        for row in rows[:25]
+        if isinstance(row, dict)
+    ]
+
+
+def _world_dashboard_public_candidates(value: Any) -> list[dict[str, Any]]:
+    rows = value if isinstance(value, list) else []
+    return [
+        _world_dashboard_public_map(
+            row,
+            (
+                ("candidateId", "candidateId", "candidate_id"),
+                ("idempotencyKey", "idempotencyKey", "idempotency_key"),
+                ("scene", "scene"),
+                ("ownerId", "ownerId", "owner_id"),
+                ("channel", "channel"),
+                ("target", "target"),
+                ("promptKey", "promptKey", "prompt_key"),
+                ("reasonCode", "reasonCode", "reason_code"),
+                ("source", "source"),
+                ("score", "score"),
+                ("expiresAt", "expiresAt", "expires_at"),
+                ("createdAt", "createdAt", "created_at"),
+                ("sequence", "sequence"),
+                ("eventId", "eventId", "event_id"),
+                ("payloadKeys", "payloadKeys", "payload_keys"),
+                ("sensitiveKeys", "sensitiveKeys", "sensitive_keys"),
+                ("sensitiveSha256", "sensitiveSha256", "sensitive_sha256"),
+            ),
+        )
+        for row in rows[:25]
+        if isinstance(row, dict)
+    ]
+
+
+def _world_dashboard_public_map(
+    value: Any,
+    fields: tuple[tuple[str, ...], ...],
+) -> dict[str, Any]:
+    data = value if isinstance(value, dict) else {}
+    public: dict[str, Any] = {}
+    for field in fields:
+        output_key, *input_keys = field
+        raw = _world_dashboard_first(data, input_keys)
+        public_value = _world_dashboard_public_scalar(raw)
+        if public_value not in ("", None, [], {}):
+            public[output_key] = public_value
+    return public
+
+
+def _world_dashboard_first(data: dict[str, Any], keys: list[str]) -> Any:
+    for key in keys:
+        if key in data:
+            return data.get(key)
+    return None
+
+
+def _world_dashboard_public_scalar(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value
+    if isinstance(value, list | tuple):
+        return [_world_dashboard_safe_text(item, 120) for item in value[:25]]
+    if value is None:
+        return ""
+    return _world_dashboard_safe_text(value)
+
+
+@app.get("/api/world/dashboard/snapshot")
+async def world_dashboard_snapshot(user_id: int = Query(default=0)) -> dict[str, Any]:
+    """Redacted World Dashboard snapshot contract.
+
+    This endpoint exposes only public dashboard fields. Raw world payloads,
+    prompt text, message text, plugin config values, and provider details are
+    deliberately dropped by whitelisting instead of recursively echoing handler
+    output.
+    """
+    if not FeatureFlags().is_enabled("world_sidecar_v1"):
+        return _world_dashboard_public_snapshot(
+            {
+                "status": "disabled",
+                **_WORLD_DASHBOARD_EMPTY_SNAPSHOT,
+            },
+            status="disabled",
+            handler_called=False,
+        )
+
+    comp = get_companion()
+    handler = getattr(comp, "get_world_dashboard_snapshot", None)
+    if not callable(handler):
+        return _world_dashboard_public_snapshot(
+            {
+                "status": "backend_unavailable",
+                **_WORLD_DASHBOARD_EMPTY_SNAPSHOT,
+                "error_code": "snapshot_handler_missing",
+            },
+            status="backend_unavailable",
+            handler_called=False,
+        )
+
+    try:
+        try:
+            result = handler(user_id=user_id)
+        except TypeError:
+            result = handler()
+        if hasattr(result, "__await__"):
+            result = await result
+    except Exception:
+        logger.warning("world dashboard snapshot handler failed", exc_info=True)
+        return _world_dashboard_public_snapshot(
+            {
+                "status": "failed",
+                **_WORLD_DASHBOARD_EMPTY_SNAPSHOT,
+                "error_code": "snapshot_handler_failed",
+            },
+            status="failed",
+            handler_called=True,
+        )
+
+    return _world_dashboard_public_snapshot(result, handler_called=True)
 
 
 @app.post("/api/world/candidates/approve")

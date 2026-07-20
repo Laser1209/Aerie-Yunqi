@@ -81,6 +81,12 @@
   gap: 12px;
 }
 
+.world-dashboard-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .world-dashboard-form {
   display: flex;
   flex-direction: column;
@@ -149,7 +155,8 @@
   }
 
   .world-dashboard-grid,
-  .world-dashboard-columns {
+  .world-dashboard-columns,
+  .world-dashboard-snapshot-grid {
     grid-template-columns: 1fr;
   }
 }

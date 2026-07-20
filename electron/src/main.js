@@ -666,6 +666,10 @@ ipcMain.handle("world-dashboard:get-status", async () => {
   return await worldDashboardHost.getStatus();
 });
 
+ipcMain.handle("world-dashboard:get-snapshot", async () => {
+  return await worldDashboardHost.getSnapshot();
+});
+
 ipcMain.handle("world-dashboard:show", async () => {
   return await worldDashboardHost.show();
 });

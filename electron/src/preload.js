@@ -103,6 +103,7 @@ contextBridge.exposeInMainWorld("aerie", {
   },
   worldDashboard: {
     getStatus: () => ipcRenderer.invoke("world-dashboard:get-status"),
+    getSnapshot: () => ipcRenderer.invoke("world-dashboard:get-snapshot"),
     show: () => ipcRenderer.invoke("world-dashboard:show"),
     hide: () => ipcRenderer.invoke("world-dashboard:hide"),
     approveCandidate: (payload) => ipcRenderer.invoke("world-dashboard:approve-candidate", payload || {}),

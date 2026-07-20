@@ -6,18 +6,18 @@ task_id: TASK-15-001
 phase: Phase 15
 subsystem: world
 status: done
-progress_note: "2026-07-21: implemented feature-flagged Electron world dashboard host contract, real renderer shell, backend candidate approval API contract, and Companion manual approval handler with redacted plugin/health status, hide/show continuity, sanitized candidate approval IPC, creative preview metadata, and preload exposure; no background plugin window was introduced."
+progress_note: "2026-07-21: implemented feature-flagged Electron world dashboard host contract, real renderer shell, backend snapshot/approval API contracts, and Companion manual approval/snapshot handlers with redacted plugin/health status, hide/show continuity, sanitized candidate approval IPC, creative preview metadata, and preload exposure; no background plugin window was introduced."
 priority: P1
 dependencies: ["TASK-14-001"]
 risk: high
 decision_required: false
 feature_flag: world_sidecar_v1
 migration: false
-files: ["electron/src/main.js", "electron/src/preload.js", "electron/src/world-dashboard-host.js", "electron/src/renderer/index.html", "electron/src/renderer/js/app.js", "electron/src/renderer/js/world-dashboard.js", "electron/src/renderer/styles/world-dashboard.css", "core/api_server.py", "core/companion.py", "core/world_image_candidates.py", "tests/test_phase15_world_dashboard_host.py", "electron/tests/world-dashboard-renderer.test.js", "tests/test_phase15_world_dashboard_api.py", "tests/test_phase15_world_dashboard_approval_handler.py"]
+files: ["electron/src/main.js", "electron/src/preload.js", "electron/src/world-dashboard-host.js", "electron/src/renderer/index.html", "electron/src/renderer/js/app.js", "electron/src/renderer/js/world-dashboard.js", "electron/src/renderer/styles/world-dashboard.css", "core/api_server.py", "core/companion.py", "core/world_image_candidates.py", "tests/test_phase15_world_dashboard_host.py", "electron/tests/world-dashboard-renderer.test.js", "tests/test_phase15_world_dashboard_api.py", "tests/test_phase15_world_dashboard_approval_handler.py", "tests/test_phase15_world_dashboard_snapshot.py"]
 acceptance_ids: ["A-15-01", "A-15-02", "A-15-03"]
 rollback_ready: true
 owner: world-team
-evidence: ["file:///E:/Agent_reply/electron/src/main.js", "file:///E:/Agent_reply/electron/src/preload.js", "file:///E:/Agent_reply/electron/src/world-dashboard-host.js", "file:///E:/Agent_reply/electron/src/renderer/index.html", "file:///E:/Agent_reply/electron/src/renderer/js/app.js", "file:///E:/Agent_reply/electron/src/renderer/js/world-dashboard.js", "file:///E:/Agent_reply/electron/src/renderer/styles/world-dashboard.css", "file:///E:/Agent_reply/core/api_server.py", "file:///E:/Agent_reply/core/companion.py", "file:///E:/Agent_reply/core/world_image_candidates.py", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_host.py", "file:///E:/Agent_reply/electron/tests/world-dashboard-renderer.test.js", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_api.py", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_approval_handler.py"]
+evidence: ["file:///E:/Agent_reply/electron/src/main.js", "file:///E:/Agent_reply/electron/src/preload.js", "file:///E:/Agent_reply/electron/src/world-dashboard-host.js", "file:///E:/Agent_reply/electron/src/renderer/index.html", "file:///E:/Agent_reply/electron/src/renderer/js/app.js", "file:///E:/Agent_reply/electron/src/renderer/js/world-dashboard.js", "file:///E:/Agent_reply/electron/src/renderer/styles/world-dashboard.css", "file:///E:/Agent_reply/core/api_server.py", "file:///E:/Agent_reply/core/companion.py", "file:///E:/Agent_reply/core/world_image_candidates.py", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_host.py", "file:///E:/Agent_reply/electron/tests/world-dashboard-renderer.test.js", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_api.py", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_approval_handler.py", "file:///E:/Agent_reply/tests/test_phase15_world_dashboard_snapshot.py"]
 ---
 # Task 15-baseline
 > [!todo] Phase 15
@@ -59,3 +59,10 @@ evidence: ["file:///E:/Agent_reply/electron/src/main.js", "file:///E:/Agent_repl
 - Green：`Companion.approve_world_image_candidate()` 委托 Phase 14 consumer；`WorldImageCandidateConsumer.approve_candidate()` 从 `WorldPort.replay_events(last_seq=0)` 查 canonical candidate，approve 走原 ImageWorkflow/ACK/idempotency 路径，reject 终态记录并 ACK 但无图片工作流副作用，postpone 不 ACK 以保留候选可重放，not_found 无副作用返回。
 - 验证：目标 handler `4 passed`；Phase 14/15 相关 `19 passed, 4 warnings`；`python -m py_compile core/world_image_candidates.py core/companion.py` 通过；完整 Python `549 passed, 6 warnings`；Electron Node `25 passed`；`npm run check:all` 与当前工作区 provider-key 扫描通过。
 - 回滚：关闭 `world_image_candidates_v1` 或 `world_sidecar_v1` 均保持 disabled/no-side-effect；删除 handler 只影响 Dashboard 手动审批真实执行，不影响旧聊天或 Phase 14 自动消费入口。
+
+## Dashboard Snapshot Evidence（2026-07-21）
+
+- Red：`python -m pytest tests/test_phase15_world_dashboard_snapshot.py -q` 初跑 `3 failed`，失败点为 snapshot API 404 与 `Companion` 缺少 `get_world_dashboard_snapshot`；扩展 host/renderer 测试后，失败点为缺 `worldDashboard.getSnapshot`、`world-dashboard:get-snapshot` IPC 和四个 snapshot DOM。
+- Green：新增 `/api/world/dashboard/snapshot` 只读脱敏 API、`Companion.get_world_dashboard_snapshot()`、host `getSnapshot()`、main/preload 窄 IPC、renderer 四块 snapshot 显示；输出仅包含 world summary、relationship、self model、timeline metadata 与 image candidate metadata，不展示 raw prompt、raw thought、secret values 或 provider payload。
+- 验证：目标 snapshot `3 passed, 4 warnings`；Phase 14/15 相关 `23 passed, 4 warnings`；`python -m py_compile core/api_server.py core/companion.py` 与 Electron `node --check` 通过；完整 Python `553 passed, 6 warnings`；Electron Node `25 passed`；`npm run check:all` 与 provider-key 工作区扫描通过。
+- 回滚：关闭 `world_sidecar_v1` 恢复 disabled/no-handler-call；移除 snapshot IPC/DOM 仅回到 status-only Dashboard，不影响旧聊天、候选审批或自动消费入口。

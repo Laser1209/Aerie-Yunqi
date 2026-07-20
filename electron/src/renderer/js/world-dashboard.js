@@ -21,6 +21,7 @@ class WorldDashboardPanel {
       errors: [],
       chatPublishAvailable: true,
     });
+    this._renderSnapshot({});
     return Promise.resolve();
   }
 
@@ -48,6 +49,11 @@ class WorldDashboardPanel {
     await this._withButton(this._els.refresh, async () => {
       try {
         this._renderStatus(await api.getStatus());
+        if (typeof api.getSnapshot === "function") {
+          this._renderSnapshot(await api.getSnapshot());
+        } else {
+          this._renderSnapshot({});
+        }
       } catch (_) {
         this._renderStatus({
           status: "unavailable",
@@ -58,6 +64,7 @@ class WorldDashboardPanel {
           errors: ["status_failed"],
           chatPublishAvailable: true,
         });
+        this._renderSnapshot({});
       }
     });
   }
@@ -150,6 +157,10 @@ class WorldDashboardPanel {
       panels: byId("world-dashboard-panels"),
       errors: byId("world-dashboard-errors"),
       updated: byId("world-dashboard-updated"),
+      summary: byId("world-dashboard-summary"),
+      relationship: byId("world-dashboard-relationship"),
+      timeline: byId("world-dashboard-timeline"),
+      candidates: byId("world-dashboard-candidates"),
       refresh: byId("world-dashboard-refresh"),
       show: byId("world-dashboard-show"),
       hide: byId("world-dashboard-hide"),
@@ -195,6 +206,42 @@ class WorldDashboardPanel {
     setText(this._els.updated, formatUpdatedAt(safeStatus.updatedAt));
   }
 
+  _renderSnapshot(snapshot) {
+    const safeSnapshot = snapshot && typeof snapshot === "object" ? snapshot : {};
+    const summary = safeSnapshot.worldSummary && typeof safeSnapshot.worldSummary === "object"
+      ? safeSnapshot.worldSummary
+      : {};
+    const relationship = safeSnapshot.relationshipState && typeof safeSnapshot.relationshipState === "object"
+      ? safeSnapshot.relationshipState
+      : {};
+    const timeline = Array.isArray(safeSnapshot.actionTimeline) ? safeSnapshot.actionTimeline : [];
+    const candidates = Array.isArray(safeSnapshot.imageCandidates) ? safeSnapshot.imageCandidates : [];
+
+    setText(this._els.summary, compactParts([
+      summary.status,
+      summary.phase,
+      summary.location,
+      summary.activity,
+    ]));
+    setText(this._els.relationship, compactParts([
+      relationship.persona_id || relationship.personaId,
+      relationship.warmth !== undefined ? `warmth ${safeInput(relationship.warmth)}` : "",
+      relationship.summary,
+    ]));
+    const firstEvent = timeline[0] && typeof timeline[0] === "object" ? timeline[0] : {};
+    setText(this._els.timeline, compactParts([
+      firstEvent.sequence,
+      firstEvent.topic,
+      firstEvent.eventType || firstEvent.event_type,
+    ]));
+    const firstCandidate = candidates[0] && typeof candidates[0] === "object" ? candidates[0] : {};
+    setText(this._els.candidates, compactParts([
+      firstCandidate.candidateId || firstCandidate.candidate_id,
+      firstCandidate.promptKey || firstCandidate.prompt_key,
+      firstCandidate.scene,
+    ]));
+  }
+
   _api() {
     return window.aerie && window.aerie.worldDashboard ? window.aerie.worldDashboard : null;
   }
@@ -220,6 +267,11 @@ function onClick(element, handler) {
 function setText(element, value) {
   if (!element) return;
   element.textContent = safeInput(value, 500);
+}
+
+function compactParts(parts) {
+  const rendered = (parts || []).map((part) => safeInput(part)).filter(Boolean);
+  return rendered.length ? rendered.join(" · ") : "暂无数据";
 }
 
 function safeInput(value, limit = 200) {

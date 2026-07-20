@@ -447,6 +447,42 @@ class Companion:
             "acked": False,
         }
 
+    async def get_world_dashboard_snapshot(
+        self,
+        *,
+        user_id: int | str = 0,
+    ) -> dict[str, Any]:
+        """Build a redacted snapshot for the World Dashboard.
+
+        This is read-only.  It asks the WorldPort for public state/snapshots
+        and recent events, then reduces them to Dashboard-safe metadata.  Raw
+        world payloads, prompts, message text, provider details, and plugin
+        config values are never returned.
+        """
+
+        world_port = getattr(self, "world_port", None)
+        state_data = await _dashboard_get_world_state(world_port)
+        world_summary = _dashboard_world_summary(
+            state_data,
+            _dashboard_safe_mapping(self._world_snapshot_for_context()),
+        )
+        relationship_state = _dashboard_safe_relationship(
+            self._relationship_snapshot_for_context(user_id),
+        )
+        self_model = _dashboard_safe_self_model(
+            self._self_model_snapshot_for_context(world_summary, relationship_state),
+        )
+        events = await _dashboard_replay_events(world_port)
+        return {
+            "status": "ready" if state_data or world_summary else "degraded",
+            "worldSummary": world_summary,
+            "relationshipState": relationship_state,
+            "selfModel": self_model,
+            "actionTimeline": _dashboard_action_timeline(events),
+            "imageCandidates": _dashboard_image_candidates(events),
+            "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
+        }
+
     def _get_world_image_candidate_consumer(self) -> Any:
         existing = getattr(self, "world_image_candidate_consumer", None)
         if existing is not None:
@@ -1233,3 +1269,222 @@ class Companion:
         Triggers emotion_comfort scene if configured.
         """
         return await self.push_scheduler.trigger("emotion_comfort")
+
+
+async def _dashboard_get_world_state(world_port: Any) -> dict[str, Any]:
+    if world_port is None:
+        return {}
+    getter = getattr(world_port, "get_state", None)
+    if not callable(getter):
+        return {}
+    try:
+        value = getter()
+        if hasattr(value, "__await__"):
+            value = await value
+        to_public = getattr(value, "to_public_dict", None)
+        if callable(to_public):
+            value = to_public()
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        logger.debug("world dashboard state unavailable", exc_info=True)
+        return {}
+
+
+async def _dashboard_replay_events(world_port: Any) -> list[Any]:
+    replay = getattr(world_port, "replay_events", None)
+    if not callable(replay):
+        return []
+    try:
+        try:
+            events = replay(last_seq=0)
+        except TypeError:
+            events = replay()
+        if hasattr(events, "__await__"):
+            events = await events
+        return list(events or [])[:25]
+    except Exception:
+        logger.debug("world dashboard event replay unavailable", exc_info=True)
+        return []
+
+
+def _dashboard_world_summary(
+    state: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    merged = {}
+    if isinstance(state, dict):
+        merged.update(state)
+    if isinstance(snapshot, dict):
+        merged.update(snapshot)
+    return _dashboard_pick(
+        merged,
+        (
+            ("status", "status"),
+            ("source", "source"),
+            ("instanceId", "instance_id", "instanceId"),
+            ("protocol", "protocol"),
+            ("protocolVersion", "protocol_version", "protocolVersion"),
+            ("phase", "phase"),
+            ("location", "location"),
+            ("activity", "activity"),
+            ("sequence", "sequence"),
+            ("revision", "revision"),
+            ("paused", "paused"),
+            ("generatedAt", "generated_at", "generatedAt"),
+            ("capabilities", "capabilities"),
+        ),
+    )
+
+
+def _dashboard_safe_relationship(value: dict[str, Any] | None) -> dict[str, Any]:
+    return _dashboard_pick(
+        _dashboard_safe_mapping(value),
+        (
+            ("user_id", "user_id", "userId"),
+            ("persona_id", "persona_id", "personaId"),
+            ("warmth", "warmth"),
+            ("trust", "trust"),
+            ("affinity", "affinity"),
+            ("tension", "tension"),
+            ("familiarity", "familiarity"),
+            ("conflict", "conflict"),
+            ("closeness", "closeness"),
+            ("summary", "summary"),
+            ("updated_at", "updated_at", "updatedAt"),
+        ),
+    )
+
+
+def _dashboard_safe_self_model(value: dict[str, Any] | None) -> dict[str, Any]:
+    return _dashboard_pick(
+        _dashboard_safe_mapping(value),
+        (
+            ("mood", "mood"),
+            ("energy", "energy"),
+            ("focus", "focus"),
+            ("stability", "stability"),
+            ("summary", "summary"),
+            ("updated_at", "updated_at", "updatedAt"),
+        ),
+    )
+
+
+def _dashboard_action_timeline(events: list[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for event in events[:25]:
+        payload = _dashboard_event_payload(event)
+        payload_keys = payload.get("payload_keys") or payload.get("payloadKeys")
+        if not isinstance(payload_keys, list):
+            payload_keys = sorted(str(key) for key in payload.keys())
+        row = {
+            "eventId": _dashboard_safe_text(getattr(event, "event_id", "") or ""),
+            "topic": _dashboard_safe_text(getattr(event, "topic", "") or ""),
+            "eventType": _dashboard_safe_text(getattr(event, "event_type", "") or ""),
+            "sequence": _dashboard_event_sequence(event),
+            "occurredAt": _dashboard_safe_text(getattr(event, "occurred_at", "") or ""),
+            "payloadKeys": _dashboard_public_payload_keys(payload_keys),
+        }
+        digest = payload.get("payload_sha256") or payload.get("payloadSha256")
+        if digest:
+            row["payloadSha256"] = _dashboard_safe_text(digest, 120)
+        rows.append(row)
+    return rows
+
+
+def _dashboard_image_candidates(events: list[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for event in events[:25]:
+        topic = str(getattr(event, "topic", "") or "")
+        event_type = str(getattr(event, "event_type", "") or "")
+        if topic not in {"image_candidates", "message.candidates", "world.image_candidates"} and event_type not in {"world.image_candidate.published", "image_candidate.published"}:
+            continue
+        payload = _dashboard_event_payload(event)
+        candidate = _dashboard_pick(
+            payload,
+            (
+                ("candidateId", "candidate_id", "candidateId", "id"),
+                ("idempotencyKey", "idempotency_key", "idempotencyKey"),
+                ("scene", "scene"),
+                ("ownerId", "owner_id", "ownerId"),
+                ("channel", "channel"),
+                ("target", "target"),
+                ("promptKey", "prompt_key", "promptKey"),
+                ("reasonCode", "reason_code", "reasonCode"),
+                ("source", "source"),
+                ("score", "score"),
+                ("expiresAt", "expires_at", "expiresAt"),
+                ("createdAt", "created_at", "createdAt"),
+                ("payloadKeys", "payload_keys", "payloadKeys"),
+                ("sensitiveKeys", "sensitive_keys", "sensitiveKeys"),
+                ("sensitiveSha256", "sensitive_sha256", "sensitiveSha256"),
+            ),
+        )
+        candidate["sequence"] = _dashboard_event_sequence(event)
+        candidate["eventId"] = _dashboard_safe_text(getattr(event, "event_id", "") or "")
+        rows.append(candidate)
+    return rows
+
+
+def _dashboard_event_payload(event: Any) -> dict[str, Any]:
+    payload = getattr(event, "payload", {})
+    return payload if isinstance(payload, dict) else {}
+
+
+def _dashboard_event_sequence(event: Any) -> int:
+    try:
+        return int(getattr(event, "sequence", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _dashboard_public_payload_keys(keys: list[Any]) -> list[str]:
+    public: list[str] = []
+    for key in keys[:25]:
+        text = _dashboard_safe_text(key, 120)
+        lowered = text.lower()
+        if "raw" in lowered or "prompt" in lowered or "token" in lowered or "credential" in lowered:
+            continue
+        public.append(text)
+    return public
+
+
+def _dashboard_safe_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _dashboard_pick(
+    data: dict[str, Any],
+    fields: tuple[tuple[str, ...], ...],
+) -> dict[str, Any]:
+    public: dict[str, Any] = {}
+    source = data if isinstance(data, dict) else {}
+    for field in fields:
+        output_key, *input_keys = field
+        raw = _dashboard_first(source, input_keys)
+        public_value = _dashboard_public_scalar(raw)
+        if public_value not in ("", None, [], {}):
+            public[output_key] = public_value
+    return public
+
+
+def _dashboard_first(data: dict[str, Any], keys: list[str]) -> Any:
+    for key in keys:
+        if key in data:
+            return data.get(key)
+    return None
+
+
+def _dashboard_public_scalar(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value
+    if isinstance(value, list | tuple):
+        return [_dashboard_safe_text(item, 120) for item in value[:25]]
+    if value is None:
+        return ""
+    return _dashboard_safe_text(value)
+
+
+def _dashboard_safe_text(value: Any, limit: int = 200) -> str:
+    return str(value or "").replace("\x00", "").strip()[:limit]

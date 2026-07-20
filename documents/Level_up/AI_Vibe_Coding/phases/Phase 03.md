@@ -51,8 +51,9 @@ tags: [aerie, phase, phase03]
 - 兼容路径：规范镜像异常只记录错误，不中断已成功的 legacy 回复、事件或投递；规范历史读取异常自动回退 legacy；Flag 关闭时 Pipeline 不调用规范读写入口，并保持原 literal `LIMIT` 与参数合同。
 - 本批 TDD Evidence：先观察仓储缺少 `recent_turn_history()`、Pipeline 未调用规范历史、Flag 关闭仍调用规范写入口，以及 legacy SQL 参数合同漂移的行为 Red；最小实现后 Phase 3 + Pipeline 回归 `33 passed`，Phase 0/2/3 + Pipeline 回归 `78 passed, 4 warnings`，完整 Python `346 passed, 6 warnings`，修改文件诊断为空。
 - 事务原子性：先观察 assistant Message 写失败后遗留 Conversation 的 Red；随后以 SQLite SAVEPOINT 包裹 Conversation、Turn、Request 与全部 Message，异常时整体回滚。事务小节回归 `34 passed`，跨阶段相关回归 `79 passed, 4 warnings`，完整 Python `347 passed, 6 warnings`，修改文件诊断为空。
+- 真实组合根 Flag 合同：先观察 `Companion` 不接受安全测试数据库注入的 Red，再加入默认行为不变的 `database=` 注入缝；使用临时真实 `Database` 构造真实 `Companion`，验证环境变量 true/false、`ConversationRepository.enabled` 与 Pipeline 同实例注入一致，且未调用 `start()`。本小节 Phase 3 + Pipeline `37 passed`，跨阶段相关 `82 passed, 4 warnings`，完整 Python `350 passed, 6 warnings`，修改文件诊断为空。
 - 历史 Evidence：规范双写小节定向回归 `28 passed`；此前完整 Python `334 passed, 6 warnings`。
-- 当前未对真实生产库执行 backup/dry-run/守恒迁移，005 尚无批量 cursor/断点续跑，真实组合根 Flag 演练与迁移回滚尚未完成，Phase 03 保持 `in_progress`。
+- 当前未对真实生产库执行 backup/dry-run/守恒迁移，005 尚无批量 cursor/断点续跑，生产库备份恢复与迁移回滚尚未完成，Phase 03 保持 `in_progress`。
 
 ## 验收
 - [ ] 记录、附件、角色顺序和 Channel 守恒

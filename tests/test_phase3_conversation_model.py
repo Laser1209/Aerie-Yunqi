@@ -1,6 +1,8 @@
 import json
 import sqlite3
 
+import pytest
+
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {
@@ -374,6 +376,99 @@ def test_phase3_repository_is_noop_when_feature_flag_is_disabled():
     ) is None
     assert conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 0
     assert conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 0
+
+
+def test_phase3_companion_accepts_database_for_safe_composition_testing():
+    import inspect
+
+    from core.companion import Companion
+
+    assert "database" in inspect.signature(Companion).parameters
+
+
+@pytest.mark.parametrize(
+    ("env_value", "expected_enabled"),
+    [("true", True), ("false", False)],
+)
+def test_phase3_companion_wires_conversation_flag_into_pipeline(
+    monkeypatch,
+    tmp_path,
+    env_value,
+    expected_enabled,
+):
+    import core.companion as companion_module
+    from core.database import Database
+
+    class PassiveQQ:
+        def __init__(self, _config):
+            self.whitelist = None
+
+        def set_whitelist(self, whitelist):
+            self.whitelist = whitelist
+
+    class PassiveQueue:
+        def __init__(self, **_kwargs):
+            pass
+
+    class PassiveScheduler:
+        judge = None
+
+        def __init__(self, _config):
+            pass
+
+        def set_dispatcher(self, _dispatcher):
+            pass
+
+    class PassiveEventEngine:
+        def bind_scheduler(self, _scheduler):
+            pass
+
+    monkeypatch.setenv(
+        "AERIE_FEATURE_CONVERSATION_MODEL_V1",
+        env_value,
+    )
+    monkeypatch.setattr(companion_module, "QQClient", PassiveQQ)
+    monkeypatch.setattr(companion_module, "SendQueue", PassiveQueue)
+    monkeypatch.setattr(companion_module, "PushScheduler", PassiveScheduler)
+    monkeypatch.setattr(
+        companion_module,
+        "get_event_engine",
+        lambda: PassiveEventEngine(),
+    )
+    monkeypatch.setattr(companion_module, "register_all_tools", lambda _registry: None)
+    monkeypatch.setattr(
+        companion_module.Companion,
+        "_warmup_threshold_from_history",
+        lambda _self: None,
+    )
+    monkeypatch.setattr(
+        companion_module.Companion,
+        "_register_async_task_handlers",
+        lambda _self: None,
+    )
+
+    Database.reset_instance()
+    try:
+        database = Database(tmp_path / f"composition-{env_value}.db")
+        companion = companion_module.Companion(
+            {
+                "qq": {"self_qq": 0, "friends_qq": []},
+                "agent": {"task_planner_enabled": False},
+            },
+            database=database,
+        )
+
+        assert companion.feature_flags.is_enabled(
+            "conversation_model_v1"
+        ) is expected_enabled
+        assert companion.conversation_repository.enabled is expected_enabled
+        assert (
+            companion.pipeline.conversation_repository
+            is companion.conversation_repository
+        )
+        assert companion._started is False
+    finally:
+        Database.reset_instance()
 
 
 def test_phase3_repository_reads_recent_complete_turns_without_splitting_segments():

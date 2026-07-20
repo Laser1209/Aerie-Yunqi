@@ -37,7 +37,8 @@ evidence: ["file:///E:/Agent_reply/core/database.py", "file:///E:/Agent_reply/co
 - Turn 事务：Conversation、Turn、Request、用户 Message 与全部助手 Message 置于同一 SQLite SAVEPOINT；任一 Message 写失败时四表均无残留。
 - 历史读取批次回归：Phase 3 + Pipeline `33 passed`；Phase 0/2/3 + Pipeline `78 passed, 4 warnings`；完整 Python `346 passed, 6 warnings`。
 - 事务批次回归：Phase 3 + Pipeline `34 passed`；Phase 0/2/3 + Pipeline `79 passed, 4 warnings`；完整 Python `347 passed, 6 warnings`；修改文件诊断为空。
-- 未完成：真实库 backup/dry-run/cursor 守恒报告、`conversation_model_v1` 关闭后的真实组合根回滚与迁移回滚；不得将本 Task 标记为 done。
+- 组合根批次回归：Phase 3 + Pipeline `37 passed`；Phase 0/2/3 + Pipeline `82 passed, 4 warnings`；完整 Python `350 passed, 6 warnings`；修改文件诊断为空。
+- 未完成：真实库 backup/dry-run/cursor 守恒报告、生产库备份恢复与迁移回滚；不得将本 Task 标记为 done。
 
 ## 链接
 [[Phase 03]] · [[90_全局验收清单]] · [[92_回滚演练]]

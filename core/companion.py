@@ -48,7 +48,12 @@ def get_companion():
 
 
 class Companion:
-    def __init__(self, settings: dict | None = None) -> None:
+    def __init__(
+        self,
+        settings: dict | None = None,
+        *,
+        database: Any = None,
+    ) -> None:
         global _COMPANION
         self.settings = settings or load_settings()
         self.feature_flags = FeatureFlags()
@@ -57,7 +62,7 @@ class Companion:
         self.behavior_cfg = load_behavior_config()
 
         # Data layer
-        self.db = Database()
+        self.db = database or Database()
         self.identity_repository = IdentityRepository(self.db)
         self.identity_resolver = IdentityResolver.from_feature_flags(
             self.identity_repository,

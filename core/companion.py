@@ -410,6 +410,43 @@ class Companion:
         consumer = self._get_world_image_candidate_consumer()
         return await consumer.consume_replay(last_seq=last_seq)
 
+    async def approve_world_image_candidate(
+        self,
+        approval: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Handle a Dashboard-originated manual ImageCandidate decision.
+
+        The API layer has already stripped the renderer payload down to public
+        approval fields.  This handler deliberately delegates to the Phase 14
+        consumer so manual dashboard decisions share the same WorldPort replay,
+        image workflow idempotency, ACK, and redacted audit path as automatic
+        candidate consumption.
+        """
+
+        consumer = self._get_world_image_candidate_consumer()
+        approve = getattr(consumer, "approve_candidate", None)
+        if not callable(approve):
+            return {
+                "status": "backend_unavailable",
+                "reason": "approval_consumer_unavailable",
+                "candidate_id": str((approval or {}).get("candidate_id") or ""),
+                "acked": False,
+                "side_effects": {
+                    "provider_called": False,
+                    "asset_created": False,
+                    "delivery_created": False,
+                },
+            }
+        result = approve(dict(approval or {}))
+        if hasattr(result, "__await__"):
+            result = await result
+        return result if isinstance(result, dict) else {
+            "status": "failed",
+            "reason": "invalid_approval_result",
+            "candidate_id": str((approval or {}).get("candidate_id") or ""),
+            "acked": False,
+        }
+
     def _get_world_image_candidate_consumer(self) -> Any:
         existing = getattr(self, "world_image_candidate_consumer", None)
         if existing is not None:

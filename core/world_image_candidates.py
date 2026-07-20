@@ -36,6 +36,7 @@ _IMAGE_CANDIDATE_TOPICS = {
     "message.candidates",
     "world.image_candidates",
 }
+_MANUAL_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
 
 
 class JsonWorldImageCandidateStore:
@@ -133,6 +134,74 @@ class WorldImageCandidateConsumer:
         for event in events or []:
             results.append(await self.process_event(event))
         return results
+
+    async def approve_candidate(self, approval_payload: dict[str, Any]) -> dict[str, Any]:
+        """Process a Dashboard-originated manual candidate decision.
+
+        The Dashboard only sends public identifiers and a decision. Core looks
+        up the canonical ImageCandidate event from WorldPort replay, so ACK,
+        idempotency, and audit records stay anchored to the world event instead
+        of trusting renderer-provided candidate details.
+        """
+
+        approval = _manual_approval_from_payload(approval_payload)
+        if not self._flag_enabled():
+            return _manual_result(
+                status="disabled",
+                approval=approval,
+                reason="feature_flag_off",
+                acked=False,
+            )
+
+        found = await self._find_candidate_event(approval)
+        if found is None:
+            return _manual_result(
+                status="not_found",
+                approval=approval,
+                reason="candidate_not_found",
+                acked=False,
+            )
+        event, candidate = found
+
+        if approval["action"] == "postpone":
+            return _manual_result(
+                status="postponed",
+                approval=approval,
+                reason=approval["reason_code"] or "manual_postpone",
+                acked=False,
+                event=event,
+                candidate=candidate,
+            )
+
+        if approval["action"] == "reject":
+            existing = self.store.get(candidate["idempotency_key"])
+            if existing:
+                acked = await self._ack(_event_sequence(event))
+                return self._result(
+                    status="duplicate",
+                    event=event,
+                    candidate=candidate,
+                    reason=str(existing.get("status") or "already_processed"),
+                    acked=acked,
+                    idempotent_replay=True,
+                )
+            record = self._record(
+                "rejected",
+                candidate,
+                event,
+                reason=approval["reason_code"] or "manual_reject",
+            )
+            acked = await self._ack(_event_sequence(event))
+            return self._result(
+                status="rejected",
+                event=event,
+                candidate=candidate,
+                reason=approval["reason_code"] or "manual_reject",
+                acked=acked,
+                record=record,
+            )
+
+        return await self.process_event(event)
 
     async def process_event(self, event: Any) -> dict[str, Any]:
         if not self._flag_enabled():
@@ -376,6 +445,37 @@ class WorldImageCandidateConsumer:
         except Exception:
             logger.debug("world image candidate push policy record failed", exc_info=True)
 
+    async def _find_candidate_event(
+        self,
+        approval: dict[str, str],
+    ) -> tuple[Any, dict[str, Any]] | None:
+        replay = getattr(self.world_port, "replay_events", None)
+        if not callable(replay):
+            return None
+        try:
+            events = await _maybe_await(replay(last_seq=0))
+        except TypeError:
+            try:
+                events = await _maybe_await(replay())
+            except Exception:
+                logger.debug("world image candidate manual replay unavailable", exc_info=True)
+                return None
+        except Exception:
+            logger.debug("world image candidate manual replay unavailable", exc_info=True)
+            return None
+
+        wanted_candidate = approval["candidate_id"]
+        wanted_idempotency = approval["idempotency_key"]
+        for event in events or []:
+            candidate = self._candidate_from_event(event)
+            if candidate is None:
+                continue
+            if wanted_candidate and candidate["candidate_id"] == wanted_candidate:
+                return event, candidate
+            if wanted_idempotency and candidate["idempotency_key"] == wanted_idempotency:
+                return event, candidate
+        return None
+
     async def _ack(self, seq: int) -> bool:
         if seq <= 0 or self.world_port is None or not hasattr(self.world_port, "ack"):
             return False
@@ -510,6 +610,54 @@ def _public_judge(judge_decision: Any | None) -> dict[str, Any]:
         "score": int(getattr(judge_decision, "score", 0) or 0),
         "tone": str(getattr(judge_decision, "tone", "") or ""),
         "suppress_reason": str(getattr(judge_decision, "suppress_reason", "") or ""),
+    }
+
+
+def _manual_approval_from_payload(payload: dict[str, Any]) -> dict[str, str]:
+    data = payload if isinstance(payload, dict) else {}
+    action = _safe_value(data.get("action") or "approve").lower()
+    if action not in _MANUAL_APPROVAL_ACTIONS:
+        action = "reject"
+    candidate_id = _safe_value(data.get("candidate_id") or data.get("candidateId") or "")
+    idempotency_key = _safe_value(
+        data.get("idempotency_key")
+        or data.get("idempotencyKey")
+        or candidate_id
+    )
+    reason_code = _safe_value(data.get("reason_code") or data.get("reasonCode") or "")
+    return {
+        "candidate_id": candidate_id,
+        "action": action,
+        "idempotency_key": idempotency_key,
+        "reason_code": reason_code,
+    }
+
+
+def _manual_result(
+    *,
+    status: str,
+    approval: dict[str, str],
+    reason: str,
+    acked: bool,
+    event: Any | None = None,
+    candidate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "reason": str(reason or ""),
+        "feature_flag": WorldImageCandidateConsumer.feature_flag,
+        "event_id": str(getattr(event, "event_id", "") or ""),
+        "sequence": _event_sequence(event) if event is not None else 0,
+        "candidate_id": (candidate or {}).get("candidate_id") or approval["candidate_id"],
+        "prompt_key": (candidate or {}).get("prompt_key", ""),
+        "acked": bool(acked),
+        "idempotent_replay": False,
+        "side_effects": dict(_NO_SIDE_EFFECTS),
+        "workflow": {
+            "status": "",
+            "request_id": "",
+        },
+        "recorded": False,
     }
 
 

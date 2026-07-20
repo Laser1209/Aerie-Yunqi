@@ -6,6 +6,7 @@ const fs = require("fs");
 const http = require("http");
 const { createCapabilityBroker } = require("./capability-broker");
 const { createPluginSupervisor } = require("./plugin-supervisor");
+const { createEnvFeatureFlags, createWorldDashboardHost } = require("./world-dashboard-host");
 
 // ── Config ──────────────────────────────────────────
 const PY_PORT = 7890;
@@ -49,6 +50,11 @@ let BACKEND_LOG_DIR = null;
 const START_MINIMIZED_ARG = "--start-minimized";
 const worldCapabilityBroker = createCapabilityBroker();
 const worldPluginSupervisor = createPluginSupervisor();
+const worldDashboardHost = createWorldDashboardHost({
+  featureFlags: createEnvFeatureFlags(process.env),
+  apiRequest,
+  supervisor: worldPluginSupervisor,
+});
 
 function isStartMinimizedArgPresent() {
   return process.argv.includes(START_MINIMIZED_ARG) || process.argv.includes("--hidden");
@@ -654,6 +660,26 @@ ipcMain.handle("api:request", async (_event, opts) => {
   } catch (err) {
     return { status: 0, data: { error: err.message } };
   }
+});
+
+ipcMain.handle("world-dashboard:get-status", async () => {
+  return await worldDashboardHost.getStatus();
+});
+
+ipcMain.handle("world-dashboard:show", async () => {
+  return await worldDashboardHost.show();
+});
+
+ipcMain.handle("world-dashboard:hide", async () => {
+  return await worldDashboardHost.hide();
+});
+
+ipcMain.handle("world-dashboard:approve-candidate", async (_event, payload) => {
+  return await worldDashboardHost.approveCandidate(payload || {});
+});
+
+ipcMain.handle("world-dashboard:preview-creative", async (_event, payload) => {
+  return await worldDashboardHost.previewCreative(payload || {});
 });
 
 // Dynamic Island IPC

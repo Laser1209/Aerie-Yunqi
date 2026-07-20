@@ -101,6 +101,13 @@ contextBridge.exposeInMainWorld("aerie", {
     set: (data) => ipcRenderer.invoke("settings:set", data),
     reset: () => ipcRenderer.invoke("settings:reset"),
   },
+  worldDashboard: {
+    getStatus: () => ipcRenderer.invoke("world-dashboard:get-status"),
+    show: () => ipcRenderer.invoke("world-dashboard:show"),
+    hide: () => ipcRenderer.invoke("world-dashboard:hide"),
+    approveCandidate: (payload) => ipcRenderer.invoke("world-dashboard:approve-candidate", payload || {}),
+    previewCreative: (payload) => ipcRenderer.invoke("world-dashboard:preview-creative", payload || {}),
+  },
   startup: {
     get: () => ipcRenderer.invoke("startup:get"),
     set: (options) => ipcRenderer.invoke("startup:set", options || {}),

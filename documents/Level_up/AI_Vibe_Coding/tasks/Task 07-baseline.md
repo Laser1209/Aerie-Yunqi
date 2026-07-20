@@ -12,12 +12,12 @@ risk: medium
 decision_required: false
 feature_flag: chat_stream_v1
 migration: false
-files: ["electron/src/renderer/js/chat.js", "electron/src/renderer/styles/main.css", "electron/tests/chat-request-queue.test.js", "core/brain.py", "tests/test_brain_provider_routing.py"]
+files: ["electron/src/renderer/js/chat.js", "electron/src/renderer/styles/main.css", "electron/tests/chat-request-queue.test.js", "core/brain.py", "voice/multimodal_output.py", "tests/test_brain_provider_routing.py", "tests/test_multimodal_output_tts.py"]
 acceptance_ids: ["A-07-01", "A-07-02"]
 rollback_ready: true
 owner: core-team
-evidence: ["file:///E:/Agent_reply/electron/src/renderer/js/chat.js", "file:///E:/Agent_reply/electron/src/renderer/styles/main.css", "file:///E:/Agent_reply/electron/tests/chat-request-queue.test.js", "file:///E:/Agent_reply/core/brain.py", "file:///E:/Agent_reply/tests/test_brain_provider_routing.py"]
-progress_note: "2026-07-21: renderer typing bubble, request rebinding, reduced-motion fallback, chat_stream_v1-off path, optional explicit TTS provider wiring, and rollback matrix checks are green."
+evidence: ["file:///E:/Agent_reply/electron/src/renderer/js/chat.js", "file:///E:/Agent_reply/electron/src/renderer/styles/main.css", "file:///E:/Agent_reply/electron/tests/chat-request-queue.test.js", "file:///E:/Agent_reply/core/brain.py", "file:///E:/Agent_reply/voice/multimodal_output.py", "file:///E:/Agent_reply/tests/test_brain_provider_routing.py", "file:///E:/Agent_reply/tests/test_multimodal_output_tts.py"]
+progress_note: "2026-07-21: renderer typing bubble, request rebinding, reduced-motion fallback, chat_stream_v1-off path, optional explicit Brain and multimodal-output TTS provider wiring, and rollback matrix checks are green."
 ---
 # Task 07-baseline
 > [!todo] Phase 07
@@ -27,6 +27,7 @@ progress_note: "2026-07-21: renderer typing bubble, request rebinding, reduced-m
 - [x] 完成最小实现与兼容路径
 - [x] 验证 `chat_stream_v1` 关闭后的旧路径
 - [x] 显式配置 TTS Provider 时接入 OpenAI-compatible `/audio/speech`，未配置时保持无外部调用的 stub 降级
+- [x] `EnhancedTTSEngine` 的 `TTSProvider.OPENAI` 可写本地音频文件，且无显式 key 时不落到 Edge TTS 外呼
 - [x] 记录脱敏 Evidence、指标与守恒结果
 - [x] 完成回滚演练并更新 `rollback_ready`
 
@@ -36,6 +37,9 @@ progress_note: "2026-07-21: renderer typing bubble, request rebinding, reduced-m
 - 2026-07-21 TTS provider hardening Red: explicit TTS provider tests returned `1 failed, 1 passed` because Brain still returned stub.
 - 2026-07-21 TTS provider hardening Green: `python -m pytest tests/test_brain_provider_routing.py::test_speak_text_uses_explicit_openai_compatible_tts_provider tests/test_brain_provider_routing.py::test_speak_text_without_explicit_provider_keeps_stub -q` -> `2 passed`；`python -m pytest tests/test_brain_provider_routing.py tests/test_phase10_image_workflow.py -q` -> `18 passed, 4 warnings`。
 - 2026-07-21 TTS provider hardening Regression: `python -m py_compile core/brain.py` passed；`python -m pytest tests -q` -> `538 passed, 6 warnings`；`node --test electron/tests/*.test.js` -> `23 passed`；`npm run check:all` in `electron` passed；workspace provider-key scan OK。
+- 2026-07-21 Multimodal TTS provider Red: `python -m pytest tests/test_multimodal_output_tts.py -q` -> `2 failed` because `TTSProvider.OPENAI` was unsupported and fell through to Edge fallback.
+- 2026-07-21 Multimodal TTS provider Green: `python -m pytest tests/test_multimodal_output_tts.py -q` -> `2 passed`; `python -m pytest tests/test_multimodal_output_tts.py tests/test_brain_provider_routing.py -q` -> `11 passed`.
+- 2026-07-21 Multimodal TTS provider Regression: `python -m py_compile voice/multimodal_output.py` passed；`PYTHONPATH=E:\Agent_reply PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python tests/e2e/e2e_s4_multimodal_output_verify.py` -> `11/11 passed`；`python -m pytest tests -q` -> `540 passed, 6 warnings`；`node --test electron/tests/*.test.js` -> `23 passed`；`npm run check:all` in `electron` passed；workspace provider-key scan OK。
 
 ## 链接
 [[Phase 07]] · [[90_全局验收清单]] · [[92_回滚演练]]

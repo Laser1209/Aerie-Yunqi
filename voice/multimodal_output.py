@@ -214,6 +214,7 @@ class EnhancedTTSEngine:
         cache: Optional[TTSCache] = None,
         default_style: VoiceStyle = VoiceStyle.WARM,
     ) -> None:
+        self._api_key_from_argument = bool(api_key)
         self.api_key = api_key or os.getenv("MINIMAX_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
         self.provider = provider
         self.cache = cache or TTSCache()
@@ -274,7 +275,10 @@ class EnhancedTTSEngine:
 
         # 尝试各 Provider
         providers_try = [self.provider]
-        if self._edge_tts_available and self.provider != TTSProvider.EDGE_TTS:
+        if (
+            self._edge_tts_available
+            and self.provider not in {TTSProvider.EDGE_TTS, TTSProvider.OPENAI}
+        ):
             providers_try.append(TTSProvider.EDGE_TTS)
 
         last_error = ""
@@ -310,9 +314,90 @@ class EnhancedTTSEngine:
     ) -> TTSResult:
         if provider == TTSProvider.MINIMAX:
             return await self._minimax_tts(text, style, speed, volume, output_name)
+        if provider == TTSProvider.OPENAI:
+            return await self._openai_tts(text, style, speed, volume, output_name)
         if provider == TTSProvider.EDGE_TTS:
             return await self._edge_tts(text, style, speed, volume, output_name)
         return TTSResult(success=False, error=f"unsupported provider: {provider}")
+
+    async def _openai_tts(
+        self,
+        text: str,
+        style: VoiceStyle,
+        speed: float,
+        volume: float,
+        output_name: Optional[str],
+    ) -> TTSResult:
+        """OpenAI-compatible speech endpoint.
+
+        This path is only used when ``provider=TTSProvider.OPENAI`` is selected.
+        It writes provider bytes to the normal TTS cache directory, but does
+        not send the audio to QQ or any external delivery channel.
+        """
+        del speed, volume
+        api_key = self.api_key if self._api_key_from_argument else ""
+        api_key = api_key or os.getenv("AERIE_TTS_API_KEY", "") or os.getenv("OPENAI_TTS_API_KEY", "")
+        if not api_key:
+            return TTSResult(success=False, error="no API key")
+
+        import httpx
+
+        base_url = (
+            os.getenv("AERIE_TTS_BASE_URL", "")
+            or os.getenv("OPENAI_TTS_BASE_URL", "")
+            or "https://api.openai.com/v1"
+        ).rstrip("/")
+        model = (
+            os.getenv("AERIE_TTS_MODEL", "")
+            or os.getenv("OPENAI_TTS_MODEL", "")
+            or "gpt-4o-mini-tts"
+        )
+        voice = (
+            os.getenv("AERIE_TTS_VOICE", "")
+            or os.getenv("OPENAI_TTS_VOICE", "")
+            or "alloy"
+        )
+        response_format = (
+            os.getenv("AERIE_TTS_FORMAT", "")
+            or os.getenv("OPENAI_TTS_FORMAT", "")
+            or "mp3"
+        ).strip().lower()
+        if response_format not in {"mp3", "wav", "opus", "aac", "flac", "pcm"}:
+            return TTSResult(success=False, error="unsupported response_format")
+
+        output_dir = Path("data/tts")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        name = output_name or f"tts_{hashlib.md5(text.encode()).hexdigest()[:12]}"
+        extension = "wav" if response_format == "pcm" else response_format
+        out_path = output_dir / f"{name}.{extension}"
+
+        try:
+            client = httpx.AsyncClient(timeout=30.0)
+            resp = await client.post(
+                f"{base_url}/audio/speech",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "input": text,
+                    "voice": voice,
+                    "response_format": response_format,
+                },
+            )
+            if resp.status_code == 200 and resp.content:
+                out_path.write_bytes(resp.content)
+                return TTSResult(
+                    success=True,
+                    audio_path=str(out_path),
+                    text=text,
+                    style=style.value if isinstance(style, VoiceStyle) else str(style),
+                    provider="openai",
+                )
+            return TTSResult(success=False, error=f"HTTP {resp.status_code}: {resp.text[:100]}")
+        except Exception as e:
+            return TTSResult(success=False, error=str(e))
 
     async def _minimax_tts(
         self,

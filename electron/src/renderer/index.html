@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="styles/approval-modal.css">
 <link rel="stylesheet" href="styles/persona-hub.css">
 <link rel="stylesheet" href="styles/office-mode.css">
+<link rel="stylesheet" href="styles/world-dashboard.css">
 <link rel="stylesheet" id="theme-css" href="styles/themes/yita-pink.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -335,6 +336,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
         <span>状态</span>
       </button>
+      <button class="sidebar-tab" data-tab="world-dashboard">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span>世界</span>
+      </button>
       <button class="sidebar-tab" data-tab="memorial">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         <span>日历</span>
@@ -621,6 +626,78 @@
               </div>
               <h3 class="status-qq-log-title">运行日志</h3>
               <pre id="napcat-logs" class="napcat-logs"></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- World Dashboard panel -->
+      <section id="panel-world-dashboard" class="tab-panel">
+        <div class="world-dashboard-panel">
+          <div class="world-dashboard-header">
+            <div>
+              <h2>世界仪表盘</h2>
+              <p>World Dashboard · Sidecar status, candidate approval, creative preview</p>
+            </div>
+            <div class="world-dashboard-actions">
+              <button id="world-dashboard-refresh" class="btn btn-secondary btn-sm">刷新</button>
+              <button id="world-dashboard-show" class="btn btn-primary btn-sm">显示插件</button>
+              <button id="world-dashboard-hide" class="btn btn-secondary btn-sm">隐藏插件</button>
+            </div>
+          </div>
+
+          <div class="world-dashboard-grid">
+            <div class="world-dashboard-card">
+              <span class="world-dashboard-label">状态</span>
+              <strong id="world-dashboard-status">unknown</strong>
+              <span id="world-dashboard-visible" class="world-dashboard-muted">visible unknown</span>
+            </div>
+            <div class="world-dashboard-card">
+              <span class="world-dashboard-label">插件</span>
+              <strong id="world-dashboard-plugin">aerie.world · unknown</strong>
+              <span id="world-dashboard-backend" class="world-dashboard-muted">backend unknown</span>
+            </div>
+            <div class="world-dashboard-card">
+              <span class="world-dashboard-label">聊天发布</span>
+              <strong id="world-dashboard-chat-publish">unknown</strong>
+              <span id="world-dashboard-updated" class="world-dashboard-muted">not refreshed</span>
+            </div>
+          </div>
+
+          <div class="world-dashboard-section">
+            <h3>可用面板</h3>
+            <div id="world-dashboard-panels" class="world-dashboard-pill-row">暂无数据</div>
+            <div id="world-dashboard-errors" class="world-dashboard-errors"></div>
+          </div>
+
+          <div class="world-dashboard-columns">
+            <div class="world-dashboard-section">
+              <h3>图片候选审批</h3>
+              <div class="world-dashboard-form">
+                <label>Candidate ID<input id="world-candidate-id" type="text" placeholder="cand-..." autocomplete="off"></label>
+                <label>Action
+                  <select id="world-candidate-action">
+                    <option value="approve">approve</option>
+                    <option value="reject">reject</option>
+                    <option value="postpone">postpone</option>
+                  </select>
+                </label>
+                <label>Reason code<input id="world-candidate-reason" type="text" placeholder="manual_ok" autocomplete="off"></label>
+                <label>Idempotency key<input id="world-candidate-idempotency" type="text" placeholder="optional" autocomplete="off"></label>
+                <button id="world-candidate-approve" class="btn btn-primary">提交审批</button>
+                <div id="world-candidate-result" class="world-dashboard-result">等待操作</div>
+              </div>
+            </div>
+
+            <div class="world-dashboard-section">
+              <h3>Creative Workshop 预览</h3>
+              <div class="world-dashboard-form">
+                <label>Kind<input id="world-creative-kind" type="text" value="world_note" autocomplete="off"></label>
+                <label>Title<input id="world-creative-title" type="text" placeholder="draft title" autocomplete="off"></label>
+                <label>Payload JSON<textarea id="world-creative-payload" rows="5" placeholder='{"scene":"morning"}'></textarea></label>
+                <button id="world-creative-preview" class="btn btn-secondary">生成预览元数据</button>
+                <div id="world-creative-result" class="world-dashboard-result">等待预览</div>
+              </div>
             </div>
           </div>
         </div>
@@ -1827,6 +1904,7 @@
 <script src="js/approval-modal.js"></script>
 <script src="js/persona-hub.js"></script>
 <script src="js/office-mode.js"></script>
+<script src="js/world-dashboard.js"></script>
 <link rel="stylesheet" href="styles/cognition-panel.css">
 <link rel="stylesheet" href="styles/calendar-panel.css">
 <link rel="stylesheet" href="styles/emotion-history.css">

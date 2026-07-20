@@ -60,6 +60,13 @@ window.addEventListener("DOMContentLoaded", () => {
     window.officeMode = officeMode;
   }
 
+  // ── Phase 15: World Dashboard renderer shell ─
+  if (window.WorldDashboardPanel) {
+    const worldDashboardPanel = new WorldDashboardPanel();
+    worldDashboardPanel.init();
+    window.worldDashboardPanel = worldDashboardPanel;
+  }
+
   // ── Tab switching ──────────────────────────────
   document.querySelectorAll(".sidebar-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -81,6 +88,9 @@ window.addEventListener("DOMContentLoaded", () => {
       }
       if (window.personaHub) {
         window.personaHub.setVisible(tab === "persona-hub");
+      }
+      if (window.worldDashboardPanel) {
+        window.worldDashboardPanel.setVisible(tab === "world-dashboard");
       }
     });
   });

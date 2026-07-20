@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Incoming and outgoing message models."""
+"""Aerie · 云栖 v0.1.0-beta.1 — Incoming and outgoing message models."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -17,6 +17,10 @@ class IncomingMessage:
     reply_to_role: str = ""
     # Phase 4: attachments (Phase 5 will fill these)
     attachments: list[dict] = field(default_factory=list)
+    # Phase 2: normalized identity contract (legacy fields remain above)
+    actor_id: str | None = None
+    channel: str | None = None
+    channel_account_id: str | None = None
 
     @staticmethod
     def from_onebot_event(event: dict) -> "IncomingMessage":
@@ -42,6 +46,8 @@ class IncomingMessage:
             source="qq",
             raw_event=event,
             reply_to_id=reply_to_id,
+            channel="qq",
+            channel_account_id=str(user_id),
         )
 
     @staticmethod
@@ -58,6 +64,8 @@ class IncomingMessage:
             source="local",
             reply_to_id=reply_to_id,
             attachments=attachments or [],
+            channel="desktop",
+            channel_account_id="local",
         )
 
 

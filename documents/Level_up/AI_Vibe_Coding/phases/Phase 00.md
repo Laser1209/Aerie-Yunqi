@@ -57,11 +57,12 @@ tags: [aerie, phase, phase00]
 只提交 Phase 00 相关源码、测试、迁移与文档；不混入无关重构、格式化或构建产物。
 
 ## Evidence
-- Phase 0 定向门禁：`56 passed, 4 warnings in 2.35s`。
-- Phase 0 基线专项：`14 passed in 0.25s`。
-- 全量 Python 基线：`254 passed, 10 failed, 6 warnings in 7.83s`；10 项既有失败集中在 ContextBuilder、情绪关键词、Persona 兼容接口与权限策略，不涉及本阶段修改文件。
-- 回滚验证：`migration_framework_v1=false` 时不创建迁移账本，旧 `chat_log` Schema 可正常初始化。
-- [实施计划](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_全面升级实施计划.md)
+- 2026-07-20 重新审计：Phase 0 基线专项 `14 passed in 0.30s`。
+- 2026-07-20 当前完整 Python 回归：`353 passed, 6 warnings in 9.99s`，历史 `10 failed` 已清零。
+- Flag 关闭与恢复演练：`migration_framework_v1=false` 时恢复后的旧 `chat_log` 为 `1/1` 行，`migration_ledger` 表数量为 `0`，`quick_check=ok`，数据损失 `0`，演练总耗时 `0.060643s`。
+- 历史 TDD Red/Green 过程由 [[Task 00-baseline]] 记录；本次为阶段推进前复验，不倒写或伪造历史失败输出。
+- 本轮仅使用脱敏占位内容，未记录消息正文、个人数据或凭据。
+- [实施计划](file:///E:/Agent_reply/documents/Level_up/实施计划.md)
 - [database.py](file:///E:/Agent_reply/core/database.py)
 - [chat_events.py](file:///E:/Agent_reply/core/chat_events.py)
 - [test_phase0_baseline.py](file:///E:/Agent_reply/tests/test_phase0_baseline.py)

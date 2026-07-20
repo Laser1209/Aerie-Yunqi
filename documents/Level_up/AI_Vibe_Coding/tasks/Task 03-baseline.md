@@ -43,7 +43,8 @@ evidence: ["file:///E:/Agent_reply/core/database.py", "file:///E:/Agent_reply/co
 - 生产数据副本演练：在线一致性备份成功；独立 rehearsal 上 dry-run 零写入；1754 条 legacy/canonical Message 数量与脱敏有序载荷摘要守恒；4 个 Conversation、299 个 Turn/Request；cursor=`1754`；重复 id=0；幂等二次运行计数不变；quick check 通过；源库哈希未变。
 - 生产运行态：真实 Companion 在 Flag true/false 两态均正常启动和停止；开启态生命周期 `4.476s`，关闭并恢复 legacy 路径 `4.189s`，未发送消息或调用模型。
 - 实际恢复：SQLite Backup API 回写生产库耗时 `0.047860s`；`quick_check=ok`，六张关键表数量及脱敏摘要与一致性备份相同，数据损失 0。
-- 最终验收：完整 Python `353 passed, 6 warnings`，诊断为空；Electron 默认关闭态 smoke 可读主窗口和 Dynamic Island 并正常关闭，未执行 UI 写操作。既有 SVG 编码、CSP 和后端就绪前请求告警已记录但不属于 Phase 03。本 Task 已完成并具备回滚条件。
+- 最终验收：完整 Python `353 passed, 6 warnings`，诊断为空；Electron 默认关闭态 smoke 可读主窗口和 Dynamic Island 并正常关闭，未执行 UI 写操作。既有 SVG 编码、CSP 和后端就绪前请求告警已记录但不属于 Phase 03。
+- 2026-07-20 前置门禁修复后重新复验：Phase 3 + API + Pipeline `67 passed, 4 warnings`；Phase 0–3 + API + Pipeline `141 passed, 4 warnings`。Phase 2 依赖已重新通过，本 Task 的 `done` 与 `rollback_ready: true` 当前一致。
 
 ## 链接
 [[Phase 03]] · [[90_全局验收清单]] · [[92_回滚演练]]

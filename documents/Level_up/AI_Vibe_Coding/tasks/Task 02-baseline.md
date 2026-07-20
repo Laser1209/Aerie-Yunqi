@@ -27,18 +27,17 @@ evidence: ["file:///E:/Agent_reply/tests/test_phase2_identity.py", "file:///E:/A
 - [x] 验证 `identity_contract_v1` 关闭后的旧路径
 - [x] 记录脱敏 Evidence、指标与守恒结果
 - [x] 完成回滚合同并更新 `rollback_ready`
-- [ ] 清零完整 Python 回归的 10 个既有失败
+- [x] 清零完整 Python 回归的 10 个既有失败
 
 ## Evidence
 
-> [!success] Phase 2 定向门禁
-> - Python：`91 passed, 4 warnings`
-> - Electron Persona Hub：`3 passed`
-> - `node --check src/renderer/js/persona-hub.js`：通过
-> - VS Code diagnostics：`memory_store.py`、`database.py`、`api_server.py` 均为零
-
-> [!warning] 恢复审计后的当前门禁
-> 2026-07-20 中断恢复审计确认旧测试数字已过期。当前代码已增加 Migration Ledger、Actor Emotion、Pipeline/Agent Actor 合同与规范身份双写；但主动消息、情绪 API、后台 idle/decay 和 Actor 持久化仍未闭环。完成修复并重新执行全部门禁前，Phase 02 保持 `review`。
+> [!success] 2026-07-20 重新审计通过
+> - 身份与 Persona 专项：`41 passed, 4 warnings in 1.99s`
+> - Phase 0–2 + API + Pipeline：`124 passed, 4 warnings in 3.35s`
+> - 完整 Python：`353 passed, 6 warnings in 9.99s`
+> - Electron Persona Hub：`3 passed`；`persona-hub.js` 语法检查通过
+> - Actor Emotion、主动消息、情绪 API、后台 idle/decay 与 Actor 持久化闭环均由当前测试重新覆盖
+> - `status: done`、全部验收勾选与 `rollback_ready: true` 当前一致
 
 ### TDD Red 证据
 - 长期记忆：`LongTermMemory.store/retrieve()` 不接受 `actor_id`，2 failed、6 passed。

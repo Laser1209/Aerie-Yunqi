@@ -57,14 +57,16 @@ tags: [aerie, phase, phase01]
 只提交 Phase 01 相关源码、测试、迁移与文档；不混入无关重构、格式化或构建产物。
 
 ## Evidence
-- [实施计划](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_全面升级实施计划.md)
+- 2026-07-20 重新审计：Phase 1 专项 `19 passed, 4 warnings in 1.28s`。
+- Phase 0 + Phase 1 + API + Pipeline 当前定向回归：`83 passed, 4 warnings in 2.58s`。
+- 当前完整 Python 回归：`353 passed, 6 warnings in 9.99s`，历史 `10 failed` 已清零。
+- Electron `node --check`：`chat.js`、`dynamic-island.js`、`main.js`、`preload.js` 全部通过。
+- 自动化重新覆盖 V2 三通道、QQ 离线本地降级、quiet、系统通知开关，以及 Flag 关闭的 QQ-only 与离线暂停旧路径。
+- 本轮仅记录场景与通道合同，不记录主动消息正文、账号或凭据；`rollback_ready=true`。
+- [实施计划](file:///E:/Agent_reply/documents/Level_up/实施计划.md)
 - [push_scheduler.py](file:///E:/Agent_reply/core/push_scheduler.py)
 - [companion.py](file:///E:/Agent_reply/core/companion.py)
 - [api_server.py](file:///E:/Agent_reply/core/api_server.py)
 - [chat.js](file:///E:/Agent_reply/electron/src/renderer/js/chat.js)
 - [test_phase1_proactive_baseline.py](file:///E:/Agent_reply/tests/test_phase1_proactive_baseline.py)
-- Phase 1 专项：`19 passed, 4 warnings`
-- Phase 0 + Phase 1 + API + Pipeline：`72 passed, 4 warnings`
-- Electron `node --check`：`chat.js`、`dynamic-island.js`、`main.js`、`preload.js` 全部通过
-- 全量基线：`272 passed, 10 failed, 6 warnings`；10 项为本批次前已存在的 Context、Emotion、Persona 兼容与 Permission 失败，主动消息无新增失败
 - [[90_全局验收清单]] · [[92_回滚演练]]

@@ -36,11 +36,13 @@ evidence: ["file:///E:/Agent_reply/core/push_scheduler.py", "file:///E:/Agent_re
 - 主动气泡写入兼容 `chat_log`；聊天页仅消费 `user` / `assistant` 角色事件，避免通知与遥测形成重复气泡。
 
 ## 验证 Evidence
-- Phase 1 专项：`19 passed, 4 warnings`
-- Phase 0 + Phase 1 + API + Pipeline：`72 passed, 4 warnings`
-- Electron 四个 JS 入口 `node --check` 全部通过；相关编辑器诊断为 0。
-- 全量：`272 passed, 10 failed, 6 warnings`；失败集合与实施前一致，主动消息无新增回归。
-- 回滚合同：`proactive_delivery_v2=false` 时不持久化本地主动气泡、不发本地事件，只调用 QQ，并恢复 QQ 断线暂停。
+- 2026-07-20 重新审计：Phase 1 专项 `19 passed, 4 warnings in 1.28s`。
+- Phase 0 + Phase 1 + API + Pipeline 当前定向回归：`83 passed, 4 warnings in 2.58s`。
+- 当前完整 Python 回归：`353 passed, 6 warnings in 9.99s`，历史失败已清零。
+- Electron 四个 JS 入口 `node --check` 全部通过。
+- 回滚合同重新验证：`proactive_delivery_v2=false` 时不持久化本地主动气泡、不发本地事件，只调用 QQ，并恢复 QQ 断线暂停。
+- V2 开启态重新验证：QQ 离线不阻断本地气泡和系统通知；quiet 与通知配置继续生效。
+- Evidence 不含消息正文、账号或凭据；`rollback_ready: true` 与当前结果一致。
 
 ## 链接
 [[Phase 01]] · [[90_全局验收清单]] · [[92_回滚演练]]

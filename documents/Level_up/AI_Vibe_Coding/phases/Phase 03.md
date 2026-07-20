@@ -74,7 +74,13 @@ tags: [aerie, phase, phase03]
 只提交 Phase 03 相关源码、测试、迁移与文档；不混入无关重构、格式化或构建产物。
 
 ## Evidence
-- [实施计划](file:///E:/Agent_reply/.trae/documents/Aerie_AI_Vibe_Coding_全面升级实施计划.md)
+- 2026-07-20 前置门禁修复后重新复验：Phase 3 + API + Pipeline `67 passed, 4 warnings in 3.35s`。
+- Phase 0–3 + API + Pipeline 当前定向回归：`141 passed, 4 warnings in 4.37s`。
+- 当前完整 Python 回归仍为 `353 passed, 6 warnings in 9.99s`。
+- 既有生产副本守恒、Flag true/false 生命周期与实际恢复 Evidence 保持有效；本轮未再次触碰生产库。
+- Phase 2 依赖已重新通过并消除状态矛盾；Phase 3 的 `status: done` 与 `rollback_ready=true` 重新成立。
+- [实施计划](file:///E:/Agent_reply/documents/Level_up/实施计划.md)
 - [database.py](file:///E:/Agent_reply/core/database.py)
 - [pipeline.py](file:///E:/Agent_reply/core/pipeline.py)
+- [test_phase3_conversation_model.py](file:///E:/Agent_reply/tests/test_phase3_conversation_model.py)
 - [[90_全局验收清单]] · [[92_回滚演练]]

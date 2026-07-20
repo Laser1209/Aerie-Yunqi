@@ -29,10 +29,11 @@ evidence: ["file:///E:/Agent_reply/core/database.py", "file:///E:/Agent_reply/co
 - [x] 完成回滚演练并更新 `rollback_ready`
 
 ## 验证结果
-- Phase 0 基线专项：`14 passed in 0.25s`。
-- Phase 0 定向门禁：`56 passed, 4 warnings in 2.35s`。
-- 全量 Python 基线：`254 passed, 10 failed, 6 warnings in 7.83s`；既有失败已按模块记录，不作为 Phase 0 新增回归。
-- Flag 关闭时旧 Schema 正常初始化，迁移账本不创建；新表与备份保留策略未执行破坏性删除。
+- 2026-07-20 重新审计：Phase 0 基线专项 `14 passed in 0.30s`。
+- 当前完整 Python 回归：`353 passed, 6 warnings in 9.99s`，历史失败已清零。
+- `migration_framework_v1=false` 恢复演练：旧 `chat_log` `1/1` 行、`migration_ledger=0`、`quick_check=ok`、数据损失 `0`、总耗时 `0.060643s`。
+- 本次复验未修改生产库，只使用临时脱敏数据库；新表与备份保留策略未执行破坏性删除。
+- `rollback_ready: true` 与当前 Evidence 一致。
 
 ## 链接
 [[Phase 00]] · [[90_全局验收清单]] · [[92_回滚演练]]

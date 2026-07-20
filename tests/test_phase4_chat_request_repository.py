@@ -533,7 +533,6 @@ def test_persist_turn_completes_existing_request_and_turn_without_duplicate_pk(
     frozen_utc_clock,
 ):
     from core.conversation_repository import ConversationRepository
-    from core.conversation_repository import resolve_conversation_id
 
     request_repository = _repository(phase4_db, frozen_utc_clock)
     context = _context(request_id="req_complete_existing")
@@ -631,6 +630,7 @@ def test_recent_turn_history_reads_completed_turns_only(
     frozen_utc_clock,
 ):
     from core.conversation_repository import ConversationRepository
+    from core.conversation_repository import resolve_conversation_id
 
     request_repository = _repository(phase4_db, frozen_utc_clock)
     conversation_repository = ConversationRepository(

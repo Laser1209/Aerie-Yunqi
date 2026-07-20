@@ -256,3 +256,58 @@ def test_phase3_database_runs_backfill_migration_after_schema_creation(tmp_path)
             check.close()
     finally:
         Database.reset_instance()
+
+
+def test_phase3_repository_persists_one_turn_with_ordered_assistant_messages():
+    from core.conversation_repository import ConversationRepository
+
+    conn = _conversation_fixture()
+    repository = ConversationRepository(conn, enabled=True)
+
+    result = repository.persist_turn(
+        request_id="request_live_1",
+        user_id=7,
+        actor_id="actor_shared",
+        channel="qq",
+        channel_account_id="7",
+        user_content="现在好吗",
+        user_attachments=[{"path": "m.png"}],
+        assistant_segments=["我在", "等你"],
+    )
+
+    assert result["conversation_id"].startswith("conv_")
+    assert result["turn_id"].startswith("turn_")
+    assert conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM turns").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] == 1
+    rows = conn.execute(
+        """SELECT role, content, sequence, response_group_id, attachments
+           FROM messages ORDER BY sequence"""
+    ).fetchall()
+    assert [tuple(row[:3]) for row in rows] == [
+        ("user", "现在好吗", 0),
+        ("assistant", "我在", 1),
+        ("assistant", "等你", 2),
+    ]
+    assert rows[0]["attachments"] == json.dumps([{"path": "m.png"}])
+    assert rows[1]["response_group_id"] == rows[2]["response_group_id"]
+
+
+def test_phase3_repository_is_noop_when_feature_flag_is_disabled():
+    from core.conversation_repository import ConversationRepository
+
+    conn = _conversation_fixture()
+    repository = ConversationRepository(conn, enabled=False)
+
+    assert repository.persist_turn(
+        request_id="request_legacy_1",
+        user_id=7,
+        actor_id="actor_shared",
+        channel="desktop",
+        channel_account_id="local",
+        user_content="旧路径",
+        user_attachments=[],
+        assistant_segments=["旧回复"],
+    ) is None
+    assert conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 0

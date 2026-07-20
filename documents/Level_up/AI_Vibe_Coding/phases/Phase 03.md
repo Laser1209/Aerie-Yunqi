@@ -42,6 +42,13 @@ tags: [aerie, phase, phase03]
 3. 运行受影响模块测试与完整回归。
 4. 验证 Flag 关闭、迁移/协议恢复和 Evidence 脱敏。
 
+## 实施进展
+- 首批 Green：`004_conversation_model` 创建四表规范化骨架；随后以独立 `005_conversation_backfill` 保持 004 checksum 稳定并执行保守回填。
+- 自动化守恒：记录数、正文、附件、角色顺序、Actor/Channel 原值、QQ/Desktop 隔离和重复运行幂等已在隔离数据库验证。
+- 迁移安全：最小旧库缺少附件/身份列时 005 先补可空列；未知身份保持 NULL；缺少 `chat_log` 时显式失败。
+- 相关回归：`51 passed, 4 warnings`；完整 Python：`334 passed, 6 warnings`；修改文件诊断为空。
+- 当前未对真实生产库执行迁移，且 Feature Flag live 双写、完整 Turn 历史与回滚尚未完成，Phase 03 保持 `in_progress`。
+
 ## 验收
 - [ ] 记录、附件、角色顺序和 Channel 守恒
 - [ ] Feature Flag 关闭恢复旧路径且不丢新数据

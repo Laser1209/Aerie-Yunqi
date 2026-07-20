@@ -17,6 +17,7 @@ from communication.message import IncomingMessage, OutgoingReply
 from communication.splitter import SemanticMessageSplitter
 from core.chat_events import emit
 from core.cognition import CognitionEngine
+from core.ids import generate_id
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
 
@@ -39,6 +40,7 @@ class Pipeline:
         self_evolver: Any = None,            # Phase 9: capability gap detector
         settings: dict | None = None,
         identity_resolver: Any = None,
+        conversation_repository: Any = None,
     ) -> None:
         self.router = router
         self.emotion = emotion_engine
@@ -52,6 +54,7 @@ class Pipeline:
         self.decision_engine = decision_engine
         self.self_evolver = self_evolver
         self.identity_resolver = identity_resolver
+        self.conversation_repository = conversation_repository
         self._splitter = SemanticMessageSplitter()
         # v13.9: 回复校验器（准确性 Guard + 质量 Judge）
         self.validator = ResponseValidator()
@@ -484,6 +487,8 @@ class Pipeline:
             persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
+        self._persist_canonical_turn(msg, segments)
+
         # Phase 9: stage 9 — output
         self.cognition.record(trace, "output", {
             "ai_msg_ids": ai_row_ids,
@@ -834,6 +839,8 @@ class Pipeline:
             persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
+        self._persist_canonical_turn(msg, segments)
+
         self.cognition.record(trace, "output", {
             "ai_msg_ids": ai_row_ids,
             "user_msg_id": user_row_id,
@@ -896,6 +903,27 @@ class Pipeline:
         if persist_errors:
             result["persist_error"] = "; ".join(persist_errors)
         return result
+
+    def _persist_canonical_turn(
+        self,
+        msg: IncomingMessage,
+        segments: list[str],
+    ) -> None:
+        if not self.conversation_repository:
+            return
+        try:
+            self.conversation_repository.persist_turn(
+                request_id=generate_id("req"),
+                user_id=msg.user_id,
+                actor_id=msg.actor_id,
+                channel=msg.channel,
+                channel_account_id=msg.channel_account_id,
+                user_content=msg.content,
+                user_attachments=msg.attachments,
+                assistant_segments=segments,
+            )
+        except Exception:
+            logger.exception("canonical conversation mirror write failed")
 
     @staticmethod
     def _extract_react(text: str) -> dict:

@@ -90,6 +90,10 @@ class TestPipelineHandle:
         return resolver
 
     @pytest.fixture
+    def conversation_repository(self):
+        return MagicMock()
+
+    @pytest.fixture
     def pipeline(
         self,
         router,
@@ -100,6 +104,7 @@ class TestPipelineHandle:
         tool_registry,
         db,
         identity_resolver,
+        conversation_repository,
     ):
         return Pipeline(
             router=router,
@@ -110,6 +115,7 @@ class TestPipelineHandle:
             tool_registry=tool_registry,
             db=db,
             identity_resolver=identity_resolver,
+            conversation_repository=conversation_repository,
         )
 
     @pytest.mark.asyncio
@@ -147,6 +153,44 @@ class TestPipelineHandle:
         assert "emotion" in result
 
     @pytest.mark.asyncio
+    async def test_handle_mirrors_full_turn_to_conversation_repository(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        pipeline._splitter.split = MagicMock(return_value=["第一段", "第二段"])
+        msg = IncomingMessage.from_local("完整轮次", 3998874040)
+        msg.attachments = [{"path": "a.png"}]
+
+        await pipeline.handle(msg, force_full=True)
+
+        conversation_repository.persist_turn.assert_called_once()
+        persisted = conversation_repository.persist_turn.call_args.kwargs
+        assert persisted["request_id"].startswith("req_")
+        assert persisted["user_id"] == 3998874040
+        assert persisted["actor_id"] == "actor_primary"
+        assert persisted["channel"] == "desktop"
+        assert persisted["channel_account_id"] == "local"
+        assert persisted["user_content"] == "完整轮次"
+        assert persisted["user_attachments"] == [{"path": "a.png"}]
+        assert persisted["assistant_segments"] == ["第一段", "第二段"]
+
+    @pytest.mark.asyncio
+    async def test_canonical_mirror_failure_does_not_break_legacy_reply(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        conversation_repository.persist_turn.side_effect = RuntimeError("mirror down")
+        msg = IncomingMessage.from_local("兼容旧路径", 3998874040)
+
+        result = await pipeline.handle(msg, force_full=True)
+
+        assert result is not None
+        assert result["reply"] == "嗯。"
+        assert pipeline.db.insert.call_count >= 2
+
+    @pytest.mark.asyncio
     async def test_handle_qq_message_enqueues(self, pipeline):
         msg = IncomingMessage(user_id=3998874040, content="你好", source="qq")
         await pipeline.handle(msg)
@@ -174,6 +218,24 @@ class TestPipelineHandle:
         assert len(chat_rows) >= 2
         assert all(row["actor_id"] == "actor_primary" for row in chat_rows)
         assert all(row["channel"] == "desktop" for row in chat_rows)
+
+    @pytest.mark.asyncio
+    async def test_basic_path_mirrors_turn_to_conversation_repository(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        pipeline.router.route.return_value = "BASIC"
+        pipeline._splitter.split = MagicMock(return_value=["轻量一", "轻量二"])
+        msg = IncomingMessage.from_local("轻量轮次", 3998874040)
+
+        await pipeline.handle(msg)
+
+        conversation_repository.persist_turn.assert_called_once()
+        persisted = conversation_repository.persist_turn.call_args.kwargs
+        assert persisted["assistant_segments"] == ["轻量一", "轻量二"]
+        assert persisted["actor_id"] == "actor_primary"
+        assert persisted["channel"] == "desktop"
 
     @pytest.mark.asyncio
     async def test_basic_path_uses_actor_emotion_contract(

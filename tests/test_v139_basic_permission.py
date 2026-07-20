@@ -52,7 +52,7 @@ def test_basic_mode_context():
 
     # FULL 模式
     msgs_full = builder.build(
-        persona=persona,
+        user_id=0,
         route_mode="FULL",
         history_msgs=[{"role": "user", "content": "你好"}] * 10,
         current_msg="测试消息",
@@ -61,15 +61,15 @@ def test_basic_mode_context():
 
     # BASIC 模式
     msgs_basic = builder.build(
-        persona=persona,
+        user_id=0,
         route_mode="BASIC",
         history_msgs=[{"role": "user", "content": "你好"}] * 10,
         current_msg="测试消息",
     )
-    print(f"  BASIC 模式消息数: {len(msgs_basic)}（system + 3 history + user）")
+    print(f"  BASIC 模式消息数: {len(msgs_basic)}（system + user）")
 
-    assert len(msgs_basic) == 5, f"BASIC 应该是 5 条消息，实际 {len(msgs_basic)}"
-    print("  ✅ BASIC 模式历史消息限制为 3 条")
+    assert len(msgs_basic) == 2, f"BASIC 应该是 2 条消息，实际 {len(msgs_basic)}"
+    print("  ✅ BASIC 模式不携带历史消息")
 
     print()
 

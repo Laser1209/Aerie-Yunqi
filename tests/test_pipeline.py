@@ -23,6 +23,7 @@ class TestPipelineHandle:
     def emotion(self):
         e = MagicMock()
         e.update_trajectory = MagicMock()
+        e.update_trajectory_async = AsyncMock()
         e.get_state = MagicMock(return_value={
             "label": "neutral",
             "pad": {"P": 0.0, "A": 0.0, "D": 0.0},
@@ -32,7 +33,7 @@ class TestPipelineHandle:
             "eruption": None,
             "panel": "",
         })
-        e.tune = MagicMock(side_effect=lambda text: text)
+        e.tune = MagicMock(side_effect=lambda text, **kwargs: text)
         return e
 
     @pytest.fixture
@@ -78,7 +79,28 @@ class TestPipelineHandle:
         return d
 
     @pytest.fixture
-    def pipeline(self, router, emotion, ctx_builder, brain, send_queue, tool_registry, db):
+    def identity_resolver(self):
+        resolver = MagicMock()
+
+        def resolve_message(msg):
+            msg.actor_id = "actor_primary"
+            return msg
+
+        resolver.resolve_message.side_effect = resolve_message
+        return resolver
+
+    @pytest.fixture
+    def pipeline(
+        self,
+        router,
+        emotion,
+        ctx_builder,
+        brain,
+        send_queue,
+        tool_registry,
+        db,
+        identity_resolver,
+    ):
         return Pipeline(
             router=router,
             emotion_engine=emotion,
@@ -87,7 +109,33 @@ class TestPipelineHandle:
             send_queue=send_queue,
             tool_registry=tool_registry,
             db=db,
+            identity_resolver=identity_resolver,
         )
+
+    @pytest.mark.asyncio
+    async def test_handle_scopes_history_and_persistence_to_channel_identity(
+        self,
+        pipeline,
+        identity_resolver,
+    ):
+        msg = IncomingMessage.from_local("隔离历史", 3998874040)
+
+        await pipeline.handle(msg, force_full=True)
+
+        identity_resolver.resolve_message.assert_called_once_with(msg)
+        history_sql, history_params = pipeline.db.query.call_args_list[0].args
+        assert "actor_id = ?" in history_sql
+        assert "channel = ?" in history_sql
+        assert history_params == ("actor_primary", "desktop")
+        chat_rows = [
+            call.args[1]
+            for call in pipeline.db.insert.call_args_list
+            if call.args[0] == "chat_log"
+        ]
+        assert len(chat_rows) >= 2
+        assert all(row["actor_id"] == "actor_primary" for row in chat_rows)
+        assert all(row["channel"] == "desktop" for row in chat_rows)
+        assert all(row["channel_account_id"] == "local" for row in chat_rows)
 
     @pytest.mark.asyncio
     async def test_handle_local_message_returns_reply(self, pipeline):
@@ -105,13 +153,65 @@ class TestPipelineHandle:
         pipeline.send_queue.enqueue.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_handle_basic_skip_stranger(self, pipeline):
+    async def test_basic_path_scopes_history_and_persistence_to_channel_identity(
+        self,
+        pipeline,
+    ):
+        pipeline.router.route.return_value = "BASIC"
+        msg = IncomingMessage.from_local("轻量隔离", 3998874040)
+
+        await pipeline.handle(msg)
+
+        history_sql, history_params = pipeline.db.query.call_args_list[0].args
+        assert "actor_id = ?" in history_sql
+        assert "channel = ?" in history_sql
+        assert history_params == ("actor_primary", "desktop")
+        chat_rows = [
+            call.args[1]
+            for call in pipeline.db.insert.call_args_list
+            if call.args[0] == "chat_log"
+        ]
+        assert len(chat_rows) >= 2
+        assert all(row["actor_id"] == "actor_primary" for row in chat_rows)
+        assert all(row["channel"] == "desktop" for row in chat_rows)
+
+    @pytest.mark.asyncio
+    async def test_basic_path_uses_actor_emotion_contract(
+        self,
+        pipeline,
+    ):
+        pipeline.router.route.return_value = "BASIC"
+        msg = IncomingMessage.from_local("你好", 3998874040)
+
+        await pipeline.handle(msg)
+
+        pipeline.emotion.update_trajectory.assert_called_once_with(
+            3998874040,
+            "你好",
+            actor_id="actor_primary",
+        )
+        pipeline.emotion.get_state.assert_called_once_with(
+            3998874040,
+            actor_id="actor_primary",
+        )
+        pipeline.emotion.tune.assert_called_once_with(
+            "嗯。",
+            actor_id="actor_primary",
+        )
+
+    @pytest.mark.asyncio
+    async def test_handle_basic_uses_lightweight_reply(self, pipeline):
         pipeline.router.route.return_value = "BASIC"
         msg = IncomingMessage(user_id=99999, content="你好", source="qq")
+
         result = await pipeline.handle(msg)
-        assert result is None
-        # Brain should not have been called
-        pipeline.brain.chat.assert_not_called()
+
+        assert result is not None
+        assert result["route_mode"] == "BASIC"
+        assert result["lightweight"] is True
+        pipeline.brain.chat.assert_awaited_once()
+        assert pipeline.brain.chat.await_args.kwargs["tools"] is None
+        pipeline.send_queue.enqueue.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_handle_saves_to_db(self, pipeline):
@@ -137,7 +237,11 @@ class TestPipelineHandle:
     async def test_handle_calls_emotion_update(self, pipeline):
         msg = IncomingMessage.from_local("你好", 3998874040)
         await pipeline.handle(msg, force_full=True)
-        pipeline.emotion.update_trajectory.assert_called_once_with(3998874040, "你好")
+        pipeline.emotion.update_trajectory_async.assert_awaited_once_with(
+            3998874040,
+            "你好",
+            actor_id="actor_primary",
+        )
 
     @pytest.mark.asyncio
     async def test_handle_local_skip_send_queue(self, pipeline):
@@ -149,7 +253,10 @@ class TestPipelineHandle:
     async def test_handle_calls_emotion_tune(self, pipeline):
         msg = IncomingMessage.from_local("你好", 3998874040)
         await pipeline.handle(msg, force_full=True)
-        pipeline.emotion.tune.assert_called_once()
+        pipeline.emotion.tune.assert_called_once_with(
+            "嗯。",
+            actor_id="actor_primary",
+        )
 
     @pytest.mark.asyncio
     async def test_handle_db_error_graceful(self, pipeline):
@@ -171,7 +278,9 @@ class TestPipelineHandle:
 
     @pytest.mark.asyncio
     async def test_handle_emotion_error_graceful(self, pipeline):
-        pipeline.emotion.update_trajectory = MagicMock(side_effect=Exception("Emo error"))
+        pipeline.emotion.update_trajectory_async = AsyncMock(
+            side_effect=Exception("Emo error")
+        )
         msg = IncomingMessage.from_local("你好", 3998874040)
         result = await pipeline.handle(msg, force_full=True)
         assert result is not None
@@ -187,11 +296,12 @@ class TestPipelineRouteModes:
         router.route.return_value = "AUTO"
         emotion = MagicMock()
         emotion.update_trajectory = MagicMock()
+        emotion.update_trajectory_async = AsyncMock()
         emotion.get_state = MagicMock(return_value={
             "label": "neutral", "pad": {"P": 0, "A": 0, "D": 0},
             "thresholds": {}, "eruption": None, "panel": "",
         })
-        emotion.tune = MagicMock(side_effect=lambda t: t)
+        emotion.tune = MagicMock(side_effect=lambda t, **kwargs: t)
         ctx = MagicMock()
         ctx.build.return_value = [{"role": "system", "content": "你是伊塔"}, {"role": "user", "content": "hi"}]
         brain = MagicMock()

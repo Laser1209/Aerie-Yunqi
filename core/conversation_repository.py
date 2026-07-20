@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Iterator
 
 from core.ids import generate_id
 
@@ -27,9 +28,17 @@ def _conversation_id(
 
 
 class ConversationRepository:
-    def __init__(self, conn: sqlite3.Connection, *, enabled: bool) -> None:
-        self.conn = conn
+    def __init__(self, database: Any, *, enabled: bool) -> None:
+        self.database = database
         self.enabled = enabled
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        if isinstance(self.database, sqlite3.Connection):
+            yield self.database
+            return
+        with self.database.connection() as conn:
+            yield conn
 
     def persist_turn(
         self,
@@ -54,55 +63,58 @@ class ConversationRepository:
         )
         turn_id = generate_id("turn")
         response_group_id = generate_id("group")
-        self.conn.execute(
-            """INSERT OR IGNORE INTO conversations
-               (conversation_id, actor_id, channel, channel_account_id, status)
-               VALUES (?, ?, ?, ?, 'active')""",
-            (conversation_id, actor_id, channel, channel_account_id),
-        )
-        self.conn.execute(
-            """INSERT INTO turns
-               (turn_id, conversation_id, status, completed_at)
-               VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
-            (turn_id, conversation_id),
-        )
-        self.conn.execute(
-            """INSERT INTO requests
-               (request_id, conversation_id, turn_id, status,
-                completed_at)
-               VALUES (?, ?, ?, 'completed', datetime('now', 'localtime'))""",
-            (request_id, conversation_id, turn_id),
-        )
         attachments = (
             json.dumps(user_attachments, ensure_ascii=False)
             if user_attachments
             else None
         )
-        self._insert_message(
-            conversation_id=conversation_id,
-            turn_id=turn_id,
-            role="user",
-            content=user_content,
-            attachments=attachments,
-            response_group_id=None,
-            sequence=0,
-            channel=channel,
-            channel_account_id=channel_account_id,
-            actor_id=actor_id,
-        )
-        for sequence, content in enumerate(assistant_segments, start=1):
+        with self._connection() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO conversations
+                   (conversation_id, actor_id, channel, channel_account_id, status)
+                   VALUES (?, ?, ?, ?, 'active')""",
+                (conversation_id, actor_id, channel, channel_account_id),
+            )
+            conn.execute(
+                """INSERT INTO turns
+                   (turn_id, conversation_id, status, completed_at)
+                   VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
+                (turn_id, conversation_id),
+            )
+            conn.execute(
+                """INSERT INTO requests
+                   (request_id, conversation_id, turn_id, status,
+                    completed_at)
+                   VALUES (?, ?, ?, 'completed', datetime('now', 'localtime'))""",
+                (request_id, conversation_id, turn_id),
+            )
             self._insert_message(
+                conn,
                 conversation_id=conversation_id,
                 turn_id=turn_id,
-                role="assistant",
-                content=content,
-                attachments=None,
-                response_group_id=response_group_id,
-                sequence=sequence,
+                role="user",
+                content=user_content,
+                attachments=attachments,
+                response_group_id=None,
+                sequence=0,
                 channel=channel,
                 channel_account_id=channel_account_id,
                 actor_id=actor_id,
             )
+            for sequence, content in enumerate(assistant_segments, start=1):
+                self._insert_message(
+                    conn,
+                    conversation_id=conversation_id,
+                    turn_id=turn_id,
+                    role="assistant",
+                    content=content,
+                    attachments=None,
+                    response_group_id=response_group_id,
+                    sequence=sequence,
+                    channel=channel,
+                    channel_account_id=channel_account_id,
+                    actor_id=actor_id,
+                )
         return {
             "conversation_id": conversation_id,
             "turn_id": turn_id,
@@ -112,6 +124,7 @@ class ConversationRepository:
 
     def _insert_message(
         self,
+        conn: sqlite3.Connection,
         *,
         conversation_id: str,
         turn_id: str,
@@ -124,7 +137,7 @@ class ConversationRepository:
         channel_account_id: str | None,
         actor_id: str | None,
     ) -> None:
-        self.conn.execute(
+        conn.execute(
             """INSERT INTO messages
                (message_id, conversation_id, turn_id, role, content,
                 attachments, response_group_id, sequence, channel,

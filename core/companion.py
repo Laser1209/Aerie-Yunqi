@@ -17,6 +17,7 @@ from config.persona_loader import load_behavior_config
 from core.brain import Brain
 from core.cognition import CognitionEngine
 from core.computer_control import ComputerController, PermissionLevel
+from core.conversation_repository import ConversationRepository
 from core.permission_manager import FineGrainedPermissionManager
 from core.context_builder import ContextBuilder
 from core.database import Database
@@ -61,6 +62,10 @@ class Companion:
         self.identity_resolver = IdentityResolver.from_feature_flags(
             self.identity_repository,
             self.feature_flags,
+        )
+        self.conversation_repository = ConversationRepository(
+            self.db,
+            enabled=self.feature_flags.is_enabled("conversation_model_v1"),
         )
 
         # ── Core engines (single instantiation — no duplicates) ──
@@ -167,6 +172,7 @@ class Companion:
             cognition=self.cognition,
             settings=self.settings,
             identity_resolver=self.identity_resolver,
+            conversation_repository=self.conversation_repository,
         )
 
         # Push scheduler

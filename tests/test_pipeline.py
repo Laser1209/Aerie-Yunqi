@@ -176,6 +176,19 @@ class TestPipelineHandle:
         assert persisted["assistant_segments"] == ["第一段", "第二段"]
 
     @pytest.mark.asyncio
+    async def test_canonical_mirror_waits_for_legacy_persistence_success(
+        self,
+        pipeline,
+        conversation_repository,
+    ):
+        pipeline.db.insert.side_effect = RuntimeError("legacy down")
+        msg = IncomingMessage.from_local("旧存储失败", 3998874040)
+
+        await pipeline.handle(msg, force_full=True)
+
+        conversation_repository.persist_turn.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_canonical_mirror_failure_does_not_break_legacy_reply(
         self,
         pipeline,

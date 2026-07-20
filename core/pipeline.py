@@ -487,7 +487,8 @@ class Pipeline:
             persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
-        self._persist_canonical_turn(msg, segments)
+        if user_row_id and len(ai_row_ids) == len(segments):
+            self._persist_canonical_turn(msg, segments)
 
         # Phase 9: stage 9 — output
         self.cognition.record(trace, "output", {
@@ -839,7 +840,8 @@ class Pipeline:
             persist_errors.append(f"assistant message: {e}")
             logger.exception("db insert ai msg error")
 
-        self._persist_canonical_turn(msg, segments)
+        if user_row_id and len(ai_row_ids) == len(segments):
+            self._persist_canonical_turn(msg, segments)
 
         self.cognition.record(trace, "output", {
             "ai_msg_ids": ai_row_ids,

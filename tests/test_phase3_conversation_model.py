@@ -293,6 +293,33 @@ def test_phase3_repository_persists_one_turn_with_ordered_assistant_messages():
     assert rows[1]["response_group_id"] == rows[2]["response_group_id"]
 
 
+def test_phase3_repository_supports_database_connection_provider(tmp_path):
+    from core.conversation_repository import ConversationRepository
+    from core.database import Database
+
+    Database.reset_instance()
+    try:
+        db = Database(tmp_path / "phase3-live.db")
+        repository = ConversationRepository(db, enabled=True)
+
+        repository.persist_turn(
+            request_id="request_provider_1",
+            user_id=7,
+            actor_id=None,
+            channel="desktop",
+            channel_account_id="local",
+            user_content="连接提供者",
+            user_attachments=None,
+            assistant_segments=["已持久化"],
+        )
+
+        assert db.query_one(
+            "SELECT content FROM messages WHERE role = 'user'"
+        )["content"] == "连接提供者"
+    finally:
+        Database.reset_instance()
+
+
 def test_phase3_repository_is_noop_when_feature_flag_is_disabled():
     from core.conversation_repository import ConversationRepository
 

@@ -1,12 +1,15 @@
 """Aerie · 云栖 v0.1.0-beta.1 — Brain: multi-provider LLM call layer with fallback chain."""
 
 from __future__ import annotations
+import base64
 import json
 import logging
+import mimetypes
 import os
 import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -1153,18 +1156,101 @@ def _brain_get_ai_options(self) -> list[dict]:
     return self._load_ai_options()
 
 
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _openai_compatible_url(base_url: str, suffix: str) -> str:
+    base = (base_url or "").strip().rstrip("/")
+    clean_suffix = "/" + suffix.strip("/")
+    if base.endswith(clean_suffix):
+        return base
+    return base + clean_suffix
+
+
+def _provider_timeout_seconds() -> float:
+    raw = os.getenv("AERIE_IMAGE_PROVIDER_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        raw = os.getenv("AERIE_VISION_PROVIDER_TIMEOUT_SECONDS", "60").strip()
+    try:
+        return max(1.0, min(float(raw), 300.0))
+    except ValueError:
+        return 60.0
+
+
 def _brain_generate_image(self, prompt: str) -> dict:
     """Generate an image via the ``image_sdxl`` provider.
 
-    Stub today: returns a structured response so the LLM can continue
-    the conversation without blocking. Once a local SDXL adapter is
-    wired up, replace the body to actually call the model.
+    Uses an explicit OpenAI-compatible image provider only when
+    ``AERIE_IMAGE_API_KEY`` or ``OPENAI_IMAGE_API_KEY`` is configured.
+    Otherwise it keeps the historical structured stub so existing chat and
+    smoke-test paths never start making surprise external calls.
     """
     opts = self._load_ai_options()
     provider = next(
         (o for o in opts if o.get("id") == "image_sdxl"),
         {"id": "image_sdxl", "label": "图像生成", "model": "sdxl"},
     )
+    api_key = _first_env("AERIE_IMAGE_API_KEY", "OPENAI_IMAGE_API_KEY")
+    if api_key:
+        base_url = (
+            _first_env("AERIE_IMAGE_BASE_URL", "OPENAI_IMAGE_BASE_URL")
+            or "https://api.openai.com/v1"
+        )
+        model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL") or "gpt-image-1"
+        size = _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+        try:
+            response = httpx.post(
+                _openai_compatible_url(base_url, "images/generations"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "prompt": prompt or "",
+                    "n": 1,
+                    "size": size,
+                    "response_format": "b64_json",
+                },
+                timeout=_provider_timeout_seconds(),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            data = payload.get("data") if isinstance(payload, dict) else None
+            first = data[0] if isinstance(data, list) and data else {}
+            image_b64 = str(first.get("b64_json") or "")
+            if not image_b64:
+                return {
+                    "status": "unavailable",
+                    "provider": "openai_compatible_image",
+                    "model": model,
+                    "output_path": None,
+                    "error_code": "missing_b64_json",
+                }
+            return {
+                "status": "ok",
+                "provider": "openai_compatible_image",
+                "model": model,
+                "prompt": (prompt or "")[:200],
+                "image_bytes_b64": image_b64,
+                "mime_type": "image/png",
+                "output_path": None,
+                "external_id": str(first.get("revised_prompt") or ""),
+            }
+        except Exception:
+            logger.warning("image provider call failed", exc_info=True)
+            return {
+                "status": "failed",
+                "provider": "openai_compatible_image",
+                "model": model,
+                "output_path": None,
+                "error_code": "provider_failed",
+            }
     return {
         "status": "stub",
         "provider": provider.get("id", "image_sdxl"),
@@ -1199,14 +1285,102 @@ def _brain_speak_text(self, text: str) -> dict:
 def _brain_see_image(self, image_path: str, question: str) -> dict:
     """Answer a question about an image via the ``vision_llava`` provider.
 
-    Stub today: returns metadata. The local vision LLaVA adapter can
-    be wired in later.
+    Uses an explicit OpenAI-compatible vision/chat provider only when
+    ``AERIE_VISION_API_KEY`` or ``OPENAI_VISION_API_KEY`` is configured.
+    Without that explicit opt-in, it preserves the previous stub contract.
     """
     opts = self._load_ai_options()
     provider = next(
         (o for o in opts if o.get("id") == "vision_llava"),
         {"id": "vision_llava", "label": "视觉理解", "model": "llava"},
     )
+    api_key = _first_env("AERIE_VISION_API_KEY", "OPENAI_VISION_API_KEY")
+    if api_key:
+        base_url = (
+            _first_env("AERIE_VISION_BASE_URL", "OPENAI_VISION_BASE_URL")
+            or "https://api.openai.com/v1"
+        )
+        model = _first_env("AERIE_VISION_MODEL", "OPENAI_VISION_MODEL") or "gpt-4o-mini"
+        try:
+            path = Path(image_path or "").expanduser().resolve()
+            if not path.exists() or not path.is_file():
+                return {
+                    "status": "failed",
+                    "provider": "openai_compatible_vision",
+                    "model": model,
+                    "answer": None,
+                    "error_code": "image_not_found",
+                }
+            max_bytes = int(os.getenv("AERIE_VISION_MAX_IMAGE_BYTES", str(20 * 1024 * 1024)))
+            image_bytes = path.read_bytes()
+            if len(image_bytes) > max_bytes:
+                return {
+                    "status": "failed",
+                    "provider": "openai_compatible_vision",
+                    "model": model,
+                    "answer": None,
+                    "error_code": "image_too_large",
+                }
+            mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            data_url = (
+                f"data:{mime_type};base64,"
+                f"{base64.b64encode(image_bytes).decode('ascii')}"
+            )
+            response = httpx.post(
+                _openai_compatible_url(base_url, "chat/completions"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": question or "describe"},
+                                {"type": "image_url", "image_url": {"url": data_url}},
+                            ],
+                        }
+                    ],
+                },
+                timeout=_provider_timeout_seconds(),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            choices = payload.get("choices") if isinstance(payload, dict) else None
+            first = choices[0] if isinstance(choices, list) and choices else {}
+            message = first.get("message") if isinstance(first, dict) else {}
+            answer = str((message or {}).get("content") or "").strip()
+            if not answer:
+                return {
+                    "status": "unavailable",
+                    "provider": "openai_compatible_vision",
+                    "model": model,
+                    "image_path": (image_path or "")[:200],
+                    "question": (question or "")[:200],
+                    "answer": None,
+                    "error_code": "missing_answer",
+                }
+            return {
+                "status": "ok",
+                "provider": "openai_compatible_vision",
+                "model": model,
+                "image_path": (image_path or "")[:200],
+                "question": (question or "")[:200],
+                "answer": answer,
+            }
+        except Exception:
+            logger.warning("vision provider call failed", exc_info=True)
+            return {
+                "status": "failed",
+                "provider": "openai_compatible_vision",
+                "model": model,
+                "image_path": (image_path or "")[:200],
+                "question": (question or "")[:200],
+                "answer": None,
+                "error_code": "provider_failed",
+            }
     return {
         "status": "stub",
         "provider": provider.get("id", "vision_llava"),

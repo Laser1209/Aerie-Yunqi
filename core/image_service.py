@@ -15,6 +15,7 @@ must perform their own idempotent outbox handling.
 from __future__ import annotations
 
 import copy
+import base64
 import hashlib
 import json
 import logging
@@ -216,6 +217,25 @@ class BrainImageGenerationProvider:
                     model=model,
                     external_id=str(raw.get("external_id") or ""),
                 )
+        image_bytes_b64 = raw.get("image_bytes_b64")
+        if image_bytes_b64:
+            try:
+                image_bytes = base64.b64decode(str(image_bytes_b64), validate=True)
+            except Exception:
+                return ImageGenerationResult(
+                    status="failed",
+                    provider_id=provider_id,
+                    model=model,
+                    error_code="invalid_provider_image_bytes",
+                )
+            return ImageGenerationResult(
+                status="ok",
+                image_bytes=image_bytes,
+                mime_type=str(raw.get("mime_type") or "image/png"),
+                provider_id=provider_id,
+                model=model,
+                external_id=str(raw.get("external_id") or ""),
+            )
         return ImageGenerationResult(
             status="unavailable",
             provider_id=provider_id,

@@ -1,4 +1,8 @@
+import base64
+import io
+
 import pytest
+from PIL import Image
 
 from core.brain import Brain
 
@@ -82,3 +86,92 @@ async def test_summarize_news_batch_keeps_openai_for_article_generation(monkeypa
 
     assert captured["preferred_provider"] == "openai"
     assert result[0]["summary"] == "生成摘要"
+
+
+def _png_b64() -> str:
+    buf = io.BytesIO()
+    Image.new("RGB", (4, 3), color=(120, 160, 210)).save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def test_generate_image_uses_explicit_openai_compatible_provider(monkeypatch):
+    monkeypatch.setenv("AERIE_IMAGE_API_KEY", "image-provider-key")
+    monkeypatch.setenv("AERIE_IMAGE_BASE_URL", "https://image.example/v1")
+    monkeypatch.setenv("AERIE_IMAGE_MODEL", "image-test-model")
+    brain = Brain()
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"b64_json": _png_b64()}]}
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("core.brain.httpx.post", fake_post)
+
+    result = brain.generate_image("draw a calm lake")
+
+    assert result["status"] == "ok"
+    assert result["provider"] == "openai_compatible_image"
+    assert result["model"] == "image-test-model"
+    assert result["mime_type"] == "image/png"
+    assert result["image_bytes_b64"]
+    assert calls[0]["url"] == "https://image.example/v1/images/generations"
+    assert calls[0]["headers"]["Authorization"] == "Bearer image-provider-key"
+    assert calls[0]["json"]["prompt"] == "draw a calm lake"
+    assert calls[0]["json"]["response_format"] == "b64_json"
+
+
+def test_generate_image_without_explicit_provider_keeps_stub(monkeypatch):
+    monkeypatch.delenv("AERIE_IMAGE_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_IMAGE_API_KEY", raising=False)
+    brain = Brain()
+
+    def fail_post(*args, **kwargs):
+        raise AssertionError("image provider should not be called without explicit image key")
+
+    monkeypatch.setattr("core.brain.httpx.post", fail_post)
+
+    result = brain.generate_image("draw a calm lake")
+
+    assert result["status"] == "stub"
+    assert result["output_path"] is None
+
+
+def test_see_image_uses_explicit_openai_compatible_vision_provider(tmp_path, monkeypatch):
+    monkeypatch.setenv("AERIE_VISION_API_KEY", "vision-provider-key")
+    monkeypatch.setenv("AERIE_VISION_BASE_URL", "https://vision.example/v1")
+    monkeypatch.setenv("AERIE_VISION_MODEL", "vision-test-model")
+    image_path = tmp_path / "sample.png"
+    image_path.write_bytes(base64.b64decode(_png_b64()))
+    brain = Brain()
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "a quiet blue test image"}}]}
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("core.brain.httpx.post", fake_post)
+
+    result = brain.see_image(str(image_path), "describe")
+
+    assert result["status"] == "ok"
+    assert result["answer"] == "a quiet blue test image"
+    assert result["provider"] == "openai_compatible_vision"
+    assert result["model"] == "vision-test-model"
+    assert calls[0]["url"] == "https://vision.example/v1/chat/completions"
+    content = calls[0]["json"]["messages"][0]["content"]
+    assert content[0] == {"type": "text", "text": "describe"}
+    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")

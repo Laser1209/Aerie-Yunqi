@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import base64
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from PIL import Image
 import core.api_server as api_server
 from core.api_server import app
 from core.image_service import (
+    BrainImageGenerationProvider,
     IdempotencyConflict,
     ImageGenerationResult,
     ImageSafetyPolicy,
@@ -187,6 +189,40 @@ def test_generation_success_persists_asset_and_plans_delivery_once(tmp_path):
         "delivery_created": False,
     }
     assert len(provider.calls) == 1
+
+
+def test_brain_generation_provider_accepts_base64_image_bytes(tmp_path):
+    class BrainWithImageBytes:
+        def generate_image(self, prompt: str):
+            return {
+                "status": "ok",
+                "provider": "openai_compatible_image",
+                "model": "image-test-model",
+                "image_bytes_b64": base64.b64encode(_png_bytes()).decode("ascii"),
+                "mime_type": "image/png",
+            }
+
+    service = ImageWorkflow(
+        upload_base=tmp_path / "uploads",
+        feature_enabled=True,
+        generation_provider=BrainImageGenerationProvider(BrainWithImageBytes()),
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.generate_image(
+        prompt="draw a persisted provider image",
+        idempotency_key="brain-b64-key",
+        owner_id="master",
+    )
+
+    assert result["status"] == "completed"
+    assert result["provider"] == {
+        "id": "openai_compatible_image",
+        "model": "image-test-model",
+        "status": "ok",
+    }
+    assert result["asset"]["url"].startswith("/uploads/")
+    assert (tmp_path / "uploads" / result["asset"]["saved_as"]).exists()
 
 
 def test_generation_idempotency_key_conflict_prevents_history_crosswire(tmp_path):

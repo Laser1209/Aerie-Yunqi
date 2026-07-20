@@ -52,8 +52,9 @@ tags: [aerie, phase, phase03]
 - 本批 TDD Evidence：先观察仓储缺少 `recent_turn_history()`、Pipeline 未调用规范历史、Flag 关闭仍调用规范写入口，以及 legacy SQL 参数合同漂移的行为 Red；最小实现后 Phase 3 + Pipeline 回归 `33 passed`，Phase 0/2/3 + Pipeline 回归 `78 passed, 4 warnings`，完整 Python `346 passed, 6 warnings`，修改文件诊断为空。
 - 事务原子性：先观察 assistant Message 写失败后遗留 Conversation 的 Red；随后以 SQLite SAVEPOINT 包裹 Conversation、Turn、Request 与全部 Message，异常时整体回滚。事务小节回归 `34 passed`，跨阶段相关回归 `79 passed, 4 warnings`，完整 Python `347 passed, 6 warnings`，修改文件诊断为空。
 - 真实组合根 Flag 合同：先观察 `Companion` 不接受安全测试数据库注入的 Red，再加入默认行为不变的 `database=` 注入缝；使用临时真实 `Database` 构造真实 `Companion`，验证环境变量 true/false、`ConversationRepository.enabled` 与 Pipeline 同实例注入一致，且未调用 `start()`。本小节 Phase 3 + Pipeline `37 passed`，跨阶段相关 `82 passed, 4 warnings`，完整 Python `350 passed, 6 warnings`，修改文件诊断为空。
+- 005 cursor/断点续跑：先观察回填不接受 `after_id/limit`、批次边界拆裂 Turn、第二批失败后 Ledger cursor 为 NULL 的三条 Red；随后以每批 500 行有界读取推进，按已回填 Message 恢复最后 Turn/sequence，并在每批成功后持久化 Ledger cursor。故障移除后重复运行只补剩余行，005 已发布 checksum 未变。相关回归 `40 passed`，跨阶段相关 `85 passed, 4 warnings`，完整 Python `353 passed, 6 warnings`，修改文件诊断与 `git diff --check` 均通过。
 - 历史 Evidence：规范双写小节定向回归 `28 passed`；此前完整 Python `334 passed, 6 warnings`。
-- 当前未对真实生产库执行 backup/dry-run/守恒迁移，005 尚无批量 cursor/断点续跑，生产库备份恢复与迁移回滚尚未完成，Phase 03 保持 `in_progress`。
+- 当前未对真实生产库执行 backup/dry-run/守恒迁移，生产库备份恢复与迁移回滚尚未完成，Phase 03 保持 `in_progress`。
 
 ## 验收
 - [ ] 记录、附件、角色顺序和 Channel 守恒

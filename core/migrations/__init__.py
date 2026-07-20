@@ -210,7 +210,26 @@ def _apply_phase3_conversation_backfill(conn: sqlite3.Connection) -> None:
     )
     from core.conversation_backfill import backfill_chat_log
 
-    backfill_chat_log(conn)
+    version = "005_conversation_backfill"
+    cursor_row = conn.execute(
+        "SELECT cursor FROM migration_ledger WHERE version = ?",
+        (version,),
+    ).fetchone()
+    after_id = int(cursor_row["cursor"] or 0) if cursor_row else 0
+    while True:
+        result = backfill_chat_log(
+            conn,
+            after_id=after_id,
+            limit=500,
+        )
+        if result["processed"]:
+            after_id = int(result["cursor"])
+            conn.execute(
+                "UPDATE migration_ledger SET cursor = ? WHERE version = ?",
+                (str(after_id), version),
+            )
+        if not result["has_more"]:
+            break
 
 
 def phase3_backfill_migrations() -> list[Migration]:

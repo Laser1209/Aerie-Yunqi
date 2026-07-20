@@ -22,12 +22,46 @@ def _conversation_id(row: sqlite3.Row) -> str:
     )
 
 
-def backfill_chat_log(conn: sqlite3.Connection) -> dict[str, int]:
+def backfill_chat_log(
+    conn: sqlite3.Connection,
+    *,
+    after_id: int = 0,
+    limit: int | None = None,
+) -> dict[str, int | bool]:
     """Backfill legacy chat rows without inferring missing identity fields."""
-    rows = conn.execute("SELECT * FROM chat_log ORDER BY id ASC").fetchall()
+    if limit is None:
+        rows = conn.execute(
+            "SELECT * FROM chat_log WHERE id > ? ORDER BY id ASC",
+            (after_id,),
+        ).fetchall()
+        has_more = False
+    else:
+        rows = conn.execute(
+            "SELECT * FROM chat_log WHERE id > ? ORDER BY id ASC LIMIT ?",
+            (after_id, limit + 1),
+        ).fetchall()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
     inserted = 0
     current_turns: dict[str, str] = {}
     next_sequence: dict[str, int] = {}
+    if after_id:
+        prior_turns = conn.execute(
+            """SELECT m.conversation_id, m.turn_id, m.sequence
+               FROM messages m
+               JOIN (
+                   SELECT conversation_id, MAX(legacy_chat_log_id) AS legacy_id
+                   FROM messages
+                   WHERE legacy_chat_log_id <= ?
+                   GROUP BY conversation_id
+               ) latest
+                 ON latest.conversation_id = m.conversation_id
+                AND latest.legacy_id = m.legacy_chat_log_id""",
+            (after_id,),
+        ).fetchall()
+        for prior in prior_turns:
+            current_turns[prior["conversation_id"]] = prior["turn_id"]
+            next_sequence[prior["turn_id"]] = prior["sequence"] + 1
 
     for row in rows:
         conversation_id = _conversation_id(row)
@@ -107,4 +141,10 @@ def backfill_chat_log(conn: sqlite3.Connection) -> dict[str, int]:
             inserted += 1
         next_sequence[turn_id] = sequence + 1
 
-    return {"processed": len(rows), "inserted": inserted}
+    cursor = rows[-1]["id"] if rows else after_id
+    return {
+        "processed": len(rows),
+        "inserted": inserted,
+        "cursor": cursor,
+        "has_more": has_more,
+    }

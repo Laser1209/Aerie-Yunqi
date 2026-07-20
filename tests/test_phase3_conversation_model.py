@@ -155,6 +155,67 @@ def test_phase3_backfill_preserves_order_attachments_and_groups_assistant_segmen
     assert rows[0]["legacy_chat_log_id"] == 1
 
 
+def test_phase3_backfill_processes_bounded_batches_with_cursor():
+    from core.conversation_backfill import backfill_chat_log
+
+    conn = _conversation_fixture()
+    conn.executemany(
+        "INSERT INTO chat_log (user_id, role, content) VALUES (?, ?, ?)",
+        [
+            (7, "user", "第一问"),
+            (7, "assistant", "第一答"),
+            (7, "user", "第二问"),
+        ],
+    )
+
+    first = backfill_chat_log(conn, after_id=0, limit=2)
+    second = backfill_chat_log(
+        conn,
+        after_id=first["cursor"],
+        limit=2,
+    )
+
+    assert first == {
+        "processed": 2,
+        "inserted": 2,
+        "cursor": 2,
+        "has_more": True,
+    }
+    assert second == {
+        "processed": 1,
+        "inserted": 1,
+        "cursor": 3,
+        "has_more": False,
+    }
+    assert conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 3
+
+
+def test_phase3_backfill_resumes_same_turn_across_batch_boundary():
+    from core.conversation_backfill import backfill_chat_log
+
+    conn = _conversation_fixture()
+    conn.executemany(
+        "INSERT INTO chat_log (user_id, role, content) VALUES (?, ?, ?)",
+        [
+            (7, "user", "跨批问题"),
+            (7, "assistant", "跨批第一段"),
+            (7, "assistant", "跨批第二段"),
+        ],
+    )
+
+    first = backfill_chat_log(conn, after_id=0, limit=1)
+    second = backfill_chat_log(conn, after_id=first["cursor"], limit=2)
+
+    rows = conn.execute(
+        """SELECT turn_id, role, sequence, response_group_id
+           FROM messages ORDER BY legacy_chat_log_id"""
+    ).fetchall()
+    assert len({row["turn_id"] for row in rows}) == 1
+    assert [row["sequence"] for row in rows] == [0, 1, 2]
+    assert rows[1]["response_group_id"] == rows[2]["response_group_id"]
+    assert second["has_more"] is False
+
+
 def test_phase3_backfill_is_idempotent_and_does_not_guess_missing_identity():
     from core.conversation_backfill import backfill_chat_log
 
@@ -222,6 +283,57 @@ def test_phase3_backfill_isolates_short_term_conversations_by_channel():
         ("桌面消息", "desktop", "local"),
         ("桌面回复", "desktop", "local"),
     ]
+
+
+def test_phase3_backfill_migration_persists_cursor_and_resumes_after_failure():
+    from core.migrations import MigrationRunner, phase3_backfill_migrations
+
+    conn = _conversation_fixture()
+    conn.execute(
+        "DELETE FROM migration_ledger WHERE version = '005_conversation_backfill'"
+    )
+    rows = [(7, "user", "批次起点")]
+    rows.extend((7, "assistant", f"分段 {index}") for index in range(500))
+    conn.executemany(
+        "INSERT INTO chat_log (user_id, role, content) VALUES (?, ?, ?)",
+        rows,
+    )
+    conn.execute(
+        """CREATE TRIGGER interrupt_second_backfill_batch
+           BEFORE INSERT ON messages
+           WHEN NEW.legacy_chat_log_id = 501
+           BEGIN
+               SELECT RAISE(ABORT, 'backfill interrupted');
+           END"""
+    )
+    runner = MigrationRunner(conn)
+    migration = phase3_backfill_migrations()
+
+    with pytest.raises(sqlite3.IntegrityError, match="backfill interrupted"):
+        runner.run(migration)
+
+    failed = conn.execute(
+        """SELECT status, cursor FROM migration_ledger
+           WHERE version = '005_conversation_backfill'"""
+    ).fetchone()
+    assert dict(failed) == {"status": "failed", "cursor": "500"}
+    assert conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 500
+
+    conn.execute("DROP TRIGGER interrupt_second_backfill_batch")
+    runner.run(migration)
+
+    completed = conn.execute(
+        """SELECT status, cursor FROM migration_ledger
+           WHERE version = '005_conversation_backfill'"""
+    ).fetchone()
+    assert dict(completed) == {"status": "completed", "cursor": "501"}
+    messages = conn.execute(
+        """SELECT turn_id, sequence FROM messages
+           ORDER BY legacy_chat_log_id"""
+    ).fetchall()
+    assert len(messages) == 501
+    assert len({row["turn_id"] for row in messages}) == 1
+    assert messages[-1]["sequence"] == 500
 
 
 def test_phase3_database_runs_backfill_migration_after_schema_creation(tmp_path):

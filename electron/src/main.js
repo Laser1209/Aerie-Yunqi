@@ -4,6 +4,7 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
+const { createCapabilityBroker } = require("./capability-broker");
 
 // ── Config ──────────────────────────────────────────
 const PY_PORT = 7890;
@@ -45,6 +46,7 @@ let BACKEND_DB_PATH = null;
 let BACKEND_DATA_DIR = null;
 let BACKEND_LOG_DIR = null;
 const START_MINIMIZED_ARG = "--start-minimized";
+const worldCapabilityBroker = createCapabilityBroker();
 
 function isStartMinimizedArgPresent() {
   return process.argv.includes(START_MINIMIZED_ARG) || process.argv.includes("--hidden");

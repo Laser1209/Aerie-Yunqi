@@ -37,6 +37,7 @@ from core.push_scheduler import PushScheduler
 from core.qq_whitelist import QQWhitelistManager
 from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry
+from core.world_port import build_world_port
 from config.persona_loader import load_settings, load_proactive_config
 from knowledge.kb import KnowledgeBase
 from memory.memory_store import LongTermMemory
@@ -61,6 +62,7 @@ class Companion:
         global _COMPANION
         self.settings = settings or load_settings()
         self.feature_flags = FeatureFlags()
+        self.world_port = build_world_port(feature_flags=self.feature_flags)
 
         # R0.3.7: load centralized behavior config (single source of truth).
         self.behavior_cfg = load_behavior_config()

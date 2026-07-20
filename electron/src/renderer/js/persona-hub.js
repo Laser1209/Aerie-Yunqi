@@ -401,13 +401,22 @@ class PersonaHubPanel {
     this._showEditor();
   }
 
-  _editPersona(id) {
+  async _editPersona(id) {
     this._currentId = id;
-    const persona = this._personas.find((p) => p.id === id);
-    if (persona) {
-      this._fillForm(persona);
+    try {
+      const r = await window.aerie.api.request({
+        method: "GET",
+        path: `/api/persona/hub/${id}`,
+      });
+      if (!r || !r.data || !r.data.persona) {
+        throw new Error("返回数据格式异常");
+      }
+      this._fillForm(r.data.persona);
+      this._showEditor();
+    } catch (e) {
+      console.error("load persona detail failed:", e);
+      alert("加载人设失败: " + (e.message || "unknown"));
     }
-    this._showEditor();
   }
 
   async _activatePersona(id) {
@@ -429,7 +438,7 @@ class PersonaHubPanel {
   async _saveCurrent() {
     const data = this._collectForm();
 
-    if (!data.name || !data.name.trim()) {
+    if (!data.basic || !data.basic.name || !data.basic.name.trim()) {
       alert("请填写人设名称");
       return;
     }
@@ -452,9 +461,11 @@ class PersonaHubPanel {
         });
       }
 
-      if (r && r.data && r.data.persona) {
+      if (r && r.data && r.data.status === "ok" && r.data.persona_id) {
         await this._loadList();
         this._showList();
+      } else {
+        throw new Error((r && r.data && r.data.error) || "返回数据格式异常");
       }
     } catch (e) {
       console.error("save persona failed:", e);
@@ -529,10 +540,76 @@ class PersonaHubPanel {
       } catch (_) {}
     }
 
-    return data;
+    return this._toHubModel(data);
+  }
+
+  _toHubModel(data) {
+    if (data.basic || data.personality || data.relationship) {
+      return data;
+    }
+    const traits = (data.core_traits || "")
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((name) => ({ name, en: "", desc: "" }));
+    const model = {
+      name: data.name || "",
+      version: "1.0.0",
+      basic: {
+        name: data.name || "",
+        english_name: data.english_name || "",
+        age: data.age ?? 0,
+        product_name: "Aerie · 云栖",
+      },
+      personality: {
+        cores: traits,
+        speech_style: data.speech_style || "",
+        big_five: data.big_five || {},
+      },
+      relationship: {
+        user_address_default: data.user_address || "你",
+        user_intimate_terms: data.user_address ? [data.user_address] : [],
+        self_reference: "我",
+      },
+      emotion: {
+        baseline: { pleasure: 0.1, arousal: 0.2, dominance: 0.8 },
+        thresholds: {},
+      },
+      behavior: {
+        proactivity_level: 0.5,
+        default_permission_level: "VIEW_ONLY",
+      },
+      prompt_overrides: {
+        system_prompt: data.system_prompt || "",
+      },
+    };
+    ["tagline", "gender", "mbti", "occupation", "background_story", "hobbies", "catchphrases", "behavior_guidelines"].forEach((key) => {
+      if (data[key] !== undefined) model[key] = data[key];
+    });
+    return model;
   }
 
   _fillForm(persona) {
+    const basic = persona.basic || {};
+    const personality = persona.personality || {};
+    const relationship = persona.relationship || {};
+    const promptOverrides = persona.prompt_overrides || {};
+    persona = {
+      ...persona,
+      name: basic.name || persona.name,
+      english_name: basic.english_name || persona.english_name,
+      age: basic.age ?? persona.age,
+      core_traits: (personality.cores || [])
+        .map((item) => typeof item === "string" ? item : item.name)
+        .filter(Boolean)
+        .join("\n"),
+      speech_style: personality.speech_style || persona.speech_style,
+      big_five: personality.big_five || persona.big_five,
+      user_address: (relationship.user_intimate_terms || [])[0]
+        || relationship.user_address_default
+        || persona.user_address,
+      system_prompt: promptOverrides.system_prompt || persona.system_prompt,
+    };
     const textFields = [
       "name", "english_name", "tagline", "gender", "mbti",
       "occupation", "user_address",

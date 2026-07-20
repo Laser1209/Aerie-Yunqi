@@ -108,6 +108,9 @@ class ChatManager {
         this._markRecalled(msg.id);
         return;
       }
+      if (!msg || !["user", "assistant"].includes(msg.role)) {
+        return;
+      }
       if (this._seenIds.has(msg.id)) return;
       this._seenIds.add(msg.id);
       this._render(msg);

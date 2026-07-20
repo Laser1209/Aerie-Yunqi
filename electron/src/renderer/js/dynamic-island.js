@@ -704,16 +704,25 @@
     if (!payload?.type) return;
     switch (payload.type) {
       case "proactive_message":
-      case "chat_message":
-        if (payload.data?.text) {
+      case "chat_message": {
+        const data = payload.data || payload;
+        if (data.text) {
           addNotification(
-            payload.data.title || "云栖",
-            payload.data.text,
-            payload.data.icon || "ui-bell",
+            data.title || "云栖",
+            data.text,
+            data.icon || "ui-bell",
             payload.type
           );
+          if (payload.type === "proactive_message" && data.notify_system) {
+            api?.systemNotify?.({
+              title: data.title || "Aerie · 云栖",
+              body: data.text,
+              scene: data.scene,
+            })?.catch?.(() => {});
+          }
         }
         break;
+      }
       case "calendar_reminder":
         handleCalendarReminder(payload.data || payload);
         break;

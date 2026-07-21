@@ -27,6 +27,7 @@ public_hostname: aerie.etta.top
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
 | Android 目标设备 | VIVO Y500 Pro，OriginOS 6，Android 16 |
 | 首版分发方式 | 固定签名 APK，私有安装，不上应用商店 |
+| Android 客户端仓库 | `https://github.com/Laser1209/Aerie-Android`，本地工作树为 `E:\Agent_reply\android-client`；已初始化并推送 `main` |
 
 ### 0.1 状态词含义
 
@@ -386,6 +387,13 @@ disable-account    禁用访客并撤销全部设备
 - 前台 SSE 断开按 `1/2/4/8/30` 秒上限退避并加入抖动。
 - 每次回到前台先刷新令牌，再同步消息游标、未完成请求、文件状态和待审批列表。
 
+### 10.6 仓库边界
+
+- `E:\Agent_reply` 的当前 Aerie 服务器仓库（当前分支为 `Aerie-Model-X`）只保存 Python 网关、桌面端、服务器端测试和本文档；`core/mobile_gateway.py` 不属于 Android 客户端仓库。
+- `E:\Agent_reply\android-client` 是独立 Git 工作树，`origin` 固定为 `https://github.com/Laser1209/Aerie-Android.git`；只保存 Gradle、Kotlin、Compose、Android 资源、客户端测试、客户端 CI 和从主控文档派生的客户端合同。
+- 父仓库必须忽略 `android-client/`，不得把 Android 的 `.git`、构建产物或客户端源文件作为 Aerie 服务器仓库的普通文件暂存。
+- 本文档继续是跨仓库的唯一主控文档。Android 仓库可保存接口合同副本，但接口、权限、端口或安全边界变动必须先更新本文档并同步相应测试，禁止两份文档漂移。
+
 ## 11. 配置与秘密
 
 计划新增的配置名称：
@@ -572,6 +580,14 @@ AERIE_DISABLE_QQ=false
 - [x] Phase 0/1 复核：`7890` 仍仅为本地管理 API，`7891` 的路由清单只有健康检查；端口、开关和主控文档一致。`git diff --check` 未报告空白错误。
 - [x] 用户已确认 `etta.top` 已成功由 Cloudflare 解析。此证据只确认 DNS/Zone 已激活；Phase 7 仍需在公共解析器重新核验并创建只指向 `127.0.0.1:7891` 的命名 Tunnel。
 
+### 2026-07-21：Android 仓库边界确认
+
+- [x] 用户明确要求 Android 客户端与 `Aerie-Model-X` 分开，目标远程仓库为 `https://github.com/Laser1209/Aerie-Android`。
+- [x] `git ls-remote https://github.com/Laser1209/Aerie-Android.git` 成功但无引用，确认远程仓库可访问且尚未初始化内容。
+- [x] 主仓库当前 `HEAD` 为 `71b8815 feat(mobile): add isolated Android gateway foundation`；该提交中的 Python 网关、服务器配置和 Python 测试保留在服务器仓库，不复制到 Android 仓库。
+- [x] 已将空远程克隆到 `E:\Agent_reply\android-client`，建立 Android 专用 `README.md` 与 `.gitignore`，并创建本地根提交 `a20f883 chore: initialize Android companion repository`。
+- [x] HTTPS 推送受 `github.com:443` 网络故障影响后，已验证 SSH 认证并将 `origin` 切换为 `git@github.com:Laser1209/Aerie-Android.git`；`git push -u origin main` 成功，远程 `main` 已发布本地根提交 `a20f883`。
+
 ## 17. 决策日志
 
 | 日期 | 决策 | 原因 |
@@ -589,6 +605,7 @@ AERIE_DISABLE_QQ=false
 | 2026-07-21 | 活动任务期间使用前台服务，不接云推送 | 保持执行可见性，不引入额外云服务和隐私依赖 |
 | 2026-07-21 | 离线请求恢复后手动确认 | 避免过期指令在未知时间自动执行 |
 | 2026-07-21 | 完整回归中的图表测试使用 pytest 临时目录 | 测试不应写入用户配置的生产办公目录；该修复不改变生产行为 |
+| 2026-07-21 | Android 客户端使用独立 `Aerie-Android` 仓库 | 防止 Kotlin/Gradle 客户端与 Python 服务器代码混库，同时保留跨仓库主控合同 |
 
 ## 18. 变更规则
 

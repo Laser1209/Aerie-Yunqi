@@ -72,6 +72,9 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Standalone Android client repository
+android-client/
+
 # OS
 *.lnk
 desktop.ini

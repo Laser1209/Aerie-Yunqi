@@ -49,6 +49,61 @@ def test_history_preflight_collects_read_only_release_blocker(monkeypatch):
     assert all("force push" not in item.lower() for item in report["pre_authorization_commands"])
 
 
+def test_history_preflight_blocks_high_risk_runtime_paths(monkeypatch):
+    from tools import history_remediation_preflight as preflight
+
+    monkeypatch.setattr(
+        preflight,
+        "_git_state",
+        lambda: {
+            "head": "abcdef1234567890",
+            "head_short": "abcdef1",
+            "branch": "Aerie-Model-X",
+            "clean": True,
+            "dirty_entries": [],
+            "remote_names": ["origin"],
+            "has_remote": True,
+        },
+    )
+    monkeypatch.setattr(preflight.scanner, "scan_workspace", lambda: ([], {"files_scanned": 7}))
+    monkeypatch.setattr(preflight.scanner, "scan_history", lambda: ([], {"commits_scanned": 3}))
+    monkeypatch.setattr(preflight, "_history_high_risk_paths", lambda: ["logs/verify_bridge.ps1"])
+
+    report = preflight.build_report(include_history=True)
+
+    assert report["history"]["finding_count"] == 0
+    assert report["history"]["high_risk_path_count"] == 1
+    assert report["release_gate"]["can_close_credential_history_gate"] is False
+    assert report["release_gate"]["reason"] == "high-risk runtime paths remain in git history"
+    assert any("runtime paths" in item for item in report["required_user_actions"])
+
+
+def test_high_risk_history_path_classifier():
+    from tools import history_remediation_preflight as preflight
+
+    blocked = [
+        "logs/chat_resp.json",
+        "uploads/private.png",
+        "data/aerie.db-wal",
+        "data/world.sqlite3-shm",
+        "data/backups/snapshot.json",
+        "NapCat/NapCat.Shell/config/napcat.json",
+        "electron/dist-win-unpacked/Aerie.exe",
+        "Spotlight/public/Aerie Setup.exe",
+        ".env",
+        "config/.env.local",
+    ]
+    allowed = [
+        ".env.example",
+        "documents/logging.md",
+        "electron/src/distribution.js",
+        "tests/test_database.py",
+    ]
+
+    assert all(preflight._is_high_risk_history_path(path) for path in blocked)
+    assert not any(preflight._is_high_risk_history_path(path) for path in allowed)
+
+
 def test_git_state_ignores_status_stat_cache_false_positive(monkeypatch):
     from tools import history_remediation_preflight as preflight
 

@@ -2,8 +2,9 @@
 
 This helper intentionally does not rewrite git history, delete files, rotate
 keys, push, or force push.  It only gathers current git state plus redacted
-provider-key scan summaries so the user can decide whether to authorize the
-destructive remediation plan documented in AI_Vibe_Coding/95.
+provider-key and high-risk runtime-path summaries so the user can decide
+whether to authorize the destructive remediation plan documented in
+AI_Vibe_Coding/95.
 
 Exit codes:
   0  preflight is clean enough to close the credential-history gate
@@ -27,6 +28,31 @@ if str(ROOT) not in sys.path:
 from tools import scan_provider_key_patterns as scanner
 
 
+_HIGH_RISK_HISTORY_PREFIXES = (
+    "logs/",
+    "uploads/",
+    "data/backups/",
+    "data/audit/",
+    "data/world_sidecar/",
+    "napcat/napcat.shell/config/",
+    "napcat/napcat.shell/cache/",
+)
+_HIGH_RISK_DATABASE_SUFFIXES = (
+    ".db",
+    ".db-journal",
+    ".db-shm",
+    ".db-wal",
+    ".sqlite",
+    ".sqlite-journal",
+    ".sqlite-shm",
+    ".sqlite-wal",
+    ".sqlite3",
+    ".sqlite3-journal",
+    ".sqlite3-shm",
+    ".sqlite3-wal",
+)
+
+
 def _git_lines(*args: str, timeout: int = 30) -> list[str]:
     proc = subprocess.run(
         ["git", *args],
@@ -40,6 +66,41 @@ def _git_lines(*args: str, timeout: int = 30) -> list[str]:
     if proc.returncode not in (0, 1):
         raise RuntimeError(proc.stderr.strip() or f"git {' '.join(args)} failed")
     return [line.rstrip("\n") for line in proc.stdout.splitlines()]
+
+
+def _is_high_risk_history_path(path: str) -> bool:
+    normalized = path.strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    lowered = normalized.casefold()
+    if not lowered:
+        return False
+    filename = lowered.rsplit("/", 1)[-1]
+    if lowered.startswith(_HIGH_RISK_HISTORY_PREFIXES):
+        return True
+    if filename == ".env" or (filename.startswith(".env.") and not filename.endswith(".example")):
+        return True
+    if lowered.endswith(_HIGH_RISK_DATABASE_SUFFIXES):
+        return True
+    if lowered == "electron/dist" or lowered.startswith("electron/dist/"):
+        return True
+    if lowered.startswith("electron/dist-") or lowered.startswith("electron/dist_"):
+        return True
+    return lowered.startswith("spotlight/public/") and lowered.endswith((".exe", ".blockmap"))
+
+
+def _history_high_risk_paths() -> list[str]:
+    historical_paths = _git_lines(
+        "-c",
+        "core.quotepath=false",
+        "log",
+        "--all",
+        "--format=",
+        "--name-only",
+        "--",
+        timeout=120,
+    )
+    return sorted({path for path in historical_paths if _is_high_risk_history_path(path)})
 
 
 def _git_state() -> dict[str, Any]:
@@ -106,18 +167,32 @@ def build_report(*, include_history: bool = True) -> dict[str, Any]:
 
     if include_history:
         history_findings, history_stats = scanner.scan_history()
+        high_risk_paths = _history_high_risk_paths()
     else:
         history_findings, history_stats = [], {"skipped": 1}
+        high_risk_paths = []
     history = _scan_summary(history_findings, history_stats)
+    history["high_risk_path_count"] = len(high_risk_paths)
+    history["high_risk_paths"] = high_risk_paths
 
-    can_close = git["clean"] and workspace["finding_count"] == 0 and history["finding_count"] == 0
+    can_close = (
+        git["clean"]
+        and workspace["finding_count"] == 0
+        and history["finding_count"] == 0
+        and history["high_risk_path_count"] == 0
+    )
     required_user_actions = []
     if history["finding_count"]:
-        required_user_actions.extend(
-            [
-                "Rotate or revoke any provider keys that may match the historical findings.",
-                "Explicitly authorize Git history rewrite rehearsal and cleanup before execution.",
-            ]
+        required_user_actions.append(
+            "Rotate or revoke any provider keys that may match the historical findings."
+        )
+    if history["high_risk_path_count"]:
+        required_user_actions.append(
+            "Remove high-risk runtime paths from every reachable Git ref before publication."
+        )
+    if history["finding_count"] or history["high_risk_path_count"]:
+        required_user_actions.append(
+            "Explicitly authorize Git history rewrite rehearsal and cleanup before execution."
         )
     if not git["has_remote"]:
         required_user_actions.append("Configure a Git remote before uploading cleanup results, or confirm local-only closure.")
@@ -158,6 +233,8 @@ def _gate_reason(
         return "provider-key shaped values remain in the current workspace"
     if history["finding_count"]:
         return "provider-key shaped values remain in git history"
+    if history.get("high_risk_path_count", 0):
+        return "high-risk runtime paths remain in git history"
     return "credential history gate can close"
 
 
@@ -177,7 +254,8 @@ def _print_text(report: dict[str, Any]) -> None:
     print(
         "SCAN "
         f"workspace_findings={report['workspace'].get('finding_count', 0)} "
-        f"history_findings={report['history'].get('finding_count', 0)}"
+        f"history_findings={report['history'].get('finding_count', 0)} "
+        f"history_high_risk_paths={report['history'].get('high_risk_path_count', 0)}"
     )
     print(
         "RELEASE_GATE "

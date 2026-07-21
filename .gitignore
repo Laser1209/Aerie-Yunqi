@@ -28,9 +28,7 @@ data/**/*.db-wal
 data/world_sidecar/
 data/backups/
 data/audit/
-logs/*.log
-logs/*.log.*
-!logs/.gitkeep
+/logs/
 *.log
 
 # Temporary files (Block-5D R4) — entire tree is git-ignored

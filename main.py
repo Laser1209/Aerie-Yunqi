@@ -55,6 +55,27 @@ def _setup_logging() -> None:
     )
 
 
+async def _start_optional_mobile_gateway(logger: logging.Logger):
+    """Start the separate mobile boundary only when it is explicitly enabled."""
+
+    from core.mobile_gateway import (
+        is_mobile_gateway_enabled,
+        start_mobile_gateway,
+    )
+
+    try:
+        if not is_mobile_gateway_enabled():
+            return None
+        runner = await start_mobile_gateway()
+        logger.info("[MOBILE_GATEWAY_READY] Aerie mobile gateway is ready")
+        return runner
+    except Exception:
+        # The desktop backend remains local and usable if the optional mobile
+        # boundary cannot bind.  The failure is explicit in the local logs.
+        logger.exception("[MOBILE_GATEWAY_UNAVAILABLE] mobile gateway did not start")
+        return None
+
+
 async def _main() -> None:
     _setup_logging()
     logger = logging.getLogger("aerie.main")
@@ -144,6 +165,8 @@ async def _main() -> None:
     runner = await start_api(host=host, port=port)
     logger.info("[READY] Aerie ready at http://%s:%d", host, port)
 
+    mobile_runner = await _start_optional_mobile_gateway(logger)
+
     stop_event = asyncio.Event()
 
     def _on_signal(*_):
@@ -160,6 +183,12 @@ async def _main() -> None:
         await stop_event.wait()
     finally:
         logger.info("shutting down...")
+        if mobile_runner is not None:
+            try:
+                await mobile_runner.cleanup()
+                logger.info("mobile gateway stopped")
+            except Exception:
+                logger.exception("mobile gateway shutdown failed")
         try:
             from config.persona_loader import get_config_reloader
             reloader = get_config_reloader()

@@ -6,6 +6,7 @@ feature_flags:
   identity_contract_v1: false
   image_assets_v1: false
   migration_framework_v1: true
+  mobile_gateway_v1: false
   persona_hub_source_v1: false
   proactive_delivery_v2: false
   world_image_candidates_v1: false

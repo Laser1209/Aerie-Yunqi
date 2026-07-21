@@ -40,7 +40,7 @@ export default function DownloadPage() {
               <p className="text-xs text-sky-50/70">Windows beta / Windows 内测版</p>
               <h2 className="mt-3 font-heading text-4xl italic leading-none md:text-6xl">Aerie · 云栖 {release.version}</h2>
               <p className="mt-5 max-w-xl text-sm font-light leading-relaxed text-white/70">
-                便携版适合直接放进自己的工作目录；Windows Setup 则提供标准安装流程。两种真实构建共享同一 beta 基线。
+                便携版适合直接放进自己的工作目录；Windows Setup 则提供标准安装流程。两种真实构建共享同一 beta.1 基线；公开主线源码可能包含更新的 feature-gated 能力。
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <a

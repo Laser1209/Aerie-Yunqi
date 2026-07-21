@@ -5,6 +5,7 @@ import StatusBadge from './StatusBadge'
 
 const filters: Array<{ value: JournalStatus; label: string; labelZh: string }> = [
   { value: 'shipped', label: 'Shipped', labelZh: '已发布' },
+  { value: 'mainline', label: 'Mainline', labelZh: '公开主线' },
   { value: 'building', label: 'Building', labelZh: '建设中' },
   { value: 'planned', label: 'Planned', labelZh: '计划中' },
 ]
@@ -16,6 +17,7 @@ interface JournalTimelineProps {
 export default function JournalTimeline({ entries }: JournalTimelineProps) {
   const [activeStatus, setActiveStatus] = useState<JournalStatus>('shipped')
   const reduceMotion = useReducedMotion()
+  const availableFilters = filters.filter((filter) => entries.some((entry) => entry.status === filter.value))
   const visibleEntries = entries.filter((entry) => entry.status === activeStatus)
 
   return (
@@ -25,8 +27,8 @@ export default function JournalTimeline({ entries }: JournalTimelineProps) {
           <p className="text-xs text-emerald-50/70">Release notes / 产品进程</p>
           <h2 id="journal-timeline-title" className="mt-2 font-heading text-3xl italic leading-none md:text-4xl">A living record</h2>
         </div>
-        <div className="liquid-glass grid w-full grid-cols-3 rounded-full p-1 md:w-auto" role="group" aria-label="Filter journal entries">
-          {filters.map((filter) => {
+        <div className="liquid-glass grid w-full grid-flow-col auto-cols-fr rounded-full p-1 md:w-auto" role="group" aria-label="Filter journal entries">
+          {availableFilters.map((filter) => {
             const isActive = filter.value === activeStatus
             return (
               <button

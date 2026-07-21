@@ -15,7 +15,7 @@ export default function RoadmapTracks({ tracks }: RoadmapTracksProps) {
           <p className="text-xs text-emerald-50/65">Product tracks / 产品化路线</p>
           <h2 id="product-tracks-title" className="mt-2 font-heading text-4xl italic leading-none md:text-5xl">Three paths, one local-first core.</h2>
         </div>
-        <p className="max-w-sm text-xs font-light leading-relaxed text-white/50">每条路线都以前一阶段的验收为入口，不把计划中的能力写成已经交付的承诺。</p>
+        <p className="max-w-sm text-xs font-light leading-relaxed text-white/50">三条路线已进入公开主线并通过阶段测试；feature flag 决定实际启用范围，不等同于 beta.1 安装包内容。</p>
       </div>
       <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {tracks.map((track, index) => (

@@ -64,7 +64,7 @@ export default function SiteHeader() {
       <div className="hidden h-12 w-12 md:block" />
 
       {open && (
-        <nav aria-label="Mobile navigation" className="liquid-glass absolute left-5 right-5 top-16 flex flex-col rounded-[1.25rem] p-2 md:hidden">
+        <nav aria-label="Mobile navigation" className="liquid-glass !absolute left-5 right-5 top-16 flex flex-col rounded-[1.25rem] p-2 md:hidden">
           {navigation.map((item) => (
             <NavLink
               key={item.path}

@@ -192,7 +192,7 @@ class QQClient:
         if self._disabled:
             logger.info("QQ client disabled by AERIE_DISABLE_QQ")
             self._running = False
-            self._set_state(STATE_DISCONNECTED)
+            self._emit_state(STATE_DISCONNECTED)
             return
         self._running = True
         url = f"ws://{self.host}:{self.port}"

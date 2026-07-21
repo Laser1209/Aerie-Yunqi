@@ -255,15 +255,18 @@ def test_async_task_manager():
     print("  🎉 异步任务管理器测试全部通过!\n")
 
 
-def test_data_tools():
+def test_data_tools(tmp_path, monkeypatch):
     """测试数据分析工具"""
     print("=" * 60)
     print("测试 6: 数据分析工具")
     print("=" * 60)
 
+    import core.office_tools as office_tools
     from core.office_tools import (
         tool_data_stats, tool_data_filter, tool_data_sort, tool_chart_generate
     )
+
+    monkeypatch.setattr(office_tools, "get_office_dir", lambda: tmp_path)
 
     test_data = [
         {"name": "产品A", "sales": 1200, "profit": 200},
@@ -300,6 +303,7 @@ def test_data_tools():
     )
     assert result["success"] is True
     assert "svg_path" in result
+    assert result["svg_path"] == str(tmp_path / "销售统计.svg")
     print(f"  ✅ 图表生成: {result['chart_type']}, 保存到 {result['svg_path']}")
 
     print("  🎉 数据分析工具测试全部通过!\n")

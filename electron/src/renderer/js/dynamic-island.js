@@ -75,7 +75,6 @@
     bindEvents();
     renderCapsule();
     renderExpanded();
-    startBreathParticles();
     bindIpcListeners();
     fetchInitialData();
   }
@@ -794,28 +793,6 @@
       });
     }
     if (!animFrame) animateParticles();
-  }
-
-  function startBreathParticles() {
-    setInterval(() => {
-      if (state !== "capsule") return;
-      const rect = capsuleEl.getBoundingClientRect();
-      const diRect = diEl.getBoundingClientRect();
-      const px = rect.left - diRect.left + rect.width / 2 + (Math.random() - 0.5) * 30;
-      const py = rect.top - diRect.top + rect.height / 2;
-      particles.push({
-        x: px, y: py,
-        vx: (Math.random() - 0.5) * 0.6,
-        vy: -0.4 - Math.random() * 0.6,
-        size: 2 + Math.random() * 2.5,
-        life: 1,
-        decay: 0.006 + Math.random() * 0.005,
-        type: Math.random() > 0.7 ? "heart" : "sparkle",
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 0.05,
-      });
-      if (!animFrame) animateParticles();
-    }, 600);
   }
 
   function animateParticles() {

@@ -136,17 +136,17 @@ def _git_state() -> dict[str, Any]:
 
 
 def _scan_summary(findings: list[scanner.Finding], stats: dict[str, int]) -> dict[str, Any]:
-    paths = sorted({finding.path for finding in findings})
+    paths = sorted({scanner.redact_text(finding.path) for finding in findings})
     patterns = sorted({finding.pattern for finding in findings})
     commits = sorted({finding.commit[:12] for finding in findings if finding.commit})
     samples = [
         {
             "scope": finding.scope,
             "pattern": finding.pattern,
-            "path": finding.path,
+            "path": scanner.redact_text(finding.path),
             "commit": finding.commit[:12] if finding.commit else None,
             "line": finding.line,
-            "snippet": finding.snippet,
+            "snippet": scanner.redact_text(finding.snippet) if finding.snippet else None,
         }
         for finding in findings[:10]
     ]
@@ -174,14 +174,24 @@ def build_report(*, include_history: bool = True) -> dict[str, Any]:
     history = _scan_summary(history_findings, history_stats)
     history["high_risk_path_count"] = len(high_risk_paths)
     history["high_risk_paths"] = high_risk_paths
+    workspace_read_errors = workspace_stats.get("read_errors", 0)
+    unconfirmed_pickaxe_commits = history_stats.get("unconfirmed_git_pickaxe_commits", 0)
+    history_scan_skipped = bool(history_stats.get("skipped", 0))
 
     can_close = (
         git["clean"]
         and workspace["finding_count"] == 0
+        and workspace_read_errors == 0
+        and not history_scan_skipped
         and history["finding_count"] == 0
+        and unconfirmed_pickaxe_commits == 0
         and history["high_risk_path_count"] == 0
     )
     required_user_actions = []
+    if workspace_read_errors:
+        required_user_actions.append(
+            "Resolve all unreadable workspace files and rerun the provider-key scan."
+        )
     if history["finding_count"]:
         required_user_actions.append(
             "Rotate or revoke any provider keys that may match the historical findings."
@@ -190,7 +200,19 @@ def build_report(*, include_history: bool = True) -> dict[str, Any]:
         required_user_actions.append(
             "Remove high-risk runtime paths from every reachable Git ref before publication."
         )
-    if history["finding_count"] or history["high_risk_path_count"]:
+    if unconfirmed_pickaxe_commits:
+        required_user_actions.append(
+            "Investigate all unconfirmed Git pickaxe candidates before closing the credential-history gate."
+        )
+    if history_scan_skipped:
+        required_user_actions.append(
+            "Run the full history scan before closing the credential-history gate."
+        )
+    if (
+        history["finding_count"]
+        or unconfirmed_pickaxe_commits
+        or history["high_risk_path_count"]
+    ):
         required_user_actions.append(
             "Explicitly authorize Git history rewrite rehearsal and cleanup before execution."
         )
@@ -231,8 +253,14 @@ def _gate_reason(
         return "working tree is not clean"
     if workspace["finding_count"]:
         return "provider-key shaped values remain in the current workspace"
+    if workspace.get("stats", {}).get("read_errors", 0):
+        return "workspace scan has unreadable files"
+    if history.get("stats", {}).get("skipped", 0):
+        return "git history scan was skipped"
     if history["finding_count"]:
         return "provider-key shaped values remain in git history"
+    if history.get("stats", {}).get("unconfirmed_git_pickaxe_commits", 0):
+        return "unconfirmed git pickaxe candidates remain in git history"
     if history.get("high_risk_path_count", 0):
         return "high-risk runtime paths remain in git history"
     return "credential history gate can close"
@@ -254,7 +282,13 @@ def _print_text(report: dict[str, Any]) -> None:
     print(
         "SCAN "
         f"workspace_findings={report['workspace'].get('finding_count', 0)} "
+        "workspace_read_errors="
+        f"{report['workspace'].get('stats', {}).get('read_errors', 0)} "
         f"history_findings={report['history'].get('finding_count', 0)} "
+        "history_scan_skipped="
+        f"{report['history'].get('stats', {}).get('skipped', 0)} "
+        "history_unconfirmed_pickaxe_commits="
+        f"{report['history'].get('stats', {}).get('unconfirmed_git_pickaxe_commits', 0)} "
         f"history_high_risk_paths={report['history'].get('high_risk_path_count', 0)}"
     )
     print(

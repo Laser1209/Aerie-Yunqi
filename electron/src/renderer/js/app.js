@@ -9,63 +9,97 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // ── Emotion dashboard ──────────────────────────
   const emotionDashboard = new EmotionDashboard();
-  emotionDashboard.init();
+
+  // Hidden panels initialize on first use. Building every panel and starting
+  // all polling loops before first paint caused a large startup burst.
+  const initialized = new Set();
+  const initOnce = (key, fn) => {
+    if (initialized.has(key)) return;
+    initialized.add(key);
+    try {
+      fn();
+    } catch (error) {
+      initialized.delete(key);
+      console.error(`[startup] ${key} init failed`, error);
+    }
+  };
+
+  const initPanel = (tab) => {
+    if (tab === "emotion") {
+      initOnce("emotion-dashboard", () => emotionDashboard.init());
+      if (window.emotionHistory) initOnce("emotion-history", () => window.emotionHistory.init());
+    }
+    if (tab === "memorial" && window.memorialPanel) {
+      initOnce("memorial", () => window.memorialPanel.init());
+    }
+    if (tab === "settings" && window.settingsPanel) {
+      initOnce("settings", () => window.settingsPanel.init());
+    }
+    if (tab === "data" && window.dataViewer) {
+      initOnce("data", () => window.dataViewer.init());
+    }
+    if (tab === "cognition" && window.cognitionPanel) {
+      initOnce("cognition", () => window.cognitionPanel.init());
+    }
+    if (tab === "persona-hub" && window.PersonaHubPanel) {
+      initOnce("persona-hub", () => {
+        window.personaHub = new PersonaHubPanel();
+        window.personaHub.init();
+      });
+    }
+    if (tab === "world-dashboard" && window.WorldDashboardPanel) {
+      initOnce("world-dashboard", () => {
+        window.worldDashboardPanel = new WorldDashboardPanel();
+        window.worldDashboardPanel.init();
+      });
+    }
+  };
+
+  const scheduleAfterFirstPaint = (fn) => {
+    requestAnimationFrame(() => {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(fn, { timeout: 1000 });
+      } else {
+        setTimeout(fn, 0);
+      }
+    });
+  };
+
+  // These controllers are global, but neither needs to block first paint.
+  scheduleAfterFirstPaint(() => {
+    if (window.ApprovalModal) {
+      initOnce("approval-modal", () => {
+        window.approvalModal = new ApprovalModal();
+        window.approvalModal.init();
+      });
+    }
+    if (window.OfficeModeController) {
+      initOnce("office-mode", () => {
+        window.officeMode = new OfficeModeController();
+        window.officeMode.init();
+      });
+    }
+  });
 
   // ── Emotion history curves (Phase 9 Batch 5) ───
-  if (window.emotionHistory) {
-    window.emotionHistory.init();
-  }
 
   // ── Memorial panel ──────────────────────────────
-  if (window.memorialPanel) {
-    window.memorialPanel.init();
-  }
 
   // ── Settings panel ──────────────────────────────
-  if (window.settingsPanel) {
-    window.settingsPanel.init();
-  }
 
   // ── v13.9.9: First-run self-check → jump to API Key setup ─
-  _runFirstRunSelfCheck();
 
   // ── Data viewer ─────────────────────────────────
-  if (window.dataViewer) {
-    window.dataViewer.init();
-  }
 
   // ── Cognition panel (Phase 9 Batch 4: brain center) ─
-  if (window.cognitionPanel) {
-    window.cognitionPanel.init();
-  }
 
   // ── v13.0: Permission approval modal ─
-  if (window.ApprovalModal) {
-    const approvalModal = new ApprovalModal();
-    approvalModal.init();
-    window.approvalModal = approvalModal;
-  }
 
   // ── v13.0: Persona Hub panel ─
-  if (window.PersonaHubPanel) {
-    const personaHub = new PersonaHubPanel();
-    personaHub.init();
-    window.personaHub = personaHub;
-  }
 
   // ── v13.0: Office Mode controller ─
-  if (window.OfficeModeController) {
-    const officeMode = new OfficeModeController();
-    officeMode.init();
-    window.officeMode = officeMode;
-  }
 
   // ── Phase 15: World Dashboard renderer shell ─
-  if (window.WorldDashboardPanel) {
-    const worldDashboardPanel = new WorldDashboardPanel();
-    worldDashboardPanel.init();
-    window.worldDashboardPanel = worldDashboardPanel;
-  }
 
   // ── Tab switching ──────────────────────────────
   document.querySelectorAll(".sidebar-tab").forEach((btn) => {
@@ -76,6 +110,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const tab = btn.getAttribute("data-tab");
       const panel = document.getElementById("panel-" + tab);
       if (panel) panel.classList.add("active");
+      initPanel(tab);
 
       // Notify panels of visibility
       emotionDashboard.setVisible(tab === "emotion");
@@ -96,6 +131,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   // ── Status health monitoring ──────────────────
+  // The self-check may activate settings; the tab handler above initializes
+  // the panel before the API-key subview is selected.
+  _runFirstRunSelfCheck();
+
   const statusText = document.getElementById("status-text");
   const statusDot = document.getElementById("status-dot");
   const statsBackend = document.getElementById("stats-backend");

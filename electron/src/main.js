@@ -1,5 +1,15 @@
 "use strict";
 const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen, Menu, dialog, Notification } = require("electron");
+// Hardware acceleration is the normal path. The dynamic island uses blur and
+// animation heavily, so forcing SwiftShader can consume an entire CPU core.
+// Keep a deliberate escape hatch for machines with broken GPU drivers.
+const useSoftwareRendering = process.env.AERIE_SOFTWARE_RENDERING === "1";
+if (useSoftwareRendering) app.disableHardwareAcceleration();
+const dynamicIslandEnabled = process.env.AERIE_DISABLE_DYNAMIC_ISLAND !== "1";
+// Electron's "floating" level is placed behind the Windows taskbar and can
+// lose the native TOPMOST flag. The island is intentionally visible above
+// normal and fullscreen app windows, so use the level that preserves TOPMOST.
+const DYNAMIC_ISLAND_TOP_LEVEL = process.platform === "win32" ? "screen-saver" : "floating";
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -7,6 +17,19 @@ const http = require("http");
 const { createCapabilityBroker } = require("./capability-broker");
 const { createPluginSupervisor } = require("./plugin-supervisor");
 const { createEnvFeatureFlags, createWorldDashboardHost } = require("./world-dashboard-host");
+
+// Development launchers and test harnesses may close their output pipe while
+// Electron stays alive. Without an error listener, later console writes turn a
+// harmless detached terminal into repeated main-process EPIPE dialogs.
+for (const stream of [process.stdout, process.stderr]) {
+  if (stream && typeof stream.on === "function") {
+    stream.on("error", (error) => {
+      if (error && error.code === "EPIPE") {
+        stream.write = () => false;
+      }
+    });
+  }
+}
 
 // ── Config ──────────────────────────────────────────
 const PY_PORT = 7890;
@@ -23,7 +46,7 @@ if (app.isPackaged) {
   PYTHON_ROOT = path.join(process.resourcesPath, "python");
   PYTHON_EXE = path.join(PYTHON_ROOT, ".venv", "Scripts", "python.exe");
   PY_MAIN = path.join(PYTHON_ROOT, "main.py");
-  ICON_PATH = path.join(process.resourcesPath, "icon.png");
+  ICON_PATH = path.join(__dirname, "..", "builder", "icon.ico");
 } else {
   PROJECT_ROOT = path.resolve(__dirname, "..", "..");
   PYTHON_ROOT = PROJECT_ROOT;
@@ -33,10 +56,33 @@ if (app.isPackaged) {
 }
 
 // ── State ──────────────────────────────────────────
+// Development launchers can provide an isolated profile when the default
+// Electron user-data directory is locked down or owned by another instance.
+// This must run before requestSingleInstanceLock() below.
+function configureElectronUserDataPath() {
+  const configuredPath = process.env.AERIE_USER_DATA_DIR;
+  if (!configuredPath) return;
+
+  const userDataPath = path.resolve(configuredPath);
+  try {
+    fs.mkdirSync(userDataPath, { recursive: true });
+    app.setPath("userData", userDataPath);
+    console.log("[main] Electron userData:", userDataPath);
+  } catch (error) {
+    console.error("[main] failed to configure Electron userData:", error.message);
+  }
+}
+
+configureElectronUserDataPath();
+console.log("[main] software rendering:", useSoftwareRendering);
+
 let pythonProc = null;
 let mainWindow = null;
 let tray = null;
 let dynamicIsland = null;
+let isQuitting = false;
+let mainWindowReady = false;
+let pendingMainNavigation = null;
 // R7.1: legacy brief popup/detail windows removed. The brief now
 // lives inside the main window as a right-side drawer (see
 // renderer/js/brief-drawer.js + styles/brief-drawer.css).
@@ -342,8 +388,60 @@ function apiRequest(opts) {
 }
 
 // ── Windows ────────────────────────────────────────
+function ensureDynamicIslandOnTop() {
+  if (!dynamicIsland || dynamicIsland.isDestroyed() || !dynamicIsland.isVisible()) return false;
+  dynamicIsland.setAlwaysOnTop(true, DYNAMIC_ISLAND_TOP_LEVEL);
+  dynamicIsland.moveTop();
+  return true;
+}
+
+const MAIN_TAB_ALIASES = Object.freeze({ calendar: "memorial" });
+
+function dispatchMainNavigation(tab, payload) {
+  if (!tab || !mainWindow || mainWindow.isDestroyed() || !mainWindowReady) return false;
+  try {
+    if (tab === "brief") {
+      if (payload === undefined) {
+        mainWindow.webContents.send("brief:show");
+      } else {
+        mainWindow.webContents.send("brief:show", payload);
+      }
+    } else {
+      mainWindow.webContents.send("ui:open-tab", MAIN_TAB_ALIASES[tab] || tab);
+    }
+  } catch (error) {
+    console.warn("[main] navigation dispatch failed:", error);
+    return false;
+  }
+  return true;
+}
+
+function flushPendingMainNavigation() {
+  if (!pendingMainNavigation) return false;
+  const navigation = pendingMainNavigation;
+  if (!dispatchMainNavigation(navigation.tab, navigation.payload)) return false;
+  if (pendingMainNavigation === navigation) pendingMainNavigation = null;
+  return true;
+}
+
+function queueMainNavigation(tab, payload) {
+  if (!tab) return false;
+  pendingMainNavigation = { tab, payload };
+  return flushPendingMainNavigation();
+}
+
+function hasBackgroundRecoverySurface() {
+  const hasTray = Boolean(tray && !tray.isDestroyed());
+  const hasVisibleIsland = Boolean(
+    dynamicIsland && !dynamicIsland.isDestroyed() && dynamicIsland.isVisible(),
+  );
+  return hasTray || hasVisibleIsland;
+}
+
 function createMainWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  console.log("[main] creating main window:", { width, height, argv: process.argv });
+  mainWindowReady = false;
 
   mainWindow = new BrowserWindow({
     width: Math.min(1280, width),
@@ -351,9 +449,8 @@ function createMainWindow() {
     minWidth: 900,
     minHeight: 600,
     frame: false,
-    transparent: true,
-    backgroundColor: "#00000000",
-    backgroundMaterial: "acrylic",
+    transparent: false,
+    backgroundColor: "#ffffff",
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -379,22 +476,113 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on("console-message", (_event, level, message, line, source) => {
-    console.log(`[RENDERER] ${message} (${source}:${line})`);
+    if (level >= 2 || process.env.AERIE_DEBUG_LOGS === "1") {
+      console.log(`[RENDERER] ${message} (${source}:${line})`);
+    }
+  });
+
+  let readyToShow = false;
+  const readyToShowTimer = setTimeout(() => {
+    if (readyToShow || !mainWindow || mainWindow.isDestroyed()) return;
+    console.error("[main] main window ready-to-show timeout; forcing visibility");
+    showMainWindow();
+  }, 8000);
+
+  mainWindow.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
+    console.error("[main] renderer did-fail-load:", { code, description, url, isMainFrame });
+  });
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    mainWindowReady = false;
+    console.error("[main] renderer process gone:", details);
+  });
+  mainWindow.webContents.on("unresponsive", () => {
+    console.error("[main] renderer became unresponsive");
+  });
+  mainWindow.webContents.on("responsive", () => {
+    console.log("[main] renderer responsive again");
+  });
+  mainWindow.webContents.on("did-start-loading", () => {
+    mainWindowReady = false;
+  });
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindowReady = true;
+    flushPendingMainNavigation();
   });
 
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   mainWindow.once("ready-to-show", () => {
+    readyToShow = true;
+    clearTimeout(readyToShowTimer);
+    console.log("[main] main window ready-to-show");
     if (isStartMinimizedArgPresent()) {
       mainWindow.hide();
     } else {
-      mainWindow.show();
+      mainWindow.center();
+      showMainWindow();
     }
+    console.log("[main] main window visibility:", {
+      visible: mainWindow.isVisible(),
+      bounds: mainWindow.getBounds(),
+      nativeHandle: mainWindow.getNativeWindowHandle().toString("hex"),
+    });
   });
-  mainWindow.on("closed", () => { mainWindow = null; });
+  mainWindow.on("show", () => {
+    console.log("[main] main window shown");
+    ensureDynamicIslandOnTop();
+  });
+  mainWindow.on("focus", ensureDynamicIslandOnTop);
+  mainWindow.on("restore", ensureDynamicIslandOnTop);
+  mainWindow.on("enter-full-screen", ensureDynamicIslandOnTop);
+  mainWindow.on("leave-full-screen", ensureDynamicIslandOnTop);
+  mainWindow.on("enter-html-full-screen", ensureDynamicIslandOnTop);
+  mainWindow.on("leave-html-full-screen", ensureDynamicIslandOnTop);
+  mainWindow.on("hide", () => console.log("[main] main window hidden"));
+  mainWindow.on("close", (event) => {
+    if (isQuitting) return;
+    if (hasBackgroundRecoverySurface()) {
+      event.preventDefault();
+      mainWindow.hide();
+      return;
+    }
+    isQuitting = true;
+    setImmediate(() => app.quit());
+  });
+  mainWindow.on("closed", () => {
+    console.log("[main] main window closed");
+    mainWindowReady = false;
+    mainWindow = null;
+  });
 
   // Broadcast maximize state changes to renderer so the button glyph can update
-  mainWindow.on("maximize", () => broadcastMaximizeState(true));
-  mainWindow.on("unmaximize", () => broadcastMaximizeState(false));
+  mainWindow.on("maximize", () => {
+    broadcastMaximizeState(true);
+    ensureDynamicIslandOnTop();
+  });
+  mainWindow.on("unmaximize", () => {
+    broadcastMaximizeState(false);
+    ensureDynamicIslandOnTop();
+  });
+}
+
+function showMainWindow(tab, payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (!app.isReady()) return false;
+    createMainWindow();
+  }
+
+  if (mainWindow.webContents.isCrashed()) {
+    mainWindowReady = false;
+    mainWindow.webContents.reload();
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.setSkipTaskbar(false);
+  mainWindow.setOpacity(1);
+  mainWindow.show();
+  mainWindow.moveTop();
+  mainWindow.focus();
+  ensureDynamicIslandOnTop();
+  if (tab) queueMainNavigation(tab, payload);
+  return true;
 }
 
 // ── Dynamic Island ────────────────────────────────
@@ -430,88 +618,43 @@ function createDynamicIsland() {
     },
   });
 
-  dynamicIsland.setAlwaysOnTop(true, "floating");
   dynamicIsland.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  dynamicIsland.setIgnoreMouseEvents(true, { forward: true });
+  ensureDynamicIslandOnTop();
+  // The collapsed native window is only 200x36, exactly the capsule hit area.
+  // Let it receive input directly; everything outside that small window is
+  // naturally click-through without a high-frequency cursor polling loop.
+  dynamicIsland.setIgnoreMouseEvents(false);
 
   dynamicIsland.loadFile(path.join(__dirname, "renderer", "dynamic-island.html"));
 
   dynamicIsland.webContents.on("did-finish-load", () => {
-    startIslandPenetrationPolling();
+    ensureDynamicIslandOnTop();
     startSystemStatusPolling();
     _startMediaPolling();
   });
 
+  dynamicIsland.on("show", () => {
+    ensureDynamicIslandOnTop();
+    _startMediaPolling();
+  });
+  dynamicIsland.on("hide", _stopMediaPolling);
+
   dynamicIsland.on("closed", () => {
-    stopIslandPenetrationPolling();
     stopSystemStatusPolling();
     _stopMediaPolling();
+    _cleanupOldThumbnail();
     dynamicIsland = null;
   });
 }
 
-// ── Dynamic Island Mouse Penetration System ───
-let _islandIgnoreState = true;
-let _islandHoverTimer = null;
-let _islandPollInterval = null;
+// ── Dynamic Island Mouse Input ──────────────
+let _islandIgnoreState = false;
 let _islandExpanded = false;
 
-function startIslandPenetrationPolling() {
-  if (_islandPollInterval) return;
-
-  _islandPollInterval = setInterval(() => {
-    if (!dynamicIsland || dynamicIsland.isDestroyed()) return;
-
-    if (_islandExpanded) {
-      setIslandIgnoreMouse(false);
-      return;
-    }
-
-    try {
-      const cursorPos = screen.getCursorScreenPoint();
-      const winBounds = dynamicIsland.getBounds();
-      const scaleFactor = screen.getPrimaryDisplay().scaleFactor || 1;
-
-      const inBounds =
-        cursorPos.x >= winBounds.x &&
-        cursorPos.x <= winBounds.x + winBounds.width &&
-        cursorPos.y >= winBounds.y &&
-        cursorPos.y <= winBounds.y + winBounds.height;
-
-      if (inBounds) {
-        if (_islandHoverTimer) {
-          clearTimeout(_islandHoverTimer);
-          _islandHoverTimer = null;
-        }
-        setIslandIgnoreMouse(false);
-      } else {
-        if (!_islandHoverTimer && !_islandIgnoreState) {
-          _islandHoverTimer = setTimeout(() => {
-            setIslandIgnoreMouse(true);
-            _islandHoverTimer = null;
-          }, 120);
-        }
-      }
-    } catch (_) {}
-  }, 30);
-}
-
-function stopIslandPenetrationPolling() {
-  if (_islandPollInterval) {
-    clearInterval(_islandPollInterval);
-    _islandPollInterval = null;
-  }
-  if (_islandHoverTimer) {
-    clearTimeout(_islandHoverTimer);
-    _islandHoverTimer = null;
-  }
-}
-
 function setIslandExpanded(expanded) {
-  _islandExpanded = !!expanded;
-  if (expanded) {
-    setIslandIgnoreMouse(false);
-  }
+  _islandExpanded = Boolean(expanded);
+  setIslandIgnoreMouse(false);
+  if (_mediaPollingActive) _scheduleMediaPoll(0);
 }
 
 function setIslandIgnoreMouse(ignore) {
@@ -537,6 +680,10 @@ function createTray() {
     return;
   }
   const icon = nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 });
+  if (icon.isEmpty()) {
+    console.warn("[main] tray icon is empty:", ICON_PATH);
+    return;
+  }
   tray = new Tray(icon);
   tray.setToolTip("Aerie · 云栖");
   // Block-2 T1: right-click context menu
@@ -548,9 +695,7 @@ function createTray() {
         if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
           mainWindow.hide();
         } else {
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.show();
-          mainWindow.focus();
+          showMainWindow();
         }
       },
     },
@@ -561,7 +706,7 @@ function createTray() {
         if (dynamicIsland.isVisible()) {
           dynamicIsland.hide();
         } else {
-          dynamicIsland.show();
+          dynamicIsland.showInactive();
         }
       },
     },
@@ -570,36 +715,19 @@ function createTray() {
       // R7.1: trigger the in-app right-side drawer (no separate window)
       label: "打开今日简报 / Open Brief",
       click: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.show();
-          mainWindow.focus();
-          try { mainWindow.webContents.send("brief:show"); } catch (_) {}
-        }
+        showMainWindow("brief");
       },
     },
     {
       label: "展开完整日报 / Full Brief",
       click: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.show();
-          mainWindow.focus();
-          try { mainWindow.webContents.send("brief:show", { expanded: true }); } catch (_) {}
-        }
+        showMainWindow("brief", { expanded: true });
       },
     },
     {
       label: "设置",
       click: () => {
-        if (mainWindow) {
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.show();
-          mainWindow.focus();
-        }
-        BrowserWindow.getAllWindows().forEach((w) => {
-          if (w && !w.isDestroyed()) {
-            try { w.webContents.send("ui:open-tab", "settings"); } catch (_) {}
-          }
-        });
+        showMainWindow("settings");
       },
     },
     { type: "separator" },
@@ -688,20 +816,11 @@ ipcMain.handle("world-dashboard:preview-creative", async (_event, payload) => {
 
 // Dynamic Island IPC
 ipcMain.on("ui:open-main", () => {
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  showMainWindow();
 });
 
 ipcMain.on("ui:open-quick-chat", () => {
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
-  try {
-    mainWindow.webContents.send("ui:open-tab", "chat");
-  } catch (_) {}
+  showMainWindow("chat");
 });
 
 ipcMain.on("ui:quit-app", () => {
@@ -744,15 +863,8 @@ ipcMain.handle("island:state-change", async (_event, { expanded }) => {
 });
 
 ipcMain.handle("island:open-main", async (_event, { tab }) => {
-  if (!mainWindow) return { ok: false };
   try {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-    if (tab) {
-      mainWindow.webContents.send("ui:open-tab", tab);
-    }
-    return { ok: true };
+    return { ok: showMainWindow(tab) };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -778,12 +890,7 @@ ipcMain.handle("system:notify", async (_event, data) => {
       silent: Boolean(data?.silent),
     });
     notification.on("click", () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-        mainWindow.webContents.send("ui:open-tab", "calendar");
-      }
+      showMainWindow("memorial");
     });
     notification.show();
     return { ok: true };
@@ -880,7 +987,17 @@ let _mediaState = {
   duration: 0,
   thumbnail: "",
 };
-let _mediaPollInterval = null;
+const MEDIA_QUERY_TIMEOUT_MS = 5000;
+const MEDIA_CONTROL_TIMEOUT_MS = 3000;
+const MEDIA_CONTROL_REFRESH_DELAY_MS = 150;
+const MEDIA_POLL_ACTIVE_MS = 5000;
+const MEDIA_POLL_IDLE_MS = 15000;
+let _mediaPollTimer = null;
+let _mediaPollingActive = false;
+let _mediaPollInFlight = false;
+let _mediaQueryPromise = null;
+let _mediaControlChain = Promise.resolve();
+let _mediaControlInFlight = null;
 let _lastThumbnailPath = null;
 
 const _SMTC_PS1 = `
@@ -984,24 +1101,50 @@ try {
 }
 `;
 
-function _fetchMediaState() {
+function _queryMediaState() {
   return new Promise((resolve) => {
+    const emptyState = {
+      playing: false,
+      title: "",
+      artist: "",
+      progress: 0,
+      duration: 0,
+      thumbnail: "",
+    };
     if (process.platform !== "win32") {
-      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" });
+      resolve(emptyState);
       return;
     }
-    const ps = spawn("powershell.exe", [
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-Command", _SMTC_PS1,
-    ]);
+    let settled = false;
+    let timeoutId = null;
+    const finish = (state = emptyState) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      resolve(state);
+    };
+    let ps;
+    try {
+      ps = spawn("powershell.exe", [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command", _SMTC_PS1,
+      ], { windowsHide: true });
+    } catch (_) {
+      finish();
+      return;
+    }
     let stdout = "";
     ps.stdout.on("data", (d) => (stdout += d.toString()));
     ps.stderr.on("data", () => {});
+    timeoutId = setTimeout(() => {
+      try { ps.kill(); } catch (_) {}
+      finish();
+    }, MEDIA_QUERY_TIMEOUT_MS);
     ps.on("close", () => {
       try {
         const data = JSON.parse(stdout.trim());
-        resolve({
+        finish({
           playing: !!data.playing,
           title: data.title || "",
           artist: data.artist || "",
@@ -1010,13 +1153,71 @@ function _fetchMediaState() {
           thumbnail: data.thumbnail || "",
         });
       } catch {
-        resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" });
+        finish();
       }
     });
-    ps.on("error", () => {
-      resolve({ playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" });
-    });
+    ps.on("error", () => finish());
   });
+}
+
+function _fetchMediaState() {
+  if (_mediaControlInFlight) return _mediaControlInFlight;
+  if (!_mediaQueryPromise) {
+    _mediaQueryPromise = _queryMediaState().finally(() => {
+      _mediaQueryPromise = null;
+    });
+  }
+  return _mediaQueryPromise;
+}
+
+function _runMediaControlProcess(action) {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") {
+      resolve();
+      return;
+    }
+    let settled = false;
+    let timeoutId = null;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      resolve();
+    };
+    let ps;
+    try {
+      ps = spawn("powershell.exe", [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command", _buildMediaControlScript(action),
+      ], { windowsHide: true });
+    } catch (_) {
+      finish();
+      return;
+    }
+    timeoutId = setTimeout(() => {
+      try { ps.kill(); } catch (_) {}
+      finish();
+    }, MEDIA_CONTROL_TIMEOUT_MS);
+    ps.on("close", finish);
+    ps.on("error", finish);
+  });
+}
+
+function _runMediaControlAndRefresh(action) {
+  const operation = _mediaControlChain.then(async () => {
+    if (_mediaQueryPromise) await _mediaQueryPromise;
+    await _runMediaControlProcess(action);
+    await new Promise((resolve) => setTimeout(resolve, MEDIA_CONTROL_REFRESH_DELAY_MS));
+    return _queryMediaState();
+  });
+  _mediaControlChain = operation.catch(() => _mediaState);
+  _mediaControlInFlight = operation;
+  const clearInFlight = () => {
+    if (_mediaControlInFlight === operation) _mediaControlInFlight = null;
+  };
+  void operation.then(clearInFlight, clearInFlight);
+  return operation;
 }
 
 function _cleanupOldThumbnail() {
@@ -1028,94 +1229,88 @@ function _cleanupOldThumbnail() {
   }
 }
 
-function _startMediaPolling() {
-  if (_mediaPollInterval) return;
-  _mediaPollInterval = setInterval(async () => {
+function _applyMediaState(state) {
+  const changed =
+    state.playing !== _mediaState.playing ||
+    state.title !== _mediaState.title ||
+    state.artist !== _mediaState.artist ||
+    state.thumbnail !== _mediaState.thumbnail;
+  if (state.thumbnail !== _mediaState.thumbnail) {
+    _cleanupOldThumbnail();
+    if (state.thumbnail) _lastThumbnailPath = state.thumbnail;
+  }
+  _mediaState = state;
+  if (changed && dynamicIsland && !dynamicIsland.isDestroyed() && dynamicIsland.isVisible()) {
+    dynamicIsland.webContents.send("island:media-update", _mediaState);
+  }
+}
+
+function _scheduleMediaPoll(delayMs) {
+  if (!_mediaPollingActive) return;
+  if (_mediaPollTimer) clearTimeout(_mediaPollTimer);
+  _mediaPollTimer = setTimeout(() => {
+    _mediaPollTimer = null;
+    void _pollMediaOnce();
+  }, delayMs);
+}
+
+async function _pollMediaOnce() {
+  if (!_mediaPollingActive || _mediaPollInFlight) return;
+  if (!dynamicIsland || dynamicIsland.isDestroyed() || !dynamicIsland.isVisible()) {
+    _stopMediaPolling();
+    return;
+  }
+  _mediaPollInFlight = true;
+  try {
     const state = await _fetchMediaState();
-    const changed =
-      state.playing !== _mediaState.playing ||
-      state.title !== _mediaState.title ||
-      state.artist !== _mediaState.artist ||
-      state.thumbnail !== _mediaState.thumbnail;
-    if (state.thumbnail && state.thumbnail !== _mediaState.thumbnail) {
-      _cleanupOldThumbnail();
-      _lastThumbnailPath = state.thumbnail;
+    _applyMediaState(state);
+  } finally {
+    _mediaPollInFlight = false;
+    if (_mediaPollingActive) {
+      const delay = _islandExpanded || _mediaState.playing
+        ? MEDIA_POLL_ACTIVE_MS
+        : MEDIA_POLL_IDLE_MS;
+      _scheduleMediaPoll(delay);
     }
-    _mediaState = state;
-    if (changed && dynamicIsland && !dynamicIsland.isDestroyed()) {
-      dynamicIsland.webContents.send("island:media-update", _mediaState);
-    }
-  }, 3000);
+  }
+}
+
+function _startMediaPolling() {
+  if (_mediaPollingActive) return;
+  if (!dynamicIsland || dynamicIsland.isDestroyed() || !dynamicIsland.isVisible()) return;
+  _mediaPollingActive = true;
+  _scheduleMediaPoll(MEDIA_POLL_ACTIVE_MS);
 }
 
 function _stopMediaPolling() {
-  if (_mediaPollInterval) {
-    clearInterval(_mediaPollInterval);
-    _mediaPollInterval = null;
+  _mediaPollingActive = false;
+  if (_mediaPollTimer) {
+    clearTimeout(_mediaPollTimer);
+    _mediaPollTimer = null;
   }
-  _cleanupOldThumbnail();
 }
 
 ipcMain.handle("island:media-get-state", async () => {
   const state = await _fetchMediaState();
-  _mediaState = state;
-  return { ok: true, data: state };
+  _applyMediaState(state);
+  return { ok: true, data: _mediaState };
 });
 
 ipcMain.handle("island:media-play-pause", async () => {
-  if (process.platform === "win32") {
-    try {
-      const ps = spawn("powershell.exe", [
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-Command", _buildMediaControlScript("PlayPause"),
-      ]);
-      ps.on("error", () => {});
-    } catch (_) {}
-  }
-  const state = await _fetchMediaState();
-  _mediaState = state;
-  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
-    dynamicIsland.webContents.send("island:media-update", _mediaState);
-  }
+  const state = await _runMediaControlAndRefresh("PlayPause");
+  _applyMediaState(state);
   return { ok: true, data: _mediaState };
 });
 
 ipcMain.handle("island:media-next", async () => {
-  if (process.platform === "win32") {
-    try {
-      const ps = spawn("powershell.exe", [
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-Command", _buildMediaControlScript("Next"),
-      ]);
-      ps.on("error", () => {});
-    } catch (_) {}
-  }
-  const state = await _fetchMediaState();
-  _mediaState = state;
-  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
-    dynamicIsland.webContents.send("island:media-update", _mediaState);
-  }
+  const state = await _runMediaControlAndRefresh("Next");
+  _applyMediaState(state);
   return { ok: true, data: _mediaState };
 });
 
 ipcMain.handle("island:media-prev", async () => {
-  if (process.platform === "win32") {
-    try {
-      const ps = spawn("powershell.exe", [
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-Command", _buildMediaControlScript("Previous"),
-      ]);
-      ps.on("error", () => {});
-    } catch (_) {}
-  }
-  const state = await _fetchMediaState();
-  _mediaState = state;
-  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
-    dynamicIsland.webContents.send("island:media-update", _mediaState);
-  }
+  const state = await _runMediaControlAndRefresh("Previous");
+  _applyMediaState(state);
   return { ok: true, data: _mediaState };
 });
 
@@ -1400,6 +1595,8 @@ ipcMain.handle("window:is-maximized", (event) => {
 
 ipcMain.handle("window:close", (event) => {
   const win = getSenderWindow(event);
+  // The main-window close listener decides between background hide and a
+  // normal quit based on whether a recovery surface is actually available.
   if (win) win.close();
   return true;
 });
@@ -1579,11 +1776,7 @@ if (!gotSingleInstanceLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 }
 
@@ -1592,7 +1785,7 @@ if (gotSingleInstanceLock) {
     configureBackendDataPath();
     startPythonBackend();
     createMainWindow();
-    createDynamicIsland();
+    if (dynamicIslandEnabled) createDynamicIsland();
     // Delay tray creation to avoid flash
     setTimeout(createTray, 2000);
     // R7.1: after backend is ready, wait 8s and tell the main window
@@ -1608,11 +1801,7 @@ if (gotSingleInstanceLock) {
         _bootBriefShown = true;
         clearInterval(_bootBriefTimer);
         setTimeout(() => {
-          try {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send("brief:show");
-            }
-          } catch (e) { console.warn("[main] open-brief send failed:", e); }
+          showMainWindow("brief");
         }, 8000);
       }
     }, 1000);
@@ -1628,6 +1817,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  isQuitting = true;
   _cleanupOldThumbnail();
   if (pythonProc) {
     pythonProc.kill();
@@ -1642,5 +1832,5 @@ app.on("before-quit", () => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+  showMainWindow();
 });

@@ -13,7 +13,7 @@ const cards: CapabilityCard[] = [
     icon: DocumentIcon,
     title: 'Office Mode 办公模式',
     tags: ['文档写作', '文件整理', '任务检测', '豆包优先'],
-    body: '7 大办公工具与智能任务检测，从文档写作到文件整理，预览执行、7 天可撤销，办公学习一个就够了。',
+    body: '26 个静态注册办公工具与智能任务检测，从文档写作到文件整理，预览执行、7 天可撤销，办公学习一个就够了。',
   },
   {
     icon: LightbulbIcon,

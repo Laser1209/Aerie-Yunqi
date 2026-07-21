@@ -13,10 +13,10 @@ export default function JournalPage() {
           <PageIntro
             label="Journal"
             title="What shipped. What's next."
-            description="从版本记录到升级路线，这里只写已经交付、正在建设和经过门禁的下一步。"
+            description="从发布包到公开主线，这里分别记录已经交付的版本与通过阶段测试、仍受 feature flag 控制的源码能力。"
           />
           <p className="max-w-sm text-sm font-light leading-relaxed text-white/55 lg:pb-1">
-            The changelog is evidence, not decoration. 发布事实来自 CHANGELOG；未来能力来自 AI Vibe Coding 阶段文档。
+            Release facts come from GitHub Release and CHANGELOG. 主线能力来自阶段状态与验收证据，不与 beta.1 下载包混写。
           </p>
         </header>
 

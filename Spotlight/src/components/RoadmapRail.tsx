@@ -6,7 +6,7 @@ interface RoadmapRailProps {
 }
 
 export default function RoadmapRail({ milestones }: RoadmapRailProps) {
-  const current = milestones.filter((milestone) => milestone.status === 'shipped' || milestone.status === 'building')
+  const current = milestones.filter((milestone) => ['shipped', 'mainline', 'building'].includes(milestone.status))
   const next = milestones.filter((milestone) => milestone.status === 'planned' || milestone.status === 'gated')
 
   const renderMilestones = (items: RoadmapMilestone[]) => (
@@ -28,13 +28,15 @@ export default function RoadmapRail({ milestones }: RoadmapRailProps) {
   return (
     <aside className="liquid-glass h-fit rounded-[1.1rem] p-6 md:p-7" aria-label="Product roadmap">
       <section>
-        <h2 className="mb-5 text-xs font-medium uppercase text-cyan-50/80">Now / 已抵达与正在建设</h2>
+        <h2 className="mb-5 text-xs font-medium uppercase text-cyan-50/80">Current / 已发布与主线</h2>
         {renderMilestones(current)}
       </section>
-      <section className="mt-8 border-t border-white/10 pt-7">
-        <h2 className="mb-5 text-xs font-medium uppercase text-white/60">Next / 下一段路线</h2>
-        {renderMilestones(next)}
-      </section>
+      {next.length > 0 && (
+        <section className="mt-8 border-t border-white/10 pt-7">
+          <h2 className="mb-5 text-xs font-medium uppercase text-white/60">Next / 下一段路线</h2>
+          {renderMilestones(next)}
+        </section>
+      )}
     </aside>
   )
 }

@@ -1,0 +1,8 @@
+# Audited false positives: documented placeholders and vendored NapCat constants.
+49c19f15972cc5a14fa42686bb197b8b32bb4bd2:documents/Agent_v/GLM/GLM-5-Turbo.md:curl-auth-header:113
+49c19f15972cc5a14fa42686bb197b8b32bb4bd2:documents/Agent_v/GLM/GLM-5-Turbo.md:curl-auth-header:117
+f93a721856d7d0d91ef871f30e0086d53978a6e0:NapCat/NapCat.Shell/static/assets/xterm-CKd-j0KT.js:generic-api-key:1
+f93a721856d7d0d91ef871f30e0086d53978a6e0:NapCat/NapCat.Shell/static/assets/xterm-CKd-j0KT.js:generic-api-key:7
+f93a721856d7d0d91ef871f30e0086d53978a6e0:NapCat/NapCat.Shell/napcat.mjs:generic-api-key:9515
+f93a721856d7d0d91ef871f30e0086d53978a6e0:NapCat/NapCat.Shell/napcat.mjs:generic-api-key:9516
+f93a721856d7d0d91ef871f30e0086d53978a6e0:NapCat/NapCat.Shell/napcat.mjs:generic-api-key:75325

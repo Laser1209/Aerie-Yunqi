@@ -7,6 +7,8 @@ __pycache__/
 *.egg
 .eggs/
 .pytest_cache/
+.pytest-*/
+tmp_pytest*.txt
 .coverage
 htmlcov/
 
@@ -19,11 +21,17 @@ ENV/
 # Data & logs (runtime artifacts)
 data/*.db
 data/*.db-journal
+data/**/*.db
+data/**/*.db-journal
+data/**/*.db-shm
+data/**/*.db-wal
 data/world_sidecar/
-data/backups/*.zip
+data/backups/
+data/audit/
 logs/*.log
 logs/*.log.*
 !logs/.gitkeep
+*.log
 
 # Temporary files (Block-5D R4) — entire tree is git-ignored
 tmp/
@@ -33,6 +41,14 @@ userData/
 dist/
 build/
 out/
+electron/dist*/
+Spotlight/public/*.exe
+Spotlight/public/*.blockmap
+
+# Local account state and uploads
+NapCat/NapCat.Shell/config/
+NapCat/NapCat.Shell/cache/
+uploads/
 
 # Environment & secrets
 .env

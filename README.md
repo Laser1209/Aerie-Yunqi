@@ -105,8 +105,8 @@ LOG_LEVEL=INFO
 ┌──────────────────────────────────────────────────────────┐
 │  Electron Desktop Shell (UI + IPC)                       │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │ 主窗口     │  │ 悬浮球     │  │ 侧边栏     │  │ 托盘      │  │
-│  │ Main     │  │ Ball     │  │ Sidebar  │  │ Tray     │  │
+│  │ 主窗口     │  │灵动岛     │  │ 侧边栏     │  │ 托盘      │  │
+│  │ Main     │  │ Land     │  │ Sidebar  │  │ Tray     │  │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  │
 │       └──────────────┴──────────────┴──────────────┘      │
 │                      ▲  contextBridge                     │
@@ -177,14 +177,10 @@ LOG_LEVEL=INFO
 
 ## 🎮 使用说明 / Usage
 
-### 悬浮球 / Floating Ball
+### 灵动岛 / Floating land
 
-* **拖拽** / Drag：可移动到任意位置，松手自动靠边吸附
-  Drag to any position, auto-edges-snap on release.
 * **单击** / Click：展开 380×480 聊天窗
   Click to expand into 380×480 chat window.
-* **双击** / Double-click：最大化为主窗口（1280×800）
-  Double-click to maximize to main window.
 * **5s 无操作** / 5s idle：半透明（0.3 opacity）
   Semi-transparent after 5s idle.
 
@@ -211,7 +207,7 @@ LOG_LEVEL=INFO
 | 现象 / Symptom | 原因 / Cause | 解决 / Fix |
 | --- | --- | --- |
 | 双击 .exe 闪退 / Crashes on launch | Python 路径不对 | 检查 `userData/config.json` 的 `python_path` |
-| 伊塔不回复 / Yita silent | API 密钥未配置 | 编辑 `.env` 填入 `DASHSCOPE_API_KEY` |
+| 不回复 /  silent | API 密钥未配置 | 编辑 `.env` 填入 `DASHSCOPE_API_KEY` |
 | QQ 收不到消息 / No QQ messages | NapCat 未启动 | 运行 `NapCat\NapCat.Shell\launcher-user.bat` |
 | 端口 7890 被占 / Port 7890 busy | 上一进程未退出 | `netstat -ano \| findstr :7890` → kill PID |
 | 早安不触发 / No morning_brief | 时区不对 | 确认 `Asia/Shanghai` 时区 |
@@ -246,7 +242,7 @@ LOG_LEVEL=INFO
 ## 📜 许可证 / License
 
 本项目为 **私有项目 / Private project**，作者 Laser。
-仅供个人使用，不对外发布。
+仅供学习探索使用，不可商用。
 
 This is a **private project** by Laser. For personal use only; not for public distribution.
 

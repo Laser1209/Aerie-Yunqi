@@ -4,6 +4,9 @@ import time
 
 import pytest
 
+from communication import qq_client as qq_client_module
+from communication.qq_client import QQClient
+from communication.qq_client import STATE_DISCONNECTED
 from communication.router import RouteMode
 from communication.router import Router
 from communication.splitter import SemanticMessageSplitter
@@ -11,6 +14,25 @@ from communication.recall_manager import RecallManager
 
 MASTER_QQ = 3998874040
 FRIEND_QQ = 12345678
+
+
+class TestQQClient:
+    """Test QQ lifecycle behavior without touching NapCat or the network."""
+
+    @pytest.mark.asyncio
+    async def test_connect_returns_cleanly_when_disabled(self, monkeypatch):
+        monkeypatch.setenv("AERIE_DISABLE_QQ", "true")
+
+        def fail_if_port_checked(*_args, **_kwargs):
+            raise AssertionError("disabled QQ must not probe the network")
+
+        monkeypatch.setattr(qq_client_module, "_port_is_open", fail_if_port_checked)
+        client = QQClient({"ws_port": 3001})
+
+        await client.connect()
+
+        assert client._running is False
+        assert client.state == STATE_DISCONNECTED
 
 
 class TestRouter:

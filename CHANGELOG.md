@@ -9,6 +9,38 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased] - 2026-07-21
+
+> **文档同步 / Documentation Sync**
+> 根据当前仓库结构、运行入口、Spotlight 官网、World Service 与 Phase 测试状态，同步根文档说明。
+
+### 📝 Documentation / 文档
+- **README.md 当前状态更新**：补充 Electron 桌面端、Python 后端、NapCat、Spotlight 官网、World Service、Phase 0-15 测试与发布资源状态
+- **线上官网地址同步**：在当前状态、快速开始、发布资源与文档索引中补充 `https://laser1209.github.io/Aerie_Spotlight/`
+- **运行说明校准**：按当前源码结构整理 Python 后端、NapCat、Electron 与 Spotlight 的启动流程
+- **验证命令校准**：保留 `pytest tests`、重点 Phase 测试、Electron `check:all` 与 Spotlight 构建命令，移除未在 `electron/package.json` 暴露的 `npm test` 指引
+- **项目结构更新**：新增 `world_service/`、`Spotlight/`、`docs/`、`.trae/documents/` 等当前实际目录说明
+- **配置与排障更新**：补充配置热加载、运行数据、日志、官网构建与发布资源说明
+
+### Fixed / 修复
+- **灵动岛原生置顶**：Windows 使用保留 `WS_EX_TOPMOST` 的窗口层级，并在主窗口显示、聚焦、最大化、还原和全屏切换后重新确认置顶
+- **窗口生命周期**：二次启动统一唤回现有窗口；只有托盘或可见灵动岛可恢复窗口时才执行“关闭即隐藏”
+- **导航时序**：主窗口加载完成前缓存 tab/日报导航，修正灵动岛日报入口与通知日历入口的目标协议
+- **打包托盘图标**：打包态改用实际进入 `app.asar` 的 `builder/icon.ico`
+- **API 路由与日报问候**：限制 self-evolve 详情路由为整数，并将日报日期传入问候生成合同
+- **渲染安全**：恢复 Electron 默认 renderer sandbox，保持 `contextIsolation` 与禁用 `nodeIntegration`
+
+### Performance / 性能
+- **首屏初始化**：隐藏面板改为首次进入时初始化，全局控制器延后到首帧之后启动
+- **日报合成**：收敛为单层背景模糊，移除嵌套 filter、位移动画和会触发 sibling layer 丢失的 hover transform
+- **灵动岛空闲负载**：移除常驻粒子循环；媒体状态查询改为单飞、带超时的自适应轮询，隐藏时暂停
+
+### Tests / 测试
+- 新增日报 compositor、renderer 性能、窗口生命周期、导航队列、媒体轮询与原生置顶合同测试
+- 新增 self-evolve 静态路由与日报日期传递回归测试
+
+---
+
 ## [0.1.0-beta.1] - 2026-07-19
 
 > **内测基准版本 / Internal Beta Baseline**

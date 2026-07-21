@@ -137,6 +137,54 @@ class TestToolsListEndpoint:
         assert "count" in data
 
 
+def test_self_evolve_stats_route_is_not_captured_by_detail(monkeypatch):
+    expected = {"total": 4, "pending": 1, "approved": 2, "rejected": 1, "rolled_back": 0}
+    evolver = MagicMock()
+    evolver.stats.return_value = expected
+    monkeypatch.setattr(api_server, "_get_self_evolver", lambda: evolver)
+
+    response = client.get("/api/self_evolve/stats")
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+
+def test_brief_greeting_receives_date(monkeypatch):
+    from core import brief_fetcher
+    from core import brain as brain_module
+
+    sections = {
+        "date": "2026-07-21",
+        "time_of_day": "afternoon",
+        "todo_stats": {"remaining": 2},
+        "weather": {"city": "Jinan"},
+        "ai_news": [],
+    }
+    brain = MagicMock()
+    brain.compose_brief_greeting = AsyncMock(return_value="Good afternoon")
+    brain.compose_brief = AsyncMock(return_value="Brief")
+    monkeypatch.setattr(brain_module, "Brain", lambda: brain)
+    monkeypatch.setattr(brief_fetcher, "load_brief", MagicMock(return_value=None))
+    monkeypatch.setattr(
+        brief_fetcher,
+        "run_all",
+        AsyncMock(side_effect=[sections.copy(), sections.copy()]),
+    )
+    monkeypatch.setattr(brief_fetcher, "save_brief", MagicMock())
+
+    today_response = client.get("/api/brief/today")
+    run_response = client.post("/api/brief/run")
+
+    assert today_response.status_code == 200
+    assert run_response.status_code == 200
+    assert today_response.json()["brief"]["greeting"] == "Good afternoon"
+    assert run_response.json()["brief"]["greeting"] == "Good afternoon"
+    assert [call.kwargs["date_str"] for call in brain.compose_brief_greeting.await_args_list] == [
+        today_response.json()["date"],
+        "2026-07-21",
+    ]
+
+
 class TestChatSendEndpoint:
     """Test POST /api/chat/send."""
 

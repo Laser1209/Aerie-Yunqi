@@ -870,6 +870,7 @@ class BriefDrawer {
   _setExpanded(on, redraw) {
     this._expanded = !!on;
     this._drawer.classList.toggle("brief-drawer--expanded", this._expanded);
+    this._backdrop.classList.toggle("is-expanded", this._expanded);
     this._expandBtn.classList.toggle("is-expanded", this._expanded);
     this._expandLabel.textContent = this._expanded ? "收起" : "展开完整";
     const svg = this._expandBtn.querySelector("svg");

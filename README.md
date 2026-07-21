@@ -1,256 +1,258 @@
 # Aerie · 云栖 v0.1.0-beta.1
 
 > **本地优先的 AI 桌面伴侣 / Local-first AI desktop companion**
-> 你的私人 AI · 伊塔 · 在 Windows 11 上随时待命。办公学习 / 情感陪伴 / 电脑操控 / 主动关怀，一个就够了。
+> 你的私人 AI · 伊塔 · 在 Windows 11 上随时待命。办公学习、情感陪伴、电脑操控、主动关怀、世界模拟与多模态工作流，一个就够了。
 
-**Aerie · 云栖** 是一款本地运行的 AI 桌面伴侣应用。它由 **Electron 桌面壳** + **Python 智能内核** 组成，通过 **NapCat** 接入 QQ，内置**办公模式**、**双层回复校验**、**事件驱动主动推送**，支持**电脑操控 / 文件整理 / 文档写作 / 自进化**等高级能力。
-
-> **Aerie · 云栖** is a local-first AI desktop companion. It is composed of an **Electron desktop shell** + **Python intelligent core**, bridges to QQ via **NapCat**, features **Office Mode**, dual-layer response validation, event-driven proactive messaging, and supports computer control / file organization / document writing / self-evolution.
+**Aerie · 云栖** 是一个本地优先的 AI 桌面伴侣项目。当前仓库由 **Electron 桌面壳**、**Python 智能内核**、**NapCat QQ 桥接**、**Spotlight 官网** 与 **World Service 世界模拟侧车** 组成，版本号仍锁定在内测基线 `0.1.0-beta.1`，但代码树已经进入后续 R/Phase 能力实装状态。
 
 ---
 
-## ✨ 核心特性 / Key Features
+## 当前状态 / Current Status
 
-| 模块 / Module | 说明 / Description |
-| --- | --- |
-| **🪟 Electron 桌面壳 / Electron Shell** | 灵动岛 + 聊天窗 + 侧边栏 + 托盘图标 / Dynamic Island + chat window + sidebar + tray |
-| **🧠 Python 智能内核 / Python Brain** | 多 Provider AI 调度（Qwen / DeepSeek / 豆包 / MiniMax 等）/ Multi-provider LLM orchestration |
-| **👤 Persona Hub 人设基础设施** | 可自定义人设模板，随时切换 / Customizable persona templates, switch anytime |
-| **💼 办公模式 / Office Mode** | 7 大办公工具 + 豆包模型优先 + 设备识别 + 智能任务检测 / 7 office tools + Doubao priority + device detection |
-| **✅ 双层回复校验 / Response Validation** | Accuracy Guard（准确合规） + Quality Judge（质量情绪）/ Accuracy Guard + Quality Judge |
-| **💓 情感引擎 / Emotion Engine** | PAD 三维模型 + 4 槽累积阈值系统（角色磨损）/ PAD model + 4-slot cumulative threshold |
-| **⏰ 主动推送 / Proactive Messenger** | 三类触发源：定时 + 情绪 + 事件 / 3 trigger types: cron + emotion + event |
-| **🤖 QQ 接入 / QQ Bridge** | NapCat OneBot11 WebSocket / NapCat OneBot11 WebSocket |
-| **🖱️ 电脑操控 / Computer Control** | 3 级权限 + 键鼠 + 截图 + UIA 自动化 / 3 permission levels + mouse/keyboard + screenshot + UIA |
-| **📁 文件整理 / File Organizer** | AI 智能分类 + 预览执行 + 7 天撤销 / AI classification + preview + 7-day undo |
-| **📝 文档写作 / Doc Writer** | 5 类模板 + 4 种导出 + 3 种样式 / 5 templates + 4 export formats + 3 styles |
-| **🧬 自进化 L4 / Self-Evolution** | 代码自修改 + 4 道安全闸门 + 24h 回滚 / Code self-modify + 4 safety gates + 24h rollback |
-| **🛠 20+ 工具系统 / 20+ Tools** | 知识库 / 待办 / 日历 / 音乐 / 天气 / 截图 / 系统 / ... / KB / todo / calendar / music / weather / screenshot / system / ... |
-| **🎨 5+ 主题切换 / Themes** | 伊塔粉 / 深夜紫 / 樱白 / 海蓝 / 森绿 / Yita Pink / Midnight Purple / Sakura / Ocean / Forest |
-| **💾 数据备份 / Backup** | 每日 04:00 自动 + 一键迁移 zip / Daily 04:00 auto + one-click zip migration |
-| **🔐 高权限 / Elevated Privileges** | UAC 提权 + 任务计划 / UAC + Task Scheduler |
-| **🩹 故障自愈 / Self-Healing** | 14 类故障自动恢复 / 14 failure categories auto-recovery |
+| 项目 / Item                        | 状态 / Status                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **版本 / Version**           | `0.1.0-beta.1` 内测基线                                                                                                                   |
+| **桌面端 / Desktop**         | Electron 28 + 渲染层多面板 UI                                                                                                               |
+| **后端 / Backend**           | Python 3.10+ aiohttp + asyncio                                                                                                              |
+| **QQ 接入 / QQ Bridge**      | NapCat OneBot11 WebSocket                                                                                                                   |
+| **官网 / Spotlight**         | [https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/) · React 18 + Vite 6 + Tailwind + Framer Motion |
+| **世界模拟 / World Service** | 独立 Python sidecar + SQLite storage                                                                                                        |
+| **验证 / Tests**             | 覆盖 Phase 0-15、v13.9、E2E 与 Electron 检查文件                                                                                            |
+| **交付 / Release**           | `Spotlight/src/config/release.ts` 指向 `v0.1.0-beta.1` 便携版与安装包                                                                   |
 
 ---
 
-## 🚀 快速开始 / Quick Start
+## 核心能力 / Key Capabilities
 
-### 方式 1 · 便携版（推荐）/ Portable (Recommended)
+| 模块 / Module                                     | 说明 / Description                                        |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| **Electron 桌面壳 / Electron Shell**        | 主窗口、灵动岛、侧边栏、托盘、CSP 安全渲染层              |
+| **Python 智能内核 / Python Brain**          | 多 Provider 调度、预算跟踪、上下文构建、消息流水线        |
+| **Persona Hub / 人设基础设施**              | Persona 模板、校验、投影、配置热加载                      |
+| **情感与关系引擎 / Emotion & Relationship** | PAD 情绪、累积阈值、欲望引擎、关系建模、拟人化节奏        |
+| **主动推送 / Proactive Messenger**          | cron、事件、情绪触发，支持频控、静默时段与反馈闭环        |
+| **办公模式 / Office Mode**                  | 办公任务识别、工具矩阵、任务规划、异步任务执行            |
+| **电脑操控 / Computer Control**             | 权限分级、键鼠、截图、UIA、受限 Shell、审计日志           |
+| **文件与文档 / File & Docs**                | 文件整理、文档写作、上传处理、图片工作流                  |
+| **多模态 / Multimodal**                     | 图片输入、TTS 输出、语音与 QQ 深耕能力                    |
+| **世界模拟 / World Simulation**             | world port、domain、sidecar、dashboard API 与候选图片管线 |
+| **自进化 / Self Evolution**                 | L1-L4 演进、Skill 创建、安全沙箱、代码修改闸门            |
+| **Spotlight 官网 / Web Spotlight**          | 6 页面产品站、发布下载页、Remotion 视频素材工程           |
 
-1. 解压 `Aerie-9.0.0-Portable.zip` 到任意目录
-   Extract `Aerie-9.0.0-Portable.zip` to any folder.
-2. 双击 `Aerie · 云栖.exe`
-   Double-click `Aerie · 云栖.exe`.
-3. 首次运行会提示授予管理员权限（用于自启动 + 任务计划）
-   First run prompts for admin privileges (for autostart + Task Scheduler).
+---
 
-### 方式 2 · 从源码运行 / From Source
+## 项目结构 / Repository Layout
 
-```bash
-# 1. 安装 Python 依赖 / Install Python deps
+```text
+.
+├─ main.py                    # Python 后端入口
+├─ core/                      # Agent、API、Pipeline、工具、情感、世界模拟适配
+├─ communication/             # QQ/NapCat 通讯层
+├─ config/                    # settings/persona/proactive 配置与加载器
+├─ memory/ knowledge/ voice/  # 记忆、知识库、语音输出
+├─ world_service/             # 世界模拟 sidecar 服务
+├─ electron/                  # Electron 桌面应用
+├─ Spotlight/                 # React/Vite 官网与 Remotion 素材工程
+├─ NapCat/                    # NapCat Shell 与 QQ 协议客户端资源
+├─ tests/                     # Python 单测、E2E、Phase 验证
+├─ tools/ scripts/            # 诊断、迁移、验证、构建辅助脚本
+├─ documents/ docs/           # 设计、排障、实施记录
+└─ data/ logs/                # 本地运行数据与日志
+```
+
+---
+
+## 快速开始 / Quick Start
+
+### 1. 准备 Python 环境
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
 
-# 2. 启动 NapCat（QQ 协议客户端）/ Start NapCat
+### 2. 配置环境变量
+
+复制 `.env.example` 为 `.env`，至少填写一个模型 API Key。
+
+```env
+DASHSCOPE_API_KEY=sk-xxx
+DEEPSEEK_API_KEY=sk-xxx
+GEMINI_API_KEY=AIza-xxx
+SELF_QQ=123456789
+HTTP_API_PORT=7890
+NAPCAT_WS_URL=ws://127.0.0.1:3001
+LOG_LEVEL=INFO
+```
+
+### 3. 启动 NapCat
+
+```powershell
 cd NapCat\NapCat.Shell
-launcher-user.bat
+.\launcher-user.bat
+```
 
-# 3. 启动 Python 后端 / Start Python backend
-cd ../..
+### 4. 启动 Python 后端
+
+```powershell
 python main.py
+```
 
-# 4. 启动 Electron 前端（新终端）/ Start Electron (new terminal)
+后端默认监听 `http://127.0.0.1:7890`，启动日志会输出 git commit、进程时间与 `[READY]` 标记。
+
+### 5. 启动 Electron 桌面端
+
+```powershell
 cd electron
 npm install
 npm start
 ```
 
-### 配置 .env / Configure .env
+### 6. 访问或本地启动 Spotlight 官网
 
-```env
-# 复制 .env.example → .env，然后填入 API 密钥
-# Copy .env.example → .env and fill API keys
+线上官网：[https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/)
 
-DASHSCOPE_API_KEY=sk-xxx          # Qwen (主 / primary)
-DEEPSEEK_API_KEY=sk-xxx           # DeepSeek (备 / backup)
-GEMINI_API_KEY=AIza-xxx           # Gemini (专 / specialized)
-SELF_QQ=123456789                 # 你的 QQ / your QQ
-HTTP_API_PORT=7890                # Python API 端口
-NAPCAT_WS_URL=ws://127.0.0.1:3001 # NapCat WebSocket
-LOG_LEVEL=INFO
-```
-
-> 至少需要 1 个 `*_API_KEY` 才能让伊塔说话。
-> At least one `*_API_KEY` is required for Yita to speak.
-
----
-
-## 📦 交付物 / Deliverables
-
-| 文件 / File | 大小 / Size | 说明 / Description |
-| --- | --- | --- |
-| `Aerie-9.0.0-Portable.zip` | ~82 MB | 便携版压缩包 / Portable archive |
-| `Aerie · 云栖.exe` (在 `win-unpacked/`) | ~176 MB | 单文件可执行 / Single-file executable |
-| `win-unpacked/` | ~250 MB | 解包目录（含所有 DLL + locales）/ Unpacked directory |
-
-> 💡 **磁盘空间 / Disk Space**：解压后约需 350 MB，运行内存 < 500 MB。
-> Unpacked requires ~350 MB disk, runtime RAM < 500 MB.
-
----
-
-## 🏗 架构 / Architecture
-
-```
-┌──────────────────────────────────────────────────────────┐
-│  Electron Desktop Shell (UI + IPC)                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │ 主窗口     │  │ 悬浮球     │  │ 侧边栏     │  │ 托盘      │  │
-│  │ Main     │  │ Ball     │  │ Sidebar  │  │ Tray     │  │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  │
-│       └──────────────┴──────────────┴──────────────┘      │
-│                      ▲  contextBridge                     │
-│                      ▼  ipcMain (api:request)             │
-└──────────────────────┬───────────────────────────────────┘
-                       │ HTTP 127.0.0.1:7890
-┌──────────────────────┴───────────────────────────────────┐
-│  Python Backend (aiohttp + asyncio)                      │
-│  ┌────────────┐  ┌────────────┐  ┌────────────────────┐  │
-│  │ Brain      │  │ Emotion    │  │ ProactiveMessenger │  │
-│  │ (Qwen/DS/  │  │ Engine     │  │ + PushPolicy       │  │
-│  │  Gemini)   │  │ (PAD+Cum)  │  │ + CronScheduler    │  │
-│  └─────┬──────┘  └─────┬──────┘  └─────────┬──────────┘  │
-│        │               │                    │             │
-│  ┌─────▼───────────────▼────────────────────▼──────────┐  │
-│  │  Pipeline (5-stage) + QQClient (WebSocket)         │  │
-│  └─────┬──────────────────────────────────────────────┘  │
-│        ▼ WebSocket ws://127.0.0.1:3001                    │
-└──────────────────────────────────────────────────────────┘
-                       │
-┌──────────────────────┴───────────────────────────────────┐
-│  NapCat (QQ 协议客户端) / NapCat (QQ protocol client)    │
-└──────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-                QQ 9.9.26-44343
+```powershell
+cd Spotlight
+npm install
+npm run dev
 ```
 
 ---
 
-## ⏰ Auto-Wake 主动唤醒（核心特性 ⭐）
+## 常用验证 / Verification
 
-**Auto-Wake** 是本项目最核心的特性 —— 伊塔在固定时间点和情感事件触发时会主动给你发消息。
+```powershell
+# Python 测试
+pytest tests
 
-**Auto-Wake** is the core feature — Yita proactively messages you at fixed time points and on emotional events.
+# 重点阶段验证示例
+pytest tests/test_phase10_image_workflow.py
+pytest tests/test_phase15_world_dashboard_api.py
+pytest tests/test_v139_basic_permission.py
 
-### 9 类场景 / 9 Scenes
+# Electron 静态检查
+cd electron
+npm run check:all
 
-| 场景 / Scene | 时间 / Time | 类型 / Type |
-| --- | --- | --- |
-| `morning_brief` 早安 | 06:30, 07:30 | cron (豁免静默 / exempt) |
-| `weather_push` 天气 | 07:00 | cron |
-| `lunch_remind` 午提醒 | 11:30, 12:30 | cron |
-| `evening_check` 晚问候 | 17:30, 18:30 | cron |
-| `goodnight` 晚安 | 22:30, 23:30 | cron (豁免静默 / exempt) |
-| `todo_remind` 待办 | 09:00-21:00 整点 | cron |
-| `anniversary` 纪念日 | 每日 00:00 扫描 | cron (豁免静默) |
-| `idle_care` 失联关怀 | 用户 4h 无活动 | event-driven |
-| `emotion_comfort` 情绪安抚 | 累积阈值突破 | event-driven |
+# Electron 渲染层单测文件位于 electron/tests/，当前未在 package.json 暴露 npm test 脚本
 
-### 频控策略 / Rate Limit Policy
-
-* 每日上限 / Daily cap: **5 次 / times**
-* 间隔 / Interval: **≥ 30 分钟 / minutes**
-* 静默时段 / Quiet hours: **23:30 - 07:00**（豁免：早安 / 晚安 / 纪念日）
-* 可暂停 / Pausable: 托盘菜单 / Tray menu → 暂停推送 1 小时
-
-### 情感槽联动 / Emotion Slot Coupling
-
-| 行为 / Behavior | 槽位 / Slot | 增量 / Delta | 联动 / Trigger |
-| --- | --- | --- | --- |
-| > 4h 不回 / No reply | 忍耐 / Patience | +20 | 触发 `idle_care` 提前 / early `idle_care` |
-| 主动夸她 / Praise | 渴望 / Desire | +10 | 升温早安 / warmer morning_brief |
-| 主动说想她 / Miss her | 渴望 / Desire | +15 | 触发 `emotion_comfort` 反扑 |
-| 你哭了 / Vulnerable | 温柔 / Tenderness | +30 | 立即 `emotion_comfort`（不走频控 / bypass policy） |
+# Spotlight 构建
+cd Spotlight
+npm run build
+```
 
 ---
 
-## 🎮 使用说明 / Usage
+## 配置与数据 / Config & Data
 
-### 悬浮球 / Floating Ball
+| 路径 / Path                      | 用途 / Purpose                       |
+| -------------------------------- | ------------------------------------ |
+| `config/settings.yaml`         | 主配置、HTTP、主题、窗口、办公目录等 |
+| `config/persona.yaml`          | 伊塔核心人设配置                     |
+| `config/persona_behavior.yaml` | 行为与表达节奏配置                   |
+| `config/proactive.yaml`        | 主动推送场景、频控、静默时段         |
+| `data/personas/`               | Persona Hub 运行态数据               |
+| `data/briefs/`                 | 每日简报缓存                         |
+| `data/audit/`                  | 权限与电脑操控审计日志               |
+| `logs/`                        | 后端与诊断日志                       |
 
-* **拖拽** / Drag：可移动到任意位置，松手自动靠边吸附
-  Drag to any position, auto-edges-snap on release.
-* **单击** / Click：展开 380×480 聊天窗
-  Click to expand into 380×480 chat window.
-* **双击** / Double-click：最大化为主窗口（1280×800）
-  Double-click to maximize to main window.
-* **5s 无操作** / 5s idle：半透明（0.3 opacity）
-  Semi-transparent after 5s idle.
-
-### 托盘菜单 / Tray Menu
-
-* 打开 Aerie
-* 悬浮球
-* 开机自启（写入注册表 HKCU\...\Run）
-* 暂停推送 1 小时
-* 退出
-
-### 侧边栏 5 Tab / Sidebar 5 Tabs
-
-* **情绪 / Emotion**：实时 PAD + 累积槽位仪表盘
-* **纪念 / Memorial**：纪念日列表 + 在一起天数
-* **系统 / System**：自启 / 主题 / 窗口设置
-* **其他 / Other**：暂停推送 / 反馈 / 隐私
-* **数据 / Data**：聊天记录 / 知识库 / 工具调用
+`main.py` 已接入配置热加载，会监听 `settings.yaml`、`persona_behavior.yaml` 与 `proactive.yaml` 的变更。
 
 ---
 
-## 🛠 故障排查 / Troubleshooting
+## Auto-Wake 主动唤醒
 
-| 现象 / Symptom | 原因 / Cause | 解决 / Fix |
-| --- | --- | --- |
-| 双击 .exe 闪退 / Crashes on launch | Python 路径不对 | 检查 `userData/config.json` 的 `python_path` |
-| 伊塔不回复 / Yita silent | API 密钥未配置 | 编辑 `.env` 填入 `DASHSCOPE_API_KEY` |
-| QQ 收不到消息 / No QQ messages | NapCat 未启动 | 运行 `NapCat\NapCat.Shell\launcher-user.bat` |
-| 端口 7890 被占 / Port 7890 busy | 上一进程未退出 | `netstat -ano \| findstr :7890` → kill PID |
-| 早安不触发 / No morning_brief | 时区不对 | 确认 `Asia/Shanghai` 时区 |
+Auto-Wake 是 Aerie 的核心能力之一：伊塔会在固定时间、情绪事件、用户空闲、纪念日和环境事件触发时主动发消息。
 
----
+| 场景 / Scene                 | 时间或触发 / Trigger | 类型 / Type |
+| ---------------------------- | -------------------- | ----------- |
+| `morning_brief` 早安       | 06:30, 07:30         | cron        |
+| `weather_push` 天气        | 07:00                | cron        |
+| `lunch_remind` 午提醒      | 11:30, 12:30         | cron        |
+| `evening_check` 晚问候     | 17:30, 18:30         | cron        |
+| `goodnight` 晚安           | 22:30, 23:30         | cron        |
+| `todo_remind` 待办         | 09:00-21:00 整点     | cron        |
+| `anniversary` 纪念日       | 每日 00:00 扫描      | cron        |
+| `idle_care` 失联关怀       | 用户长时间无活动     | event       |
+| `emotion_comfort` 情绪安抚 | 情感槽阈值突破       | emotion     |
 
-## 🔧 兼容性 / Compatibility
-
-| 项目 / Item | 要求 / Requirement |
-| --- | --- |
-| **OS** | Windows 10 1809+ / Windows 11 |
-| **Python** | 3.12 - 3.14（推荐 3.14.3）|
-| **Node.js** | 20+（仅源码构建时需要）|
-| **QQ** | 9.9.26+ |
-| **NapCat** | v4.18.9 |
-| **RAM** | 建议 8 GB+ |
-| **Disk** | 500 MB+ |
+默认频控：每日上限 5 次、间隔不少于 30 分钟、静默时段 23:30-07:00，早安/晚安/纪念日等场景可按配置豁免。
 
 ---
 
-## 📚 文档 / Documentation
+## 打包与发布 / Build & Release
 
-* `OpenCloud_Companion_System_Features.md` v9.0 — 系统设计总纲
-* `Ita.md` v9.0 Hybrid Edition — 伊塔人设（对齐 `Ita_Aerie_Companion_Spec.md`）
-* `.trae/specs/aerie-companion-v9-buildout/spec.md` — 实施规范
-* `.trae/specs/aerie-companion-v9-buildout/tasks.md` — 任务分解
-* `.trae/specs/aerie-companion-v9-buildout/checklist.md` — 验证清单
-* `CHANGELOG.md` — 变更记录
+### Electron 打包
+
+```powershell
+cd electron
+npm run build:win
+```
+
+备用输出目录：
+
+```powershell
+npm run build:win:alt
+```
+
+### Spotlight 发布资源
+
+线上官网：[https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/)
+
+当前官网下载配置位于 `Spotlight/src/config/release.ts`，指向 GitHub Release `v0.1.0-beta.1`：
+
+- `Aerie-Cloud-0.1.0-beta.1-Portable.exe`
+- `Aerie-Cloud-0.1.0-beta.1-Setup.exe`
 
 ---
 
-## 📜 许可证 / License
+## 故障排查 / Troubleshooting
 
-本项目为 **私有项目 / Private project**，作者 Laser。
-仅供个人使用，不对外发布。
-
-This is a **private project** by Laser. For personal use only; not for public distribution.
+| 现象 / Symptom | 原因 / Cause                 | 处理 / Fix                                         |
+| -------------- | ---------------------------- | -------------------------------------------------- |
+| 后端启动失败   | 依赖未安装或 Python 版本不符 | 重新执行`pip install -r requirements.txt`        |
+| API 无响应     | 7890 端口被占用或后端未启动  | 检查`logs/main.log` 与端口占用                   |
+| 伊塔不回复     | 未配置可用模型 Key           | 检查`.env` 至少一个 `*_API_KEY`                |
+| QQ 收不到消息  | NapCat 未启动或未登录        | 启动`NapCat\NapCat.Shell\launcher-user.bat`      |
+| 桌面端白屏     | Electron 渲染资源或 CSP 问题 | 查看 Electron DevTools 与`electron/python-*.log` |
+| 官网构建失败   | Node 依赖未安装              | 在`Spotlight/` 执行 `npm install` 后重试       |
 
 ---
 
-> **Aerie · 云栖** — 你的本地 AI 桌面伴侣
-> **Aerie · 云栖** — Your local AI desktop companion
+## 兼容性 / Compatibility
+
+| 项目 / Item        | 要求 / Requirement               |
+| ------------------ | -------------------------------- |
+| **OS**       | Windows 10 1809+ / Windows 11    |
+| **Python**   | 3.10+                            |
+| **Node.js**  | 20+                              |
+| **Electron** | 28.x                             |
+| **QQ**       | 9.9.26+                          |
+| **NapCat**   | v4.18.9 级别                     |
+| **RAM**      | 建议 8 GB+                       |
+| **Disk**     | 建议 500 MB+，构建产物需更多空间 |
+
+---
+
+## 文档索引 / Documentation
+
+| 文档 / Document                                          | 说明 / Description               |
+| -------------------------------------------------------- | -------------------------------- |
+| `CHANGELOG.md`                                         | 版本与重要变更记录               |
+| `documents/Ita/Ita_Aerie_Companion_Spec.md`            | 伊塔伴侣规格                     |
+| `documents/Level_up/Aerie_v14_对话系统全面升级方案.md` | 对话系统后续升级方案             |
+| `docs/debug-window-top-gap.md`                         | 窗口顶部间隙排障记录             |
+| `docs/debug-dynamic-island-expand-fail.md`             | 灵动岛展开问题排障记录           |
+| `.trae/documents/`                                     | 实施计划、修复计划、阶段验证记录 |
+| [官网](https://laser1209.github.io/Aerie_Spotlight/)      | Aerie · 云栖线上项目官网        |
+| `Spotlight/README.md`                                  | Spotlight 官网子项目说明         |
+
+---
+
+## License
+
+本仓库源码公开可见，但当前标记为 **UNLICENSED / All rights reserved**，不因此自动授予复制、再分发或商业使用许可。
+
+**Aerie · 云栖** — 你的本地 AI 桌面伴侣。

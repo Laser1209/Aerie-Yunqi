@@ -562,12 +562,7 @@ button {
 }
 
 .di-companion-emoji {
-  animation: di-bob 2s ease-in-out infinite;
-}
-
-@keyframes di-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  transform: translateY(0);
 }
 
 .di-companion-info {
@@ -804,7 +799,6 @@ button {
   border-radius: 50%;
   background: var(--di-success);
   box-shadow: 0 0 8px var(--di-success);
-  animation: di-pulse 2s ease-in-out infinite;
   border: 2px solid var(--di-bg);
 }
 
@@ -824,14 +818,8 @@ button {
   border-radius: calc(var(--di-radius) + 2px);
   background: var(--di-glow);
   filter: blur(12px);
-  opacity: 0;
+  opacity: 0.28;
   z-index: -1;
-  animation: di-breath 3s ease-in-out infinite;
-}
-
-@keyframes di-breath {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.6; }
 }
 
 /* ── Notification State ──────────────────────── */

@@ -28,10 +28,8 @@
   --text-500: #886677;
   --text-700: #3c3c43;
   --text-800: #333333;
-  /* R7.3: Liquid Glass tokens — semi-transparent layers that let the
-     underlying main app show through (backdrop-filter: blur). All glass
-     surfaces stack: --glass-bg-1 (drawer shell) > --glass-bg-2 (rows) >
-     --glass-bg-3 (pills/thumbs). Border is a 1px white highlight. */
+  /* R7.3: Liquid Glass tokens. Surfaces use stacked alpha colors while
+     full-screen overlays own the single backdrop blur layer. */
   --glass-blur: blur(24px) saturate(160%);
   --glass-bg-1: rgba(255, 255, 255, 0.55);
   --glass-bg-2: rgba(255, 255, 255, 0.32);

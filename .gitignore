@@ -28,6 +28,8 @@ data/**/*.db-wal
 data/world_sidecar/
 data/backups/
 data/audit/
+data/briefs/*.html
+data/briefs/*.json
 /logs/
 *.log
 
@@ -36,6 +38,7 @@ tmp/
 
 # User data (Electron)
 userData/
+.manual-userdata*/
 dist/
 build/
 out/

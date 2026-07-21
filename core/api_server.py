@@ -2042,7 +2042,7 @@ async def self_evolve_list(
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@app.get("/api/self_evolve/{proposal_id}")
+@app.get("/api/self_evolve/{proposal_id:int}")
 async def self_evolve_detail(proposal_id: int) -> dict:
     """Fetch a single proposal (full row + parsed schema)."""
     ev = _get_self_evolver()
@@ -4023,6 +4023,7 @@ async def brief_today() -> dict:
         brain = Brain()
         greeting = await brain.compose_brief_greeting(
             time_of_day=sections.get("time_of_day", "morning"),
+            date_str=today,
             todo_count=sections.get("todo_stats", {}).get("remaining", 0),
             weather=sections.get("weather"),
         )
@@ -4098,10 +4099,12 @@ async def brief_run(request: Request, limit: int = Query(default=0, ge=0, le=50)
         sections = await brief_fetcher.run_all(limit=effective_limit)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+    today = sections.get("date") or datetime.now().strftime("%Y-%m-%d")
     try:
         brain = Brain()
         greeting = await brain.compose_brief_greeting(
             time_of_day=sections.get("time_of_day", "morning"),
+            date_str=today,
             todo_count=sections.get("todo_stats", {}).get("remaining", 0),
             weather=sections.get("weather"),
         )
@@ -4110,7 +4113,6 @@ async def brief_run(request: Request, limit: int = Query(default=0, ge=0, le=50)
     except Exception:
         md = ""
         sections["greeting"] = ""
-    today = sections.get("date") or datetime.now().strftime("%Y-%m-%d")
     brief_fetcher.save_brief(today, sections, html=md)
     return {"status": "ok", "date": today, "markdown": md, "brief": sections, "limit": effective_limit or 0}
 

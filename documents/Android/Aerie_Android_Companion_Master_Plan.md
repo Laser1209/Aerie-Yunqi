@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真机 owner 认证、Keystore 会话恢复以及 Android Room/Retrofit 聊天数据层已通过对应测试；Compose 历史/请求界面、SSE 和真实消息闭环尚未完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真机 owner 认证、Keystore 会话恢复、Android Room/Retrofit 聊天数据层和 Android SSE 重连客户端已通过对应自动化测试；Compose 历史/请求界面和真实消息闭环尚未完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -698,7 +698,18 @@ AERIE_DISABLE_QQ=false
 - [!] UTP 默认 `uninstall_after_test=true`，在测试完成后卸载了 App 和测试包，手机端本地 App 数据因此被清除；电脑账号、认证库和聊天库未受影响。用户随后断开手机，整合 APK 安装和新一次配对延后到 Compose/SSE 业务真机验收，并将使用保留 APK 的测试参数。
 - [x] `:app:testDebugUnitTest :app:assembleDebug :app:lintDebug --rerun-tasks --no-daemon` 实际执行 `55` 个任务并在 `3m39s` 内成功，Lint 为 `No issues found`；Debug APK 为 `65639082` bytes，SHA-256 `065CFF55D19C331FCA9E2D7F206DC09FD5A9749FF6B1F71AAD2C07E52C51D679`。
 - [x] 本节没有修改 Python、服务器配置或生产数据库；恢复审计时 `data/aerie.db` 与 `data/mobile_gateway.db` 均 `quick_check=ok`、外键违规 `0`。
-- [ ] Room/Retrofit 数据层尚未接入 Compose，也尚未实现 SSE 重连；不能据此勾选 Phase 3 或 Phase 4 的组合门禁。
+- [ ] Room/Retrofit/SSE 数据层尚未接入 Compose；不能据此勾选 Phase 3 或 Phase 4 的组合门禁。
+
+### 2026-07-22：Android SSE 客户端
+
+- [x] 批次开始前重新读取主控合同；服务器仓库、后端 `7890/7891` 和 Android 独立仓库边界未改变，手机当前断开，未执行真机安装或登录。
+- [x] Android 新增 OkHttp SSE 客户端，使用 `/api/mobile/v1/events`、Bearer Access Token 和 Room 中持久化的 `Last-Event-ID`；不连接管理 API `7890`。
+- [x] 客户端只处理主控允许的 `stream.open`、`message.created`、`request.updated`、`approval.pending` 和 `file.updated`；未知事件不推进游标，心跳注释不进入业务层。
+- [x] 消息/请求事件按 `accountId` 写入现有 Room；事件序列只单调前进，重复或乱序事件不能回退游标；重连前重新同步消息和未完成请求。
+- [x] SSE 401 只触发一次既有 Refresh Token 互斥刷新后重试；网络断开按 `1/2/4/8/30` 秒基线并加入有界抖动，连接状态已提供给后续 ViewModel。
+- [x] MockWebServer 定向命令实际执行 `9` 项 JVM 测试，`0` failures/errors/skips；覆盖认证头、Last-Event-ID、心跳、401 响应隔离、退避边界和断线重连后的 `evt_1` 游标。
+- [x] 本批只修改 Android 客户端源代码、测试和客户端证据文档，以及本主控文档；未修改 Python、服务器配置、生产数据库、Cloudflare 或运行态文件。
+- [ ] 下一门禁：把 Room/SSE/请求操作接入 Compose ViewModel，完成整合构建后再进行一次保留 APK 的真机业务验收。
 
 ## 17. 决策日志
 
@@ -723,6 +734,7 @@ AERIE_DISABLE_QQ=false
 | 2026-07-22 | 生产 Flag 必须晚于 owner `user_id` 明确绑定 | 历史包含多个内部用户编号；猜测绑定会把他人或旧测试上下文并入主账号，属于不可接受的数据隔离错误 |
 | 2026-07-22 | Android Release 仅允许 HTTPS，Debug 明文仅限本机测试主机 | 保证正式凭据不经明文网络传输，同时保留 MockWebServer、模拟器和 ADB reverse 的本地调试能力 |
 | 2026-07-22 | 生产 Feature Flags 通过本机 `.env` 覆盖启用，版本库默认继续关闭 | 防止新检出或未配置环境意外暴露 `7891`，同时允许当前生产机明确激活并保留一键回滚 |
+| 2026-07-22 | Android SSE 使用 OkHttp 原生事件流并把 Last-Event-ID 放入 Room 游标 | Retrofit 负责请求/响应 API，原生 SSE 便于处理长连接、取消、401 重试和断线后的数据库收敛 |
 
 ## 18. 变更规则
 

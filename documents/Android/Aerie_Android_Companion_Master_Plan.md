@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 已实现认证网络合同、内存 Access Token、Keystore 加密 Refresh Token 和 401 刷新重试，并通过真机覆盖安装。本地 Pepper、`AERIE_PRIMARY_USER_ID` 和空认证库已安全配置；生产 owner 尚未绑定，四个运行 Flag 尚未开启，不能宣称真实联调完成 |
+| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 已实现认证网络合同、内存 Access Token、Keystore 加密 Refresh Token 和 401 刷新重试，并通过真机覆盖安装。生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 尚未开启，不能宣称真实联调完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -454,7 +454,7 @@ AERIE_DISABLE_QQ=false
 - [x] 生产数据库一致性备份、`quick_check` 和恢复演练。
 - [x] 实现移动认证数据库和本地账号管理工具。
 - [x] 实现 Argon2id、配对码、令牌轮换、撤销和限流。
-- [ ] 建立 owner/guest Actor 绑定及历史、记忆隔离测试。
+- [x] 建立 owner/guest Actor 绑定及历史、记忆隔离测试。
 
 ### Phase 3：持久聊天
 
@@ -622,7 +622,8 @@ AERIE_DISABLE_QQ=false
 - [x] 当前生产库、`data/backups/aerie_pre_mobile_phase23_20260722_0830.db` 和隔离恢复副本均 `quick_check=ok`；25 张业务表行数及迁移账本完全一致。
 - [!] 流程偏差：上述测试隔离修复前，旧测试的 import-time `Database()` 提前把纯新增的 `007` 应用到生产库，早于本轮备份；当时 `quick_check`/`integrity_check` 均为 `ok`。已有 2026-07-20 迁移前备份可用，但不含之后数据，因此未执行破坏性回滚。
 - [x] 用户已确认主历史 `user_id` 为 `3489352115`；该编号可以写入本地 `AERIE_PRIMARY_USER_ID`，但账号密码不得通过聊天传递。
-- [ ] 生产门禁：`.env` 的主 user_id、Pepper 和移动数据库路径已配置；owner 尚未通过本地交互工具创建，Actor 历史尚未回填。完成建号、回填与守恒验证后，才开启 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1`。
+- [x] 生产 owner 已通过本地隐藏密码输入创建，`actor_primary` 历史回填和守恒验证通过。
+- [ ] 下一门禁：先复核 Phase 0-2 安全边界和回归，再开启 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1` 并重启验证。
 
 ### 2026-07-22：Phase 2/3 生产启用准备
 
@@ -632,7 +633,16 @@ AERIE_DISABLE_QQ=false
 - [x] 使用 SQLite Backup API 创建 `data/backups/aerie_pre_mobile_owner_20260722_091708.db` 和独立恢复检查副本；源库 SHA-256 前后均为 `99FDB0EA45D27B39A1F3BB0DBD1D61A52BCE6542A962454D688238422A43996D`，三份库均 `quick_check=ok`、外键违规 `0`、`25` 张表逻辑计数一致。
 - [x] 初始化空的 `data/mobile_gateway.db`：`quick_check=ok`、外键违规 `0`、`7` 张移动表、账号数 `0`。
 - [x] 修复 `scripts/mobile_accounts.py` 直接运行时未加载项目 `.env` 的问题；使用 `override=False` 保留显式进程环境优先级。移动账号、身份、网关和聊天定向回归为 `38 passed`，直接执行 `python scripts/mobile_accounts.py list-accounts` 成功返回空列表。
-- [ ] 下一门禁是本地交互式创建 owner `actor_primary`、执行历史回填并验证守恒；密码只在本机隐藏输入，不通过聊天或命令行参数传递。
+- [x] 下一门禁已完成：owner `actor_primary` 通过本地隐藏输入创建，密码未通过聊天或命令行参数传递。
+
+### 2026-07-22：Phase 2 生产 owner 创建与历史回填
+
+- [x] Android 登录用户名使用此前确认的账号 `3489352115`；本地 PowerShell 交互窗口调用 `getpass` 隐藏输入并二次确认密码，进程退出码为 `0`。
+- [x] `data/mobile_gateway.db` 只有一个启用 owner：username `3489352115`、role `owner`、actor `actor_primary`、user_id `3489352115`；密码字段以 `$argon2id$` 开头，`account.created` 成功审计为 `1`，未读取或输出密码正文。
+- [x] 主库存在唯一 `actor_primary`，并建立 `desktop/local`、对应 mobile account 和 `qq/3489352115` 三条渠道绑定。
+- [x] 历史守恒：`chat_log` 为 `1084/1084` 绑定、NULL `0`、跨用户 `0`；`emotion_state_snapshot` 为 `97/97` 绑定、NULL `0`、跨用户 `0`；`long_term_memory` 当前为 `0`。
+- [x] 规范归属：与该用户 legacy 历史关联的 `1057/1057` 条 `messages` 已绑定；`actor_primary` 拥有 `1` 个 Conversation 和 `104` 个 Request，Request user_id 错配为 `0`。
+- [x] 主库与移动库均 `quick_check=ok`、外键违规 `0`；启 Flag 前快照为 `data/backups/aerie_post_mobile_owner_20260722_095250.db` 和 `data/backups/mobile_gateway_post_owner_20260722_095250.db`。
 
 ### 2026-07-22：Phase 4 Android 认证客户端合同
 

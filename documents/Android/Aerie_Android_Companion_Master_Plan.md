@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真机 owner 认证、Keystore 会话恢复、Android Room/Retrofit 聊天数据层和 Android SSE 重连客户端已通过对应自动化测试；Compose 历史/请求界面和真实消息闭环尚未完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收。Android 已完成认证、Room/Retrofit、SSE、Compose 和前台 `dataSync` 服务本体；同时间戳长回复已通过 `messageOrder` 合同、Room v2 迁移和真机 instrumented test 修复。当前手机安全会话为空，仍需重新登录后完成真实历史排序和长任务通知验收，Phase 4 不标记完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -255,6 +255,7 @@ disable-account    禁用访客并撤销全部设备
 - 文本去除首尾空白后最大 `20000` 字符。
 - `clientRequestId` 在同一账号内唯一；重复提交必须返回原请求，不能重复执行。
 - 允许纯文件请求，但文本和文件不能同时为空。
+- `/messages` 每项和 `message.created` SSE 数据必须包含同一个 64 位整数 `messageOrder`；客户端只能按它升序排列消息，不得使用 `createdAt`、`messageId` 或到达顺序替代。`createdAt` 仅用于显示，`messageOrder` 不作为公开分页游标。
 - SSE 只允许 `message.created`、`request.updated`、`approval.pending`、`file.updated`、`stream.open` 和心跳。
 - SSE 只是及时通道；数据库查询才是最终真相，断线恢复必须重新同步消息和未完成请求。
 
@@ -509,6 +510,7 @@ AERIE_DISABLE_QQ=false
 - 密码、配对码、令牌轮换、复用检测、锁定、注销和设备撤销。
 - owner/guest 身份、历史、记忆、文件、审计和审批隔离。
 - `clientRequestId` 重试不会生成重复请求或重复电脑副作用。
+- 相同 `createdAt` 的一条用户消息和多段 assistant 回复在 `/messages` 与 `message.created` 中保持相同且严格递增的 `messageOrder`。
 - SSE 丢失、重复、乱序和进程内 replay 后以数据库状态收敛。
 - 文件大小、扩展名伪造、MIME 伪造、路径穿越、越权 file ID、分块缺失、哈希错误和扫描失败。
 - 审批签名正确、错误、过期、重复、跨设备、访客越权和已撤销设备。
@@ -520,6 +522,7 @@ AERIE_DISABLE_QQ=false
 - Repository、DTO、错误映射、令牌刷新互斥和幂等发送单元测试。
 - MockWebServer 覆盖登录、刷新、聊天、SSE 重连、401 重试和文件分块。
 - Room 覆盖游标、待发送、进程重启和账号切换隔离。
+- Room 覆盖相同时间戳消息按 `messageOrder` 排列，以及 v1 到 v2 迁移保留消息并清除同步游标后全量收敛。
 - Compose 覆盖 owner/guest 导航、离线状态、取消/重试、审批和错误提示。
 - Keystore/签名使用 instrumented test，不在 JVM 测试中伪称已验证硬件行为。
 - `assembleDebug`、单元测试、instrumented test 和 `assembleRelease` 均需记录结果。
@@ -721,6 +724,17 @@ AERIE_DISABLE_QQ=false
 - [x] 本批只修改 Android UI、ViewModel 和客户端测试/证据文档，以及本主控文档；未修改 Python、端口、生产数据库、Cloudflare 或运行态文件。
 - [ ] 尚未完成 Compose instrumented test、前台 `dataSync` 服务/通知和目标 vivo 真机业务闭环，因此 Phase 4 仍不能标记完成。
 
+### 2026-07-22：同时间戳长回复顺序修复
+
+- [x] 只读核验生产消息确认截图所示一轮并未丢失：同一 `created_at=2026-07-22 13:00:28` 下，用户消息 `sequence=0`，assistant 回复为 `sequence=1..7`，对应数据库顺序连续；旧 Android DAO 使用 `createdAt, messageId`，随机 UUID 导致回答分段散落到提问上方。
+- [x] 服务器 Red 测试先稳定复现 `KeyError: messageOrder`；实现后 `/messages` 和 `message.created` 均返回相同的 `messageOrder`，同时间戳的 `user -> assistant 1..7` 顺序合同通过。
+- [x] 服务器定向回归 `43 passed, 1 warning`；完整显式 `tests` 回归为 `630 passed, 7 warnings`，警告均为既有 FastAPI/asyncio 弃用提示。
+- [x] Android `MobileMessageDto -> ChatMessage -> ChatMessageEntity -> DAO` 全链路接入 `messageOrder`；Room 升级到 v2，迁移保留旧消息、以原本地行序初始化顺序、删除旧消息索引和全部同步游标，下一次认证同步后以服务器顺序覆盖。
+- [x] Android JVM Red 准确得到预期 `[msg-z-user, msg-a-answer-1, ...]`、实际 UUID 顺序 `[msg-a-answer-1, ..., msg-z-user]`；实现后 `27` 项 JVM 测试全部通过，`:app:lintDebug` 和 `:app:assembleDebug` 成功。
+- [x] vivo `V2516A` 使用手工 `am instrument` 完成 `5 tests`、`0 failures/errors/skips`：包含相同时间戳排序、Room v1 到 v2 数据保留与游标清除、账号隔离、中断发送恢复和 Compose 冷启动；测试 APK 未卸载目标 App。
+- [x] 当前后端通过既有受控接口自重启，PID `39616 -> 35720`；`7890/7891` 同时恢复，移动健康检查返回 `200`、`status=ok`，运行进程已载入新服务器合同。
+- [!] 覆盖安装后手机 `secure_mobile_session.preferences_pb` 当前为空，App 正常停留登录页且无崩溃；未读取、猜测或代填密码、配对码和 Token。真实生产历史全量回填、七段回答连续显示和前台长任务通知仍等待 owner 在手机安全键盘重新认证，不能据此关闭 Phase 4 门禁。
+
 ## 17. 决策日志
 
 | 日期 | 决策 | 原因 |
@@ -745,6 +759,7 @@ AERIE_DISABLE_QQ=false
 | 2026-07-22 | Android Release 仅允许 HTTPS，Debug 明文仅限本机测试主机 | 保证正式凭据不经明文网络传输，同时保留 MockWebServer、模拟器和 ADB reverse 的本地调试能力 |
 | 2026-07-22 | 生产 Feature Flags 通过本机 `.env` 覆盖启用，版本库默认继续关闭 | 防止新检出或未配置环境意外暴露 `7891`，同时允许当前生产机明确激活并保留一键回滚 |
 | 2026-07-22 | Android SSE 使用 OkHttp 原生事件流并把 Last-Event-ID 放入 Room 游标 | Retrofit 负责请求/响应 API，原生 SSE 便于处理长连接、取消、401 重试和断线后的数据库收敛 |
+| 2026-07-22 | 消息历史与 SSE 统一返回 64 位 `messageOrder`，Android 只按该字段排序 | 多个回复分段可以共享同一时间戳，UUID 也不表示因果顺序；服务器数据库顺序才是可恢复的唯一真相 |
 
 ## 18. 变更规则
 

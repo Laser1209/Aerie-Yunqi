@@ -105,6 +105,65 @@ def test_mobile_chat_shares_owner_history_and_isolates_guest(
     assert guest_service.list_messages(guest)["items"] == []
 
 
+def test_mobile_messages_keep_turn_segments_in_database_order_when_timestamps_match(
+    phase4_db,
+    tmp_path,
+):
+    _seed_desktop_message(phase4_db)
+    store, owner = _principal(
+        tmp_path,
+        username="owner",
+        role="owner",
+        actor_id="actor-primary",
+        user_id=1001,
+    )
+    message_ids = [
+        "msg-z-user",
+        "msg-a-assistant-1",
+        "msg-y-assistant-2",
+        "msg-b-assistant-3",
+        "msg-x-assistant-4",
+        "msg-c-assistant-5",
+        "msg-w-assistant-6",
+        "msg-d-assistant-7",
+    ]
+    with phase4_db.connection() as conn:
+        conn.execute(
+            """INSERT INTO turns(turn_id, conversation_id, status, completed_at)
+               VALUES ('turn-segmented', 'conv-desktop', 'completed', datetime('now'))"""
+        )
+        conn.execute("DELETE FROM messages WHERE message_id = 'msg-desktop'")
+        for sequence, message_id in enumerate(message_ids):
+            conn.execute(
+                """INSERT INTO messages
+                   (message_id, conversation_id, turn_id, role, content, sequence,
+                    channel, channel_account_id, actor_id, created_at)
+                   VALUES (?, 'conv-desktop', 'turn-segmented', ?, ?, ?, 'mobile',
+                           '1001', 'actor-primary', '2026-07-22T13:00:28Z')""",
+                (
+                    message_id,
+                    "user" if sequence == 0 else "assistant",
+                    "question" if sequence == 0 else f"answer-{sequence}",
+                    sequence,
+                ),
+            )
+
+    service = MobileChatService(phase4_db, store)
+    items = service.list_messages(owner, limit=100)["items"]
+
+    assert [item["messageId"] for item in items] == message_ids
+    orders = [item["messageOrder"] for item in items]
+    assert orders == sorted(orders)
+    assert all(left < right for left, right in zip(orders, orders[1:]))
+
+    events = service.list_events(owner, after_event_id=None, limit=100)
+    message_events = [event for event in events if event["type"] == "message.created"]
+    assert [event["data"]["messageId"] for event in message_events] == message_ids
+    assert [event["data"]["messageOrder"] for event in message_events] == [
+        item["messageOrder"] for item in items
+    ]
+
+
 def test_mobile_request_submission_is_idempotent_and_owned(phase4_db, tmp_path):
     _seed_desktop_message(phase4_db)
     store, owner = _principal(

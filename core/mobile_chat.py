@@ -201,7 +201,7 @@ class MobileChatService:
                 params.append(cursor["rowid"])
             direction = "DESC" if before_id or not after_id else "ASC"
             rows = conn.execute(
-                f"""SELECT rowid, message_id, conversation_id, turn_id, role,
+                f"""SELECT rowid AS message_order, message_id, conversation_id, turn_id, role,
                             content, attachments, created_at
                      FROM messages WHERE {' AND '.join(clauses)}
                      ORDER BY rowid {direction} LIMIT ?""",
@@ -210,6 +210,7 @@ class MobileChatService:
         items = [
             {
                 "messageId": row["message_id"],
+                "messageOrder": row["message_order"],
                 "conversationId": row["conversation_id"],
                 "turnId": row["turn_id"],
                 "role": row["role"],
@@ -277,7 +278,8 @@ class MobileChatService:
     ) -> dict[str, Any] | None:
         if event_type == "message.created":
             row = conn.execute(
-                """SELECT message_id, conversation_id, role, content, created_at
+                """SELECT rowid AS message_order, message_id, conversation_id, role,
+                          content, created_at
                    FROM messages WHERE message_id = ? AND actor_id = ?""",
                 (entity_id, actor_id),
             ).fetchone()
@@ -285,6 +287,7 @@ class MobileChatService:
                 return None
             return {
                 "messageId": row["message_id"],
+                "messageOrder": row["message_order"],
                 "conversationId": row["conversation_id"],
                 "role": row["role"],
                 "content": row["content"],

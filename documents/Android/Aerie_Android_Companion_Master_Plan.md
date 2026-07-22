@@ -3,7 +3,7 @@ title: Aerie v2 安卓远程伴侣主控方案
 kind: master-plan
 version: 2.0-draft
 status: implementing
-current_phase: Phase 2/3 重新执行；Phase 4 Android 本体并行实施
+current_phase: Phase 4 Android 真机业务验收
 created_at: 2026-07-21
 updated_at: 2026-07-22
 project: Aerie
@@ -20,8 +20,8 @@ public_hostname: aerie.etta.top
 | 项目 | 当前值 |
 | --- | --- |
 | 文档状态 | `implementing` |
-| 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收。Android 已完成认证、Room/Retrofit、SSE、Compose 和前台 `dataSync` 服务本体；同时间戳长回复已通过 `messageOrder` 合同、Room v2 迁移和真机 instrumented test 修复。当前手机安全会话为空，仍需重新登录后完成真实历史排序和长任务通知验收，Phase 4 不标记完成 |
+| 当前阶段 | Phase 0-3 门禁已完成，进入 Phase 4 Android 真机业务验收；Phase 5 不得提前开始 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收。Phase 3 已由移动 API、持久 Worker、真实 Pipeline、桌面共享历史和 owner/guest 隔离组合合同收口。Android 已完成认证、Room/Retrofit、SSE、Compose 和前台 `dataSync` 服务本体；同时间戳长回复已通过 `messageOrder` 合同、Room v2 迁移和真机 instrumented test 修复。当前手机安全会话为空，仍需重新登录后完成真实历史排序和长任务通知验收，Phase 4 不标记完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -459,10 +459,10 @@ AERIE_DISABLE_QQ=false
 
 ### Phase 3：持久聊天
 
-- [ ] 启用并验证 Conversation Model 和持久 Request Queue。
+- [x] 启用并验证 Conversation Model 和持久 Request Queue。
 - [x] 实现移动请求、历史、状态、取消、重试和幂等。
 - [x] 实现过滤后的移动 SSE 和断线恢复。
-- [ ] 验证主账号桌面共享与访客互相隔离。
+- [x] 验证主账号桌面共享与访客互相隔离。
 
 ### Phase 4：Android 基础端
 
@@ -737,6 +737,15 @@ AERIE_DISABLE_QQ=false
 - [x] 在 `cfad6f3` 上执行 `:app:assembleRelease :app:lintRelease --no-daemon`，退出码为 `0`、耗时 `240.9s`，Release Lint 为 `No issues found`。未签名 APK 为 `4620711` bytes，SHA-256 为 `7237C095E206DDE97FDB24103806F48EFA7D00E5D0D0A7B176CB26AB3CC02B09`；`apkanalyzer` 确认包名 `top.etta.aerie`、`usesCleartextTraffic=false`，`dataSync` 前台服务为非导出组件。
 - [x] 对最终 APK 的全部压缩条目执行敏感字符串和文件名扫描：固定 owner 账号、测试密码、独立测试配对码、模拟 access/refresh Token、私钥、JWT、OpenAI Key、GitHub PAT 和含凭据 URL 均为零命中，也未打包测试目录、`.env`、keystore、PEM 或 `local.properties`。数字串 `12345678` 仅作为标准 Base64/十六进制字符表的子串出现，不是独立凭据。该 APK 仍未签名，不代表已发布，也不要求连接手机。
 - [!] 覆盖安装后手机 `secure_mobile_session.preferences_pb` 当前为空，App 正常停留登录页且无崩溃；未读取、猜测或代填密码、配对码和 Token。真实生产历史全量回填、七段回答连续显示和前台长任务通知仍等待 owner 在手机安全键盘重新认证，不能据此关闭 Phase 4 门禁。
+
+### 2026-07-22：Phase 3 组合门禁收口
+
+- [x] 新批次开始前完整复读主控方案并重新核对两个仓库：服务器分支和 Android 分支均与各自远端 `0 behind / 0 ahead`；Android 工作树干净，服务器既有 Spotlight、配置、运行态和临时文件继续留在本批白名单之外。
+- [x] 本机 `.env` 中 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1` 四项覆盖均存在且为 true，仓库 `config/settings.yaml` 默认仍为 false。运行日志明确记录 `chat request worker started`、`slots=4`、`recovered=0`，`7890` 与 `7891` 健康检查均为 `200`。
+- [x] 在 `tests/test_phase4_integration.py` 新增跨入口组合合同：通过真实移动 FastAPI app 完成 owner/guest 登录和 `POST /api/mobile/v1/requests`，请求进入同一持久 Repository 和 Worker、经真实 Pipeline 完成后可从移动消息 API 与桌面 `/api/chat/history` 同步读取；owner 与 guest 双向不可见，`AERIE_DISABLE_QQ=true` 时 QQ SendQueue 写入为 `0`。
+- [x] 新合同定向运行 `1 passed`；Conversation、Request Queue、Worker、Pipeline、移动身份、移动 API 和隔离相关回归为 `181 passed, 4 warnings`；显式 `python -m pytest --basetemp=E:\Agent_reply\.codex-temp\pytest-phase3-full tests -q` 全量回归为 `631 passed, 6 warnings`。警告均为既有 FastAPI lifespan 与 Python 3.16 前 asyncio 弃用提示。
+- [x] 以 SQLite 只读 URI 核验生产库：主库和移动认证库均 `quick_check=ok`、外键违规 `0`。主库当前 `3/3` 个 mobile 请求全部 completed，共用 `1` 个 owner Conversation，缺失 Conversation、未完成 Turn 和 Actor 错配均为 `0`；该 Conversation 同时包含既有 `1057` 条回填消息和 `12` 条 mobile 规范消息，证明桌面与手机使用同一持久时间线。
+- [x] Phase 3 两项遗留门禁据此关闭；本批没有修改 Android 源码、生产数据库、端口、Cloudflare 或运行 Flag。下一门禁回到 Phase 4 真机：owner 重新认证后验证 Room v2 全量收敛、长回复顺序和前台通知隐私。
 
 ## 17. 决策日志
 

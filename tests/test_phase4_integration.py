@@ -848,6 +848,168 @@ async def test_submit_claim_pipeline_complete_status_and_events_end_to_end(
 
 
 @pytest.mark.asyncio
+async def test_mobile_queue_shares_owner_desktop_history_and_isolates_guest(
+    monkeypatch,
+    phase4_db,
+    frozen_utc_clock,
+    tmp_path,
+):
+    from core import api_server
+    from core.mobile_chat import MobileChatService
+    from core.mobile_gateway import create_mobile_app
+    from core.mobile_identity import MobileIdentityStore
+
+    monkeypatch.setenv("AERIE_DISABLE_QQ", "true")
+    harness = _make_e2e_harness(
+        monkeypatch,
+        phase4_db,
+        frozen_utc_clock,
+        label="mobile_shared_timeline",
+    )
+    monkeypatch.setattr(api_server, "_db", phase4_db)
+
+    guest_actor_id = "actor_mobile_guest"
+    _insert_actor(phase4_db, guest_actor_id)
+    identity_store = MobileIdentityStore(
+        tmp_path / "mobile-shared-timeline.db",
+        pepper="test-only-pepper-with-at-least-32-bytes",
+    )
+    identity_store.create_account(
+        username="owner",
+        password="correct-horse-battery-staple",
+        role="owner",
+        actor_id=harness.actor_id,
+        user_id=7001,
+    )
+    identity_store.create_account(
+        username="guest-one",
+        password="correct-horse-battery-staple",
+        role="guest",
+        actor_id=guest_actor_id,
+        user_id=8001,
+    )
+    mobile_app = create_mobile_app(
+        identity_store=identity_store,
+        chat_service=MobileChatService(phase4_db, identity_store),
+    )
+    mobile_client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=mobile_app),
+        base_url="http://mobile.test",
+    )
+
+    async def login(username: str) -> dict[str, str]:
+        response = await mobile_client.post(
+            "/api/mobile/v1/auth/login",
+            json={
+                "username": username,
+                "password": "correct-horse-battery-staple",
+                "deviceName": f"{username}-device",
+                "pairingCode": identity_store.create_pairing_code(username),
+            },
+        )
+        assert response.status_code == 200
+        return {"Authorization": f"Bearer {response.json()['accessToken']}"}
+
+    await harness.worker.start()
+    try:
+        owner_headers = await login("owner")
+        owner_response = await mobile_client.post(
+            "/api/mobile/v1/requests",
+            headers=owner_headers,
+            json={
+                "clientRequestId": "00000000-0000-4000-8000-000000000701",
+                "text": "owner mobile request",
+                "fileIds": [],
+            },
+        )
+        assert owner_response.status_code == 202
+        owner_request = owner_response.json()
+        await _wait_for_request_status(
+            phase4_db,
+            owner_request["requestId"],
+            "completed",
+        )
+
+        owner_status = await mobile_client.get(
+            f"/api/mobile/v1/requests/{owner_request['requestId']}",
+            headers=owner_headers,
+        )
+        assert owner_status.status_code == 200
+        assert owner_status.json()["status"] == "completed"
+
+        owner_messages = await mobile_client.get(
+            "/api/mobile/v1/messages?limit=100",
+            headers=owner_headers,
+        )
+        assert owner_messages.status_code == 200
+        assert [item["content"] for item in owner_messages.json()["items"]] == [
+            "owner mobile request",
+            "助手第一段",
+            "助手第二段",
+        ]
+
+        desktop_history = await harness.client.get(
+            "/api/chat/history?user_id=7001&limit=100",
+        )
+        assert desktop_history.status_code == 200
+        assert [item["content"] for item in desktop_history.json()["history"]] == [
+            "owner mobile request",
+            "助手第一段",
+            "助手第二段",
+        ]
+
+        guest_headers = await login("guest-one")
+        guest_response = await mobile_client.post(
+            "/api/mobile/v1/requests",
+            headers=guest_headers,
+            json={
+                "clientRequestId": "00000000-0000-4000-8000-000000000801",
+                "text": "guest isolated request",
+                "fileIds": [],
+            },
+        )
+        assert guest_response.status_code == 202
+        guest_request = guest_response.json()
+        await _wait_for_request_status(
+            phase4_db,
+            guest_request["requestId"],
+            "completed",
+        )
+
+        owner_after_guest = await mobile_client.get(
+            "/api/mobile/v1/messages?limit=100",
+            headers=owner_headers,
+        )
+        guest_messages = await mobile_client.get(
+            "/api/mobile/v1/messages?limit=100",
+            headers=guest_headers,
+        )
+        owner_contents = [
+            item["content"] for item in owner_after_guest.json()["items"]
+        ]
+        guest_contents = [item["content"] for item in guest_messages.json()["items"]]
+        assert "guest isolated request" not in owner_contents
+        assert "owner mobile request" not in guest_contents
+        assert guest_contents == [
+            "guest isolated request",
+            "助手第一段",
+            "助手第二段",
+        ]
+
+        owner_desktop_after_guest = await harness.client.get(
+            "/api/chat/history?user_id=7001&limit=100",
+        )
+        assert "guest isolated request" not in {
+            item["content"] for item in owner_desktop_after_guest.json()["history"]
+        }
+        assert len(harness.brain.calls) == 2
+        assert harness.send_queue.enqueued == []
+    finally:
+        await mobile_client.aclose()
+        await _close_harness(harness)
+
+
+@pytest.mark.asyncio
 async def test_three_same_conversation_requests_complete_in_order(
     monkeypatch,
     phase4_db,

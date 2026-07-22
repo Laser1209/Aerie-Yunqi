@@ -733,6 +733,7 @@ AERIE_DISABLE_QQ=false
 - [x] Android JVM Red 准确得到预期 `[msg-z-user, msg-a-answer-1, ...]`、实际 UUID 顺序 `[msg-a-answer-1, ..., msg-z-user]`；实现后 `27` 项 JVM 测试全部通过，`:app:lintDebug` 和 `:app:assembleDebug` 成功。
 - [x] vivo `V2516A` 使用手工 `am instrument` 完成 `5 tests`、`0 failures/errors/skips`：包含相同时间戳排序、Room v1 到 v2 数据保留与游标清除、账号隔离、中断发送恢复和 Compose 冷启动；测试 APK 未卸载目标 App。
 - [x] 当前后端通过既有受控接口自重启，PID `39616 -> 35720`；`7890/7891` 同时恢复，移动健康检查返回 `200`、`status=ok`，运行进程已载入新服务器合同。
+- [x] 本批主控复核通过严格 UTF-8 解码（`61712` bytes）、Markdown 围栏配对（`10` 个围栏、`78` 个标题）、端口一致性和差异白名单检查；敏感信息扫描仅命中文档既有的 `<random-secret>` 占位符与 `$argon2id$` 算法前缀，未发现实际凭据、Token 或配对码。
 - [!] 覆盖安装后手机 `secure_mobile_session.preferences_pb` 当前为空，App 正常停留登录页且无崩溃；未读取、猜测或代填密码、配对码和 Token。真实生产历史全量回填、七段回答连续显示和前台长任务通知仍等待 owner 在手机安全键盘重新认证，不能据此关闭 Phase 4 门禁。
 
 ## 17. 决策日志

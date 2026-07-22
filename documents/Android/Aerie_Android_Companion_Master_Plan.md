@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已由同一新进程启动并通过安全路由验收；真实手机登录、聊天和 SSE 闭环尚未完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收；PID 定向自重启修复已通过自动化、等待一次授权后的运行验收。真实手机登录、聊天和 SSE 闭环尚未完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -649,8 +649,10 @@ AERIE_DISABLE_QQ=false
 - [x] Phase 0-2 门禁复核覆盖移动账号、身份、网关、聊天、Conversation、Request Queue、迁移、Worker、Pipeline 和 API，共 `209 passed`、`4` 条既有 FastAPI 弃用警告；测试后两份生产库均 `quick_check=ok`、外键违规 `0`。
 - [x] 拒绝把 `config/settings.yaml` 提交为默认开启：相关测试准确复现 `mobile_gateway_v1` 默认值变为 true 的风险。仓库四个 Flag 继续为 false，生产机仅在 Git 忽略的 `.env` 设置 `AERIE_FEATURE_IDENTITY_CONTRACT_V1=true`、`AERIE_FEATURE_CONVERSATION_MODEL_V1=true`、`AERIE_FEATURE_CHAT_REQUEST_QUEUE_V1=true` 和 `AERIE_FEATURE_MOBILE_GATEWAY_V1=true`。
 - [x] `.env` 激活前快照保存为 Git 忽略的 `.env.pre-mobile-flags.local`；`.env.example` 只记录四项默认 false 模板，不包含生产值或 Pepper。
-- [x] 首次调用管理 API 重启未生效，定位到 `tools/restart_helper.ps1` 默认项目根多向上取一层、错误落到 `E:\`。修复 helper 默认根，并由 `/api/system/restart` 显式传入 `PROJECT_ROOT`；新增重启合同测试，相关 `31 passed`，PowerShell AST 解析错误 `0`。
-- [x] 使用显式 `E:\Agent_reply` 完成受控重启；新进程 `45904` 同时且仅监听 `127.0.0.1:7890` 和 `127.0.0.1:7891`，运行 Git 提交 `b6c55aa`，移动健康检查返回 `status=ok`、`apiVersion=v1`。
+- [x] 首次调用管理 API 重启未生效，定位到 `tools/restart_helper.ps1` 默认项目根多向上取一层、错误落到 `E:\`。修复 helper 默认根，并由 `/api/system/restart` 显式传入 `PROJECT_ROOT`；新增重启合同测试。
+- [x] 使用显式 `E:\Agent_reply` 完成一次受控重启；新进程 `45904` 同时且仅监听 `127.0.0.1:7890` 和 `127.0.0.1:7891`，运行 Git 提交 `b6c55aa`，移动健康检查返回 `status=ok`、`apiVersion=v1`。
+- [x] 随后的 API 自重启实测仍只返回 `scheduled` 而 PID/启动提交未变化，进一步定位为 helper 依赖 WMI 枚举并静默吞掉停止失败。第二版改为端点显式传入 `os.getpid()` 和 `sys.executable`，helper 延迟 2 秒后定向停止 PID、使用 .NET TCP 探测端口释放并以同一解释器启动；相关 `32 passed`，PowerShell AST 解析错误 `0`。
+- [ ] 第二版 PID 定向自重启的实际运行验收尚未执行：当前沙箱的系统操作自动审批服务返回 `503`，未获得终止当前 Aerie 后端进程的授权；不得把自动化验证代替运行验收。
 - [x] `7891` 安全路由实测：`/docs`、`/openapi.json`、`/api/system/restart`、`/api/brain/shell`、`/api/config/settings` 均为 `404`；未认证 `/api/mobile/v1/me` 和 `/messages` 为 `401`；响应无 CORS 且均为 `Cache-Control: no-store`。
 - [ ] 下一门禁：通过 ADB reverse 在真机使用一次性配对码完成真实登录，验证 Refresh Token Keystore 往返、历史同步、持久请求和 SSE；在此之前不宣称 Phase 3 完成。
 

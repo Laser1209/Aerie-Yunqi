@@ -24,6 +24,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import sys
 import time
 from dataclasses import asdict
 from datetime import datetime
@@ -659,6 +661,10 @@ async def system_restart() -> dict:
                 str(helper),
                 "-ProjectRoot",
                 str(project_root),
+                "-TargetPid",
+                str(os.getpid()),
+                "-PythonExecutable",
+                sys.executable,
             ],
             cwd=str(project_root),
             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)

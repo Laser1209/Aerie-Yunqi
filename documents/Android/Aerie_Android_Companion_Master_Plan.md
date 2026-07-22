@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收；PID 定向自重启修复已通过自动化、等待一次授权后的运行验收。真实手机登录、聊天和 SSE 闭环尚未完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真实手机登录、聊天和 SSE 闭环尚未完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -655,7 +655,8 @@ AERIE_DISABLE_QQ=false
 - [x] 用户已明确授权提交修复并重启当前 Aerie 后端；第二版人工 PID 定向升级重启成功，PID `45904 -> 36736`，`7890/7891` 均恢复并运行提交 `5203907`。
 - [!] 第二版 API 自重启仍只返回 `scheduled`，120 秒后 PID 保持 `36736`；人工 helper 成功而端点子进程无日志，不能宣称自重启验收通过。
 - [x] 第三版端点移除 `DETACHED_PROCESS`，改用 `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW`，将 helper stdout/stderr 追加到 `logs/restart_helper.log` 并记录子进程 PID；相关 `32 passed`，PowerShell AST 解析错误 `0`。
-- [ ] 第三版可观测 API 自重启等待在包含该修复的提交上完成实际 PID 变化和双端口恢复验收。
+- [x] 第三版可观测修复提交 `f369adf` 完成人工升级重启，PID `36736 -> 41460`，运行提交和双端口均正确；随后仅调用 `/api/system/restart` 完成自重启，PID `41460 -> 39616`，`7890/7891` 约 `13s` 内恢复，helper 日志完整记录定向停止、端口释放和启动。
+- [x] 自重启后两份数据库均 `quick_check=ok`、外键违规 `0`、唯一 owner 不变；`7891` 再次验证 health `200`、文档与管理路由 `404`、未认证 `/me` 为 `401`。
 - [x] `7891` 安全路由实测：`/docs`、`/openapi.json`、`/api/system/restart`、`/api/brain/shell`、`/api/config/settings` 均为 `404`；未认证 `/api/mobile/v1/me` 和 `/messages` 为 `401`；响应无 CORS 且均为 `Cache-Control: no-store`。
 - [ ] 下一门禁：通过 ADB reverse 在真机使用一次性配对码完成真实登录，验证 Refresh Token Keystore 往返、历史同步、持久请求和 SSE；在此之前不宣称 Phase 3 完成。
 

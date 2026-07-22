@@ -617,6 +617,7 @@ AERIE_DISABLE_QQ=false
 - [x] 新增 `007_mobile_event_log`，通过 Actor 过滤的持久事件序列支持 SSE `Last-Event-ID` 重连；数据库查询继续是最终真相。
 - [x] `164` 项 Conversation、Request Queue、Worker、API、迁移和移动定向回归通过；仅有 4 条既有 FastAPI `on_event` 弃用警告。
 - [x] `python -m pytest tests -q`：`643 passed`、`6 warnings`；警告均为既有 FastAPI `on_event` 和 Python 3.16 前的 asyncio 弃用提示，无测试失败。
+- [x] 服务器实现已发布到 `codex/phase2-3-mobile-auth-chat`；因共享工作树并发提交，15 个移动文件首次落在提交 `3a5850c`，本证据提交负责明确其真实 Phase 2/3 内容和后续生产门禁。
 - [x] 修复 pytest 收集期导入 `core.api_server` 会默认打开生产库的隔离缺口；修复后回归前后 `data/aerie.db` SHA-256 均为 `99FDB0EA45D27B39A1F3BB0DBD1D61A52BCE6542A962454D688238422A43996D`。
 - [x] 当前生产库、`data/backups/aerie_pre_mobile_phase23_20260722_0830.db` 和隔离恢复副本均 `quick_check=ok`；25 张业务表行数及迁移账本完全一致。
 - [!] 流程偏差：上述测试隔离修复前，旧测试的 import-time `Database()` 提前把纯新增的 `007` 应用到生产库，早于本轮备份；当时 `quick_check`/`integrity_check` 均为 `ok`。已有 2026-07-20 迁移前备份可用，但不含之后数据，因此未执行破坏性回滚。

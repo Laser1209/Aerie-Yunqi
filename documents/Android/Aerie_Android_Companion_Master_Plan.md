@@ -698,7 +698,7 @@ AERIE_DISABLE_QQ=false
 - [!] UTP 默认 `uninstall_after_test=true`，在测试完成后卸载了 App 和测试包，手机端本地 App 数据因此被清除；电脑账号、认证库和聊天库未受影响。用户随后断开手机，整合 APK 安装和新一次配对延后到 Compose/SSE 业务真机验收，并将使用保留 APK 的测试参数。
 - [x] `:app:testDebugUnitTest :app:assembleDebug :app:lintDebug --rerun-tasks --no-daemon` 实际执行 `55` 个任务并在 `3m39s` 内成功，Lint 为 `No issues found`；Debug APK 为 `65639082` bytes，SHA-256 `065CFF55D19C331FCA9E2D7F206DC09FD5A9749FF6B1F71AAD2C07E52C51D679`。
 - [x] 本节没有修改 Python、服务器配置或生产数据库；恢复审计时 `data/aerie.db` 与 `data/mobile_gateway.db` 均 `quick_check=ok`、外键违规 `0`。
-- [ ] Room/Retrofit/SSE 数据层尚未接入 Compose；不能据此勾选 Phase 3 或 Phase 4 的组合门禁。
+- [ ] 尚未完成前台服务/通知、Compose instrumented test 和目标 vivo 真机业务闭环；不能据此勾选 Phase 4 的组合门禁。
 
 ### 2026-07-22：Android SSE 客户端
 
@@ -709,7 +709,17 @@ AERIE_DISABLE_QQ=false
 - [x] SSE 401 只触发一次既有 Refresh Token 互斥刷新后重试；网络断开按 `1/2/4/8/30` 秒基线并加入有界抖动，连接状态已提供给后续 ViewModel。
 - [x] MockWebServer 定向命令实际执行 `9` 项 JVM 测试，`0` failures/errors/skips；覆盖认证头、Last-Event-ID、心跳、401 响应隔离、退避边界和断线重连后的 `evt_1` 游标。
 - [x] 本批只修改 Android 客户端源代码、测试和客户端证据文档，以及本主控文档；未修改 Python、服务器配置、生产数据库、Cloudflare 或运行态文件。
-- [ ] 下一门禁：把 Room/SSE/请求操作接入 Compose ViewModel，完成整合构建后再进行一次保留 APK 的真机业务验收。
+- [ ] 下一门禁：增加前台服务/通知并进行一次保留 APK 的真机业务验收。
+
+### 2026-07-22：Android Compose 与 ViewModel 接线
+
+- [x] 批次开始前重新读取主控 Android 工程、离线恢复和测试合同；服务器仓库与 Android 独立仓库边界未变，手机仍断开。
+- [x] `AerieViewModel` 按当前远程 `accountId` 切换 Room 消息、请求、待确认和连接 Flow；owner/guest 不共享客户端缓存，Debug 本地预览不启动网络 SSE。
+- [x] Compose 聊天页已接入真实历史、连接状态、待确认离线消息、发送动作和错误状态；任务页已接入 queued/running/cancel_requested/completed/failed/cancelled 以及取消/重试动作。
+- [x] 设置页提供显式手动同步入口；不把正文、Token、密码或配对码写入界面日志。
+- [x] `:app:testDebugUnitTest :app:assembleDebug :app:lintDebug --rerun-tasks --no-daemon` 实际执行成功；`22` 项 JVM 测试通过，`0` failures/errors/skips，APK `65786538` bytes，SHA-256 为 `C291939F9AAD7B59AD8CCB45B2D3A21D7049E4A9C0B6D0E78915FDD020A95B1A`，Lint 为 `No issues found`。
+- [x] 本批只修改 Android UI、ViewModel 和客户端测试/证据文档，以及本主控文档；未修改 Python、端口、生产数据库、Cloudflare 或运行态文件。
+- [ ] 尚未完成 Compose instrumented test、前台 `dataSync` 服务/通知和目标 vivo 真机业务闭环，因此 Phase 4 仍不能标记完成。
 
 ## 17. 决策日志
 

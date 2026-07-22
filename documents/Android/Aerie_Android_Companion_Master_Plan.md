@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 已实现认证网络合同、内存 Access Token、Keystore 加密 Refresh Token 和 401 刷新重试，并通过真机覆盖安装。生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 尚未开启，不能宣称真实联调完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已由同一新进程启动并通过安全路由验收；真实手机登录、聊天和 SSE 闭环尚未完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -644,6 +644,16 @@ AERIE_DISABLE_QQ=false
 - [x] 规范归属：与该用户 legacy 历史关联的 `1057/1057` 条 `messages` 已绑定；`actor_primary` 拥有 `1` 个 Conversation 和 `104` 个 Request，Request user_id 错配为 `0`。
 - [x] 主库与移动库均 `quick_check=ok`、外键违规 `0`；启 Flag 前快照为 `data/backups/aerie_post_mobile_owner_20260722_095250.db` 和 `data/backups/mobile_gateway_post_owner_20260722_095250.db`。
 
+### 2026-07-22：Phase 3 生产 Flag 激活与可靠重启
+
+- [x] Phase 0-2 门禁复核覆盖移动账号、身份、网关、聊天、Conversation、Request Queue、迁移、Worker、Pipeline 和 API，共 `209 passed`、`4` 条既有 FastAPI 弃用警告；测试后两份生产库均 `quick_check=ok`、外键违规 `0`。
+- [x] 拒绝把 `config/settings.yaml` 提交为默认开启：相关测试准确复现 `mobile_gateway_v1` 默认值变为 true 的风险。仓库四个 Flag 继续为 false，生产机仅在 Git 忽略的 `.env` 设置 `AERIE_FEATURE_IDENTITY_CONTRACT_V1=true`、`AERIE_FEATURE_CONVERSATION_MODEL_V1=true`、`AERIE_FEATURE_CHAT_REQUEST_QUEUE_V1=true` 和 `AERIE_FEATURE_MOBILE_GATEWAY_V1=true`。
+- [x] `.env` 激活前快照保存为 Git 忽略的 `.env.pre-mobile-flags.local`；`.env.example` 只记录四项默认 false 模板，不包含生产值或 Pepper。
+- [x] 首次调用管理 API 重启未生效，定位到 `tools/restart_helper.ps1` 默认项目根多向上取一层、错误落到 `E:\`。修复 helper 默认根，并由 `/api/system/restart` 显式传入 `PROJECT_ROOT`；新增重启合同测试，相关 `31 passed`，PowerShell AST 解析错误 `0`。
+- [x] 使用显式 `E:\Agent_reply` 完成受控重启；新进程 `45904` 同时且仅监听 `127.0.0.1:7890` 和 `127.0.0.1:7891`，运行 Git 提交 `b6c55aa`，移动健康检查返回 `status=ok`、`apiVersion=v1`。
+- [x] `7891` 安全路由实测：`/docs`、`/openapi.json`、`/api/system/restart`、`/api/brain/shell`、`/api/config/settings` 均为 `404`；未认证 `/api/mobile/v1/me` 和 `/messages` 为 `401`；响应无 CORS 且均为 `Cache-Control: no-store`。
+- [ ] 下一门禁：通过 ADB reverse 在真机使用一次性配对码完成真实登录，验证 Refresh Token Keystore 往返、历史同步、持久请求和 SSE；在此之前不宣称 Phase 3 完成。
+
 ### 2026-07-22：Phase 4 Android 认证客户端合同
 
 - [x] 将生产 `AppContainer` 从内存模拟 Repository 切换到 Retrofit/kotlinx.serialization 网络认证 Repository；登录 DTO 与 `/api/mobile/v1/auth/login` 当前服务器合同一致。
@@ -681,6 +691,7 @@ AERIE_DISABLE_QQ=false
 | 2026-07-22 | Phase 2/3 与 Android Phase 4 改由当前开发任务统一接管 | 减少跨 Agent 合同漂移；仍保持服务器与 Android 独立仓库、独立提交和阶段门禁 |
 | 2026-07-22 | 生产 Flag 必须晚于 owner `user_id` 明确绑定 | 历史包含多个内部用户编号；猜测绑定会把他人或旧测试上下文并入主账号，属于不可接受的数据隔离错误 |
 | 2026-07-22 | Android Release 仅允许 HTTPS，Debug 明文仅限本机测试主机 | 保证正式凭据不经明文网络传输，同时保留 MockWebServer、模拟器和 ADB reverse 的本地调试能力 |
+| 2026-07-22 | 生产 Feature Flags 通过本机 `.env` 覆盖启用，版本库默认继续关闭 | 防止新检出或未配置环境意外暴露 `7891`，同时允许当前生产机明确激活并保留一键回滚 |
 
 ## 18. 变更规则
 

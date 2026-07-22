@@ -650,7 +650,16 @@ async def system_restart() -> dict:
         return JSONResponse({"error": "helper_missing"}, status_code=500)
     try:
         subprocess.Popen(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(helper)],
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(helper),
+                "-ProjectRoot",
+                str(project_root),
+            ],
             cwd=str(project_root),
             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
             | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),

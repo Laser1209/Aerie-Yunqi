@@ -2,7 +2,7 @@
 # Kills the running main.py, waits for the port to free, then spawns a
 # fresh one in a detached process. Returns 0 on success, 1 on failure.
 param(
-    [string]$ProjectRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
+    [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
     [int]$Port = 7890
 )
 

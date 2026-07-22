@@ -497,7 +497,7 @@ AERIE_DISABLE_QQ=false
 ### Phase 8：发布与 QQ 独立验收
 
 - [ ] 创建仓库外签名密钥并安全备份。
-- [ ] 构建 Release APK，扫描 APK 内敏感字符串。
+- [x] 构建 Release APK，扫描 APK 内敏感字符串。
 - [ ] 在目标手机覆盖安装并验证数据保留。
 - [ ] 使用 `AERIE_DISABLE_QQ=true` 完成聊天、文件和审批闭环。
 - [ ] 文档状态更新为 `released`。
@@ -734,6 +734,8 @@ AERIE_DISABLE_QQ=false
 - [x] vivo `V2516A` 使用手工 `am instrument` 完成 `5 tests`、`0 failures/errors/skips`：包含相同时间戳排序、Room v1 到 v2 数据保留与游标清除、账号隔离、中断发送恢复和 Compose 冷启动；测试 APK 未卸载目标 App。
 - [x] 当前后端通过既有受控接口自重启，PID `39616 -> 35720`；`7890/7891` 同时恢复，移动健康检查返回 `200`、`status=ok`，运行进程已载入新服务器合同。
 - [x] 本批主控复核通过严格 UTF-8 解码（`61712` bytes）、Markdown 围栏配对（`10` 个围栏、`78` 个标题）、端口一致性和差异白名单检查；敏感信息扫描仅命中文档既有的 `<random-secret>` 占位符与 `$argon2id$` 算法前缀，未发现实际凭据、Token 或配对码。
+- [x] 在 `cfad6f3` 上执行 `:app:assembleRelease :app:lintRelease --no-daemon`，退出码为 `0`、耗时 `240.9s`，Release Lint 为 `No issues found`。未签名 APK 为 `4620711` bytes，SHA-256 为 `7237C095E206DDE97FDB24103806F48EFA7D00E5D0D0A7B176CB26AB3CC02B09`；`apkanalyzer` 确认包名 `top.etta.aerie`、`usesCleartextTraffic=false`，`dataSync` 前台服务为非导出组件。
+- [x] 对最终 APK 的全部压缩条目执行敏感字符串和文件名扫描：固定 owner 账号、测试密码、独立测试配对码、模拟 access/refresh Token、私钥、JWT、OpenAI Key、GitHub PAT 和含凭据 URL 均为零命中，也未打包测试目录、`.env`、keystore、PEM 或 `local.properties`。数字串 `12345678` 仅作为标准 Base64/十六进制字符表的子串出现，不是独立凭据。该 APK 仍未签名，不代表已发布，也不要求连接手机。
 - [!] 覆盖安装后手机 `secure_mobile_session.preferences_pb` 当前为空，App 正常停留登录页且无崩溃；未读取、猜测或代填密码、配对码和 Token。真实生产历史全量回填、七段回答连续显示和前台长任务通知仍等待 owner 在手机安全键盘重新认证，不能据此关闭 Phase 4 门禁。
 
 ## 17. 决策日志

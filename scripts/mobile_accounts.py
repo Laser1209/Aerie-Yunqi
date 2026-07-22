@@ -10,6 +10,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -18,6 +20,7 @@ from core.mobile_identity import MobileIdentityStore
 
 
 def _store() -> MobileIdentityStore:
+    load_dotenv(ROOT / ".env", override=False)
     pepper = os.getenv("AERIE_MOBILE_TOKEN_PEPPER", "")
     if not pepper:
         raise SystemExit("AERIE_MOBILE_TOKEN_PEPPER is required")

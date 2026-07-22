@@ -6,6 +6,30 @@ import sqlite3
 from scripts import mobile_accounts
 
 
+def test_store_loads_project_env_before_reading_mobile_settings(
+    tmp_path, monkeypatch
+):
+    auth_db = tmp_path / "mobile.db"
+    monkeypatch.delenv("AERIE_MOBILE_TOKEN_PEPPER", raising=False)
+    monkeypatch.delenv("AERIE_MOBILE_AUTH_DB", raising=False)
+
+    def fake_load_dotenv(path, *, override):
+        assert path == mobile_accounts.ROOT / ".env"
+        assert override is False
+        monkeypatch.setenv(
+            "AERIE_MOBILE_TOKEN_PEPPER",
+            "test-only-pepper-with-at-least-32-bytes",
+        )
+        monkeypatch.setenv("AERIE_MOBILE_AUTH_DB", str(auth_db))
+
+    monkeypatch.setattr(mobile_accounts, "load_dotenv", fake_load_dotenv)
+
+    store = mobile_accounts._store()
+
+    assert store.db_path == auth_db
+    assert auth_db.exists()
+
+
 def test_local_account_cli_creates_actor_binding(tmp_path, monkeypatch, capsys):
     main_db = tmp_path / "aerie.db"
     auth_db = tmp_path / "mobile.db"

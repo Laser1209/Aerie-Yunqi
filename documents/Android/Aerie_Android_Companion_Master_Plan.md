@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 已实现认证网络合同、内存 Access Token、Keystore 加密 Refresh Token 和 401 刷新重试，并通过真机覆盖安装。生产 owner 尚未绑定，四个运行 Flag 尚未开启，不能宣称真实联调完成 |
+| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 已实现认证网络合同、内存 Access Token、Keystore 加密 Refresh Token 和 401 刷新重试，并通过真机覆盖安装。本地 Pepper、`AERIE_PRIMARY_USER_ID` 和空认证库已安全配置；生产 owner 尚未绑定，四个运行 Flag 尚未开启，不能宣称真实联调完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -622,7 +622,17 @@ AERIE_DISABLE_QQ=false
 - [x] 当前生产库、`data/backups/aerie_pre_mobile_phase23_20260722_0830.db` 和隔离恢复副本均 `quick_check=ok`；25 张业务表行数及迁移账本完全一致。
 - [!] 流程偏差：上述测试隔离修复前，旧测试的 import-time `Database()` 提前把纯新增的 `007` 应用到生产库，早于本轮备份；当时 `quick_check`/`integrity_check` 均为 `ok`。已有 2026-07-20 迁移前备份可用，但不含之后数据，因此未执行破坏性回滚。
 - [x] 用户已确认主历史 `user_id` 为 `3489352115`；该编号可以写入本地 `AERIE_PRIMARY_USER_ID`，但账号密码不得通过聊天传递。
-- [ ] 生产门禁：`.env` 尚无 Pepper，owner 尚未通过本地交互工具创建，Actor 历史尚未回填；完成这些步骤后，才开启 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1`。
+- [ ] 生产门禁：`.env` 的主 user_id、Pepper 和移动数据库路径已配置；owner 尚未通过本地交互工具创建，Actor 历史尚未回填。完成建号、回填与守恒验证后，才开启 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1`。
+
+### 2026-07-22：Phase 2/3 生产启用准备
+
+- [x] 只读审计确认 `data/mobile_gateway.db` 原先不存在；`3489352115` 在生产库中有 `1084` 条 `chat_log` 和 `97` 条 `emotion_state_snapshot`，这些记录当前均未绑定 Actor。旧 `SELF_QQ` 与已确认编号不一致，因此正式主身份只使用 `AERIE_PRIMARY_USER_ID=3489352115`，不依赖 QQ 配置猜测。
+- [x] 在 Git 忽略的 `.env` 中生成并保存 48 字节高熵 Pepper，配置 `AERIE_PRIMARY_USER_ID=3489352115` 和 `AERIE_MOBILE_AUTH_DB=data/mobile_gateway.db`；只验证存在性和长度，未在命令输出、文档或 Git 中暴露真实 Pepper。
+- [x] `.env` 已备份到同样被 Git 忽略的 `.env.pre-mobile.local`；`.env.example` 只新增空的 `AERIE_PRIMARY_USER_ID` 模板。
+- [x] 使用 SQLite Backup API 创建 `data/backups/aerie_pre_mobile_owner_20260722_091708.db` 和独立恢复检查副本；源库 SHA-256 前后均为 `99FDB0EA45D27B39A1F3BB0DBD1D61A52BCE6542A962454D688238422A43996D`，三份库均 `quick_check=ok`、外键违规 `0`、`25` 张表逻辑计数一致。
+- [x] 初始化空的 `data/mobile_gateway.db`：`quick_check=ok`、外键违规 `0`、`7` 张移动表、账号数 `0`。
+- [x] 修复 `scripts/mobile_accounts.py` 直接运行时未加载项目 `.env` 的问题；使用 `override=False` 保留显式进程环境优先级。移动账号、身份、网关和聊天定向回归为 `38 passed`，直接执行 `python scripts/mobile_accounts.py list-accounts` 成功返回空列表。
+- [ ] 下一门禁是本地交互式创建 owner `actor_primary`、执行历史回填并验证守恒；密码只在本机隐藏输入，不通过聊天或命令行参数传递。
 
 ### 2026-07-22：Phase 4 Android 认证客户端合同
 

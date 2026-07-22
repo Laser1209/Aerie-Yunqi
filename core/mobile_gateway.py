@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, Header, Request, Response
+from fastapi import Depends, FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -370,8 +370,8 @@ def create_mobile_app(
 
     @app.get("/api/mobile/v1/messages")
     async def messages(
-        before_id: str | None = None,
-        after_id: str | None = None,
+        before_id: str | None = Query(default=None, alias="beforeId"),
+        after_id: str | None = Query(default=None, alias="afterId"),
         limit: int = 50,
         current: MobilePrincipal = Depends(principal),
         service: MobileChatService = Depends(chat),

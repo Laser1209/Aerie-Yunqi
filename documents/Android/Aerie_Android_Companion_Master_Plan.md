@@ -5,7 +5,7 @@ version: 2.0-draft
 status: implementing
 current_phase: Phase 4 Android 真机业务验收
 created_at: 2026-07-21
-updated_at: 2026-07-22
+updated_at: 2026-07-23
 project: Aerie
 public_hostname: aerie.etta.top
 ---
@@ -20,9 +20,9 @@ public_hostname: aerie.etta.top
 | 项目 | 当前值 |
 | --- | --- |
 | 文档状态 | `implementing` |
-| 当前阶段 | Phase 0-3 门禁已完成，进入 Phase 4 Android 真机业务验收；Phase 5 不得提前开始 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收。Phase 3 已由移动 API、持久 Worker、真实 Pipeline、桌面共享历史和 owner/guest 隔离组合合同收口。Android 已完成认证、Room/Retrofit、SSE、Compose、前台 `dataSync` 服务本体和约 15 分钟 WorkManager 状态同步；同时间戳长回复已通过 `messageOrder` 合同、Room v2 迁移和真机 instrumented test 修复。当前手机安全会话为空，仍需重新登录后完成真实历史排序、七段长回复连续显示、周期任务登记和长任务通知验收，Phase 4 不标记完成 |
-| 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
+| 当前阶段 | Phase 0-4 门禁已完成；Phase 4 状态为 `verified`，Phase 5 尚未开始，进入前必须重新复核既有门禁 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary`，四个生产 Flag 仅由本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 管理 API 与独立 `7891` 移动网关健康，Phase 3 持久聊天合同已收口。Android 最终 Debug APK 已在 vivo `V2516A` 覆盖安装并保留账号数据；Room v3、Retrofit、SSE、Compose、前台 `dataSync` 服务和唯一 WorkManager 周期任务均通过真机验收。移除标准 device-idle 白名单、只保留 VIVO“允许后台耗电”后，后台请求正常完成并自动撤销通知；服务器与手机 `1188` 条消息有序集合完全一致。Phase 4 自动化为 Android JVM `38/38`、真机 instrumented `9/9`、服务器完整回归 `632/632` |
+| 当前公开域名 | `etta.top` 已使用 Cloudflare 名称服务器；`aerie.etta.top` 当前在主要公共解析器返回 `NXDOMAIN`，命名 Tunnel 尚未创建，Phase 7 未开始 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
 | Android 目标设备 | VIVO Y500 Pro，OriginOS 6，Android 16 |
@@ -469,9 +469,9 @@ AERIE_DISABLE_QQ=false
 > 2026-07-22 用户授权提前创建和实现独立 Android 本体。此授权允许工程、客户端架构、界面、本地存储、安全容器和模拟合同并行开发，不代表 Phase 2/3 已完成，也不能提前宣称真实后端联调或 Phase 4 验收通过。
 
 - [x] 创建 Gradle Wrapper 和 Compose 工程。
-- [ ] 完成登录、配对、角色导航、聊天和请求状态。
-- [ ] 完成 Room、Keystore、前台服务、通知和恢复。
-- [ ] 在 VIVO Y500 Pro 通过 ADB 安装并完成本地接口测试。
+- [x] 完成登录、配对、角色导航、聊天和请求状态。
+- [x] 完成 Room、Keystore、前台服务、通知和恢复。
+- [x] 在 VIVO Y500 Pro 通过 ADB 安装并完成本地接口测试。
 
 ### Phase 5：文件双向传输
 
@@ -522,7 +522,7 @@ AERIE_DISABLE_QQ=false
 - Repository、DTO、错误映射、令牌刷新互斥和幂等发送单元测试。
 - MockWebServer 覆盖登录、刷新、聊天、SSE 重连、401 重试和文件分块。
 - Room 覆盖游标、待发送、进程重启和账号切换隔离。
-- Room 覆盖相同时间戳消息按 `messageOrder` 排列，以及 v1 到 v2 迁移保留消息并清除同步游标后全量收敛。
+- Room 覆盖相同时间戳消息按 `messageOrder` 排列，以及 v1/v2 到 v3 迁移保留消息并清除同步游标后全量收敛。
 - WorkManager 覆盖远程会话登记、注销/本地预览取消、约 15 分钟唯一周期、联网约束、失败重试，以及不得自动发送待确认指令。
 - Compose 覆盖 owner/guest 导航、离线状态、取消/重试、审批和错误提示。
 - Keystore/签名使用 instrumented test，不在 JVM 测试中伪称已验证硬件行为。
@@ -760,6 +760,18 @@ AERIE_DISABLE_QQ=false
 - [!] 上述两项 WorkManager instrumented 测试目前只完成编译，因尚未收到手机重新连接确认而未调用 ADB、未安装、未执行，不能记为真机通过。
 - [!] 分页代码复核确认客户端单次全量回填上限为 `100 × 100 = 10000` 条，当前约 `1069` 条生产历史和七段长回复不受该上限截断；Compose 默认自动滚到最新消息，因此一屏可见两条不能证明 Room 只同步两条。真实 Room 条数、七段连续显示、周期任务登记和前台通知仍必须在 owner 重新认证后的真机验收中确认，Phase 4 三个组合门禁保持未勾选。
 
+### 2026-07-23：Phase 4 最终真机收口
+
+- [x] 批次开始前完整复读主控方案，并复核服务器/Android 双仓库边界、`7890/7891` 健康状态和唯一目标设备；服务器仓库既有 Spotlight、配置、运行态及临时文件继续排除在本批路径白名单之外。
+- [x] vivo `V2516A` 通过系统“超级守护”物理授权完成保留数据覆盖安装。手机实际主 APK 与本地最终 Debug APK 的 SHA-256 均为 `E8CC4C7A591CB764E47028856DEA5161868714158AE2AA143664DB7168E4C08E`；安装前后 Aerie 私有区均为 `1754 KB`，测试后为 `1758 KB`，Room、WorkManager 和加密会话文件均保留。
+- [x] 最终 APK 冷启动 `1.479s` 后直接恢复 owner 主界面，未回到登录表单；随后真机测试后的冷启动为 `1.029s`。两次目标进程日志均为致命异常 `0`，密码、配对码、Access/Refresh Token、Authorization 和 Bearer 关键字命中 `0`。
+- [x] 移除临时标准 device-idle 白名单后，仅依赖 VIVO 应用设置中的“允许后台耗电”复测。唯一请求 `req_6c3f7847104cda2e9e4fad9c5c5ebb71` 在 App 退到桌面后于服务端完成；日志只记录 `02:37:48.583` 前台监控启动和 `02:38:15.556` 终态关闭，没有 Aerie `fast_freezer` 记录。结束后前台服务不存在，活动通知记录为 `0`，通知正文始终只使用产品名和状态文案。
+- [x] 后台状态写回时 Room 已升级到 v3，目标请求为 `completed`。服务器 owner Conversation 与手机 Room 均为 `1188` 条、`1188` 个唯一 ID；手机缺失 `0`、额外 `0`、`messageOrder` 不一致 `0`、role 不一致 `0`，完整有序 ID 序列完全相同。既有七段长回复 `messageOrder=1850..1856` 全部连续存在；本轮 `1` 条 user 加 `21` 条 assistant 消息 `messageOrder=1864..1885` 也全部连续存在。
+- [x] 最终 Test APK 与手机已安装测试包的 SHA-256 均为 `6DC07100764AC3D00410564873BF9FC2AACA3AE164A8CE437D532F01DECC16F5`。手工 `am instrument` 执行 `9` 项、`0` failures/errors/skips，覆盖 Room 顺序/账号隔离/中断恢复、v1/v2 到 v3 迁移、通知合同、唯一周期任务和 Compose 冷启动。
+- [x] 真机 WorkManager 数据库只存在一个 `aerie_periodic_status_sync`：状态 `ENQUEUED`、周期 `900000ms`、退避 `300000ms`、运行尝试 `0`。Android JVM `38/38`，Debug/Release Lint 均成功；服务器移动相关回归 `54/54`，显式 `tests/` 完整回归 `632/632`，仅有 `6` 条既有 FastAPI/asyncio 弃用警告。
+- [x] 最终 Debug APK 为 `66122092` bytes，SHA-256 `E8CC4C7A591CB764E47028856DEA5161868714158AE2AA143664DB7168E4C08E`；未签名 Release APK 为 `4637095` bytes，SHA-256 `96173B1549BDBCDAF151120AB970C299D58C695E89018367ED9B68EB6404E4BA`。Debug `553` 个和 Release `542` 个压缩条目的敏感文件名、固定 owner、OpenAI Key、GitHub PAT、私钥、JWT 和含凭据 URL 扫描均为零命中；Release 仍为 `debuggable=false`、`usesCleartextTraffic=false`，前台服务 `exported=false`。
+- [x] Phase 4 三项组合门禁据此关闭，状态为 `verified`。本批未实现或启用 Phase 5 文件传输、Phase 6 审批、Phase 7 Cloudflare Tunnel 或 Phase 8 签名发布；进入 Phase 5 前仍需重新审查 Phase 0-4 门禁。
+
 ## 17. 决策日志
 
 | 日期 | 决策 | 原因 |
@@ -786,6 +798,9 @@ AERIE_DISABLE_QQ=false
 | 2026-07-22 | Android SSE 使用 OkHttp 原生事件流并把 Last-Event-ID 放入 Room 游标 | Retrofit 负责请求/响应 API，原生 SSE 便于处理长连接、取消、401 重试和断线后的数据库收敛 |
 | 2026-07-22 | 消息历史与 SSE 统一返回 64 位 `messageOrder`，Android 只按该字段排序 | 多个回复分段可以共享同一时间戳，UUID 也不表示因果顺序；服务器数据库顺序才是可恢复的唯一真相 |
 | 2026-07-22 | 后台状态检查使用唯一 WorkManager 周期任务，采用 `KEEP`、联网约束且不自动发送待确认指令 | 满足进程退出后的约 15 分钟状态收敛，同时避免重复调度、过期指令自动执行和常驻 SSE 带来的耗电 |
+| 2026-07-23 | Android Room 升级到 v3 并在迁移时清除旧同步游标 | 服务器分页查询使用公开 `beforeId/afterId`，旧客户端曾可能留下不完整游标；保留消息后强制全量收敛可恢复权威集合 |
+| 2026-07-23 | 活动请求由前台服务每 5 秒执行状态专用刷新，单次最多等待 20 秒 | 任务退后台后仍需观察终态并自动关闭通知，但不应为一次状态检查重复下载完整消息历史 |
+| 2026-07-23 | vivo 首版运行要求使用系统“允许后台耗电”，不保留标准 device-idle 白名单 | OriginOS `fast_freezer` 会冻结普通后台执行；OEM 明确授权已通过真机闭环，额外白名单不是最小必要条件 |
 
 ## 18. 变更规则
 

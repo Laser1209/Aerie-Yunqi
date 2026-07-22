@@ -142,3 +142,56 @@ def test_mobile_persistent_chat_api_is_idempotent(phase4_db, tmp_path):
     )
     assert invalid_cursor.status_code == 400
     assert invalid_cursor.json()["error"]["code"] == "invalid_cursor"
+
+
+def test_mobile_message_cursors_use_camel_case_query_contract(phase4_db, tmp_path):
+    client, store = _client(tmp_path)
+    with phase4_db.connection() as conn:
+        conn.execute("INSERT INTO actors(actor_id) VALUES ('actor-primary')")
+        conn.execute(
+            """INSERT INTO conversations
+               (conversation_id, actor_id, channel, channel_account_id, status)
+               VALUES ('conv-cursors', 'actor-primary', 'mobile', '1001', 'active')"""
+        )
+        conn.execute(
+            """INSERT INTO turns(turn_id, conversation_id, status, completed_at)
+               VALUES ('turn-cursors', 'conv-cursors', 'completed', datetime('now'))"""
+        )
+        for sequence in range(1, 4):
+            conn.execute(
+                """INSERT INTO messages
+                   (message_id, conversation_id, turn_id, role, content, sequence,
+                    channel, channel_account_id, actor_id)
+                   VALUES (?, 'conv-cursors', 'turn-cursors', 'assistant', ?, ?,
+                           'mobile', '1001', 'actor-primary')""",
+                (f"msg-{sequence}", f"answer-{sequence}", sequence),
+            )
+    client.app.state.chat_service = MobileChatService(phase4_db, store)
+    tokens = _login(client, store)
+    headers = {"Authorization": f"Bearer {tokens['accessToken']}"}
+
+    latest = client.get(
+        "/api/mobile/v1/messages",
+        params={"limit": 2},
+        headers=headers,
+    )
+    before = client.get(
+        "/api/mobile/v1/messages",
+        params={"beforeId": "msg-2", "limit": 2},
+        headers=headers,
+    )
+    after = client.get(
+        "/api/mobile/v1/messages",
+        params={"afterId": "msg-2", "limit": 2},
+        headers=headers,
+    )
+
+    assert [item["messageId"] for item in latest.json()["items"]] == [
+        "msg-2",
+        "msg-3",
+    ]
+    assert latest.json()["hasMore"] is True
+    assert [item["messageId"] for item in before.json()["items"]] == ["msg-1"]
+    assert before.json()["hasMore"] is False
+    assert [item["messageId"] for item in after.json()["items"]] == ["msg-3"]
+    assert after.json()["hasMore"] is False

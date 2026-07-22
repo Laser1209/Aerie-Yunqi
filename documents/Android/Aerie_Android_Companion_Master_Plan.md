@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 0-3 门禁已完成，进入 Phase 4 Android 真机业务验收；Phase 5 不得提前开始 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收。Phase 3 已由移动 API、持久 Worker、真实 Pipeline、桌面共享历史和 owner/guest 隔离组合合同收口。Android 已完成认证、Room/Retrofit、SSE、Compose 和前台 `dataSync` 服务本体；同时间戳长回复已通过 `messageOrder` 合同、Room v2 迁移和真机 instrumented test 修复。当前手机安全会话为空，仍需重新登录后完成真实历史排序和长任务通知验收，Phase 4 不标记完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收。Phase 3 已由移动 API、持久 Worker、真实 Pipeline、桌面共享历史和 owner/guest 隔离组合合同收口。Android 已完成认证、Room/Retrofit、SSE、Compose、前台 `dataSync` 服务本体和约 15 分钟 WorkManager 状态同步；同时间戳长回复已通过 `messageOrder` 合同、Room v2 迁移和真机 instrumented test 修复。当前手机安全会话为空，仍需重新登录后完成真实历史排序、七段长回复连续显示、周期任务登记和长任务通知验收，Phase 4 不标记完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -523,6 +523,7 @@ AERIE_DISABLE_QQ=false
 - MockWebServer 覆盖登录、刷新、聊天、SSE 重连、401 重试和文件分块。
 - Room 覆盖游标、待发送、进程重启和账号切换隔离。
 - Room 覆盖相同时间戳消息按 `messageOrder` 排列，以及 v1 到 v2 迁移保留消息并清除同步游标后全量收敛。
+- WorkManager 覆盖远程会话登记、注销/本地预览取消、约 15 分钟唯一周期、联网约束、失败重试，以及不得自动发送待确认指令。
 - Compose 覆盖 owner/guest 导航、离线状态、取消/重试、审批和错误提示。
 - Keystore/签名使用 instrumented test，不在 JVM 测试中伪称已验证硬件行为。
 - `assembleDebug`、单元测试、instrumented test 和 `assembleRelease` 均需记录结果。
@@ -747,6 +748,16 @@ AERIE_DISABLE_QQ=false
 - [x] 以 SQLite 只读 URI 核验生产库：主库和移动认证库均 `quick_check=ok`、外键违规 `0`。主库当前 `3/3` 个 mobile 请求全部 completed，共用 `1` 个 owner Conversation，缺失 Conversation、未完成 Turn 和 Actor 错配均为 `0`；该 Conversation 同时包含既有 `1057` 条回填消息和 `12` 条 mobile 规范消息，证明桌面与手机使用同一持久时间线。
 - [x] Phase 3 两项遗留门禁据此关闭；本批没有修改 Android 源码、生产数据库、端口、Cloudflare 或运行 Flag。下一门禁回到 Phase 4 真机：owner 重新认证后验证 Room v2 全量收敛、长回复顺序和前台通知隐私。
 
+### 2026-07-22：Android WorkManager 周期状态同步
+
+- [x] 批次开始前完整复读主控方案并复核 Android/服务器双仓库边界；手机按用户要求保持断开，未执行 ADB、安装、凭据输入或安全会话读取，服务器仓库既有 Spotlight、配置、运行态和临时文件均未进入本批修改范围。
+- [x] Android 新增唯一周期任务 `aerie_periodic_status_sync`：间隔约 `15` 分钟、仅在网络连接时运行、失败使用 `5` 分钟指数退避，并以 `ExistingPeriodicWorkPolicy.KEEP` 防止重复登记。远程会话激活时登记，注销或进入本地预览时取消。
+- [x] Worker 只恢复既有 Keystore 会话并调用同一账号隔离的聊天仓储同步 Room 消息和活动请求；不打开 SSE、不启动前台服务、不显示正文，也不提交或自动确认离线待发送指令。同步失败返回 WorkManager `retry`。
+- [x] 初次组合回归因 Windows 原生内存不足中止；确认非测试失败后保留用户 Live2D 进程，改用 `1` 个 worker、`-Xmx1024m`、Metaspace `384m` 和 Kotlin in-process 分拆执行。最终 `33` 项 JVM 测试、Debug/Release 构建及两套 Lint 全部通过，`0` failures/errors/skips，Lint 均为 `No issues found`。
+- [x] 合并后的 Debug/Release Manifest 均含 WorkManager initializer、`SystemJobService`、`RescheduleReceiver`、`RECEIVE_BOOT_COMPLETED`、`INTERNET` 和 `ACCESS_NETWORK_STATE`；Release 仍为 `usesCleartextTraffic=false`，现有 `dataSync` 服务仍不导出。
+- [x] Debug APK 为 `65953442` bytes，SHA-256 `461DB7F4128CE34C0479AA0F466806CD3F648A914D074BAAA759E10687F6E4F8`；未签名 Release APK 为 `4637095` bytes，SHA-256 `42D358EBD92DA9B61CD27C51EBF4BB5E0FA6D81AFAC62EB40F5BB441F1F8C8FB`。`apkanalyzer` 确认包名 `top.etta.aerie`、`debuggable=false`、min SDK 28、target SDK 35；全部 `542` 个 APK 条目的敏感文件名及固定账号/测试凭据、私钥、JWT、OpenAI Key、GitHub PAT 和含凭据 URL 扫描均为零命中。
+- [!] 分页代码复核确认客户端单次全量回填上限为 `100 × 100 = 10000` 条，当前约 `1069` 条生产历史和七段长回复不受该上限截断；Compose 默认自动滚到最新消息，因此一屏可见两条不能证明 Room 只同步两条。真实 Room 条数、七段连续显示、周期任务登记和前台通知仍必须在 owner 重新认证后的真机验收中确认，Phase 4 三个组合门禁保持未勾选。
+
 ## 17. 决策日志
 
 | 日期 | 决策 | 原因 |
@@ -772,6 +783,7 @@ AERIE_DISABLE_QQ=false
 | 2026-07-22 | 生产 Feature Flags 通过本机 `.env` 覆盖启用，版本库默认继续关闭 | 防止新检出或未配置环境意外暴露 `7891`，同时允许当前生产机明确激活并保留一键回滚 |
 | 2026-07-22 | Android SSE 使用 OkHttp 原生事件流并把 Last-Event-ID 放入 Room 游标 | Retrofit 负责请求/响应 API，原生 SSE 便于处理长连接、取消、401 重试和断线后的数据库收敛 |
 | 2026-07-22 | 消息历史与 SSE 统一返回 64 位 `messageOrder`，Android 只按该字段排序 | 多个回复分段可以共享同一时间戳，UUID 也不表示因果顺序；服务器数据库顺序才是可恢复的唯一真相 |
+| 2026-07-22 | 后台状态检查使用唯一 WorkManager 周期任务，采用 `KEEP`、联网约束且不自动发送待确认指令 | 满足进程退出后的约 15 分钟状态收敛，同时避免重复调度、过期指令自动执行和常驻 SSE 带来的耗电 |
 
 ## 18. 变更规则
 

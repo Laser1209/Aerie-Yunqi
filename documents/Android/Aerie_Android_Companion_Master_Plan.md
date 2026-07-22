@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 工程与首次真机安装已通过。生产 owner 尚未绑定，四个运行 Flag 尚未开启，不能宣称真实联调完成 |
+| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 已实现认证网络合同、内存 Access Token、Keystore 加密 Refresh Token 和 401 刷新重试，并通过真机覆盖安装。生产 owner 尚未绑定，四个运行 Flag 尚未开启，不能宣称真实联调完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -621,7 +621,23 @@ AERIE_DISABLE_QQ=false
 - [x] 修复 pytest 收集期导入 `core.api_server` 会默认打开生产库的隔离缺口；修复后回归前后 `data/aerie.db` SHA-256 均为 `99FDB0EA45D27B39A1F3BB0DBD1D61A52BCE6542A962454D688238422A43996D`。
 - [x] 当前生产库、`data/backups/aerie_pre_mobile_phase23_20260722_0830.db` 和隔离恢复副本均 `quick_check=ok`；25 张业务表行数及迁移账本完全一致。
 - [!] 流程偏差：上述测试隔离修复前，旧测试的 import-time `Database()` 提前把纯新增的 `007` 应用到生产库，早于本轮备份；当时 `quick_check`/`integrity_check` 均为 `ok`。已有 2026-07-20 迁移前备份可用，但不含之后数据，因此未执行破坏性回滚。
-- [ ] 生产门禁：`.env` 尚无 `AERIE_PRIMARY_USER_ID` 和 Pepper，现有历史包含多个内部用户编号，不能猜测 owner；确认主历史 `user_id`、本地交互创建 owner 并完成 Actor 回填后，才开启 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1`。
+- [x] 用户已确认主历史 `user_id` 为 `3489352115`；该编号可以写入本地 `AERIE_PRIMARY_USER_ID`，但账号密码不得通过聊天传递。
+- [ ] 生产门禁：`.env` 尚无 Pepper，owner 尚未通过本地交互工具创建，Actor 历史尚未回填；完成这些步骤后，才开启 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1`。
+
+### 2026-07-22：Phase 4 Android 认证客户端合同
+
+- [x] 将生产 `AppContainer` 从内存模拟 Repository 切换到 Retrofit/kotlinx.serialization 网络认证 Repository；登录 DTO 与 `/api/mobile/v1/auth/login` 当前服务器合同一致。
+- [x] Access Token 仅保存在进程内 `StateFlow`；Refresh Token 使用 Android Keystore AES-256-GCM 加密，只有密文进入 DataStore，账号、设备、角色和服务器 URL 作为非敏感恢复元数据保存。
+- [x] Refresh Token 轮换使用协程 `Mutex`；12 个并发过期请求只发起一次刷新。授权执行器只对单次 `401` 刷新并重试一次，不对其他错误盲目重试。
+- [x] Release 只允许 HTTPS；Debug 仅允许 `localhost`、`127.0.0.1` 和模拟器 `10.0.2.2` 使用明文测试地址。OkHttp 未启用可能泄露密码或 Authorization 的日志拦截器。
+- [x] MockWebServer 与原有会话测试合计 `11` 项，`0` failures/errors/skips；覆盖登录 JSON、稳定错误映射、并发刷新、401 重试、后端不可达注销和 URL 策略。
+- [x] `.\gradlew.bat :app:clean :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon` 通过；Lint 为 `No issues found`。
+- [x] 已安装的认证批次 Debug APK 为 `65610280` bytes，SHA-256 `677818D2F07B78C4937D707330D06D40E1EE6471903712FFDD10BC7F9E7E81C1`。
+- [x] vivo `V2516A`（Android 16/API 36）覆盖安装成功；冷启动 `1.905s`，PID `25673`，启动日志未发现 Aerie 致命异常。空会话恢复路径已真机验证；真实 Refresh Token 的 Keystore 往返仍等待生产 owner 配置。
+- [x] Release 首次 R8 尝试因 3 GB Java 堆和过高 worker 并发耗尽 Windows 原生内存；将仓库构建基线固化为 1.5 GB 堆、512 MB Metaspace、2 workers 且关闭并行项目执行后，`:app:assembleRelease :app:lintRelease` 在 `2m40s` 内通过。
+- [x] 使用固化参数从 `clean` 开始执行 Debug 单测/编译/Lint及 Release 编译/Lint：`108` 个任务在 `52s` 内成功；Debug/Release Lint 均为 `No issues found`，`11` 项 JVM 测试全通过。
+- [x] 合并后的 Release Manifest 明确包含 `android:usesCleartextTraffic="false"`；未签名 Release APK 为 `4486789` bytes，SHA-256 `D24B613C6B6576FDC1FF8785EA39B524A4FEFF1A0471A7DF601B20F2F1440542`。该文件只作为构建证据，不代表已签名发布。
+- [x] 最新 clean Debug APK 为 `65491626` bytes，SHA-256 `2A9F60F8990648CE12A1CACC4226DDBCE92FAD4EAFB0974F18426CEE17E80FB3`；再次覆盖安装因手机端确认在 120 秒内未返回而终止，设备上 08:54 已成功安装的同源码认证批次仍在运行。
 
 ## 17. 决策日志
 
@@ -644,6 +660,7 @@ AERIE_DISABLE_QQ=false
 | 2026-07-22 | 允许 Android Phase 4 本体在 Phase 2/3 期间提前并行实现 | 服务器由独立 Agent 推进；客户端可先按冻结合同构建，但真实联调和阶段验收不得越过服务器门禁 |
 | 2026-07-22 | Phase 2/3 与 Android Phase 4 改由当前开发任务统一接管 | 减少跨 Agent 合同漂移；仍保持服务器与 Android 独立仓库、独立提交和阶段门禁 |
 | 2026-07-22 | 生产 Flag 必须晚于 owner `user_id` 明确绑定 | 历史包含多个内部用户编号；猜测绑定会把他人或旧测试上下文并入主账号，属于不可接受的数据隔离错误 |
+| 2026-07-22 | Android Release 仅允许 HTTPS，Debug 明文仅限本机测试主机 | 保证正式凭据不经明文网络传输，同时保留 MockWebServer、模拟器和 ADB reverse 的本地调试能力 |
 
 ## 18. 变更规则
 

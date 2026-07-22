@@ -3,7 +3,7 @@ title: Aerie v2 安卓远程伴侣主控方案
 kind: master-plan
 version: 2.0-draft
 status: implementing
-current_phase: Phase 4 Android 真机业务验收
+current_phase: Phase 5 文件双向传输
 created_at: 2026-07-21
 updated_at: 2026-07-23
 project: Aerie
@@ -20,7 +20,7 @@ public_hostname: aerie.etta.top
 | 项目 | 当前值 |
 | --- | --- |
 | 文档状态 | `implementing` |
-| 当前阶段 | Phase 0-4 门禁已完成；Phase 4 状态为 `verified`，Phase 5 尚未开始，进入前必须重新复核既有门禁 |
+| 当前阶段 | Phase 0-4 门禁已完成并通过进入前复核；Phase 5 文件双向传输进入 `implementing`，尚无 Phase 5 功能可宣称完成 |
 | 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary`，四个生产 Flag 仅由本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 管理 API 与独立 `7891` 移动网关健康，Phase 3 持久聊天合同已收口。Android 最终 Debug APK 已在 vivo `V2516A` 覆盖安装并保留账号数据；Room v3、Retrofit、SSE、Compose、前台 `dataSync` 服务和唯一 WorkManager 周期任务均通过真机验收。移除标准 device-idle 白名单、只保留 VIVO“允许后台耗电”后，后台请求正常完成并自动撤销通知；服务器与手机 `1188` 条消息有序集合完全一致。Phase 4 自动化为 Android JVM `38/38`、真机 instrumented `9/9`、服务器完整回归 `632/632` |
 | 当前公开域名 | `etta.top` 已使用 Cloudflare 名称服务器；`aerie.etta.top` 当前在主要公共解析器返回 `NXDOMAIN`，命名 Tunnel 尚未创建，Phase 7 未开始 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
@@ -771,6 +771,15 @@ AERIE_DISABLE_QQ=false
 - [x] 真机 WorkManager 数据库只存在一个 `aerie_periodic_status_sync`：状态 `ENQUEUED`、周期 `900000ms`、退避 `300000ms`、运行尝试 `0`。Android JVM `38/38`，Debug/Release Lint 均成功；服务器移动相关回归 `54/54`，显式 `tests/` 完整回归 `632/632`，仅有 `6` 条既有 FastAPI/asyncio 弃用警告。
 - [x] 最终 Debug APK 为 `66122092` bytes，SHA-256 `E8CC4C7A591CB764E47028856DEA5161868714158AE2AA143664DB7168E4C08E`；未签名 Release APK 为 `4637095` bytes，SHA-256 `96173B1549BDBCDAF151120AB970C299D58C695E89018367ED9B68EB6404E4BA`。Debug `553` 个和 Release `542` 个压缩条目的敏感文件名、固定 owner、OpenAI Key、GitHub PAT、私钥、JWT 和含凭据 URL 扫描均为零命中；Release 仍为 `debuggable=false`、`usesCleartextTraffic=false`，前台服务 `exported=false`。
 - [x] Phase 4 三项组合门禁据此关闭，状态为 `verified`。本批未实现或启用 Phase 5 文件传输、Phase 6 审批、Phase 7 Cloudflare Tunnel 或 Phase 8 签名发布；进入 Phase 5 前仍需重新审查 Phase 0-4 门禁。
+
+### 2026-07-23：Phase 0-4 门禁复核与 Phase 5 准入
+
+- [x] Android 与服务器 Phase 4 提交已分别推送：Android `5bc9138` 位于 `codex/phase4-android-foundation`，服务器 `2c0e359` 位于 `codex/phase2-3-mobile-auth-chat`；两个分支相对各自 upstream 均为 `0 ahead / 0 behind`。Android 工作树干净，服务器本批三个 owned 路径干净，Spotlight、配置、运行态及临时文件仍未暂存或覆盖。
+- [x] 服务器通过既有本地重启接口从 PID `35200`、提交 `bdc6df6` 切换为 PID `37472`、提交 `2c0e359`；健康检查 `stale_code=false`，`7890` 和 `7891` 同时且仅监听 `127.0.0.1`。
+- [x] 重启后的 `7891` 路由复核：health 为 `200`；`/docs`、`/openapi.json`、`/api/system/restart`、`/api/brain/shell` 和 `/api/config/settings` 均为 `404`；未认证 `/me`、`/messages` 均为 `401`。全部响应无通配 CORS，且为 `Cache-Control: no-store`。
+- [x] `data/aerie.db` 与 `data/mobile_gateway.db` 均 `quick_check=ok`、外键违规 `0`；移动请求状态为 `15 completed`，唯一 owner 账号保持启用。四个生产 Feature Flag 在本机 `.env` 均为 true，工作树和提交中的 `config/settings.yaml` 默认值均仍为 false。
+- [x] Phase 7 未被提前开启：本机 `cloudflared` 进程和服务均为 `0`，`aerie.etta.top` 在 `1.1.1.1` 和 `8.8.8.8` 仍返回 `NXDOMAIN`；`7890` 未暴露公网。
+- [x] Phase 0-4 清单与上述实时证据一致，没有发现需要回退的未完成门禁。准许把主控当前阶段切换为 Phase 5 `implementing`；本准入小节不实现文件 API、Android 文件 UI、目录授权或 Defender 扫描。
 
 ## 17. 决策日志
 

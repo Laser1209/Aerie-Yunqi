@@ -756,6 +756,8 @@ AERIE_DISABLE_QQ=false
 - [x] 初次组合回归因 Windows 原生内存不足中止；确认非测试失败后保留用户 Live2D 进程，改用 `1` 个 worker、`-Xmx1024m`、Metaspace `384m` 和 Kotlin in-process 分拆执行。最终 `33` 项 JVM 测试、Debug/Release 构建及两套 Lint 全部通过，`0` failures/errors/skips，Lint 均为 `No issues found`。
 - [x] 合并后的 Debug/Release Manifest 均含 WorkManager initializer、`SystemJobService`、`RescheduleReceiver`、`RECEIVE_BOOT_COMPLETED`、`INTERNET` 和 `ACCESS_NETWORK_STATE`；Release 仍为 `usesCleartextTraffic=false`，现有 `dataSync` 服务仍不导出。
 - [x] Debug APK 为 `65953442` bytes，SHA-256 `461DB7F4128CE34C0479AA0F466806CD3F648A914D074BAAA759E10687F6E4F8`；未签名 Release APK 为 `4637095` bytes，SHA-256 `42D358EBD92DA9B61CD27C51EBF4BB5E0FA6D81AFAC62EB40F5BB441F1F8C8FB`。`apkanalyzer` 确认包名 `top.etta.aerie`、`debuggable=false`、min SDK 28、target SDK 35；全部 `542` 个 APK 条目的敏感文件名及固定账号/测试凭据、私钥、JWT、OpenAI Key、GitHub PAT 和含凭据 URL 扫描均为零命中。
+- [x] 后续补充 `work-testing:2.10.1` instrumented 合同，覆盖重复登记只保留一个 unique work、任务标签/状态、取消后进入 `CANCELLED`，并锁定 `15` 分钟周期与 `5` 分钟退避常量；测试数据库在每项结束后显式关闭。`:app:assembleDebugAndroidTest` 与 `:app:lintDebug` 均成功，Lint 为 `No issues found`，JVM 回归仍为 `33/33`；当前共准备 `7` 项真机测试。测试 APK 为 `2355262` bytes，SHA-256 `495855344DCB6F73B4443B80CF963C6279B2EE90EA8CD0DFDC5EBF4223E2C11C`。
+- [!] 上述两项 WorkManager instrumented 测试目前只完成编译，因尚未收到手机重新连接确认而未调用 ADB、未安装、未执行，不能记为真机通过。
 - [!] 分页代码复核确认客户端单次全量回填上限为 `100 × 100 = 10000` 条，当前约 `1069` 条生产历史和七段长回复不受该上限截断；Compose 默认自动滚到最新消息，因此一屏可见两条不能证明 Room 只同步两条。真实 Room 条数、七段连续显示、周期任务登记和前台通知仍必须在 owner 重新认证后的真机验收中确认，Phase 4 三个组合门禁保持未勾选。
 
 ## 17. 决策日志

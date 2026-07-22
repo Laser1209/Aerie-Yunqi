@@ -301,6 +301,68 @@ preserve legacy completed rows and nullable snapshots
     ]
 
 
+def _apply_mobile_event_log(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS mobile_events (
+            event_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK(
+                event_type IN ('message.created', 'request.updated')
+            ),
+            entity_id TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            )
+        )"""
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_mobile_events_actor_sequence
+           ON mobile_events(actor_id, event_sequence)"""
+    )
+    conn.execute(
+        """CREATE TRIGGER IF NOT EXISTS mobile_message_created
+           AFTER INSERT ON messages
+           WHEN NEW.actor_id IS NOT NULL
+           BEGIN
+             INSERT INTO mobile_events(actor_id, event_type, entity_id)
+             VALUES (NEW.actor_id, 'message.created', NEW.message_id);
+           END"""
+    )
+    conn.execute(
+        """CREATE TRIGGER IF NOT EXISTS mobile_request_created
+           AFTER INSERT ON requests
+           WHEN NEW.actor_id IS NOT NULL
+           BEGIN
+             INSERT INTO mobile_events(actor_id, event_type, entity_id)
+             VALUES (NEW.actor_id, 'request.updated', NEW.request_id);
+           END"""
+    )
+    conn.execute(
+        """CREATE TRIGGER IF NOT EXISTS mobile_request_updated
+           AFTER UPDATE OF status, updated_at, error_code ON requests
+           WHEN NEW.actor_id IS NOT NULL
+           BEGIN
+             INSERT INTO mobile_events(actor_id, event_type, entity_id)
+             VALUES (NEW.actor_id, 'request.updated', NEW.request_id);
+           END"""
+    )
+
+
+def mobile_gateway_migrations() -> list[Migration]:
+    contract = """007_mobile_event_log
+mobile_events(event_sequence,actor_id,event_type,entity_id,created_at)
+triggers(messages.insert,requests.insert,requests.status+updated_at+error_code)
+actor-filtered resumable mobile SSE cursor
+"""
+    return [
+        Migration(
+            version="007_mobile_event_log",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_mobile_event_log,
+        )
+    ]
+
+
 def phase2_identity_migrations() -> list[Migration]:
     contract = """002_actor_channel_identity
 actors(actor_id)

@@ -23,10 +23,24 @@ from core.mobile_gateway import (
 client = TestClient(mobile_app)
 
 
-def test_mobile_gateway_exposes_only_the_public_health_route():
+def test_mobile_gateway_exposes_only_the_phase2_route_allowlist():
     paths = {route.path for route in mobile_app.routes}
 
-    assert paths == {"/api/mobile/v1/health"}
+    assert paths == {
+        "/api/mobile/v1/health",
+        "/api/mobile/v1/auth/login",
+        "/api/mobile/v1/auth/refresh",
+        "/api/mobile/v1/auth/logout",
+        "/api/mobile/v1/me",
+        "/api/mobile/v1/devices",
+        "/api/mobile/v1/devices/{device_id}",
+        "/api/mobile/v1/messages",
+        "/api/mobile/v1/requests",
+        "/api/mobile/v1/requests/{request_id}",
+        "/api/mobile/v1/requests/{request_id}/cancel",
+        "/api/mobile/v1/requests/{request_id}/retry",
+        "/api/mobile/v1/events",
+    }
     assert mobile_app.docs_url is None
     assert mobile_app.redoc_url is None
     assert mobile_app.openapi_url is None

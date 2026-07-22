@@ -44,6 +44,7 @@ psutil==7.2.2
 loguru==0.7.3
 pyyaml==6.0.3
 python-dotenv==1.2.2
+argon2-cffi==25.1.0
 
 # ============================================================
 # Scheduler (auto-wake core) ------------------------ verified=yes

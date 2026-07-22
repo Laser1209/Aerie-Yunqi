@@ -3,9 +3,9 @@ title: Aerie v2 安卓远程伴侣主控方案
 kind: master-plan
 version: 2.0-draft
 status: implementing
-current_phase: 最小安全网关（已验证）
+current_phase: Phase 2/3 重新执行；Phase 4 Android 本体并行实施
 created_at: 2026-07-21
-updated_at: 2026-07-21
+updated_at: 2026-07-22
 project: Aerie
 public_hostname: aerie.etta.top
 ---
@@ -20,8 +20,8 @@ public_hostname: aerie.etta.top
 | 项目 | 当前值 |
 | --- | --- |
 | 文档状态 | `implementing` |
-| 当前阶段 | 最小安全网关（已验证），下一阶段为账号、设备与身份 |
-| 当前实现状态 | `7891` 独立网关仅提供健康检查，默认关闭；尚未实现认证、聊天、文件、审批或 Android App |
+| 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
+| 当前实现状态 | `7891` 已实现默认关闭的认证、设备、持久请求、历史和 SSE 合同；Android 工程与首次真机安装已通过。生产 owner 尚未绑定，四个运行 Flag 尚未开启，不能宣称真实联调完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -435,7 +435,7 @@ AERIE_DISABLE_QQ=false
 
 ## 13. 分阶段实施门禁
 
-### Phase 0：文档基线（当前阶段）
+### Phase 0：文档基线
 
 - [x] 创建主控 MD。
 - [x] 写入已确认的产品决策、架构、端口和安全边界。
@@ -451,21 +451,23 @@ AERIE_DISABLE_QQ=false
 
 ### Phase 2：账号、设备与身份
 
-- [ ] 生产数据库一致性备份、`quick_check` 和恢复演练。
-- [ ] 实现移动认证数据库和本地账号管理工具。
-- [ ] 实现 Argon2id、配对码、令牌轮换、撤销和限流。
+- [x] 生产数据库一致性备份、`quick_check` 和恢复演练。
+- [x] 实现移动认证数据库和本地账号管理工具。
+- [x] 实现 Argon2id、配对码、令牌轮换、撤销和限流。
 - [ ] 建立 owner/guest Actor 绑定及历史、记忆隔离测试。
 
 ### Phase 3：持久聊天
 
 - [ ] 启用并验证 Conversation Model 和持久 Request Queue。
-- [ ] 实现移动请求、历史、状态、取消、重试和幂等。
-- [ ] 实现过滤后的移动 SSE 和断线恢复。
+- [x] 实现移动请求、历史、状态、取消、重试和幂等。
+- [x] 实现过滤后的移动 SSE 和断线恢复。
 - [ ] 验证主账号桌面共享与访客互相隔离。
 
 ### Phase 4：Android 基础端
 
-- [ ] 创建 Gradle Wrapper 和 Compose 工程。
+> 2026-07-22 用户授权提前创建和实现独立 Android 本体。此授权允许工程、客户端架构、界面、本地存储、安全容器和模拟合同并行开发，不代表 Phase 2/3 已完成，也不能提前宣称真实后端联调或 Phase 4 验收通过。
+
+- [x] 创建 Gradle Wrapper 和 Compose 工程。
 - [ ] 完成登录、配对、角色导航、聊天和请求状态。
 - [ ] 完成 Room、Keystore、前台服务、通知和恢复。
 - [ ] 在 VIVO Y500 Pro 通过 ADB 安装并完成本地接口测试。
@@ -588,6 +590,38 @@ AERIE_DISABLE_QQ=false
 - [x] 已将空远程克隆到 `E:\Agent_reply\android-client`，建立 Android 专用 `README.md` 与 `.gitignore`，并创建本地根提交 `a20f883 chore: initialize Android companion repository`。
 - [x] HTTPS 推送受 `github.com:443` 网络故障影响后，已验证 SSH 认证并将 `origin` 切换为 `git@github.com:Laser1209/Aerie-Android.git`；`git push -u origin main` 成功，远程 `main` 已发布本地根提交 `a20f883`。
 
+### 2026-07-22：Android 本体提前开发授权
+
+- [x] 用户明确要求直接开始生成 Android 本体并在 `E:\Agent_reply\android-client` 本地向后推进。
+- [x] 提前开发范围限定为独立 Android 仓库中的可构建工程、客户端架构、界面、本地存储、安全容器、前台服务和基于既定 API 合同的客户端测试。
+- [x] 本批开始时 Phase 2/3 仍由服务器 Agent 负责；Android 真实联调、真机业务闭环和 Phase 4 完成标记继续等待这些门禁。
+- [x] 提前 ADB 预检通过：Android SDK ADB 独立识别 VIVO `V2516A`，设备状态为 `device`，Android 16/API 36；该结果不等同于 APK 安装验收。
+
+### 2026-07-22：Phase 4 Android 工程基线
+
+- [x] 在独立分支 `codex/phase4-android-foundation` 创建单 `app` 模块、Application ID `top.etta.aerie`、compile/target SDK 35 和 min SDK 28。
+- [x] 生成 Gradle Wrapper 8.11.1；固定腾讯 Gradle 镜像并配置官方 SHA-256 `f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6`，本地分发包校验一致。
+- [x] 固定 Android Gradle Plugin 8.9.2、Kotlin 2.1.20、JDK 17，并建立 Compose Material 3、MVVM、Repository 和手动 `AppContainer` 基线。
+- [x] 完成登录/配对界面、owner/guest Debug 本地预览、聊天/任务/文件/设置主壳；Release 构建常量禁止本地预览绕过登录。
+- [x] `.\gradlew.bat :app:clean :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon`：通过；`5` 项会话输入、角色和退出测试全部通过，Lint 为 `No issues found`。
+- [x] Debug APK 元数据通过：`top.etta.aerie`、`0.1.0-dev`、min SDK 28、target/compile SDK 35；APK 为 `65393180` bytes，SHA-256 `C10ECCDFFB0A6CF0E1B9A9666826DA22D8B41A937E22F56B2610C97AE795DF35`。
+- [x] ADB 在唯一连接的 vivo `V2516A`（Android 16/API 36）执行 `adb install -r` 成功；`top.etta.aerie/.MainActivity` 冷启动成功，进程 PID `16107`。该证据证明安装和启动，不替代 Phase 2/3 完成后的本地接口与业务闭环测试。
+
+### 2026-07-22：Phase 2/3 重新执行接管
+
+- [x] 用户将 Phase 2/3、后续提交和上传操作正式交由当前开发任务统一负责。
+- [x] 重新审计服务器仓库和既有实现：Phase 1 当时仅有 health；移动账号/设备/令牌不存在；主系统已有 Conversation/Request Queue，但未接入 `7891`。
+- [x] 新增独立 `data/mobile_gateway.db` 存储、Argon2id、10 分钟一次性八位配对码、15 分钟失败限流、15 分钟 Access Token、30 天 Refresh Token 轮换/家族复用撤销、设备撤销和脱敏审计。
+- [x] 新增本地 `scripts/mobile_accounts.py`，覆盖 owner/guest 创建、改密、配对码、账号/设备列表、设备撤销和账号禁用；owner 创建时将 `mobile`、`desktop/local` 和对应 QQ 兼容身份绑定到同一 Actor，并按显式 `user_id` 回填历史。
+- [x] 新增移动 `/auth/*`、`/me`、`/devices`、`/messages`、`/requests*` 和 `/events`；桌面管理 API、OpenAPI、文档和 CORS 仍未暴露。
+- [x] 新增 `007_mobile_event_log`，通过 Actor 过滤的持久事件序列支持 SSE `Last-Event-ID` 重连；数据库查询继续是最终真相。
+- [x] `164` 项 Conversation、Request Queue、Worker、API、迁移和移动定向回归通过；仅有 4 条既有 FastAPI `on_event` 弃用警告。
+- [x] `python -m pytest tests -q`：`643 passed`、`6 warnings`；警告均为既有 FastAPI `on_event` 和 Python 3.16 前的 asyncio 弃用提示，无测试失败。
+- [x] 修复 pytest 收集期导入 `core.api_server` 会默认打开生产库的隔离缺口；修复后回归前后 `data/aerie.db` SHA-256 均为 `99FDB0EA45D27B39A1F3BB0DBD1D61A52BCE6542A962454D688238422A43996D`。
+- [x] 当前生产库、`data/backups/aerie_pre_mobile_phase23_20260722_0830.db` 和隔离恢复副本均 `quick_check=ok`；25 张业务表行数及迁移账本完全一致。
+- [!] 流程偏差：上述测试隔离修复前，旧测试的 import-time `Database()` 提前把纯新增的 `007` 应用到生产库，早于本轮备份；当时 `quick_check`/`integrity_check` 均为 `ok`。已有 2026-07-20 迁移前备份可用，但不含之后数据，因此未执行破坏性回滚。
+- [ ] 生产门禁：`.env` 尚无 `AERIE_PRIMARY_USER_ID` 和 Pepper，现有历史包含多个内部用户编号，不能猜测 owner；确认主历史 `user_id`、本地交互创建 owner 并完成 Actor 回填后，才开启 `identity_contract_v1`、`conversation_model_v1`、`chat_request_queue_v1` 和 `mobile_gateway_v1`。
+
 ## 17. 决策日志
 
 | 日期 | 决策 | 原因 |
@@ -606,11 +640,14 @@ AERIE_DISABLE_QQ=false
 | 2026-07-21 | 离线请求恢复后手动确认 | 避免过期指令在未知时间自动执行 |
 | 2026-07-21 | 完整回归中的图表测试使用 pytest 临时目录 | 测试不应写入用户配置的生产办公目录；该修复不改变生产行为 |
 | 2026-07-21 | Android 客户端使用独立 `Aerie-Android` 仓库 | 防止 Kotlin/Gradle 客户端与 Python 服务器代码混库，同时保留跨仓库主控合同 |
+| 2026-07-22 | 允许 Android Phase 4 本体在 Phase 2/3 期间提前并行实现 | 服务器由独立 Agent 推进；客户端可先按冻结合同构建，但真实联调和阶段验收不得越过服务器门禁 |
+| 2026-07-22 | Phase 2/3 与 Android Phase 4 改由当前开发任务统一接管 | 减少跨 Agent 合同漂移；仍保持服务器与 Android 独立仓库、独立提交和阶段门禁 |
+| 2026-07-22 | 生产 Flag 必须晚于 owner `user_id` 明确绑定 | 历史包含多个内部用户编号；猜测绑定会把他人或旧测试上下文并入主账号，属于不可接受的数据隔离错误 |
 
 ## 18. 变更规则
 
 1. 修改公开 API、端口、令牌期限、角色权限、目录边界或文件类型前，先新增决策日志。
-2. 每次只实施一个 Phase；当前 Phase 未通过目标测试时，不并行进入下一 Phase。
+2. 默认每次只实施一个 Phase；2026-07-22 的明确例外只允许独立 Android 仓库提前实现 Phase 4 客户端本体，真实后端联调、真机业务闭环和 Phase 4 验收仍必须等待 Phase 2/3 通过。
 3. 修改前先增加或确认失败测试，修改后先跑定向测试，再跑相关回归和完整回归。
 4. 任何生产数据库迁移都必须先备份、dry-run、`quick_check` 和恢复演练。
 5. 不用“后面再补安全”作为临时方案；鉴权、所有权和路由隔离必须早于 Tunnel。

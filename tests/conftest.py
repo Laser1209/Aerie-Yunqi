@@ -1,6 +1,7 @@
 """Shared pytest fixtures for Aerie · 云栖 v9.0 tests."""
 
 import os
+import shutil
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,16 @@ import pytest
 
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Collection imports core.api_server, which initializes Database eagerly.
+# Pin that import-time singleton to a disposable database before test modules load.
+_PYTEST_DB_ROOT = Path(tempfile.mkdtemp(prefix="aerie-pytest-db-"))
+os.environ["AERIE_DB_PATH"] = str(_PYTEST_DB_ROOT / "aerie.db")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    del session, exitstatus
+    shutil.rmtree(_PYTEST_DB_ROOT, ignore_errors=True)
 
 
 @pytest.fixture

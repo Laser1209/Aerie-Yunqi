@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真实手机登录、聊天和 SSE 闭环尚未完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真机 owner 登录、一次性配对、Keystore 会话恢复和 Refresh Token 轮换已通过；手机历史同步、持久请求和 SSE 闭环尚未完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -658,7 +658,8 @@ AERIE_DISABLE_QQ=false
 - [x] 第三版可观测修复提交 `f369adf` 完成人工升级重启，PID `36736 -> 41460`，运行提交和双端口均正确；随后仅调用 `/api/system/restart` 完成自重启，PID `41460 -> 39616`，`7890/7891` 约 `13s` 内恢复，helper 日志完整记录定向停止、端口释放和启动。
 - [x] 自重启后两份数据库均 `quick_check=ok`、外键违规 `0`、唯一 owner 不变；`7891` 再次验证 health `200`、文档与管理路由 `404`、未认证 `/me` 为 `401`。
 - [x] `7891` 安全路由实测：`/docs`、`/openapi.json`、`/api/system/restart`、`/api/brain/shell`、`/api/config/settings` 均为 `404`；未认证 `/api/mobile/v1/me` 和 `/messages` 为 `401`；响应无 CORS 且均为 `Cache-Control: no-store`。
-- [ ] 下一门禁：通过 ADB reverse 在真机使用一次性配对码完成真实登录，验证 Refresh Token Keystore 往返、历史同步、持久请求和 SSE；在此之前不宣称 Phase 3 完成。
+- [x] 通过 ADB reverse 在真机使用一次性配对码完成真实登录，并验证 Refresh Token Keystore 往返和轮换。
+- [ ] 下一门禁：实现并验证 Android 历史同步、持久请求和 SSE；在此之前不宣称 Phase 3 完成。
 
 ### 2026-07-22：Phase 4 Android 认证客户端合同
 
@@ -674,6 +675,17 @@ AERIE_DISABLE_QQ=false
 - [x] 使用固化参数从 `clean` 开始执行 Debug 单测/编译/Lint及 Release 编译/Lint：`108` 个任务在 `52s` 内成功；Debug/Release Lint 均为 `No issues found`，`11` 项 JVM 测试全通过。
 - [x] 合并后的 Release Manifest 明确包含 `android:usesCleartextTraffic="false"`；未签名 Release APK 为 `4486789` bytes，SHA-256 `D24B613C6B6576FDC1FF8785EA39B524A4FEFF1A0471A7DF601B20F2F1440542`。该文件只作为构建证据，不代表已签名发布。
 - [x] 最新 clean Debug APK 为 `65491626` bytes，SHA-256 `2A9F60F8990648CE12A1CACC4226DDBCE92FAD4EAFB0974F18426CEE17E80FB3`；再次覆盖安装因手机端确认在 120 秒内未返回而终止，设备上 08:54 已成功安装的同源码认证批次仍在运行。
+
+### 2026-07-22：真机 owner 认证与 Keystore 恢复验收
+
+- [x] 批次开始前重新读取主控文档并复核双仓库、运行后端和目标设备；服务器与 Android 分支均和各自远端 `0 ahead / 0 behind`，既有 Spotlight、运行态和临时文件未进入本批范围。
+- [x] ADB 唯一识别 vivo `V2516A`（Android 16/API 36），并建立 `tcp:7891 -> tcp:7891` reverse；手机侧 TCP 探测和 `GET /api/mobile/v1/health` 均成功。本地 Debug 登录地址固定为 `http://127.0.0.1:7891`，未接触 `7890`。
+- [x] owner `3489352115` 使用本地隐藏密码和只在本机窗口显示的一次性配对码登录成功；密码、配对码和 Token 未写入聊天、文档或 Git。生产移动库从设备 `0`、Refresh Token `0` 变为有效设备 `1`、有效 Token `1`，配对会话从有效 `1` 变为已消费 `1`，审计为 `auth.login success`。
+- [x] 强制停止 App 后冷启动耗时 `1.236s`，无需再次输入凭据即恢复 owner 主界面。Refresh Token 记录由 `1` 变为 `2`：旧记录已撤销并指向替代令牌，新记录是同一 family 中唯一有效令牌，证明真实签发 Token 完成 Android Keystore 加密、DataStore 保存、解密恢复和服务端轮换往返。
+- [x] OriginOS 安全键盘在密码输入期间主动阻止截图，属于系统隐私保护；关闭安全键盘后通过截图与 UI 层级确认 owner 主界面、账号和导航均正确。冷启动后的 `65` 行 App 日志对 `password`、`pairingCode`、`accessToken`、`refreshToken`、`Authorization` 和 `Bearer` 的关键字扫描命中 `0`。
+- [x] `tests/test_mobile_identity.py`、`tests/test_mobile_api.py` 和 `tests/test_mobile_gateway.py` 共 `36 passed`，包含配对码单次使用及统一错误验证；Android `:app:testDebugUnitTest --rerun-tasks` 实际执行 `11` 项测试，`0` failures/errors/skips。
+- [x] 验收后 `data/aerie.db` 与 `data/mobile_gateway.db` 均 `quick_check=ok`、外键违规 `0`；当前唯一设备未撤销、唯一有效 Refresh Token 未暴露正文。
+- [ ] 本节只完成真实认证与会话恢复，不证明聊天历史、持久请求或 SSE 已接入 Android；这些仍是 Phase 3/4 下一门禁。
 
 ## 17. 决策日志
 

@@ -264,12 +264,34 @@ disable-account    禁用访客并撤销全部设备
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `POST` | `/files/uploads` | 创建上传会话和返回分块参数 |
+| `GET` | `/files/uploads/{uploadId}` | 恢复上传会话和已完成分块 |
 | `PUT` | `/files/uploads/{uploadId}/parts/{partNumber}` | 上传 `4MB` 分块 |
 | `POST` | `/files/uploads/{uploadId}/complete` | 校验大小、SHA-256 和扫描结果 |
 | `DELETE` | `/files/uploads/{uploadId}` | 取消未完成上传 |
 | `GET` | `/files` | 按账号 ACL 列出可见文件 |
 | `GET` | `/files/{fileId}` | 获取脱敏元数据 |
 | `GET` | `/files/{fileId}/content` | 下载，支持 HTTP Range |
+
+创建上传会话使用以下 JSON 合同：
+
+```json
+{
+  "clientUploadId": "UUID",
+  "fileName": "report.pdf",
+  "size": 123456,
+  "sha256": "64位小写十六进制",
+  "mimeType": "application/pdf",
+  "directoryGrantId": "grant_xxx 或 null"
+}
+```
+
+- `clientUploadId` 在同一账号内唯一；网络重试或进程恢复必须返回原上传会话，不能重复占用活动上传名额。
+- 分块固定为 `4194304` bytes、从 `partNumber=1` 开始；除最后一块外大小必须等于分块大小。`PUT` 使用原始二进制请求体并携带 `X-Part-SHA256`，相同编号和相同哈希可幂等重传，不同内容返回冲突。
+- 创建和 `GET` 上传会话返回 `uploadId`、`partSize`、`partCount`、`uploadedParts`、`expiresAt` 和状态；上传会话 `24` 小时后过期，同一账号最多 `2` 个 `uploading` 会话。
+- `complete` 必须按顺序流式组装，不把接近 `50MB` 的文件整体读入内存；分块数、每块大小、整文件大小和 SHA-256 全部一致后才进入类型检查与 Defender 扫描。重复完成已经 `ready` 的会话返回同一个 `fileId`。
+- owner 创建上传时必须提交电脑本地已登记且拥有 upload 权限的 `directoryGrantId`；guest 必须省略该字段，文件固定进入自己的 Inbox。客户端永远不能提交真实目录或绝对路径。
+- `/files` 使用 `beforeId` 游标，默认 `50`、最大 `100`；列表和元数据只返回不透明 ID、显示文件名、大小、MIME、SHA-256、来源、状态和时间，不返回真实路径。
+- 下载只支持一个 `bytes=start-end` 区间以及开放结尾/后缀区间；合法 Range 返回 `206`、`Content-Range`、`Accept-Ranges: bytes` 和稳定 ETag，无效或多区间请求返回 `416`。未携带 Range 时返回 `200`；响应文件名经过 Content-Disposition 安全编码。
 
 ### 7.5 审批与主账号审计
 
@@ -301,6 +323,10 @@ disable-account    禁用访客并撤销全部设备
 - API 只接受不透明 `fileId`，禁止接受客户端绝对路径或 `../` 路径片段。
 - 上传完成前位于隔离区；SHA-256、大小、分块完整性和 Windows Defender 扫描通过后才能标记 `ready`。
 - 电脑产物必须先登记进 `mobile_files`，不能用任意本地路径直接生成下载链接。
+- owner 目录授权只能由电脑本地管理命令创建、停用和修改；授权保存规范化绝对路径以及 read/upload/download 三个独立权限，移动 API 不提供目录登记或路径修改端点。
+- guest 上传的 ready 文件使用服务端生成的 `fileId` 文件名写入 Inbox；电脑登记给 guest 的产出只进入 Outbox。owner 授权目录内同样使用服务端生成的存储名，显示名只保存在数据库中，不能覆盖同名真实文件。
+- 隔离区固定在 `data/mobile_files/.quarantine/<upload-id>`；取消、过期、校验失败或扫描失败时只清理该上传会话拥有的隔离目录，不递归操作授权目录、Inbox/Outbox 的其他文件。
+- Windows Defender 不可用、超时、返回威胁或非零结果时一律失败关闭，文件不得标记 `ready`；扫描命令禁止使用 shell 拼接，日志不得记录真实完整路径。
 
 ## 9. 手机审批安全合同
 
@@ -418,7 +444,7 @@ AERIE_DISABLE_QQ=false
 
 ### 12.1 稳定错误码
 
-首版至少固定：`invalid_credentials`、`pairing_required`、`pairing_expired`、`account_disabled`、`device_revoked`、`token_expired`、`rate_limited`、`invalid_message`、`request_not_found`、`request_conflict`、`file_too_large`、`file_type_denied`、`file_scan_failed`、`file_not_found`、`approval_not_found`、`approval_expired`、`approval_signature_invalid`、`backend_unavailable`。
+首版至少固定：`invalid_credentials`、`pairing_required`、`pairing_expired`、`account_disabled`、`device_revoked`、`token_expired`、`rate_limited`、`invalid_message`、`request_not_found`、`request_conflict`、`invalid_file`、`file_too_large`、`file_type_denied`、`file_conflict`、`file_scan_failed`、`file_not_found`、`range_not_satisfiable`、`approval_not_found`、`approval_expired`、`approval_signature_invalid`、`backend_unavailable`。
 
 ### 12.2 限流基线
 
@@ -810,6 +836,9 @@ AERIE_DISABLE_QQ=false
 | 2026-07-23 | Android Room 升级到 v3 并在迁移时清除旧同步游标 | 服务器分页查询使用公开 `beforeId/afterId`，旧客户端曾可能留下不完整游标；保留消息后强制全量收敛可恢复权威集合 |
 | 2026-07-23 | 活动请求由前台服务每 5 秒执行状态专用刷新，单次最多等待 20 秒 | 任务退后台后仍需观察终态并自动关闭通知，但不应为一次状态检查重复下载完整消息历史 |
 | 2026-07-23 | vivo 首版运行要求使用系统“允许后台耗电”，不保留标准 device-idle 白名单 | OriginOS `fast_freezer` 会冻结普通后台执行；OEM 明确授权已通过真机闭环，额外白名单不是最小必要条件 |
+| 2026-07-23 | 文件上传使用账号内 `clientUploadId` 幂等会话、1-based 固定 4MB 分块和 24 小时过期 | 支持 Android 进程/网络中断恢复，同时限制重复会话、内存占用和长期隔离文件堆积 |
+| 2026-07-23 | owner 文件必须绑定本地目录授权，guest 上传/产出固定进入独立 Inbox/Outbox | 移动端不接触真实路径，避免同名覆盖、路径穿越和跨账号文件可见性 |
+| 2026-07-23 | 文件完成流程对格式和 Windows Defender 采用失败关闭 | MIME、扩展名、签名或扫描任一不确定时都不能把隔离文件提升为 ready |
 
 ## 18. 变更规则
 

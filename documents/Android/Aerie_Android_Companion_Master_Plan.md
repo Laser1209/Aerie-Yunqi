@@ -21,7 +21,7 @@ public_hostname: aerie.etta.top
 | --- | --- |
 | 文档状态 | `implementing` |
 | 当前阶段 | Phase 2/3 与 Android Phase 4 已由当前开发任务统一接管；先重新验收服务器身份/持久聊天，再完成真实联调 |
-| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真机 owner 登录、一次性配对、Keystore 会话恢复和 Refresh Token 轮换已通过；手机历史同步、持久请求和 SSE 闭环尚未完成 |
+| 当前实现状态 | 生产 owner `3489352115` 已绑定 `actor_primary` 且历史回填验收通过；四个运行 Flag 已通过本机 `.env` 覆盖启用，仓库默认仍关闭。`7890` 与独立 `7891` 已启动并通过安全路由验收，PID 定向自重启已通过自动化与真实运行验收。真机 owner 认证、Keystore 会话恢复以及 Android Room/Retrofit 聊天数据层已通过对应测试；Compose 历史/请求界面、SSE 和真实消息闭环尚未完成 |
 | 当前公开域名 | `aerie.etta.top`，Cloudflare DNS 已确认激活；Tunnel 尚未创建 |
 | 当前后端 | `127.0.0.1:7890` 本地 FastAPI 管理 API |
 | 计划手机网关 | `127.0.0.1:7891` 独立最小权限 FastAPI 应用 |
@@ -686,6 +686,19 @@ AERIE_DISABLE_QQ=false
 - [x] `tests/test_mobile_identity.py`、`tests/test_mobile_api.py` 和 `tests/test_mobile_gateway.py` 共 `36 passed`，包含配对码单次使用及统一错误验证；Android `:app:testDebugUnitTest --rerun-tasks` 实际执行 `11` 项测试，`0` failures/errors/skips。
 - [x] 验收后 `data/aerie.db` 与 `data/mobile_gateway.db` 均 `quick_check=ok`、外键违规 `0`；当前唯一设备未撤销、唯一有效 Refresh Token 未暴露正文。
 - [ ] 本节只完成真实认证与会话恢复，不证明聊天历史、持久请求或 SSE 已接入 Android；这些仍是 Phase 3/4 下一门禁。
+
+### 2026-07-22：Android 持久聊天数据层
+
+- [x] 中断恢复后重新读取主控方案，并复核服务器/Android 两个仓库、`7890/7891`、两份生产数据库、ADB reverse 和未提交范围；恢复时两个分支均与各自远端 `0 ahead / 0 behind`，服务器既有无关脏文件未被修改或暂存。
+- [x] Android 新增独立 `aerie_mobile_chat.db` Room v1，按 `accountId` 隔离保存消息、请求、离线待确认消息和消息/SSE 游标；进程中断时遗留的 `sending` 只恢复为 `awaiting_confirmation`，不会自动发送。
+- [x] 新增与真实 `7891` 合同一致的消息分页、请求提交、状态查询、取消和重试 DTO/API；聊天仓储复用既有内存 Access Token、单次 `401` 刷新执行器和当前会话服务器 URL，不创建第二套认证状态。
+- [x] 历史同步支持首次从最新页向前补齐、已有游标后的增量同步和无效游标回退；queued/running/cancel_requested 请求以服务器查询收敛。网络结果不确定时保留原 `clientRequestId`，只有用户再次确认才以同一 ID 重试。
+- [x] MockWebServer/JVM 新增 `4` 项聊天仓储测试；与原认证测试合计 `15` tests、`0` failures/errors/skips，覆盖完整分页、Authorization、请求状态收敛、断网待确认、固定 ID、取消/重试和跨账号拒绝。
+- [x] vivo `V2516A` 上内存 Room instrumented test 为 `2` tests、`0` failures/errors/skips，覆盖消息/请求/游标账号隔离以及中断发送恢复。Gradle 外层命令在 `364s` 超时，但 UTP 日志和最终 JUnit XML 均在超时前明确记录两项 `PASSED`。
+- [!] UTP 默认 `uninstall_after_test=true`，在测试完成后卸载了 App 和测试包，手机端本地 App 数据因此被清除；电脑账号、认证库和聊天库未受影响。用户随后断开手机，整合 APK 安装和新一次配对延后到 Compose/SSE 业务真机验收，并将使用保留 APK 的测试参数。
+- [x] `:app:testDebugUnitTest :app:assembleDebug :app:lintDebug --rerun-tasks --no-daemon` 实际执行 `55` 个任务并在 `3m39s` 内成功，Lint 为 `No issues found`；Debug APK 为 `65639082` bytes，SHA-256 `065CFF55D19C331FCA9E2D7F206DC09FD5A9749FF6B1F71AAD2C07E52C51D679`。
+- [x] 本节没有修改 Python、服务器配置或生产数据库；恢复审计时 `data/aerie.db` 与 `data/mobile_gateway.db` 均 `quick_check=ok`、外键违规 `0`。
+- [ ] Room/Retrofit 数据层尚未接入 Compose，也尚未实现 SSE 重连；不能据此勾选 Phase 3 或 Phase 4 的组合门禁。
 
 ## 17. 决策日志
 

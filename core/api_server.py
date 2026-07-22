@@ -650,28 +650,40 @@ async def system_restart() -> dict:
     helper = project_root / "tools" / "restart_helper.ps1"
     if not helper.exists():
         return JSONResponse({"error": "helper_missing"}, status_code=500)
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(helper),
+        "-ProjectRoot",
+        str(project_root),
+        "-TargetPid",
+        str(os.getpid()),
+        "-PythonExecutable",
+        sys.executable,
+    ]
+    log_path = project_root / "logs" / "restart_helper.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.Popen(
-            [
-                "powershell",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(helper),
-                "-ProjectRoot",
-                str(project_root),
-                "-TargetPid",
-                str(os.getpid()),
-                "-PythonExecutable",
-                sys.executable,
-            ],
-            cwd=str(project_root),
-            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
-            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-        )
+        with log_path.open("a", encoding="utf-8") as restart_log:
+            process = subprocess.Popen(
+                command,
+                cwd=str(project_root),
+                stdin=subprocess.DEVNULL,
+                stdout=restart_log,
+                stderr=subprocess.STDOUT,
+                creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                | getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
     except Exception as e:
         return JSONResponse({"error": "spawn_failed", "detail": str(e)}, status_code=500)
+    logging.getLogger(__name__).info(
+        "backend restart helper scheduled pid=%s log=%s",
+        process.pid,
+        log_path,
+    )
     return {"status": "scheduled", "hint": "Backend will restart in ~3s"}
 
 

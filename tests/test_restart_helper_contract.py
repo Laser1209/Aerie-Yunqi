@@ -22,6 +22,11 @@ def test_restart_endpoint_passes_runtime_identity_explicitly() -> None:
     assert "str(os.getpid())" in restart_block
     assert '"-PythonExecutable"' in restart_block
     assert "sys.executable" in restart_block
+    assert '"restart_helper.log"' in restart_block
+    assert "stdout=restart_log" in restart_block
+    assert "stderr=subprocess.STDOUT" in restart_block
+    assert 'getattr(subprocess, "CREATE_NO_WINDOW", 0)' in restart_block
+    assert "DETACHED_PROCESS" not in restart_block
 
 
 def test_restart_helper_prefers_target_pid_and_tcp_probe() -> None:

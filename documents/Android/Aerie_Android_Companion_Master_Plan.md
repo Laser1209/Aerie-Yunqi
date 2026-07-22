@@ -652,7 +652,10 @@ AERIE_DISABLE_QQ=false
 - [x] 首次调用管理 API 重启未生效，定位到 `tools/restart_helper.ps1` 默认项目根多向上取一层、错误落到 `E:\`。修复 helper 默认根，并由 `/api/system/restart` 显式传入 `PROJECT_ROOT`；新增重启合同测试。
 - [x] 使用显式 `E:\Agent_reply` 完成一次受控重启；新进程 `45904` 同时且仅监听 `127.0.0.1:7890` 和 `127.0.0.1:7891`，运行 Git 提交 `b6c55aa`，移动健康检查返回 `status=ok`、`apiVersion=v1`。
 - [x] 随后的 API 自重启实测仍只返回 `scheduled` 而 PID/启动提交未变化，进一步定位为 helper 依赖 WMI 枚举并静默吞掉停止失败。第二版改为端点显式传入 `os.getpid()` 和 `sys.executable`，helper 延迟 2 秒后定向停止 PID、使用 .NET TCP 探测端口释放并以同一解释器启动；相关 `32 passed`，PowerShell AST 解析错误 `0`。
-- [ ] 第二版 PID 定向自重启的实际运行验收尚未执行：当前沙箱的系统操作自动审批服务返回 `503`，未获得终止当前 Aerie 后端进程的授权；不得把自动化验证代替运行验收。
+- [x] 用户已明确授权提交修复并重启当前 Aerie 后端；第二版人工 PID 定向升级重启成功，PID `45904 -> 36736`，`7890/7891` 均恢复并运行提交 `5203907`。
+- [!] 第二版 API 自重启仍只返回 `scheduled`，120 秒后 PID 保持 `36736`；人工 helper 成功而端点子进程无日志，不能宣称自重启验收通过。
+- [x] 第三版端点移除 `DETACHED_PROCESS`，改用 `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW`，将 helper stdout/stderr 追加到 `logs/restart_helper.log` 并记录子进程 PID；相关 `32 passed`，PowerShell AST 解析错误 `0`。
+- [ ] 第三版可观测 API 自重启等待在包含该修复的提交上完成实际 PID 变化和双端口恢复验收。
 - [x] `7891` 安全路由实测：`/docs`、`/openapi.json`、`/api/system/restart`、`/api/brain/shell`、`/api/config/settings` 均为 `404`；未认证 `/api/mobile/v1/me` 和 `/messages` 为 `401`；响应无 CORS 且均为 `Cache-Control: no-store`。
 - [ ] 下一门禁：通过 ADB reverse 在真机使用一次性配对码完成真实登录，验证 Refresh Token Keystore 往返、历史同步、持久请求和 SSE；在此之前不宣称 Phase 3 完成。
 

@@ -21,7 +21,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Force UTF-8 on Windows (default GBK chokes on checkmark/cross symbols)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from core.multimodal_input import (
     AttachmentType,
@@ -126,11 +132,24 @@ def t4_image_analyzer_config() -> tuple[bool, str]:
 
 def t5_audio_transcriber_config() -> tuple[bool, str]:
     """T5 AudioTranscriber 配置"""
-    trans = AudioTranscriber(api_key="test-key", model="whisper-test")
+    # AudioTranscriber 使用多 provider 架构：api_key + api_base 注册到 _providers 列表
+    trans = AudioTranscriber(
+        api_key="test-key",
+        api_base="https://test.example.com/v1",
+        model="whisper-test",
+    )
     checks = []
-    checks.append(trans.model == "whisper-test")
-    checks.append(trans.api_key == "test-key")
-    return all(checks), f"model={trans.model}, available={trans.is_available}"
+    # 验证 provider 注册：至少有一个 provider 含正确 model
+    has_provider = len(trans._providers) > 0
+    checks.append(has_provider)
+    if has_provider:
+        provider = trans._providers[0]
+        checks.append(provider["model"] == "whisper-test")
+        checks.append(provider["key"] == "test-key")
+        checks.append(provider["base_url"] == "https://test.example.com/v1")
+    # is_available 依赖 provider 列表或本地模型
+    checks.append(trans.is_available == has_provider or trans._local_model is not None)
+    return all(checks), f"providers={len(trans._providers)}, available={trans.is_available}"
 
 
 def t6_processor_text_only() -> tuple[bool, str]:

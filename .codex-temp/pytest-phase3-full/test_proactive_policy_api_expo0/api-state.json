@@ -1,0 +1,24 @@
+{
+  "daily_count": 0,
+  "enabled": true,
+  "feedback": {
+    "idle_care": {
+      "last_action": "negative",
+      "negative": 1,
+      "positive": 0
+    }
+  },
+  "last_push_at": null,
+  "mute_until": null,
+  "scene_blocks": {
+    "idle_care": {
+      "reason": "feedback_cooldown",
+      "until": "2026-07-22T15:16:11.036347"
+    },
+    "weather_push": {
+      "reason": "postponed",
+      "until": "2026-07-22T15:16:11.044277"
+    }
+  },
+  "today": "2026-07-22"
+}

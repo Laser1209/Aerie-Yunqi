@@ -28,6 +28,7 @@ data/**/*.db-wal
 data/world_sidecar/
 data/backups/
 data/audit/
+data/mobile_files/
 data/briefs/*.html
 data/briefs/*.json
 /logs/

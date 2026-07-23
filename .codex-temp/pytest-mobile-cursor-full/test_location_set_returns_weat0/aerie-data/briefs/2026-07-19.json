@@ -1,0 +1,10 @@
+{
+  "ai_news": [],
+  "weather": {
+    "city": "巴黎",
+    "temp": "21",
+    "forecast": [],
+    "manual": true,
+    "source": "manual"
+  }
+}

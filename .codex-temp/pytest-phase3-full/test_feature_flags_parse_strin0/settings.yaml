@@ -1,0 +1,3 @@
+feature_flags:
+  disabled_flag: 'false'
+  enabled_flag: 'true'

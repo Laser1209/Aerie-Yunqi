@@ -1,7 +1,13 @@
 {
-  "name": "spotlight",
+  "name": "aerie-spotlight",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0-beta.1",
+  "description": "GitHub Pages showcase site for Aerie · 云栖.",
+  "homepage": "https://laser1209.github.io/Aerie_Spotlight/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Laser1209/Aerie_Spotlight.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

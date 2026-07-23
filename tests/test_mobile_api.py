@@ -47,6 +47,7 @@ def test_mobile_auth_me_devices_refresh_and_logout(tmp_path):
     assert me.status_code == 200
     assert me.json()["role"] == "owner"
     assert me.json()["actorId"] == "actor-primary"
+    assert me.json()["capabilities"]["files"] is True
 
     devices = client.get("/api/mobile/v1/devices", headers=headers)
     assert devices.status_code == 200
@@ -105,6 +106,13 @@ def test_gateway_route_allowlist_excludes_desktop_management_api(tmp_path):
         "/api/mobile/v1/requests/{request_id}/cancel",
         "/api/mobile/v1/requests/{request_id}/retry",
         "/api/mobile/v1/events",
+        "/api/mobile/v1/files/uploads",
+        "/api/mobile/v1/files/uploads/{upload_id}",
+        "/api/mobile/v1/files/uploads/{upload_id}/parts/{part_number}",
+        "/api/mobile/v1/files/uploads/{upload_id}/complete",
+        "/api/mobile/v1/files",
+        "/api/mobile/v1/files/{file_id}",
+        "/api/mobile/v1/files/{file_id}/content",
     }
     for path in ("/api/system/restart", "/api/brain/shell", "/docs"):
         assert client.get(path).status_code == 404

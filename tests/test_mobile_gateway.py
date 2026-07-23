@@ -1,4 +1,4 @@
-"""Phase 1 contract tests for the isolated Android mobile gateway."""
+"""Route and process contracts for the isolated Android mobile gateway."""
 
 from __future__ import annotations
 
@@ -23,23 +23,38 @@ from core.mobile_gateway import (
 client = TestClient(mobile_app)
 
 
-def test_mobile_gateway_exposes_only_the_phase2_route_allowlist():
-    paths = {route.path for route in mobile_app.routes}
+def test_mobile_gateway_exposes_only_the_phase5_route_allowlist():
+    routes = {
+        (method, route.path)
+        for route in mobile_app.routes
+        for method in (route.methods or set())
+    }
 
-    assert paths == {
-        "/api/mobile/v1/health",
-        "/api/mobile/v1/auth/login",
-        "/api/mobile/v1/auth/refresh",
-        "/api/mobile/v1/auth/logout",
-        "/api/mobile/v1/me",
-        "/api/mobile/v1/devices",
-        "/api/mobile/v1/devices/{device_id}",
-        "/api/mobile/v1/messages",
-        "/api/mobile/v1/requests",
-        "/api/mobile/v1/requests/{request_id}",
-        "/api/mobile/v1/requests/{request_id}/cancel",
-        "/api/mobile/v1/requests/{request_id}/retry",
-        "/api/mobile/v1/events",
+    assert routes == {
+        ("GET", "/api/mobile/v1/health"),
+        ("POST", "/api/mobile/v1/auth/login"),
+        ("POST", "/api/mobile/v1/auth/refresh"),
+        ("POST", "/api/mobile/v1/auth/logout"),
+        ("GET", "/api/mobile/v1/me"),
+        ("GET", "/api/mobile/v1/devices"),
+        ("DELETE", "/api/mobile/v1/devices/{device_id}"),
+        ("GET", "/api/mobile/v1/messages"),
+        ("POST", "/api/mobile/v1/requests"),
+        ("GET", "/api/mobile/v1/requests/{request_id}"),
+        ("POST", "/api/mobile/v1/requests/{request_id}/cancel"),
+        ("POST", "/api/mobile/v1/requests/{request_id}/retry"),
+        ("GET", "/api/mobile/v1/events"),
+        ("POST", "/api/mobile/v1/files/uploads"),
+        ("GET", "/api/mobile/v1/files/uploads/{upload_id}"),
+        ("DELETE", "/api/mobile/v1/files/uploads/{upload_id}"),
+        (
+            "PUT",
+            "/api/mobile/v1/files/uploads/{upload_id}/parts/{part_number}",
+        ),
+        ("POST", "/api/mobile/v1/files/uploads/{upload_id}/complete"),
+        ("GET", "/api/mobile/v1/files"),
+        ("GET", "/api/mobile/v1/files/{file_id}"),
+        ("GET", "/api/mobile/v1/files/{file_id}/content"),
     }
     assert mobile_app.docs_url is None
     assert mobile_app.redoc_url is None
@@ -68,6 +83,7 @@ def test_mobile_gateway_health_is_minimal_and_public():
         "/api/config/yaml",
         "/api/computer_control/level",
         "/api/chat/send",
+        "/uploads/example.txt",
         "/docs",
         "/openapi.json",
     ],

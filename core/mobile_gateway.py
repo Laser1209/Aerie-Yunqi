@@ -24,6 +24,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core.feature_flags import FeatureFlags
 from core.mobile_chat import MobileChatError, MobileChatService
+from core.mobile_files import (
+    PART_SIZE,
+    MobileFileError,
+    MobileFileService,
+    iter_download,
+)
 from core.mobile_identity import (
     MobileAuthError,
     MobileIdentityStore,
@@ -112,6 +118,23 @@ class SubmitRequest(_MobileModel):
     file_ids: list[str] = Field(default_factory=list, alias="fileIds", max_length=20)
 
 
+class CreateUploadRequest(_MobileModel):
+    client_upload_id: str = Field(
+        alias="clientUploadId",
+        min_length=36,
+        max_length=36,
+    )
+    file_name: str = Field(alias="fileName", min_length=1, max_length=255)
+    size: int
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mime_type: str = Field(alias="mimeType", min_length=1, max_length=255)
+    directory_grant_id: str | None = Field(
+        default=None,
+        alias="directoryGrantId",
+        max_length=128,
+    )
+
+
 def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", f"req_{secrets.token_hex(12)}")
 
@@ -122,7 +145,10 @@ def _error_response(
     code: str,
     message: str,
     status_code: int,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
+    response_headers = {"Cache-Control": "no-store"}
+    response_headers.update(headers or {})
     return JSONResponse(
         {
             "error": {
@@ -132,7 +158,7 @@ def _error_response(
             }
         },
         status_code=status_code,
-        headers={"Cache-Control": "no-store"},
+        headers=response_headers,
     )
 
 
@@ -161,7 +187,17 @@ def _default_identity_store() -> MobileIdentityStore:
     return MobileIdentityStore(path, pepper=pepper)
 
 
-def _default_chat_service(identity_store: MobileIdentityStore) -> MobileChatService:
+def _default_file_service(identity_store: MobileIdentityStore) -> MobileFileService:
+    return MobileFileService(
+        identity_store.db_path,
+        storage_root=Path("data/mobile_files"),
+    )
+
+
+def _default_chat_service(
+    identity_store: MobileIdentityStore,
+    file_service: MobileFileService,
+) -> MobileChatService:
     flags = FeatureFlags()
     required = (
         "migration_framework_v1",
@@ -172,13 +208,18 @@ def _default_chat_service(identity_store: MobileIdentityStore) -> MobileChatServ
         raise MobileChatError("chat_unavailable", status_code=503)
     from core.database import Database
 
-    return MobileChatService(Database(), identity_store)
+    return MobileChatService(
+        Database(),
+        identity_store,
+        file_service=file_service,
+    )
 
 
 def create_mobile_app(
     *,
     identity_store: MobileIdentityStore | None = None,
     chat_service: MobileChatService | None = None,
+    file_service: MobileFileService | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="Aerie Mobile Gateway",
@@ -191,6 +232,8 @@ def create_mobile_app(
         app.state.identity_store = identity_store
     if chat_service is not None:
         app.state.chat_service = chat_service
+    if file_service is not None:
+        app.state.file_service = file_service
 
     @app.middleware("http")
     async def add_request_id(request: Request, call_next: Any) -> Response:
@@ -226,10 +269,11 @@ def create_mobile_app(
         exc: RequestValidationError,
     ) -> JSONResponse:
         del exc
+        is_file_request = request.url.path.startswith("/api/mobile/v1/files")
         return _error_response(
             request,
-            code="invalid_request",
-            message="请求格式无效",
+            code="invalid_file" if is_file_request else "invalid_request",
+            message="文件请求无效" if is_file_request else "请求格式无效",
             status_code=422,
         )
 
@@ -256,6 +300,29 @@ def create_mobile_app(
             status_code=exc.status_code,
         )
 
+    @app.exception_handler(MobileFileError)
+    async def mobile_file_error(
+        request: Request,
+        exc: MobileFileError,
+    ) -> JSONResponse:
+        messages = {
+            "invalid_file": "文件请求无效",
+            "file_too_large": "文件超过 50MB 限制",
+            "file_type_denied": "文件类型不受支持",
+            "file_conflict": "文件状态或内容冲突",
+            "file_scan_failed": "文件安全扫描未通过",
+            "file_not_found": "文件不存在或不可访问",
+            "range_not_satisfiable": "下载范围无效",
+            "rate_limited": "活动上传数量已达上限",
+        }
+        return _error_response(
+            request,
+            code=exc.code,
+            message=messages.get(exc.code, "文件操作失败"),
+            status_code=exc.status_code,
+            headers=exc.headers,
+        )
+
     def store(request: Request) -> MobileIdentityStore:
         existing = getattr(request.app.state, "identity_store", None)
         if existing is None:
@@ -275,13 +342,24 @@ def create_mobile_app(
             raise MobileAuthError("invalid_token")
         return identity.authenticate_access(token)
 
+    def files(
+        request: Request,
+        identity: MobileIdentityStore = Depends(store),
+    ) -> MobileFileService:
+        existing = getattr(request.app.state, "file_service", None)
+        if existing is None:
+            existing = _default_file_service(identity)
+            request.app.state.file_service = existing
+        return existing
+
     def chat(
         request: Request,
         identity: MobileIdentityStore = Depends(store),
+        file_storage: MobileFileService = Depends(files),
     ) -> MobileChatService:
         existing = getattr(request.app.state, "chat_service", None)
         if existing is None:
-            existing = _default_chat_service(identity)
+            existing = _default_chat_service(identity, file_storage)
             request.app.state.chat_service = existing
         return existing
 
@@ -335,7 +413,7 @@ def create_mobile_app(
             "deviceId": current.device_id,
             "capabilities": {
                 "chat": True,
-                "files": False,
+                "files": True,
                 "approvals": current.role == "owner",
             },
         }
@@ -367,6 +445,124 @@ def create_mobile_app(
     ) -> Response:
         identity.revoke_device(current, device_id)
         return Response(status_code=204)
+
+    @app.post("/api/mobile/v1/files/uploads")
+    async def create_upload(
+        payload: CreateUploadRequest,
+        response: Response,
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> dict[str, Any]:
+        result, created = service.create_upload(
+            current,
+            client_upload_id=payload.client_upload_id,
+            file_name=payload.file_name,
+            size=payload.size,
+            sha256=payload.sha256,
+            mime_type=payload.mime_type,
+            directory_grant_id=payload.directory_grant_id,
+        )
+        response.status_code = 201 if created else 200
+        return result
+
+    @app.get("/api/mobile/v1/files/uploads/{upload_id}")
+    async def get_upload(
+        upload_id: str,
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> dict[str, Any]:
+        return service.get_upload(current, upload_id)
+
+    @app.put(
+        "/api/mobile/v1/files/uploads/{upload_id}/parts/{part_number}",
+        status_code=204,
+    )
+    async def put_upload_part(
+        upload_id: str,
+        part_number: int,
+        request: Request,
+        x_part_sha256: str | None = Header(
+            default=None,
+            alias="X-Part-SHA256",
+        ),
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> Response:
+        content = bytearray()
+        async for chunk in request.stream():
+            if len(content) + len(chunk) > PART_SIZE:
+                raise MobileFileError("file_conflict", status_code=409)
+            content.extend(chunk)
+        service.put_part(
+            current,
+            upload_id,
+            part_number,
+            bytes(content),
+            x_part_sha256 or "",
+        )
+        return Response(status_code=204)
+
+    @app.post("/api/mobile/v1/files/uploads/{upload_id}/complete")
+    async def complete_upload(
+        upload_id: str,
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> dict[str, Any]:
+        return service.complete_upload(current, upload_id)
+
+    @app.delete(
+        "/api/mobile/v1/files/uploads/{upload_id}",
+        status_code=204,
+    )
+    async def cancel_upload(
+        upload_id: str,
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> Response:
+        service.cancel_upload(current, upload_id)
+        return Response(status_code=204)
+
+    @app.get("/api/mobile/v1/files")
+    async def list_files(
+        before_id: str | None = Query(default=None, alias="beforeId"),
+        limit: int = 50,
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> dict[str, Any]:
+        return service.list_files(current, before_id=before_id, limit=limit)
+
+    @app.get("/api/mobile/v1/files/{file_id}")
+    async def get_file(
+        file_id: str,
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> dict[str, Any]:
+        return service.get_file(current, file_id)
+
+    @app.get("/api/mobile/v1/files/{file_id}/content")
+    async def download_file(
+        file_id: str,
+        range_header: str | None = Header(default=None, alias="Range"),
+        current: MobilePrincipal = Depends(principal),
+        service: MobileFileService = Depends(files),
+    ) -> StreamingResponse:
+        download = service.prepare_download(current, file_id, range_header)
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(download.content_length),
+            "Content-Disposition": download.content_disposition,
+            "ETag": f'"{download.sha256}"',
+        }
+        if download.partial:
+            headers["Content-Range"] = (
+                f"bytes {download.start}-{download.end}/{download.total_size}"
+            )
+        return StreamingResponse(
+            iter_download(download),
+            status_code=206 if download.partial else 200,
+            media_type=download.mime_type,
+            headers=headers,
+        )
 
     @app.get("/api/mobile/v1/messages")
     async def messages(

@@ -8,6 +8,8 @@ import { ArrowUpRight } from './icons'
 export default function SiteHeader() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
+  const logoSrc = publicPath('aerie-logo.svg')
+  const logoFallbackSrc = publicPath('aerie-mark.svg')
 
   const close = () => setOpen(false)
 
@@ -21,10 +23,27 @@ export default function SiteHeader() {
         to="/"
         aria-label="返回 Aerie 首页"
         className="liquid-glass flex h-12 w-12 items-center justify-center rounded-full p-1.5"
-        style={{ backgroundColor: 'rgba(255, 255, 255, 0.18)' }}
+        style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.18)',
+          backgroundImage: `url("${logoFallbackSrc}")`,
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: '70% 70%',
+        }}
         onClick={close}
       >
-        <img src={publicPath('aerie-logo.svg')} alt="Aerie · 云栖" className="h-full w-full rounded-full object-cover" width="36" height="36" />
+        <img
+          src={logoSrc}
+          alt="Aerie · 云栖"
+          className="h-full w-full rounded-full object-cover"
+          width="36"
+          height="36"
+          loading="eager"
+          decoding="async"
+          onError={(event) => {
+            event.currentTarget.src = logoFallbackSrc
+          }}
+        />
       </Link>
 
       <nav aria-label="Primary navigation" className="liquid-glass hidden items-center rounded-full px-1.5 py-1.5 md:flex">

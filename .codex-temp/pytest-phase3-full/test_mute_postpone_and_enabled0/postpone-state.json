@@ -1,0 +1,14 @@
+{
+  "daily_count": 0,
+  "enabled": true,
+  "feedback": {},
+  "last_push_at": null,
+  "mute_until": null,
+  "scene_blocks": {
+    "idle_care": {
+      "reason": "postponed",
+      "until": "2026-07-22T16:16:10.997593"
+    }
+  },
+  "today": "2026-07-22"
+}

@@ -1,0 +1,61 @@
+{
+  "records_by_key": {
+    "world-cand-1": {
+      "candidate": {
+        "candidate_id": "cand-1",
+        "channel": "local_chat",
+        "created_at": "2026-07-20T20:00:00+00:00",
+        "event_id": "world_evt_candidate_1",
+        "expires_at": "2026-07-20T20:10:00+00:00",
+        "owner_id": "master",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "source",
+          "target"
+        ],
+        "prompt_key": "evening_home",
+        "reason_code": "evening_private_scene",
+        "scene": "idle_care",
+        "score": 0.91,
+        "sequence": 7,
+        "source": "generated",
+        "target": "desktop"
+      },
+      "event": {
+        "event_id": "world_evt_candidate_1",
+        "event_type": "world.image_candidate.published",
+        "sequence": 7,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "world-cand-1",
+      "judge": {
+        "scene": "idle_care",
+        "score": 81,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-07-20T20:00:00+00:00",
+      "workflow": {
+        "delivery_plan_id": "delivery-1",
+        "request_id": "img-ok",
+        "status": "completed"
+      }
+    }
+  },
+  "version": 1
+}

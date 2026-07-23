@@ -12,6 +12,7 @@ from core.chat_request_repository import (
     RequestContext,
     RequestIdentity,
 )
+from core.chat_request_service import PURE_ATTACHMENT_EFFECTIVE_CONTENT
 from core.conversation_repository import resolve_conversation_id
 from core.ids import generate_id
 from core.mobile_identity import MobileIdentityStore, MobilePrincipal
@@ -25,9 +26,16 @@ class MobileChatError(Exception):
 
 
 class MobileChatService:
-    def __init__(self, database: Any, identity_store: MobileIdentityStore) -> None:
+    def __init__(
+        self,
+        database: Any,
+        identity_store: MobileIdentityStore,
+        *,
+        file_service: Any | None = None,
+    ) -> None:
         self.database = database
         self.identity_store = identity_store
+        self.file_service = file_service
         self.requests = ChatRequestRepository(database)
 
     def _conversation_id(self, principal: MobilePrincipal) -> str:
@@ -70,9 +78,7 @@ class MobileChatService:
         content = text.strip()
         if len(content) > 20_000:
             raise MobileChatError("text_too_long")
-        if file_ids:
-            raise MobileChatError("files_not_available", status_code=409)
-        if not content:
+        if not content and not file_ids:
             raise MobileChatError("empty_request")
 
         request_id = self._deterministic_id(
@@ -84,6 +90,14 @@ class MobileChatService:
         )
         if existing is not None:
             return self._request_response(existing)
+
+        if file_ids and self.file_service is None:
+            raise MobileChatError("files_not_available", status_code=409)
+        attachments = (
+            self.file_service.resolve_request_attachments(principal, file_ids)
+            if file_ids
+            else []
+        )
 
         conversation_id = self._conversation_id(principal)
         turn_id = self._deterministic_id(
@@ -101,7 +115,10 @@ class MobileChatService:
                     user_id=principal.user_id,
                 ),
                 input_content=content,
-                effective_content=content,
+                effective_content=(
+                    content if content else PURE_ATTACHMENT_EFFECTIVE_CONTENT
+                ),
+                attachments=attachments,
             )
         )
         return {

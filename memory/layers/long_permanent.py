@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Long-term + Permanent 记忆层 (S3 M3.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Long-term + Permanent 记忆层 (S3 M3.1).
 
 Long-term (长期层):
     - ChromaDB 向量数据库存储嵌入，SQLite 存元数据
@@ -104,7 +104,12 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     updated_at REAL DEFAULT 0,
                     accessed_at REAL DEFAULT 0,
                     source TEXT DEFAULT '',
-                    has_embedding INTEGER DEFAULT 0
+                    has_embedding INTEGER DEFAULT 0,
+                    source_message_id TEXT,
+                    confidence REAL DEFAULT 0.5,
+                    user_confirmed INTEGER DEFAULT 0,
+                    expires_at REAL,
+                    deleted_at REAL
                 )
             """)
             self.db.execute(
@@ -113,6 +118,20 @@ class LongTermMemoryLayer(BaseMemoryLayer):
             self.db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_ltm_importance ON long_term_memory(importance DESC)"
             )
+            # ── P1-A.4: 为已有表添加可见性列（ALTER TABLE 无 IF NOT EXISTS，逐列 try）──
+            for col, ddl in [
+                ("source_message_id", "TEXT"),
+                ("confidence", "REAL DEFAULT 0.5"),
+                ("user_confirmed", "INTEGER DEFAULT 0"),
+                ("expires_at", "REAL"),
+                ("deleted_at", "REAL"),
+            ]:
+                try:
+                    self.db.execute(
+                        f"ALTER TABLE long_term_memory ADD COLUMN {col} {ddl}"
+                    )
+                except Exception:
+                    pass  # 列已存在
         except Exception:
             logger.exception("Failed to create long_term_memory table")
 

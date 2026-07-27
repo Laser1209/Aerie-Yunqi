@@ -867,24 +867,103 @@ class DesktopAttachmentService:
         *,
         max_chars: int = 4000,
     ) -> list[str]:
+        artifacts = self.context_artifacts(attachment_ids, max_chars=max_chars)
+        return [
+            f"[{art['original_name']}] {art['content']}"
+            for art in artifacts
+        ]
+
+    def context_artifacts(
+        self,
+        attachment_ids: Sequence[str],
+        *,
+        max_chars: int = 4000,
+    ) -> list[dict[str, Any]]:
+        """Return structured attachment artifacts with boundary metadata.
+
+        Each artifact dict carries the C3.5 boundary fields:
+        - attachment_id: unique attachment identifier
+        - trusted_boundary: trust level marker ("desktop" for this service)
+        - part_id: part identifier (page-N / sheet-N / slide-N / part-N)
+        - page_range / sheet_range / slide_range: range string (when available)
+        - parser_warning: parser warning message (when present in metadata)
+        - parser_status: parser status from worker metadata
+        - sheet_names / cell_ranges: spreadsheet-specific fields (when available)
+        - original_name: original filename
+        - content: redacted chunk content
+        """
         remaining = max(0, int(max_chars))
-        snippets: list[str] = []
+        artifacts: list[dict[str, Any]] = []
         for attachment_id in dict.fromkeys(str(value) for value in attachment_ids):
             record = self.repository.get(attachment_id)
             if not record or record["state"] != "ready":
                 continue
+            metadata = record.get("metadata") or {}
+            extension = str(record.get("extension") or "")
+            parser_warning = str(metadata.get("parserWarning") or "")
+            parser_status = str(
+                metadata.get("parserStatus")
+                or metadata.get("semanticStatus")
+                or "unknown"
+            )
+            page_ranges = metadata.get("pageRanges") or []
+            sheet_names = metadata.get("sheetNames") or []
+            cell_ranges = metadata.get("cellRanges") or []
+            sheet_ranges = metadata.get("sheetRanges") or []
+            slide_ranges = metadata.get("slideRanges") or []
+
             for chunk in self.repository.chunks(attachment_id):
                 if remaining <= 0:
-                    return snippets
+                    return artifacts
                 content = str(chunk["content"] or "")[:remaining]
-                if content:
-                    safe_content = _redact_local_paths(
-                        content,
-                        roots=(self.storage_root,),
-                    )
-                    snippets.append(f"[{record['original_name']}] {safe_content}")
-                    remaining -= len(safe_content)
-        return snippets
+                if not content:
+                    continue
+                safe_content = _redact_local_paths(
+                    content,
+                    roots=(self.storage_root,),
+                )
+                ordinal = int(chunk.get("ordinal", 0))
+                artifact: dict[str, Any] = {
+                    "attachment_id": attachment_id,
+                    "trusted_boundary": "desktop",
+                    "part_id": self._derive_part_id(extension, ordinal),
+                    "original_name": record["original_name"],
+                    "content": safe_content,
+                    "parser_status": parser_status,
+                    "parser_warning": parser_warning,
+                }
+                page_range = self._index_or_none(page_ranges, ordinal)
+                if page_range is not None:
+                    artifact["page_range"] = str(page_range)
+                sheet_range = self._index_or_none(sheet_ranges, ordinal)
+                if sheet_range is not None:
+                    artifact["sheet_range"] = str(sheet_range)
+                slide_range = self._index_or_none(slide_ranges, ordinal)
+                if slide_range is not None:
+                    artifact["slide_range"] = str(slide_range)
+                if sheet_names:
+                    artifact["sheet_names"] = list(sheet_names)
+                if cell_ranges:
+                    artifact["cell_ranges"] = list(cell_ranges)
+                artifacts.append(artifact)
+                remaining -= len(safe_content)
+        return artifacts
+
+    @staticmethod
+    def _derive_part_id(extension: str, ordinal: int) -> str:
+        if extension == "pdf":
+            return f"page-{ordinal + 1}"
+        if extension in ("xlsx", "xls"):
+            return f"sheet-{ordinal}"
+        if extension in ("pptx", "ppt"):
+            return f"slide-{ordinal + 1}"
+        return f"part-{ordinal}"
+
+    @staticmethod
+    def _index_or_none(items: Any, index: int) -> Any:
+        if isinstance(items, (list, tuple)) and 0 <= index < len(items):
+            return items[index]
+        return None
 
     def download_path(self, attachment_id: str) -> tuple[Path, str]:
         record = self.repository.get(attachment_id)

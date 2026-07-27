@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — 四层记忆架构 DTO (S3 M3.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — 四层记忆架构 DTO (S3 M3.1).
 
 四层记忆模型：
   1. Transient  (瞬时层) — 单会话临时状态，会话结束即清空
@@ -59,6 +59,12 @@ class MemoryItem:
     accessed_at: float = field(default_factory=time.time)
     embedding: Optional[List[float]] = None  # 向量嵌入（仅 long-term/permanent）
     source: str = ""  # 来源：conversation/dream/reflect/import/manual
+    # ── P1-A.4 可见性与用户控制字段 ──
+    source_message_id: Optional[str] = None  # 产生该记忆的原始消息 ID
+    confidence: float = 0.5  # 置信度 0-1
+    user_confirmed: bool = False  # 用户是否已确认该记忆
+    expires_at: Optional[float] = None  # 过期时间戳（None=永不过期）
+    deleted_at: Optional[float] = None  # 软删除时间戳（None=未删除）
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)

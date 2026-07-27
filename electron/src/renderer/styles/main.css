@@ -1,4 +1,4 @@
-﻿/* Aerie · 云栖 v9.0 — Design Tokens & Layout */
+/* Aerie · 云栖 v9.0 — Design Tokens & Layout */
 /* Pinguo color system — Apple HIG aligned */
 
 /* ===== Design Tokens ===== */
@@ -1706,6 +1706,7 @@ body {
 .chat-attach-card__name,
 .chat-attach-card__meta,
 .chat-attach-card__error { display: block; min-width: 0; overflow-wrap: anywhere; }
+.chat-attach-card__notice { display: block; color: var(--color-text-muted); font-size: 11px; font-style: italic; }
 .chat-attach-card__meta { color: var(--color-text-muted); font-size: 11px; }
 .chat-attach-card__error { color: var(--color-attach-failed); font-size: 11px; }
 .chat-attach-card__actions { display: inline-flex; gap: 4px; }

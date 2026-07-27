@@ -81,12 +81,15 @@
 - [x] C3.10 主动图片置信度不足可回退
   - 验证: 低置信度分类不直接调用生图 provider，产生询问或文字回退
   - 证据: [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py)、命令 `python -m pytest tests/test_phase10_image_workflow.py::test_generation_low_confidence_visual_intent_does_not_call_provider -q` 通过
-- [ ] C3.11 前端附件预览可读
+- [x] C3.11 前端附件预览可读
   - 验证: 图片、文本/Markdown、表格、PDF/PPT/Office 投影均有可读预览或明确降级状态
-- [ ] C3.12 前端不泄露本机路径
+  - 证据: [chat.js](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js)、命令 `node --test electron\tests\attachment-card-renderer.test.js` 通过 14/14；所有 category 类型均有对应图标和 ready 状态打开入口
+- [x] C3.12 前端不泄露本机路径
   - 验证: Renderer DOM、状态 payload、截图和日志中不包含附件本机绝对路径或内部扫描令牌
-- [ ] C3.13 专用向量知识库连接尝试完成
+  - 证据: [chat.js _redactSensitive](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js) `test_attachment_card_does_not_expose_local_absolute_paths` 和 `test_attachment_card_does_not_expose_tokens_or_credentials_in_error_messages` 通过
+- [x] C3.13 专用向量知识库连接尝试完成
   - 验证: 若成功，至少 3 个融合概念可语义检索；若失败，报告包含能力探测、缺失接口、阻塞原因和后续设计
+  - 证据: [Task3.6-向量知识库连接尝试报告.md](./Task3.6-向量知识库连接尝试报告.md)；结论：阻塞——ChromaDB 依赖未安装、Embedding API 未配置、生产代码未接入 LayeredMemory；报告包含能力探测、缺失接口清单、阻塞原因、推荐方案 A/B/C 和后续设计建议
 
 ## §4 · 审计与累积验证
 

@@ -664,6 +664,14 @@ class ChatManager {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  _redactSensitive(text) {
+    let s = String(text || "");
+    s = s.replace(/[A-Za-z]:\\[^\s"'<>]*/g, "<path>");
+    s = s.replace(/\/(?:home|Users|root|var|opt|tmp)\/[^\s"'<>]*/g, "<path>");
+    s = s.replace(/(?:api[_-]?key|token|secret|bearer|ghp_)[^\s"'<>]*/gi, "<redacted>");
+    return s;
+  }
+
   _buildAttachmentCard(att) {
     const id = att.attachmentId || att.id || "";
     const state = att.state || "ready";
@@ -671,7 +679,8 @@ class ChatManager {
     const name = this._escapeHtml(att.name || "文件");
     const stateLabel = this._escapeHtml(this._attachmentStateLabel(state));
     const size = this._escapeHtml(this._formatAttachmentSize(att.size));
-    const error = att.error && (att.error.message || att.error.code);
+    const rawError = att.error && (att.error.message || att.error.code);
+    const error = rawError ? this._redactSensitive(rawError) : "";
     const imageUrl = att.thumbnailUrl || att.thumbnail_url || "";
     let preview = '<svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>';
     if (category === "image" && imageUrl) {
@@ -683,9 +692,16 @@ class ChatManager {
     const retry = state === "failed" && id
       ? `<button type="button" data-attachment-retry="${this._escapeHtml(id)}">重试</button>`
       : "";
+    let notice = "";
+    if (state === "quarantined") {
+      notice = '<span class="chat-attach-card__notice">文件未通过安全校验，已隔离</span>';
+    } else if (state === "unsupported") {
+      notice = '<span class="chat-attach-card__notice">此文件类型暂不支持</span>';
+    }
     return `<div class="chat-attach-card" data-type="${this._escapeHtml(category)}" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">
       ${preview}<span class="chat-attach-card__name">${name}</span>
       <span class="chat-attach-card__meta">${size} ${stateLabel}</span>
+      ${notice}
       ${error ? `<span class="chat-attach-card__error" title="${this._escapeHtml(error)}">${this._escapeHtml(error)}</span>` : ""}
       <span class="chat-attach-card__actions">${open}${retry}</span>
     </div>`;

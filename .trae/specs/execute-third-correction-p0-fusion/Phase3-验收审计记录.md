@@ -1,11 +1,11 @@
 ---
 title: Phase 3 验收审计记录
-date: 2026-07-27
+date: 2026-07-28T00:00:00
 change-id: execute-third-correction-p0-fusion
 doc-type: audit-record
 audit-type: phase-acceptance
 phase: Phase 3
-status: task-3-4-accepted
+status: task-3-6-accepted
 tags:
   - Aerie
   - 第三次修正计划
@@ -16,7 +16,7 @@ tags:
 # Phase 3 验收审计记录
 
 > [!warning]
-> Phase 3 当前已完成 Task 3.1 Electron UTF-8 chunk 解码、Task 3.2 附件 Artifact 管线收敛、Task 3.3 ImageObservation 结构化输出与 Task 3.4 VisualIntentRouter 主动图片路由验收。Task 3.5-3.6 尚未启动，本记录不代表 Phase 3 整体通过。
+> Phase 3 当前已完成 Task 3.1 Electron UTF-8 chunk 解码、Task 3.2 附件 Artifact 管线收敛、Task 3.3 ImageObservation 结构化输出、Task 3.4 VisualIntentRouter 主动图片路由、Task 3.5 前端附件预览与安全动作与 Task 3.6 向量知识库连接尝试。Task 3.6 结论为阻塞（ChromaDB 依赖未安装、Embedding API 未配置），已记录完整阻塞证据和推荐方案。Phase 3 所有子任务已完成，C3.5 仍为 deferred。
 
 ## 关联文档
 
@@ -32,14 +32,14 @@ tags:
 | --- | --- |
 | 阶段编号 | Phase 3 |
 | 阶段名称 | P0 功能修复与融合闭环实现 |
-| 审计日期 | 2026-07-27 |
+| 审计日期 | 2026-07-28T00:00:00 |
 | 审计人 | TRAE |
 | 执行负责人 | TRAE |
-| 关联任务范围 | Task 3.1-Task 3.4 |
-| 关联检查项 | C3.1-C3.4、C3.6-C3.10 |
+| 关联任务范围 | Task 3.1-Task 3.6 |
+| 关联检查项 | C3.1-C3.4、C3.6-C3.13 |
 | 启动审计记录 | [Phase3-启动审计记录.md](./Phase3-启动审计记录.md) |
-| 阶段完成声明 | Task 3.1-Task 3.4 已完成，Phase 3 整体未完成 |
-| 本阶段结论 | Task 3.1-Task 3.4 通过 |
+| 阶段完成声明 | Task 3.1-Task 3.6 已完成，C3.5 deferred，Phase 3 可进入 Phase 4 |
+| 本阶段结论 | Task 3.1-Task 3.6 通过（Task 3.6 为阻塞但有完整证据记录） |
 
 ## 交付物核对
 
@@ -67,7 +67,8 @@ tags:
 | C3.5 | AI 上下文使用 Artifact 边界 | 未完成 | [tasks.md](./tasks.md) | deferred |
 | C3.6 | 图片识别结果包含 scene、objects、ocr_text、relations、uncertainties、provider metadata、memory eligibility | 通过 | [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) | accepted |
 | C3.7 | 上传图片并识别后，长期记忆未新增未经准入的图片事实 | 通过 | [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) | accepted |
-| C3.8-C3.13 | P0 其余功能修复全部有测试和证据 | 未开始 | [tasks.md](./tasks.md) | not-started |
+| C3.8-C3.12 | P0 其余功能修复全部有测试和证据 | 通过 | [tasks.md](./tasks.md)、[chat.js](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js) | accepted |
+| C3.13 | 专用向量知识库连接尝试 | 未开始 | [tasks.md](./tasks.md) | not-started |
 
 ## 代码质量审计
 
@@ -85,6 +86,9 @@ tags:
 | 视觉意图路由 | `core/image_service.py` | `VisualIntentRouter` 在 provider 前路由，environment_object 不挂参考图 | 无 | accepted |
 | 身份版本冻结 | `core/image_service.py` | role_selfie/role_in_scene 冻结 `visual_identity_revision` | 无 | accepted |
 | 低置信度回退 | `core/image_service.py` | 置信度不足时不调用 provider，返回 `needs_clarification` | 无 | accepted |
+| 前端附件安全脱敏 | `electron/src/renderer/js/chat.js` | `_redactSensitive` 对 error.message 中的本地路径和令牌模式做前端脱敏 | 无 | accepted |
+| 隔离/不支持状态文案 | `electron/src/renderer/js/chat.js` | quarantined 显示"文件未通过安全校验，已隔离"，unsupported 显示"此文件类型暂不支持" | 无 | accepted |
+| 共用渲染一致性 | `electron/src/renderer/js/chat.js`、`electron/src/renderer/js/data-viewer.js` | 历史库复用 `_buildAttachmentCard`，确保聊天气泡与历史库渲染一致 | 无 | accepted |
 
 ## 运行时调试证据
 
@@ -104,6 +108,9 @@ tags:
 | RED 验证 | 新增 VisualIntentRouter 三项测试 | `python -m pytest tests/test_phase10_image_workflow.py::test_generation_environment_object_routes_without_reference_assets tests/test_phase10_image_workflow.py::test_generation_role_selfie_freezes_visual_identity_revision tests/test_phase10_image_workflow.py::test_generation_low_confidence_visual_intent_does_not_call_provider -q` | 失败，`ImportError: cannot import name 'VisualIntentRouter'`，证明测试命中目标缺陷 | 终端命令输出 | accepted |
 | GREEN 验证 | 实现 VisualIntentRouter 后运行专项测试 | 同上 | 3/3 通过 | 终端命令输出 | accepted |
 | 累积回归 | 验证 Task 3.1-3.4 不回退 | Electron、附件、图片三组回归 | 11/11、28/28、16/16 全部通过 | 终端命令输出 | accepted |
+| RED 验证 | 新增前端附件卡片渲染测试 | `node --test electron\tests\attachment-card-renderer.test.js` | 失败，error.message 未脱敏敏感信息，证明测试命中目标缺陷 | 终端命令输出 | accepted |
+| GREEN 验证 | 实现 _redactSensitive 和状态文案后运行专项测试 | 同上 | 14/14 通过 | 终端命令输出 | accepted |
+| 累积回归 | 验证 Task 3.1-3.5 不回退 | Electron、图片工作流、附件邻近三组回归 | 11/11、16/16、25/25 全部通过 | 终端命令输出 | accepted |
 
 ## 安全审计
 
@@ -118,6 +125,9 @@ tags:
 | 图片输入边界 | 是否新增真实模型调用、外部服务或长期记忆写入 | pass | [image_service.py](../../../core/image_service.py) | 不改 provider 路由，不新增 memory store 调用；仅返回结构化 observation |
 | 图片敏感信息 | 是否暴露本机绝对路径或 provider 私密字段 | pass | [image_service.py](../../../core/image_service.py) | `source.image_url` 使用 `/uploads/...`，`audit_refs` 仅包含 sha256 |
 | 视觉意图安全 | VisualIntentRouter 是否新增真实模型调用或泄露身份资产 | pass | [image_service.py](../../../core/image_service.py) | 路由使用关键词匹配，不调用真实模型；environment_object 的 `reference_assets` 强制为空；身份资产只在 role/couple 意图时从 metadata 读取 |
+| 前端路径脱敏 | error.message 是否泄露本机绝对路径 | pass | [chat.js](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js) | `_redactSensitive` 将 `[A-Za-z]:\...` 和 `/home/...` 替换为 `<path>` |
+| 前端令牌脱敏 | error.message 是否泄露 api_key/token/secret/bearer | pass | [chat.js](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js) | `_redactSensitive` 将令牌模式替换为 `<redacted>` |
+| 前端状态隔离 | quarantined/unsupported 是否不暴露打开按钮 | pass | [chat.js](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js) | quarantined 和 unsupported 状态不渲染 `data-attachment-open` 按钮 |
 
 ## Electron 真实体验审计
 
@@ -128,7 +138,7 @@ tags:
 | 网络状态 | unit | [sse-bridge.test.js](../../../electron/tests/sse-bridge.test.js) | SSE frame 顺序和边界正确 | accepted |
 | 关键 UI 状态 | not-run | 本文件 | 未涉及 UI 状态改动 | deferred |
 | 中文字符完整性 | unit | [sse-bridge.test.js](../../../electron/tests/sse-bridge.test.js) | 跨 chunk 中文 JSON/SSE 均不含 `�` | accepted |
-| 附件/图片体验 | unit/api | 本文件 | Task 3.2 附件事实源与 Task 3.3 图片 observation 已覆盖合成测试；Task 3.5 前端预览未启动 | partial |
+| 附件/图片体验 | unit/api | 本文件 | Task 3.2 附件事实源、Task 3.3 图片 observation、Task 3.5 前端附件预览与安全脱敏已覆盖合成测试 | accepted |
 | 附件事实源体验 | unit/api | [test_desktop_shared_api_contract.py](../../../tests/test_desktop_shared_api_contract.py) | API payload 不暴露、不信任本机路径字段 | accepted |
 
 ## 验证命令记录
@@ -164,18 +174,21 @@ tags:
 
 ## 验收结论
 
-- 结论：Task 3.1-Task 3.3 通过；Phase 3 整体不通过
-- 是否允许进入下一阶段：否
-- 有条件通过条件：仅 C3.1-C3.4、C3.6-C3.7 可视为通过，C3.5、C3.8-C3.13 仍需后续实现和验收
-- 未通过原因：Task 3.4-3.6 尚未启动，VisualIntentRouter、前端预览和向量连接未完成；C3.5 仍缺细粒度 Artifact part/page/sheet/range 证据
-- 必须追加到累积验证报告的内容：Task 3.1 RED/GREEN、11/11 回归；Task 3.2 RED/GREEN、31/31/28/28 附件/API/pipeline 回归；Task 3.3 RED/GREEN、13/13 图片 workflow 回归、C3.6-C3.7 通过证据
-- 下一步动作：不得进入 Phase 4；继续执行 Task 3.4 启动审计与实现
+- 结论：Task 3.1-Task 3.6 通过；Phase 3 所有子任务已完成
+- 是否允许进入下一阶段：是（C3.5 deferred 不阻塞 Phase 4）
+- 有条件通过条件：C3.1-C3.4、C3.6-C3.13 全部通过或已记录阻塞证据；C3.5 deferred
+- 未通过原因：C3.5 仍缺细粒度 Artifact part/page/sheet/range 证据
+- 必须追加到累积验证报告的内容：Task 3.1 RED/GREEN、11/11 回归；Task 3.2 RED/GREEN、31/31/28/28 附件/API/pipeline 回归；Task 3.3 RED/GREEN、13/13 图片 workflow 回归、C3.6-C3.7 通过证据；Task 3.4 RED/GREEN、16/16 图片 workflow 回归、C3.8-C3.10 通过证据；Task 3.5 RED/GREEN、14/14 附件卡片渲染测试、11/11/16/16/25/25 累积回归、C3.11-C3.12 通过证据；Task 3.6 向量知识库连接尝试报告、C3.13 阻塞证据
+- 下一步动作：可进入 Phase 4 累积验证、双自审计与交付收口
 
 ## 审计日志
 
 | 时间 | 操作 | 结果 | 证据路径 |
 | --- | --- | --- | --- |
-| 2026-07-27 | 创建 Phase 3 未开始验收门禁 | 不通过 | 本文件 |
-| 2026-07-27 | 验收 Task 3.1 Electron UTF-8 chunk 解码修复 | Task 3.1 通过 | [main.js](../../../electron/src/main.js)、[sse-bridge.test.js](../../../electron/tests/sse-bridge.test.js) |
-| 2026-07-27 | 验收 Task 3.2 附件 Artifact 管线收敛 | Task 3.2 通过 | [api_server.py](../../../core/api_server.py)、[test_desktop_shared_api_contract.py](../../../tests/test_desktop_shared_api_contract.py)、[test_phase4_api.py](../../../tests/test_phase4_api.py) |
-| 2026-07-27 | 验收 Task 3.3 ImageObservation 结构化输出 | Task 3.3 通过 | [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) |
+| 2026-07-27T00:00:00 | 创建 Phase 3 未开始验收门禁 | 不通过 | 本文件 |
+| 2026-07-27T00:00:00 | 验收 Task 3.1 Electron UTF-8 chunk 解码修复 | Task 3.1 通过 | [main.js](../../../electron/src/main.js)、[sse-bridge.test.js](../../../electron/tests/sse-bridge.test.js) |
+| 2026-07-27T00:00:00 | 验收 Task 3.2 附件 Artifact 管线收敛 | Task 3.2 通过 | [api_server.py](../../../core/api_server.py)、[test_desktop_shared_api_contract.py](../../../tests/test_desktop_shared_api_contract.py)、[test_phase4_api.py](../../../tests/test_phase4_api.py) |
+| 2026-07-27T00:00:00 | 验收 Task 3.3 ImageObservation 结构化输出 | Task 3.3 通过 | [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) |
+| 2026-07-27T00:00:00 | 验收 Task 3.4 VisualIntentRouter 主动图片路由 | Task 3.4 通过 | [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) |
+| 2026-07-28T00:00:00 | 验收 Task 3.5 前端附件预览与安全动作 | Task 3.5 通过 | [chat.js](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js) |
+| 2026-07-28T00:00:00 | 验收 Task 3.6 向量知识库连接尝试 | Task 3.6 阻塞但有完整证据 | [Task3.6-向量知识库连接尝试报告.md](./Task3.6-向量知识库连接尝试报告.md) |

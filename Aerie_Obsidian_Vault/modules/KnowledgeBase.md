@@ -1,8 +1,8 @@
 ---
 title: 专用向量知识库
 kind: module_note
-status: Review
-updated_at: 2026-07-27
+status: Blocked-with-evidence
+updated_at: 2026-07-28
 owners:
   - ARCH
 related_decisions:
@@ -26,6 +26,8 @@ related_validations:
 - ADR-TC-003 已确认本轮按专用向量库方向设计和尝试接入。
 - 代码中存在长期记忆层 ChromaDB 可选路径和 embedding provider 适配，但仍需能力探测确认是否能服务独立 Vault 摘要索引。
 - 关键实现候选包括 [long_permanent.py](file:///e:/Agent_reply/memory/layers/long_permanent.py)、[brain.py](file:///e:/Agent_reply/core/brain.py) 与 [kb.py](file:///e:/Agent_reply/knowledge/kb.py)。
+- **Task 3.6 探测结论（2026-07-28T00:00:00）**：阻塞——ChromaDB 依赖未安装（`requirements.txt` 中被注释）、Embedding API 环境变量全部未配置、生产代码未接入 `LayeredMemory`、`data/chroma` 目录不存在。
+- 完整阻塞证据见 [Task3.6-向量知识库连接尝试报告.md](../../.trae/specs/execute-third-correction-p0-fusion/Task3.6-向量知识库连接尝试报告.md)。
 
 ## 目标状态
 

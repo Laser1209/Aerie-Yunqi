@@ -1,8 +1,8 @@
 ---
 title: VisualIntentRouter
 kind: module_note
-status: Review
-updated_at: 2026-07-27
+status: Implemented
+updated_at: 2026-07-28
 owners:
   - ARCH
 related_decisions:
@@ -15,7 +15,6 @@ related_validations:
   - C3.9
   - C3.10
 ---
-
 # VisualIntentRouter
 
 ## 定义
@@ -27,6 +26,8 @@ VisualIntentRouter 是主动图片生成前的意图路由器，用于区分 rol
 - 规格要求任何 image provider 收到 reference assets 前，必须先经过 VisualIntentRouter。
 - environment_object 必须让 reference_assets 为空，并从 WorldSnapshot 或 OfficeContext 派生环境细节。
 - role_selfie 和 role_in_scene 必须冻结 PersonaConfig visual identity revision。
+- 已实现于 [image_service.py L102-L218](../../core/image_service.py)，使用确定性关键词匹配，不调用真实模型。
+- 集成于 `ImageWorkflow.generate_image`，低置信度时返回 `rejected` + `visual_intent_low_confidence`，不调用 provider。
 
 ## 目标状态
 
@@ -56,9 +57,20 @@ VisualIntentRouter 是主动图片生成前的意图路由器，用于区分 rol
 
 - C1.4：本概念具备实现、依赖、风险/决策、验证四类链接。
 - C3.8：environment_object 请求的 reference_assets 为空。
+  - 证据：`test_generation_environment_object_routes_without_reference_assets`
 - C3.9：role_selfie 或 role_in_scene 请求包含 PersonaConfig visual identity revision。
+  - 证据：`test_generation_role_selfie_freezes_visual_identity_revision`
 - C3.10：低置信度分类不直接调用生图 provider。
+  - 证据：`test_generation_low_confidence_visual_intent_does_not_call_provider`
+- 回归：`python -m pytest tests/test_phase10_image_workflow.py -q` 通过 16/16
 - 验证索引：[[../06_验证索引#核心概念链接验证]]、[[../06_验证索引#P0-功能验证]]
+
+## 审计结论
+
+- 代码质量：类结构清晰，`route` 与 `_build_visual_request` 职责分离，类型注解完整。
+- 安全：不调用真实模型，`reference_assets` 仅含 asset ID 不含本地路径，不写入长期记忆。
+- 审计日期：2026-07-28
+- 审计人：TRAE
 
 ## 反向链接
 
@@ -67,4 +79,3 @@ VisualIntentRouter 是主动图片生成前的意图路由器，用于区分 rol
 - 依赖索引：[[../03_依赖清单#核心概念依赖]]
 - 风险索引：[[../risks/Unresolved-Risks]]
 - 矩阵索引：[[../matrices/Function-To-Implementation]]
-

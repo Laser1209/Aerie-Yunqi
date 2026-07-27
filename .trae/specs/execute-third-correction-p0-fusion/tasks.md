@@ -91,17 +91,19 @@
   - [x] SubTask 3.4.5: 增加角色自拍、环境图、置信度不足回退测试
   - 证据：[image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py)、命令 `python -m pytest tests/test_phase10_image_workflow.py -q` 通过 16/16；累积回归 Electron 11/11、附件邻近 28/28
 
-- [ ] Task 3.5: 补齐前端附件预览与安全动作
-  - [ ] SubTask 3.5.1: 聊天气泡与历史库共用附件渲染状态
-  - [ ] SubTask 3.5.2: 展示图片、文本/Markdown、表格、PDF/PPT/Office 投影的可读预览入口
-  - [ ] SubTask 3.5.3: 实现 ready/failed/quarantined/unsupported 等状态的明确文案和操作
-  - [ ] SubTask 3.5.4: 验证 UI 不暴露本机绝对路径、令牌或扫描细节
+- [x] Task 3.5: 补齐前端附件预览与安全动作
+  - [x] SubTask 3.5.1: 聊天气泡与历史库共用附件渲染状态
+  - [x] SubTask 3.5.2: 展示图片、文本/Markdown、表格、PDF/PPT/Office 投影的可读预览入口
+  - [x] SubTask 3.5.3: 实现 ready/failed/quarantined/unsupported 等状态的明确文案和操作
+  - [x] SubTask 3.5.4: 验证 UI 不暴露本机绝对路径、令牌或扫描细节
+  - 证据：[chat.js](../../../electron/src/renderer/js/chat.js)、[attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js)、命令 `node --test electron\tests\attachment-card-renderer.test.js` 通过 14/14；累积回归 Electron 11/11、图片工作流 16/16、附件邻近 25/25
 
-- [ ] Task 3.6: 尝试连接专用向量知识库
-  - [ ] SubTask 3.6.1: 探测现有 knowledge 模块、embedding 模块和配置中是否存在可用向量实现
-  - [ ] SubTask 3.6.2: 若存在可用实现，将 Obsidian 总览摘要写入索引并执行语义检索测试
-  - [ ] SubTask 3.6.3: 若不存在可用实现，记录缺失接口、推荐专用向量库边界和阻塞证据
-  - [ ] SubTask 3.6.4: 将结果写入累积验证报告和知识库相关笔记
+- [x] Task 3.6: 尝试连接专用向量知识库
+  - [x] SubTask 3.6.1: 探测现有 knowledge 模块、embedding 模块和配置中是否存在可用向量实现
+  - [x] SubTask 3.6.2: 若存在可用实现，将 Obsidian 总览摘要写入索引并执行语义检索测试
+  - [x] SubTask 3.6.3: 若不存在可用实现，记录缺失接口、推荐专用向量库边界和阻塞证据
+  - [x] SubTask 3.6.4: 将结果写入累积验证报告和知识库相关笔记
+  - 证据：[Task3.6-向量知识库连接尝试报告.md](./Task3.6-向量知识库连接尝试报告.md)、[KnowledgeBase.md](../../../Aerie_Obsidian_Vault/modules/KnowledgeBase.md)；结论：阻塞——ChromaDB 依赖未安装、Embedding API 未配置、生产代码未接入 LayeredMemory
 
 ## 阶段 4 · 累积验证、双自审计与交付收口
 

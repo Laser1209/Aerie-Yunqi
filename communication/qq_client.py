@@ -67,6 +67,15 @@ def _qq_disabled_by_env() -> bool:
     }
 
 
+def _qq_connectivity_test_by_env() -> bool:
+    return os.environ.get("AERIE_QQ_CONNECTIVITY_TEST", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 class QQClient:
     def __init__(self, config: dict) -> None:
         self.host = "127.0.0.1"
@@ -92,6 +101,12 @@ class QQClient:
         self._state = STATE_DISCONNECTED
         self._state_handlers: list[StateHandler] = []
         self._disabled = _qq_disabled_by_env()
+        self._connectivity_test = _qq_connectivity_test_by_env()
+
+    @property
+    def connectivity_test(self) -> bool:
+        """Whether this process is restricted to QQ connectivity checks."""
+        return self._connectivity_test
 
     def set_whitelist(self, whitelist_manager) -> None:
         """设置白名单管理器。"""
@@ -251,6 +266,10 @@ class QQClient:
 
     async def _dispatch(self, event: dict) -> None:
         """Route OneBot11 events to handler."""
+        post_type = event.get("post_type", "")
+        if self._connectivity_test and post_type in {"message", "notice", "request"}:
+            logger.debug("QQ connectivity test discarded non-meta event")
+            return
         # R7.5+: every OneBot11 message event carries ``self_id``
         # (the bot's own QQ). Cache the first one we see so push
         # dispatchers can target the master without a separate
@@ -259,7 +278,6 @@ class QQClient:
         if sid and not self.self_id:
             self.self_id = int(sid)
             logger.info("QQ client learned self_id=%s", self.self_id)
-        post_type = event.get("post_type", "")
         if post_type == "message":
             msg_type = event.get("message_type", "")
             if msg_type == "private":
@@ -309,8 +327,8 @@ class QQClient:
         self, user_id: int, content: str, render_mode: str = "plain"
     ) -> bool:
         """Send a private message via NapCat OneBot11 API."""
-        if self._disabled:
-            logger.info("QQ send skipped because AERIE_DISABLE_QQ is enabled")
+        if self._disabled or self._connectivity_test:
+            logger.info("QQ send skipped by process safety mode")
             return False
         if not self.is_connected:
             logger.warning("Cannot send: QQ WS not connected")
@@ -380,6 +398,9 @@ class QQClient:
         None on timeout/failure. Caller is responsible for checking
         status/data.
         """
+        if self._connectivity_test and action != "get_login_info":
+            logger.info("QQ mutating RPC skipped by connectivity test mode")
+            return None
         if not self.is_connected:
             return None
         echo_tag = f"rpc_{uuid.uuid4().hex[:12]}"
@@ -437,10 +458,13 @@ class QQClient:
                     self._logged_in = True
                     self._login_event.set()
                     self._emit_state(STATE_LOGGED_IN)
-                logger.info(
-                    "QQ client learned self_id=%s via get_login_info",
-                    self.self_id,
-                )
+                if self._connectivity_test:
+                    logger.info("QQ connectivity test confirmed login identity")
+                else:
+                    logger.info(
+                        "QQ client learned self_id=%s via get_login_info",
+                        self.self_id,
+                    )
                 return
             logger.debug(
                 "get_login_info attempt %s: no user_id in resp", attempt + 1,
@@ -455,6 +479,9 @@ class QQClient:
         Returns:
             True if recall succeeded
         """
+        if self._disabled or self._connectivity_test:
+            logger.info("QQ recall skipped by process safety mode")
+            return False
         if not self.is_connected:
             logger.warning("Cannot recall: QQ WS not connected")
             return False
@@ -472,6 +499,9 @@ class QQClient:
 
     async def send_poke(self, user_id: int) -> bool:
         """Send a poke (戳一戳) to a user via NapCat OneBot11."""
+        if self._disabled or self._connectivity_test:
+            logger.info("QQ poke skipped by process safety mode")
+            return False
         if not self.is_connected:
             return False
         resp = await self._rpc_call(
@@ -493,6 +523,9 @@ class QQClient:
           [{"type": "reply", "data": {"id": 12345}},
            {"type": "text", "data": {"text": "我也在想你"}}]
         """
+        if self._disabled or self._connectivity_test:
+            logger.info("QQ segmented send skipped by process safety mode")
+            return False
         if not self.is_connected:
             return False
 

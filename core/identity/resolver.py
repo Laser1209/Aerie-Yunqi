@@ -16,7 +16,7 @@ class IdentityResolver:
     def resolve_message(self, message):
         if not self.enabled:
             return message
-        identity = self.repository.resolve(
+        identity = self.resolve(
             message.channel or message.source,
             message.channel_account_id or str(message.user_id),
         )
@@ -24,3 +24,7 @@ class IdentityResolver:
         message.channel = identity.channel
         message.channel_account_id = identity.channel_account_id
         return message
+
+    def resolve(self, channel: str, channel_account_id: str):
+        """Resolve one channel identity through the shared repository."""
+        return self.repository.resolve(channel, channel_account_id)

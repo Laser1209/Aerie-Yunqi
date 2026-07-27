@@ -1,0 +1,5 @@
+# Isolated desktop attachment worker. Install with Python 3.12 only.
+markitdown[all]==0.1.6
+Pillow==12.2.0
+py7zr==1.1.0
+rarfile==4.2

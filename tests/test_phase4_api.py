@@ -147,6 +147,20 @@ def test_api_queue_flag_off_preserves_legacy_200_shape_and_empty_400(
     companion.pipeline.handle.assert_awaited_once()
 
 
+def test_api_queue_flag_off_supports_legacy_pipeline_only_companion(monkeypatch):
+    companion = _companion(queue_requested=False)
+    monkeypatch.setattr(api_server, "get_companion", lambda: companion)
+
+    response = client.post(
+        "/api/chat/send",
+        json={"text": "同步", "user_id": 3998874040},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == "嗯。"
+    companion.pipeline.handle.assert_awaited_once()
+
+
 def test_api_pure_attachment_202_and_empty_no_attachment_400(
     monkeypatch,
     ready_attachment,

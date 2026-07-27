@@ -1,5 +1,5 @@
 "use strict";
-const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen, Menu, dialog, Notification } = require("electron");
+const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen, Menu, dialog, Notification, shell } = require("electron");
 // Hardware acceleration is the normal path. The dynamic island uses blur and
 // animation heavily, so forcing SwiftShader can consume an entire CPU core.
 // Keep a deliberate escape hatch for machines with broken GPU drivers.
@@ -14,6 +14,9 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
+const crypto = require("crypto");
+const { StringDecoder } = require("string_decoder");
+const { backendHealthMatches } = require("./backend-health");
 const { createCapabilityBroker } = require("./capability-broker");
 const { createPluginSupervisor } = require("./plugin-supervisor");
 const { createEnvFeatureFlags, createWorldDashboardHost } = require("./world-dashboard-host");
@@ -32,7 +35,7 @@ for (const stream of [process.stdout, process.stderr]) {
 }
 
 // ── Config ──────────────────────────────────────────
-const PY_PORT = 7890;
+const PY_PORT = Number.parseInt(process.env.AERIE_BACKEND_PORT || "7890", 10);
 const PY_BACKEND = "http://127.0.0.1:" + PY_PORT;
 
 let PROJECT_ROOT;
@@ -50,7 +53,9 @@ if (app.isPackaged) {
 } else {
   PROJECT_ROOT = path.resolve(__dirname, "..", "..");
   PYTHON_ROOT = PROJECT_ROOT;
-  PYTHON_EXE = path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe");
+  PYTHON_EXE = process.env.AERIE_PYTHON_EXE
+    ? path.resolve(process.env.AERIE_PYTHON_EXE)
+    : path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe");
   PY_MAIN = path.join(PROJECT_ROOT, "main.py");
   ICON_PATH = path.join(PROJECT_ROOT, "Aerie · 云栖.png");
 }
@@ -89,10 +94,21 @@ let pendingMainNavigation = null;
 let _chatEventBuf = "";
 const CHAT_EVENT_PREFIX = "[CHAT_EVENT]";
 let _backendReady = false;
+let _backendState = "booting";
+let _lastBroadcastBackendReady = false;
 let _pendingHealthInterval = null;
+let _bootingDeadlineTs = 0;
 let BACKEND_DB_PATH = null;
 let BACKEND_DATA_DIR = null;
 let BACKEND_LOG_DIR = null;
+let EXPECTED_BACKEND_INSTANCE_ID = null;
+const MAIN_PROCESS_TOKEN = crypto.randomBytes(32).toString("base64url");
+let _worldConnectionSignature = "";
+let _worldConnectionMonitor = null;
+const _openedAttachmentTempPaths = new Set();
+let _worldShutdownStarted = false;
+let _worldShutdownComplete = false;
+const _stderrDecoder = new StringDecoder("utf8");
 const START_MINIMIZED_ARG = "--start-minimized";
 const worldCapabilityBroker = createCapabilityBroker();
 const worldPluginSupervisor = createPluginSupervisor();
@@ -200,24 +216,200 @@ function configureBackendDataPath() {
 }
 
 // ── Backend ────────────────────────────────────────
-function startPythonBackend() {
-  // v2.2 fix: before spawning a fresh Python, probe port 7890. If a
-  // healthy backend is already listening (e.g. the user launched
-  // `python main.py` manually, or the previous Electron session left
-  // one running), attach to it instead of fighting for the port.
-  healthCheck().then((alive) => {
-    if (alive) {
-      console.log("[main] existing backend detected on port " + PY_PORT + " — attaching");
-      _backendReady = true;
-      broadcastHealth();
+// R7.2: Derive a three-state backend state so the first paint of the
+//       status-bar is "启动中…" instead of the misleading "后端离线".
+//
+//       - "booting"  : we haven't given up yet (still within the boot-deadline
+//                     window, or an explicit respawn is in progress).
+//       - "ready"    : _backendReady === true.
+//       - "offline"  : explicitly dead (exit handler, timeout expired, or
+//                     restart handler told us so).
+const BOOT_TIMEOUT_MS = 20000;
+function _recomputeBackendState(nowTs = Date.now()) {
+  if (_backendReady) { _backendState = "ready"; return; }
+  if (_bootingDeadlineTs && nowTs < _bootingDeadlineTs) {
+    _backendState = "booting";
+    return;
+  }
+  if (pythonProc && typeof pythonProc.pid === "number") {
+    try {
+      process.kill(pythonProc.pid, 0);
+      _backendState = "booting";
       return;
+    } catch (_) {}
+  }
+  _backendState = "offline";
+}
+function _setBootingDeadline(ms = BOOT_TIMEOUT_MS) {
+  _bootingDeadlineTs = Date.now() + ms;
+}
+
+// R7.3: Append ALL raw stderr to a dedicated log file so users can at
+//       any time open it and see the *actual* Python startup error, instead
+//       of relying on the handleStderr function which only forwards
+//       [CHAT_EVENT] JSON lines and silently drops everything else.
+let _rawStderrLogPath = null;
+let _rawStderrFatalPattern = /(Traceback \(most recent call last\)|SystemExit|OSError|NameError|ModuleNotFoundError|ImportError|AttributeError|TypeError|KeyError|ValueError|error while attempting to bind on address|Address already in use|EADDRINUSE|WinError 10048)/i;
+let _lastFatalBroadcastTs = 0;
+function decodeBufferedUtf8Chunks(chunks) {
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8");
+}
+
+function createUtf8SseProcessor(onFrame, initialBuffer = "") {
+  const decoder = new StringDecoder("utf8");
+  let buf = initialBuffer || "";
+  function write(chunk) {
+    buf += decoder.write(Buffer.from(chunk));
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      onFrame(frame);
     }
-    _spawnNewPython();
-  }).catch(() => _spawnNewPython());
+  }
+  function end() {
+    buf += decoder.end();
+    const remaining = buf;
+    buf = "";
+    return remaining;
+  }
+  return { write, end };
+}
+
+function _ensureRawStderrLogger() {
+  if (_rawStderrLogPath) return;
+  if (!BACKEND_LOG_DIR) return;
+  try {
+    fs.mkdirSync(BACKEND_LOG_DIR, { recursive: true });
+    const stamp = new Date();
+    const stampStr = stamp.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    _rawStderrLogPath = path.join(BACKEND_LOG_DIR, "backend.stderr." + stampStr + ".raw.log");
+    const summaryPath = path.join(BACKEND_LOG_DIR, "backend.stderr.LATEST.raw.log");
+    try { fs.rmSync(summaryPath, { force: true }); } catch (_) {}
+    try { fs.symlinkSync(_rawStderrLogPath, summaryPath, "file"); } catch (_) {
+      try { fs.copyFileSync(_rawStderrLogPath, summaryPath); } catch (_2) {}
+    }
+    fs.appendFileSync(_rawStderrLogPath,
+      "\n# ===== backend stderr session start " + stamp.toISOString() + " =====\n",
+      "utf8");
+  } catch (_err) {
+    console.warn("[main] failed to open raw stderr log:", _err && _err.message);
+    _rawStderrLogPath = null;
+  }
+}
+function _appendRawStderr(chunkStr) {
+  _ensureRawStderrLogger();
+  if (!_rawStderrLogPath) return;
+  try { fs.appendFileSync(_rawStderrLogPath, chunkStr, "utf8"); } catch (_) {}
+}
+function _broadcastBackendFatalIfNeeded(chunkStr) {
+  if (!_rawStderrFatalPattern.test(chunkStr)) return;
+  const nowTs = Date.now();
+  if (nowTs - _lastFatalBroadcastTs < 2000) return; // throttle at 2s
+  _lastFatalBroadcastTs = nowTs;
+  const payload = {
+    type: "backend_fatal",
+    log_path: _rawStderrLogPath || "",
+    message: chunkStr.split("\n").slice(0, 3).join("\n").slice(0, 500),
+    ts: Date.now(),
+  };
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w || w.isDestroyed()) continue;
+    try { w.webContents.send("backend:fatal", payload); } catch (_) {}
+    try { w.webContents.send("chat:message", payload); } catch (_) {}
+  }
+}
+
+function startPythonBackend() {
+  _setBootingDeadline();
+  _recomputeBackendState();
+  broadcastHealth();
+  // R7.4: Before doing anything, kill ANY existing python.exe process
+  // that is LISTENING on PY_PORT, but ONLY if healthCheck() says it's NOT
+  // a compatible Aerie backend we can cleanly attach to.  This eliminates
+  // the orphan-7890 problem: a leftover child from yesterday's restart kills
+  // the next launch forever (WinError 10048).
+  (async () => {
+    try { await _evictOrphanBackendIfNeeded(); } catch (_) {}
+    // v2.2 fix: before spawning a fresh Python, probe port 7890. If a
+    // healthy backend is already listening (e.g. the user launched
+    // `python main.py` manually, or the previous Electron session left
+    // one running), attach to it instead of fighting for the port.
+    healthCheck().then((alive) => {
+      if (alive) {
+        console.log("[main] existing backend detected on port " + PY_PORT + " — attaching");
+        _backendReady = true;
+        _recomputeBackendState();
+        broadcastHealth();
+        return;
+      }
+      _spawnNewPython();
+    }).catch(() => _spawnNewPython());
+  })();
+}
+
+// R7.4: If the port is LISTENING but healthCheck() rejects it (wrong DB,
+//       wrong instance id, wrong app id — signs of an orphan process),
+//       kill it BEFORE spawn so our new child can bind cleanly.
+async function _evictOrphanBackendIfNeeded() {
+  if (process.platform !== "win32") return;
+  // Step 1: Check if it's a VALID Aerie backend via healthCheck(); if so,
+  //         it's not an orphan — leave it alone so startPythonBackend can
+  //         attach to it (this is the "attach if port alive" path).
+  let healthy = false;
+  try { healthy = Boolean(await Promise.race([
+    healthCheck(),
+    new Promise((r) => setTimeout(() => r(false), 800)),
+  ])); } catch (_) { healthy = false; }
+  if (healthy) return;
+
+  // Step 2: Port is NOT a valid Aerie. Find PIDs LISTENING on 127.0.0.1:PY_PORT.
+  let pidList = [];
+  try {
+    const { execSync } = require("child_process");
+    const output = execSync(
+      "netstat -ano | findstr /R /C:\"" + PY_PORT + "\\s*\"",
+      { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }
+    );
+    for (const line of String(output || "").split(/\r?\n/)) {
+      const m = line.match(/LISTENING\s+(\d+)\s*$/);
+      if (!m) continue;
+      const p = Number(m[1]);
+      if (Number.isFinite(p) && p > 4 && p !== process.pid && !pidList.includes(p)) pidList.push(p);
+    }
+  } catch (_netstatErr) { return; }
+  if (!pidList.length) return;
+
+  // Step 3: Only kill processes whose image name starts with "python".
+  //         We never kill non-python processes (they're unrelated services).
+  for (const pid of pidList) {
+    try {
+      const proc = require("child_process").execSync(
+        "wmic process where ProcessId=" + pid + " get Name,ExecutablePath /format:list",
+        { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }
+      );
+      const nameLine = String(proc || "").match(/Name=([^\r\n]+)/);
+      const name = (nameLine && nameLine[1] || "").trim().toLowerCase();
+      if (!name || name.indexOf("python") !== 0) {
+        console.log("[main] evict-orphan: skip PID=" + pid + " (Name=" + name + ")");
+        continue;
+      }
+      console.log("[main] evict-orphan: KILLING orphan python PID=" + pid + " on port " + PY_PORT);
+      try { process.kill(pid, "SIGKILL"); } catch (_killErr) {
+        try { require("child_process").execSync("taskkill /F /PID " + pid, { timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }); } catch (_) {}
+      }
+    } catch (_wmixErr) { /* PID vanished */ }
+  }
+  // Small wait so the OS fully releases the socket (avoids TIME_WAIT false reject).
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
 }
 
 function _spawnNewPython() {
   if (pythonProc) return;
+  _setBootingDeadline();
+  _recomputeBackendState();
+  broadcastHealth();
+  EXPECTED_BACKEND_INSTANCE_ID = crypto.randomUUID();
   console.log("[main] starting Python backend:", PY_MAIN);
 
   pythonProc = spawn(PYTHON_EXE, [PY_MAIN], {
@@ -230,6 +422,9 @@ function _spawnNewPython() {
       PYTHONUNBUFFERED: "1",
       AERIE_DATA_DIR: BACKEND_DATA_DIR,
       AERIE_DB_PATH: BACKEND_DB_PATH,
+      AERIE_BACKEND_PORT: String(PY_PORT),
+      AERIE_BACKEND_INSTANCE_ID: EXPECTED_BACKEND_INSTANCE_ID,
+      AERIE_MAIN_PROCESS_TOKEN: MAIN_PROCESS_TOKEN,
       LOG_DIR: BACKEND_LOG_DIR,
     },
   });
@@ -244,6 +439,7 @@ function _spawnNewPython() {
     console.log("[main] python exited code=" + code + " sig=" + sig);
     pythonProc = null;
     _backendReady = false;
+    _recomputeBackendState();
     broadcastHealth();
     // v2.2: keep watching for a respawn so a "restart backend" click
     // can flip _backendReady back to true without an Electron reload.
@@ -253,31 +449,116 @@ function _spawnNewPython() {
           const ok = await healthCheck();
           if (ok) {
             _backendReady = true;
+            _recomputeBackendState();
             broadcastHealth();
             clearInterval(_pendingHealthInterval);
             _pendingHealthInterval = null;
+          } else {
+            _recomputeBackendState();
           }
-        } catch (_) {}
+        } catch (_) { _recomputeBackendState(); }
       }, 1000);
     }
   });
 
-  // Poll until backend is ready
+  // Poll until backend is ready. Also tick the boot-deadline each round so
+  // "启动中…" gracefully falls back to "后端离线" if Python is hanging.
   _pendingHealthInterval = setInterval(async () => {
     try {
       const ok = await healthCheck();
       if (ok) {
         _backendReady = true;
+        _recomputeBackendState();
         broadcastHealth();
         clearInterval(_pendingHealthInterval);
         _pendingHealthInterval = null;
+      } else {
+        _recomputeBackendState();
+        if (_backendState === "offline") broadcastHealth();
       }
-    } catch (_) {}
+    } catch (_) {
+      _recomputeBackendState();
+      if (_backendState === "offline") broadcastHealth();
+    }
   }, 1000);
 }
 
+/**
+ * R6.6 FIX — Real Electron-parent-level backend restart.
+ *
+ * This is the ONLY reliable way to restart the backend when the backend
+ * itself is OFFLINE (port not listening, HTTP 5xx, pythonProc died).
+ *
+ * The previous chain (settings button → IPC → HTTP POST /api/system/restart
+ * → Python spawns a PowerShell helper → helper kills Python and re-launches
+ * main.py) had THREE stacked bugs:
+ *   1. If backend is already offline, the HTTP request fails immediately and
+ *      the helper script never runs — the exact scenario users complain about.
+ *   2. The helper re-launched main.py WITHOUT the 10+ Electron env vars
+ *      (AERIE_DATA_DIR / AERIE_BACKEND_INSTANCE_ID / MAIN_PROCESS_TOKEN /
+ *       PYTHONIOENCODING / LOG_DIR …), so the new backend had the wrong
+ *      profile, wrong DB, and the UI kept showing "backend offline".
+ *   3. The new Python was an orphan process NOT parented under Electron, so
+ *      `pythonProc.stderr` stream (which carries all [CHAT_EVENT] JSON lines
+ *      that feed the renderer / dynamic island / emotion updates) was lost
+ *      FOREVER — health returned 200 but *nothing* streamed any more.
+ *
+ * This helper kills the running child (if any), resets shared state,
+ * rolls a fresh EXPECTED_BACKEND_INSTANCE_ID, and calls the SAME
+ * `_spawnNewPython()` path used at cold boot → env vars, stderr pipe,
+ * instance-id all line up perfectly.
+ */
+function _forceRestartPythonBackend() {
+  // 1) Clear any in-flight health polling so we don't race the old backend.
+  if (_pendingHealthInterval) {
+    clearInterval(_pendingHealthInterval);
+    _pendingHealthInterval = null;
+  }
+
+  // 2) If we still hold a valid pythonProc, kill it forcefully.
+  if (pythonProc && typeof pythonProc.pid === "number") {
+    try {
+      // Best-effort graceful first; Node kill() on Windows is always force.
+      pythonProc.kill("SIGKILL");
+    } catch (_) { /* ignore */ }
+    // Give the OS ~300ms to reclaim the port before we respawn.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
+  }
+  // Force-reset the handle even if kill() threw, so _spawnNewPython won't bail.
+  pythonProc = null;
+  _backendReady = false;
+  _setBootingDeadline();
+  _recomputeBackendState();
+  broadcastHealth();
+
+  // 3) Roll a fresh instance id. This is critical: the old id matched the
+  //    dead process; if we kept it, health-check's instance-id gate would
+  //    reject our new child (even though *we* spawned it).
+  EXPECTED_BACKEND_INSTANCE_ID = crypto.randomUUID();
+  console.log("[main] restart backend: new EXPECTED_BACKEND_INSTANCE_ID =",
+    EXPECTED_BACKEND_INSTANCE_ID.slice(0, 8) + "…");
+
+  // 4) Spawn via the SAME code path as cold boot.
+  //    startPythonBackend() probes the port first:
+  //      - if an orphan backend already occupied the port (e.g. leftover from
+  //        the previous broken ps1 restart path), it ATTACHES cleanly instead
+  //        of spawning a duplicate that would fail EADDRINUSE;
+  //      - if the port is free, it calls _spawnNewPython() for us with full
+  //        env-var parity, stderr-event plumbing, health polling, etc.
+  //    This is strictly safer than calling _spawnNewPython() directly.
+  startPythonBackend();
+}
+
 function handleStderr(chunk) {
-  const s = chunk.toString("utf-8");
+  const s = _stderrDecoder.write(Buffer.from(chunk));
+  // R7.3: write ALL stderr (not just CHAT_EVENT lines) to a permanent log
+  // so users can diagnose startup crash / traceback / missing modules
+  // without needing a debugger.
+  _appendRawStderr(s);
+  // R7.3: fatal pattern detection → broadcast a `backend:fatal` event so
+  // the UI can tell the user where the raw log is and what the error was,
+  // instead of silently spinning "启动中…" forever.
+  _broadcastBackendFatalIfNeeded(s);
   // Parse [CHAT_EVENT] lines
   _chatEventBuf += s;
   let nl;
@@ -302,26 +583,69 @@ function emitChatEvent(payload) {
   }
 }
 
+function sendBackendState(win, includeReadyEvent = false) {
+  if (!win || win.isDestroyed()) return;
+  _recomputeBackendState();
+  win.webContents.send("backend:health", { ready: _backendReady, state: _backendState });
+  if (!includeReadyEvent || !_backendReady) return;
+  const readyEvent = {
+    type: "backend_ready",
+    backendInstanceId: EXPECTED_BACKEND_INSTANCE_ID || "compatible-existing",
+  };
+  win.webContents.send("backend:ready", readyEvent);
+  win.webContents.send("chat:message", readyEvent);
+}
+
 function broadcastHealth() {
-  const wins = BrowserWindow.getAllWindows();
-  for (const w of wins) {
-    if (w && !w.isDestroyed()) {
-      w.webContents.send("backend:health", { ready: _backendReady });
-    }
+  const becameReady = _backendReady && !_lastBroadcastBackendReady;
+  for (const win of BrowserWindow.getAllWindows()) {
+    sendBackendState(win, becameReady);
   }
+  _lastBroadcastBackendReady = _backendReady;
+  if (_backendReady) {
+    _worldConnectionSignature = "";
+    reconcileWorldRuntime().catch(() => {});
+  }
+}
+
+function readLegacyBackendDatabasePath() {
+  return new Promise((resolve) => {
+    const req = http.get(PY_BACKEND + "/api/stats/system", (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+      res.on("end", () => {
+        const data = decodeBufferedUtf8Chunks(chunks);
+        try {
+          const payload = JSON.parse(data);
+          resolve(payload && payload.database_path ? payload.database_path : null);
+        } catch (_) {
+          resolve(null);
+        }
+      });
+    });
+    req.on("error", () => resolve(null));
+    req.setTimeout(2000, () => { req.destroy(); resolve(null); });
+  });
 }
 
 function healthCheck() {
   return new Promise((resolve) => {
     const req = http.get(PY_BACKEND + "/api/health", (res) => {
-      let d = "";
-      res.on("data", (c) => (d += c));
-      res.on("end", () => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(Buffer.from(c)));
+      res.on("end", async () => {
+        const d = decodeBufferedUtf8Chunks(chunks);
         try {
           const j = JSON.parse(d);
-          const expected = BACKEND_DB_PATH ? path.resolve(BACKEND_DB_PATH).toLowerCase() : null;
-          const actual = j.data_path_id ? path.resolve(j.data_path_id).toLowerCase() : null;
-          resolve((j.status === "healthy" || j.status === "degraded") && (!expected || expected === actual));
+          const legacyDbPath = j.data_path_id
+            ? null
+            : await readLegacyBackendDatabasePath();
+          resolve(backendHealthMatches({
+            payload: j,
+            expectedDbPath: BACKEND_DB_PATH,
+            expectedInstanceId: EXPECTED_BACKEND_INSTANCE_ID,
+            legacyDbPath,
+          }));
         } catch (_) {
           resolve(false);
         }
@@ -339,6 +663,9 @@ function apiRequest(opts) {
     const headers = isRaw
       ? { "Content-Type": "text/plain; charset=utf-8" }
       : { "Content-Type": "application/json" };
+    if (opts.internal === true) {
+      headers["X-Aerie-Main-Token"] = MAIN_PROCESS_TOKEN;
+    }
     const options = {
       hostname: "127.0.0.1",
       port: PY_PORT,
@@ -348,9 +675,10 @@ function apiRequest(opts) {
       timeout: 30000,
     };
     const req = http.request(options, (res) => {
-      let d = "";
-      res.on("data", (c) => (d += c));
+      const chunks = [];
+      res.on("data", (c) => chunks.push(Buffer.from(c)));
       res.on("end", () => {
+        const d = decodeBufferedUtf8Chunks(chunks);
         let body;
         const ct = (res.headers && res.headers["content-type"] || "").toLowerCase();
         if (ct.indexOf("application/json") >= 0) {
@@ -506,6 +834,9 @@ function createMainWindow() {
   });
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindowReady = true;
+    // A fast or pre-existing backend can become ready before the Renderer has
+    // registered listeners. Always replay the current state to this window.
+    sendBackendState(mainWindow, _backendReady);
     flushPendingMainNavigation();
   });
 
@@ -586,6 +917,111 @@ function showMainWindow(tab, payload) {
 }
 
 // ── Dynamic Island ────────────────────────────────
+// R8.1: Dynamic-island master enable state. Defaults ON for users who
+//       don't have the prefs file yet. The state is persisted to
+//       {BACKEND_DATA_DIR}/island_prefs.json so (a) restarting the app
+//       preserves user choice and (b) the choice is not tied to the
+//       Python backend — if the backend is offline we still respect it.
+//
+//       We do NOT use the Python settings.yaml round-trip for this one
+//       because: (1) it creates a circular dependency on backend being up,
+//       which matches the exact failure pattern the user just reported,
+//       and (2) the island window is 100% Electron-side code.
+let _islandEnabled = true;
+let _islandPrefsPath = null;
+
+function _resolveIslandPrefsPath() {
+  if (_islandPrefsPath) return _islandPrefsPath;
+  const base = BACKEND_DATA_DIR
+    ? path.resolve(BACKEND_DATA_DIR)
+    : (app.getPath ? path.resolve(app.getPath("userData")) : process.cwd());
+  try { fs.mkdirSync(base, { recursive: true }); } catch (_) {}
+  _islandPrefsPath = path.join(base, "island_prefs.json");
+  return _islandPrefsPath;
+}
+function _loadIslandPrefs() {
+  if (process.env.AERIE_DISABLE_DYNAMIC_ISLAND === "1") {
+    _islandEnabled = false;
+    return;
+  }
+  const p = _resolveIslandPrefsPath();
+  try {
+    if (fs.existsSync(p)) {
+      const raw = fs.readFileSync(p, "utf8");
+      const obj = JSON.parse(raw || "{}");
+      if (obj && typeof obj.enabled === "boolean") _islandEnabled = obj.enabled;
+    }
+  } catch (_e) {
+    // Corrupt JSON or ACL problem — fall back to the default (enabled).
+    console.warn("[main] failed to read island_prefs.json, defaulting to enabled:", _e && _e.message);
+    _islandEnabled = true;
+  }
+}
+function _saveIslandPrefs() {
+  const p = _resolveIslandPrefsPath();
+  try {
+    fs.writeFileSync(
+      p,
+      JSON.stringify({ enabled: _islandEnabled, updatedAt: Date.now() }, null, 2),
+      { encoding: "utf8" }
+    );
+    return true;
+  } catch (_e) {
+    console.warn("[main] failed to save island_prefs.json:", _e && _e.message);
+    return false;
+  }
+}
+function _isIslandWindowAlive() {
+  return Boolean(dynamicIsland && !dynamicIsland.isDestroyed());
+}
+function _broadcastIslandEnabled() {
+  const payload = {
+    enabled: _islandEnabled,
+    visible: _isIslandWindowAlive() && dynamicIsland.isVisible(),
+    windowExists: _isIslandWindowAlive(),
+    prefsPath: _islandPrefsPath || "",
+    updatedAt: Date.now(),
+  };
+  const wins = BrowserWindow.getAllWindows();
+  for (const w of wins) {
+    if (!w || w.isDestroyed()) continue;
+    try { w.webContents.send("island:enabled-change", payload); } catch (_) {}
+  }
+}
+function _applyIslandEnabledToWindow() {
+  if (_islandEnabled) {
+    if (!_isIslandWindowAlive()) {
+      // The env guard was the *only* gate before R8.1; we keep it as a safety
+      // escape hatch for headless / CI / broken-GPU-machine users.
+      if (process.env.AERIE_DISABLE_DYNAMIC_ISLAND === "1") {
+        console.log("[main] _applyIslandEnabledToWindow: skipping create (env AERIE_DISABLE_DYNAMIC_ISLAND=1)");
+        return;
+      }
+      createDynamicIsland();
+    } else if (!dynamicIsland.isVisible()) {
+      dynamicIsland.showInactive();
+    }
+  } else {
+    if (_isIslandWindowAlive()) {
+      stopSystemStatusPolling();
+      _stopMediaPolling();
+      _cleanupOldThumbnail();
+      try { dynamicIsland.setClosable(true); } catch (_) {}
+      try { dynamicIsland.hide(); } catch (_) {}
+      try { dynamicIsland.close(); } catch (_) {}
+      // Windows destroy is async; give it a tick before broadcasting so
+      // callers checking "is there a window" don't see a stale handle.
+      setTimeout(() => {
+        if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+          try { dynamicIsland.destroy(); } catch (_) {}
+        }
+        dynamicIsland = null;
+        _broadcastIslandEnabled();
+      }, 0);
+    }
+  }
+}
+
 function createDynamicIsland() {
   if (dynamicIsland) return;
 
@@ -784,7 +1220,9 @@ function createTray() {
 // ── IPC Handlers ───────────────────────────────────
 ipcMain.handle("api:request", async (_event, opts) => {
   try {
-    return await apiRequest(opts);
+    const rendererOptions = opts && typeof opts === "object" ? { ...opts } : {};
+    delete rendererOptions.internal;
+    return await apiRequest(rendererOptions);
   } catch (err) {
     return { status: 0, data: { error: err.message } };
   }
@@ -804,6 +1242,32 @@ ipcMain.handle("world-dashboard:show", async () => {
 
 ipcMain.handle("world-dashboard:hide", async () => {
   return await worldDashboardHost.hide();
+});
+
+ipcMain.handle("attachments:open", async (_event, attachmentId) => {
+  try {
+    return await openDesktopAttachment(attachmentId);
+  } catch (error) {
+    return { ok: false, error: String((error && error.message) || error) };
+  }
+});
+
+ipcMain.handle("attachments:download", async (_event, attachmentId) => {
+  try {
+    return await saveDesktopAttachment(attachmentId);
+  } catch (error) {
+    return { ok: false, error: String((error && error.message) || error) };
+  }
+});
+
+ipcMain.handle("world-dashboard:control", async (_event, input) => {
+  const payload = input && typeof input === "object" ? input : {};
+  const result = await worldDashboardHost.control(
+    payload.action,
+    payload.payload && typeof payload.payload === "object" ? payload.payload : {},
+  );
+  await bindWorldConnectionToBackend(true);
+  return result;
 });
 
 ipcMain.handle("world-dashboard:approve-candidate", async (_event, payload) => {
@@ -920,10 +1384,82 @@ ipcMain.handle("island:get-config", async () => {
   return { ok: true, config: _islandConfig };
 });
 
+// R8.1: master enable/disable IPC.  These are deliberately *not* guarded by
+//       backend readiness because the island is 100% Electron — the same
+//       circularity (backend off → can't change backend-off status) was the
+//       root of the previous bug reports.
+ipcMain.handle("island:get-enabled", async () => {
+  return {
+    ok: true,
+    enabled: _islandEnabled,
+    visible: _isIslandWindowAlive() && dynamicIsland.isVisible(),
+    windowExists: _isIslandWindowAlive(),
+    prefsPath: _islandPrefsPath || "",
+    saved: Boolean(_islandPrefsPath && fs.existsSync(_islandPrefsPath)),
+  };
+});
+ipcMain.handle("island:set-enabled", async (_event, payload) => {
+  const wanted = Boolean(payload && payload.enabled);
+  if (_islandEnabled === wanted &&
+      (wanted ? _isIslandWindowAlive() : !_isIslandWindowAlive())) {
+    // State already matches — nothing to do, just confirm to caller.
+    _broadcastIslandEnabled();
+    return {
+      ok: true,
+      changed: false,
+      enabled: _islandEnabled,
+      visible: _isIslandWindowAlive() && dynamicIsland.isVisible(),
+      windowExists: _isIslandWindowAlive(),
+      prefsPath: _islandPrefsPath || "",
+    };
+  }
+
+  // 1) Persist FIRST. If we can't write the prefs file (read-only folder),
+  //    fail the whole change instead of silently flipping the UI without
+  //    saving — that was another previously-reported bug pattern.
+  _islandEnabled = wanted;
+  const saved = _saveIslandPrefs();
+
+  // 2) Create / destroy the actual BrowserWindow.
+  try {
+    _applyIslandEnabledToWindow();
+  } catch (e) {
+    console.error("[main] _applyIslandEnabledToWindow failed:", e && e.message);
+    // Rollback the in-memory state (but keep persisted file: the user really
+    // wanted this toggle, next app restart will retry with a clean window).
+    const payload2 = {
+      ok: false,
+      error: e && e.message || "apply_failed",
+      saved,
+      enabled: _islandEnabled,
+      prefsPath: _islandPrefsPath || "",
+    };
+    _broadcastIslandEnabled();
+    return payload2;
+  }
+
+  // 3) Broadcast to all renderer processes (main window, settings tab, any
+  //    secondary windows). Also push the enabled flag into _islandConfig so
+  //    the island window itself doesn't have to learn about it separately.
+  _islandConfig = Object.assign({}, _islandConfig, { enabled: _islandEnabled });
+  if (_isIslandWindowAlive()) {
+    try { dynamicIsland.webContents.send("island:config-change", _islandConfig); } catch (_) {}
+  }
+  _broadcastIslandEnabled();
+  return {
+    ok: true,
+    changed: true,
+    enabled: _islandEnabled,
+    saved,
+    prefsPath: _islandPrefsPath || "",
+    visible: _isIslandWindowAlive() && dynamicIsland.isVisible(),
+    windowExists: _isIslandWindowAlive(),
+  };
+});
+
 // System status (CPU / memory / network)
 const os = require("os");
 let _lastCpuTimes = null;
-let _lastNetStats = null;
 
 function _getCpuUsage() {
   const cpus = os.cpus();
@@ -952,18 +1488,250 @@ function _getMemUsage() {
 }
 
 let _systemStatusInterval = null;
-let _systemStatus = { cpu: 0, mem: 0, net: 0 };
+let _systemStatus = {
+  cpu: 0,
+  mem: 0,
+  net: null,
+  netReceive: null,
+  netSend: null,
+  networkAvailable: false,
+  sampledAt: "",
+};
+
+async function sampleSystemStatus() {
+  _systemStatus.cpu = _getCpuUsage();
+  _systemStatus.mem = _getMemUsage();
+  try {
+    const response = await apiRequest({ path: "/api/stats/system" });
+    const data = response && response.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    const receive = Number(data.network_receive_kbps);
+    const send = Number(data.network_send_kbps);
+    if (Number.isFinite(receive) && Number.isFinite(send)) {
+      _systemStatus.netReceive = receive;
+      _systemStatus.netSend = send;
+      _systemStatus.net = receive + send;
+      _systemStatus.networkAvailable = true;
+    } else {
+      _systemStatus.netReceive = null;
+      _systemStatus.netSend = null;
+      _systemStatus.net = null;
+      _systemStatus.networkAvailable = false;
+    }
+    _systemStatus.sampledAt = String(data.sampled_at || "");
+  } catch (_) {
+    _systemStatus.netReceive = null;
+    _systemStatus.netSend = null;
+    _systemStatus.net = null;
+    _systemStatus.networkAvailable = false;
+    _systemStatus.sampledAt = "";
+  }
+  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+    dynamicIsland.webContents.send("island:system-status", _systemStatus);
+  }
+}
+
+function configureWorldSupervisor() {
+  const sidecarDataDir = path.join(BACKEND_DATA_DIR, "world_sidecar");
+  fs.mkdirSync(sidecarDataDir, { recursive: true });
+  worldPluginSupervisor.register("aerie.world", {
+    command: PYTHON_EXE,
+    cwd: PYTHON_ROOT,
+    dataDir: sidecarDataDir,
+  });
+}
+
+async function fetchDesktopAttachment(attachmentId) {
+  const id = String(attachmentId || "");
+  if (!/^att_[a-f0-9]{32}$/i.test(id)) throw new Error("invalid_attachment_id");
+  const status = await apiRequest({
+    method: "GET",
+    path: "/api/attachments/" + encodeURIComponent(id),
+  });
+  const record = status && status.data && status.data.attachment;
+  if (!record || record.state !== "ready") throw new Error("attachment_not_ready");
+  const originalName = path.basename(String(record.name || "attachment.bin"));
+  const safeName = originalName.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 180)
+    || "attachment.bin";
+  const bytes = await new Promise((resolve, reject) => {
+    const req = http.get(
+      PY_BACKEND + "/api/attachments/" + encodeURIComponent(id) + "/download",
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          reject(new Error("attachment_download_failed"));
+          return;
+        }
+        const chunks = [];
+        let size = 0;
+        res.on("data", (chunk) => {
+          size += chunk.length;
+          if (size > 21 * 1024 * 1024) {
+            req.destroy(new Error("attachment_too_large"));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(30000, () => req.destroy(new Error("attachment_download_timeout")));
+  });
+  return { id, name: safeName, bytes };
+}
+
+async function fetchNapcatQrCode() {
+  const bytes = await new Promise((resolve, reject) => {
+    const req = http.get(PY_BACKEND + "/api/napcat/qrcode", (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error("napcat_qrcode_unavailable"));
+        return;
+      }
+      const chunks = [];
+      let size = 0;
+      res.on("data", (chunk) => {
+        size += chunk.length;
+        if (size > 2 * 1024 * 1024) {
+          req.destroy(new Error("napcat_qrcode_too_large"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+    });
+    req.on("error", reject);
+    req.setTimeout(5000, () => req.destroy(new Error("napcat_qrcode_timeout")));
+  });
+  if (!bytes.length) throw new Error("napcat_qrcode_empty");
+  return `data:image/png;base64,${bytes.toString("base64")}`;
+}
+
+async function openDesktopAttachment(attachmentId) {
+  const attachment = await fetchDesktopAttachment(attachmentId);
+  const targetDir = path.join(app.getPath("temp"), "Aerie", "attachments-open");
+  fs.mkdirSync(targetDir, { recursive: true });
+  const target = path.join(targetDir, attachment.id + "-" + attachment.name);
+  fs.writeFileSync(target, attachment.bytes, { flag: "w" });
+  _openedAttachmentTempPaths.add(target);
+  const error = await shell.openPath(target);
+  return error ? { ok: false, error: "open_failed" } : { ok: true };
+}
+
+async function saveDesktopAttachment(attachmentId) {
+  const attachment = await fetchDesktopAttachment(attachmentId);
+  const selected = await dialog.showSaveDialog(mainWindow || undefined, {
+    defaultPath: attachment.name,
+  });
+  if (selected.canceled || !selected.filePath) return { ok: false, canceled: true };
+  fs.writeFileSync(selected.filePath, attachment.bytes, { flag: "w" });
+  return { ok: true };
+}
+
+function runtimeConfigValue(snapshot, key, fallback) {
+  const values = snapshot && snapshot.values && typeof snapshot.values === "object"
+    ? snapshot.values
+    : {};
+  const entry = values[key];
+  return entry && typeof entry === "object" && "effectiveValue" in entry
+    ? entry.effectiveValue
+    : fallback;
+}
+
+async function bindWorldConnectionToBackend(force = false) {
+  if (!_backendReady) return false;
+  const connection = worldPluginSupervisor.connection("aerie.world");
+  const signature = connection
+    ? crypto.createHash("sha256").update([
+        connection.endpoint,
+        connection.token,
+        connection.instanceId,
+        connection.expiresAt,
+      ].join("\u001f")).digest("hex")
+    : "none";
+  if (!force && signature === _worldConnectionSignature) return true;
+  try {
+    const response = await apiRequest({
+      method: "POST",
+      path: "/api/world/runtime/bind",
+      internal: true,
+      body: { connection },
+    });
+    if (!response || !response.data || response.data.accepted !== true) return false;
+    _worldConnectionSignature = signature;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function reconcileWorldRuntime() {
+  if (!_backendReady) return;
+  let snapshot;
+  try {
+    const response = await apiRequest({ method: "GET", path: "/api/runtime/snapshot" });
+    snapshot = response && response.data && typeof response.data === "object"
+      ? response.data
+      : {};
+  } catch (_) {
+    return;
+  }
+  const effective = worldDashboardHost.applyRuntimeSnapshot(snapshot);
+  let plugin = worldPluginSupervisor.status("aerie.world");
+  if (!effective.enabled) {
+    if (plugin.enabled) {
+      await worldPluginSupervisor.disable("aerie.world", {
+        expectedRevision: plugin.revision,
+      });
+    }
+    await bindWorldConnectionToBackend(true);
+    return;
+  }
+  if (!plugin.enabled) {
+    await worldPluginSupervisor.enable("aerie.world", {
+      expectedRevision: plugin.revision,
+    });
+    plugin = worldPluginSupervisor.status("aerie.world");
+  }
+  const desired = String(runtimeConfigValue(snapshot, "world_desired", "stopped"));
+  if (desired === "running" && plugin.actual !== "running") {
+    const command = plugin.actual === "paused" ? "resume" : "start";
+    await worldPluginSupervisor.control("aerie.world", command, {
+      expectedRevision: plugin.revision,
+    });
+  } else if (desired === "paused" && plugin.actual !== "paused") {
+    if (plugin.actual !== "running") {
+      await worldPluginSupervisor.start("aerie.world", {
+        expectedRevision: plugin.revision,
+      });
+      plugin = worldPluginSupervisor.status("aerie.world");
+    }
+    await worldPluginSupervisor.pause("aerie.world", {
+      expectedRevision: plugin.revision,
+    });
+  } else if (desired === "stopped" && plugin.actual !== "stopped") {
+    await worldPluginSupervisor.stop("aerie.world", {
+      expectedRevision: plugin.revision,
+    });
+  }
+  await bindWorldConnectionToBackend(true);
+}
+
+function startWorldConnectionMonitor() {
+  if (_worldConnectionMonitor) return;
+  _worldConnectionMonitor = setInterval(() => {
+    bindWorldConnectionToBackend(false).catch(() => {});
+  }, 2000);
+}
 
 function startSystemStatusPolling() {
   if (_systemStatusInterval) return;
   _getCpuUsage();
+  void sampleSystemStatus();
   _systemStatusInterval = setInterval(() => {
-    _systemStatus.cpu = _getCpuUsage();
-    _systemStatus.mem = _getMemUsage();
-    _systemStatus.net = Math.random() * 200 + 20;
-    if (dynamicIsland && !dynamicIsland.isDestroyed()) {
-      dynamicIsland.webContents.send("island:system-status", _systemStatus);
-    }
+    void sampleSystemStatus();
   }, 2000);
 }
 
@@ -1407,9 +2175,10 @@ ipcMain.handle("api:upload", async (_event, opts) => {
         },
         timeout: 30000,
       }, (res) => {
-        let d = "";
-        res.on("data", (c) => (d += c));
+        const chunks = [];
+        res.on("data", (c) => chunks.push(Buffer.from(c)));
         res.on("end", () => {
+          const d = decodeBufferedUtf8Chunks(chunks);
           const ct = (res.headers && res.headers["content-type"] || "").toLowerCase();
           let parsed;
           if (ct.indexOf("application/json") >= 0) {
@@ -1514,17 +2283,13 @@ function connectSseForWebContents(senderId) {
       headers: buildSseHeaders(sseCursors.get(senderId)),
     },
     (res) => {
-      let buf = "";
+      const sseProcessor = createUtf8SseProcessor((frame) => forwardSseFrame(senderId, frame));
       res.on("data", (chunk) => {
-        buf += chunk.toString("utf-8");
-        let idx;
-        while ((idx = buf.indexOf("\n\n")) >= 0) {
-          const frame = buf.slice(0, idx);
-          buf = buf.slice(idx + 2);
-          forwardSseFrame(senderId, frame);
-        }
+        sseProcessor.write(chunk);
       });
       res.on("end", () => {
+        const buf = sseProcessor.end();
+        if (buf.trim()) forwardSseFrame(senderId, buf);
         handleSseDisconnect(senderId, client);
       });
     }
@@ -1630,29 +2395,57 @@ ipcMain.handle("shell:openPath", async (_event, path) => {
 // without a second round-trip. The renderer's poll already calls
 // /api/health, so this IPC is mainly used by the very first paint
 // before the renderer's poll loop kicks in.
+// R7.2: get-health MUST return instantly (<1ms) so renderer first-paint
+// shows a correct status instead of spinning on "后端离线" for 2s while
+// the old implementation awaited apiRequest() on a not-yet-running backend.
+// Stale metadata (stale_code / process_started_at) is fetched best-effort
+// in the background and broadcast via the normal onHealth channel later.
 ipcMain.handle("get-health", async () => {
-  try {
-    const r = await apiRequest({ path: "/api/health" });
-    if (r && r.data) {
-      const sc = (r.data && r.data.stale_code) || {};
-      return {
-        ready: _backendReady,
-        port: PY_PORT,
-        stale: !!sc.stale,
-        modified: sc.modified || [],
-        started_at: sc.started_at || r.data.process_started_at || "",
-      };
-    }
-  } catch (_) {}
-  return { ready: _backendReady, port: PY_PORT, stale: false, modified: [] };
+  _recomputeBackendState();
+  const snap = {
+    ready: _backendReady,
+    state: _backendState,
+    port: PY_PORT,
+    stale: false,
+    modified: [],
+    started_at: "",
+  };
+  // Kick off an async refresh WITHOUT awaiting. Populates stale_code
+  // if backend is alive; does nothing when offline (no harm).
+  setImmediate(async () => {
+    try {
+      const r = await apiRequest({ path: "/api/health", timeoutMs: 1500 });
+      if (r && r.data) {
+        const sc = (r.data && r.data.stale_code) || {};
+        snap.stale = !!sc.stale;
+        snap.modified = sc.modified || [];
+        snap.started_at = sc.started_at || r.data.process_started_at || "";
+      }
+    } catch (_) {}
+  });
+  return snap;
 });
 
 ipcMain.handle("napcat:getStatus", async () => {
   try {
     const r = await apiRequest({ path: "/api/napcat/status" });
-    return r.data;
+    const status = r.data && typeof r.data === "object" ? { ...r.data } : {};
+    delete status.qrcode_path;
+    return status;
   } catch (_) {
-    return { phase: "idle", error: "backend unreachable" };
+    return { phase: "error", error: "backend unreachable", error_code: "backend_unreachable" };
+  }
+});
+
+ipcMain.handle("napcat:getQrCode", async () => {
+  try {
+    return { ok: true, dataUrl: await fetchNapcatQrCode() };
+  } catch (error) {
+    return {
+      ok: false,
+      dataUrl: "",
+      errorCode: String(error && error.message || "napcat_qrcode_unavailable"),
+    };
   }
 });
 
@@ -1717,17 +2510,41 @@ ipcMain.handle("startup:set", async (_event, options) => {
   }
 });
 
-// R6.6: backend self-restart. Triggers tools/restart_helper.ps1 via the
-// Python /api/system/restart endpoint, which spawns a fresh main.py in
-// a detached process. The Electron window stays alive; its SSE / status
-// polling will reconnect once the new backend is up.
+// R6.6: backend self-restart.
+//
+// FIXED: The primary restart path is now Electron-parent-level
+// `_forceRestartPythonBackend()` (see definition above).  We no longer depend
+// on the Python-side /api/system/restart HTTP endpoint because that endpoint
+// is unreachable in the exact scenario users complain about: the backend is
+// OFFLINE and the user clicks "重启后端".
+//
+// We still fire a best-effort POST to /api/system/restart BEFORE the hard
+// kill, so:
+//   - If the backend is still alive, it can flush caches / write a clean
+//     "i am restarting" line to logs / trigger its helper (harmless backup);
+//   - If the backend is already dead, the HTTP failure is caught & ignored,
+//     and the Electron hard restart proceeds anyway.
 function restartBackend() {
-  apiRequest({ method: "POST", path: "/api/system/restart" }).catch(() => {});
+  // (A) Best-effort polite notification to a still-alive backend.
+  //      Fire & forget — no await, no throw on failure.
+  try {
+    apiRequest({ method: "POST", path: "/api/system/restart", timeoutMs: 700 })
+      .catch(() => {});
+  } catch (_) {}
+
+  // (B) Broadcast to renderers immediately (don't wait for step A).
   const wins = BrowserWindow.getAllWindows();
   for (const w of wins) {
     if (w && !w.isDestroyed()) {
       try { w.webContents.send("system:restarting", { target: "backend" }); } catch (_) {}
     }
+  }
+
+  // (C) The real restart. Runs regardless of step A succeeding.
+  //     This is the line that fixes the "backend offline, restart button
+  //     does nothing" user complaint.
+  try { _forceRestartPythonBackend(); } catch (err) {
+    console.error("[main] _forceRestartPythonBackend threw:", err && err.message);
   }
 }
 
@@ -1741,9 +2558,12 @@ function restartApp() {
 }
 
 ipcMain.handle("system:restart-backend", async () => {
+  // FIXED: call restartBackend() synchronously from the IPC handler so the
+  // return value reflects whether we actually scheduled the Electron-level
+  // restart.  We no longer require apiRequest() to succeed.
   try {
-    const r = await apiRequest({ method: "POST", path: "/api/system/restart" });
-    return r.data || { status: "scheduled" };
+    restartBackend();
+    return { status: "scheduled", mode: "electron_parent_restart" };
   } catch (e) {
     return { error: String((e && e.message) || e) };
   }
@@ -1783,11 +2603,33 @@ if (!gotSingleInstanceLock) {
 if (gotSingleInstanceLock) {
   app.whenReady().then(() => {
     configureBackendDataPath();
+    configureWorldSupervisor();
+    startWorldConnectionMonitor();
     startPythonBackend();
     createMainWindow();
-    if (dynamicIslandEnabled) createDynamicIsland();
+    // R8.1: read persistent island prefs *after* configureBackendDataPath
+    //       so BACKEND_DATA_DIR is resolved, then decide whether to create
+    //       the window.  Fallback: if everything fails, default to enabled.
+    try { _loadIslandPrefs(); } catch (_e) { _islandEnabled = true; }
+    if (_islandEnabled && process.env.AERIE_DISABLE_DYNAMIC_ISLAND !== "1") {
+      createDynamicIsland();
+    } else {
+      console.log("[main] skipping dynamic island create: enabled=" + _islandEnabled + " env=" + (process.env.AERIE_DISABLE_DYNAMIC_ISLAND || "0"));
+    }
     // Delay tray creation to avoid flash
     setTimeout(createTray, 2000);
+    // R8.1: after the main window finishes loading, push the initial
+    //       island-enabled state once so the settings slider isn't blindly
+    //       defaulting to "checked" and lying to the user.
+    const syncOnce = () => {
+      try { _broadcastIslandEnabled(); } catch (_) {}
+    };
+    if (mainWindow && typeof mainWindow.once === "function") {
+      mainWindow.once("ready-to-show", syncOnce);
+      mainWindow.once("did-finish-load", syncOnce);
+    } else {
+      setTimeout(syncOnce, 1500);
+    }
     // R7.1: after backend is ready, wait 8s and tell the main window
     // to open the brief drawer once. Replaces the old
     // ``showBriefPopup()`` which opened a separate BrowserWindow.
@@ -1816,9 +2658,28 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   isQuitting = true;
+  if (!_worldShutdownComplete) {
+    event.preventDefault();
+    if (!_worldShutdownStarted) {
+      _worldShutdownStarted = true;
+      if (_worldConnectionMonitor) {
+        clearInterval(_worldConnectionMonitor);
+        _worldConnectionMonitor = null;
+      }
+      worldPluginSupervisor.dispose().catch(() => {}).finally(() => {
+        _worldShutdownComplete = true;
+        app.quit();
+      });
+    }
+    return;
+  }
   _cleanupOldThumbnail();
+  for (const temporaryPath of _openedAttachmentTempPaths) {
+    try { fs.unlinkSync(temporaryPath); } catch (_) {}
+  }
+  _openedAttachmentTempPaths.clear();
   if (pythonProc) {
     pythonProc.kill();
     pythonProc = null;

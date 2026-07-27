@@ -1,0 +1,1168 @@
+/*
+ * Aerie Design System v1.0 — Component Styles
+ * Consumes design tokens from tokens/colors_and_type.css
+ * Design philosophy: 温暖、通透、有呼吸感的玻璃态设计语言
+ */
+
+/* ============================================================
+   0. 引入设计 Tokens
+   ============================================================ */
+@import url('../tokens/colors_and_type.css');
+
+/* ============================================================
+   1. Reset / Base 基础重置
+   ============================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+::selection {
+  background-color: var(--brand-200);
+  color: var(--brand-900);
+}
+
+/* ============================================================
+   2. Typography 文字样式
+   ============================================================ */
+.aerie-text-display {
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  line-height: var(--leading-tight);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.aerie-text-h1 {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  line-height: var(--leading-tight);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.aerie-text-h2 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-snug);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.aerie-text-h3 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.aerie-text-h4 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.aerie-text-body {
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.aerie-text-caption {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.aerie-text-overline {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--text-muted);
+  font-weight: var(--font-medium);
+  margin: 0;
+}
+
+.aerie-gradient-text {
+  background: linear-gradient(135deg, var(--brand-500) 0%, var(--coral-400) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ============================================================
+   3. Button 按钮
+   ============================================================ */
+.aerie-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--size-btn-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--duration-normal) var(--ease-out),
+    border-color var(--duration-normal) var(--ease-out),
+    color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    opacity var(--duration-normal) var(--ease-out);
+  position: relative;
+}
+
+.aerie-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.aerie-btn:disabled,
+.aerie-btn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.aerie-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* --- 尺寸 --- */
+.aerie-btn-sm {
+  height: var(--size-btn-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.aerie-btn-md {
+  height: var(--size-btn-md);
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.aerie-btn-lg {
+  height: var(--size-btn-lg);
+  padding: 0 var(--space-6);
+  font-size: var(--text-base);
+}
+
+/* --- 图标正方形按钮 --- */
+.aerie-btn-icon-only.aerie-btn-sm {
+  width: var(--size-btn-sm);
+  padding: 0;
+}
+
+.aerie-btn-icon-only.aerie-btn-md {
+  width: var(--size-btn-md);
+  padding: 0;
+}
+
+.aerie-btn-icon-only.aerie-btn-lg {
+  width: var(--size-btn-lg);
+  padding: 0;
+}
+
+/* --- 变体 --- */
+.aerie-btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.aerie-btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.aerie-btn-primary:active:not(:disabled) {
+  background-color: var(--color-primary-active);
+}
+
+.aerie-btn-secondary {
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: var(--border-default);
+  color: var(--color-text);
+}
+
+.aerie-btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-surface-hover);
+  border-color: var(--border-strong);
+}
+
+.aerie-btn-ghost {
+  background-color: transparent;
+  color: var(--color-text);
+}
+
+.aerie-btn-ghost:hover:not(:disabled) {
+  background-color: var(--color-surface-hover);
+}
+
+.aerie-btn-danger {
+  background-color: var(--error);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.aerie-btn-danger:hover:not(:disabled) {
+  background-color: var(--error-foreground);
+  box-shadow: var(--shadow-md);
+}
+
+.aerie-btn-emotion {
+  background: linear-gradient(135deg, var(--emotion-pleasure) 0%, var(--coral-400) 100%);
+  color: white;
+  box-shadow: var(--shadow-glow);
+}
+
+.aerie-btn-emotion:hover:not(:disabled) {
+  box-shadow:
+    0 0 28px color-mix(in srgb, var(--emotion-pleasure) 50%, transparent),
+    0 0 56px color-mix(in srgb, var(--emotion-pleasure) 25%, transparent);
+}
+
+/* --- 加载态 --- */
+.aerie-btn-loading {
+  opacity: 0.7;
+  pointer-events: none;
+  color: transparent !important;
+}
+
+.aerie-btn-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: aerie-spin 0.7s linear infinite;
+  color: white;
+}
+
+.aerie-btn-loading.aerie-btn-sm::after {
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-width: 1.5px;
+}
+
+.aerie-btn-secondary.aerie-btn-loading::after,
+.aerie-btn-ghost.aerie-btn-loading::after {
+  color: var(--color-text-muted);
+}
+
+@keyframes aerie-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   4. Card 卡片
+   ============================================================ */
+.aerie-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition:
+    box-shadow var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    border-color var(--duration-normal) var(--ease-out);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.aerie-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* --- 变体 --- */
+.aerie-card-elevated {
+  box-shadow: var(--shadow-lg);
+}
+
+.aerie-card-elevated:hover {
+  box-shadow: var(--shadow-xl);
+}
+
+.aerie-card-interactive {
+  cursor: pointer;
+}
+
+.aerie-card-interactive:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+
+.aerie-card-glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border-color: var(--glass-border-strong);
+}
+
+.aerie-card-flat {
+  background: var(--color-surface);
+  box-shadow: none;
+  border-color: var(--border-soft);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.aerie-card-flat:hover {
+  box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.aerie-card-emotion {
+  border-color: color-mix(in srgb, var(--emotion-pleasure) 30%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--emotion-pleasure) 15%, transparent), var(--shadow-sm);
+}
+
+.aerie-card-emotion:hover {
+  border-color: color-mix(in srgb, var(--emotion-pleasure) 50%, transparent);
+  box-shadow: 0 0 32px color-mix(in srgb, var(--emotion-pleasure) 25%, transparent), var(--shadow-md);
+}
+
+/* --- 内部子元素 --- */
+.aerie-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.aerie-card-body {
+  padding: var(--space-5);
+  flex: 1;
+}
+
+.aerie-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ============================================================
+   5. Input 输入框
+   ============================================================ */
+.aerie-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--size-input-md);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-input);
+  background-color: rgba(255, 255, 255, 0.8);
+  transition:
+    border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    background-color var(--duration-normal) var(--ease-out);
+  width: 100%;
+}
+
+.aerie-field:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--brand-100);
+}
+
+.aerie-field:has(.aerie-input:disabled),
+.aerie-field.aerie-field-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- 尺寸 --- */
+.aerie-field-sm {
+  height: 32px;
+  padding: 0 var(--space-3);
+}
+
+.aerie-field-md {
+  height: var(--size-input-md);
+  padding: 0 var(--space-4);
+}
+
+.aerie-field-lg {
+  height: var(--size-input-lg);
+  padding: 0 var(--space-5);
+}
+
+/* --- 错误态 --- */
+.aerie-field-error {
+  border-color: var(--error);
+}
+
+.aerie-field-error:focus-within {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px var(--error-surface);
+}
+
+/* --- 输入元素 --- */
+.aerie-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--text-sm);
+  color: inherit;
+  padding: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.aerie-input::placeholder {
+  color: var(--text-placeholder);
+}
+
+.aerie-input:disabled {
+  cursor: not-allowed;
+}
+
+.aerie-input-prefix,
+.aerie-input-suffix {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+}
+
+/* ============================================================
+   6. Avatar 头像
+   ============================================================ */
+.aerie-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: var(--font-medium);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.aerie-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* --- 尺寸 --- */
+.aerie-avatar-sm {
+  width: var(--size-avatar-sm);
+  height: var(--size-avatar-sm);
+  font-size: var(--text-xs);
+}
+
+.aerie-avatar-md {
+  width: var(--size-avatar-md);
+  height: var(--size-avatar-md);
+  font-size: var(--text-sm);
+}
+
+.aerie-avatar-lg {
+  width: var(--size-avatar-lg);
+  height: var(--size-avatar-lg);
+  font-size: var(--text-base);
+}
+
+.aerie-avatar-xl {
+  width: var(--size-avatar-xl);
+  height: var(--size-avatar-xl);
+  font-size: var(--text-lg);
+}
+
+/* --- 状态点 --- */
+.aerie-avatar-status {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  border: 2px solid white;
+  box-sizing: content-box;
+}
+
+.aerie-avatar-sm .aerie-avatar-status {
+  width: 7px;
+  height: 7px;
+  border-width: 1.5px;
+}
+
+.aerie-avatar-xl .aerie-avatar-status {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- 状态色 --- */
+.aerie-avatar-status-online {
+  background-color: var(--success);
+}
+
+.aerie-avatar-status-away {
+  background-color: var(--warning);
+}
+
+.aerie-avatar-status-offline {
+  background-color: var(--text-300);
+}
+
+.aerie-avatar-status-emotion {
+  background-color: var(--emotion-pleasure);
+  box-shadow: 0 0 8px var(--emotion-pleasure);
+}
+
+/* ============================================================
+   7. Badge 徽章
+   ============================================================ */
+.aerie-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* --- 尺寸 --- */
+.aerie-badge-sm {
+  height: 16px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.aerie-badge-md {
+  height: 20px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.aerie-badge-lg {
+  height: 24px;
+  padding: 0 var(--space-2-5, 10px);
+  font-size: var(--text-xs);
+}
+
+/* --- 变体 --- */
+.aerie-badge-default {
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.aerie-badge-primary {
+  background-color: var(--brand-100);
+  color: var(--brand-700);
+}
+
+.aerie-badge-success {
+  background-color: var(--success-surface);
+  color: var(--success-foreground);
+}
+
+.aerie-badge-warning {
+  background-color: var(--warning-surface);
+  color: var(--warning-foreground);
+}
+
+.aerie-badge-error {
+  background-color: var(--error-surface);
+  color: var(--error-foreground);
+}
+
+.aerie-badge-info {
+  background-color: var(--info-surface);
+  color: var(--info-foreground);
+}
+
+.aerie-badge-emotion {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--emotion-pleasure) 20%, transparent) 0%,
+    var(--coral-200) 100%
+  );
+  color: var(--coral-500);
+}
+
+/* --- 纯圆点 --- */
+.aerie-badge-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: var(--radius-full);
+}
+
+.aerie-badge-dot.aerie-badge-sm {
+  width: 6px;
+  height: 6px;
+}
+
+.aerie-badge-dot.aerie-badge-lg {
+  width: 10px;
+  height: 10px;
+}
+
+/* ============================================================
+   8. Modal 模态框
+   ============================================================ */
+.aerie-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  padding: var(--space-4);
+  animation: aerie-fade-in var(--duration-normal) var(--ease-out) both;
+}
+
+.aerie-modal {
+  position: relative;
+  width: 100%;
+  max-width: 512px;
+  max-height: calc(100vh - var(--space-8));
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-2xl);
+  border: 1px solid var(--glass-border-strong);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: aerie-scale-in var(--duration-slow) var(--ease-spring) both;
+}
+
+.aerie-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.aerie-modal-body {
+  padding: var(--space-6);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.aerie-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.aerie-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.aerie-modal-close:hover {
+  background-color: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+/* ============================================================
+   9. Chat Bubble 聊天气泡
+   ============================================================ */
+.aerie-bubble {
+  max-width: 75%;
+  padding: var(--space-2-5, 10px) var(--space-4);
+  border-radius: var(--radius-2xl);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  word-break: break-word;
+  position: relative;
+}
+
+.aerie-bubble-ai {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  color: var(--color-text);
+  border-bottom-left-radius: var(--radius-md);
+  align-self: flex-start;
+}
+
+.aerie-bubble-user {
+  background-color: var(--color-primary);
+  color: white;
+  box-shadow: var(--shadow-md);
+  border-bottom-right-radius: var(--radius-md);
+  align-self: flex-end;
+}
+
+.aerie-bubble-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+  display: block;
+}
+
+.aerie-bubble-user .aerie-bubble-time {
+  text-align: right;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* --- 正在输入动画 --- */
+.aerie-bubble-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.aerie-bubble-typing .aerie-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--text-muted);
+  animation: aerie-typing-dot 1.3s ease-in-out infinite;
+}
+
+.aerie-bubble-typing .aerie-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.aerie-bubble-typing .aerie-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* ============================================================
+   10. Dynamic Island 灵动岛
+   ============================================================ */
+.aerie-island {
+  position: fixed;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  height: var(--size-dynamic-island);
+  width: 200px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background-color: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  color: white;
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-dynamic-island);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    width var(--duration-slower) var(--ease-spring),
+    height var(--duration-slower) var(--ease-spring),
+    border-radius var(--duration-slower) var(--ease-spring),
+    padding var(--duration-slower) var(--ease-spring);
+}
+
+.aerie-island.aerie-island-expanded {
+  width: 360px;
+  height: auto;
+  min-height: var(--size-dynamic-island);
+  border-radius: 24px;
+  padding: var(--space-3) var(--space-4);
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.aerie-island-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--emotion-pleasure);
+  animation: aerie-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes aerie-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}
+
+/* ============================================================
+   11. Floating Orb 悬浮球
+   ============================================================ */
+.aerie-orb {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--brand-400) 0%, var(--emotion-pleasure) 100%);
+  box-shadow: var(--shadow-glow);
+  cursor: pointer;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out);
+  animation: aerie-breath 4s ease-in-out infinite;
+  border: none;
+}
+
+.aerie-orb:hover {
+  transform: scale(1.1);
+}
+
+.aerie-orb:active {
+  transform: scale(1.05);
+}
+
+/* ============================================================
+   12. Utility Classes 工具类
+   ============================================================ */
+.aerie-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+}
+
+.aerie-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aerie-flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* --- 滚动条 --- */
+.aerie-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-500) 40%, transparent) transparent;
+}
+
+.aerie-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.aerie-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.aerie-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--text-500) 40%, transparent);
+  border-radius: var(--radius-full);
+}
+
+.aerie-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--text-500) 60%, transparent);
+}
+
+/* --- 分割线 --- */
+.aerie-divider {
+  height: 1px;
+  background-color: var(--border-default);
+  border: none;
+  margin: var(--space-4) 0;
+}
+
+/* --- 文本截断 --- */
+.aerie-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aerie-line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.aerie-line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ============================================================
+   13. Animations 动画
+   ============================================================ */
+@keyframes aerie-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes aerie-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes aerie-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes aerie-breath {
+  0%, 100% {
+    opacity: 0.7;
+    box-shadow: 0 0 20px rgba(74, 144, 217, 0.3);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 40px rgba(255, 138, 128, 0.5);
+  }
+}
+
+@keyframes aerie-typing-dot {
+  0%, 60%, 100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.aerie-animate-fade-in {
+  animation: aerie-fade-in var(--duration-normal) var(--ease-out) both;
+}
+
+.aerie-animate-scale-in {
+  animation: aerie-scale-in var(--duration-normal) var(--ease-out) both;
+}
+
+.aerie-animate-slide-up {
+  animation: aerie-slide-up var(--duration-normal) var(--ease-out) both;
+}
+
+.aerie-animate-breath {
+  animation: aerie-breath 4s ease-in-out infinite;
+}
+
+/* ============================================================
+   14. Dark Mode 深色模式适配
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  .aerie-btn-secondary {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: var(--glass-border);
+  }
+
+  .aerie-btn-secondary:hover:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.14);
+  }
+
+  .aerie-card {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+  }
+
+  .aerie-card-glass-strong {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border-strong);
+  }
+
+  .aerie-card-flat {
+    background: var(--color-surface);
+    border-color: var(--border-soft);
+  }
+
+  .aerie-field {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: var(--border-default);
+  }
+
+  .aerie-field:focus-within {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+
+  .aerie-field-error:focus-within {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 20%, transparent);
+  }
+
+  .aerie-bubble-ai {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+  }
+
+  .aerie-island {
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .aerie-avatar-status {
+    border-color: var(--bg-100);
+  }
+
+  .aerie-modal {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border-strong);
+  }
+
+  .aerie-glass {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+  }
+
+  .aerie-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .aerie-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.35);
+  }
+
+  .aerie-divider {
+    background-color: var(--border-default);
+  }
+
+  .aerie-btn-loading.aerie-btn-primary::after,
+  .aerie-btn-loading.aerie-btn-danger::after,
+  .aerie-btn-loading.aerie-btn-emotion::after {
+    color: white;
+  }
+}

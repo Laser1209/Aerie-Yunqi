@@ -96,6 +96,7 @@ class ImageVisionResult:
     model: str = "unknown"
     error_code: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    observation: dict[str, Any] = field(default_factory=dict)
 
 
 class ImageGenerationProvider(Protocol):
@@ -677,6 +678,13 @@ class ImageWorkflow:
         )
         result["answer"] = analyzed.answer
         result["image"] = {"url": self._url_for_upload_path(resolved)}
+        result["observation"] = self._build_image_observation(
+            analyzed=analyzed,
+            provider=provider_public,
+            answer=analyzed.answer,
+            image_url=result["image"]["url"],
+            audit={"image_sha256": image_sha, "question_sha256": question_sha},
+        )
         self._record_result(result, operation, idem, fingerprint, owner)
         return result
 
@@ -758,6 +766,59 @@ class ImageWorkflow:
                 "result": result,
             }
         )
+
+    def _build_image_observation(
+        self,
+        *,
+        analyzed: ImageVisionResult,
+        provider: dict[str, Any],
+        answer: str,
+        image_url: str,
+        audit: dict[str, Any],
+    ) -> dict[str, Any]:
+        metadata = dict(analyzed.metadata or {})
+        observation = dict(analyzed.observation or metadata.get("observation") or {})
+        scene = observation.get("scene") or metadata.get("scene") or {}
+        if not isinstance(scene, dict):
+            scene = {"summary": str(scene)}
+        scene = {"summary": str(answer or scene.get("summary") or ""), **scene}
+        objects = observation.get("objects", metadata.get("objects", []))
+        relations = observation.get("relations", metadata.get("relations", []))
+        ocr_text = observation.get("ocr_text", metadata.get("ocr_text", []))
+        uncertainties = observation.get(
+            "uncertainties",
+            metadata.get("uncertainties") or metadata.get("uncertainty") or [],
+        )
+        if isinstance(ocr_text, str):
+            ocr_text = [ocr_text]
+        if isinstance(uncertainties, str):
+            uncertainties = [uncertainties]
+        if not isinstance(uncertainties, list):
+            uncertainties = []
+        confidence = observation.get("confidence", metadata.get("confidence", 0.5))
+        try:
+            confidence_value = float(confidence)
+        except (TypeError, ValueError):
+            confidence_value = 0.5
+            uncertainties.append("invalid_provider_confidence")
+        memory_eligibility = observation.get("memory_eligibility") or metadata.get(
+            "memory_eligibility"
+        ) or {
+            "eligible": False,
+            "reason": "requires_explicit_confirmation",
+        }
+        return {
+            "scene": scene,
+            "objects": list(objects) if isinstance(objects, list) else [],
+            "ocr_text": list(ocr_text) if isinstance(ocr_text, list) else [],
+            "relations": list(relations) if isinstance(relations, list) else [],
+            "confidence": confidence_value,
+            "uncertainties": list(uncertainties),
+            "provider": dict(provider),
+            "memory_eligibility": dict(memory_eligibility),
+            "source": {"image_url": image_url},
+            "audit_refs": dict(audit),
+        }
 
     def _replay_if_existing(
         self,

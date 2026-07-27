@@ -1,0 +1,1452 @@
+{
+  "version": "1.0.0",
+  "components": [
+    {
+      "name": "AppHeader",
+      "category": "Navigation",
+      "description": "应用顶部标题栏，承载 Logo、页面标题与窗口控制按钮，支持拖拽移动窗口",
+      "variants": ["default", "transparent"],
+      "states": ["default", "focused", "dragging"],
+      "anatomy": ["dragRegion", "logoArea", "titleArea", "actionSlot", "windowControls"],
+      "sizes": {
+        "sm": { "height": "40px", "padding": "0 12px", "fontSize": "13px", "iconSize": "16px" },
+        "md": { "height": "48px", "padding": "0 16px", "fontSize": "14px", "iconSize": "18px" },
+        "lg": { "height": "56px", "padding": "0 20px", "fontSize": "16px", "iconSize": "20px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-none"
+      },
+      "usage": [
+        "作为 Electron 窗口的固定顶部标题栏，高度固定为 48px",
+        "拖拽区域需覆盖左侧大部分区域，预留右侧窗口控制按钮（最小化/最大化/关闭）位置",
+        "可在 actionSlot 放置全局操作按钮如搜索、设置入口"
+      ],
+      "doNot": [
+        "不要在标题栏放置过多操作按钮，避免与窗口控制区冲突",
+        "不要将可交互元素放置在 -webkit-app-region: drag 区域内导致无法点击",
+        "不要使用不透明实色背景，破坏整体玻璃态通透感"
+      ]
+    },
+    {
+      "name": "Sidebar",
+      "category": "Navigation",
+      "description": "侧边导航栏，提供主要功能模块入口，支持展开与折叠两种状态",
+      "variants": ["expanded", "collapsed", "floating"],
+      "states": ["default", "expanded", "collapsed", "hover"],
+      "anatomy": ["container", "header", "navList", "footer", "collapseToggle", "scrollArea"],
+      "sizes": {
+        "sm": { "height": "100%", "padding": "8px", "fontSize": "13px", "iconSize": "18px" },
+        "md": { "height": "100%", "padding": "12px", "fontSize": "14px", "iconSize": "20px" },
+        "lg": { "height": "100%", "padding": "16px", "fontSize": "15px", "iconSize": "22px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-md",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "展开态宽度 240px，折叠态宽度 64px，折叠后仅显示图标",
+        "使用玻璃态半透明背景配合 backdrop-filter 实现通透效果",
+        "底部放置用户信息、设置等次要入口，顶部放置 Logo 或人格形象"
+      ],
+      "doNot": [
+        "不要在折叠态显示文字标签，保持侧边栏宽度严格为 64px",
+        "不要使用过强的背景色或阴影，避免产生厚重感",
+        "不要在侧边栏内嵌套超过两级的导航层级"
+      ]
+    },
+    {
+      "name": "NavItem",
+      "category": "Navigation",
+      "description": "侧边栏导航项，由图标与文字组成，支持选中、悬停、展开子菜单等状态",
+      "variants": ["default", "withBadge", "withSubmenu", "iconOnly"],
+      "states": ["default", "hover", "active", "selected", "focused", "disabled", "expanded"],
+      "anatomy": ["icon", "label", "badge", "submenuArrow", "submenu", "rippleArea"],
+      "sizes": {
+        "sm": { "height": "32px", "padding": "0 10px", "fontSize": "12px", "iconSize": "16px" },
+        "md": { "height": "40px", "padding": "0 12px", "fontSize": "14px", "iconSize": "18px" },
+        "lg": { "height": "48px", "padding": "0 16px", "fontSize": "15px", "iconSize": "20px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "--radius-md"
+      },
+      "usage": [
+        "选中态使用主色高亮背景配合左侧指示条或图标变色",
+        "悬停态使用低透明度白色/黑色覆盖层，保持玻璃态通透感",
+        "带有子菜单的导航项在右侧显示展开箭头，点击展开内嵌子列表"
+      ],
+      "doNot": [
+        "不要使用粗边框或强烈阴影来表示选中状态",
+        "不要在 iconOnly 模式下显示文字，需通过 Tooltip 提示名称",
+        "不要同时使用图标变色和背景高亮的双重强调"
+      ]
+    },
+    {
+      "name": "TabBar",
+      "category": "Navigation",
+      "description": "标签栏，用于在多个平级页面间切换，支持顶部和底部两种位置",
+      "variants": ["top", "bottom", "pill", "underline"],
+      "states": ["default", "hover", "active", "selected", "focused", "disabled"],
+      "anatomy": ["tabList", "tab", "tabLabel", "tabIcon", "badge", "activeIndicator", "scrollButton"],
+      "sizes": {
+        "sm": { "height": "36px", "padding": "0 8px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "44px", "padding": "0 12px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "52px", "padding": "0 16px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text-muted",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "--radius-md"
+      },
+      "usage": [
+        "底部 TabBar 适用于移动端风格界面，顶部 TabBar 适用于桌面端内容切换",
+        "选中标签使用主色文字并配以胶囊形或下划线指示器",
+        "支持在标签右上角显示 Badge 徽章标记未读数量"
+      ],
+      "doNot": [
+        "不要在标签栏放置超过 5 个标签项，超出时使用滚动或下拉菜单",
+        "不要使用过于突兀的指示器动画，保持过渡自然柔和",
+        "不要在 disabled 标签上显示 Badge"
+      ]
+    },
+    {
+      "name": "Breadcrumb",
+      "category": "Navigation",
+      "description": "面包屑导航，显示当前页面在层级结构中的位置，支持点击返回上级",
+      "variants": ["default", "withIcon", "collapsed"],
+      "states": ["default", "hover", "active", "focused", "disabled"],
+      "anatomy": ["list", "item", "separator", "currentItem", "icon", "ellipsis"],
+      "sizes": {
+        "sm": { "height": "24px", "padding": "0 4px", "fontSize": "12px", "iconSize": "12px" },
+        "md": { "height": "32px", "padding": "0 6px", "fontSize": "14px", "iconSize": "14px" },
+        "lg": { "height": "40px", "padding": "0 8px", "fontSize": "15px", "iconSize": "16px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text-muted",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "--radius-sm"
+      },
+      "usage": [
+        "层级超过 5 级时自动折叠中间项为省略号，点击展开完整路径",
+        "使用斜杠或箭头图标作为分隔符，分隔符颜色弱于文字颜色",
+        "当前页使用 --color-text 强调且不可点击"
+      ],
+      "doNot": [
+        "不要让面包屑层级超过 7 级，应考虑优化信息架构",
+        "不要在面包屑中放置操作按钮，仅用于导航",
+        "不要使用下划线装饰非当前项"
+      ]
+    },
+    {
+      "name": "Pagination",
+      "category": "Navigation",
+      "description": "分页器，用于列表数据的分页浏览，支持页码跳转和每页条数选择",
+      "variants": ["default", "simple", "mini"],
+      "states": ["default", "hover", "active", "focused", "disabled"],
+      "anatomy": ["prevButton", "pageList", "pageItem", "nextButton", "pageSizeSelector", "jumpInput", "totalText"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "0 6px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "32px", "padding": "0 8px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "40px", "padding": "0 10px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "--radius-md"
+      },
+      "usage": [
+        "页码超过 7 页时显示首末页和省略号，保持分页器宽度稳定",
+        "当前页码使用主色填充背景，其他页码使用文字按钮样式",
+        "提供每页条数选择器（10/20/50/100）和跳转到指定页输入框"
+      ],
+      "doNot": [
+        "不要同时显示过多页码导致分页器换行",
+        "不要在第一页时启用上一页按钮，同理末页禁用下一页",
+        "不要使用复杂的分页动画，保持交互简洁"
+      ]
+    },
+    {
+      "name": "DynamicIsland",
+      "category": "Navigation",
+      "description": "Aerie 特色灵动岛组件，悬浮于屏幕顶部的胶囊形状态指示器，支持展开收起显示详细状态",
+      "variants": ["compact", "expanded", "pulsing"],
+      "states": ["default", "hover", "expanded", "pulsing", "focused"],
+      "anatomy": ["container", "iconSlot", "titleSlot", "contentArea", "closeButton", "glowLayer"],
+      "sizes": {
+        "sm": { "height": "32px", "padding": "0 12px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "40px", "padding": "0 16px", "fontSize": "14px", "iconSize": "18px" },
+        "lg": { "height": "56px", "padding": "0 20px", "fontSize": "15px", "iconSize": "22px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-glow",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "紧凑态为胶囊形悬浮于屏幕顶部中央，使用最高 z-index 确保始终可见",
+        "展开态平滑扩展显示详细状态信息，支持 AI 思考、语音录制、任务进度等场景",
+        "带有呼吸光晕动画表示 AI 正在活动或处理中"
+      ],
+      "doNot": [
+        "不要将灵动岛放置在非顶部位置，固定悬浮于屏幕顶部居中",
+        "不要在紧凑态显示过多文字，保持胶囊形态简洁",
+        "不要使用直角边框，必须使用 --radius-full 实现完全胶囊形态"
+      ]
+    },
+    {
+      "name": "Button",
+      "category": "Form",
+      "description": "按钮组件，用于触发操作或事件，提供六种变体和三种尺寸，采用圆形胶囊风格",
+      "variants": ["primary", "secondary", "ghost", "text", "danger", "emotion"],
+      "states": ["default", "hover", "active", "focused", "disabled", "loading"],
+      "anatomy": ["container", "icon", "label", "loadingSpinner", "ripple"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "0 12px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "36px", "padding": "0 16px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "44px", "padding": "0 24px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--color-primary",
+        "text": "--color-surface",
+        "border": "transparent",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "Primary 按钮用于主要行动点如发送消息、确认操作，一个区域内仅出现一个主按钮",
+        "Ghost 按钮使用透明背景加边框，适用于次要操作和玻璃态面板中",
+        "Emotion 按钮使用 --emotion-pleasure 情感色，用于情感互动场景如拥抱、安慰",
+        "loading 状态显示旋转图标并禁用按钮点击"
+      ],
+      "doNot": [
+        "不要在按钮内放置过多文字，标签不超过 4 个汉字为宜",
+        "不要同时使用图标按钮和文字按钮来表达同等重要的操作",
+        "不要在 disabled 状态下保留阴影和悬停效果",
+        "不要使用直角或小圆角，按钮必须使用胶囊形圆角"
+      ]
+    },
+    {
+      "name": "IconButton",
+      "category": "Form",
+      "description": "图标按钮，仅包含图标的按钮，适用于工具栏、窗口控制等紧凑场景",
+      "variants": ["default", "filled", "glass", "subtle"],
+      "states": ["default", "hover", "active", "focused", "disabled", "selected", "loading"],
+      "anatomy": ["container", "icon", "tooltip", "badge", "ripple"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "4px", "fontSize": "0px", "iconSize": "14px" },
+        "md": { "height": "36px", "padding": "6px", "fontSize": "0px", "iconSize": "18px" },
+        "lg": { "height": "44px", "padding": "8px", "fontSize": "0px", "iconSize": "22px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "鼠标悬停时必须显示 Tooltip 说明按钮功能",
+        "glass 变体使用半透明背景，适用于玻璃态面板中的操作按钮",
+        "窗口控制按钮使用固定尺寸 sm 规格，关闭按钮在 hover 时变为红色"
+      ],
+      "doNot": [
+        "不要在没有 Tooltip 的情况下使用纯图标按钮表达非通用操作",
+        "不要让图标按钮的点击热区小于 28px",
+        "不要使用方形图标按钮，保持圆形或圆角正方形"
+      ]
+    },
+    {
+      "name": "Input",
+      "category": "Form",
+      "description": "单行输入框，支持普通文本、搜索、密码等类型，带有清除按钮和前后缀插槽",
+      "variants": ["text", "search", "password", "withPrefix", "withSuffix"],
+      "states": ["default", "hover", "focused", "disabled", "error", "loading"],
+      "anatomy": ["container", "prefixIcon", "prefixSlot", "input", "clearButton", "suffixIcon", "suffixSlot", "passwordToggle"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "0 10px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "36px", "padding": "0 12px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "44px", "padding": "0 16px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--color-surface",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "聚焦状态使用主色边框加微弱外发光，避免粗重边框",
+        "搜索框左侧显示搜索图标，输入内容后右侧显示清除按钮",
+        "密码框右侧提供显示/隐藏密码切换按钮"
+      ],
+      "doNot": [
+        "不要使用 --radius-full 圆角，输入框使用 --radius-lg 保持适度圆润",
+        "不要在输入框内放置超过一个前缀或后缀图标",
+        "不要在 error 状态下仅使用红色边框，需同时显示错误提示文字"
+      ]
+    },
+    {
+      "name": "TextArea",
+      "category": "Form",
+      "description": "多行文本输入框，支持自适应高度和手动调整大小，适用于长文本输入",
+      "variants": ["default", "autoResize", "fixedSize"],
+      "states": ["default", "hover", "focused", "disabled", "error"],
+      "anatomy": ["container", "textarea", "resizeHandle", "charCount", "clearButton"],
+      "sizes": {
+        "sm": { "height": "64px", "padding": "8px 10px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "96px", "padding": "10px 12px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "128px", "padding": "12px 16px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--color-surface",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "autoResize 模式下随内容自动增加高度，设置最大高度后内部滚动",
+        "右下角显示字符计数，超出限制时变为警告色",
+        "消息输入框使用 autoResize 模式，从单行平滑扩展到多行"
+      ],
+      "doNot": [
+        "不要让 TextArea 默认高度小于 3 行文本空间",
+        "不要使用等宽字体渲染普通文本输入场景",
+        "不要禁用调整大小功能而不提供固定尺寸替代方案"
+      ]
+    },
+    {
+      "name": "Select",
+      "category": "Form",
+      "description": "下拉选择器，从预设选项列表中选择单个或多个值，支持搜索筛选",
+      "variants": ["single", "multiple", "searchable", "grouped"],
+      "states": ["default", "hover", "focused", "disabled", "error", "open", "selected"],
+      "anatomy": ["control", "valueContainer", "placeholder", "selectedTags", "dropdownArrow", "clearButton", "menu", "option", "groupLabel", "emptyHint"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "0 10px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "36px", "padding": "0 12px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "44px", "padding": "0 16px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--color-surface",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-lg",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "下拉菜单使用玻璃态背景配合 --shadow-lg 阴影浮于页面之上",
+        "多选模式下将已选项显示为可关闭的 Tag 标签",
+        "选中项使用主色背景高亮，键盘导航时显示聚焦态"
+      ],
+      "doNot": [
+        "不要在选项少于 3 个时使用 Select，直接使用 RadioGroup 更直观",
+        "不要让下拉菜单宽度小于选择器宽度",
+        "不要在选项列表中使用过于复杂的自定义内容影响可读性"
+      ]
+    },
+    {
+      "name": "Checkbox",
+      "category": "Form",
+      "description": "复选框，用于在一组选项中进行多选，支持 indeterminate 半选状态",
+      "variants": ["default", "withLabel", "card"],
+      "states": ["default", "hover", "checked", "focused", "disabled", "indeterminate"],
+      "anatomy": ["box", "checkmark", "label", "ripple"],
+      "sizes": {
+        "sm": { "height": "16px", "padding": "0", "fontSize": "12px", "iconSize": "12px" },
+        "md": { "height": "20px", "padding": "0", "fontSize": "14px", "iconSize": "14px" },
+        "lg": { "height": "24px", "padding": "0", "fontSize": "15px", "iconSize": "16px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "--radius-sm"
+      },
+      "usage": [
+        "选中状态使用主色填充方框，内部显示白色对勾图标",
+        "半选状态用于父级复选框表示子项部分选中",
+        "card 变体将整个卡片变为可点击区域，适用于协议同意等场景"
+      ],
+      "doNot": [
+        "不要单独使用复选框执行立即生效的操作，应配合提交按钮",
+        "不要将复选框用于互斥选项的选择，应使用 Radio",
+        "不要让复选框点击热区仅局限于方框本身，文字标签也应可点击"
+      ]
+    },
+    {
+      "name": "Radio",
+      "category": "Form",
+      "description": "单选框，用于在一组互斥选项中选择一个值",
+      "variants": ["default", "withLabel", "button", "card"],
+      "states": ["default", "hover", "checked", "focused", "disabled"],
+      "anatomy": ["dot", "innerCircle", "label", "ripple"],
+      "sizes": {
+        "sm": { "height": "16px", "padding": "0", "fontSize": "12px", "iconSize": "8px" },
+        "md": { "height": "20px", "padding": "0", "fontSize": "14px", "iconSize": "10px" },
+        "lg": { "height": "24px", "padding": "0", "fontSize": "15px", "iconSize": "12px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "圆形外圈在选中时变为主色，内部显示主色实心圆点",
+        "button 变体将选项渲染为按钮组样式，适用于少量选项切换",
+        "同组 Radio 必须使用相同 name 属性确保互斥"
+      ],
+      "doNot": [
+        "不要在 Radio 选项超过 6 个时使用默认样式，应考虑 Select",
+        "不要使用方形外框，Radio 必须是圆形",
+        "不要默认不选任何选项，表单场景应提供默认值"
+      ]
+    },
+    {
+      "name": "Switch",
+      "category": "Form",
+      "description": "开关组件，用于二元状态切换，支持情感色用于情绪相关开关",
+      "variants": ["default", "emotion", "withLabel", "sizes"],
+      "states": ["default", "hover", "checked", "focused", "disabled", "loading"],
+      "anatomy": ["track", "thumb", "label", "icon", "ripple"],
+      "sizes": {
+        "sm": { "height": "20px", "padding": "2px", "fontSize": "12px", "iconSize": "10px" },
+        "md": { "height": "24px", "padding": "2px", "fontSize": "14px", "iconSize": "12px" },
+        "lg": { "height": "32px", "padding": "3px", "fontSize": "15px", "iconSize": "16px" }
+      },
+      "tokens": {
+        "bg": "--color-border",
+        "text": "--color-text",
+        "border": "transparent",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "开启状态轨道使用主色填充，情感相关开关使用 --emotion-pleasure 色",
+        "滑块使用圆形 thumb 带有阴影，滑动动画使用 --ease-spring 弹性曲线",
+        "适用于设置项的开关切换，点击立即生效无需确认"
+      ],
+      "doNot": [
+        "不要将 Switch 用于需要提交确认的表单场景，应使用 Checkbox",
+        "不要在 Switch 上放置过多文字说明，使用独立 Label 标签",
+        "不要使用方形轨道，必须保持胶囊形"
+      ]
+    },
+    {
+      "name": "Slider",
+      "category": "Form",
+      "description": "滑块组件，用于在区间内选择数值，支持情绪和参数的连续调节",
+      "variants": ["default", "range", "emotion", "withMarks"],
+      "states": ["default", "hover", "active", "focused", "disabled"],
+      "anatomy": ["track", "filledTrack", "thumb", "marks", "markLabel", "tooltip"],
+      "sizes": {
+        "sm": { "height": "20px", "padding": "0 8px", "fontSize": "12px", "iconSize": "12px" },
+        "md": { "height": "28px", "padding": "0 12px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "40px", "padding": "0 16px", "fontSize": "15px", "iconSize": "20px" }
+      },
+      "tokens": {
+        "bg": "--color-border",
+        "text": "--color-text",
+        "border": "transparent",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "拖动 thumb 时显示当前数值 Tooltip，松手后隐藏",
+        "emotion 变体使用 --emotion-pleasure 渐变填充轨道，表示情绪强度",
+        "range 变体使用双滑块选择数值区间"
+      ],
+      "doNot": [
+        "不要在选项少于 4 个的离散值场景使用 Slider，应使用 RadioGroup",
+        "不要让 thumb 直径小于 16px，确保触屏和鼠标可点击",
+        "不要在 Slider 上使用复杂的自定义刻度图案"
+      ]
+    },
+    {
+      "name": "DatePicker",
+      "category": "Form",
+      "description": "日期选择器，弹出日历面板选择单个日期或日期范围",
+      "variants": ["single", "range", "datetime", "withTime"],
+      "states": ["default", "hover", "focused", "disabled", "open", "selected"],
+      "anatomy": ["input", "calendarIcon", "panel", "header", "prevButton", "nextButton", "monthLabel", "weekRow", "dayGrid", "dayCell", "todayButton", "timePicker"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "0 10px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "36px", "padding": "0 12px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "44px", "padding": "0 16px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--color-surface",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-xl",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "日历面板使用玻璃态背景，选中日期使用主色圆形高亮",
+        "今天日期使用主色描边标记，不可选日期使用灰色禁用",
+        "range 模式下选中区间使用主色半透明背景连接"
+      ],
+      "doNot": [
+        "不要让用户手动输入日期而不提供日历选择器",
+        "不要在日历面板中显示超过 6 行日期",
+        "不要使用方形日期单元格，保持圆角设计"
+      ]
+    },
+    {
+      "name": "Upload",
+      "category": "Form",
+      "description": "文件上传组件，支持点击选择和拖拽上传，显示上传进度和预览",
+      "variants": ["button", "dragArea", "pictureCard", "avatar"],
+      "states": ["default", "hover", "focused", "disabled", "dragging", "uploading", "success", "error"],
+      "anatomy": ["dropzone", "uploadIcon", "uploadText", "hintText", "fileList", "fileItem", "preview", "progressBar", "removeButton", "retryButton"],
+      "sizes": {
+        "sm": { "height": "80px", "padding": "16px", "fontSize": "12px", "iconSize": "24px" },
+        "md": { "height": "120px", "padding": "24px", "fontSize": "14px", "iconSize": "32px" },
+        "lg": { "height": "160px", "padding": "32px", "fontSize": "15px", "iconSize": "40px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text-muted",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "拖拽区域使用虚线边框，拖拽进入时边框变为主色并填充浅色背景",
+        "文件列表显示文件名、大小、上传进度和删除按钮",
+        "图片类文件上传后显示缩略图预览"
+      ],
+      "doNot": [
+        "不要在上传进行中允许移除正在上传的文件",
+        "不要使用不支持的文件类型时不给出明确提示",
+        "不要让拖拽区域过小导致难以拖入文件"
+      ]
+    },
+    {
+      "name": "FormField",
+      "category": "Form",
+      "description": "表单项组合容器，将标签、输入控件、错误提示和帮助文字组合为一个整体",
+      "variants": ["default", "horizontal", "inline", "floating"],
+      "states": ["default", "error", "success", "disabled", "required"],
+      "anatomy": ["label", "requiredMark", "control", "helpText", "errorText", "successIcon"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "4px 0", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "auto", "padding": "6px 0", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "auto", "padding": "8px 0", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "0"
+      },
+      "usage": [
+        "标签显示在输入控件上方，必填项在标签后显示红色星号",
+        "错误提示显示在输入控件下方，使用 --color-error 红色文字加图标",
+        "帮助文字使用 --color-text-muted 灰色显示辅助说明"
+      ],
+      "doNot": [
+        "不要在一个 FormField 内放置多个输入控件",
+        "不要让错误提示文字过长，保持简洁明确",
+        "不要同时显示错误提示和帮助文字，错误时隐藏帮助文字"
+      ]
+    },
+    {
+      "name": "Card",
+      "category": "Data Display",
+      "description": "卡片容器，用于承载相关内容的分组展示，支持标准、媒体、信息、情感四种变体",
+      "variants": ["standard", "media", "info", "emotion", "glass"],
+      "states": ["default", "hover", "selected", "disabled", "loading"],
+      "anatomy": ["container", "cover", "header", "title", "subtitle", "body", "actions", "footer", "closeButton"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "12px", "fontSize": "13px", "iconSize": "16px" },
+        "md": { "height": "auto", "padding": "16px", "fontSize": "14px", "iconSize": "18px" },
+        "lg": { "height": "auto", "padding": "24px", "fontSize": "15px", "iconSize": "20px" }
+      },
+      "tokens": {
+        "bg": "--color-surface",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-md",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "glass 变体使用 --glass-bg 半透明背景配合 backdrop-filter 实现玻璃态",
+        "media 变体顶部展示图片/视频封面，下方为文字内容",
+        "emotion 变体使用 --emotion-pleasure 渐变边框或光晕，用于情感互动卡片",
+        "可点击卡片在 hover 时轻微上移并增强阴影"
+      ],
+      "doNot": [
+        "不要在卡片内使用过强的背景色破坏通透感",
+        "不要在卡片 actions 区域放置超过 3 个操作按钮",
+        "不要嵌套过多层级的卡片，最多不超过两层"
+      ]
+    },
+    {
+      "name": "Avatar",
+      "category": "Data Display",
+      "description": "头像组件，圆形显示用户或 AI 人格形象，支持在线状态和情绪指示器",
+      "variants": ["image", "initials", "icon", "persona", "group"],
+      "states": ["default", "hover", "selected", "focused", "online", "offline", "busy", "away"],
+      "anatomy": ["container", "image", "fallback", "statusDot", "emotionRing", "initials"],
+      "sizes": {
+        "sm": { "height": "24px", "padding": "0", "fontSize": "10px", "iconSize": "12px" },
+        "md": { "height": "32px", "padding": "0", "fontSize": "12px", "iconSize": "16px" },
+        "lg": { "height": "40px", "padding": "0", "fontSize": "14px", "iconSize": "20px" },
+        "xl": { "height": "56px", "padding": "0", "fontSize": "18px", "iconSize": "28px" }
+      },
+      "tokens": {
+        "bg": "--color-border",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "必须使用圆形裁剪，图片加载失败时显示姓名首字母或默认图标",
+        "右下角状态点使用绿色表示在线、红色忙碌、黄色离开、灰色离线",
+        "persona 变体在外层增加情绪光环，颜色根据 --emotion-pleasure 等情绪值变化"
+      ],
+      "doNot": [
+        "不要使用方形头像，所有头像必须为圆形",
+        "不要在状态点中使用文字，仅用颜色区分状态",
+        "不要使用低分辨率图片作为头像源"
+      ]
+    },
+    {
+      "name": "Badge",
+      "category": "Data Display",
+      "description": "徽章组件，用于显示未读数、状态标记或小红点，依附于其他元素角落",
+      "variants": ["number", "dot", "status", "text"],
+      "states": ["default", "pulsing"],
+      "anatomy": ["container", "count", "dot"],
+      "sizes": {
+        "sm": { "height": "16px", "padding": "0 4px", "fontSize": "10px", "iconSize": "6px" },
+        "md": { "height": "20px", "padding": "0 6px", "fontSize": "12px", "iconSize": "8px" },
+        "lg": { "height": "24px", "padding": "0 8px", "fontSize": "13px", "iconSize": "10px" }
+      },
+      "tokens": {
+        "bg": "--color-error",
+        "text": "--color-surface",
+        "border": "--color-surface",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "数字徽章显示未读数量，超过 99 显示为 99+",
+        "红点徽章用于无具体数字的新内容提示，pulsing 状态添加呼吸动画",
+        "徽章通常定位在父元素右上角，使用 transform 偏移"
+      ],
+      "doNot": [
+        "不要让数字徽章宽度超过其内容必要宽度",
+        "不要在一个元素上叠加多个 Badge",
+        "不要在静态装饰场景使用 Badge，应考虑 Tag 或装饰元素"
+      ]
+    },
+    {
+      "name": "Tag",
+      "category": "Data Display",
+      "description": "标签组件，用于标记、分类和选择，支持关闭和选中状态，提供多种语义颜色",
+      "variants": ["default", "closable", "checkable", "colored", "emotion"],
+      "states": ["default", "hover", "selected", "focused", "disabled"],
+      "anatomy": ["container", "label", "icon", "closeButton"],
+      "sizes": {
+        "sm": { "height": "20px", "padding": "0 6px", "fontSize": "11px", "iconSize": "12px" },
+        "md": { "height": "24px", "padding": "0 8px", "fontSize": "12px", "iconSize": "14px" },
+        "lg": { "height": "28px", "padding": "0 12px", "fontSize": "13px", "iconSize": "16px" }
+      },
+      "tokens": {
+        "bg": "--color-border",
+        "text": "--color-text",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "--radius-md"
+      },
+      "usage": [
+        "可关闭标签在右侧显示 x 按钮，点击后触发关闭动画",
+        "可选中标签点击后切换选中状态，选中时填充对应颜色",
+        "emotion 变体使用情绪色系（愉悦蓝/温暖橙/平静绿）"
+      ],
+      "doNot": [
+        "不要在 Tag 内放置过长文字，标签文字控制在 6 字以内",
+        "不要使用超过 3 种颜色的标签在同一区域",
+        "不要将 Tag 用作按钮触发主要操作"
+      ]
+    },
+    {
+      "name": "Tooltip",
+      "category": "Data Display",
+      "description": "工具提示，鼠标悬停时显示的气泡式说明文字，带有指向性箭头",
+      "variants": ["default", "rich", "arrow"],
+      "states": ["default", "visible"],
+      "anatomy": ["container", "arrow", "content", "title", "body"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "4px 8px", "fontSize": "12px", "iconSize": "12px" },
+        "md": { "height": "auto", "padding": "6px 10px", "fontSize": "13px", "iconSize": "14px" },
+        "lg": { "height": "auto", "padding": "8px 12px", "fontSize": "14px", "iconSize": "16px" }
+      },
+      "tokens": {
+        "bg": "--color-text",
+        "text": "--color-surface",
+        "border": "transparent",
+        "shadow": "--shadow-lg",
+        "radius": "--radius-md"
+      },
+      "usage": [
+        "默认延迟 300ms 显示，鼠标移出后立即隐藏，使用淡入淡出动画",
+        "箭头指向触发元素，可设置在上下左右四个方向",
+        "用于解释图标按钮功能、显示完整文本截断内容等"
+      ],
+      "doNot": [
+        "不要在 Tooltip 中放置可交互元素，应使用 Popover",
+        "不要让 Tooltip 内容超过 2 行文字",
+        "不要在移动端使用 Tooltip，触摸设备无 hover 状态"
+      ]
+    },
+    {
+      "name": "Progress",
+      "category": "Data Display",
+      "description": "进度条组件，用于显示操作完成度或任务进度，支持线性和环形两种形态",
+      "variants": ["linear", "circular", "indeterminate", "emotion"],
+      "states": ["default", "active", "success", "error", "paused"],
+      "anatomy": ["track", "filledTrack", "label", "percentage", "circleTrack", "circleFilled"],
+      "sizes": {
+        "sm": { "height": "4px", "padding": "0", "fontSize": "11px", "iconSize": "12px" },
+        "md": { "height": "8px", "padding": "0", "fontSize": "12px", "iconSize": "16px" },
+        "lg": { "height": "12px", "padding": "0", "fontSize": "14px", "iconSize": "24px" }
+      },
+      "tokens": {
+        "bg": "--color-border",
+        "text": "--color-text",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "线性进度条使用圆角轨道，已完成部分使用主色填充",
+        "不确定态使用流动的条纹动画表示进行中但无法估算进度",
+        "环形进度条中心可显示百分比数字或图标"
+      ],
+      "doNot": [
+        "不要让进度条在 100% 后不消失或不变为成功状态",
+        "不要使用过多颜色分段表示不同状态",
+        "不要在进度条上添加复杂装饰元素"
+      ]
+    },
+    {
+      "name": "Divider",
+      "category": "Data Display",
+      "description": "分割线，用于视觉上分隔内容区域，支持水平和垂直方向",
+      "variants": ["horizontal", "vertical", "withText", "dashed"],
+      "states": ["default"],
+      "anatomy": ["line", "text", "icon"],
+      "sizes": {
+        "sm": { "height": "1px", "padding": "0", "fontSize": "11px", "iconSize": "12px" },
+        "md": { "height": "1px", "padding": "0", "fontSize": "12px", "iconSize": "14px" },
+        "lg": { "height": "2px", "padding": "0", "fontSize": "13px", "iconSize": "16px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text-muted",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "0"
+      },
+      "usage": [
+        "水平分割线用于分隔段落或卡片区域，垂直分割线用于分隔并排元素",
+        "带文字的分割线在文字两侧显示线段，文字居中",
+        "使用 1px 细线，颜色为 --color-border 低对比度分隔"
+      ],
+      "doNot": [
+        "不要使用过粗或颜色过深的分割线，应保持克制",
+        "不要使用分割线作为卡片边框，应使用 Card 组件自身边框",
+        "不要在分割线文字中放置过长内容"
+      ]
+    },
+    {
+      "name": "List",
+      "category": "Data Display",
+      "description": "列表组件，用于垂直排列数据项，支持单选、多选、拖拽排序等交互",
+      "variants": ["default", "split", "bordered", "virtualized"],
+      "states": ["default", "hover", "selected", "focused", "disabled", "dragging"],
+      "anatomy": ["container", "header", "item", "itemMeta", "avatar", "title", "description", "actions", "footer", "emptyState", "loadMore"],
+      "sizes": {
+        "sm": { "height": "40px", "padding": "8px 12px", "fontSize": "13px", "iconSize": "16px" },
+        "md": { "height": "56px", "padding": "12px 16px", "fontSize": "14px", "iconSize": "20px" },
+        "lg": { "height": "72px", "padding": "16px 20px", "fontSize": "15px", "iconSize": "24px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "0"
+      },
+      "usage": [
+        "split 变体在列表项之间显示分割线，bordered 变体显示外边框",
+        "列表项 hover 时使用浅色背景高亮，选中项使用主色半透明背景",
+        "虚拟列表用于超过 100 条数据的场景，保证滚动性能"
+      ],
+      "doNot": [
+        "不要在列表项中放置超过 3 行的内容，应考虑卡片或详情页",
+        "不要让列表项高度不统一，保持视觉节奏一致",
+        "不要在无分割线的列表中使用过多视觉噪音"
+      ]
+    },
+    {
+      "name": "Timeline",
+      "category": "Data Display",
+      "description": "时间线组件，按时间顺序垂直展示事件流，适用于对话历史、记忆回顾等场景",
+      "variants": ["default", "left", "right", "alternate", "dot"],
+      "states": ["default", "pending", "completed", "error"],
+      "anatomy": ["container", "item", "dot", "line", "connector", "timestamp", "title", "content", "icon"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "8px 0", "fontSize": "12px", "iconSize": "12px" },
+        "md": { "height": "auto", "padding": "12px 0", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "auto", "padding": "16px 0", "fontSize": "15px", "iconSize": "20px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "none",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "左侧时间线使用竖线连接各节点，节点圆点可自定义颜色和图标",
+        "对话历史中可在节点处显示对方头像替代圆点",
+        "pending 状态使用空心圆点表示尚未完成的事件"
+      ],
+      "doNot": [
+        "不要在时间线节点之间留出过大间距导致关联感弱",
+        "不要使用过于花哨的连接线样式",
+        "不要让时间戳格式不统一，全程使用相同时间格式"
+      ]
+    },
+    {
+      "name": "Empty",
+      "category": "Data Display",
+      "description": "空状态组件，在无数据时显示友好提示和引导操作，包含插画",
+      "variants": ["default", "simple", "withAction", "illustration"],
+      "states": ["default"],
+      "anatomy": ["container", "illustration", "title", "description", "actionButton"],
+      "sizes": {
+        "sm": { "height": "160px", "padding": "24px", "fontSize": "13px", "iconSize": "48px" },
+        "md": { "height": "240px", "padding": "32px", "fontSize": "14px", "iconSize": "72px" },
+        "lg": { "height": "320px", "padding": "48px", "fontSize": "16px", "iconSize": "96px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text-muted",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "0"
+      },
+      "usage": [
+        "使用温暖友好的插画风格，避免冰冷的机械感",
+        "标题说明当前无数据的状态，描述文字给出下一步操作建议",
+        "提供明确的行动按钮引导用户创建内容或开始使用"
+      ],
+      "doNot": [
+        "不要在空状态中只显示暂无数据而不提供任何引导",
+        "不要使用过于负面或沮丧的插画和文案",
+        "不要让空状态插画与应用整体风格不符"
+      ]
+    },
+    {
+      "name": "EmotionGauge",
+      "category": "Data Display",
+      "description": "Aerie 特色情绪仪表盘，使用 PAD（愉悦度/激活度/优势度）三圆环展示 AI 当前情绪状态",
+      "variants": ["compact", "full", "detailed"],
+      "states": ["default", "animating", "calm", "excited", "sad"],
+      "anatomy": ["container", "pleasureRing", "arousalRing", "dominanceRing", "centerLabel", "emotionIcon", "legend"],
+      "sizes": {
+        "sm": { "height": "120px", "padding": "12px", "fontSize": "11px", "iconSize": "20px" },
+        "md": { "height": "200px", "padding": "16px", "fontSize": "13px", "iconSize": "32px" },
+        "lg": { "height": "280px", "padding": "24px", "fontSize": "15px", "iconSize": "48px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-glow",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "三个同心圆环分别表示 Pleasure（愉悦-蓝紫）、Arousal（激活-橙）、Dominance（优势-绿）",
+        "圆环填充程度表示对应维度的数值高低，中心显示综合情绪图标",
+        "情绪变化时使用 --duration-slow 动画平滑过渡圆环填充度"
+      ],
+      "doNot": [
+        "不要使用超过三个情绪维度，保持 PAD 模型的清晰性",
+        "不要让仪表盘颜色过于刺眼，使用柔和的情绪色渐变",
+        "不要在 compact 模式下显示图例和详细数值"
+      ]
+    },
+    {
+      "name": "Toast",
+      "category": "Feedback",
+      "description": "轻提示组件，用于非侵入式地反馈操作结果，自动消失，支持四种类型和上下两种位置",
+      "variants": ["info", "success", "warning", "error"],
+      "states": ["entering", "visible", "exiting"],
+      "anatomy": ["container", "icon", "message", "actionButton", "closeButton"],
+      "sizes": {
+        "sm": { "height": "32px", "padding": "0 12px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "44px", "padding": "0 16px", "fontSize": "14px", "iconSize": "18px" },
+        "lg": { "height": "56px", "padding": "0 20px", "fontSize": "15px", "iconSize": "22px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-lg",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "默认从顶部滑入，3 秒后自动消失，支持手动关闭",
+        "info 使用蓝色图标、success 绿色、warning 橙色、error 红色",
+        "多条 Toast 堆叠显示时保持间距，依次消失"
+      ],
+      "doNot": [
+        "不要在 Toast 中放置超过一行的文字",
+        "不要使用 Toast 显示需要用户确认的重要信息，应使用 Modal",
+        "不要让 Toast 遮挡重要操作区域超过 5 秒"
+      ]
+    },
+    {
+      "name": "Alert",
+      "category": "Feedback",
+      "description": "警告提示，用于页面内显式展示重要信息，需要用户关注但不强制操作",
+      "variants": ["info", "success", "warning", "error", "emotion"],
+      "states": ["default", "closable", "expandable"],
+      "anatomy": ["container", "icon", "title", "description", "closeButton", "action", "expandIcon"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "8px 12px", "fontSize": "12px", "iconSize": "16px" },
+        "md": { "height": "auto", "padding": "12px 16px", "fontSize": "14px", "iconSize": "20px" },
+        "lg": { "height": "auto", "padding": "16px 20px", "fontSize": "15px", "iconSize": "24px" }
+      },
+      "tokens": {
+        "bg": "--color-surface",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "左侧显示对应类型的彩色图标，右侧可选关闭按钮",
+        "emotion 变体用于情感提示如 Aerie 感到难过/开心，使用温暖色调",
+        "可展开变体显示详细信息和操作建议"
+      ],
+      "doNot": [
+        "不要在同一页面同时显示超过 3 个 Alert",
+        "不要使用 error Alert 展示非错误性提示",
+        "不要让 Alert 自动消失，用户需要时间阅读内容"
+      ]
+    },
+    {
+      "name": "Modal",
+      "category": "Feedback",
+      "description": "模态弹窗，用于需要用户确认或处理的重要操作，带有遮罩层居中显示",
+      "variants": ["default", "confirm", "form", "info", "emotion"],
+      "states": ["entering", "visible", "exiting", "loading"],
+      "anatomy": ["mask", "container", "header", "title", "closeButton", "body", "footer", "okButton", "cancelButton"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "20px", "fontSize": "14px", "iconSize": "20px" },
+        "md": { "height": "auto", "padding": "24px", "fontSize": "15px", "iconSize": "24px" },
+        "lg": { "height": "auto", "padding": "32px", "fontSize": "16px", "iconSize": "28px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-xl",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "遮罩层使用半透明黑色，点击遮罩可关闭（可配置）",
+        "标题居左或居中，底部放置确认和取消按钮，确认按钮使用主色",
+        "emotion 变体使用柔和渐变背景，适用于 Aerie 情感表达场景"
+      ],
+      "doNot": [
+        "不要在 Modal 中弹出另一个 Modal，嵌套不超过一层",
+        "不要让 Modal 内容区域超过视口高度的 80%",
+        "不要将取消按钮设为红色，红色仅用于危险操作确认按钮"
+      ]
+    },
+    {
+      "name": "Drawer",
+      "category": "Feedback",
+      "description": "抽屉组件，从屏幕右侧滑出的面板，用于展示详情或不打断主流程的表单",
+      "variants": ["left", "right", "bottom"],
+      "states": ["entering", "visible", "exiting"],
+      "anatomy": ["mask", "container", "header", "title", "closeButton", "body", "footer", "resizeHandle"],
+      "sizes": {
+        "sm": { "height": "100%", "padding": "16px", "fontSize": "13px", "iconSize": "18px" },
+        "md": { "height": "100%", "padding": "20px", "fontSize": "14px", "iconSize": "20px" },
+        "lg": { "height": "100%", "padding": "24px", "fontSize": "15px", "iconSize": "22px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-xl",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "默认从右侧滑出，宽度为 480px 或屏幕宽度的 50%",
+        "底部抽屉适用于移动端风格的操作面板，高度为屏幕 50%",
+        "抽屉内可放置表单、详情信息或二级导航"
+      ],
+      "doNot": [
+        "不要在抽屉中使用过于复杂的布局，保持内容线性",
+        "不要让抽屉宽度超过屏幕宽度的 80%",
+        "不要在抽屉打开时允许页面主体滚动"
+      ]
+    },
+    {
+      "name": "Popover",
+      "category": "Feedback",
+      "description": "气泡卡片，点击触发元素后弹出的浮层，可包含丰富的交互内容",
+      "variants": ["default", "menu", "card", "emotion"],
+      "states": ["entering", "visible", "exiting"],
+      "anatomy": ["container", "arrow", "content", "header", "body", "footer", "closeButton"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "8px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "auto", "padding": "12px", "fontSize": "13px", "iconSize": "16px" },
+        "lg": { "height": "auto", "padding": "16px", "fontSize": "14px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-lg",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "点击触发元素显示，点击外部区域关闭",
+        "可放置表单、菜单、用户卡片等富交互内容",
+        "箭头指向触发元素，支持 12 个方位定位"
+      ],
+      "doNot": [
+        "不要在 Popover 中放置超过视口 50% 高度的内容，应使用 Modal 或 Drawer",
+        "不要在 Popover 中嵌套另一个 Popover",
+        "不要在 Popover 内部滚动时让页面也跟随滚动"
+      ]
+    },
+    {
+      "name": "Dropdown",
+      "category": "Feedback",
+      "description": "下拉菜单，点击触发按钮后弹出的操作菜单列表，用于收纳次要操作",
+      "variants": ["default", "submenu", "checkbox", "radio", "danger"],
+      "states": ["entering", "visible", "exiting", "selected", "disabled"],
+      "anatomy": ["container", "menuItem", "icon", "label", "shortcut", "divider", "submenuArrow", "groupLabel"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "4px 8px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "36px", "padding": "6px 12px", "fontSize": "13px", "iconSize": "16px" },
+        "lg": { "height": "44px", "padding": "8px 16px", "fontSize": "14px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-lg",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "菜单项左侧显示图标，右侧可显示快捷键提示",
+        "危险操作项使用 --color-error 红色文字",
+        "分组菜单使用分组标签和分隔线区分不同类别的操作"
+      ],
+      "doNot": [
+        "不要在下拉菜单中放置超过 10 个菜单项，应考虑分组或子菜单",
+        "不要将主要操作放入下拉菜单，应直接显示在界面上",
+        "不要让菜单项宽度小于触发元素宽度"
+      ]
+    },
+    {
+      "name": "Loading",
+      "category": "Feedback",
+      "description": "加载状态组件，用于表示内容加载中，支持骨架屏、旋转图标和 AI 思考动画",
+      "variants": ["spinner", "dots", "skeleton", "aiThinking", "progress"],
+      "states": ["default", "active"],
+      "anatomy": ["container", "spinner", "dot", "pulse", "aiOrb", "text"],
+      "sizes": {
+        "sm": { "height": "16px", "padding": "0", "fontSize": "12px", "iconSize": "16px" },
+        "md": { "height": "24px", "padding": "0", "fontSize": "13px", "iconSize": "24px" },
+        "lg": { "height": "40px", "padding": "0", "fontSize": "14px", "iconSize": "40px" }
+      },
+      "tokens": {
+        "bg": "transparent",
+        "text": "--color-text-muted",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "spinner 使用圆环旋转动画，aiThinking 使用呼吸光球加思维点跳动动画",
+        "AI 思考状态可配合显示思考中的文字如 Aerie 正在思考...",
+        "页面级加载使用居中的大号加载动画"
+      ],
+      "doNot": [
+        "不要在页面上同时显示多个不同类型的加载动画",
+        "不要让加载动画过于花哨分散用户注意力",
+        "不要无限显示加载状态而不提供超时提示"
+      ]
+    },
+    {
+      "name": "Skeleton",
+      "category": "Feedback",
+      "description": "骨架屏，在内容加载完成前显示占位图形，提升感知加载速度",
+      "variants": ["text", "circular", "rectangular", "card", "chat"],
+      "states": ["default", "animating"],
+      "anatomy": ["container", "avatarBlock", "titleBlock", "paragraphLine", "imageBlock"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "0", "fontSize": "12px", "iconSize": "16px" },
+        "md": { "height": "auto", "padding": "0", "fontSize": "14px", "iconSize": "24px" },
+        "lg": { "height": "auto", "padding": "0", "fontSize": "15px", "iconSize": "32px" }
+      },
+      "tokens": {
+        "bg": "--color-border",
+        "text": "--color-border",
+        "border": "transparent",
+        "shadow": "none",
+        "radius": "--radius-md"
+      },
+      "usage": [
+        "使用从左到右的渐变扫光动画表示加载中",
+        "圆形骨架用于头像占位，矩形用于图片，长条形用于文字行",
+        "聊天骨架屏模拟对方消息气泡形状"
+      ],
+      "doNot": [
+        "不要让骨架屏形状与实际内容形状差异过大",
+        "不要在骨架屏中显示真实的文字或图标内容",
+        "不要在骨架屏上显示加载中文字提示"
+      ]
+    },
+    {
+      "name": "ContextMenu",
+      "category": "Feedback",
+      "description": "右键菜单，用户右键点击时在鼠标位置弹出的操作菜单",
+      "variants": ["default", "withSubmenu", "withIcons"],
+      "states": ["entering", "visible", "exiting", "disabled"],
+      "anatomy": ["container", "menuItem", "icon", "label", "shortcut", "divider", "submenu"],
+      "sizes": {
+        "sm": { "height": "28px", "padding": "4px 8px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "32px", "padding": "6px 12px", "fontSize": "13px", "iconSize": "16px" },
+        "lg": { "height": "40px", "padding": "8px 16px", "fontSize": "14px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-lg",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "在鼠标右键位置弹出，菜单项与 Dropdown 保持一致",
+        "第一项为默认操作（双击触发的操作），使用半粗字体",
+        "不可用操作显示为灰色禁用状态"
+      ],
+      "doNot": [
+        "不要在右键菜单中放置超过 15 个菜单项",
+        "不要将右键菜单作为唯一的操作入口",
+        "不要让右键菜单超出屏幕边界"
+      ]
+    },
+    {
+      "name": "Dialog",
+      "category": "Overlay",
+      "description": "对话框，用于系统级消息通知和简单确认，比 Modal 更轻量简洁",
+      "variants": ["default", "system", "notification", "emotion"],
+      "states": ["entering", "visible", "exiting"],
+      "anatomy": ["container", "icon", "title", "message", "buttonGroup", "checkbox"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "16px", "fontSize": "13px", "iconSize": "24px" },
+        "md": { "height": "auto", "padding": "20px", "fontSize": "14px", "iconSize": "32px" },
+        "lg": { "height": "auto", "padding": "24px", "fontSize": "15px", "iconSize": "40px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-xl",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "居中显示，宽度约 400px，适用于系统通知、确认删除等简单交互",
+        "可包含不再提示复选框记住用户选择",
+        "emotion 对话框用于 Aerie 主动发起的情感交流"
+      ],
+      "doNot": [
+        "不要在 Dialog 中放置复杂表单，应使用 Modal",
+        "不要让 Dialog 超过 2 个操作按钮",
+        "不要使用遮罩层完全阻断所有操作（区别于 Modal）"
+      ]
+    },
+    {
+      "name": "Sheet",
+      "category": "Overlay",
+      "description": "底部工作表，从屏幕底部滑出的移动端风格面板，适用于快捷操作和选项选择",
+      "variants": ["list", "grid", "action", "detent"],
+      "states": ["entering", "visible", "exiting", "dragging"],
+      "anatomy": ["mask", "container", "handle", "title", "content", "actionGrid", "cancelButton"],
+      "sizes": {
+        "sm": { "height": "30%", "padding": "12px 16px", "fontSize": "13px", "iconSize": "20px" },
+        "md": { "height": "50%", "padding": "16px 20px", "fontSize": "14px", "iconSize": "24px" },
+        "lg": { "height": "90%", "padding": "20px 24px", "fontSize": "15px", "iconSize": "28px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-xl",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "顶部显示拖拽手柄，支持拖拽手势调整高度和关闭",
+        "action 变体使用网格布局显示操作按钮如分享、复制等",
+        "固定显示取消按钮在底部便于快速关闭"
+      ],
+      "doNot": [
+        "不要在桌面端使用 Sheet 替代 Drawer，Sheet 为移动端风格",
+        "不要让 Sheet 内容无滚动限制",
+        "不要在 Sheet 中使用多层嵌套"
+      ]
+    },
+    {
+      "name": "ChatBubble",
+      "category": "AI-specific",
+      "description": "聊天气泡，显示对话消息内容，区分用户和 AI 两种方向，支持时间戳、状态和表情反应",
+      "variants": ["user", "ai", "system", "emotion", "typing"],
+      "states": ["default", "sending", "sent", "delivered", "read", "error", "selected"],
+      "anatomy": ["container", "avatar", "bubble", "message", "timestamp", "statusIcon", "reactions", "actions", "quote"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "8px 12px", "fontSize": "13px", "iconSize": "14px" },
+        "md": { "height": "auto", "padding": "10px 14px", "fontSize": "14px", "iconSize": "16px" },
+        "lg": { "height": "auto", "padding": "12px 16px", "fontSize": "15px", "iconSize": "18px" }
+      },
+      "tokens": {
+        "bg": "--color-primary",
+        "text": "--color-surface",
+        "border": "transparent",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "用户消息靠右对齐，使用主色填充气泡；AI 消息靠左对齐，使用 --color-surface 玻璃态背景",
+        "AI 气泡左下角与 Avatar 连接处使用尖角，圆角较大保持柔和感",
+        "typing 状态显示三个跳动的圆点表示 AI 正在输入",
+        "表情反应显示在气泡下方，可添加多个 Emoji 反应"
+      ],
+      "doNot": [
+        "不要让用户和 AI 气泡使用相同的对齐方向和背景色",
+        "不要在气泡中显示过长的无换行文本，确保自动换行",
+        "不要使用直角气泡，保持大圆角的柔和感"
+      ]
+    },
+    {
+      "name": "MessageInput",
+      "category": "AI-specific",
+      "description": "消息输入框，聊天场景专用的多行自适应输入区域，集成发送、语音、表情、附件按钮",
+      "variants": ["default", "expanded", "voiceMode"],
+      "states": ["default", "focused", "disabled", "recording", "sending", "empty"],
+      "anatomy": ["container", "textarea", "attachButton", "emojiButton", "voiceButton", "sendButton", "toolbar", "suggestionChip", "recordingOverlay"],
+      "sizes": {
+        "sm": { "height": "44px", "padding": "8px 12px", "fontSize": "13px", "iconSize": "18px" },
+        "md": { "height": "auto", "padding": "10px 12px", "fontSize": "14px", "iconSize": "20px" },
+        "lg": { "height": "auto", "padding": "12px 16px", "fontSize": "15px", "iconSize": "22px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-md",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "默认高度为单行，随输入内容自动扩展，最大高度 200px 后内部滚动",
+        "输入内容为空时发送按钮置灰，有内容时变为主色可点击",
+        "语音模式切换为按住说话按钮，录音时显示波形动画",
+        "上方可显示快捷建议 Chips 如早安、讲个故事等"
+      ],
+      "doNot": [
+        "不要让输入框默认占满整个屏幕宽度，两侧保持适当边距",
+        "不要在输入框为空时显示发送按钮为可用状态",
+        "不要在录音状态下允许文字输入"
+      ]
+    },
+    {
+      "name": "PersonaCard",
+      "category": "AI-specific",
+      "description": "人格卡片，展示 AI 伴侣的人格形象、当前状态和属性参数",
+      "variants": ["compact", "full", "selectable"],
+      "states": ["default", "hover", "selected", "focused"],
+      "anatomy": ["container", "avatar", "name", "statusDot", "statusText", "moodTag", "attributeBar", "bio", "actionButton"],
+      "sizes": {
+        "sm": { "height": "72px", "padding": "12px", "fontSize": "12px", "iconSize": "32px" },
+        "md": { "height": "120px", "padding": "16px", "fontSize": "14px", "iconSize": "48px" },
+        "lg": { "height": "200px", "padding": "24px", "fontSize": "15px", "iconSize": "72px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-md",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "大尺寸头像配合情绪光环，显示 AI 名称和当前状态（在线/思考中/休息中）",
+        "属性条显示亲密度、情绪值等参数，使用情感色渐变填充",
+        "selectable 变体用于人格选择界面，选中时显示主色边框和光晕"
+      ],
+      "doNot": [
+        "不要在卡片中显示过多属性，保持核心信息一目了然",
+        "不要使用纯文本描述状态，应配合状态点和图标",
+        "不要让人格卡片背景过于花哨影响头像展示"
+      ]
+    },
+    {
+      "name": "EmotionPanel",
+      "category": "AI-specific",
+      "description": "情绪面板，展示 AI 情绪历史曲线和当前详细情绪状态",
+      "variants": ["timeline", "radar", "detail"],
+      "states": ["default", "hover", "expanded"],
+      "anatomy": ["container", "currentEmotion", "emotionIcon", "moodText", "historyChart", "dimensionBars", "factorList", "trendArrow"],
+      "sizes": {
+        "sm": { "height": "160px", "padding": "12px", "fontSize": "12px", "iconSize": "24px" },
+        "md": { "height": "240px", "padding": "16px", "fontSize": "13px", "iconSize": "32px" },
+        "lg": { "height": "360px", "padding": "24px", "fontSize": "14px", "iconSize": "48px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-md",
+        "radius": "--radius-xl"
+      },
+      "usage": [
+        "顶部显示当前情绪图标和文字描述，如平静、开心、思考中",
+        "历史曲线图展示最近 24 小时/7 天的情绪变化趋势",
+        "PAD 三维度使用彩色进度条分别显示愉悦度、激活度、优势度数值"
+      ],
+      "doNot": [
+        "不要使用过多维度展示情绪，保持 PAD 三维度的清晰结构",
+        "不要让历史曲线过于复杂，使用平滑曲线连接",
+        "不要在面板中放置与情绪无关的操作按钮"
+      ]
+    },
+    {
+      "name": "CognitionCard",
+      "category": "AI-specific",
+      "description": "认知卡片，可视化展示 AI 的思考过程，包括感知、推理、决策三个阶段",
+      "variants": ["stream", "collapsed", "detailed", "chain"],
+      "states": ["default", "thinking", "completed", "expanded"],
+      "anatomy": ["container", "stageIndicator", "stageIcon", "stageLabel", "thoughtText", "confidenceBar", "sourceTag", "expandButton", "chainConnector"],
+      "sizes": {
+        "sm": { "height": "auto", "padding": "8px 12px", "fontSize": "12px", "iconSize": "14px" },
+        "md": { "height": "auto", "padding": "12px 16px", "fontSize": "13px", "iconSize": "18px" },
+        "lg": { "height": "auto", "padding": "16px 20px", "fontSize": "14px", "iconSize": "22px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "折叠态仅显示当前思考阶段和加载动画，展开后显示完整思维链",
+        "使用不同颜色区分感知（蓝）、推理（紫）、决策（绿）三个阶段",
+        "思维链节点使用时间线连接器串联，流式输出时逐字显示"
+      ],
+      "doNot": [
+        "不要默认展开完整思考过程，默认折叠避免信息过载",
+        "不要显示原始的 prompt 或系统指令内容",
+        "不要让认知卡片影响正常聊天消息的阅读节奏"
+      ]
+    },
+    {
+      "name": "FloatingOrb",
+      "category": "AI-specific",
+      "description": "悬浮球，AI 伴侣的常驻桌面入口，带有呼吸光晕动画，可拖拽移动位置",
+      "variants": ["default", "active", "sleeping", "notification"],
+      "states": ["default", "hover", "dragging", "pulsing", "speaking"],
+      "anatomy": ["container", "orb", "core", "glowLayer", "pulseRing", "tooltip", "notificationDot"],
+      "sizes": {
+        "sm": { "height": "40px", "padding": "0", "fontSize": "0px", "iconSize": "20px" },
+        "md": { "height": "56px", "padding": "0", "fontSize": "0px", "iconSize": "28px" },
+        "lg": { "height": "72px", "padding": "0", "fontSize": "0px", "iconSize": "36px" }
+      },
+      "tokens": {
+        "bg": "--emotion-pleasure",
+        "text": "--color-surface",
+        "border": "transparent",
+        "shadow": "--shadow-glow",
+        "radius": "--radius-full"
+      },
+      "usage": [
+        "始终悬浮于桌面最顶层，使用最高 z-index，支持拖拽到屏幕任意位置",
+        "默认状态下有柔和的呼吸光晕动画，AI 说话时显示声波律动",
+        "有新消息时显示通知红点并加强脉动频率",
+        "点击展开主面板或灵动岛，双击切换状态"
+      ],
+      "doNot": [
+        "不要让悬浮球小于 40px 导致难以点击",
+        "不要让呼吸动画过于强烈干扰用户注意力",
+        "不要在悬浮球上显示文字，保持纯图形形态"
+      ]
+    },
+    {
+      "name": "VoiceWave",
+      "category": "AI-specific",
+      "description": "语音波形组件，在录音和语音播放时显示动态波形，反映音量大小和播放进度",
+      "variants": ["recording", "playing", "idle", "compact"],
+      "states": ["default", "recording", "playing", "paused", "processing"],
+      "anatomy": ["container", "waveBar", "playButton", "pauseButton", "timeLabel", "durationLabel", "progressTrack", "volumeIndicator"],
+      "sizes": {
+        "sm": { "height": "24px", "padding": "0 8px", "fontSize": "11px", "iconSize": "16px" },
+        "md": { "height": "40px", "padding": "0 12px", "fontSize": "12px", "iconSize": "20px" },
+        "lg": { "height": "64px", "padding": "0 16px", "fontSize": "14px", "iconSize": "28px" }
+      },
+      "tokens": {
+        "bg": "--glass-bg",
+        "text": "--color-text",
+        "border": "--color-border",
+        "shadow": "--shadow-sm",
+        "radius": "--radius-lg"
+      },
+      "usage": [
+        "录音时波形条实时根据麦克风音量跳动，使用主色渐变填充",
+        "播放时波形从左到右填充表示进度，已播放部分使用主色，未播放使用灰色",
+        "compact 变体用于消息气泡中，显示简化波形和播放按钮"
+      ],
+      "doNot": [
+        "不要让波形条数量过多导致密集，保持 20-40 根柱状条",
+        "不要在录音状态下显示播放进度",
+        "不要使用方形波形柱，保持圆角柱状"
+      ]
+    }
+  ]
+}

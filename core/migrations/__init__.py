@@ -286,6 +286,35 @@ def _apply_phase4_request_queue(conn: sqlite3.Connection) -> None:
     )
 
 
+def _apply_phase5_batch_requests(conn: sqlite3.Connection) -> None:
+    _add_column_if_missing(
+        conn,
+        "requests",
+        "batch_id",
+        "TEXT DEFAULT NULL",
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_requests_batch "
+        "ON requests(batch_id, created_at, request_id) "
+        "WHERE batch_id IS NOT NULL"
+    )
+
+
+def phase5_batch_request_migrations() -> list[Migration]:
+    contract = """009_batch_request_support
+requests(batch_id)
+index(batch_id+created_at+request_id)
+batch-aware request queue for MessageBatcher
+"""
+    return [
+        Migration(
+            version="009_batch_request_support",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_phase5_batch_requests,
+        )
+    ]
+
+
 def phase4_request_queue_migrations() -> list[Migration]:
     contract = """006_chat_request_queue
 requests(actor_id,channel,channel_account_id,user_id,input_content,effective_content,attachments,reply_to_id,retry_of_request_id,cancel_requested_at,cancelled_at,started_at,lease_owner,lease_expires_at,last_heartbeat_at,error_code)
@@ -359,6 +388,118 @@ actor-filtered resumable mobile SSE cursor
             version="007_mobile_event_log",
             checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
             apply=_apply_mobile_event_log,
+        )
+    ]
+
+
+def _apply_desktop_chat_continuity(conn: sqlite3.Connection) -> None:
+    """Add desktop-only continuity and attachment storage.
+
+    The desktop attachment tables deliberately do not reference the mobile
+    gateway tables.  Conversation/message identifiers remain nullable text
+    links so this migration is also usable when the normalized conversation
+    model feature is disabled and the desktop falls back to ``chat_log``.
+    """
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS conversation_summaries (
+            conversation_id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL DEFAULT '',
+            through_message_rowid INTEGER NOT NULL DEFAULT 0,
+            source_message_count INTEGER NOT NULL DEFAULT 0,
+            revision INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            ),
+            updated_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            ),
+            CHECK(through_message_rowid >= 0),
+            CHECK(source_message_count >= 0),
+            CHECK(revision >= 1)
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS desktop_attachments (
+            attachment_id TEXT PRIMARY KEY,
+            conversation_id TEXT DEFAULT NULL,
+            message_id TEXT DEFAULT NULL,
+            original_name TEXT NOT NULL,
+            stored_name TEXT NOT NULL,
+            storage_relpath TEXT NOT NULL,
+            category TEXT NOT NULL,
+            extension TEXT NOT NULL,
+            mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+            size_bytes INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            state TEXT NOT NULL DEFAULT 'queued' CHECK(
+                state IN (
+                    'queued', 'processing', 'ready', 'failed',
+                    'quarantined', 'unsupported'
+                )
+            ),
+            analysis_mode TEXT NOT NULL CHECK(
+                analysis_mode IN ('extract', 'metadata')
+            ),
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            error_code TEXT DEFAULT NULL,
+            error_message TEXT DEFAULT NULL,
+            created_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            ),
+            updated_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            ),
+            ready_at TEXT DEFAULT NULL,
+            CHECK(size_bytes >= 0),
+            CHECK(length(sha256) = 64)
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS desktop_attachment_chunks (
+            attachment_id TEXT NOT NULL REFERENCES desktop_attachments(
+                attachment_id
+            ) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            char_count INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            ),
+            PRIMARY KEY(attachment_id, ordinal),
+            CHECK(ordinal >= 0),
+            CHECK(char_count >= 0),
+            CHECK(length(sha256) = 64)
+        )"""
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_desktop_attachments_state_created
+           ON desktop_attachments(state, created_at, attachment_id)"""
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_desktop_attachments_message
+           ON desktop_attachments(message_id, created_at)
+           WHERE message_id IS NOT NULL"""
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_desktop_attachments_conversation
+           ON desktop_attachments(conversation_id, created_at)
+           WHERE conversation_id IS NOT NULL"""
+    )
+
+
+def desktop_chat_continuity_migrations() -> list[Migration]:
+    contract = """008_desktop_chat_continuity
+conversation_summaries(conversation_id,summary,through_message_rowid,source_message_count,revision)
+desktop_attachments(attachment_id,conversation_id,message_id,original_name,stored_name,storage_relpath,category,extension,mime_type,size_bytes,sha256,state,analysis_mode,metadata_json,error_code,error_message)
+desktop_attachment_chunks(attachment_id,ordinal,content,char_count,sha256)
+desktop-only storage; no mobile gateway table or filesystem dependency
+"""
+    return [
+        Migration(
+            version="008_desktop_chat_continuity",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_desktop_chat_continuity,
         )
     ]
 

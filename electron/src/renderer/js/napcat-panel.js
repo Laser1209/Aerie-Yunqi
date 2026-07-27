@@ -16,6 +16,7 @@ class NapcatPanel {
       qqBadge: document.getElementById("status-qq-badge"),
     };
     this._interval = null;
+    this._qrLoading = false;
     this._bindEvents();
     this._bindQQToggle();
     this._startPoll();
@@ -39,7 +40,7 @@ class NapcatPanel {
       this._el.stopBtn.addEventListener("click", () => this.stop());
     }
     if (this._el.qrRefresh) {
-      this._el.qrRefresh.addEventListener("click", () => this._refreshQR());
+      this._el.qrRefresh.addEventListener("click", () => this._refreshQR(true));
     }
   }
 
@@ -76,8 +77,23 @@ class NapcatPanel {
   _updateUI(status) {
     if (!status) return;
     const phase = status.phase || "idle";
-    const phases = { idle: "未连接", starting: "启动中…", qr_pending: "等待扫码", connected: "已连接" };
-    const phaseText = phases[phase] || phase;
+    const phases = {
+      idle: "未连接",
+      starting: "启动中…",
+      qr_pending: "等待扫码",
+      connected: status.owned === false ? "已连接（外部）" : "已连接",
+      error: "连接错误",
+    };
+    const errors = {
+      backend_unreachable: "后端不可用",
+      launcher_not_found: "未找到 NapCat 启动器",
+      napcat_start_timeout: "启动超时",
+      napcat_start_failed: "启动失败",
+      napcat_residual_port: "停止未完成",
+    };
+    const phaseText = phase === "error"
+      ? (errors[status.error_code] || phases.error)
+      : (phases[phase] || "状态未知");
 
     if (this._el.phaseDot) {
       this._el.phaseDot.className = "phase-dot phase-dot--" + phase;
@@ -98,19 +114,39 @@ class NapcatPanel {
     if (this._el.qrZone) {
       if (status.qrcode_available && phase === "qr_pending") {
         this._el.qrZone.classList.remove("hidden");
-        if (this._el.qrImg && status.qrcode_path) {
-          this._el.qrImg.src = "http://127.0.0.1:7890/api/napcat/qrcode?t=" + Date.now();
+        if (this._el.qrImg && !this._el.qrImg.getAttribute("src")) {
+          this._refreshQR(false);
         }
       } else if (phase !== "qr_pending") {
         this._el.qrZone.classList.add("hidden");
+        if (this._el.qrImg) this._el.qrImg.removeAttribute("src");
       }
+    }
+    if (this._el.startBtn) {
+      this._el.startBtn.disabled = ["starting", "qr_pending", "connected"].includes(phase);
+    }
+    if (this._el.stopBtn) {
+      this._el.stopBtn.disabled = status.owned !== true;
+      this._el.stopBtn.title = status.owned === true
+        ? "停止由 Aerie 启动的 NapCat"
+        : "Aerie 不会停止外部启动的 NapCat";
     }
   }
 
-  _refreshQR() {
-    if (this._el.qrImg) {
-      this._el.qrImg.src = "http://127.0.0.1:7890/api/napcat/qrcode?t=" + Date.now();
-      this._addLog("[系统] 二维码已刷新");
+  async _refreshQR(showLog) {
+    if (!this._el.qrImg || this._qrLoading) return;
+    this._qrLoading = true;
+    try {
+      const response = await window.aerie.napcat.getQrCode();
+      if (!response || response.ok !== true || !response.dataUrl) {
+        throw new Error(response && response.errorCode || "qrcode_unavailable");
+      }
+      this._el.qrImg.src = response.dataUrl;
+      if (showLog) this._addLog("[系统] 二维码已刷新");
+    } catch (error) {
+      this._addLog("[错误] 二维码刷新失败: " + String(error && error.message || error));
+    } finally {
+      this._qrLoading = false;
     }
   }
 
@@ -118,8 +154,9 @@ class NapcatPanel {
     this._addLog("[系统] 正在启动 NapCat...");
     try {
       const resp = await window.aerie.napcat.start();
-      this._addLog("[系统] " + (resp.message || JSON.stringify(resp)));
-      this._poll();
+      this._addLog((resp && resp.ok === false ? "[错误] " : "[系统] ")
+        + (resp.message || JSON.stringify(resp)));
+      await this._poll();
     } catch (err) {
       this._addLog("[错误] 启动失败: " + err.message);
     }
@@ -129,8 +166,9 @@ class NapcatPanel {
     this._addLog("[系统] 正在停止 NapCat...");
     try {
       const resp = await window.aerie.napcat.stop();
-      this._addLog("[系统] " + (resp.message || JSON.stringify(resp)));
-      this._poll();
+      this._addLog((resp && resp.ok === false ? "[错误] " : "[系统] ")
+        + (resp.message || JSON.stringify(resp)));
+      await this._poll();
     } catch (err) {
       this._addLog("[错误] 停止失败: " + err.message);
     }

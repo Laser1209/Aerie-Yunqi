@@ -86,19 +86,28 @@ class EmotionStateStore:
         *,
         actor_id: str | None = None,
     ) -> list[dict]:
-        """Return snapshots newer than since_ts, ascending by ts."""
+        """Return the newest matching snapshots in chronological order.
+
+        Applying ``LIMIT`` to an ascending query returns the oldest rows in a
+        busy window. Select newest-first in a subquery, then restore ascending
+        order for chart consumers.
+        """
         try:
             if actor_id:
                 return self._db.query(
+                    "SELECT * FROM ("
                     "SELECT * FROM emotion_state_snapshot "
                     "WHERE actor_id = ? AND ts >= ? "
-                    "ORDER BY ts ASC LIMIT ?",
+                    "ORDER BY ts DESC, id DESC LIMIT ?"
+                    ") AS latest_rows ORDER BY ts ASC, id ASC",
                     (actor_id, int(since_ts), int(limit)),
                 )
             return self._db.query(
+                "SELECT * FROM ("
                 "SELECT * FROM emotion_state_snapshot "
                 "WHERE user_id = ? AND ts >= ? "
-                "ORDER BY ts ASC LIMIT ?",
+                "ORDER BY ts DESC, id DESC LIMIT ?"
+                ") AS latest_rows ORDER BY ts ASC, id ASC",
                 (int(user_id or 0), int(since_ts), int(limit)),
             )
         except Exception:
@@ -115,17 +124,43 @@ class EmotionStateStore:
             if actor_id:
                 return self._db.query_one(
                     "SELECT * FROM emotion_state_snapshot "
-                    "WHERE actor_id = ? ORDER BY id DESC LIMIT 1",
+                    "WHERE actor_id = ? ORDER BY ts DESC, id DESC LIMIT 1",
                     (actor_id,),
                 )
             return self._db.query_one(
                 "SELECT * FROM emotion_state_snapshot "
-                "WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+                "WHERE user_id = ? ORDER BY ts DESC, id DESC LIMIT 1",
                 (int(user_id or 0),),
             )
         except Exception:
             logger.exception("emotion_state_store.latest error")
             return None
+
+    def freshness_metadata(
+        self,
+        user_id: int,
+        *,
+        actor_id: str | None = None,
+        sampled_at: int | None = None,
+        now_ms: int | None = None,
+        stale_after_ms: int = 10_000,
+    ) -> dict[str, int | bool | None]:
+        """Build additive API metadata for live-state freshness."""
+        now = int(now_ms if now_ms is not None else time.time() * 1000)
+        sampled = int(sampled_at) if sampled_at is not None else None
+        latest = self.latest(user_id, actor_id=actor_id)
+        persisted = int((latest or {}).get("ts") or 0) or None
+        stale = (
+            sampled is None
+            or sampled <= 0
+            or now - sampled > max(1, int(stale_after_ms))
+        )
+        return {
+            "sampledAt": sampled,
+            "latestPersistedAt": persisted,
+            "serverNow": now,
+            "stale": stale,
+        }
 
     def aggregate(
         self,

@@ -22,8 +22,11 @@ function createWorldDashboardHost({
   now = () => Date.now(),
 } = {}) {
   let visible = false;
+  let runtimeEnabledOverride = null;
+  let runtimeConfigRevision = 0;
 
   function isEnabled() {
+    if (typeof runtimeEnabledOverride === "boolean") return runtimeEnabledOverride;
     try {
       return !!(featureFlags && featureFlags.isEnabled && featureFlags.isEnabled(WORLD_SIDECAR_FLAG));
     } catch (_) {
@@ -48,6 +51,18 @@ function createWorldDashboardHost({
           lastCrashKeys: Array.isArray(status.lastCrashKeys)
             ? status.lastCrashKeys.map(String)
             : [],
+          enabled: status.enabled === true,
+          desired: String(status.desired || "stopped"),
+          actual: String(status.actual || "stopped"),
+          adapter: String(status.adapter || "null"),
+          revision: Number(status.revision || 0),
+          instanceId: String(status.instanceId || ""),
+          startupEpochMs: Number(status.startupEpochMs || 0),
+          heartbeatStatus: String(status.heartbeatStatus || "unknown"),
+          lastTickAt: String(status.lastTickAt || ""),
+          lastCheckpointAt: String(status.lastCheckpointAt || ""),
+          errorCode: String(status.errorCode || ""),
+          fallbackAdapter: String(status.fallbackAdapter || "null"),
         };
       }
     } catch (_) {}
@@ -60,6 +75,18 @@ function createWorldDashboardHost({
       configKeys: [],
       lastHeartbeatKeys: [],
       lastCrashKeys: [],
+      enabled: false,
+      desired: "stopped",
+      actual: "stopped",
+      adapter: "null",
+      revision: 0,
+      instanceId: "",
+      startupEpochMs: 0,
+      heartbeatStatus: "unknown",
+      lastTickAt: "",
+      lastCheckpointAt: "",
+      errorCode: "",
+      fallbackAdapter: "null",
     };
   }
 
@@ -84,6 +111,9 @@ function createWorldDashboardHost({
   }
 
   async function getStatus() {
+    // A disabled plugin is a hard no-side-effect boundary. Runtime state is
+    // applied by the main-process reconciler and by explicit lifecycle actions.
+    if (isEnabled()) await refreshRuntimeConfig();
     const sideEffects = { apiCalled: false };
     if (!isEnabled()) {
       visible = false;
@@ -102,6 +132,18 @@ function createWorldDashboardHost({
         panels: [],
         errors: [],
         chatPublishAvailable: true,
+        lifecycle: {
+          enabled: false,
+          desired: "stopped",
+          actual: "stopped",
+          adapter: "null",
+          revision: 0,
+          configRevision: runtimeConfigRevision,
+          health: "disabled",
+          lastTickAt: "",
+          lastCheckpointAt: "",
+          errorCode: "",
+        },
         sideEffects,
         updatedAt: now(),
       };
@@ -111,6 +153,9 @@ function createWorldDashboardHost({
     const plugin = publicPluginStatus();
     if (plugin.state === "fused") {
       errors.push("plugin_fused");
+    }
+    if (plugin.errorCode && !errors.includes(plugin.errorCode)) {
+      errors.push(plugin.errorCode);
     }
     const backend = await readBackendHealth(sideEffects, errors);
     const status = errors.length > 0 ? "degraded" : (visible ? "ready" : "hidden");
@@ -130,6 +175,19 @@ function createWorldDashboardHost({
       ],
       errors,
       chatPublishAvailable: true,
+      lifecycle: {
+        enabled: isEnabled(),
+        desired: plugin.desired,
+        actual: plugin.actual,
+        adapter: plugin.adapter,
+        revision: plugin.revision,
+        configRevision: runtimeConfigRevision,
+        health: plugin.heartbeatStatus,
+        lastTickAt: plugin.lastTickAt,
+        lastCheckpointAt: plugin.lastCheckpointAt,
+        errorCode: plugin.errorCode,
+        fallbackAdapter: plugin.fallbackAdapter,
+      },
       sideEffects,
       updatedAt: now(),
     };
@@ -187,6 +245,150 @@ function createWorldDashboardHost({
   async function hide() {
     visible = false;
     return getStatus();
+  }
+
+  function applyRuntimeSnapshot(snapshot = {}) {
+    const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+    const values = source.values && typeof source.values === "object"
+      ? source.values
+      : {};
+    const sidecar = values.world_sidecar_v1;
+    if (sidecar && typeof sidecar === "object") {
+      runtimeEnabledOverride = sidecar.effectiveValue === true;
+    }
+    runtimeConfigRevision = Number(source.revision || runtimeConfigRevision || 0);
+    return {
+      enabled: isEnabled(),
+      revision: runtimeConfigRevision,
+      desired: safeText(
+        values.world_desired && values.world_desired.effectiveValue || "stopped",
+      ),
+    };
+  }
+
+  async function refreshRuntimeConfig() {
+    if (typeof apiRequest !== "function") return null;
+    try {
+      const response = await apiRequest({ method: "GET", path: "/api/runtime/snapshot" });
+      const data = response && response.data && typeof response.data === "object"
+        ? response.data
+        : {};
+      return applyRuntimeSnapshot(data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function control(action, input = {}) {
+    const command = safeText(action || input.action || "").toLowerCase();
+    const allowed = ["enable", "disable", "start", "stop", "pause", "resume", "restart"];
+    if (!allowed.includes(command)) {
+      return controlResult(false, "unsupported_action", publicPluginStatus());
+    }
+    if (!supervisor || typeof supervisor.control !== "function") {
+      return controlResult(false, "supervisor_unavailable", publicPluginStatus());
+    }
+
+    const idempotencyKey = safeText(input.idempotencyKey || input.idempotency_key || "");
+    const expectedRevision = finiteRevision(input.expectedRevision ?? input.expected_revision);
+    const configExpectedRevision = finiteRevision(
+      input.configExpectedRevision ?? input.config_expected_revision ?? runtimeConfigRevision
+    );
+
+    if (command === "enable") {
+      const persisted = await persistRuntimeEnabled(true, configExpectedRevision);
+      if (!persisted.accepted) return persisted;
+      runtimeEnabledOverride = true;
+    }
+
+    let plugin = publicPluginStatus();
+    let supervisorExpected = expectedRevision;
+    if (command === "start" && isEnabled() && plugin.enabled !== true) {
+      const enabled = await supervisor.control(pluginId, "enable", {
+        expectedRevision: supervisorExpected,
+        idempotencyKey: idempotencyKey ? `${idempotencyKey}:enable` : "",
+      });
+      if (!enabled || enabled.accepted !== true) return sanitizeControlResult(enabled, plugin);
+      plugin = publicPluginStatus();
+      supervisorExpected = plugin.revision;
+    }
+
+    const result = await supervisor.control(pluginId, command, {
+      expectedRevision: supervisorExpected,
+      idempotencyKey,
+      resetFuse: input.resetFuse === true,
+    });
+    const sanitized = sanitizeControlResult(result, publicPluginStatus());
+    if (sanitized.accepted && !["enable", "disable"].includes(command)) {
+      const desired = {
+        start: "running",
+        stop: "stopped",
+        pause: "paused",
+        resume: "running",
+        restart: "running",
+      }[command];
+      const persisted = await persistRuntimeChanges(
+        { world_desired: desired },
+        runtimeConfigRevision,
+      );
+      if (!persisted.accepted) return { ...sanitized, ...persisted };
+    }
+    if (command === "disable" && sanitized.accepted) {
+      const persisted = await persistRuntimeEnabled(false, configExpectedRevision);
+      if (!persisted.accepted) return persisted;
+      runtimeEnabledOverride = false;
+    }
+    return sanitized;
+  }
+
+  async function persistRuntimeEnabled(enabled, expectedRevision) {
+    const changes = enabled
+      ? {
+          runtime_control_v1: true,
+          world_sidecar_v1: true,
+          world_process_supervision_v1: true,
+          world_dashboard_control_v1: true,
+          world_runtime_loop_v1: true,
+          world_desired: "stopped",
+        }
+      : {
+          world_dashboard_control_v1: false,
+          world_runtime_loop_v1: false,
+          world_process_supervision_v1: false,
+          world_sidecar_v1: false,
+          world_desired: "stopped",
+        };
+    return persistRuntimeChanges(changes, expectedRevision);
+  }
+
+  async function persistRuntimeChanges(changes, expectedRevision) {
+    if (typeof apiRequest !== "function") {
+      return controlResult(false, "runtime_config_unavailable", publicPluginStatus());
+    }
+    try {
+      const response = await apiRequest({
+        method: "PATCH",
+        path: "/api/runtime/config",
+        body: {
+          changes,
+          expected_revision: Number(expectedRevision || 0),
+        },
+      });
+      const data = response && response.data && typeof response.data === "object"
+        ? response.data
+        : {};
+      if (data.accepted === false || data.errorCode || data.error_code) {
+        return controlResult(
+          false,
+          safeText(data.errorCode || data.error_code || "runtime_config_rejected"),
+          publicPluginStatus(),
+        );
+      }
+      runtimeConfigRevision = Number(data.revision || runtimeConfigRevision || 0);
+      return { accepted: true };
+    } catch (_) {
+      return controlResult(false, "runtime_config_unavailable", publicPluginStatus());
+    }
   }
 
   async function approveCandidate(input = {}) {
@@ -254,8 +456,56 @@ function createWorldDashboardHost({
     getSnapshot,
     show,
     hide,
+    control,
+    applyRuntimeSnapshot,
+    refreshRuntimeConfig,
+    enable: (input) => control("enable", input),
+    disable: (input) => control("disable", input),
+    start: (input) => control("start", input),
+    stop: (input) => control("stop", input),
+    pause: (input) => control("pause", input),
+    resume: (input) => control("resume", input),
+    restart: (input) => control("restart", input),
     approveCandidate,
     previewCreative,
+  };
+}
+
+function finiteRevision(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function controlResult(accepted, errorCode, plugin) {
+  const status = plugin && typeof plugin === "object" ? plugin : {};
+  return {
+    accepted: accepted === true,
+    rejected: accepted !== true,
+    enabled: status.enabled === true,
+    desired: String(status.desired || "stopped"),
+    actual: String(status.actual || "stopped"),
+    adapter: String(status.adapter || "null"),
+    revision: Number(status.revision || 0),
+    fallbackAdapter: String(status.fallbackAdapter || "null"),
+    errorCode: safeText(errorCode || ""),
+  };
+}
+
+function sanitizeControlResult(result, fallbackPlugin) {
+  const source = result && typeof result === "object" ? result : {};
+  const plugin = source.plugin && typeof source.plugin === "object"
+    ? source.plugin
+    : fallbackPlugin;
+  const base = controlResult(source.accepted === true, source.errorCode || "", plugin);
+  return {
+    ...base,
+    enabled: source.enabled === true || (source.enabled === undefined && base.enabled),
+    desired: String(source.desired || base.desired),
+    actual: String(source.actual || base.actual),
+    adapter: String(source.adapter || base.adapter),
+    revision: Number(source.revision || base.revision || 0),
+    fallbackAdapter: String(source.fallbackAdapter || base.fallbackAdapter),
   };
 }
 

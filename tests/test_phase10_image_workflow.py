@@ -71,7 +71,9 @@ class FakeVisionProvider:
     provider_id = "fake_vision"
     model = "fake-vision-model"
 
-    def __init__(self):
+    def __init__(self, *, answer: str = "safe description", metadata: dict | None = None):
+        self.answer = answer
+        self.metadata = metadata or {}
         self.calls: list[dict] = []
 
     def analyze(self, *, image_path: str, question: str, request_id: str, owner_id: str):
@@ -85,9 +87,10 @@ class FakeVisionProvider:
         )
         return ImageVisionResult(
             status="ok",
-            answer="safe description",
+            answer=self.answer,
             provider_id=self.provider_id,
             model=self.model,
+            metadata=dict(self.metadata),
         )
 
 
@@ -295,6 +298,156 @@ def test_vision_uses_safe_upload_reference_and_is_idempotent(tmp_path):
     assert first["delivery_plan"] is None
     assert second["idempotent_replay"] is True
     assert len(vision.calls) == 1
+
+
+def test_vision_builds_chinese_screenshot_image_observation(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    image_path = upload_dir / "screenshot.png"
+    image_path.write_bytes(_png_bytes())
+    vision = FakeVisionProvider(
+        answer="截图显示待办应用，OCR 文本包含：今天 18:00 提交报告。",
+        metadata={
+            "scene": {"type": "screenshot", "summary": "待办应用截图"},
+            "ocr_text": ["今天 18:00 提交报告"],
+            "confidence": 0.86,
+        },
+    )
+    service = ImageWorkflow(
+        upload_base=upload_dir,
+        feature_enabled=True,
+        vision_provider=vision,
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.understand_image(
+        image_ref="/uploads/screenshot.png",
+        question="读一下截图",
+        idempotency_key="vision-cn-screenshot",
+        owner_id="master",
+    )
+
+    observation = result["observation"]
+    assert observation["scene"] == {"type": "screenshot", "summary": "待办应用截图"}
+    assert observation["ocr_text"] == ["今天 18:00 提交报告"]
+    assert observation["objects"] == []
+    assert observation["relations"] == []
+    assert observation["confidence"] == 0.86
+    assert observation["provider"] == {
+        "id": "fake_vision",
+        "model": "fake-vision-model",
+        "status": "ok",
+    }
+    assert observation["memory_eligibility"] == {
+        "eligible": False,
+        "reason": "requires_explicit_confirmation",
+    }
+
+
+def test_vision_builds_object_relation_image_observation(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    image_path = upload_dir / "object.png"
+    image_path.write_bytes(_png_bytes())
+    vision = FakeVisionProvider(
+        answer="桌面上有一只白色杯子，杯子在笔记本电脑旁边。",
+        metadata={
+            "objects": [
+                {"label": "白色杯子", "confidence": 0.91},
+                {"label": "笔记本电脑", "confidence": 0.88},
+            ],
+            "relations": [
+                {"subject": "白色杯子", "relation": "next_to", "object": "笔记本电脑"}
+            ],
+        },
+    )
+    service = ImageWorkflow(
+        upload_base=upload_dir,
+        feature_enabled=True,
+        vision_provider=vision,
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.understand_image(
+        image_ref="/uploads/object.png",
+        question="这是什么",
+        idempotency_key="vision-object",
+        owner_id="master",
+    )
+
+    observation = result["observation"]
+    assert observation["scene"]["summary"] == "桌面上有一只白色杯子，杯子在笔记本电脑旁边。"
+    assert observation["objects"] == [
+        {"label": "白色杯子", "confidence": 0.91},
+        {"label": "笔记本电脑", "confidence": 0.88},
+    ]
+    assert observation["relations"] == [
+        {"subject": "白色杯子", "relation": "next_to", "object": "笔记本电脑"}
+    ]
+    assert observation["memory_eligibility"]["eligible"] is False
+
+
+def test_vision_low_confidence_observation_records_uncertainty(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    image_path = upload_dir / "uncertain.png"
+    image_path.write_bytes(_png_bytes())
+    vision = FakeVisionProvider(
+        answer="可能是表格截图，但文字不清晰。",
+        metadata={
+            "confidence": 0.22,
+            "uncertainties": ["ocr_unavailable", "low_resolution"],
+        },
+    )
+    service = ImageWorkflow(
+        upload_base=upload_dir,
+        feature_enabled=True,
+        vision_provider=vision,
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.understand_image(
+        image_ref="/uploads/uncertain.png",
+        question="识别表格",
+        idempotency_key="vision-low-confidence",
+        owner_id="master",
+    )
+
+    observation = result["observation"]
+    assert observation["confidence"] == 0.22
+    assert observation["uncertainties"] == ["ocr_unavailable", "low_resolution"]
+    assert observation["memory_eligibility"] == {
+        "eligible": False,
+        "reason": "requires_explicit_confirmation",
+    }
+
+
+def test_vision_observation_handles_invalid_provider_confidence(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    image_path = upload_dir / "bad-confidence.png"
+    image_path.write_bytes(_png_bytes())
+    vision = FakeVisionProvider(
+        answer="provider confidence is malformed",
+        metadata={"confidence": "not-a-number"},
+    )
+    service = ImageWorkflow(
+        upload_base=upload_dir,
+        feature_enabled=True,
+        vision_provider=vision,
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.understand_image(
+        image_ref="/uploads/bad-confidence.png",
+        question="describe",
+        idempotency_key="vision-bad-confidence",
+        owner_id="master",
+    )
+
+    assert result["status"] == "completed"
+    assert result["observation"]["confidence"] == 0.5
+    assert "invalid_provider_confidence" in result["observation"]["uncertainties"]
 
 
 def test_vision_rejects_path_traversal_before_provider(tmp_path):

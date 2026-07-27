@@ -23,11 +23,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from core.paths import data_dir
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_DATA_DIR = _PROJECT_ROOT / "data"
-_STATE_PATH = _DATA_DIR / "desire_state.json"
+logger = logging.getLogger(__name__)
 
 # 语音窗口: 22:00 - 23:30 适合发语音
 VOICE_WINDOW_START = "22:00"
@@ -58,12 +56,12 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
         raise
 
 
-def _load_state() -> dict:
+def _load_state(path: Path) -> dict:
     """Load persisted state; return default empty state on missing/corrupt."""
-    if not _STATE_PATH.exists():
+    if not path.exists():
         return _default_state()
     try:
-        with open(_STATE_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, dict):
             return _default_state()
@@ -110,7 +108,13 @@ class DesireEngine:
     remain in one place.
     """
 
-    def __init__(self, companion: Any, behavior_cfg: dict | None = None) -> None:
+    def __init__(
+        self,
+        companion: Any,
+        behavior_cfg: dict | None = None,
+        *,
+        state_path: str | Path | None = None,
+    ) -> None:
         self.companion = companion
         cfg = (behavior_cfg or {}).get("desire", {}) or {}
         self.cfg = cfg
@@ -121,7 +125,10 @@ class DesireEngine:
         self.triggers = cfg.get("triggers", {"care": 50, "voice": 80, "cooldown_hours": 12})
         self.cooldown_hours = int(self.triggers.get("cooldown_hours", COOLDOWN_HOURS_DEFAULT))
         self.variables_cfg = cfg.get("variables", {}) or {}
-        self.state: dict = _load_state()
+        self.state_path = (
+            Path(state_path) if state_path is not None else data_dir() / "desire_state.json"
+        )
+        self.state: dict = _load_state(self.state_path)
         # Append-only ring of last 50 tick snapshots
         self._task: asyncio.Task | None = None
         self._stopped = False
@@ -322,7 +329,7 @@ class DesireEngine:
 
     def _save_state(self) -> None:
         try:
-            _atomic_write_json(_STATE_PATH, self.state)
+            _atomic_write_json(self.state_path, self.state)
         except Exception:
             logger.exception("desire state save failed")
 

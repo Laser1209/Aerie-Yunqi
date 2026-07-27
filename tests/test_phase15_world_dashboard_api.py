@@ -14,6 +14,56 @@ from core.api_server import app
 client = TestClient(app)
 
 
+class _EnabledFlags:
+    def is_enabled(self, name):
+        assert name == "world_sidecar_v1"
+        return True
+
+
+def test_world_snapshot_uses_primary_identity_and_never_zero(monkeypatch):
+    seen = []
+
+    async def snapshot(*, user_id):
+        seen.append(user_id)
+        return {"status": "running"}
+
+    companion = SimpleNamespace(
+        get_world_dashboard_snapshot=snapshot,
+        get_primary_user_selection=lambda: SimpleNamespace(user_id=24680),
+        feature_flags=_EnabledFlags(),
+    )
+    monkeypatch.setenv("AERIE_FEATURE_WORLD_SIDECAR_V1", "false")
+    monkeypatch.setattr(api_server, "get_companion", lambda: companion)
+
+    response = client.get("/api/world/dashboard/snapshot")
+    rejected = client.get("/api/world/dashboard/snapshot?user_id=0")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "running"
+    assert seen == [24680]
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "unavailable"
+    assert rejected.json()["error_code"] == "invalid_user_id"
+    assert seen == [24680]
+
+
+def test_world_snapshot_prefers_shared_runtime_flag_over_legacy_yaml(monkeypatch):
+    handler = AsyncMock(return_value={"status": "running"})
+    companion = SimpleNamespace(
+        feature_flags=_EnabledFlags(),
+        get_world_dashboard_snapshot=handler,
+        get_primary_user_selection=lambda: SimpleNamespace(user_id=13579),
+    )
+    monkeypatch.setenv("AERIE_FEATURE_WORLD_SIDECAR_V1", "false")
+    monkeypatch.setattr(api_server, "get_companion", lambda: companion)
+
+    response = client.get("/api/world/dashboard/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "running"
+    handler.assert_awaited_once_with(user_id=13579)
+
+
 def test_world_candidate_approval_flag_off_has_no_side_effects(monkeypatch):
     handler = AsyncMock(side_effect=AssertionError("handler should not run"))
     monkeypatch.setenv("AERIE_FEATURE_WORLD_SIDECAR_V1", "false")

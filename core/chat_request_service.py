@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import re
 from typing import Any, Callable
 
+from communication.message import IncomingMessage
 from config.persona_loader import get_master_qq
 from core.chat_request_repository import RequestContext, RequestIdentity
 from core.conversation_repository import resolve_conversation_id
@@ -27,6 +29,8 @@ ATTACHMENT_OPTIONAL_FIELDS = (
 ATTACHMENT_ALLOWED_FIELDS = ATTACHMENT_FIELDS + ATTACHMENT_OPTIONAL_FIELDS
 SAFE_UPLOAD_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 SAFE_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+logger = logging.getLogger(__name__)
 
 
 def _is_safe_upload_file_url(url: str) -> bool:
@@ -102,12 +106,14 @@ class ChatRequestService:
         repository: Any,
         identity_repository: Any,
         worker: Any = None,
+        attachment_service: Any = None,
         master_user_id_provider: Callable[[], int] = get_master_qq,
         id_factory: Callable[[str], str] = generate_id,
     ) -> None:
         self.repository = repository
         self.identity_repository = identity_repository
         self.worker = worker
+        self.attachment_service = attachment_service
         self.master_user_id_provider = master_user_id_provider
         self.id_factory = id_factory
 
@@ -281,104 +287,247 @@ class ChatRequestService:
         if callable(notify):
             notify()
 
-    @staticmethod
-    def _validate_attachments(attachments: Any) -> list[dict[str, Any]]:
+    def submit_batch(
+        self,
+        messages: list[IncomingMessage],
+        batch_id: str,
+    ) -> list[dict[str, Any]]:
+        if not messages:
+            return []
+
+        contexts: list[RequestContext] = []
+        for msg in messages:
+            visible_content = msg.content.strip() if msg.content else ""
+            validated_attachments = self._validate_attachments(msg.attachments or [])
+
+            channel = msg.channel or msg.source or "qq"
+            channel_account_id = msg.channel_account_id or str(msg.user_id)
+            actor_id = msg.actor_id
+            if actor_id is None:
+                try:
+                    identity = self.identity_repository.resolve(channel, channel_account_id)
+                    actor_id = identity.actor_id
+                except Exception:
+                    actor_id = f"{channel}:{channel_account_id}"
+
+            request_identity = RequestIdentity(
+                actor_id=actor_id,
+                channel=channel,
+                channel_account_id=channel_account_id,
+                user_id=msg.user_id,
+            )
+            conversation_id = resolve_conversation_id(
+                actor_id=request_identity.actor_id,
+                channel=request_identity.channel,
+                channel_account_id=request_identity.channel_account_id,
+                user_id=request_identity.user_id,
+            )
+            context = RequestContext(
+                request_id=self.id_factory("req"),
+                conversation_id=conversation_id,
+                turn_id=self.id_factory("turn"),
+                identity=request_identity,
+                input_content=visible_content,
+                effective_content=(
+                    visible_content
+                    if visible_content
+                    else PURE_ATTACHMENT_EFFECTIVE_CONTENT
+                ),
+                attachments=validated_attachments,
+                reply_to_id=msg.reply_to_id or 0,
+                batch_id=batch_id,
+            )
+            contexts.append(context)
+
+        submitted = self.repository.submit_batch(
+            contexts=contexts,
+            batch_id=batch_id,
+        )
+        self._notify_worker()
+
+        results = []
+        for sub, ctx in zip(submitted, contexts):
+            results.append({
+                "requestId": sub.request_id,
+                "conversationId": sub.conversation_id,
+                "status": sub.status,
+                "batchId": batch_id,
+            })
+        logger.info(
+            "Batch %s submitted: %d requests via service",
+            batch_id,
+            len(contexts),
+        )
+        return results
+
+    def _validate_attachments(self, attachments: Any) -> list[dict[str, Any]]:
         if attachments is None:
             return []
         if not isinstance(attachments, list):
             raise InvalidChatInput("invalid_attachment")
 
-        validated: list[dict[str, Any]] = []
+        validated: list[dict[str, Any] | tuple[str, str]] = []
+        desktop_ids: list[str] = []
         for attachment in attachments:
             if not isinstance(attachment, dict):
                 raise InvalidChatInput("invalid_attachment")
-            if attachment.get("state") != "ready":
-                raise InvalidChatInput("attachment_not_ready")
-            keys = set(attachment)
-            if not keys.issubset(set(ATTACHMENT_ALLOWED_FIELDS)):
-                raise InvalidChatInput("invalid_attachment")
-            if not set(ATTACHMENT_FIELDS).issubset(keys):
-                raise InvalidChatInput("invalid_attachment")
-            name = attachment.get("name")
-            size = attachment.get("size")
-            media_type = attachment.get("type")
-            if (
-                not isinstance(name, str)
-                or not name.strip()
-                or name in (".", "..")
-                or "/" in name
-                or "\\" in name
-                or "\x00" in name
-                or isinstance(size, bool)
-                or not isinstance(size, int)
-                or size < 0
-                or not isinstance(media_type, str)
-                or not media_type.strip()
-            ):
-                raise InvalidChatInput("invalid_attachment")
-            url = attachment.get("url")
-            if not isinstance(url, str):
-                raise InvalidChatInput("invalid_attachment")
-            if "\\" in url or "\x00" in url or ".." in url or not _is_safe_upload_file_url(url):
-                raise InvalidChatInput("invalid_attachment")
-
-            content_type = attachment.get("content_type")
-            if content_type is not None and (
-                not isinstance(content_type, str) or not content_type.strip()
-            ):
-                raise InvalidChatInput("invalid_attachment")
-
-            mime_type = attachment.get("mime_type")
-            if mime_type is not None and (
-                not isinstance(mime_type, str) or not mime_type.strip()
-            ):
-                raise InvalidChatInput("invalid_attachment")
-
-            saved_as = attachment.get("saved_as")
-            if saved_as is not None and (
-                not isinstance(saved_as, str)
-                or not saved_as.strip()
-                or SAFE_UPLOAD_FILENAME.fullmatch(saved_as) is None
-            ):
-                raise InvalidChatInput("invalid_attachment")
-
-            thumbnail_url = attachment.get("thumbnail_url")
-            if thumbnail_url is not None and (
-                not isinstance(thumbnail_url, str)
-                or not _is_safe_thumbnail_url(thumbnail_url)
-            ):
-                raise InvalidChatInput("invalid_attachment")
-
-            sha256 = attachment.get("sha256")
-            if sha256 is not None and (
-                not isinstance(sha256, str)
-                or SAFE_SHA256.fullmatch(sha256) is None
-            ):
-                raise InvalidChatInput("invalid_attachment")
-
-            for dimension_name in ("width", "height"):
-                dimension = attachment.get(dimension_name)
-                if dimension is not None and (
-                    isinstance(dimension, bool)
-                    or not isinstance(dimension, int)
-                    or dimension < 0
+            attachment_id = attachment.get("attachmentId")
+            legacy_alias = attachment.get("id")
+            if attachment_id is not None or legacy_alias is not None:
+                if attachment_id is None:
+                    attachment_id = legacy_alias
+                if legacy_alias is not None and legacy_alias != attachment_id:
+                    raise InvalidChatInput("invalid_attachment")
+                if (
+                    not isinstance(attachment_id, str)
+                    or not attachment_id.strip()
+                    or attachment_id != attachment_id.strip()
+                    or attachment_id in desktop_ids
                 ):
                     raise InvalidChatInput("invalid_attachment")
+                if attachment.get("state") not in {None, "ready"}:
+                    raise InvalidChatInput("attachment_not_ready")
+                desktop_ids.append(attachment_id)
+                validated.append(("desktop", attachment_id))
+                continue
 
-            for flag_name in ("deduplicated", "is_image"):
-                flag_value = attachment.get(flag_name)
-                if flag_value is not None and not isinstance(flag_value, bool):
-                    raise InvalidChatInput("invalid_attachment")
+            validated.append(self._validate_legacy_attachment(attachment))
 
-            duplicate_of = attachment.get("duplicate_of")
-            if duplicate_of is not None and (
-                not isinstance(duplicate_of, str)
-                or (duplicate_of and SAFE_UPLOAD_FILENAME.fullmatch(duplicate_of) is None)
+        desktop_records: dict[str, dict[str, Any]] = {}
+        if desktop_ids:
+            resolver = getattr(
+                self.attachment_service,
+                "resolve_ready_for_send",
+                None,
+            )
+            if not callable(resolver):
+                raise InvalidChatInput("invalid_attachment")
+            try:
+                records = resolver(desktop_ids)
+            except KeyError as exc:
+                raise InvalidChatInput("invalid_attachment") from exc
+            except ValueError as exc:
+                raise InvalidChatInput("invalid_attachment") from exc
+            except Exception as exc:
+                from core.desktop_attachments import AttachmentStateConflict
+
+                if isinstance(exc, AttachmentStateConflict):
+                    raise InvalidChatInput("attachment_not_ready") from exc
+                logger.exception("desktop attachment resolution failed")
+                raise InvalidChatInput("invalid_attachment") from exc
+            desktop_records = {
+                str(record.get("attachmentId") or record.get("id") or ""): record
+                for record in records
+                if isinstance(record, dict)
+            }
+            if set(desktop_records) != set(desktop_ids):
+                raise InvalidChatInput("invalid_attachment")
+
+        return [
+            dict(desktop_records[item[1]])
+            if isinstance(item, tuple)
+            else item
+            for item in validated
+        ]
+
+    @staticmethod
+    def _validate_legacy_attachment(
+        attachment: dict[str, Any],
+    ) -> dict[str, Any]:
+        if attachment.get("state") != "ready":
+            raise InvalidChatInput("attachment_not_ready")
+        keys = set(attachment)
+        if not keys.issubset(set(ATTACHMENT_ALLOWED_FIELDS)):
+            raise InvalidChatInput("invalid_attachment")
+        if not set(ATTACHMENT_FIELDS).issubset(keys):
+            raise InvalidChatInput("invalid_attachment")
+        name = attachment.get("name")
+        size = attachment.get("size")
+        media_type = attachment.get("type")
+        if (
+            not isinstance(name, str)
+            or not name.strip()
+            or name in (".", "..")
+            or "/" in name
+            or "\\" in name
+            or "\x00" in name
+            or isinstance(size, bool)
+            or not isinstance(size, int)
+            or size < 0
+            or not isinstance(media_type, str)
+            or not media_type.strip()
+        ):
+            raise InvalidChatInput("invalid_attachment")
+        url = attachment.get("url")
+        if not isinstance(url, str):
+            raise InvalidChatInput("invalid_attachment")
+        if (
+            "\\" in url
+            or "\x00" in url
+            or ".." in url
+            or not _is_safe_upload_file_url(url)
+        ):
+            raise InvalidChatInput("invalid_attachment")
+
+        content_type = attachment.get("content_type")
+        if content_type is not None and (
+            not isinstance(content_type, str) or not content_type.strip()
+        ):
+            raise InvalidChatInput("invalid_attachment")
+
+        mime_type = attachment.get("mime_type")
+        if mime_type is not None and (
+            not isinstance(mime_type, str) or not mime_type.strip()
+        ):
+            raise InvalidChatInput("invalid_attachment")
+
+        saved_as = attachment.get("saved_as")
+        if saved_as is not None and (
+            not isinstance(saved_as, str)
+            or not saved_as.strip()
+            or SAFE_UPLOAD_FILENAME.fullmatch(saved_as) is None
+        ):
+            raise InvalidChatInput("invalid_attachment")
+
+        thumbnail_url = attachment.get("thumbnail_url")
+        if thumbnail_url is not None and (
+            not isinstance(thumbnail_url, str)
+            or not _is_safe_thumbnail_url(thumbnail_url)
+        ):
+            raise InvalidChatInput("invalid_attachment")
+
+        sha256 = attachment.get("sha256")
+        if sha256 is not None and (
+            not isinstance(sha256, str)
+            or SAFE_SHA256.fullmatch(sha256) is None
+        ):
+            raise InvalidChatInput("invalid_attachment")
+
+        for dimension_name in ("width", "height"):
+            dimension = attachment.get(dimension_name)
+            if dimension is not None and (
+                isinstance(dimension, bool)
+                or not isinstance(dimension, int)
+                or dimension < 0
             ):
                 raise InvalidChatInput("invalid_attachment")
 
-            validated.append({field: attachment[field] for field in attachment})
-        return validated
+        for flag_name in ("deduplicated", "is_image"):
+            flag_value = attachment.get(flag_name)
+            if flag_value is not None and not isinstance(flag_value, bool):
+                raise InvalidChatInput("invalid_attachment")
+
+        duplicate_of = attachment.get("duplicate_of")
+        if duplicate_of is not None and (
+            not isinstance(duplicate_of, str)
+            or (
+                duplicate_of
+                and SAFE_UPLOAD_FILENAME.fullmatch(duplicate_of) is None
+            )
+        ):
+            raise InvalidChatInput("invalid_attachment")
+
+        return {field: attachment[field] for field in attachment}
 
     @staticmethod
     def _to_view(row: dict[str, Any]) -> RequestStatusView:

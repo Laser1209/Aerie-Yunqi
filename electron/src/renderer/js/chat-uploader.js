@@ -1,42 +1,17 @@
 "use strict";
-/* Chat uploader: drag-and-drop / paste / file-picker */
+/* Desktop attachment uploader. The server is the only capability authority. */
 
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const ALLOWED_EXT = new Set([
-  // images
-  "jpg","jpeg","png","gif","webp",
-  // docs
-  "pdf","doc","docx","xls","xlsx","ppt","pptx","txt",
-  // archives
-  "zip","rar","7z",
-  // audio
-  "mp3","wav","m4a","opus",
-  // video
-  "mp4","mov","avi",
-  // executables
-  "exe","apk",
-]);
-
-function classifyType(ext) {
-  ext = ext.toLowerCase();
-  if (["jpg","jpeg","png","gif","webp"].includes(ext)) return "image";
-  if (["mp3","wav","m4a","opus"].includes(ext)) return "audio";
-  if (["mp4","mov","avi"].includes(ext)) return "video";
-  return "file";
+function attachmentApiUrl(path) {
+  const value = String(path || "");
+  if (/^https?:\/\//i.test(value)) return value;
+  return "http://127.0.0.1:7890" + (value.startsWith("/") ? value : "/" + value);
 }
 
-function uploadsContractPath(value) {
-  const normalized = String(value || "").trim().replace(/^\/+/, "");
-  if (!normalized) return "";
-  return normalized.startsWith("uploads/") ? normalized : "uploads/" + normalized;
-}
-
-function uploadsFileName(value) {
-  const normalized = String(value || "").trim().replace(/^\/+/, "");
-  if (!normalized) return "";
-  const withoutUploadsPrefix = normalized.replace(/^uploads\//, "");
-  const parts = withoutUploadsPrefix.split("/");
-  return parts[parts.length - 1] || "";
+function fillAttachmentTemplate(template, attachmentId) {
+  return String(template || "").replace(
+    "{attachmentId}",
+    encodeURIComponent(String(attachmentId || "")),
+  );
 }
 
 class ChatUploader {
@@ -44,121 +19,237 @@ class ChatUploader {
     this._chat = chat;
     this._input = document.getElementById("chat-input");
     this._messages = document.getElementById("chat-messages");
+    this._capabilities = null;
+    this._capabilityError = "";
+    this._capabilitiesPromise = this._loadCapabilities();
     this._init();
   }
 
-  _init() {
-    // Block-3 R0.2: toolbar buttons are now static in index.html,
-    // we only need to bind the click and keep the hidden file input.
-    const btn = document.getElementById("chat-attach-btn");
-    if (btn) btn.addEventListener("click", () => this._openPicker());
+  async _loadCapabilities() {
+    try {
+      const response = await this._chat._request({
+        method: "GET",
+        path: "/api/attachments/capabilities",
+      });
+      const payload = (response && response.data) || {};
+      if (!payload || payload.version !== 1) {
+        throw new Error((payload && payload.error) || "附件能力不可用");
+      }
+      const extensions = new Map();
+      for (const capability of payload.capabilities || []) {
+        for (const extension of capability.extensions || []) {
+          extensions.set(String(extension).toLowerCase(), capability);
+        }
+      }
+      this._capabilities = { ...payload, extensions };
+      const input = document.getElementById("chat-file-input");
+      if (input) {
+        input.accept = Array.from(extensions.keys()).map((ext) => "." + ext).join(",");
+      }
+      return this._capabilities;
+    } catch (error) {
+      this._capabilityError = error.message || "附件能力不可用";
+      return null;
+    }
+  }
 
-    // Hidden file input
+  _init() {
+    const button = document.getElementById("chat-attach-btn");
+    if (button) button.addEventListener("click", () => this._openPicker());
+
     if (!document.getElementById("chat-file-input")) {
-      const fi = document.createElement("input");
-      fi.type = "file";
-      fi.id = "chat-file-input";
-      fi.multiple = true;
-      fi.style.display = "none";
-      document.body.appendChild(fi);
-      fi.addEventListener("change", (e) => {
-        for (const f of e.target.files) this._handleFile(f);
-        fi.value = "";
+      const input = document.createElement("input");
+      input.type = "file";
+      input.id = "chat-file-input";
+      input.multiple = true;
+      input.style.display = "none";
+      document.body.appendChild(input);
+      input.addEventListener("change", (event) => {
+        for (const file of event.target.files || []) this._handleFile(file);
+        input.value = "";
       });
     }
 
-    // Paste handler on input
     if (this._input) {
-      this._input.addEventListener("paste", (e) => {
-        const items = (e.clipboardData || window.clipboardData).items || [];
-        for (const it of items) {
-          if (it.kind === "file") {
-            const file = it.getAsFile();
-            if (file) this._handleFile(file);
-          }
+      this._input.addEventListener("paste", (event) => {
+        const items = ((event.clipboardData || window.clipboardData).items || []);
+        for (const item of items) {
+          if (item.kind !== "file") continue;
+          const file = item.getAsFile();
+          if (file) this._handleFile(file);
         }
       });
     }
 
-    // Drag-and-drop on messages container
     if (this._messages) {
-      this._messages.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      this._messages.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         this._messages.classList.add("chat-messages--drag");
       });
-      this._messages.addEventListener("dragleave", (e) => {
-        if (!this._messages.contains(e.relatedTarget)) {
+      this._messages.addEventListener("dragleave", (event) => {
+        if (!this._messages.contains(event.relatedTarget)) {
           this._messages.classList.remove("chat-messages--drag");
         }
       });
-      this._messages.addEventListener("drop", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      this._messages.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         this._messages.classList.remove("chat-messages--drag");
-        for (const f of e.dataTransfer.files) this._handleFile(f);
+        for (const file of event.dataTransfer.files || []) this._handleFile(file);
       });
     }
   }
 
-  _openPicker() {
-    const fi = document.getElementById("chat-file-input");
-    if (fi) fi.click();
+  async _openPicker() {
+    const capabilities = await this._capabilitiesPromise;
+    if (!capabilities) {
+      alert(this._capabilityError || "附件能力尚未就绪");
+      return;
+    }
+    const input = document.getElementById("chat-file-input");
+    if (input) input.click();
   }
 
   async _handleFile(file) {
     if (!file || !file.name) return;
-    const ext = (file.name.split(".").pop() || "").toLowerCase();
-    if (!ALLOWED_EXT.has(ext)) {
-      alert("不支持的文件类型: " + ext);
+    const capabilities = await this._capabilitiesPromise;
+    if (!capabilities) {
+      alert(this._capabilityError || "附件能力尚未就绪");
       return;
     }
-    if (file.size > MAX_FILE_BYTES) {
-      alert("文件太大（>20MB）");
+    const extension = (file.name.split(".").pop() || "").toLowerCase();
+    const capability = capabilities.extensions.get(extension);
+    if (!capability) {
+      alert("不支持的文件类型: " + (extension || "无扩展名"));
+      return;
+    }
+    if (file.size > Number(capabilities.maxFileBytes || 0)) {
+      alert("文件超过服务端允许的大小");
       return;
     }
 
-    // Upload
+    const pending = {
+      id: "upload_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+      name: file.name,
+      size: file.size,
+      type: capability.category,
+      category: capability.category,
+      analysisMode: capability.analysisMode,
+      state: "queued",
+    };
+    this._chat._pendingAttachments.push(pending);
+    this._chat._renderAttachmentPreviews();
+
     try {
-      const form = new FormData();
-      form.append("file", file);
-      let respData;
-      if (window.aerie) {
-        // Use IPC: send multipart via fetch (preload exposes only generic)
-        const r = await fetch("http://127.0.0.1:7890/api/upload", { method: "POST", body: form });
-        respData = await r.json();
+      let response;
+      if (
+        window.aerie && window.aerie.api
+        && typeof window.aerie.api.upload === "function"
+      ) {
+        const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+        response = await window.aerie.api.upload({
+          method: "POST",
+          path: capabilities.uploadEndpoint,
+          filename: file.name,
+          contentType: file.type || "application/octet-stream",
+          bytes,
+        });
       } else {
-        const r = await fetch("http://127.0.0.1:7890/api/upload", { method: "POST", body: form });
-        respData = await r.json();
+        const form = new FormData();
+        form.append("file", file);
+        const fallback = await fetch(attachmentApiUrl(capabilities.uploadEndpoint), {
+          method: "POST",
+          body: form,
+        });
+        response = { status: fallback.status, data: await fallback.json() };
       }
-      if (respData.error) {
-        alert("上传失败: " + respData.error);
-        return;
+      const payload = (response && response.data) || {};
+      if (!response || response.status < 200 || response.status >= 300) {
+        throw new Error(payload.error || "上传失败");
       }
-      // Append to pending attachments
-      const isDoc = (classifyType(ext) === "file") && (ext !== "zip" && ext !== "rar" && ext !== "7z" && ext !== "exe" && ext !== "apk");
-      const uploadedPath = uploadsContractPath(respData.saved_as || respData.url);
-      const thumbnailPath = uploadsContractPath(respData.thumbnail_url || "");
-      const savedAs = respData.saved_as || uploadsFileName(respData.url);
-      this._chat._pendingAttachments.push({
-        name: file.name,
-        size: file.size,
-        type: classifyType(ext),
-        url: uploadedPath,
-        saved_as: savedAs,
-        thumbnail_url: thumbnailPath,
-        content_type: respData.mime_type || respData.content_type || file.type || "",
-        sha256: respData.sha256 || "",
-        width: respData.width || 0,
-        height: respData.height || 0,
-        deduplicated: respData.deduplicated === true,
-        is_doc: isDoc,
-        state: isDoc ? "converting" : "ready",  // Block-3 R0.2: 4 态
+      const record = payload.attachment || payload;
+      Object.assign(pending, record, {
+        id: record.attachmentId || record.id,
+        attachmentId: record.attachmentId || record.id,
+        state: record.state || "queued",
       });
       this._chat._renderAttachmentPreviews();
-      if (this._input) this._input.focus();
-    } catch (err) {
-      alert("上传失败: " + err.message);
+      if (["queued", "processing"].includes(pending.state)) {
+        await this._pollUntilTerminal(pending);
+      }
+    } catch (error) {
+      pending.state = "failed";
+      pending.error = { code: "upload_failed", message: error.message || "上传失败" };
+      this._chat._renderAttachmentPreviews();
+    }
+  }
+
+  async _pollUntilTerminal(pending) {
+    const terminal = new Set(["ready", "failed", "quarantined", "unsupported"]);
+    const template = this._capabilities.statusEndpointTemplate;
+    for (let attempt = 0; attempt < 160 && !terminal.has(pending.state); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      const response = await this._chat._request({
+        method: "GET",
+        path: fillAttachmentTemplate(template, pending.attachmentId),
+      });
+      const payload = (response && response.data) || {};
+      if (!payload.attachment && !payload.attachmentId && !payload.id) {
+        throw new Error(payload.error || "附件状态查询失败");
+      }
+      Object.assign(pending, payload.attachment || payload);
+      this._chat._renderAttachmentPreviews();
+    }
+    if (!terminal.has(pending.state)) {
+      pending.state = "failed";
+      pending.error = { code: "processing_timeout", message: "附件解析超时" };
+      this._chat._renderAttachmentPreviews();
+    }
+  }
+
+  remove(attachmentId) {
+    const id = String(attachmentId || "");
+    this._chat._pendingAttachments = this._chat._pendingAttachments.filter(
+      (attachment) => String(attachment.attachmentId || attachment.id) !== id,
+    );
+    this._chat._renderAttachmentPreviews();
+    if (id && this._capabilities && this._capabilities.removeEndpointTemplate) {
+      const endpoint = fillAttachmentTemplate(
+        this._capabilities.removeEndpointTemplate,
+        id,
+      );
+      this._chat._request({ method: "DELETE", path: endpoint }).catch(() => {});
+    }
+  }
+
+  async retry(attachmentId) {
+    const pending = this._chat._pendingAttachments.find(
+      (attachment) => String(attachment.attachmentId || attachment.id) === String(attachmentId),
+    );
+    if (!pending || !pending.attachmentId) return;
+    try {
+      pending.state = "queued";
+      pending.error = null;
+      this._chat._renderAttachmentPreviews();
+      const endpoint = fillAttachmentTemplate(
+        this._capabilities.retryEndpointTemplate,
+        pending.attachmentId,
+      );
+      const response = await this._chat._request({ method: "POST", path: endpoint });
+      const payload = (response && response.data) || {};
+      if (!payload.attachment && !payload.attachmentId && !payload.id) {
+        throw new Error(payload.error || "重试失败");
+      }
+      Object.assign(pending, payload.attachment || payload);
+      this._chat._renderAttachmentPreviews();
+      if (["queued", "processing"].includes(pending.state)) {
+        await this._pollUntilTerminal(pending);
+      }
+    } catch (error) {
+      pending.state = "failed";
+      pending.error = { code: "retry_failed", message: error.message || "重试失败" };
+      this._chat._renderAttachmentPreviews();
     }
   }
 }

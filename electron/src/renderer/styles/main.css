@@ -1,4 +1,4 @@
-/* Aerie · 云栖 v9.0 — Design Tokens & Layout */
+﻿/* Aerie · 云栖 v9.0 — Design Tokens & Layout */
 /* Pinguo color system — Apple HIG aligned */
 
 /* ===== Design Tokens ===== */
@@ -421,6 +421,16 @@ body {
 
 /* Smooth scroll for new messages */
 .chat-messages { scroll-behavior: smooth; }
+.chat-history-control {
+  align-self: center;
+  margin: 4px auto;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--bg-100);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.chat-history-control:disabled { cursor: wait; opacity: .65; }
 
 /* ===== R6.5: timestamp (hover-only, QQ desktop style) ===== */
 .chat-msg__meta-time {
@@ -542,6 +552,7 @@ body {
 .phase-dot--starting { background: var(--warning); animation: pulse 1.5s infinite; }
 .phase-dot--qr_pending { background: var(--warning); }
 .phase-dot--connected { background: var(--success); }
+.phase-dot--error { background: var(--color-danger, #e74c3c); }
 .phase-text { font-size: 14px; font-weight: 500; }
 .napcat-actions { display: flex; gap: 8px; }
 
@@ -1084,6 +1095,116 @@ body {
 .settings-panel { padding: 24px; }
 .settings-panel h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
 .settings-panel h3 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; color: var(--color-text-muted); }
+
+/* ---- Hero / 页头（美化系统设置标题） ---- */
+.settings-hero {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  padding: 16px 18px 14px;
+  margin: -4px 0 18px;
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(255,91,156,0.16), transparent 55%),
+    radial-gradient(120% 120% at 100% 100%, rgba(110,142,251,0.18), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.25));
+  border: 1px solid rgba(255,91,156,0.18);
+  box-shadow:
+    0 2px 10px rgba(18,18,22,0.04),
+    inset 0 1px 0 rgba(255,255,255,0.8);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+.settings-hero__text { min-width: 0; }
+.settings-hero__title {
+  margin: 0 0 4px;
+  font-size: 20px; font-weight: 700; letter-spacing: 0.2px;
+  background: linear-gradient(135deg, #ff5b9c 0%, #8a6cff 55%, #6e8efb 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.settings-hero__subtitle {
+  margin: 0;
+  font-size: 12.5px; line-height: 1.5;
+  color: var(--color-text-muted, #6a6a72);
+}
+.settings-hero__badge {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  height: 30px; padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12.5px; font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #ff5b9c 0%, #8a6cff 55%, #6e8efb 100%);
+  box-shadow:
+    0 6px 18px rgba(255,91,156,0.25),
+    0 1px 0 rgba(255,255,255,0.35) inset;
+}
+
+/* ---- Mode tabs / 分类选项卡（三个模式按钮） ---- */
+.settings-mode-tabs {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 4px;
+  margin: 0 0 20px;
+  border-radius: 18px;
+  background: rgba(255,91,156,0.06);
+  border: 1px solid rgba(255,91,156,0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.7),
+    0 3px 10px rgba(255,91,156,0.06);
+  backdrop-filter: blur(10px);
+}
+/* Sliding pill（选中态会"粘"到按钮后面的高亮条） */
+.settings-mode-tabs__pill {
+  position: absolute; z-index: 0; top: 4px; left: 4px;
+  height: calc(100% - 8px);
+  border-radius: 15px;
+  background: linear-gradient(135deg, #ff7aaf 0%, #c49aff 55%, #8fa8ff 100%);
+  box-shadow:
+    0 4px 12px rgba(255,91,156,0.3),
+    0 0 0 1px rgba(255,255,255,0.4) inset,
+    0 8px 20px rgba(143,168,255,0.2);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+              width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, width;
+}
+/* 按钮本体 */
+.is-mode-tab {
+  position: relative; z-index: 1;
+  appearance: none; border: 0; outline: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 14px;
+  border-radius: 14px;
+  background: transparent;
+  font-family: inherit; font-size: 12px; font-weight: 400;
+  color: rgba(140,100,120,0.75);
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.25s ease, transform 0.15s ease, background-color 0.25s ease;
+}
+.is-mode-tab:hover:not(.is-active) {
+  color: rgba(255,91,156,0.9);
+  background: rgba(255,255,255,0.5);
+}
+.is-mode-tab:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255,91,156,0.2);
+}
+.is-mode-tab:active { transform: translateY(1px) scale(0.97); }
+.is-mode-tab__dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor; opacity: 0.5;
+  transition: opacity 0.25s ease, transform 0.3s ease, box-shadow 0.3s ease;
+}
+/* 选中态（旧类 active + 新类 is-active 都认，保证 settings.js 原有切换生效） */
+.is-mode-tab.is-active,
+.settings-mode-tab.active.is-mode-tab {
+  color: #fff;
+}
+.is-mode-tab.is-active .is-mode-tab__dot,
+.settings-mode-tab.active.is-mode-tab .is-mode-tab__dot {
+  opacity: 1;
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+}
+.is-mode-tab__label { white-space: nowrap; }
+
 .settings-group {
   margin-bottom: 16px;
 }
@@ -1316,6 +1437,97 @@ body {
   color: var(--color-primary);
 }
 
+/* ===== Request status badges (排队中/生成中/已完成/取消/重试) ===== */
+.chat-request-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 0;
+  font-size: 11.5px;
+  font-family: var(--font-sans);
+  line-height: 1;
+}
+.chat-request-status__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 400;
+  color: rgba(255,91,156,0.65);
+  letter-spacing: 0.2px;
+}
+.chat-request-status__label::before {
+  content: "";
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+.chat-request-status[data-status="queued"] .chat-request-status__label {
+  color: #e8a84a;
+}
+.chat-request-status[data-status="running"] .chat-request-status__label {
+  color: rgba(255,91,156,0.85);
+}
+.chat-request-status[data-status="running"] .chat-request-status__label::before {
+  animation: status-pulse 1.1s ease-in-out infinite;
+}
+@keyframes status-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50%      { opacity: 1;   transform: scale(1.15); }
+}
+.chat-request-status[data-status="completed"] .chat-request-status__label {
+  color: #5bbd7a;
+}
+.chat-request-status[data-status="cancelled"] .chat-request-status__label {
+  color: #a8a8b3;
+}
+.chat-request-status[data-status="failed"] .chat-request-status__label {
+  color: #e8707a;
+}
+.chat-request-status__btn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255,91,156,0.09);
+  color: rgba(255,91,156,0.8);
+  font-size: 11px;
+  font-weight: 400;
+  font-family: inherit;
+  letter-spacing: 0.2px;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-request-status__btn:hover {
+  background: rgba(255,91,156,0.18);
+  color: rgba(255,91,156,1);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(255,91,156,0.18);
+}
+.chat-request-status__btn:active {
+  transform: scale(0.95);
+  box-shadow: none;
+}
+.chat-request-status__btn.chat-request-retry {
+  background: rgba(110,142,251,0.09);
+  color: rgba(110,142,251,0.8);
+}
+.chat-request-status__btn.chat-request-retry:hover {
+  background: rgba(110,142,251,0.18);
+  color: rgba(110,142,251,1);
+  box-shadow: 0 3px 8px rgba(110,142,251,0.18);
+}
+.chat-msg--user .chat-request-status {
+  justify-content: flex-end;
+}
+
 /* ===== Phase 4: Recalled message bubble ===== */
 .chat-msg--recalled .chat-bubble {
   background: var(--bg-100) !important;
@@ -1487,6 +1699,24 @@ body {
   border: 1px solid var(--color-border);
   max-width: 220px;
 }
+.status-qq-badge--error {
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--color-static-e74c3c, #e74c3c);
+}
+.chat-attach-card__name,
+.chat-attach-card__meta,
+.chat-attach-card__error { display: block; min-width: 0; overflow-wrap: anywhere; }
+.chat-attach-card__meta { color: var(--color-text-muted); font-size: 11px; }
+.chat-attach-card__error { color: var(--color-attach-failed); font-size: 11px; }
+.chat-attach-card__actions { display: inline-flex; gap: 4px; }
+.chat-attach-card__actions button,
+.chat-attach-thumb button {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  padding: 2px;
+}
 .chat-attach-card[data-type="image"] {
   padding: 4px;
   background: transparent;
@@ -1545,6 +1775,114 @@ body {
   border-top: 1px solid var(--color-border, #eee);
   padding-top: 16px;
   margin-top: 16px;
+}
+
+/* R8.1: Master enable slider and its row. Uses pure checkbox + CSS,
+   no external deps. Unchecked state = 岛被关闭时，下方外观/组件
+   区域整体 dim，让用户清楚这些选项不会生效。 */
+.di-master-switch-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 91, 156, 0.06),
+    rgba(110, 142, 251, 0.06)
+  );
+  border: 1px solid rgba(255, 91, 156, 0.15);
+}
+.di-master-switch-row .di-master-switch-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.di-master-switch-text label {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text, #1c1c1e);
+  margin: 0 0 2px 0;
+  font-size: 14px;
+}
+.di-master-hint {
+  margin: 0 !important;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 12px;
+}
+.di-master-status {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.di-master-status.is-ok { color: var(--color-success, #10b981); }
+.di-master-status.is-err { color: var(--color-danger, #ef4444); }
+
+.di-switch {
+  --w: 48px;
+  --h: 26px;
+  position: relative;
+  display: inline-block;
+  width: var(--w);
+  height: var(--h);
+  flex-shrink: 0;
+  margin-top: 1px;
+  user-select: none;
+}
+.di-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+  pointer-events: none;
+}
+.di-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: rgba(120, 120, 128, 0.28);
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+  border-radius: calc(var(--h) / 2);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+.di-switch-slider::before {
+  content: "";
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #ffffff;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+.di-switch input:checked + .di-switch-slider {
+  background: linear-gradient(135deg, #ff5b9c, #6e8efb);
+  box-shadow: 0 0 0 3px rgba(255, 91, 156, 0.14);
+}
+.di-switch input:checked + .di-switch-slider::before {
+  transform: translateX(22px);
+}
+.di-switch input:focus-visible + .di-switch-slider {
+  outline: 2px solid var(--color-primary, #ff5b9c);
+  outline-offset: 2px;
+}
+.di-switch input:disabled + .di-switch-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 岛被关闭时，后续外观/组件设置区域整体淡出（不是隐藏，避免布局跳动） */
+.settings-group--dynamic-island.di-disabled .di-settings-preview,
+.settings-group--dynamic-island.di-disabled .di-theme-options,
+.settings-group--dynamic-island.di-disabled #di-interaction,
+.settings-group--dynamic-island.di-disabled .di-component-checks,
+.settings-group--dynamic-island.di-disabled .settings-actions {
+  opacity: 0.45;
+  pointer-events: none;
+  filter: saturate(0.7);
 }
 
 .settings-group--office {

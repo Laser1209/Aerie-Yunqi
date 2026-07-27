@@ -44,6 +44,7 @@ class PushPolicy:
         self.mute_until: datetime | None = None
         self.scene_blocks: dict[str, dict[str, Any]] = {}
         self.feedback: dict[str, dict[str, Any]] = {}
+        self.scene_last_sent: dict[str, datetime] = {}
         self.state_path = self._resolve_state_path(proactive)
         self._load_state()
 
@@ -117,6 +118,12 @@ class PushPolicy:
                 for scene, value in raw_feedback.items()
                 if isinstance(value, dict)
             }
+        raw_scene_last = state.get("scene_last_sent") or {}
+        if isinstance(raw_scene_last, dict):
+            for scene, ts in raw_scene_last.items():
+                dt_val = self._parse_datetime(ts)
+                if dt_val:
+                    self.scene_last_sent[str(scene)] = dt_val
 
     def _state_payload(self) -> dict[str, Any]:
         def dt(value: datetime | None) -> str | None:
@@ -136,6 +143,9 @@ class PushPolicy:
                 for scene, block in self.scene_blocks.items()
             },
             "feedback": self.feedback,
+            "scene_last_sent": {
+                scene: dt(ts) for scene, ts in self.scene_last_sent.items()
+            },
         }
 
     def _persist(self) -> None:
@@ -310,33 +320,43 @@ class PushPolicy:
             until = block.get("until")
             if isinstance(until, datetime) and now_dt < until:
                 return False, str(block.get("reason") or "postponed")
-        if self.pause_until and datetime.now() < self.pause_until:
+        if self.pause_until and now_dt < self.pause_until:
             return False, "paused"
         today = date.today()
         if today != self.today:
             self.daily_count = 0
             self.today = today
+            self.scene_last_sent.clear()
             self._persist()
         if self.daily_count >= self.max_per_day:
             return False, "daily_limit"
-        now = datetime.now().time()
+        now_time = now_dt.time()
         in_quiet = False
         if self.quiet_start <= self.quiet_end:
-            in_quiet = self.quiet_start <= now <= self.quiet_end
+            in_quiet = self.quiet_start <= now_time <= self.quiet_end
         else:
             # overnight range: e.g. 23:30 - 07:00
-            in_quiet = now >= self.quiet_start or now <= self.quiet_end
+            in_quiet = now_time >= self.quiet_start or now_time <= self.quiet_end
         if in_quiet and scene not in self.exempt_scenes:
             return False, "quiet_period"
         if self.last_push_at and scene not in self.exempt_scenes:
-            elapsed = (datetime.now() - self.last_push_at).total_seconds() / 60
+            elapsed = (now_dt - self.last_push_at).total_seconds() / 60
             if elapsed < self.min_interval_min:
                 return False, "interval"
+        # Per-scene minimum interval: 60 min default for non-exempt scenes
+        scene_min_interval = self.min_interval_min * 2 if scene not in self.exempt_scenes else 0
+        last_scene = self.scene_last_sent.get(scene)
+        if last_scene and scene not in self.exempt_scenes:
+            elapsed_scene = (now_dt - last_scene).total_seconds() / 60
+            if elapsed_scene < scene_min_interval:
+                return False, f"scene_interval:{scene}"
         return True, "ok"
 
     def record(self, scene: str) -> None:
+        now = datetime.now()
         self.daily_count += 1
-        self.last_push_at = datetime.now()
+        self.last_push_at = now
+        self.scene_last_sent[scene] = now
         self._persist()
 
 

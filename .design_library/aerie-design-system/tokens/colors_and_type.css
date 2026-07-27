@@ -1,0 +1,386 @@
+/* Aerie Design System v1.0 - Design Tokens */
+/* 温暖、通透、有呼吸感的玻璃态设计语言 — 适用于 AI 伴侣桌面端应用 */
+
+:root {
+  /* ============================================================
+     1. 色彩系统 — Color System
+     ============================================================ */
+
+  /* --- 品牌主色（Brand）— 温暖的天空蓝 10 级色阶 --- */
+  --brand-50:  #F0F6FD;
+  --brand-100: #DCEAF9;
+  --brand-200: #B8D5F2;
+  --brand-300: #8DBBE8;
+  --brand-400: #6AA5DE;
+  --brand-500: #4A90D9; /* 主色 */
+  --brand-600: #3B7CC4;
+  --brand-700: #3066A4;
+  --brand-800: #265080;
+  --brand-900: #1B3A5D;
+
+  /* --- 品牌辅助色 — 珊瑚粉（暖色陪伴色）50-500 --- */
+  --coral-50:  #FFF5F4;
+  --coral-100: #FFE2DF;
+  --coral-200: #FFC7C0;
+  --coral-300: #FFA89D;
+  --coral-400: #FF968A;
+  --coral-500: #FF8A80;
+
+  /* --- 背景色 / 灰阶（Background / Surface）--- */
+  --bg-0:   #000000; /* 纯黑 */
+  --bg-50:  #FFFFFF; /* 纯白 */
+  --bg-100: #F7F8FA; /* 极浅灰白 */
+  --bg-200: #EFF1F5;
+  --bg-300: #E3E6EB;
+  --bg-400: #CED3DB;
+  --bg-500: #9DA3AE;
+  --bg-600: #6F7683;
+  --bg-700: #4D5461;
+  --bg-800: #343A46;
+  --bg-900: #1F242D;
+
+  /* --- 玻璃态背景（Glassmorphism）--- */
+  --glass-bg:        rgba(255, 255, 255, 0.72);
+  --glass-bg-strong: rgba(255, 255, 255, 0.88);
+  --glass-bg-soft:   rgba(255, 255, 255, 0.55);
+  --glass-border:        rgba(255, 255, 255, 0.35);
+  --glass-border-strong: rgba(255, 255, 255, 0.50);
+
+  /* --- 表面层（Surface）--- */
+  --surface-elevated: rgba(255, 255, 255, 0.82);
+  --sidebar-bg:       rgba(247, 248, 250, 0.85);
+  --overlay:          rgba(0, 0, 0, 0.40);
+
+  /* --- 文字色（Text / Foreground）8 级 --- */
+  --text-900: #1A1A1E; /* 主文字 */
+  --text-800: #2B2E36;
+  --text-700: #3F434C;
+  --text-600: #575B66;
+  --text-500: #6D717D; /* 主要正文色 */
+  --text-400: #9095A0; /* 辅助文字 */
+  --text-300: #B5B9C2; /* 占位符 */
+  --text-200: #D2D5DB;
+  --text-inverse: #FFFFFF; /* 反白文字 */
+
+  /* 别名 */
+  --text-muted:       var(--text-400);
+  --text-placeholder: var(--text-300);
+
+  /* --- 边框色（Border）5 级 --- */
+  --border-default: #D8DCE2;
+  --border-strong:  #B8BDC8;
+  --border-soft:    #E6E8ED;
+  --border-subtle:  #EFF1F5;
+  --border-focus:   var(--brand-500);
+
+  /* --- 功能色 / 状态色（Semantic / State）--- */
+  --success:           #34C759;
+  --success-surface:   #E3F9E9;
+  --success-foreground:#1B8738;
+
+  --warning:           #FF9F0A;
+  --warning-surface:   #FFF4DE;
+  --warning-foreground:#A86500;
+
+  --error:             #FF453A;
+  --error-surface:     #FFEBEA;
+  --error-foreground:  #C1271D;
+
+  --info:              #5AC8FA;
+  --info-surface:      #E3F5FE;
+  --info-foreground:   #0B6E9F;
+
+  /* --- 情感色（Emotion）— AI 伴侣特有 --- */
+  --emotion-pleasure:  #FF6B9D; /* 愉悦 */
+  --emotion-arousal:   #B085FF; /* 唤醒 */
+  --emotion-dominance: #36D1DC; /* 控制 */
+  --emotion-calm:      #7ED9C4; /* 平静 */
+  --emotion-anxiety:   #FFB74D; /* 焦虑 */
+  --emotion-joy:       #FFD66B; /* 喜悦 */
+
+  /* --- 图表色（Chart）6 色 --- */
+  --chart-1: var(--brand-500);   /* 蓝 */
+  --chart-2: var(--coral-500);   /* 珊瑚 */
+  --chart-3: #34C759;            /* 绿 */
+  --chart-4: #B085FF;            /* 紫 */
+  --chart-5: #FFB74D;            /* 橙 */
+  --chart-6: #36D1DC;            /* 青 */
+
+  /* ============================================================
+     2. 字体系统 — Typography
+     ============================================================ */
+
+  /* --- 字体族（Font Family）--- */
+  --font-sans: "-apple-system, 'PingFang SC', 'Microsoft YaHei UI', 'Segoe UI', 'SF Pro Display', 'DM Sans', system-ui, sans-serif";
+  --font-mono: "'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Consolas', monospace";
+  --font-display: "'PingFang SC', 'DM Sans', system-ui, sans-serif";
+
+  /* --- 字号阶梯（Font Size）— 基于 1.25 比例，8 级 --- */
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-base: 14px; /* 正文基准 */
+  --text-lg:   16px;
+  --text-xl:   18px;
+  --text-2xl:  22px;
+  --text-3xl:  28px;
+  --text-4xl:  36px;
+
+  /* --- 字重（Font Weight）--- */
+  --font-light:    300;
+  --font-normal:   400;
+  --font-medium:   500;
+  --font-semibold: 600;
+  --font-bold:     700;
+
+  /* --- 行高（Line Height / Leading）--- */
+  --leading-tight:   1.2;
+  --leading-snug:    1.35;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.65;
+
+  /* --- 字间距（Letter Spacing / Tracking）--- */
+  --tracking-tight:  -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.02em;
+  --tracking-wider:  0.06em; /* uppercase 标签 */
+
+  /* ============================================================
+     3. 间距系统 — Spacing（基于 4px 基数）
+     ============================================================ */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ============================================================
+     4. 圆角 — Border Radius（圆润温暖风格）
+     ============================================================ */
+  --radius-xs:   4px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-2xl:  24px;
+  --radius-full: 9999px;
+  --radius-pill: 999px;
+
+  /* ============================================================
+     5. 阴影 — Shadow（柔和通透）
+     ============================================================ */
+  --shadow-xs:  0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-sm:  0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md:  0 4px 8px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --shadow-lg:  0 12px 24px -8px rgba(16, 24, 40, 0.12), 0 4px 8px -4px rgba(16, 24, 40, 0.06);
+  --shadow-xl:  0 20px 32px -12px rgba(16, 24, 40, 0.16), 0 8px 16px -8px rgba(16, 24, 40, 0.08);
+  --shadow-2xl: 0 24px 48px -16px rgba(16, 24, 40, 0.20), 0 16px 32px -12px rgba(16, 24, 40, 0.12);
+  /* 品牌色光晕 — AI 活跃状态 */
+  --shadow-glow: 0 0 20px rgba(74, 144, 217, 0.35), 0 0 40px rgba(74, 144, 217, 0.15);
+
+  /* ============================================================
+     6. 动效 — Motion / Easing
+     ============================================================ */
+  --duration-instant: 100ms;
+  --duration-fast:    150ms;
+  --duration-normal:  240ms;
+  --duration-slow:    360ms;
+  --duration-slower:  500ms;
+
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* 弹性 — 情感化动效 */
+
+  /* ============================================================
+     7. 尺寸 — Sizes（常用控件高度）
+     ============================================================ */
+  --size-header:         48px;
+  --size-nav-item:       40px;
+  --size-btn-sm:         28px;
+  --size-btn-md:         36px;
+  --size-btn-lg:         44px;
+  --size-input-md:       36px;
+  --size-input-lg:       44px;
+  --size-icon-sm:        14px;
+  --size-icon-md:        18px;
+  --size-icon-lg:        24px;
+  --size-icon-xl:        32px;
+  --size-avatar-sm:      28px;
+  --size-avatar-md:      36px;
+  --size-avatar-lg:      48px;
+  --size-avatar-xl:      64px;
+  --size-sidebar:        240px;
+  --size-dynamic-island: 44px;
+
+  /* ============================================================
+     8. Z-Index 层级
+     ============================================================ */
+  --z-base:           0;
+  --z-sidebar:        10;
+  --z-header:         20;
+  --z-dropdown:       50;
+  --z-sticky:         100;
+  --z-drawer:         200;
+  --z-modal:          500;
+  --z-toast:          1000;
+  --z-dynamic-island: 2000;
+  --z-tooltip:        3000;
+
+  /* ============================================================
+     9. 语义别名 — Semantic Aliases
+     ============================================================ */
+  --color-primary:        var(--brand-500);
+  --color-primary-hover:  var(--brand-600);
+  --color-primary-active: var(--brand-700);
+  --color-primary-soft:   var(--brand-50);
+
+  --color-bg:              var(--bg-50);
+  --color-surface:         var(--bg-100);
+  --color-surface-hover:   var(--bg-200);
+  --color-text:            var(--text-900);
+  --color-text-secondary:  var(--text-500);
+  --color-text-muted:      var(--text-400);
+  --color-border:          var(--border-default);
+
+  --radius-card:  var(--radius-lg);
+  --radius-btn:   var(--radius-full);
+  --radius-input: var(--radius-md);
+  --shadow-card:  var(--shadow-sm);
+}
+
+/* ============================================================
+   深色模式 — Dark Mode
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* --- 背景 / 灰阶（反转角色：低编号 = 深，高编号 = 浅）--- */
+    --bg-0:   #000000;
+    --bg-50:  #0E1014; /* 应用底色 */
+    --bg-100: #15181F; /* 卡片/表面 */
+    --bg-200: #1C2028;
+    --bg-300: #262B35;
+    --bg-400: #343A46;
+    --bg-500: #535A68;
+    --bg-600: #727987;
+    --bg-700: #9298A3;
+    --bg-800: #B7BBC4;
+    --bg-900: #E1E3E8;
+
+    /* --- 玻璃态（深色）--- */
+    --glass-bg:        rgba(24, 27, 34, 0.72);
+    --glass-bg-strong: rgba(24, 27, 34, 0.88);
+    --glass-bg-soft:   rgba(24, 27, 34, 0.55);
+    --glass-border:        rgba(255, 255, 255, 0.10);
+    --glass-border-strong: rgba(255, 255, 255, 0.18);
+
+    /* --- 表面层 --- */
+    --surface-elevated: rgba(30, 33, 40, 0.90);
+    --sidebar-bg:       rgba(18, 20, 25, 0.95);
+    --overlay:          rgba(0, 0, 0, 0.60);
+
+    /* --- 文字色（反转：text-900 最亮）--- */
+    --text-900: #F4F5F7;
+    --text-800: #E4E6EB;
+    --text-700: #CDD0D7;
+    --text-600: #B3B6BF;
+    --text-500: #989CA6;
+    --text-400: #767B87;
+    --text-300: #575C68;
+    --text-200: #3A3F4A;
+    --text-inverse: #0E1014;
+
+    /* --- 边框色（深色）--- */
+    --border-default: #2E333E;
+    --border-strong:  #464C58;
+    --border-soft:    #232730;
+    --border-subtle:  #1A1E26;
+    --border-focus:   var(--brand-400);
+
+    /* --- 品牌色（深色模式略提亮以保证对比度）--- */
+    --brand-50:  #0F1E2F;
+    --brand-100: #162D47;
+    --brand-200: #1E4168;
+    --brand-300: #2A5A8F;
+    --brand-400: #5B9BD9;
+    --brand-500: #6AADEE; /* 主色提亮 */
+    --brand-600: #8BC0F3;
+    --brand-700: #A9D1F6;
+    --brand-800: #C9E2F9;
+    --brand-900: #E7F1FC;
+
+    /* --- 珊瑚辅助色（深色模式）--- */
+    --coral-50:  #2F1715;
+    --coral-100: #4A211E;
+    --coral-200: #6E302B;
+    --coral-300: #9D443D;
+    --coral-400: #E06B60;
+    --coral-500: #FF8A80;
+
+    /* --- 功能色（深色模式：表面用半透明叠色，文字提亮）--- */
+    --success:           #4CD678;
+    --success-surface:   rgba(52, 199, 89, 0.15);
+    --success-foreground:#6EE293;
+
+    --warning:           #FFB340;
+    --warning-surface:   rgba(255, 159, 10, 0.15);
+    --warning-foreground:#FFC966;
+
+    --error:             #FF6961;
+    --error-surface:     rgba(255, 69, 58, 0.15);
+    --error-foreground: #FF8B85;
+
+    --info:              #7DD6FC;
+    --info-surface:      rgba(90, 200, 250, 0.15);
+    --info-foreground:   #9DE0FD;
+
+    /* --- 情感色（深色模式下略增饱和度/明度）--- */
+    --emotion-pleasure:  #FF7FA9;
+    --emotion-arousal:   #BE97FF;
+    --emotion-dominance: #4EDCE6;
+    --emotion-calm:      #8FE1CE;
+    --emotion-anxiety:   #FFC266;
+    --emotion-joy:       #FFDD80;
+
+    /* --- 图表色（深色模式微调）--- */
+    --chart-1: var(--brand-500);
+    --chart-2: var(--coral-500);
+    --chart-3: #4CD678;
+    --chart-4: #BE97FF;
+    --chart-5: #FFC266;
+    --chart-6: #4EDCE6;
+
+    /* --- 阴影（深色模式更深邃）--- */
+    --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-sm:  0 2px 6px rgba(0, 0, 0, 0.40), 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-md:  0 6px 14px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.30);
+    --shadow-lg:  0 12px 28px rgba(0, 0, 0, 0.50), 0 4px 10px rgba(0, 0, 0, 0.35);
+    --shadow-xl:  0 20px 40px rgba(0, 0, 0, 0.55), 0 8px 18px rgba(0, 0, 0, 0.40);
+    --shadow-2xl: 0 24px 56px rgba(0, 0, 0, 0.60), 0 16px 36px rgba(0, 0, 0, 0.45);
+    --shadow-glow: 0 0 24px rgba(106, 173, 238, 0.40), 0 0 48px rgba(106, 173, 238, 0.20);
+
+    /* --- 语义别名（深色）--- */
+    --color-primary:        var(--brand-500);
+    --color-primary-hover:  var(--brand-400);
+    --color-primary-active: var(--brand-300);
+    --color-primary-soft:   var(--brand-100);
+
+    --color-bg:              var(--bg-50);
+    --color-surface:         var(--bg-100);
+    --color-surface-hover:   var(--bg-200);
+    --color-text:            var(--text-900);
+    --color-text-secondary:  var(--text-500);
+    --color-text-muted:      var(--text-400);
+    --color-border:          var(--border-default);
+
+    --radius-card:  var(--radius-lg);
+    --radius-btn:   var(--radius-full);
+    --radius-input: var(--radius-md);
+    --shadow-card:  var(--shadow-sm);
+  }
+}

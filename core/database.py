@@ -15,12 +15,14 @@ from typing import Any, Iterable, Optional
 
 from core.feature_flags import FeatureFlags
 from core.migrations import (
+    desktop_chat_continuity_migrations,
     MigrationRunner,
     mobile_gateway_migrations,
     phase2_identity_migrations,
     phase3_backfill_migrations,
     phase3_conversation_migrations,
     phase4_request_queue_migrations,
+    phase5_batch_request_migrations,
 )
 
 
@@ -280,6 +282,7 @@ INDEX_SQL: list[str] = [
     # Phase 4: indexes for chat_log lookups
     "CREATE INDEX IF NOT EXISTS idx_chat_reply_to ON chat_log(reply_to_id);",
     "CREATE INDEX IF NOT EXISTS idx_chat_recalled ON chat_log(is_recalled);",
+    "CREATE INDEX IF NOT EXISTS idx_chat_batch ON chat_log(batch_id);",
     # Phase 9: cognition log lookups
     "CREATE INDEX IF NOT EXISTS idx_cognition_user_ts ON cognition_log(user_id, ts DESC);",
     # Phase 9: emotion snapshot lookups
@@ -356,12 +359,21 @@ class Database:
                 runner.run(phase3_conversation_migrations())
                 runner.run(phase3_backfill_migrations())
                 runner.run(phase4_request_queue_migrations())
+                runner.run(phase5_batch_request_migrations())
                 runner.run(mobile_gateway_migrations())
+                runner.run(desktop_chat_continuity_migrations())
+            else:
+                # Desktop attachments stay available on legacy installations.
+                # This creates only additive desktop-owned tables and leaves the
+                # normalized conversation feature disabled.
+                for migration in desktop_chat_continuity_migrations():
+                    migration.apply(conn)
             # Compatibility migrations remain available when the framework flag is off.
             self._migrate_chat_log(conn)
             self._migrate_long_term_memory(conn)
             self._migrate_emotion_state_snapshot(conn)
             self._migrate_todo(conn)
+            self._migrate_requests(conn)
             # Phase 4 + Phase 9: indexes (centralized for idempotency)
             for stmt in INDEX_SQL:
                 conn.execute(stmt)
@@ -383,6 +395,7 @@ class Database:
             ("actor_id", "TEXT DEFAULT NULL"),
             ("channel", "TEXT DEFAULT NULL"),
             ("channel_account_id", "TEXT DEFAULT NULL"),
+            ("batch_id", "TEXT DEFAULT NULL"),
         ]
         for col, decl in migrations:
             if col not in existing:
@@ -443,6 +456,21 @@ class Database:
                WHEN '1' THEN 'low' WHEN '2' THEN 'low' WHEN '3' THEN 'low'
                ELSE 'medium' END
                WHERE priority NOT IN ('high', 'medium', 'low')"""
+        )
+
+    def _migrate_requests(self, conn: sqlite3.Connection) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(requests)").fetchall()
+        }
+        if "batch_id" not in existing:
+            conn.execute(
+                "ALTER TABLE requests ADD COLUMN batch_id TEXT DEFAULT NULL"
+            )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_requests_batch "
+            "ON requests(batch_id, created_at, request_id) "
+            "WHERE batch_id IS NOT NULL"
         )
 
     # ===== CRUD helpers =====

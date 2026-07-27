@@ -14,20 +14,53 @@ class CalendarPanel {
     this._requestVersion = 0;
     this._loading = false;
     this._error = "";
+    this._retryDelays = [250, 500, 1000, 2000, 4000];
+    this._retryTimers = new Map();
+    this._destroyed = false;
+    this._unsubscribe = null;
+    this._backendReadySeen = false;
     this._init();
   }
 
   _init() {
     this._bindEvents();
     this._renderMonth();
-    this._loadEvents();
-    this._loadStats();
+    this._loadEvents(0);
+    this._loadStats(0);
     if (window.aerie.api.onMessage) {
-      window.aerie.api.onMessage((event) => {
+      const unsubscribe = window.aerie.api.onMessage((event) => {
         if (event && event.type === "timeline_changed") this._loadEvents();
         if (event && event.type === "calendar_reminder") this._handleCalendarReminder(event);
+        if (event && (event.type === "backend_ready" || event.type === "backend-ready")) {
+          this._onBackendReady();
+        }
+      });
+      if (typeof unsubscribe === "function") this._unsubscribe = unsubscribe;
+    }
+    if (window.aerie.electron && window.aerie.electron.onHealth) {
+      window.aerie.electron.onHealth((health) => {
+        if (this._destroyed) return;
+        if (health && health.ready) this._onBackendReady();
+        else this._backendReadySeen = false;
       });
     }
+  }
+
+  _onBackendReady() {
+    if (this._destroyed || this._backendReadySeen) return;
+    this._backendReadySeen = true;
+    this._cancelRetry("events");
+    this._cancelRetry("stats");
+    this._loadEvents(0);
+    this._loadStats(0);
+  }
+
+  destroy() {
+    this._destroyed = true;
+    for (const timer of this._retryTimers.values()) clearTimeout(timer);
+    this._retryTimers.clear();
+    if (this._unsubscribe) this._unsubscribe();
+    this._unsubscribe = null;
   }
 
   _handleCalendarReminder(event) {
@@ -175,7 +208,8 @@ class CalendarPanel {
     });
   }
 
-  async _loadEvents() {
+  async _loadEvents(retryAttempt = null) {
+    let response = null;
     try {
       const year = this._currentDate.getFullYear();
       const month = this._currentDate.getMonth();
@@ -185,20 +219,33 @@ class CalendarPanel {
 
       const version = ++this._requestVersion;
       this._loading = true;
-      const r = await window.aerie.api.request({
+      response = await window.aerie.api.request({
         method: "GET",
         path: `/api/calendar/timeline?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
       });
       if (version !== this._requestVersion) return;
-      const data = this._requireResponse(r, "加载议程失败");
+      const data = this._requireResponse(response, "加载议程失败");
       if (!Array.isArray(data.items)) throw new Error("加载议程失败：返回数据格式不正确");
       this._events = data.items;
       this._loading = false;
       this._error = "";
+      this._cancelRetry("events");
       this._renderMonth();
       this._renderEventList();
       this._renderLocalStats();
     } catch (e) {
+      if (Number.isInteger(retryAttempt)
+          && this._isStartupRetryable(response, e)
+          && this._scheduleRetry(
+            "events",
+            retryAttempt,
+            (next) => this._loadEvents(next),
+          )) {
+        this._loading = true;
+        this._error = "后端启动中，正在重试…";
+        this._renderEventList();
+        return;
+      }
       this._loading = false;
       this._error = e.message || "加载失败";
       this._renderEventList();
@@ -206,15 +253,47 @@ class CalendarPanel {
     }
   }
 
-  async _loadStats() {
+  async _loadStats(retryAttempt = null) {
+    let response = null;
     try {
-      const companionR = await window.aerie.api.request({ method: "GET", path: "/api/calendar/companion" });
-      const companion = this._requireResponse(companionR, "加载相伴数据失败");
+      response = await window.aerie.api.request({ method: "GET", path: "/api/calendar/companion" });
+      const companion = this._requireResponse(response, "加载相伴数据失败");
       const daysEl = document.getElementById("cal-days-together");
       if (daysEl) daysEl.textContent = companion.days_together != null ? companion.days_together : 0;
+      this._cancelRetry("stats");
     } catch (e) {
+      if (Number.isInteger(retryAttempt)
+          && this._isStartupRetryable(response, e)
+          && this._scheduleRetry(
+            "stats",
+            retryAttempt,
+            (next) => this._loadStats(next),
+          )) return;
       console.warn("[calendar] load stats failed", e);
     }
+  }
+
+  _scheduleRetry(kind, attempt, callback) {
+    if (this._destroyed || attempt >= this._retryDelays.length) return false;
+    this._cancelRetry(kind);
+    const timer = setTimeout(() => {
+      this._retryTimers.delete(kind);
+      if (!this._destroyed) callback(attempt + 1);
+    }, this._retryDelays[attempt]);
+    this._retryTimers.set(kind, timer);
+    return true;
+  }
+
+  _cancelRetry(kind) {
+    const timer = this._retryTimers.get(kind);
+    if (timer) clearTimeout(timer);
+    this._retryTimers.delete(kind);
+  }
+
+  _isStartupRetryable(response, error) {
+    if (!response || !Number.isInteger(response.status)) return true;
+    if (response.status >= 500) return true;
+    return /ECONNREFUSED|backend not ready/i.test(String(error && error.message || ""));
   }
 
   _renderLocalStats() {
@@ -490,7 +569,9 @@ class CalendarPanel {
   _requireResponse(response, fallback) {
     if (!response || !Number.isInteger(response.status) || response.status < 200 || response.status >= 300) {
       const detail = response && response.data && (response.data.error || response.data.detail);
-      throw new Error(detail ? `${fallback}：${detail}` : fallback);
+      const error = new Error(detail ? `${fallback}：${detail}` : fallback);
+      error.status = response && response.status;
+      throw error;
     }
     if (!response.data || typeof response.data !== "object") throw new Error(`${fallback}：返回数据格式不正确`);
     if (response.data.error) throw new Error(`${fallback}：${response.data.error}`);
@@ -523,3 +604,4 @@ class CalendarPanel {
 window.addEventListener("DOMContentLoaded", () => {
   window._calendarPanel = new CalendarPanel();
 });
+window.CalendarPanel = CalendarPanel;

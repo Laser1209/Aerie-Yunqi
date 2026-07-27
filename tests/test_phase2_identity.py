@@ -680,7 +680,9 @@ def test_companion_primary_emotion_state_uses_master_qq_actor():
         10001,
         actor_id="actor_primary",
     )
-    assert state == {"label": "joy"}
+    assert state["label"] == "joy"
+    assert state["primaryUserId"] == 10001
+    assert state["stale"] is True
 
 
 def test_companion_primary_emotion_state_skips_when_master_is_unknown():
@@ -691,7 +693,10 @@ def test_companion_primary_emotion_state_skips_when_master_is_unknown():
     companion.identity_resolver = MagicMock()
     companion.emotion = MagicMock()
 
-    assert companion.get_primary_emotion_state() == {}
+    state = companion.get_primary_emotion_state()
+    assert state["status"] == "unavailable"
+    assert state["primaryUserId"] is None
+    assert state["stale"] is True
     companion.emotion.get_state.assert_not_called()
 
 

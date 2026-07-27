@@ -42,13 +42,18 @@ class EmotionHistory {
     this._window = "24h";
     this._data = null;
     this._timer = null;
+    this._visible = false;
+    this._initialized = false;
+    this._requestInFlight = false;
+    this._latestState = null;
   }
 
   init() {
+    if (this._initialized) return;
+    this._initialized = true;
     this._bindToolbar();
-    // Refresh every 15s when visible (B5 polls this via setVisible).
-    this._timer = setInterval(() => this.refresh(), 15000);
-    this.refresh();
+    this._renderError("等待数据 / waiting for samples");
+    if (this._visible) this._startPolling();
   }
 
   destroy() {
@@ -56,28 +61,55 @@ class EmotionHistory {
       clearInterval(this._timer);
       this._timer = null;
     }
+    if (this._pendingRefresh) clearTimeout(this._pendingRefresh);
+    this._pendingRefresh = null;
+    this._initialized = false;
   }
 
   setVisible(v) {
-    if (v) this.refresh();
+    const visible = Boolean(v);
+    if (this._visible === visible) return;
+    this._visible = visible;
+    if (visible && this._initialized) this._startPolling();
+    if (!visible && this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
+    }
   }
 
-  onStateUpdate(_data) {
+  _startPolling() {
+    if (this._timer) clearInterval(this._timer);
+    this._timer = setInterval(() => this.refresh(), 15000);
+    this.refresh(true);
+  }
+
+  onStateUpdate(data) {
+    this._latestState = data || null;
+    if (this._visible && this._data) {
+      this._data.items = this._mergeLivePoint(this._data.items || []);
+      if (data && data.serverNow) this._data.serverNow = data.serverNow;
+      this._renderAll();
+    }
     // Hook for EmotionDashboard to push fresh state. The dashboard
     // already handles its own redraw, so here we just optionally
     // schedule a small follow-up refresh so the chart's right edge
     // catches the new sample within ~3s.
-    if (this._visible === false) return;
+    if (!this._visible) return;
     clearTimeout(this._pendingRefresh);
     this._pendingRefresh = setTimeout(() => this.refresh(), 3000);
   }
 
-  refresh() {
+  refresh(force) {
+    if ((!this._visible && !force) || this._requestInFlight) return;
+    this._requestInFlight = true;
     this._fetch().then((data) => {
       this._data = data;
       this._renderAll();
     }).catch(() => {
       this._renderError("加载失败 / load failed");
+      this._setUpdatedStatus("连接中断", true);
+    }).finally(() => {
+      this._requestInFlight = false;
     });
   }
 
@@ -86,15 +118,19 @@ class EmotionHistory {
       method: "GET",
       path: "/api/emotion/history?window=" + encodeURIComponent(this._window),
     });
-    if (!r.data || r.data.error) {
+    if (!r || (Number.isInteger(r.status) && (r.status < 200 || r.status >= 300))
+        || !r.data || r.data.error) {
       throw new Error(r.data && r.data.error || "no data");
     }
-    return r.data;
+    const data = { ...r.data };
+    data.items = this._mergeLivePoint(Array.isArray(data.items) ? data.items : []);
+    return data;
   }
 
   // ── Toolbar ─────────────────────────────────────
   _bindToolbar() {
     document.querySelectorAll(".emh-window").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-window") === this._window);
       btn.addEventListener("click", () => {
         const w = btn.getAttribute("data-window");
         if (!w || !WINDOWS.includes(w)) return;
@@ -102,11 +138,11 @@ class EmotionHistory {
         document.querySelectorAll(".emh-window").forEach((b) => {
           b.classList.toggle("active", b === btn);
         });
-        this.refresh();
+        this.refresh(true);
       });
     });
     const refresh = document.getElementById("emh-refresh");
-    if (refresh) refresh.addEventListener("click", () => this.refresh());
+    if (refresh) refresh.addEventListener("click", () => this.refresh(true));
   }
 
   // ── Render dispatch ─────────────────────────────
@@ -114,6 +150,11 @@ class EmotionHistory {
     this._renderPad();
     this._renderThresholds();
     this._renderRadar();
+    const data = this._data || {};
+    const latest = data.sampledAt || data.latestPersistedAt
+      || (data.items && data.items.length && data.items[data.items.length - 1].ts);
+    const text = latest ? "更新于 " + this._fmtClock(latest) : "等待数据";
+    this._setUpdatedStatus(text, Boolean(data.stale));
   }
 
   _renderError(msg) {
@@ -140,7 +181,7 @@ class EmotionHistory {
     const padL = 32, padR = 12, padT = 14, padB = 22;
     const innerW = W - padL - padR;
     const innerH = H - padT - padB;
-    const t0 = items[0].ts, t1 = items[items.length - 1].ts;
+    const { t0, t1 } = this._timeBounds(items);
     const tspan = Math.max(1, t1 - t0);
     const xOf = (t) => padL + ((t - t0) / tspan) * innerW;
     const yOf = (v) => padT + (1 - (Number(v) + 1) / 2) * innerH; // -1..1 → top..bottom
@@ -203,7 +244,7 @@ class EmotionHistory {
     const padL = 32, padR = 12, padT = 14, padB = 22;
     const innerW = W - padL - padR;
     const innerH = H - padT - padB;
-    const t0 = items[0].ts, t1 = items[items.length - 1].ts;
+    const { t0, t1 } = this._timeBounds(items);
     const tspan = Math.max(1, t1 - t0);
     const xOf = (t) => padL + ((t - t0) / tspan) * innerW;
     const yOf = (v) => padT + (1 - Math.max(0, Math.min(100, Number(v) || 0)) / 100) * innerH;
@@ -272,7 +313,7 @@ class EmotionHistory {
     });
     if (allLabels.length === 0) allLabels.push("neutral");
 
-    const t0 = items[0].ts, t1 = items[items.length - 1].ts;
+    const { t0, t1 } = this._timeBounds(items);
     const tspan = Math.max(1, t1 - t0);
     const bucketSize = tspan / N_BUCKETS;
 
@@ -342,6 +383,86 @@ class EmotionHistory {
   }
 
   // ── Helpers ─────────────────────────────────────
+  _windowMs() {
+    return {
+      "1h": 3_600_000,
+      "24h": 86_400_000,
+      "7d": 604_800_000,
+      "30d": 2_592_000_000,
+    }[this._window] || 86_400_000;
+  }
+
+  _timeBounds(items) {
+    const data = this._data || {};
+    let t1 = Number(data.serverNow || data.server_now);
+    if (!Number.isFinite(t1) || t1 <= 0) t1 = Date.now();
+    let t0 = Number(data.since_ts || data.sinceTs);
+    if (!Number.isFinite(t0) || t0 <= 0 || t0 >= t1) {
+      t0 = t1 - this._windowMs();
+    }
+    return { t0, t1 };
+  }
+
+  _mergeLivePoint(items) {
+    const state = this._latestState;
+    const base = Array.isArray(items) ? items.slice() : [];
+    if (!state || !state.pad) return base.sort((a, b) => Number(a.ts) - Number(b.ts));
+    const ts = Number(state.sampledAt || state.sampled_at);
+    const serverNow = Number(
+      state.serverNow || state.server_now
+      || (this._data && (this._data.serverNow || this._data.server_now))
+      || Date.now(),
+    );
+    if (!Number.isFinite(ts) || ts <= 0 || ts < serverNow - this._windowMs()) {
+      return base.sort((a, b) => Number(a.ts) - Number(b.ts));
+    }
+    const pad = state.pad || {};
+    const thresholds = state.thresholds || {};
+    const point = {
+      ts,
+      pleasure: Number.isFinite(Number(pad.P)) ? Number(pad.P) : Number(pad.pleasure),
+      arousal: Number.isFinite(Number(pad.A)) ? Number(pad.A) : Number(pad.arousal),
+      dominance: Number.isFinite(Number(pad.D)) ? Number(pad.D) : Number(pad.dominance),
+      label: state.label || "neutral",
+      trigger_event: "live_state",
+    };
+    for (const slot of ["patience", "anxiety", "desire", "tenderness"]) {
+      const info = thresholds[slot] || {};
+      point[slot + "_value"] = Number(info.value) || 0;
+    }
+    const withoutSameSample = base.filter((item) => Number(item.ts) !== ts);
+    withoutSameSample.push(point);
+    withoutSameSample.sort((a, b) => Number(a.ts) - Number(b.ts));
+    return withoutSameSample.slice(-5000);
+  }
+
+  _setUpdatedStatus(message, stale) {
+    let el = document.getElementById("emh-updated");
+    if (!el && document.createElement) {
+      const refresh = document.getElementById("emh-refresh");
+      const host = refresh && refresh.parentNode;
+      if (host && host.appendChild) {
+        el = document.createElement("span");
+        el.id = "emh-updated";
+        el.className = "emh-updated";
+        host.appendChild(el);
+      }
+    }
+    if (el) {
+      el.textContent = message;
+      if (el.classList && el.classList.toggle) {
+        el.classList.toggle("is-stale", Boolean(stale));
+      }
+    }
+  }
+
+  _fmtClock(ts) {
+    const d = new Date(Number(ts));
+    if (Number.isNaN(d.getTime())) return "--:--:--";
+    const pad = (n) => String(n).padStart(2, "0");
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
   _fmtTick(ts, win) {
     const d = new Date(ts);
     if (win === "1h" || win === "24h") {

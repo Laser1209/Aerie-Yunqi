@@ -105,6 +105,7 @@ def _service_components(
     frozen_utc_clock,
     *,
     worker=None,
+    attachment_service=None,
     identity_repository=None,
     master_user_id=7001,
 ):
@@ -121,10 +122,21 @@ def _service_components(
         repository=repository,
         identity_repository=identity_repository,
         worker=worker,
+        attachment_service=attachment_service,
         master_user_id_provider=lambda: master_user_id,
         id_factory=_FixedIdFactory(),
     )
     return service, repository, identity_repository
+
+
+class _DesktopAttachmentResolver:
+    def __init__(self, records):
+        self.records = {record["attachmentId"]: dict(record) for record in records}
+        self.calls = []
+
+    def resolve_ready_for_send(self, attachment_ids):
+        self.calls.append(list(attachment_ids))
+        return [dict(self.records[attachment_id]) for attachment_id in attachment_ids]
 
 
 def test_submit_ignores_renderer_actor_and_conversation_fields_by_signature():
@@ -251,6 +263,82 @@ def test_submit_rejects_empty_text_and_no_attachments_with_400_contract(
         )
 
     assert exc_info.value.error_code == "empty_message"
+
+
+def test_submit_resolves_attachment_id_to_server_owned_ready_metadata(
+    phase4_db,
+    frozen_utc_clock,
+):
+    server_record = {
+        "id": "att_ready_1",
+        "attachmentId": "att_ready_1",
+        "name": "server-name.txt",
+        "size": 12,
+        "category": "text",
+        "type": "text",
+        "state": "ready",
+        "contentType": "text/plain",
+        "sha256": "a" * 64,
+        "downloadUrl": "/api/attachments/att_ready_1/download",
+        "metadata": {"parsed": True},
+    }
+    resolver = _DesktopAttachmentResolver([server_record])
+    service, repository, identity_repository = _service_components(
+        phase4_db,
+        frozen_utc_clock,
+        attachment_service=resolver,
+    )
+
+    submitted = service.submit(
+        text="use the attachment",
+        attachments=[{
+            "id": "att_ready_1",
+            "attachmentId": "att_ready_1",
+            "name": "renderer-spoofed-name.txt",
+            "state": "ready",
+            "path": "C:\\private\\must-not-survive.txt",
+            "metadata": {"renderer": "untrusted"},
+        }],
+        reply_to_id=0,
+        user_id=7,
+    )
+    actor_id = identity_repository.resolve("desktop", "local").actor_id
+    row = repository.get_owned(
+        request_id=submitted.request_id,
+        actor_id=actor_id,
+    )
+    stored = json.loads(row["attachments"])
+
+    assert resolver.calls == [["att_ready_1"]]
+    assert stored == [server_record]
+    assert "renderer-spoofed-name" not in row["attachments"]
+    assert "private" not in row["attachments"]
+
+
+def test_submit_rejects_attachment_id_when_server_state_is_not_ready(
+    phase4_db,
+    frozen_utc_clock,
+):
+    from core.chat_request_service import InvalidChatInput
+    from core.desktop_attachments import AttachmentStateConflict
+
+    class NotReadyResolver:
+        def resolve_ready_for_send(self, attachment_ids):
+            raise AttachmentStateConflict("attachment is not ready")
+
+    service, _, _ = _service_components(
+        phase4_db,
+        frozen_utc_clock,
+        attachment_service=NotReadyResolver(),
+    )
+    with pytest.raises(InvalidChatInput) as exc_info:
+        service.submit(
+            text="text remains independently valid",
+            attachments=[{"attachmentId": "att_pending", "state": "ready"}],
+            reply_to_id=0,
+            user_id=7,
+        )
+    assert exc_info.value.error_code == "attachment_not_ready"
 
 
 @pytest.mark.parametrize(

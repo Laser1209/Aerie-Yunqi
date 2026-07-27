@@ -121,3 +121,6 @@ class OutgoingReply:
     # cognition_log row so SendQueue can append pacing decisions back
     # into the trace after the segments have actually been sent.
     cognition_id: int = 0
+    # Task 4: Batch processing support
+    batch_id: str | None = None
+    sequence_index: int = 0

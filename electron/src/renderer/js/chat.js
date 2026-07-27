@@ -24,10 +24,21 @@ class ChatManager {
     this._requestSequences = new Map();  // request_id -> { next, pending }
     this._clientCounter = 0;
     this._reducedMotion = this._prefersReducedMotion();
-    this._masterQQ = opts.masterQQ || 3998874040;
+    this._masterQQ = opts.masterQQ || null;
+    this._identityReady = Boolean(this._masterQQ);
+    this._identityBootstrapPromise = null;
+    this._chatStarted = false;
     this._sinceId = 0;
     this._quotedMsg = null;            // Phase 4: currently quoted message
     this._pendingAttachments = [];     // Phase 5: file attachments awaiting send
+    this._history = {
+      olderCursor: null,
+      newerCursor: null,
+      hasOlder: false,
+      hasNewer: false,
+      loading: false,
+    };
+    this._maxDomMessages = 500;
 
     // Block-2 A1: persona + master avatar cache
     // R7.5: avatar_dataurl is the base64 inline form. The renderer
@@ -48,8 +59,11 @@ class ChatManager {
     this._listenIPC();
     this._listenSSE();
     this._listenOpenTab();
-    this._startPoll();
-    this.loadHistory();
+    if (this._identityReady) {
+      this._startChatForIdentity();
+    } else {
+      this._bootstrapRuntimeIdentity();
+    }
     this.restorePendingRequests();
     // Phase 5: file uploader
     if (window.ChatUploader) {
@@ -86,6 +100,68 @@ class ChatManager {
     });
   }
 
+  async _bootstrapRuntimeIdentity() {
+    if (this._identityBootstrapPromise) return this._identityBootstrapPromise;
+    this._identityBootstrapPromise = (async () => {
+      try {
+        const response = await this._request({ method: "GET", path: "/api/runtime/snapshot" });
+        const data = (response && response.data) || {};
+        const candidate = data.primaryUserId
+          ?? data.primary_user_id
+          ?? (data.primaryIdentity && (
+            data.primaryIdentity.primaryUserId
+            ?? data.primaryIdentity.userId
+            ?? data.primaryIdentity.user_id
+          ));
+        const normalized = Number(candidate);
+        if (!Number.isSafeInteger(normalized) || normalized <= 0) {
+          throw new Error("主身份未配置");
+        }
+        this._masterQQ = normalized;
+        this._identityReady = true;
+        const identityError = this._el.messages
+          && this._el.messages.querySelector("[data-identity-error]");
+        if (identityError) identityError.remove();
+        this._syncSendAvailability();
+        this._startChatForIdentity();
+        this._loadMasterAvatar();
+        return true;
+      } catch (_) {
+        this._identityReady = false;
+        this._syncSendAvailability();
+        if (this._el.messages && !this._el.messages.querySelector("[data-identity-error]")) {
+          const status = document.createElement("div");
+          status.className = "chat-empty";
+          status.setAttribute("data-identity-error", "true");
+          status.textContent = "主身份未配置，聊天暂不可用";
+          this._el.messages.appendChild(status);
+        }
+        return false;
+      } finally {
+        this._identityBootstrapPromise = null;
+      }
+    })();
+    return this._identityBootstrapPromise;
+  }
+
+  _startChatForIdentity() {
+    if (this._chatStarted || !this._identityReady) return;
+    this._chatStarted = true;
+    this._startPoll();
+    this.loadHistory();
+  }
+
+  _syncSendAvailability() {
+    if (!this._el.sendBtn) return;
+    const attachmentsReady = this._pendingAttachments.every(
+      (attachment) => attachment.state === "ready",
+    );
+    this._el.sendBtn.disabled = !this._identityReady || !attachmentsReady;
+    this._el.sendBtn.title = !this._identityReady
+      ? "主身份未配置"
+      : (!attachmentsReady ? "请等待附件解析完成" : "");
+  }
+
   _bindEvents() {
     if (this._el.sendBtn) {
       this._el.sendBtn.addEventListener("click", () => this.send());
@@ -118,6 +194,14 @@ class ChatManager {
 
   _listenIPC() {
     if (!window.aerie) return;
+    if (
+      window.aerie.electron
+      && typeof window.aerie.electron.onBackendReady === "function"
+    ) {
+      window.aerie.electron.onBackendReady(() => {
+        if (!this._identityReady) this._bootstrapRuntimeIdentity();
+      });
+    }
     window.aerie.api.onMessage((msg) => {
       if (
         !msg ||
@@ -315,35 +399,123 @@ class ChatManager {
   }
 
   async loadHistory() {
-    try {
-      const resp = await this._request({
-        method: "GET",
-        path: "/api/chat/history?user_id=" + this._masterQQ + "&limit=50",
-      });
-      if (resp.data && resp.data.history) {
-        const empty = this._el.messages.querySelector(".chat-empty");
-        if (empty) empty.remove();
-        for (const item of resp.data.history) {
-          if (item.is_recalled) {
-            this._renderRecalledStub(item);
-            continue;
-          }
-          if (this._seenIds.has(item.id)) continue;
-          this._seenIds.add(item.id);
-          this._render(item);
-          if (item.id > this._sinceId) this._sinceId = item.id;
-        }
-      }
-    } catch (_) {}
+    return this._loadHistoryPage("initial");
   }
 
-  _renderRecalledStub(item) {
+  async _loadHistoryPage(direction) {
+    if (!this._identityReady || this._history.loading) return;
+    const cursor = direction === "older"
+      ? this._history.olderCursor
+      : (direction === "newer" ? this._history.newerCursor : null);
+    if (direction !== "initial" && !cursor) return;
+    this._history.loading = true;
+    this._renderHistoryControls();
+    try {
+      let path = "/api/chat/history/page?user_id=" + encodeURIComponent(this._masterQQ)
+        + "&limit=50";
+      if (direction !== "initial") {
+        path += "&direction=" + direction + "&cursor=" + encodeURIComponent(cursor);
+      }
+      const resp = await this._request({ method: "GET", path });
+      const page = (resp && resp.data) || {};
+      if (!Array.isArray(page.items)) throw new Error("invalid history page");
+      const previousHeight = this._el.messages ? this._el.messages.scrollHeight : 0;
+      const previousTop = this._el.messages ? this._el.messages.scrollTop : 0;
+      const firstMessage = this._el.messages
+        ? this._el.messages.querySelector(".chat-msg")
+        : null;
+      const empty = this._el.messages && this._el.messages.querySelector(".chat-empty");
+      if (empty) empty.remove();
+      for (const item of page.items) {
+        if (this._seenIds.has(item.id)) continue;
+        this._seenIds.add(item.id);
+        if (item.is_recalled) {
+          this._renderRecalledStub(item, direction === "older" ? firstMessage : null);
+        } else {
+          this._render(item, {
+            before: direction === "older" ? firstMessage : null,
+            autoScroll: false,
+          });
+        }
+        const numericId = Number(item.id);
+        if (Number.isFinite(numericId) && numericId > this._sinceId) this._sinceId = numericId;
+      }
+      this._history.olderCursor = page.olderCursor || null;
+      this._history.newerCursor = page.newerCursor || null;
+      this._history.hasOlder = Boolean(page.hasOlder);
+      this._history.hasNewer = Boolean(page.hasNewer);
+      this._trimMessageWindow(direction === "older" ? "newest" : "oldest");
+      if (this._el.messages) {
+        if (direction === "older") {
+          this._el.messages.scrollTop = previousTop
+            + (this._el.messages.scrollHeight - previousHeight);
+        } else if (direction === "initial") {
+          this._el.messages.scrollTop = this._el.messages.scrollHeight;
+        }
+      }
+    } catch (_) {
+      // History remains retryable through the controls.
+    } finally {
+      this._history.loading = false;
+      this._renderHistoryControls();
+    }
+  }
+
+  _renderHistoryControls() {
+    if (!this._el.messages) return;
+    for (const existing of this._el.messages.querySelectorAll(".chat-history-control")) {
+      existing.remove();
+    }
+    const makeButton = (kind, label) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "chat-history-control chat-history-control--" + kind;
+      button.textContent = this._history.loading ? "加载中…" : label;
+      button.disabled = this._history.loading;
+      button.addEventListener("click", () => this._loadHistoryPage(kind));
+      return button;
+    };
+    if (this._history.hasOlder) {
+      const first = this._el.messages.querySelector(".chat-msg");
+      this._el.messages.insertBefore(makeButton("older", "加载更早消息"), first);
+    }
+    if (this._history.hasNewer) {
+      this._el.messages.appendChild(makeButton("newer", "加载更新消息"));
+    }
+  }
+
+  _trimMessageWindow(removeSide) {
+    if (!this._el.messages) return;
+    const nodes = Array.from(this._el.messages.querySelectorAll(".chat-msg"));
+    while (nodes.length > this._maxDomMessages) {
+      const removed = removeSide === "newest" ? nodes.pop() : nodes.shift();
+      const id = removed && removed.getAttribute("data-id");
+      if (id) this._seenIds.delete(id);
+      if (removed) removed.remove();
+    }
+    const remaining = Array.from(this._el.messages.querySelectorAll(".chat-msg"));
+    if (!remaining.length) return;
+    const firstCursor = remaining[0].getAttribute("data-history-cursor");
+    const lastCursor = remaining[remaining.length - 1].getAttribute("data-history-cursor");
+    if (removeSide === "oldest" && firstCursor) {
+      this._history.hasOlder = true;
+      this._history.olderCursor = firstCursor;
+    }
+    if (removeSide === "newest" && lastCursor) {
+      this._history.hasNewer = true;
+      this._history.newerCursor = lastCursor;
+    }
+  }
+
+  _renderRecalledStub(item, before = null) {
     if (!this._el.messages) return;
     const div = document.createElement("div");
     div.className = "chat-msg chat-msg--recalled";
     div.setAttribute("data-id", item.id);
+    if (item.cursor) div.setAttribute("data-history-cursor", item.cursor);
     div.innerHTML = `<div class="chat-bubble chat-bubble--recalled">（消息已撤回）</div>`;
-    this._el.messages.appendChild(div);
+    if (before) this._el.messages.insertBefore(div, before);
+    else this._el.messages.appendChild(div);
   }
 
   _prefersReducedMotion() {
@@ -454,11 +626,7 @@ class ChatManager {
     if (!typing && msg.attachments && msg.attachments.length > 0) {
       html += '<div class="chat-attachments">';
       for (const att of msg.attachments) {
-        if (att.type === "image") {
-          html += `<div class="chat-attach-card" data-type="image"><img src="${this._escapeHtml(attachmentPublicUrl(att.thumbnail_url || att.url))}" alt=""></div>`;
-        } else {
-          html += `<div class="chat-attach-card" data-type="file"><svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>${this._escapeHtml(att.name || "文件")}</div>`;
-        }
+        html += this._buildAttachmentCard(att);
       }
       html += "</div>";
     }
@@ -475,6 +643,84 @@ class ChatManager {
       html += `<div class="chat-msg-actions"><button class="chat-msg-actions__btn" data-msg-actions="${msg.id}">⋮</button></div>`;
     }
     return html;
+  }
+
+  _attachmentStateLabel(state) {
+    return {
+      queued: "等待处理",
+      processing: "解析中",
+      ready: "可读取",
+      failed: "解析失败",
+      quarantined: "已隔离",
+      unsupported: "不支持",
+    }[state] || "状态未知";
+  }
+
+  _formatAttachmentSize(value) {
+    const bytes = Number(value || 0);
+    if (!Number.isFinite(bytes) || bytes <= 0) return "";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  _buildAttachmentCard(att) {
+    const id = att.attachmentId || att.id || "";
+    const state = att.state || "ready";
+    const category = att.category || att.type || "file";
+    const name = this._escapeHtml(att.name || "文件");
+    const stateLabel = this._escapeHtml(this._attachmentStateLabel(state));
+    const size = this._escapeHtml(this._formatAttachmentSize(att.size));
+    const error = att.error && (att.error.message || att.error.code);
+    const imageUrl = att.thumbnailUrl || att.thumbnail_url || "";
+    let preview = '<svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>';
+    if (category === "image" && imageUrl) {
+      preview = `<img src="${this._escapeHtml(attachmentPublicUrl(imageUrl))}" alt="">`;
+    }
+    const open = state === "ready" && id
+      ? `<button type="button" data-attachment-open="${this._escapeHtml(id)}">打开</button>`
+      : "";
+    const retry = state === "failed" && id
+      ? `<button type="button" data-attachment-retry="${this._escapeHtml(id)}">重试</button>`
+      : "";
+    return `<div class="chat-attach-card" data-type="${this._escapeHtml(category)}" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">
+      ${preview}<span class="chat-attach-card__name">${name}</span>
+      <span class="chat-attach-card__meta">${size} ${stateLabel}</span>
+      ${error ? `<span class="chat-attach-card__error" title="${this._escapeHtml(error)}">${this._escapeHtml(error)}</span>` : ""}
+      <span class="chat-attach-card__actions">${open}${retry}</span>
+    </div>`;
+  }
+
+  async _openAttachment(attachmentId) {
+    if (
+      window.aerie && window.aerie.attachments
+      && typeof window.aerie.attachments.open === "function"
+    ) {
+      await window.aerie.attachments.open(attachmentId);
+      return;
+    }
+    if (typeof window.open === "function") {
+      window.open(
+        "http://127.0.0.1:7890/api/attachments/"
+          + encodeURIComponent(attachmentId) + "/download",
+        "_blank",
+      );
+    }
+  }
+
+  async _retryAttachment(attachmentId) {
+    if (this._uploader && typeof this._uploader.retry === "function") {
+      const pending = this._pendingAttachments.some(
+        (attachment) => String(attachment.attachmentId || attachment.id) === String(attachmentId),
+      );
+      if (pending) return this._uploader.retry(attachmentId);
+    }
+    try {
+      await this._request({
+        method: "POST",
+        path: "/api/attachments/" + encodeURIComponent(attachmentId) + "/retry",
+      });
+    } catch (_) {}
   }
 
   _syncRequestTypingBubble(state) {
@@ -883,12 +1129,29 @@ class ChatManager {
   }
 
   async send() {
+    if (!this._identityReady) return;
     const text = this._el.input.value.trim();
     if (!text && this._pendingAttachments.length === 0) return;
+    if (this._pendingAttachments.some((attachment) => attachment.state !== "ready")) {
+      alert("请等待所有附件解析完成，失败项可重试或移除");
+      return;
+    }
     this._el.input.value = "";
 
     const replyToId = this._quotedMsg ? this._quotedMsg.id : 0;
-    const attachments = this._pendingAttachments.slice();
+    const attachments = this._pendingAttachments.map((attachment) => ({
+      id: attachment.attachmentId || attachment.id,
+      attachmentId: attachment.attachmentId || attachment.id,
+      name: attachment.name,
+      size: attachment.size,
+      type: attachment.category || attachment.type,
+      category: attachment.category || attachment.type,
+      state: attachment.state,
+      contentType: attachment.contentType || "",
+      sha256: attachment.sha256 || "",
+      downloadUrl: attachment.downloadUrl || null,
+      metadata: attachment.metadata || {},
+    }));
     const clientId = this._newClientId();
 
     // Optimistic render
@@ -989,27 +1252,44 @@ class ChatManager {
     if (this._pendingAttachments.length === 0) {
       preview.style.display = "none";
       preview.innerHTML = "";
+      this._syncSendAvailability();
       return;
     }
     preview.style.display = "flex";
-    // Block-3 R0.2: 4 态状态机 (uploading / converting / ready / failed)
     preview.innerHTML = this._pendingAttachments
-      .map((a, i) => {
-        const isDoc = a.is_doc === true;
-        const state = a.state || "ready";   // uploading | converting | ready | failed
-        const stateLabel = {
-          uploading:  "上传中… / Uploading…",
-          converting: "转 markdown 中… / Converting…",
-          ready:      "",
-          failed:     "她读不了这个 / She can't read this",
-        }[state] || "";
+      .map((a) => {
+        const id = a.attachmentId || a.id || "";
+        const state = a.state || "queued";
+        const stateLabel = this._attachmentStateLabel(state);
         const stateClass = "chat-attach-thumb--state-" + state;
-        if (a.type === "image") {
-          return `<div class="chat-attach-thumb ${stateClass}" data-i="${i}"><img src="${this._escapeHtml(attachmentPublicUrl(a.thumbnail_url || a.url))}" alt=""><span class="chat-attach-thumb__state">${this._escapeHtml(stateLabel)}</span></div>`;
-        }
-        return `<div class="chat-attach-thumb ${stateClass}" data-i="${i}"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-attach"/></svg><span class="chat-attach-thumb__name">${this._escapeHtml(a.name)}</span><span class="chat-attach-thumb__state">${this._escapeHtml(stateLabel)}</span></div>`;
+        const error = a.error && (a.error.message || a.error.code);
+        const retry = state === "failed" && id
+          ? `<button type="button" data-pending-attachment-retry="${this._escapeHtml(id)}">重试</button>`
+          : "";
+        const remove = `<button type="button" data-pending-attachment-remove="${this._escapeHtml(id)}" title="移除">×</button>`;
+        return `<div class="chat-attach-thumb ${stateClass}" data-attachment-id="${this._escapeHtml(id)}">
+          <svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-attach"/></svg>
+          <span class="chat-attach-thumb__name">${this._escapeHtml(a.name || "文件")}</span>
+          <span class="chat-attach-thumb__state" title="${this._escapeHtml(error || stateLabel)}">${this._escapeHtml(stateLabel)}</span>
+          ${retry}${remove}
+        </div>`;
       })
       .join("");
+    for (const button of preview.querySelectorAll("[data-pending-attachment-remove]")) {
+      button.addEventListener("click", () => {
+        if (this._uploader) {
+          this._uploader.remove(button.getAttribute("data-pending-attachment-remove"));
+        }
+      });
+    }
+    for (const button of preview.querySelectorAll("[data-pending-attachment-retry]")) {
+      button.addEventListener("click", () => {
+        if (this._uploader) {
+          this._uploader.retry(button.getAttribute("data-pending-attachment-retry"));
+        }
+      });
+    }
+    this._syncSendAvailability();
   }
 
   // ── Phase 4: Action menu (recall / quote / copy) ──
@@ -1072,7 +1352,7 @@ class ChatManager {
   }
 
   // ── Render ──
-  _render(msg) {
+  _render(msg, { before = null, autoScroll = true } = {}) {
     if (!this._el.messages) return;
     const empty = this._el.messages.querySelector(".chat-empty");
     if (empty) empty.remove();
@@ -1109,12 +1389,14 @@ class ChatManager {
     }
     div.setAttribute("data-id", msg.id);
     if (msg.id) div.setAttribute("data-msg-id", msg.id);
+    if (msg.cursor) div.setAttribute("data-history-cursor", msg.cursor);
     if (msg.id) div.setAttribute("data-temp-text", msg.content);
     if (msg.id) div.setAttribute("data-request-id", msg.request_id || "");
     if (msg.id) div.setAttribute("data-request-status", msg.request_status || msg.status || "");
     if (msg.typing) div.setAttribute("data-chat-typing", "true");
     div.innerHTML = this._buildMessageHtml(msg, { typing: Boolean(msg.typing) });
-    this._el.messages.appendChild(div);
+    if (before) this._el.messages.insertBefore(div, before);
+    else this._el.messages.appendChild(div);
 
     // Bind action button
     const actionsBtn = div.querySelector("[data-msg-actions]");
@@ -1122,6 +1404,17 @@ class ChatManager {
       actionsBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this._showActionMenu(msg, actionsBtn);
+      });
+    }
+
+    for (const button of div.querySelectorAll("[data-attachment-open]")) {
+      button.addEventListener("click", () => {
+        this._openAttachment(button.getAttribute("data-attachment-open"));
+      });
+    }
+    for (const button of div.querySelectorAll("[data-attachment-retry]")) {
+      button.addEventListener("click", () => {
+        this._retryAttachment(button.getAttribute("data-attachment-retry"));
       });
     }
 
@@ -1148,7 +1441,8 @@ class ChatManager {
       });
     }
 
-    this._el.messages.scrollTop = this._el.messages.scrollHeight;
+    this._trimMessageWindow("oldest");
+    if (autoScroll) this._el.messages.scrollTop = this._el.messages.scrollHeight;
   }
 
   /* R7.4: split a message into text / action / thought segments and

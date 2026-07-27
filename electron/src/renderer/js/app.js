@@ -142,10 +142,13 @@ window.addEventListener("DOMContentLoaded", () => {
   const statsTokens = document.getElementById("stats-tokens");
   const statsCalls = document.getElementById("stats-calls");
 
-  const updateStatus = (ready) => {
+  const updateStatus = (ready, state) => {
     if (ready) {
       if (statusText) { statusText.textContent = "后端已连接"; statusText.className = "status-text"; }
       if (statusDot) { statusDot.className = "status-dot status-dot--ok"; }
+    } else if (state === "booting") {
+      if (statusText) { statusText.textContent = "后端启动中…"; statusText.className = "status-text status-text--loading"; }
+      if (statusDot) { statusDot.className = "status-dot status-dot--loading"; }
     } else {
       if (statusText) { statusText.textContent = "后端离线"; statusText.className = "status-text status-text--loading"; }
       if (statusDot) { statusDot.className = "status-dot status-dot--error"; }
@@ -153,8 +156,8 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 
   if (window.aerie && window.aerie.electron) {
-    window.aerie.electron.onHealth((data) => updateStatus(data.ready));
-    window.aerie.electron.getHealth().then((data) => updateStatus(data.ready));
+    window.aerie.electron.onHealth((data) => updateStatus(data.ready, data.state));
+    window.aerie.electron.getHealth().then((data) => updateStatus(data.ready, data.state));
   }
 
   // ── Window controls (min / max / close) ─────────

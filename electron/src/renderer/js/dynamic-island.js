@@ -417,8 +417,8 @@
           <div class="di-system-card">
             <div class="di-system-icon">${ICON("ui-wifi", 18)}</div>
             <div class="di-system-label">网络</div>
-            <div class="di-system-value">${Math.round(s.net || 0)} KB/s</div>
-            <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${Math.min((s.net || 0) / 5, 100)}%"></div></div>
+            <div class="di-system-value">${Number.isFinite(s.net) ? Math.round(s.net) + " KB/s" : "--"}</div>
+            <div class="di-system-bar"><div class="di-system-bar-fill" style="width:${Number.isFinite(s.net) ? Math.min(s.net / 5, 100) : 0}%"></div></div>
           </div>
         </div>
       </div>

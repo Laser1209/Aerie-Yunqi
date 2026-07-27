@@ -70,6 +70,10 @@ class SettingsPanel {
       });
     });
 
+    // 首次进入 & 窗口尺寸变化时，同步滑动 pill 的位置/宽度
+    requestAnimationFrame(() => this._syncModePill());
+    window.addEventListener("resize", () => this._syncModePill());
+
     // YAML view controls
     const yamlSelect = document.getElementById("yaml-file-select");
     if (yamlSelect) {
@@ -88,6 +92,43 @@ class SettingsPanel {
     // API Key view controls
     const reloadApiBtn = document.getElementById("apikey-reload-btn");
     if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => this.loadApiKeys());
+  }
+
+  _syncModePill() {
+    const tabs = Array.from(document.querySelectorAll(".settings-mode-tab"));
+    if (!tabs.length) return;
+    const pill = document.querySelector(".settings-mode-tabs__pill");
+    if (!pill) return;
+    const active = tabs.find((b) => b.classList.contains("active")) || tabs[0];
+    if (!active) return;
+    const tabsEl = active.parentElement;
+    const rectTabs = tabsEl.getBoundingClientRect();
+    const rectBtn = active.getBoundingClientRect();
+    const leftPad = 5;
+    pill.style.width = rectBtn.width + "px";
+    pill.style.transform = `translateX(${rectBtn.left - rectTabs.left - leftPad}px)`;
+  }
+
+  _switchMode(mode) {
+    this._currentMode = mode;
+    document.querySelectorAll(".settings-mode-tab").forEach((b) => {
+      const isActive = b.getAttribute("data-mode") === mode;
+      b.classList.toggle("active", isActive);
+      b.classList.toggle("is-active", isActive);
+      b.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    const formView = document.getElementById("settings-form-view");
+    const apikeyView = document.getElementById("settings-apikey-view");
+    const yamlView = document.getElementById("settings-yaml-view");
+    if (formView) formView.style.display = mode === "form" ? "" : "none";
+    if (apikeyView) apikeyView.style.display = mode === "apikey" ? "" : "none";
+    if (yamlView) yamlView.style.display = mode === "yaml" ? "" : "none";
+    this._syncModePill();
+    if (mode === "yaml") {
+      this.loadYaml();
+    } else if (mode === "apikey") {
+      this.loadApiKeys();
+    }
   }
 
   async restartBackend() {
@@ -159,24 +200,6 @@ class SettingsPanel {
     } finally {
       setTimeout(() => { if (btn) btn.disabled = false; }, 2000);
       setTimeout(() => { if (st) st.textContent = ""; }, 5000);
-    }
-  }
-
-  _switchMode(mode) {
-    this._currentMode = mode;
-    document.querySelectorAll(".settings-mode-tab").forEach((b) => {
-      b.classList.toggle("active", b.getAttribute("data-mode") === mode);
-    });
-    const formView = document.getElementById("settings-form-view");
-    const apikeyView = document.getElementById("settings-apikey-view");
-    const yamlView = document.getElementById("settings-yaml-view");
-    if (formView) formView.style.display = mode === "form" ? "" : "none";
-    if (apikeyView) apikeyView.style.display = mode === "apikey" ? "" : "none";
-    if (yamlView) yamlView.style.display = mode === "yaml" ? "" : "none";
-    if (mode === "yaml") {
-      this.loadYaml();
-    } else if (mode === "apikey") {
-      this.loadApiKeys();
     }
   }
 
@@ -807,6 +830,9 @@ class SettingsPanel {
     const applyBtn = document.getElementById("di-settings-apply");
     const resetBtn = document.getElementById("di-settings-reset");
     const preview = document.getElementById("di-preview");
+    const masterCheckbox = document.getElementById("di-master-enabled");
+    const masterStatusEl = document.getElementById("di-master-status");
+    const groupEl = document.querySelector(".settings-group--dynamic-island");
 
     if (!applyBtn || !preview) return;
 
@@ -819,6 +845,87 @@ class SettingsPanel {
 
     applyBtn.addEventListener("click", () => this._applyIslandSettings());
     resetBtn.addEventListener("click", () => this._resetIslandSettings());
+
+    // R8.1: master enable slider.
+    //
+    // State sync strategy:
+    //   (1) On init: read getEnabled() once to set the slider to the REAL
+    //       current state of the world, not just a hardcoded "checked".
+    //   (2) On slider change: call setEnabled() → wait for Electron to
+    //       actually confirm (ok=true) before treating it as committed.
+    //       This avoids the classic "UI toggled but backend ignore" bug.
+    //   (3) On enabled-change event: apply state unconditionally. This
+    //       keeps the UI in sync if the user toggles on another window.
+    if (masterCheckbox) {
+      let internalSet = false;
+      const setCheckedSafely = (val) => {
+        internalSet = true;
+        try {
+          if (masterCheckbox.checked !== !!val) masterCheckbox.checked = !!val;
+          if (groupEl) {
+            groupEl.classList.toggle("di-disabled", !val);
+          }
+        } finally {
+          internalSet = false;
+        }
+      };
+      const setStatus = (text, cls) => {
+        if (!masterStatusEl) return;
+        if (!text) {
+          masterStatusEl.style.display = "none";
+          masterStatusEl.textContent = "";
+          masterStatusEl.classList.remove("is-ok", "is-err");
+          return;
+        }
+        masterStatusEl.textContent = text;
+        masterStatusEl.style.display = "block";
+        masterStatusEl.classList.remove("is-ok", "is-err");
+        if (cls) masterStatusEl.classList.add(cls);
+      };
+
+      if (window.aerie?.islandControl) {
+        window.aerie.islandControl.getEnabled?.().then((r) => {
+          if (r && typeof r.enabled === "boolean") setCheckedSafely(r.enabled);
+        }).catch(() => {});
+
+        window.aerie.islandControl.onEnabledChange?.((data) => {
+          if (data && typeof data.enabled === "boolean") setCheckedSafely(data.enabled);
+        });
+      }
+
+      masterCheckbox.addEventListener("change", async (ev) => {
+        if (internalSet) return;
+        if (!window.aerie?.islandControl) {
+          setStatus("Electron IPC 不可用，请重启应用", "is-err");
+          ev.target.checked = !ev.target.checked;
+          return;
+        }
+        const wanted = !!ev.target.checked;
+        masterCheckbox.disabled = true;
+        setStatus(wanted ? "正在开启灵动岛…" : "正在关闭灵动岛…");
+        try {
+          const r = await window.aerie.islandControl.setEnabled(wanted);
+          if (!r || !r.ok) {
+            setCheckedSafely(!wanted);
+            const msg = (r && r.error) ? (r.error + "") : "未知错误";
+            setStatus("切换失败：" + msg.slice(0, 120), "is-err");
+            return;
+          }
+          setCheckedSafely(Boolean(r.enabled));
+          const hint = r.prefsPath ? `（保存在 ${r.prefsPath}）` : "";
+          setStatus(
+            (r.enabled ? "灵动岛已开启" : "灵动岛已关闭") + (r.saved ? hint : "（设置未持久化）"),
+            "is-ok"
+          );
+          setTimeout(() => setStatus(""), 3500);
+        } catch (e) {
+          setCheckedSafely(!wanted);
+          setStatus("切换异常：" + (e.message || String(e)).slice(0, 120), "is-err");
+        } finally {
+          masterCheckbox.disabled = false;
+        }
+      });
+    }
 
     this._loadIslandSettings();
   }

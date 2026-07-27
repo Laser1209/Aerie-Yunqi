@@ -123,7 +123,21 @@ class Brain:
         """Load provider configs from env vars."""
         providers = []
 
-        # Primary chat: Grok (OpenAI-compatible proxy)
+        # Primary chat: DeepSeek
+        ds_key = os.getenv("DEEPSEEK_API_KEY", "")
+        ds_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+        ds_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        ds_supports_tools = os.getenv("DS_SUPPORTS_TOOLS", "false").lower() == "true"
+        if ds_key:
+            providers.append({
+                "name": "deepseek",
+                "url": ds_url,
+                "key": ds_key,
+                "model": ds_model,
+                "supports_tools": ds_supports_tools,
+            })
+
+        # Grok (OpenAI-compatible proxy) — secondary
         grok_key = os.getenv("GROK_API_KEY", "")
         grok_url = os.getenv("GROK_BASE_URL", "https://mysubapi.com/v1")
         grok_model = os.getenv("GROK_MODEL", "grok-4.5")
@@ -149,20 +163,6 @@ class Brain:
                 "key": openai_key,
                 "model": openai_model,
                 "supports_tools": openai_supports_tools,
-            })
-
-        # Fallback: DeepSeek
-        ds_key = os.getenv("DEEPSEEK_API_KEY", "")
-        ds_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-        ds_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-        ds_supports_tools = os.getenv("DS_SUPPORTS_TOOLS", "false").lower() == "true"
-        if ds_key:
-            providers.append({
-                "name": "deepseek",
-                "url": ds_url,
-                "key": ds_key,
-                "model": ds_model,
-                "supports_tools": ds_supports_tools,
             })
 
         # Secondary fallback: SiliconFlow free models
@@ -206,6 +206,151 @@ class Brain:
             logger.warning("No LLM providers configured! Set OPENAI_API_KEY or DEEPSEEK_API_KEY.")
 
         return providers
+
+    _ENV_PROVIDER_TEMPLATES: dict[str, dict] = {
+        "deepseek": {
+            "base_url_env": "DEEPSEEK_BASE_URL",
+            "base_url_default": "https://api.deepseek.com/v1",
+            "model_env": "DEEPSEEK_MODEL",
+            "model_default": "deepseek-chat",
+            "tools_env": "DS_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "grok": {
+            "base_url_env": "GROK_BASE_URL",
+            "base_url_default": "https://mysubapi.com/v1",
+            "model_env": "GROK_MODEL",
+            "model_default": "grok-4.5",
+            "tools_env": "GROK_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "openai": {
+            "base_url_env": "OPENAI_BASE_URL",
+            "base_url_default": "https://api.siliconflow.cn/v1",
+            "model_env": "OPENAI_MODEL",
+            "model_default": "Qwen/Qwen2.5-7B-Instruct",
+            "tools_env": "OPENAI_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "siliconflow": {
+            "base_url_env": "SILICONFLOW_BASE_URL",
+            "base_url_default": "https://api.siliconflow.com/v1",
+            "model_env": "SILICONFLOW_MODEL",
+            "model_default": "google/gemma-4-26B-A4B-it",
+            "tools_env": "SF_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "qwen": {
+            "base_url_env": "QWEN_BASE_URL",
+            "base_url_default": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model_env": "QWEN_MODEL",
+            "model_default": "qwen-plus",
+            "tools_env": "QWEN_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "doubao": {
+            "base_url_env": "DOUBAO_BASE_URL",
+            "base_url_default": "https://ark.cn-beijing.volces.com/api/v3",
+            "model_env": "DOUBAO_MODEL",
+            "model_default": "doubao-seed-2-1-turbo-260628",
+            "tools_env": "DOUBAO_SUPPORTS_TOOLS",
+            "tools_default": "true",
+        },
+        "gemini": {
+            "base_url_env": "GEMINI_BASE_URL",
+            "base_url_default": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "model_env": "GEMINI_MODEL",
+            "model_default": "gemini-2.0-flash-exp",
+            "tools_env": "GEMINI_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "minimax": {
+            "base_url_env": "MINIMAX_BASE_URL",
+            "base_url_default": "https://api.minimaxicom/v1",
+            "model_env": "MINIMAX_MODEL",
+            "model_default": "MiniMax-M3",
+            "tools_env": "MINIMAX_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "bigmodel": {
+            "base_url_env": "BIGMODEL_BASE_URL",
+            "base_url_default": "https://open.bigmodel.cn/api/paas/v4/",
+            "model_env": "BIGMODEL_MODEL",
+            "model_default": "glm-4-plus",
+            "tools_env": "BIGMODEL_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+        "dashscope": {
+            "base_url_env": "DASHSCOPE_BASE_URL",
+            "base_url_default": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model_env": "DASHSCOPE_MODEL",
+            "model_default": "qwen-plus",
+            "tools_env": "DASHSCOPE_SUPPORTS_TOOLS",
+            "tools_default": "false",
+        },
+    }
+
+    def _discover_env_providers(self, exclude_names: set[str] | None = None) -> list[dict]:
+        """Scan all *_API_KEY env vars and build provider configs for known templates.
+
+        Used as a last-resort fallback when the primary provider list is exhausted.
+        Providers already in the main list (by name) are skipped.
+        """
+        exclude = exclude_names or set()
+        discovered: list[dict] = []
+        seen_keys: set[str] = set()
+
+        api_key_prefixes = {
+            "DEEPSEEK": "deepseek",
+            "GROK": "grok",
+            "OPENAI": "openai",
+            "SILICONFLOW": "siliconflow",
+            "QWEN": "qwen",
+            "DOUBAO": "doubao",
+            "GEMINI": "gemini",
+            "MINIMAX": "minimax",
+            "BIGMODEL": "bigmodel",
+            "DASHSCOPE": "dashscope",
+        }
+
+        for env_key, env_val in os.environ.items():
+            if not env_key.endswith("_API_KEY"):
+                continue
+            val = (env_val or "").strip()
+            if not val or val.startswith("your_") or val == "sk-xxx":
+                continue
+            prefix = env_key[: -len("_API_KEY")]
+            name = api_key_prefixes.get(prefix)
+            if not name or name in exclude:
+                continue
+            if val in seen_keys:
+                continue
+            seen_keys.add(val)
+
+            tmpl = self._ENV_PROVIDER_TEMPLATES.get(name)
+            if not tmpl:
+                continue
+
+            base_url = os.getenv(tmpl["base_url_env"], tmpl["base_url_default"]).strip() or tmpl["base_url_default"]
+            model = os.getenv(tmpl["model_env"], tmpl["model_default"]).strip() or tmpl["model_default"]
+            tools_str = os.getenv(tmpl["tools_env"], tmpl["tools_default"]).strip().lower()
+            supports_tools = tools_str == "true"
+
+            discovered.append({
+                "name": f"env-{name}",
+                "url": base_url,
+                "key": val,
+                "model": model,
+                "supports_tools": supports_tools,
+            })
+
+        if discovered:
+            logger.info(
+                "Last-resort env discovery: found %d extra provider(s): %s",
+                len(discovered),
+                ", ".join(p["name"] for p in discovered),
+            )
+        return discovered
 
     async def chat(
         self,
@@ -385,7 +530,71 @@ class Brain:
                     provider["name"], idx + 1, len(self._providers), last_error[:80],
                 )
 
-        logger.error("All %d providers failed. Last error: %s", len(self._providers), last_error)
+        logger.error("All %d providers failed. Last error: %s", len(providers), last_error)
+
+        # ── Last resort: sweep all API keys found in environment ──
+        tried_names = {p["name"] for p in providers}
+        # Also exclude base names of main providers so env-discovered variants
+        # with the same key don't just repeat the same failures.
+        for p in providers:
+            n = p["name"]
+            if n.startswith("env-"):
+                tried_names.add(n[4:])
+            else:
+                tried_names.add(n)
+
+        extra_providers = self._discover_env_providers(exclude_names=tried_names)
+        if extra_providers:
+            logger.warning(
+                "Entering last-resort sweep: trying %d env-discovered provider(s)",
+                len(extra_providers),
+            )
+            for idx, provider in enumerate(extra_providers):
+                try:
+                    resp = await self._call_provider(provider, list(messages), None)
+                    if resp.text and not resp.text.startswith("(连接") and not resp.text.startswith("(思考"):
+                        total_prompt_tokens += resp.tokens_prompt
+                        total_completion_tokens += resp.tokens_completion
+                        total_duration_ms += resp.duration_ms
+                        final_resp = BrainResponse(
+                            text=resp.text.strip(),
+                            provider=resp.provider,
+                            model=resp.model,
+                            tokens_prompt=total_prompt_tokens,
+                            tokens_completion=total_completion_tokens,
+                            duration_ms=total_duration_ms,
+                            react_trace=resp.react_trace,
+                            tool_results=all_tool_results if all_tool_results else None,
+                        )
+                        if tracker._db is not None:
+                            tracker.record(
+                                provider=final_resp.provider,
+                                model=final_resp.model,
+                                prompt_tokens=final_resp.tokens_prompt,
+                                completion_tokens=final_resp.tokens_completion,
+                                user_id=0,
+                            )
+                        logger.info(
+                            "LLM [last-resort]: %s/%s → %d+%d tokens, %dms",
+                            final_resp.provider, final_resp.model,
+                            final_resp.tokens_prompt, final_resp.tokens_completion,
+                            final_resp.duration_ms,
+                        )
+                        return final_resp
+                    else:
+                        last_error = resp.text
+                        logger.warning(
+                            "Last-resort provider %s returned fallback: %s",
+                            provider["name"], last_error[:60],
+                        )
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(
+                        "Last-resort provider %s failed (%d/%d): %s",
+                        provider["name"], idx + 1, len(extra_providers), last_error[:80],
+                    )
+            logger.error("All last-resort providers failed too. Last error: %s", last_error)
+
         return BrainResponse(
             text="(伊塔暂时无法连接大脑，稍后再试...)",
             tool_results=all_tool_results if all_tool_results else None,

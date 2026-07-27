@@ -28,25 +28,63 @@ def _port_is_open(host: str = "127.0.0.1", port: int = 3001) -> bool:
         return False
 
 
+def _terminate_process_tree(proc: subprocess.Popen) -> None:
+    """Terminate only the NapCat process tree launched by this instance."""
+    if sys.platform == "win32":
+        completed = subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=10,
+        )
+        if completed.returncode == 0:
+            return
+    try:
+        proc.terminate()
+        proc.wait(timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
 class NapcatLauncher:
     def __init__(self, settings: dict | None = None) -> None:
         self.settings = settings or {}
         napcat_cfg = self.settings.get("napcat", {})
         self.ws_port = int(napcat_cfg.get("ws_port", 3001))
         self._proc: subprocess.Popen | None = None
+        self._owns_process = False
         self._logs: list[str] = []
         self._phase = "idle"  # idle | starting | qr_pending | connected
+        self._error_code = ""
 
     def get_status(self) -> dict:
         """Return current NapCat status for API."""
         qr_exists = _QRCODE_PATH.exists()
+        running = self._proc is not None and self._proc.poll() is None
+        port_open = _port_is_open(port=self.ws_port)
+        if port_open:
+            phase = "connected"
+        elif running and qr_exists:
+            phase = "qr_pending"
+        elif running and self._phase != "error":
+            phase = "starting"
+        elif self._phase == "error":
+            phase = "error"
+        else:
+            phase = "idle"
+        self._phase = phase
         return {
-            "running": self._proc is not None and self._proc.poll() is None,
-            "ws_port_open": _port_is_open(port=self.ws_port),
-            "pid": self._proc.pid if self._proc else None,
-            "phase": self._phase,
+            "running": running or port_open,
+            "ws_port_open": port_open,
+            "pid": self._proc.pid if running and self._owns_process else None,
+            "phase": phase,
             "qrcode_available": qr_exists,
-            "qrcode_path": str(_QRCODE_PATH) if qr_exists else None,
+            "owned": bool(running and self._owns_process),
+            "error_code": self._error_code if phase == "error" else "",
         }
 
     def get_logs(self, limit: int = 50) -> list[str]:
@@ -56,11 +94,31 @@ class NapcatLauncher:
         """Launch NapCat via launcher-user.bat."""
         if self._proc and self._proc.poll() is None:
             return {"ok": False, "message": "NapCat already running"}
+        if self._proc is not None:
+            self._proc = None
+            self._owns_process = False
+
+        if _port_is_open(port=self.ws_port):
+            self._phase = "connected"
+            self._error_code = ""
+            return {
+                "ok": True,
+                "message": "NapCat was already running outside Aerie",
+                "already_running": True,
+                "owned": False,
+            }
 
         if not _LAUNCHER_BAT.exists():
-            return {"ok": False, "message": f"launcher not found: {_LAUNCHER_BAT}"}
+            self._phase = "error"
+            self._error_code = "launcher_not_found"
+            return {
+                "ok": False,
+                "message": "NapCat launcher is unavailable",
+                "error_code": self._error_code,
+            }
 
         self._phase = "starting"
+        self._error_code = ""
         self._logs.clear()
         self._logs.append("[系统] 正在启动 NapCat...")
 
@@ -69,9 +127,12 @@ class NapcatLauncher:
                 self._proc = subprocess.Popen(
                     [str(_LAUNCHER_BAT)],
                     cwd=str(_NAPCAT_DIR),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=(
+                        subprocess.CREATE_NO_WINDOW
+                        | subprocess.CREATE_NEW_PROCESS_GROUP
+                    ),
                 )
             else:
                 self._proc = subprocess.Popen(
@@ -80,6 +141,7 @@ class NapcatLauncher:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
+            self._owns_process = True
 
             self._logs.append("[系统] NapCat 进程已启动，等待端口...")
 
@@ -94,28 +156,70 @@ class NapcatLauncher:
                 if _QRCODE_PATH.exists():
                     self._phase = "qr_pending"
                     self._logs.append("[系统] 检测到二维码，请用手机QQ扫码登录")
+                    return {
+                        "ok": True,
+                        "port_open": False,
+                        "qrcode_available": True,
+                        "message": "QR code ready",
+                        "owned": True,
+                    }
 
             self._logs.append("[系统] 等待超时，请检查NapCat日志")
-            return {"ok": True, "port_open": False, "message": "Timeout waiting for port"}
+            self._phase = "error"
+            self._error_code = "napcat_start_timeout"
+            return {
+                "ok": False,
+                "port_open": False,
+                "message": "NapCat did not become ready in time",
+                "error_code": self._error_code,
+                "owned": True,
+            }
 
-        except Exception as e:
-            self._phase = "idle"
-            msg = str(e)
-            self._logs.append(f"[错误] 启动失败: {msg}")
+        except Exception:
+            if self._proc is not None and self._owns_process:
+                _terminate_process_tree(self._proc)
+            self._proc = None
+            self._owns_process = False
+            self._phase = "error"
+            self._error_code = "napcat_start_failed"
+            self._logs.append("[错误] 启动失败")
             logger.exception("NapCat start error")
-            return {"ok": False, "message": msg}
+            return {
+                "ok": False,
+                "message": "NapCat failed to start",
+                "error_code": self._error_code,
+            }
 
     async def stop(self) -> dict:
         """Stop NapCat process."""
-        if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
-            try:
-                self._proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._proc.kill()
+        if not self._owns_process and _port_is_open(port=self.ws_port):
+            self._phase = "connected"
+            return {
+                "ok": True,
+                "message": "NapCat was already running outside Aerie",
+                "owned": False,
+            }
+        if self._proc is not None and self._owns_process:
+            _terminate_process_tree(self._proc)
             self._logs.append("[系统] NapCat 已停止")
+        self._proc = None
+        self._owns_process = False
+        for _ in range(20):
+            if not _port_is_open(port=self.ws_port):
+                break
+            await asyncio.sleep(0.25)
+        if _port_is_open(port=self.ws_port):
+            self._phase = "error"
+            self._error_code = "napcat_residual_port"
+            return {
+                "ok": False,
+                "message": "NapCat stopped but its port is still in use",
+                "error_code": self._error_code,
+                "owned": False,
+            }
         self._phase = "idle"
-        return {"ok": True, "message": "NapCat stopped"}
+        self._error_code = ""
+        return {"ok": True, "message": "NapCat stopped", "owned": False}
 
     def read_qrcode(self) -> bytes | None:
         """Read QR code image bytes for display in the UI."""

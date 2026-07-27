@@ -14,6 +14,7 @@ htmlcov/
 
 # Virtual environments
 .venv/
+.venv-attachments/
 venv/
 env/
 ENV/
@@ -29,6 +30,7 @@ data/world_sidecar/
 data/backups/
 data/audit/
 data/mobile_files/
+data/desktop_attachments/
 data/briefs/*.html
 data/briefs/*.json
 /logs/

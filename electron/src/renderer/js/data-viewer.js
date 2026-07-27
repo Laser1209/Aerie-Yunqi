@@ -16,6 +16,15 @@ class DataViewer {
   }
 
   init() {
+    if (
+      window.aerie
+      && window.aerie.electron
+      && typeof window.aerie.electron.onBackendReady === "function"
+    ) {
+      window.aerie.electron.onBackendReady(() => {
+        if (this.visible) this.refreshActive();
+      });
+    }
     document.querySelectorAll(".data-subtab").forEach((btn) => btn.addEventListener("click", () => {
       document.querySelectorAll(".data-subtab").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
@@ -23,6 +32,15 @@ class DataViewer {
     }));
     document.getElementById("data-prev-btn").addEventListener("click", () => this.changePage("chat", -1));
     document.getElementById("data-next-btn").addEventListener("click", () => this.changePage("chat", 1));
+    document.getElementById("chat-log-list").addEventListener("click", (event) => {
+      const open = event.target.closest("[data-attachment-open]");
+      const retry = event.target.closest("[data-attachment-retry]");
+      if (open && window._chat) {
+        window._chat._openAttachment(open.getAttribute("data-attachment-open"));
+      } else if (retry && window._chat) {
+        window._chat._retryAttachment(retry.getAttribute("data-attachment-retry"));
+      }
+    });
     document.getElementById("knowledge-prev-btn").addEventListener("click", () => this.changePage("knowledge", -1));
     document.getElementById("knowledge-next-btn").addEventListener("click", () => this.changePage("knowledge", 1));
     const search = document.getElementById("knowledge-search");
@@ -102,7 +120,13 @@ class DataViewer {
       this.pages.chat = Math.max(1, Math.min(actualPage, pages));
       const history = Array.isArray(data.history) ? data.history : [];
       if (!history.length) el.innerHTML = `<p class="data-empty">${this.meta.chat.total ? "当前页暂无记录" : "暂无聊天记录"}</p>`;
-      else el.innerHTML = history.map((m) => `<div class="chat-log-item"><span class="log-role">${this.esc(m.role === "user" ? "你" : "伊塔")}</span><span class="log-content">${this.esc(m.content || "").slice(0, 160)}</span><span class="log-time">${this.esc(m.created_at ? m.created_at.slice(0, 19) : "")}</span></div>`).join("");
+      else el.innerHTML = history.map((m) => {
+        const attachments = Array.isArray(m.attachments) ? m.attachments : [];
+        const attachmentHtml = attachments.length && window._chat
+          ? `<div class="chat-attachments">${attachments.map((item) => window._chat._buildAttachmentCard(item)).join("")}</div>`
+          : "";
+        return `<div class="chat-log-item"><span class="log-role">${this.esc(m.role === "user" ? "你" : "伊塔")}</span><span class="log-content">${this.esc(m.content || "").slice(0, 160)}${attachmentHtml}</span><span class="log-time">${this.esc(m.created_at ? m.created_at.slice(0, 19) : "")}</span></div>`;
+      }).join("");
       this.updatePagination("chat");
     } catch (e) { el.innerHTML = `<p class="data-error">加载失败：${this.esc(e.message || "请求错误")}</p>`; }
     finally { this.locks.chat = false; }

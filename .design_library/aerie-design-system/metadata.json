@@ -1,0 +1,13 @@
+{
+  "id": "aerie-design-system",
+  "name": "Aerie Design System",
+  "version": "1.0.0",
+  "description": "云栖 Aerie 统一界面设计规范 — 面向 AI 伴侣桌面端的温暖玻璃态设计系统",
+  "author": "Aerie Design Team",
+  "baseScale": 4,
+  "fontBaseSize": 14,
+  "targetPlatforms": ["electron-desktop", "web"],
+  "designPhilosophy": "温暖、通透、有呼吸感的 AI 伴侣界面语言",
+  "primaryReference": "Apple Human Interface Guidelines (adapted)",
+  "icon_lib": "lucide"
+}

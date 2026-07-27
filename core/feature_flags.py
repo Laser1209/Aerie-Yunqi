@@ -25,8 +25,14 @@ def _parse_bool(value: Any) -> bool:
 
 
 class FeatureFlags:
-    def __init__(self, settings_path: str | Path = _DEFAULT_SETTINGS_PATH) -> None:
+    def __init__(
+        self,
+        settings_path: str | Path = _DEFAULT_SETTINGS_PATH,
+        *,
+        runtime_config_service: Any | None = None,
+    ) -> None:
         self.settings_path = Path(settings_path)
+        self.runtime_config_service = runtime_config_service
         self._flags = self._load_flags()
 
     def _load_flags(self) -> dict[str, bool]:
@@ -39,6 +45,10 @@ class FeatureFlags:
         return {str(name): _parse_bool(value) for name, value in flags.items()}
 
     def is_enabled(self, name: str) -> bool:
+        if self.runtime_config_service is not None:
+            value = self.runtime_config_service.get_effective(str(name), None)
+            if value is not None:
+                return bool(value)
         env_value = os.environ.get(f"AERIE_FEATURE_{name.upper()}")
         if env_value is not None:
             return _parse_bool(env_value)

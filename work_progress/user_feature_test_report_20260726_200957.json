@@ -1,0 +1,330 @@
+{
+  "generated_at": "2026-07-26 20:09:57",
+  "checklist_total": 54,
+  "results": {
+    "NAV-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "NAV-02": {
+      "ok": true,
+      "status": 503,
+      "note": "HTTP 503",
+      "skipped": false
+    },
+    "NAV-03": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "CHAT-01": {
+      "ok": false,
+      "status": 503,
+      "note": "HTTP 503",
+      "skipped": false
+    },
+    "CHAT-02": {
+      "ok": false,
+      "status": 0,
+      "note": "SKIP: 未拿到 request_id（chat send 未返回）",
+      "skipped": true
+    },
+    "CHAT-06": {
+      "ok": false,
+      "status": 0,
+      "note": "SKIP: 未拿到 request_id",
+      "skipped": true
+    },
+    "CHAT-03": {
+      "ok": false,
+      "status": 503,
+      "note": "HTTP 503",
+      "skipped": false
+    },
+    "CHAT-04": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "CHAT-05": {
+      "ok": false,
+      "status": 409,
+      "note": "HTTP 409",
+      "skipped": false
+    },
+    "CHAT-07": {
+      "ok": false,
+      "status": 422,
+      "note": "HTTP 422",
+      "skipped": false
+    },
+    "CHAT-08": {
+      "ok": false,
+      "status": 422,
+      "note": "HTTP 422",
+      "skipped": false
+    },
+    "UP-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "UP-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "UP-05": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "UP-03": {
+      "ok": false,
+      "status": 422,
+      "note": "HTTP 422",
+      "skipped": false
+    },
+    "UP-04": {
+      "ok": true,
+      "status": 404,
+      "note": "HTTP 404",
+      "skipped": false
+    },
+    "UP-06": {
+      "ok": true,
+      "status": 404,
+      "note": "HTTP 404",
+      "skipped": false
+    },
+    "IMG-01": {
+      "ok": true,
+      "status": 400,
+      "note": "HTTP 400",
+      "skipped": false
+    },
+    "IMG-02": {
+      "ok": true,
+      "status": 400,
+      "note": "HTTP 400",
+      "skipped": false
+    },
+    "AUD-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "AUD-02": {
+      "ok": false,
+      "status": 0,
+      "note": "SKIP: 需真实音频文件，本轮跳过",
+      "skipped": true
+    },
+    "EMO-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "EMO-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "EMO-03": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "COG-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "COG-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "QQ-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "QQ-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "QQ-03": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "WLD-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "WLD-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "TSK-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "TSK-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "TSK-03": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "PRO-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "PRO-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "PRO-03": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "PRO-04": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "PRO-05": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "OFF-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "OFF-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "OFF-03": {
+      "ok": true,
+      "status": 0,
+      "note": "/api/office/device=HTTP 200 | /api/office/dir=HTTP 200",
+      "skipped": false
+    },
+    "CFG-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "CFG-02": {
+      "ok": false,
+      "status": 422,
+      "note": "HTTP 422",
+      "skipped": false
+    },
+    "CFG-03": {
+      "ok": false,
+      "status": 422,
+      "note": "HTTP 422",
+      "skipped": false
+    },
+    "CFG-04": {
+      "ok": false,
+      "status": 503,
+      "note": "HTTP 503",
+      "skipped": false
+    },
+    "DAT-01": {
+      "ok": true,
+      "status": 0,
+      "note": "/api/permissions/config=HTTP 200 | /api/permissions/config=HTTP 200",
+      "skipped": false
+    },
+    "DAT-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "DAT-03": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "EVO-01": {
+      "ok": false,
+      "status": 503,
+      "note": "HTTP 503",
+      "skipped": false
+    },
+    "EVO-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "CC-01": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "CC-02": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    },
+    "CC-03": {
+      "ok": true,
+      "status": 200,
+      "note": "HTTP 200",
+      "skipped": false
+    }
+  }
+}

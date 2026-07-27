@@ -646,6 +646,30 @@
             </div>
           </div>
 
+          <div class="world-dashboard-section">
+            <h3>模拟生命周期</h3>
+            <div class="world-dashboard-lifecycle-grid">
+              <div class="world-dashboard-lifecycle-item"><span>功能</span><strong id="world-dashboard-enabled">disabled</strong></div>
+              <div class="world-dashboard-lifecycle-item"><span>目标状态</span><strong id="world-dashboard-desired">stopped</strong></div>
+              <div class="world-dashboard-lifecycle-item"><span>实际状态</span><strong id="world-dashboard-actual">stopped</strong></div>
+              <div class="world-dashboard-lifecycle-item"><span>适配器</span><strong id="world-dashboard-adapter">null</strong></div>
+              <div class="world-dashboard-lifecycle-item"><span>版本</span><strong id="world-dashboard-revision">0</strong></div>
+              <div class="world-dashboard-lifecycle-item"><span>健康</span><strong id="world-dashboard-runtime-health">unknown</strong></div>
+              <div class="world-dashboard-lifecycle-item"><span>最近 Tick</span><strong id="world-dashboard-last-tick">--</strong></div>
+              <div class="world-dashboard-lifecycle-item"><span>最近快照</span><strong id="world-dashboard-last-checkpoint">--</strong></div>
+            </div>
+            <div id="world-dashboard-runtime-error" class="world-dashboard-runtime-error" role="status"></div>
+            <div class="world-dashboard-lifecycle-actions">
+              <button id="world-dashboard-enable" class="btn btn-primary btn-sm">启用</button>
+              <button id="world-dashboard-disable" class="btn btn-secondary btn-sm">停用</button>
+              <button id="world-dashboard-start" class="btn btn-primary btn-sm">启动</button>
+              <button id="world-dashboard-stop" class="btn btn-secondary btn-sm">停止</button>
+              <button id="world-dashboard-pause" class="btn btn-secondary btn-sm">暂停</button>
+              <button id="world-dashboard-resume" class="btn btn-secondary btn-sm">恢复</button>
+              <button id="world-dashboard-restart" class="btn btn-secondary btn-sm">重启</button>
+            </div>
+          </div>
+
           <div class="world-dashboard-grid">
             <div class="world-dashboard-card">
               <span class="world-dashboard-label">状态</span>
@@ -982,15 +1006,35 @@
       <!-- Settings panel -->
       <section id="panel-settings" class="tab-panel">
         <div id="settings-content" class="settings-panel">
-          <h2>系统设置</h2>
-          <div class="settings-mode-tabs">
-            <button class="settings-mode-tab active" data-mode="form">常用</button>
-            <button class="settings-mode-tab" data-mode="apikey">API Key</button>
-            <button class="settings-mode-tab" data-mode="yaml">高级 (YAML)</button>
+          <div class="settings-hero">
+            <div class="settings-hero__text">
+              <h2 class="settings-hero__title">系统设置</h2>
+              <p class="settings-hero__subtitle">常用偏好 · API 服务 · 高级配置，一处管理她的所有行为</p>
+            </div>
+            <div class="settings-hero__badge" aria-hidden="true">
+              <svg class="icon icon--18" style="color:var(--color-primary,#ff5b9c);vertical-align:-3px;margin-right:4px;"><use href="#icon-ui-flower"/></svg>
+              <span>Aerie</span>
+            </div>
           </div>
 
+          <nav class="settings-mode-tabs" role="tablist" aria-label="系统设置分类">
+            <button class="settings-mode-tab is-mode-tab is-active active" role="tab" aria-selected="true" data-mode="form" id="tab-settings-form" aria-controls="settings-form-view">
+              <span class="is-mode-tab__dot"></span>
+              <span class="is-mode-tab__label">常用</span>
+            </button>
+            <button class="settings-mode-tab is-mode-tab" role="tab" aria-selected="false" data-mode="apikey" id="tab-settings-apikey" aria-controls="settings-apikey-view">
+              <span class="is-mode-tab__dot"></span>
+              <span class="is-mode-tab__label">API Key</span>
+            </button>
+            <button class="settings-mode-tab is-mode-tab" role="tab" aria-selected="false" data-mode="yaml" id="tab-settings-yaml" aria-controls="settings-yaml-view">
+              <span class="is-mode-tab__dot"></span>
+              <span class="is-mode-tab__label">高级 (YAML)</span>
+            </button>
+            <span class="settings-mode-tabs__pill" aria-hidden="true"></span>
+          </nav>
+
           <!-- 常用 form 视图 -->
-          <div id="settings-form-view">
+          <div id="settings-form-view" role="tabpanel" aria-labelledby="tab-settings-form" tabindex="0">
             <!-- Block-2 A2: persona 头像 + 中英名 -->
             <div class="settings-group settings-group--persona">
               <h3 class="settings-section-title">她的样子 · Her Appearance</h3>
@@ -1077,6 +1121,25 @@
             <div class="settings-group settings-group--dynamic-island">
               <h3 class="settings-section-title">灵动岛 · Dynamic Island</h3>
               <p class="settings-hint">桌面顶部灵动岛的外观、交互和组件配置 / Desktop Dynamic Island appearance & interaction</p>
+
+              <!-- R8.1: Enable/disable Dynamic Island master switch. State is kept
+                   in sync across three endpoints:
+                   (1) this slider in the settings panel
+                   (2) the actual BrowserWindow (create / destroy) in main.js
+                   (3) a persistent JSON prefs file (survives app restart). -->
+              <div class="settings-subgroup di-master-switch-row" id="di-master-switch-row">
+                <div class="di-master-switch-text">
+                  <label>启用灵动岛</label>
+                  <p class="settings-hint di-master-hint">
+                    关闭后桌面顶部的胶囊窗口将立即隐藏，下次启动应用也不会自动出现。
+                  </p>
+                </div>
+                <label class="di-switch" aria-label="启用灵动岛开关" title="点击切换">
+                  <input type="checkbox" id="di-master-enabled">
+                  <span class="di-switch-slider"></span>
+                </label>
+                <div class="di-master-status" id="di-master-status" style="display:none;"></div>
+              </div>
 
               <div class="di-settings-preview">
                 <div class="di-preview-capsule theme-dark" id="di-preview">
@@ -1251,7 +1314,7 @@
           </div>
 
           <!-- API Key 视图 -->
-          <div id="settings-apikey-view" style="display:none;">
+          <div id="settings-apikey-view" role="tabpanel" aria-labelledby="tab-settings-apikey" tabindex="0" style="display:none;">
             <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6;">
               <strong style="color: var(--accent, #ff5b9c);">AI 服务配置</strong><br>
               选择你常用的 AI 服务商，填入 API Key 就能开始对话了。所有密钥只保存在本地，不会上传到任何地方。
@@ -1266,7 +1329,7 @@
           </div>
 
           <!-- 高级 YAML 视图 -->
-          <div id="settings-yaml-view" style="display:none;">
+          <div id="settings-yaml-view" role="tabpanel" aria-labelledby="tab-settings-yaml" tabindex="0" style="display:none;">
             <div class="settings-yaml-warning" style="margin: 8px 0 12px; padding: 10px 12px; border: 1px solid rgba(255, 91, 156, 0.4); border-radius: 8px; background: rgba(255, 91, 156, 0.06); font-size: 12px; line-height: 1.5;">
               <strong>改坏了她会不开心。修改前自动备份。/ A bad edit makes her sad. Auto-backup first.</strong>
             </div>

@@ -30,11 +30,14 @@ function loadSseHelpers() {
     path.join(__dirname, "..", "src", "main.js"),
     "utf8",
   );
-  const sandbox = { module: { exports: {} }, exports: {} };
+  const sandbox = { module: { exports: {} }, exports: {}, require, Buffer };
   const snippet = [
+    extractFunction(source, "decodeBufferedUtf8Chunks"),
+    "const { StringDecoder } = require(\"string_decoder\");",
+    extractFunction(source, "createUtf8SseProcessor"),
     extractFunction(source, "buildSseHeaders"),
     extractFunction(source, "parseSseFrame"),
-    "module.exports = { buildSseHeaders, parseSseFrame };",
+    "module.exports = { decodeBufferedUtf8Chunks, createUtf8SseProcessor, buildSseHeaders, parseSseFrame };",
   ].join("\n");
   vm.runInNewContext(snippet, sandbox);
   return sandbox.module.exports;
@@ -100,6 +103,39 @@ test("sse bridge falls back to payload event_id and ignores heartbeats", () => {
 
   assert.equal(parsed.id, "evt_payload_1");
   assert.equal(parsed.data, '{"event_id":"evt_payload_1","role":"assistant"}');
+});
+
+test("sse bridge decodes Chinese JSON after a multibyte character crosses chunks", () => {
+  const { decodeBufferedUtf8Chunks } = loadSseHelpers();
+  const body = '{"message":"她说你好，云栖会记得这次修复"}';
+  const bytes = Buffer.from(body, "utf8");
+  const splitAt = bytes.indexOf(Buffer.from("云", "utf8")) + 1;
+  const decoded = decodeBufferedUtf8Chunks([
+    bytes.subarray(0, splitAt),
+    bytes.subarray(splitAt),
+  ]);
+
+  assert.equal(decoded, body);
+  assert.doesNotMatch(decoded, /�/);
+  assert.equal(JSON.parse(decoded).message, "她说你好，云栖会记得这次修复");
+});
+
+test("sse bridge preserves Chinese event frames when multibyte characters cross chunks", () => {
+  const { createUtf8SseProcessor } = loadSseHelpers();
+  const frameA = 'id: evt_utf8_1\ndata: {"event_id":"evt_utf8_1","text":"云栖收到第一帧"}\n\n';
+  const frameB = 'id: evt_utf8_2\ndata: {"event_id":"evt_utf8_2","text":"继续保持边界"}\n\n';
+  const body = frameA + frameB;
+  const bytes = Buffer.from(body, "utf8");
+  const splitAt = bytes.indexOf(Buffer.from("栖", "utf8")) + 1;
+  const frames = [];
+  const processor = createUtf8SseProcessor((frame) => frames.push(frame));
+  processor.write(bytes.subarray(0, splitAt));
+  processor.write(bytes.subarray(splitAt));
+  const remaining = processor.end();
+
+  assert.equal(remaining, "");
+  assert.deepEqual(frames, [frameA.trim(), frameB.trim()]);
+  assert.doesNotMatch(frames.join("\n"), /�/);
 });
 
 test("sse bridge stores parsed ids as reconnect cursors while forwarding payloads", () => {

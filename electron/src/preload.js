@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("aerie", {
   },
   napcat: {
     getStatus: () => ipcRenderer.invoke("napcat:getStatus"),
+    getQrCode: () => ipcRenderer.invoke("napcat:getQrCode"),
     start: () => ipcRenderer.invoke("napcat:start"),
     stop: () => ipcRenderer.invoke("napcat:stop"),
     onEvent: (cb) => {
@@ -38,6 +39,9 @@ contextBridge.exposeInMainWorld("aerie", {
   electron: {
     onHealth: (cb) => {
       ipcRenderer.on("backend:health", (_event, data) => cb(data));
+    },
+    onBackendReady: (cb) => {
+      ipcRenderer.on("backend:ready", (_event, data) => cb(data || {}));
     },
     getHealth: () => ipcRenderer.invoke("get-health"),
     window: {
@@ -101,11 +105,26 @@ contextBridge.exposeInMainWorld("aerie", {
     set: (data) => ipcRenderer.invoke("settings:set", data),
     reset: () => ipcRenderer.invoke("settings:reset"),
   },
+  attachments: {
+    open: (attachmentId) => ipcRenderer.invoke("attachments:open", attachmentId),
+    download: (attachmentId) => ipcRenderer.invoke("attachments:download", attachmentId),
+  },
   worldDashboard: {
     getStatus: () => ipcRenderer.invoke("world-dashboard:get-status"),
     getSnapshot: () => ipcRenderer.invoke("world-dashboard:get-snapshot"),
     show: () => ipcRenderer.invoke("world-dashboard:show"),
     hide: () => ipcRenderer.invoke("world-dashboard:hide"),
+    control: (action, payload) => ipcRenderer.invoke(
+      "world-dashboard:control",
+      { action, payload: payload || {} },
+    ),
+    enable: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "enable", payload: payload || {} }),
+    disable: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "disable", payload: payload || {} }),
+    start: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "start", payload: payload || {} }),
+    stop: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "stop", payload: payload || {} }),
+    pause: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "pause", payload: payload || {} }),
+    resume: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "resume", payload: payload || {} }),
+    restart: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "restart", payload: payload || {} }),
     approveCandidate: (payload) => ipcRenderer.invoke("world-dashboard:approve-candidate", payload || {}),
     previewCreative: (payload) => ipcRenderer.invoke("world-dashboard:preview-creative", payload || {}),
   },
@@ -117,6 +136,16 @@ contextBridge.exposeInMainWorld("aerie", {
     setConfig: (cfg) => ipcRenderer.invoke("island:set-config", cfg || {}),
     getConfig: () => ipcRenderer.invoke("island:get-config"),
     notify: (data) => ipcRenderer.invoke("island:notify", data || {}),
+    // R8.1: master enable switch for dynamic island
+    setEnabled: (enable) => ipcRenderer.invoke("island:set-enabled", { enabled: !!enable }),
+    getEnabled: () => ipcRenderer.invoke("island:get-enabled"),
+    onEnabledChange: (cb) => {
+      const handler = (_event, data) => {
+        try { cb(data || {}); } catch (_) {}
+      };
+      ipcRenderer.on("island:enabled-change", handler);
+      return () => ipcRenderer.removeListener("island:enabled-change", handler);
+    },
   },
   dynamicIsland: {
     setSize: (width, height) => ipcRenderer.invoke("island:set-size", { width, height }),

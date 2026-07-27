@@ -25,7 +25,8 @@
       "canvasData": {
         "x": 620,
         "y": 0,
-        "group": 0
+        "group": 0,
+        "deviceType": "desktop"
       },
       "htmlSrc": "pages/chat-panel.html",
       "devMetadata": {
@@ -51,6 +52,8 @@
   ],
   "config": {
     "autoLayout": true,
-    "deviceType": "desktop"
+    "deviceType": "desktop",
+    "visualEditorEnabled": false,
+    "showEdge": false
   }
 }

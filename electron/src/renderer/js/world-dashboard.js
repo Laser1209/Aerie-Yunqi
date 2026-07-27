@@ -5,6 +5,9 @@ class WorldDashboardPanel {
     this._visible = false;
     this._initialized = false;
     this._els = {};
+    this._pollTimer = null;
+    this._operationSequence = 0;
+    this._lifecycle = defaultLifecycle();
   }
 
   init() {
@@ -20,6 +23,7 @@ class WorldDashboardPanel {
       panels: [],
       errors: [],
       chatPublishAvailable: true,
+      lifecycle: defaultLifecycle(),
     });
     this._renderSnapshot({});
     return Promise.resolve();
@@ -29,42 +33,24 @@ class WorldDashboardPanel {
     this._visible = !!visible;
     if (this._visible) {
       this.refresh();
+      this._startPolling();
+    } else {
+      this._stopPolling();
     }
   }
 
   async refresh() {
     const api = this._api();
     if (!api || typeof api.getStatus !== "function") {
-      this._renderStatus({
-        status: "unavailable",
-        visible: false,
-        plugin: { pluginId: "aerie.world", state: "missing_preload", crashCount: 0 },
-        backend: { status: "not_checked" },
-        panels: [],
-        errors: ["preload_missing"],
-        chatPublishAvailable: true,
-      });
+      this._renderUnavailable("preload_missing");
       return;
     }
     await this._withButton(this._els.refresh, async () => {
       try {
         this._renderStatus(await api.getStatus());
-        if (typeof api.getSnapshot === "function") {
-          this._renderSnapshot(await api.getSnapshot());
-        } else {
-          this._renderSnapshot({});
-        }
+        this._renderSnapshot(typeof api.getSnapshot === "function" ? await api.getSnapshot() : {});
       } catch (_) {
-        this._renderStatus({
-          status: "unavailable",
-          visible: false,
-          plugin: { pluginId: "aerie.world", state: "status_failed", crashCount: 0 },
-          backend: { status: "unreachable" },
-          panels: [],
-          errors: ["status_failed"],
-          chatPublishAvailable: true,
-        });
-        this._renderSnapshot({});
+        this._renderUnavailable("status_failed");
       }
     });
   }
@@ -72,16 +58,40 @@ class WorldDashboardPanel {
   async show() {
     const api = this._api();
     if (!api || typeof api.show !== "function") return this.refresh();
-    await this._withButton(this._els.show, async () => {
-      this._renderStatus(await api.show());
-    });
+    await this._withButton(this._els.show, async () => this._renderStatus(await api.show()));
   }
 
   async hide() {
     const api = this._api();
     if (!api || typeof api.hide !== "function") return this.refresh();
-    await this._withButton(this._els.hide, async () => {
-      this._renderStatus(await api.hide());
+    await this._withButton(this._els.hide, async () => this._renderStatus(await api.hide()));
+  }
+
+  async control(action) {
+    const api = this._api();
+    const command = safeInput(action).toLowerCase();
+    const invoke = api && (typeof api.control === "function"
+      ? (payload) => api.control(command, payload)
+      : (typeof api[command] === "function" ? (payload) => api[command](payload) : null));
+    if (!invoke) {
+      setText(this._els.runtimeError || this._els.errors, "lifecycle_unsupported");
+      return;
+    }
+    await this._withButton(this._els[command], async () => {
+      try {
+        const result = await invoke({
+          expectedRevision: Number(this._lifecycle.revision || 0),
+          configExpectedRevision: Number(this._lifecycle.configRevision || 0),
+          idempotencyKey: this._operationId(command),
+        });
+        setText(
+          this._els.runtimeError || this._els.errors,
+          result && result.accepted === true ? "" : safeInput(result && result.errorCode) || "control_rejected",
+        );
+      } catch (_) {
+        setText(this._els.runtimeError || this._els.errors, "control_failed");
+      }
+      await this.refresh();
     });
   }
 
@@ -126,20 +136,17 @@ class WorldDashboardPanel {
     await this._withButton(this._els.creativePreview, async () => {
       try {
         const result = await api.previewCreative(payload);
-        const draft = (result && result.draft && typeof result.draft === "object") ? result.draft : {};
+        const draft = result && result.draft && typeof result.draft === "object" ? result.draft : {};
         const keys = Array.isArray(draft.payloadKeys)
           ? draft.payloadKeys.map((key) => safeInput(key)).filter(Boolean)
           : [];
-        setText(
-          this._els.creativeResult,
-          [
-            safeInput(result && result.status),
-            safeInput(draft.kind),
-            safeInput(draft.title),
-            safeInput(draft.payloadSha256),
-            keys.length ? `keys: ${keys.join(", ")}` : "",
-          ].filter(Boolean).join(" · ") || "preview",
-        );
+        setText(this._els.creativeResult, [
+          safeInput(result && result.status),
+          safeInput(draft.kind),
+          safeInput(draft.title),
+          safeInput(draft.payloadSha256),
+          keys.length ? `keys: ${keys.join(", ")}` : "",
+        ].filter(Boolean).join(" · ") || "preview");
       } catch (_) {
         setText(this._els.creativeResult, "preview_failed");
       }
@@ -148,22 +155,14 @@ class WorldDashboardPanel {
 
   _bindElements() {
     const byId = (id) => document.getElementById(id);
-    this._els = {
-      status: byId("world-dashboard-status"),
-      visible: byId("world-dashboard-visible"),
-      plugin: byId("world-dashboard-plugin"),
-      backend: byId("world-dashboard-backend"),
-      chatPublish: byId("world-dashboard-chat-publish"),
-      panels: byId("world-dashboard-panels"),
-      errors: byId("world-dashboard-errors"),
-      updated: byId("world-dashboard-updated"),
-      summary: byId("world-dashboard-summary"),
-      relationship: byId("world-dashboard-relationship"),
-      timeline: byId("world-dashboard-timeline"),
-      candidates: byId("world-dashboard-candidates"),
-      refresh: byId("world-dashboard-refresh"),
-      show: byId("world-dashboard-show"),
-      hide: byId("world-dashboard-hide"),
+    const ids = [
+      "status", "visible", "plugin", "backend", "chat-publish", "panels", "errors", "updated",
+      "summary", "relationship", "timeline", "candidates", "refresh", "show", "hide",
+      "enabled", "desired", "actual", "adapter", "revision", "runtime-health", "last-tick",
+      "last-checkpoint", "runtime-error", "enable", "disable", "start", "stop", "pause", "resume", "restart",
+    ];
+    ids.forEach((suffix) => { this._els[toCamel(suffix)] = byId(`world-dashboard-${suffix}`); });
+    Object.assign(this._els, {
       candidateId: byId("world-candidate-id"),
       candidateAction: byId("world-candidate-action"),
       candidateReason: byId("world-candidate-reason"),
@@ -175,66 +174,84 @@ class WorldDashboardPanel {
       creativePayload: byId("world-creative-payload"),
       creativeResult: byId("world-creative-result"),
       creativePreview: byId("world-creative-preview"),
-    };
+    });
   }
 
   _wireActions() {
-    onClick(this._els.refresh, () => this.refresh());
-    onClick(this._els.show, () => this.show());
-    onClick(this._els.hide, () => this.hide());
+    ["refresh", "show", "hide"].forEach((action) => onClick(this._els[action], () => this[action]()));
+    ["enable", "disable", "start", "stop", "pause", "resume", "restart"].forEach((action) => {
+      onClick(this._els[action], () => this.control(action));
+    });
     onClick(this._els.candidateApprove, () => this.approveCandidate());
     onClick(this._els.creativePreview, () => this.previewCreative());
   }
 
+  _renderUnavailable(errorCode) {
+    this._renderStatus({
+      status: "unavailable",
+      visible: false,
+      plugin: { pluginId: "aerie.world", state: errorCode, crashCount: 0 },
+      backend: { status: "unreachable" },
+      panels: [],
+      errors: [errorCode],
+      chatPublishAvailable: true,
+      lifecycle: { ...defaultLifecycle(), errorCode },
+    });
+    this._renderSnapshot({});
+  }
+
   _renderStatus(status) {
     const safeStatus = status && typeof status === "object" ? status : {};
-    const plugin = safeStatus.plugin && typeof safeStatus.plugin === "object" ? safeStatus.plugin : {};
-    const backend = safeStatus.backend && typeof safeStatus.backend === "object" ? safeStatus.backend : {};
+    const plugin = objectValue(safeStatus.plugin);
+    const backend = objectValue(safeStatus.backend);
+    const lifecycleSource = safeStatus.lifecycle && typeof safeStatus.lifecycle === "object"
+      ? safeStatus.lifecycle
+      : plugin;
+    this._lifecycle = {
+      enabled: lifecycleSource.enabled === true,
+      desired: safeInput(lifecycleSource.desired || "stopped"),
+      actual: safeInput(lifecycleSource.actual || "stopped"),
+      adapter: safeInput(lifecycleSource.adapter || "null"),
+      revision: Number(lifecycleSource.revision || 0),
+      configRevision: Number(lifecycleSource.configRevision || 0),
+    };
     const panels = Array.isArray(safeStatus.panels) ? safeStatus.panels : [];
     const errors = Array.isArray(safeStatus.errors) ? safeStatus.errors : [];
-
     setText(this._els.status, safeInput(safeStatus.status || "unknown"));
     setText(this._els.visible, safeStatus.visible ? "visible" : "hidden");
-    setText(
-      this._els.plugin,
-      `${safeInput(plugin.pluginId || "aerie.world")} · ${safeInput(plugin.state || "unknown")} · crashes ${Number(plugin.crashCount || 0)}`,
-    );
+    setText(this._els.plugin, `${safeInput(plugin.pluginId || "aerie.world")} · ${safeInput(plugin.state || "unknown")} · crashes ${Number(plugin.crashCount || 0)}`);
     setText(this._els.backend, `backend ${safeInput(backend.status || "unknown")}`);
     setText(this._els.chatPublish, safeStatus.chatPublishAvailable === false ? "unavailable" : "available");
     setText(this._els.panels, panels.length ? panels.map((item) => safeInput(item)).filter(Boolean).join(" · ") : "暂无数据");
     setText(this._els.errors, errors.length ? errors.map((item) => safeInput(item)).filter(Boolean).join(" · ") : "");
     setText(this._els.updated, formatUpdatedAt(safeStatus.updatedAt));
+    setText(this._els.enabled, this._lifecycle.enabled ? "enabled" : "disabled");
+    setText(this._els.desired, this._lifecycle.desired);
+    setText(this._els.actual, this._lifecycle.actual);
+    setText(this._els.adapter, this._lifecycle.adapter);
+    setText(this._els.revision, String(this._lifecycle.revision));
+    setText(this._els.runtimeHealth, safeInput(lifecycleSource.health || lifecycleSource.heartbeatStatus || "unknown"));
+    setText(this._els.lastTick, formatTimestamp(lifecycleSource.lastTickAt));
+    setText(this._els.lastCheckpoint, formatTimestamp(lifecycleSource.lastCheckpointAt));
+    setText(this._els.runtimeError, safeInput(lifecycleSource.errorCode || ""));
+    this._syncControlButtons();
   }
 
   _renderSnapshot(snapshot) {
-    const safeSnapshot = snapshot && typeof snapshot === "object" ? snapshot : {};
-    const summary = safeSnapshot.worldSummary && typeof safeSnapshot.worldSummary === "object"
-      ? safeSnapshot.worldSummary
-      : {};
-    const relationship = safeSnapshot.relationshipState && typeof safeSnapshot.relationshipState === "object"
-      ? safeSnapshot.relationshipState
-      : {};
+    const safeSnapshot = objectValue(snapshot);
+    const summary = objectValue(safeSnapshot.worldSummary);
+    const relationship = objectValue(safeSnapshot.relationshipState);
     const timeline = Array.isArray(safeSnapshot.actionTimeline) ? safeSnapshot.actionTimeline : [];
     const candidates = Array.isArray(safeSnapshot.imageCandidates) ? safeSnapshot.imageCandidates : [];
-
-    setText(this._els.summary, compactParts([
-      summary.status,
-      summary.phase,
-      summary.location,
-      summary.activity,
-    ]));
+    setText(this._els.summary, compactParts([summary.status, summary.phase, summary.location, summary.activity]));
     setText(this._els.relationship, compactParts([
       relationship.persona_id || relationship.personaId,
       relationship.warmth !== undefined ? `warmth ${safeInput(relationship.warmth)}` : "",
       relationship.summary,
     ]));
-    const firstEvent = timeline[0] && typeof timeline[0] === "object" ? timeline[0] : {};
-    setText(this._els.timeline, compactParts([
-      firstEvent.sequence,
-      firstEvent.topic,
-      firstEvent.eventType || firstEvent.event_type,
-    ]));
-    const firstCandidate = candidates[0] && typeof candidates[0] === "object" ? candidates[0] : {};
+    const firstEvent = objectValue(timeline[0]);
+    setText(this._els.timeline, compactParts([firstEvent.sequence, firstEvent.topic, firstEvent.eventType || firstEvent.event_type]));
+    const firstCandidate = objectValue(candidates[0]);
     setText(this._els.candidates, compactParts([
       firstCandidate.candidateId || firstCandidate.candidate_id,
       firstCandidate.promptKey || firstCandidate.prompt_key,
@@ -246,14 +263,53 @@ class WorldDashboardPanel {
     return window.aerie && window.aerie.worldDashboard ? window.aerie.worldDashboard : null;
   }
 
+  _startPolling() {
+    if (this._pollTimer || typeof window.setInterval !== "function") return;
+    this._pollTimer = window.setInterval(() => { if (this._visible) this.refresh(); }, 3000);
+  }
+
+  _stopPolling() {
+    if (!this._pollTimer || typeof window.clearInterval !== "function") return;
+    window.clearInterval(this._pollTimer);
+    this._pollTimer = null;
+  }
+
+  _syncControlButtons() {
+    const { enabled, actual } = this._lifecycle;
+    setDisabled(this._els.enable, enabled);
+    setDisabled(this._els.disable, !enabled);
+    setDisabled(this._els.start, !enabled || ["running", "starting", "paused"].includes(actual));
+    setDisabled(this._els.stop, !enabled || actual === "stopped");
+    setDisabled(this._els.pause, !enabled || actual !== "running");
+    setDisabled(this._els.resume, !enabled || actual !== "paused");
+    setDisabled(this._els.restart, !enabled || ["starting", "stopping"].includes(actual));
+  }
+
+  _operationId(action) {
+    this._operationSequence += 1;
+    return `world-ui:${safeInput(action)}:${Date.now()}:${this._operationSequence}`;
+  }
+
   async _withButton(button, fn) {
     if (button) button.disabled = true;
-    try {
-      await fn();
-    } finally {
+    try { await fn(); }
+    finally {
       if (button) button.disabled = false;
+      this._syncControlButtons();
     }
   }
+}
+
+function defaultLifecycle() {
+  return { enabled: false, desired: "stopped", actual: "stopped", adapter: "null", revision: 0, configRevision: 0 };
+}
+
+function objectValue(value) {
+  return value && typeof value === "object" ? value : {};
+}
+
+function toCamel(value) {
+  return String(value).replace(/-([a-z])/g, (_match, char) => char.toUpperCase());
 }
 
 function onClick(element, handler) {
@@ -265,8 +321,11 @@ function onClick(element, handler) {
 }
 
 function setText(element, value) {
-  if (!element) return;
-  element.textContent = safeInput(value, 500);
+  if (element) element.textContent = safeInput(value, 500);
+}
+
+function setDisabled(element, value) {
+  if (element) element.disabled = !!value;
 }
 
 function compactParts(parts) {
@@ -289,19 +348,21 @@ function parseJsonObject(value) {
   try {
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch (_) {
-    return {};
-  }
+  } catch (_) { return {}; }
 }
 
 function formatUpdatedAt(value) {
   const numeric = Number(value || 0);
   if (!numeric) return "not refreshed";
-  try {
-    return new Date(numeric).toISOString();
-  } catch (_) {
-    return "not refreshed";
-  }
+  try { return new Date(numeric).toISOString(); }
+  catch (_) { return "not refreshed"; }
+}
+
+function formatTimestamp(value) {
+  const raw = safeInput(value);
+  if (!raw) return "not available";
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString();
 }
 
 window.WorldDashboardPanel = WorldDashboardPanel;

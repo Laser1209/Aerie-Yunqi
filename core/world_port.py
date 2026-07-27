@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -78,10 +79,18 @@ class WorldSnapshot:
     revision: int = 0
     sequence: int = 0
     paused: bool = False
+    enabled: bool = False
+    desired: str = "stopped"
+    actual: str = "stopped"
+    adapter: str = "null"
+    world_revision: int = 0
     phase: str = "unknown"
     location: str = "unknown"
     activity: str = "idle"
     capabilities: tuple[str, ...] = ()
+    last_tick_at: str = ""
+    last_checkpoint_at: str = ""
+    error_code: str = ""
     generated_at: str = ""
 
     def __post_init__(self) -> None:
@@ -98,10 +107,18 @@ class WorldSnapshot:
             "revision": self.revision,
             "sequence": self.sequence,
             "paused": self.paused,
+            "enabled": self.enabled,
+            "desired": self.desired,
+            "actual": self.actual,
+            "adapter": self.adapter,
+            "world_revision": self.world_revision,
             "phase": self.phase,
             "location": self.location,
             "activity": self.activity,
             "capabilities": list(self.capabilities),
+            "last_tick_at": self.last_tick_at,
+            "last_checkpoint_at": self.last_checkpoint_at,
+            "error_code": self.error_code,
             "generated_at": self.generated_at,
         }
 
@@ -142,6 +159,15 @@ class WorldPort(Protocol):
     async def resume(self) -> None:
         ...
 
+    async def control(
+        self,
+        action: str,
+        *,
+        expected_revision: int | None = None,
+        idempotency_key: str = "",
+    ) -> dict[str, Any]:
+        ...
+
 
 class NullWorldAdapter:
     """No-op adapter used when world flags are disabled or unavailable."""
@@ -154,6 +180,10 @@ class NullWorldAdapter:
             status="disabled",
             source="null",
             instance_id="world-null",
+            enabled=False,
+            desired="stopped",
+            actual="stopped",
+            adapter="null",
             capabilities=(),
         )
 
@@ -176,6 +206,27 @@ class NullWorldAdapter:
 
     async def resume(self) -> None:
         return None
+
+    async def control(
+        self,
+        action: str,
+        *,
+        expected_revision: int | None = None,
+        idempotency_key: str = "",
+    ) -> dict[str, Any]:
+        command = str(action or "").strip().lower()
+        accepted = command in {"disable", "stop"}
+        return {
+            "accepted": accepted,
+            "rejected": not accepted,
+            "enabled": False,
+            "desired": "stopped",
+            "actual": "stopped",
+            "revision": 0,
+            "adapter": "null",
+            "fallbackAdapter": "null",
+            "errorCode": "" if accepted else "world_disabled",
+        }
 
     def get_world_snapshot(self) -> dict[str, Any] | None:
         return None
@@ -236,13 +287,17 @@ class InProcessWorldAdapter:
         self._revision = 0
         self._sequence = 0
         self._paused = False
+        self._enabled = True
+        self._desired = "running"
+        self._actual = "running"
+        self._control_results: dict[str, dict[str, Any]] = {}
         self._subscribers: dict[str, tuple[set[str], asyncio.Queue[WorldEvent]]] = {}
         self._observed_keys: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
     async def get_state(self) -> WorldSnapshot:
         async with self._lock:
-            status = "paused" if self._paused else "running"
+            status = "disabled" if not self._enabled else self._actual
             world_snapshot = self.get_world_snapshot() or {}
             return WorldSnapshot(
                 status=status,
@@ -251,6 +306,11 @@ class InProcessWorldAdapter:
                 revision=max(self._revision, int(world_snapshot.get("revision") or 0)),
                 sequence=self._sequence,
                 paused=self._paused,
+                enabled=self._enabled,
+                desired=self._desired,
+                actual=self._actual,
+                adapter="in_process",
+                world_revision=int(world_snapshot.get("revision") or 0),
                 phase=str(world_snapshot.get("phase") or "unknown"),
                 location=str(world_snapshot.get("location") or "unknown"),
                 activity=str(world_snapshot.get("activity") or "idle"),
@@ -315,28 +375,107 @@ class InProcessWorldAdapter:
                 self._subscribers.pop(subscriber_id, None)
 
     async def pause(self) -> None:
-        async with self._lock:
-            if self._paused:
-                return None
-            self._paused = True
-            self._revision += 1
-            self._sequence += 1
-            event = self._lifecycle_event("world.paused")
-            subscribers = list(self._subscribers.values())
-        self._publish(event, subscribers)
+        await self.control("pause")
         return None
 
     async def resume(self) -> None:
-        async with self._lock:
-            if not self._paused:
-                return None
-            self._paused = False
-            self._revision += 1
-            self._sequence += 1
-            event = self._lifecycle_event("world.resumed")
-            subscribers = list(self._subscribers.values())
-        self._publish(event, subscribers)
+        await self.control("resume")
         return None
+
+    async def control(
+        self,
+        action: str,
+        *,
+        expected_revision: int | None = None,
+        idempotency_key: str = "",
+    ) -> dict[str, Any]:
+        command = str(action or "").strip().lower()
+        idem = str(idempotency_key or "").strip()
+        async with self._lock:
+            if idem and idem in self._control_results:
+                return dict(self._control_results[idem])
+            if expected_revision is not None and int(expected_revision) != self._revision:
+                return self._control_result(False, "revision_conflict")
+
+            previous = (self._enabled, self._desired, self._actual, self._paused)
+            error_code = ""
+            if command == "enable":
+                self._enabled = True
+            elif command == "disable":
+                self._enabled = False
+                self._desired = "stopped"
+                self._actual = "stopped"
+                self._paused = False
+            elif command == "start":
+                if not self._enabled:
+                    error_code = "world_disabled"
+                else:
+                    self._desired = "running"
+                    self._actual = "running"
+                    self._paused = False
+            elif command == "stop":
+                self._desired = "stopped"
+                self._actual = "stopped"
+                self._paused = False
+            elif command == "pause":
+                if not self._enabled:
+                    error_code = "world_disabled"
+                elif self._actual == "stopped":
+                    error_code = "world_not_running"
+                else:
+                    self._desired = "paused"
+                    self._actual = "paused"
+                    self._paused = True
+            elif command == "resume":
+                if not self._enabled:
+                    error_code = "world_disabled"
+                elif self._actual != "paused":
+                    error_code = "world_not_paused"
+                else:
+                    self._desired = "running"
+                    self._actual = "running"
+                    self._paused = False
+            elif command == "restart":
+                if not self._enabled:
+                    error_code = "world_disabled"
+                else:
+                    self._desired = "running"
+                    self._actual = "running"
+                    self._paused = False
+            else:
+                error_code = "unsupported_action"
+
+            current = (self._enabled, self._desired, self._actual, self._paused)
+            if error_code:
+                result = self._control_result(False, error_code)
+            else:
+                if current != previous or command == "restart":
+                    self._revision += 1
+                    self._sequence += 1
+                    event = self._lifecycle_event(f"world.{command}")
+                    subscribers = list(self._subscribers.values())
+                else:
+                    event = None
+                    subscribers = []
+                result = self._control_result(True, "")
+            if idem:
+                self._control_results[idem] = dict(result)
+            if event is not None:
+                self._publish(event, subscribers)
+            return result
+
+    def _control_result(self, accepted: bool, error_code: str) -> dict[str, Any]:
+        return {
+            "accepted": accepted,
+            "rejected": not accepted,
+            "enabled": self._enabled,
+            "desired": self._desired,
+            "actual": self._actual,
+            "revision": self._revision,
+            "adapter": "in_process",
+            "fallbackAdapter": "null",
+            "errorCode": error_code,
+        }
 
     def _lifecycle_event(self, event_type: str) -> WorldEvent:
         return WorldEvent(
@@ -346,7 +485,7 @@ class InProcessWorldAdapter:
             sequence=self._sequence,
             occurred_at=_now_iso(),
             payload={
-                "status": "paused" if self._paused else "running",
+                "status": self._actual if self._enabled else "disabled",
                 "revision": self._revision,
             },
         )
@@ -449,18 +588,17 @@ def build_world_port(
         sidecar_enabled = False
     if sidecar_enabled:
         try:
-            from pathlib import Path
+            from core.world_adapters.remote import HttpWorldSidecarClient, RemoteWorldAdapter
 
-            from core.world_adapters.remote import RemoteWorldAdapter
-            from world_service.main import LocalWorldSidecarService
-
-            service = LocalWorldSidecarService(
-                data_dir=Path("data") / "world_sidecar",
-            )
-            return RemoteWorldAdapter(service)
+            endpoint = str(os.environ.get("AERIE_WORLD_SIDECAR_ENDPOINT") or "").strip()
+            token = str(os.environ.get("AERIE_WORLD_SIDECAR_TOKEN") or "").strip()
+            if endpoint and token:
+                return RemoteWorldAdapter(HttpWorldSidecarClient(endpoint, token=token))
+            raise RuntimeError("world sidecar endpoint is unavailable")
         except Exception:
             logger.exception("failed to initialize remote world adapter")
-            return NullWorldAdapter(reason="sidecar_init_failed")
+            # Process ownership belongs to Electron.  Core never starts a
+            # hidden second Sidecar when the supervised endpoint is missing.
 
     try:
         enabled = bool(feature_flags.is_enabled("world_inprocess_v1"))

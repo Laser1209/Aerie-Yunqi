@@ -145,6 +145,33 @@ class WorldSimulation:
             return self.tick()
         return dict(self._snapshot)
 
+    def restore(self, snapshot: dict[str, Any] | None) -> dict[str, Any]:
+        """Restore a previously whitelisted checkpoint without advancing time."""
+
+        source = snapshot if isinstance(snapshot, dict) else {}
+        restored = {
+            key: source[key]
+            for key in (
+                "ts",
+                "iso_time",
+                "phase",
+                "location",
+                "activity",
+                "energy",
+                "social",
+                "source",
+                "revision",
+                "seed_sha256",
+                "snapshot_id",
+            )
+            if key in source
+        }
+        if not restored:
+            return {}
+        self._ticks = max(0, int(restored.get("revision") or 0))
+        self._snapshot = restored
+        return dict(restored)
+
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))

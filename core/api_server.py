@@ -30,7 +30,7 @@ import time
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import uvicorn
 import yaml
@@ -41,7 +41,6 @@ from fastapi.responses import JSONResponse, Response, FileResponse, StreamingRes
 from communication.message import IncomingMessage
 import main  # R6.6: for PROCESS_START_TIME / GIT_COMMIT (stale-code detection)
 from config.persona_loader import (
-    get_master_qq,
     load_settings,
     save_settings,
     reset_settings,
@@ -107,6 +106,9 @@ _calendar = CalendarManager(_db)
 _calendar_reminder_task: asyncio.Task | None = None
 _persona_mgr = get_persona_manager()
 _audio_transcriber = None
+_desktop_attachment_service_instance = None
+_desktop_attachment_service_key: tuple[int, str] | None = None
+_attachment_processing_tasks: set[asyncio.Task] = set()
 
 
 async def _calendar_reminder_loop() -> None:
@@ -205,6 +207,19 @@ _WORLD_DASHBOARD_EMPTY_SNAPSHOT = {
     "actionTimeline": [],
     "imageCandidates": [],
 }
+
+
+def _world_sidecar_enabled(companion: Any | None = None) -> bool:
+    """Read the shared effective flag, with a legacy-instance fallback."""
+
+    flags = getattr(companion, "feature_flags", None)
+    is_enabled = getattr(flags, "is_enabled", None)
+    if callable(is_enabled):
+        try:
+            return is_enabled("world_sidecar_v1") is True
+        except Exception:
+            logger.warning("shared world feature flag lookup failed", exc_info=True)
+    return FeatureFlags().is_enabled("world_sidecar_v1")
 
 
 def _world_dashboard_safe_text(value: Any, limit: int = 200) -> str:
@@ -421,7 +436,9 @@ def _world_dashboard_public_scalar(value: Any) -> Any:
 
 
 @app.get("/api/world/dashboard/snapshot")
-async def world_dashboard_snapshot(user_id: int = Query(default=0)) -> dict[str, Any]:
+async def world_dashboard_snapshot(
+    user_id: int | None = Query(default=None),
+) -> dict[str, Any]:
     """Redacted World Dashboard snapshot contract.
 
     This endpoint exposes only public dashboard fields. Raw world payloads,
@@ -429,7 +446,8 @@ async def world_dashboard_snapshot(user_id: int = Query(default=0)) -> dict[str,
     deliberately dropped by whitelisting instead of recursively echoing handler
     output.
     """
-    if not FeatureFlags().is_enabled("world_sidecar_v1"):
+    comp = get_companion()
+    if not _world_sidecar_enabled(comp):
         return _world_dashboard_public_snapshot(
             {
                 "status": "disabled",
@@ -439,7 +457,28 @@ async def world_dashboard_snapshot(user_id: int = Query(default=0)) -> dict[str,
             handler_called=False,
         )
 
-    comp = get_companion()
+    if user_id is None:
+        user_id = _primary_user_id(comp) if comp is not None else None
+        if user_id is None:
+            return _world_dashboard_public_snapshot(
+                {
+                    "status": "unavailable",
+                    **_WORLD_DASHBOARD_EMPTY_SNAPSHOT,
+                    "error_code": "primary_identity_unconfigured",
+                },
+                status="unavailable",
+                handler_called=False,
+            )
+    elif user_id <= 0:
+        return _world_dashboard_public_snapshot(
+            {
+                "status": "unavailable",
+                **_WORLD_DASHBOARD_EMPTY_SNAPSHOT,
+                "error_code": "invalid_user_id",
+            },
+            status="unavailable",
+            handler_called=False,
+        )
     handler = getattr(comp, "get_world_dashboard_snapshot", None)
     if not callable(handler):
         return _world_dashboard_public_snapshot(
@@ -489,7 +528,8 @@ async def world_candidate_approve(request: Request) -> dict[str, Any]:
         payload = {}
     approval = _sanitize_world_candidate_approval(payload)
 
-    if not FeatureFlags().is_enabled("world_sidecar_v1"):
+    comp = get_companion()
+    if not _world_sidecar_enabled(comp):
         return _world_candidate_approval_response(
             status="disabled",
             candidate_id=approval["candidate_id"],
@@ -497,7 +537,6 @@ async def world_candidate_approve(request: Request) -> dict[str, Any]:
             handler_called=False,
         )
 
-    comp = get_companion()
     handler = getattr(comp, "approve_world_image_candidate", None)
     if not callable(handler):
         return _world_candidate_approval_response(
@@ -534,6 +573,185 @@ async def world_candidate_approve(request: Request) -> dict[str, Any]:
 
 
 # ── Health ──────────────────────────────────────────
+
+# Runtime configuration
+
+def _runtime_config_service():
+    companion = get_companion()
+    return getattr(companion, "runtime_config_service", None) if companion else None
+
+
+def _runtime_public_snapshot(service: Any) -> dict[str, Any]:
+    snapshot = dict(service.snapshot())
+    values = snapshot.get("values") or {}
+    snapshot["requiresRestartKeys"] = [
+        key
+        for key, entry in values.items()
+        if isinstance(entry, dict) and entry.get("requiresRestart") is True
+    ]
+    companion = get_companion()
+    selection = (
+        companion.get_primary_user_selection()
+        if companion and hasattr(companion, "get_primary_user_selection")
+        else None
+    )
+    identity = (
+        selection.as_dict()
+        if selection is not None and hasattr(selection, "as_dict")
+        else {"primaryUserId": None, "source": "unconfigured"}
+    )
+    snapshot["primaryIdentity"] = identity
+    snapshot["primaryUserId"] = identity.get("primaryUserId")
+    return snapshot
+
+
+@app.get("/api/runtime/snapshot")
+async def runtime_snapshot() -> Response:
+    service = _runtime_config_service()
+    if service is None:
+        return JSONResponse(
+            {"error": "runtime_config_unavailable", "errorCode": "runtime_config_unavailable"},
+            status_code=503,
+        )
+    return JSONResponse(_runtime_public_snapshot(service))
+
+
+@app.patch("/api/runtime/config")
+async def runtime_config_update(request: Request) -> Response:
+    service = _runtime_config_service()
+    if service is None:
+        return JSONResponse(
+            {"accepted": False, "error": "runtime_config_unavailable", "errorCode": "runtime_config_unavailable"},
+            status_code=503,
+        )
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(
+            {"accepted": False, "error": "invalid_json", "errorCode": "invalid_json"},
+            status_code=400,
+        )
+    if not isinstance(body, dict) or not isinstance(body.get("changes"), dict):
+        return JSONResponse(
+            {"accepted": False, "error": "invalid_changes", "errorCode": "invalid_changes"},
+            status_code=400,
+        )
+    if "primary_user_id" in body["changes"]:
+        primary_value = body["changes"]["primary_user_id"]
+        normalized_primary = str(primary_value).strip()
+        if (
+            isinstance(primary_value, bool)
+            or not normalized_primary.isdecimal()
+            or int(normalized_primary) <= 0
+        ):
+            return JSONResponse(
+                {
+                    "accepted": False,
+                    "error": "validation_failed",
+                    "errorCode": "validation_failed",
+                    "validationErrors": [
+                        {"key": "primary_user_id", "code": "invalid_positive_identity"}
+                    ],
+                },
+                status_code=422,
+            )
+    expected = body.get("expected_revision", body.get("expectedRevision"))
+    if isinstance(expected, bool):
+        expected = None
+    try:
+        expected_revision = int(expected)
+    except (TypeError, ValueError):
+        return JSONResponse(
+            {"accepted": False, "error": "invalid_revision", "errorCode": "invalid_revision"},
+            status_code=400,
+        )
+
+    from core.runtime_config import (
+        RuntimeConfigConflict,
+        RuntimeConfigError,
+        RuntimeConfigValidationError,
+    )
+
+    try:
+        service.update(body["changes"], expected_revision=expected_revision)
+    except RuntimeConfigConflict as exc:
+        return JSONResponse(
+            {
+                "accepted": False,
+                "error": exc.code,
+                "errorCode": exc.code,
+                "expectedRevision": exc.expected,
+                "currentRevision": exc.current,
+            },
+            status_code=409,
+        )
+    except RuntimeConfigValidationError as exc:
+        return JSONResponse(
+            {
+                "accepted": False,
+                "error": exc.code,
+                "errorCode": exc.code,
+                "validationErrors": exc.errors,
+            },
+            status_code=422,
+        )
+    except RuntimeConfigError as exc:
+        return JSONResponse(
+            {"accepted": False, "error": exc.code, "errorCode": exc.code},
+            status_code=409,
+        )
+    return JSONResponse({"accepted": True, **_runtime_public_snapshot(service)})
+
+
+def _main_process_request_authorized(request: Request) -> bool:
+    import secrets
+
+    expected = os.getenv("AERIE_MAIN_PROCESS_TOKEN", "")
+    provided = request.headers.get("X-Aerie-Main-Token", "")
+    return bool(expected and provided) and secrets.compare_digest(expected, provided)
+
+
+@app.post("/api/world/runtime/bind")
+async def world_runtime_bind(request: Request) -> Response:
+    if not _main_process_request_authorized(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    companion = get_companion()
+    if companion is None:
+        return JSONResponse({"error": "backend_not_ready"}, status_code=503)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+    connection = body.get("connection") if isinstance(body, dict) else None
+    if connection is None:
+        from core.world_port import NullWorldAdapter
+
+        companion.world_port = NullWorldAdapter(reason="supervisor_stopped")
+        return JSONResponse({"accepted": True, "adapter": "null"})
+    if not isinstance(connection, dict):
+        return JSONResponse({"error": "invalid_connection"}, status_code=400)
+    endpoint = str(connection.get("endpoint") or "").strip()
+    token = str(connection.get("token") or "")
+    expected_instance_id = str(connection.get("instanceId") or "").strip()
+    if len(endpoint) > 256 or not (16 <= len(token) <= 512):
+        return JSONResponse({"error": "invalid_connection"}, status_code=400)
+    try:
+        from core.world_adapters.remote import HttpWorldSidecarClient, RemoteWorldAdapter
+
+        client = HttpWorldSidecarClient(endpoint, token=token)
+        hello = await asyncio.to_thread(client.hello)
+    except Exception:
+        return JSONResponse({"error": "sidecar_handshake_failed"}, status_code=409)
+    instance_id = str(hello.get("instance_id") or "")
+    if not instance_id or (
+        expected_instance_id and expected_instance_id != instance_id
+    ):
+        return JSONResponse({"error": "sidecar_instance_mismatch"}, status_code=409)
+    companion.world_port = RemoteWorldAdapter(client)
+    return JSONResponse(
+        {"accepted": True, "adapter": "remote", "instanceId": instance_id}
+    )
+
 
 @app.get("/api/health")
 async def health(request: Request) -> dict:
@@ -577,6 +795,7 @@ async def health(request: Request) -> dict:
         "qq_connected": qq_ws_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
         "process_started_at": getattr(main, "PROCESS_START_ISO", ""),
+        "backend_instance_id": getattr(main, "BACKEND_INSTANCE_ID", ""),
         "data_path_id": str(_db.db_path.resolve()).lower(),
         "stale_code": stale_info,
         "components": {
@@ -814,6 +1033,61 @@ def _chat_request_error_response(exc: Exception) -> JSONResponse:
         return JSONResponse({"error": exc.error_code}, status_code=400)
     raise exc
 
+
+def _positive_user_id(value: Any) -> int | None:
+    """Accept only a real positive integer or its decimal string form."""
+
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str):
+        normalized = value.strip()
+        if normalized.isdecimal():
+            parsed = int(normalized)
+            return parsed if parsed > 0 else None
+    return None
+
+
+def _primary_user_id(companion: Any) -> int | None:
+    getter = getattr(companion, "get_primary_user_selection", None)
+    if not callable(getter):
+        return None
+    try:
+        selection = getter()
+    except Exception:
+        logger.warning("primary identity selection failed", exc_info=True)
+        return None
+    return _positive_user_id(getattr(selection, "user_id", None))
+
+
+def _trusted_chat_attachments(attachments: Any) -> list[dict[str, Any]]:
+    trusted_attachments = []
+    for attachment in attachments or []:
+        if not isinstance(attachment, dict):
+            continue
+        attachment_id = attachment.get("attachmentId") or attachment.get("id")
+        if attachment_id:
+            attachment_id = str(attachment_id)
+            trusted_attachments.append(
+                {"attachmentId": attachment_id, "id": attachment_id}
+            )
+        else:
+            trusted_attachments.append(dict(attachment))
+    return trusted_attachments
+
+
+async def _process_local_message(companion: Any, msg: IncomingMessage) -> dict | None:
+    processor = getattr(companion, "process_local_message_sync", None)
+    if callable(processor):
+        return await processor(msg)
+    pipeline = getattr(companion, "pipeline", None)
+    handler = getattr(pipeline, "handle", None)
+    if not callable(handler):
+        return None
+    return await handler(msg, force_full=True)
+
+
 @app.post("/api/chat/send")
 async def chat_send(request: Request):
     body = await request.json()
@@ -858,12 +1132,19 @@ async def chat_send(request: Request):
 
     user_id = body.get("user_id")
     if user_id is None:
-        user_id = get_master_qq()
+        user_id = _primary_user_id(comp)
+        if user_id is None:
+            return JSONResponse(
+                {"error": "primary_identity_unconfigured"},
+                status_code=409,
+            )
     else:
         try:
             user_id = int(user_id)
         except (TypeError, ValueError):
             return JSONResponse({"error": "invalid_message"}, status_code=400)
+    if user_id <= 0:
+        return JSONResponse({"error": "invalid_user_id"}, status_code=400)
     if not getattr(comp, "pipeline", None):
         return JSONResponse({"error": "backend not ready"}, status_code=503)
 
@@ -871,10 +1152,13 @@ async def chat_send(request: Request):
 
     # Block-3 R0.3: enrich attachments with extracted markdown (best-effort)
     if attachments:
+        attachments = _trusted_chat_attachments(attachments)
         try:
             from core.attachment_handler import extract_markdown
             for att in attachments:
                 if not isinstance(att, dict):
+                    continue
+                if att.get("attachmentId") or att.get("id"):
                     continue
                 url = att.get("url") or ""
                 fname = url.lstrip("/").split("/")[-1]
@@ -894,7 +1178,7 @@ async def chat_send(request: Request):
     msg = IncomingMessage.from_local(
         text, user_id, reply_to_id=reply_to_id, attachments=attachments
     )
-    result = await comp.pipeline.handle(msg, force_full=True)
+    result = await _process_local_message(comp, msg)
     if not result:
         return {"reply": "(已收到)", "status": "ok"}
 
@@ -981,6 +1265,50 @@ async def chat_request_retry(
     return _chat_request_view_response(view, status_code=202)
 
 
+@app.get("/api/chat/history/page")
+async def chat_history_page(
+    user_id: int | None = Query(default=None),
+    cursor: str | None = Query(default=None, max_length=128),
+    direction: str = Query(default="older", pattern="^(older|newer)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+    conversation_id: str | None = Query(default=None, max_length=128),
+) -> Response:
+    companion = get_companion()
+    if companion is None:
+        return JSONResponse({"error": "backend_not_ready"}, status_code=503)
+    if user_id is None:
+        user_id = _primary_user_id(companion)
+        if user_id is None:
+            return JSONResponse(
+                {"error": "primary_identity_unconfigured"},
+                status_code=409,
+            )
+    if user_id <= 0:
+        return JSONResponse({"error": "invalid_user_id"}, status_code=400)
+
+    identity = companion.identity_resolver.resolve("desktop", "local")
+    try:
+        page_result = companion.conversation_repository.history_page(
+            actor_id=identity.actor_id,
+            channel="desktop",
+            channel_account_id="local",
+            user_id=int(user_id),
+            conversation_id=conversation_id,
+            cursor=cursor,
+            direction=direction,
+            limit=limit,
+        )
+    except Exception as exc:
+        from core.conversation_repository import InvalidHistoryCursor
+
+        if isinstance(exc, InvalidHistoryCursor):
+            return JSONResponse({"error": "invalid_cursor"}, status_code=400)
+        logger.exception("chat history page failed")
+        return JSONResponse({"error": "history_unavailable"}, status_code=500)
+    _hydrate_desktop_attachment_records(page_result.get("items") or [])
+    return JSONResponse({"primaryUserId": int(user_id), **page_result})
+
+
 @app.get("/api/chat/history")
 async def chat_history(
     user_id: int | None = Query(default=None),
@@ -988,6 +1316,8 @@ async def chat_history(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
     try:
+        if user_id is not None and user_id <= 0:
+            return JSONResponse({"error": "invalid_user_id"}, status_code=400)
         where = " WHERE user_id = ?" if user_id is not None else ""
         params = (user_id,) if user_id is not None else ()
         count = _db.query_one(f"SELECT COUNT(*) AS cnt FROM chat_log{where}", params)
@@ -1005,6 +1335,7 @@ async def chat_history(
                     row["attachments"] = []
             else:
                 row["attachments"] = []
+        _hydrate_desktop_attachment_records(rows)
         return {
             "history": rows,
             "total": int(count["cnt"] if count else 0),
@@ -1018,11 +1349,19 @@ async def chat_history(
 
 @app.get("/api/chat/poll")
 async def chat_poll(
-    user_id: int = Query(default=None),
+    user_id: int | None = Query(default=None),
     since_id: int = Query(default=0),
 ) -> dict:
     if user_id is None:
-        user_id = get_master_qq()
+        companion = get_companion()
+        user_id = _primary_user_id(companion) if companion is not None else None
+        if user_id is None:
+            return JSONResponse(
+                {"error": "primary_identity_unconfigured"},
+                status_code=409,
+            )
+    if user_id <= 0:
+        return JSONResponse({"error": "invalid_user_id"}, status_code=400)
     try:
         rows = _db.query(
             "SELECT * FROM chat_log WHERE user_id = ? AND id > ? ORDER BY id",
@@ -1078,13 +1417,213 @@ async def emotion_state(user_id: int | None = None) -> dict:
     if user_id is None:
         return comp.get_primary_emotion_state()
     identity = comp.identity_resolver.resolve("qq", str(user_id))
-    return comp.emotion.get_state(
+    state = dict(comp.emotion.get_state(
         user_id,
         actor_id=identity.actor_id,
-    )
+    ))
+    state["primaryUserId"] = int(user_id)
+    state.update(comp.state_store.freshness_metadata(
+        user_id,
+        actor_id=identity.actor_id,
+        sampled_at=getattr(comp, "_emotion_last_sampled_at", None),
+    ))
+    return state
 
 
 # ── Phase 4: Static file serving for uploads ────────────────
+
+def _desktop_attachment_service():
+    global _desktop_attachment_service_instance, _desktop_attachment_service_key
+    companion = get_companion()
+    companion_attributes = getattr(companion, "__dict__", {})
+    if not isinstance(companion_attributes, dict):
+        companion_attributes = {}
+    owned_service = companion_attributes.get("desktop_attachment_service")
+    if owned_service is not None:
+        return owned_service
+
+    database = companion_attributes.get("db") or _db
+    from core.paths import data_dir
+
+    configured_root = os.getenv("AERIE_DESKTOP_ATTACHMENT_ROOT", "").strip()
+    if not configured_root:
+        configured_root = os.getenv("AERIE_DESKTOP_ATTACHMENT_DIR", "").strip()
+    storage_root = (
+        Path(configured_root).expanduser().resolve()
+        if configured_root
+        else (data_dir() / "desktop_attachments").resolve()
+    )
+    cache_key = (id(database), str(storage_root))
+    if (
+        _desktop_attachment_service_instance is None
+        or _desktop_attachment_service_key != cache_key
+    ):
+        from core.desktop_attachments import DesktopAttachmentService
+
+        _desktop_attachment_service_instance = DesktopAttachmentService(
+            database,
+            storage_root=storage_root,
+        )
+        _desktop_attachment_service_key = cache_key
+    return _desktop_attachment_service_instance
+
+
+def _hydrate_desktop_attachment_records(items: list[dict[str, Any]]) -> None:
+    service = _desktop_attachment_service()
+    for item in items:
+        attachments = item.get("attachments")
+        if not isinstance(attachments, list):
+            item["attachments"] = []
+            continue
+        hydrated: list[dict[str, Any]] = []
+        for attachment in attachments:
+            if not isinstance(attachment, dict):
+                continue
+            attachment_id = attachment.get("attachmentId") or attachment.get("id")
+            public = service.public_record(str(attachment_id)) if attachment_id else None
+            hydrated.append(public or attachment)
+        item["attachments"] = hydrated
+
+
+def _schedule_attachment_processing(service: Any, attachment_id: str) -> None:
+    async def _run() -> None:
+        try:
+            await asyncio.to_thread(service.process, attachment_id)
+        except Exception:
+            logger.warning(
+                "desktop attachment processing failed for %s",
+                attachment_id,
+                exc_info=True,
+            )
+
+    task = asyncio.create_task(_run())
+    _attachment_processing_tasks.add(task)
+    task.add_done_callback(_attachment_processing_tasks.discard)
+
+
+@app.get("/api/attachments/capabilities")
+async def desktop_attachment_capabilities() -> dict[str, Any]:
+    from core.desktop_attachments import attachment_capabilities_payload
+
+    return attachment_capabilities_payload()
+
+
+@app.post("/api/attachments")
+async def desktop_attachment_upload(file: UploadFile = File(...)) -> Response:
+    from core.desktop_attachments import MAX_FILE_BYTES
+
+    service = _desktop_attachment_service()
+    incoming_root = service.storage_root / "incoming"
+    incoming_root.mkdir(parents=True, exist_ok=True)
+    temporary = incoming_root / f"upload-{os.getpid()}-{time.time_ns()}.part"
+    total = 0
+    try:
+        with temporary.open("xb") as stream:
+            while True:
+                block = await file.read(1024 * 1024)
+                if not block:
+                    break
+                total += len(block)
+                if total > MAX_FILE_BYTES:
+                    return JSONResponse(
+                        {"error": "file_too_large", "maxFileBytes": MAX_FILE_BYTES},
+                        status_code=413,
+                    )
+                stream.write(block)
+        if total == 0:
+            return JSONResponse({"error": "empty_file"}, status_code=400)
+        record = service.ingest(
+            temporary,
+            original_name=file.filename or "attachment.bin",
+            mime_type=file.content_type or "application/octet-stream",
+        )
+    except (OSError, ValueError) as exc:
+        return JSONResponse(
+            {"error": "invalid_attachment", "detail": str(exc)[:200]},
+            status_code=400,
+        )
+    finally:
+        await file.close()
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+    if record["state"] == "queued":
+        _schedule_attachment_processing(service, record["attachment_id"])
+    return JSONResponse(
+        {"attachment": service.public_record(record["attachment_id"])},
+        status_code=202 if record["state"] == "queued" else 200,
+    )
+
+
+@app.get("/api/attachments/{attachment_id}")
+async def desktop_attachment_get(attachment_id: str) -> Response:
+    record = _desktop_attachment_service().public_record(attachment_id)
+    if record is None:
+        return JSONResponse({"error": "attachment_not_found"}, status_code=404)
+    return JSONResponse({"attachment": record})
+
+
+@app.post("/api/attachments/{attachment_id}/retry")
+async def desktop_attachment_retry(attachment_id: str) -> Response:
+    from core.desktop_attachments import AttachmentStateConflict
+
+    service = _desktop_attachment_service()
+    record = service.repository.get(attachment_id)
+    if record is None:
+        return JSONResponse({"error": "attachment_not_found"}, status_code=404)
+    try:
+        queued = service.repository.transition(attachment_id, "queued")
+    except AttachmentStateConflict as exc:
+        return JSONResponse(
+            {"error": "attachment_state_conflict", "detail": str(exc)},
+            status_code=409,
+        )
+    _schedule_attachment_processing(service, attachment_id)
+    return JSONResponse(
+        {"attachment": service._public(queued)},
+        status_code=202,
+    )
+
+
+@app.delete("/api/attachments/{attachment_id}")
+async def desktop_attachment_delete(attachment_id: str) -> Response:
+    from core.desktop_attachments import AttachmentStateConflict
+
+    service = _desktop_attachment_service()
+    try:
+        removed = service.remove(attachment_id)
+    except AttachmentStateConflict as exc:
+        return JSONResponse(
+            {"error": "attachment_state_conflict", "detail": str(exc)},
+            status_code=409,
+        )
+    if not removed:
+        return JSONResponse({"error": "attachment_not_found"}, status_code=404)
+    return Response(status_code=204)
+
+
+@app.get("/api/attachments/{attachment_id}/download")
+async def desktop_attachment_download(attachment_id: str) -> Response:
+    from core.desktop_attachments import AttachmentStateConflict
+
+    service = _desktop_attachment_service()
+    record = service.public_record(attachment_id)
+    if record is None:
+        return JSONResponse({"error": "attachment_not_found"}, status_code=404)
+    try:
+        download_path, filename = service.download_path(attachment_id)
+    except AttachmentStateConflict as exc:
+        return JSONResponse(
+            {"error": "attachment_not_ready", "detail": str(exc)},
+            status_code=409,
+        )
+    return FileResponse(
+        str(download_path),
+        filename=filename,
+        media_type=record.get("contentType") or "application/octet-stream",
+    )
+
 
 @app.get("/uploads/{filename:path}")
 async def serve_upload(filename: str):
@@ -1701,7 +2240,27 @@ async def emotion_history(
             user_id, identity = primary
             actor_id = identity.actor_id
     if user_id is None:
-        user_id = get_master_qq()
+        now_ms = int(time.time() * 1000)
+        return {
+            "status": "unavailable",
+            "error": "primary identity is not configured",
+            "primaryUserId": None,
+            "sampledAt": None,
+            "latestPersistedAt": None,
+            "serverNow": now_ms,
+            "stale": True,
+            "window": window,
+            "since_ts": now_ms - {
+                "1h": 3600 * 1000,
+                "24h": 24 * 3600 * 1000,
+                "7d": 7 * 24 * 3600 * 1000,
+                "30d": 30 * 24 * 3600 * 1000,
+            }[window],
+            "count": 0,
+            "raw_count": 0,
+            "downsampled": False,
+            "items": [],
+        }
     if actor_id is None and companion and user_id:
         actor_id = companion.identity_resolver.resolve(
             "qq",
@@ -1723,13 +2282,29 @@ async def emotion_history(
         )
     else:
         raw_rows = _db.query(
+            "SELECT * FROM ("
             "SELECT ts, pleasure, arousal, dominance, label, "
             "patience_value, anxiety_value, desire_value, tenderness_value, "
             "active_eruption, trigger_event "
             "FROM emotion_state_snapshot WHERE user_id = ? AND ts >= ? "
-            "ORDER BY ts ASC LIMIT 5000",
+            "ORDER BY ts DESC, id DESC LIMIT 5000"
+            ") ORDER BY ts ASC",
             (user_id, since),
         )
+
+    freshness = {
+        "sampledAt": None,
+        "latestPersistedAt": int(raw_rows[-1]["ts"]) if raw_rows else None,
+        "serverNow": int(time.time() * 1000),
+        "stale": True,
+    }
+    if companion:
+        freshness = companion.state_store.freshness_metadata(
+            user_id,
+            actor_id=actor_id,
+            sampled_at=getattr(companion, "_emotion_last_sampled_at", None),
+        )
+    freshness["primaryUserId"] = int(user_id)
 
     if not downsample or len(raw_rows) <= 120:
         return {
@@ -1741,6 +2316,7 @@ async def emotion_history(
             "raw_count": len(raw_rows),
             "downsampled": False,
             "items": raw_rows,
+            **freshness,
         }
 
     # Choose bucket size to land at 120-336 buckets.
@@ -1826,6 +2402,7 @@ async def emotion_history(
         "downsampled": True,
         "bucket_ms": bucket_ms,
         "items": items,
+        **freshness,
     }
 
 
@@ -1834,7 +2411,10 @@ async def emotion_history(
 # Whitelist of editable config files (only these 3 are exposed for user editing).
 _YAML_ALLOWED_FILES: set[str] = {"settings.yaml", "persona.yaml", "proactive.yaml"}
 _YAML_CONFIG_DIR = Path("config")
-_YAML_BACKUP_DIR = Path("data/backups/config")
+
+def _yaml_backup_dir() -> Path:
+    from core.paths import data_dir
+    return data_dir() / "backups" / "config"
 
 
 def _yaml_path(filename: str) -> Path | None:
@@ -1851,9 +2431,10 @@ def _yaml_backup_now(filename: str) -> Path:
     still records the backup slot with an empty marker so the rollback path
     is always available.
     """
-    _YAML_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    backup_dir = _yaml_backup_dir()
+    backup_dir.mkdir(parents=True, exist_ok=True)
     ts_ms = int(time.time() * 1000)
-    backup_path = _YAML_BACKUP_DIR / f"{filename}.{ts_ms}.yaml"
+    backup_path = backup_dir / f"{filename}.{ts_ms}.yaml"
     source = _YAML_CONFIG_DIR / filename
     if source.exists():
         backup_path.write_bytes(source.read_bytes())
@@ -1864,10 +2445,11 @@ def _yaml_backup_now(filename: str) -> Path:
 
 def _yaml_latest_backup(filename: str) -> Path | None:
     """Find the most recent backup for a given yaml filename."""
-    if not _YAML_BACKUP_DIR.exists():
+    backup_dir = _yaml_backup_dir()
+    if not backup_dir.exists():
         return None
     candidates = sorted(
-        _YAML_BACKUP_DIR.glob(f"{filename}.*.yaml"),
+        backup_dir.glob(f"{filename}.*.yaml"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -2467,10 +3049,10 @@ async def tasks_submit(request: Request) -> dict:
     """提交异步任务。"""
     try:
         body = await request.json()
-        name = body.get("name", "未命名任务")
+        name = body.get("name") or body.get("title") or "未命名任务"
         description = body.get("description", "")
         task_type = body.get("task_type", "generic")
-        priority_str = body.get("priority", "medium")
+        raw_priority = body.get("priority", "medium")
         task_data = body.get("data", {})
 
         from core.async_task_manager import TaskPriority
@@ -2479,7 +3061,18 @@ async def tasks_submit(request: Request) -> dict:
             "medium": TaskPriority.MEDIUM,
             "low": TaskPriority.LOW,
         }
-        priority = priority_map.get(priority_str.lower(), TaskPriority.MEDIUM)
+        if isinstance(raw_priority, int):
+            # 兼容 1=high / 2=medium / 3=low，以及 0-2 风格
+            if raw_priority <= 0:
+                priority = TaskPriority.HIGH
+            elif raw_priority == 1:
+                priority = TaskPriority.MEDIUM
+            else:
+                priority = TaskPriority.LOW
+        else:
+            priority = priority_map.get(
+                str(raw_priority).strip().lower(), TaskPriority.MEDIUM
+            )
 
         mgr = _get_async_task_manager()
         # 确保管理器已启动
@@ -3279,9 +3872,20 @@ async def calendar_companion() -> dict:
 # ── Stats ───────────────────────────────────────────
 
 @app.get("/api/stats/tokens")
-async def stats_tokens(user_id: int = Query(default=None)) -> dict:
+async def stats_tokens(user_id: int | None = Query(default=None)) -> dict:
     if user_id is None:
-        user_id = get_master_qq()
+        companion = get_companion()
+        selection = (
+            companion.get_primary_user_selection()
+            if companion is not None
+            else None
+        )
+        if selection is None:
+            return JSONResponse(
+                {"error": "primary_identity_unconfigured"},
+                status_code=409,
+            )
+        user_id = selection.user_id
     tracker = get_token_tracker()
     try:
         today = tracker.get_today(user_id)
@@ -3716,6 +4320,8 @@ async def knowledge_delete(item_id: int) -> dict:
 
 # ── System Stats ──────────────────────────────────────
 
+_SYSTEM_NET_SAMPLE: tuple[float, int, int] | None = None
+
 @app.get("/api/stats/system")
 async def system_stats() -> dict:
     """Return system-level stats."""
@@ -3734,19 +4340,55 @@ async def system_stats() -> dict:
         # Try to get CPU and memory (platform-specific)
         cpu_str = "N/A"
         memory_str = "N/A"
+        cpu_percent = None
+        memory_percent = None
+        network_receive_kbps = None
+        network_send_kbps = None
         try:
             import psutil
-            cpu_str = f"{psutil.cpu_percent(interval=0.1):.1f}%"
+            cpu_percent = float(psutil.cpu_percent(interval=0.1))
+            cpu_str = f"{cpu_percent:.1f}%"
             mem = psutil.virtual_memory()
+            memory_percent = float(mem.percent)
             memory_str = f"{mem.percent:.1f}% ({mem.used // 1048576}MB)"
+
+            global _SYSTEM_NET_SAMPLE
+            counters = psutil.net_io_counters()
+            sampled_monotonic = time.monotonic()
+            if _SYSTEM_NET_SAMPLE is not None:
+                previous_at, previous_recv, previous_sent = _SYSTEM_NET_SAMPLE
+                elapsed = sampled_monotonic - previous_at
+                if elapsed > 0:
+                    network_receive_kbps = max(
+                        0.0,
+                        (int(counters.bytes_recv) - previous_recv) / elapsed / 1024.0,
+                    )
+                    network_send_kbps = max(
+                        0.0,
+                        (int(counters.bytes_sent) - previous_sent) / elapsed / 1024.0,
+                    )
+            _SYSTEM_NET_SAMPLE = (
+                sampled_monotonic,
+                int(counters.bytes_recv),
+                int(counters.bytes_sent),
+            )
         except ImportError:
             pass
 
+        sampled_at = time.strftime(
+            "%Y-%m-%dT%H:%M:%S%z", time.localtime()
+        )
         return {
             "uptime": uptime_str,
             "uptime_seconds": uptime_seconds,
             "cpu": cpu_str,
             "memory": memory_str,
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "network_receive_kbps": network_receive_kbps,
+            "network_send_kbps": network_send_kbps,
+            "sampled_at": sampled_at,
+            "sampledAt": sampled_at,
             "message_count": message_count,
             "backend_started_at": time.strftime(
                 "%Y-%m-%dT%H:%M:%S%z", time.localtime(_START_TIME)
@@ -4393,17 +5035,52 @@ async def skills_call(name: str, request: Request) -> dict:
 async def start_api(host: str = "127.0.0.1", port: int = 7890) -> Any:
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)
+    # R7.5: Intercept uvicorn's default SystemExit on bind failure so the
+    #       error propagates to main.py as a regular Python exception.
+    #       The default behavior (sys.exit(3)) kills the process immediately
+    #       without giving main.py's try/except any chance to log details.
+    task: Optional[asyncio.Task] = None
+    exc_holder: list[BaseException] = []
+    async def _serve_catch():
+        try:
+            await server.serve()
+        except BaseException as e:  # noqa: BLE001
+            exc_holder.append(e)
+            raise
     # Run in background
     import asyncio
-    task = asyncio.create_task(server.serve())
-    # Give it a moment to start
-    await asyncio.sleep(0.5)
+    task = asyncio.create_task(_serve_catch())
+    # Give it a moment to start.  bind-failure tends to finish within the
+    # first 0.5s, but if the task is already done we must also read the
+    # exception out of the Task so it does not surface later as an
+    # unhandled Task exception.
+    try:
+        done, _pending = await asyncio.wait([task], timeout=0.5)
+    except BaseException:  # noqa: BLE001
+        done = set()
 
     class Runner:
         async def cleanup(self):
             server.should_exit = True
             await asyncio.sleep(0.2)
-            if not task.done():
+            if task is not None and not task.done():
                 task.cancel()
 
+    if exc_holder or (task.done() and task.exception() is not None):
+        e: BaseException
+        if exc_holder:
+            e = exc_holder[0]
+        else:
+            e = task.exception() or RuntimeError(f"Server on {host}:{port} exited without error info")
+        # sys.exit(3) is the exact error raised by uvicorn when port bind fails.
+        # SystemExit bypasses most try/except Exception, so we translate it to
+        # a plain OSError for main.py's reporting path.
+        if isinstance(e, SystemExit):
+            raise OSError(
+                f"Failed to start Aerie API server on {host}:{port}. "
+                f"uvicorn reported code={e.code!r}. The most common root cause on "
+                f"Windows is a leftover python.exe holding LISTENING on this port "
+                f"(WinError 10048). Inner={e!r}"
+            ) from e
+        raise
     return Runner()

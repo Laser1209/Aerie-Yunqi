@@ -150,6 +150,11 @@ class WorldSidecarStore:
             ).fetchone()
             return int(row["last_seq"]) if row else 0
 
+    def latest_sequence(self) -> int:
+        with self._connect() as conn:
+            row = conn.execute("SELECT COALESCE(MAX(seq), 0) AS seq FROM world_outbox").fetchone()
+            return int(row["seq"]) if row else 0
+
     def heartbeat(self, *, status: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:
         now = _now_ms()
         detail_payload = detail if isinstance(detail, dict) else {}
@@ -192,6 +197,34 @@ class WorldSidecarStore:
                 ),
             )
         return {"checkpoint_id": cp_id, "ts_ms": now, "state": sanitized}
+
+    def save_runtime_state(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Persist only the public world runtime fields needed for restart."""
+
+        now = _now_ms()
+        sanitized = _runtime_state_payload(state)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO world_runtime_state (id, ts_ms, state_json)
+                VALUES (1, ?, ?)
+                ON CONFLICT(id)
+                DO UPDATE SET ts_ms = excluded.ts_ms,
+                              state_json = excluded.state_json
+                """,
+                (now, json.dumps(sanitized, ensure_ascii=False, sort_keys=True)),
+            )
+        return {"ts_ms": now, **sanitized}
+
+    def load_runtime_state(self) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT ts_ms, state_json FROM world_runtime_state WHERE id = 1"
+            ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["state_json"]) if row["state_json"] else {}
+        return {"ts_ms": int(row["ts_ms"]), **payload}
 
     def table_names(self) -> set[str]:
         with self._connect() as conn:
@@ -242,6 +275,12 @@ class WorldSidecarStore:
 
                 CREATE TABLE IF NOT EXISTS world_checkpoint (
                     checkpoint_id TEXT PRIMARY KEY,
+                    ts_ms INTEGER NOT NULL,
+                    state_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS world_runtime_state (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
                     ts_ms INTEGER NOT NULL,
                     state_json TEXT NOT NULL
                 );
@@ -320,6 +359,44 @@ def _redacted_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "payload_keys": keys,
         "payload_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+    }
+
+
+def _runtime_state_payload(state: dict[str, Any]) -> dict[str, Any]:
+    source = state if isinstance(state, dict) else {}
+    snapshot_source = source.get("snapshot")
+    snapshot = snapshot_source if isinstance(snapshot_source, dict) else {}
+    safe_snapshot = {
+        key: snapshot[key]
+        for key in (
+            "ts",
+            "iso_time",
+            "phase",
+            "location",
+            "activity",
+            "energy",
+            "social",
+            "source",
+            "revision",
+            "seed_sha256",
+            "snapshot_id",
+        )
+        if key in snapshot
+    }
+    desired = _safe_text(source.get("desired") or "stopped")
+    if desired not in {"running", "paused", "stopped"}:
+        desired = "stopped"
+    actual = _safe_text(source.get("actual") or "stopped")
+    if actual not in {"running", "paused", "stopped"}:
+        actual = "stopped"
+    return {
+        "enabled": bool(source.get("enabled", False)),
+        "desired": desired,
+        "actual": actual,
+        "revision": max(0, int(source.get("revision") or 0)),
+        "last_tick_at": _safe_text(source.get("last_tick_at") or ""),
+        "last_checkpoint_at": _safe_text(source.get("last_checkpoint_at") or ""),
+        "snapshot": safe_snapshot,
     }
 
 

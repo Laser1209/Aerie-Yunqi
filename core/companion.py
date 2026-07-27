@@ -3,6 +3,8 @@
 from __future__ import annotations
 import asyncio
 import logging
+import os
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,11 @@ from config.persona_loader import load_behavior_config
 from core.brain import Brain
 from core.cognition import CognitionEngine
 from core.computer_control import ComputerController, PermissionLevel
+from core.conversation_continuity import (
+    ContextAssembler,
+    ConversationSummaryRepository,
+    SummaryRefreshPlanner,
+)
 from core.conversation_repository import ConversationRepository
 from core.chat_events import emit
 from core.chat_request_repository import ChatRequestRepository
@@ -25,6 +32,7 @@ from core.chat_request_worker import ChatRequestWorker
 from core.permission_manager import FineGrainedPermissionManager
 from core.context_builder import ContextBuilder
 from core.database import Database
+from core.desktop_attachments import DesktopAttachmentService
 from core.emotion_engine import EmotionEngine
 from core.emotion_state_store import EmotionStateStore
 from core.emotion_threshold import get_threshold_engine
@@ -32,6 +40,8 @@ from core.feature_flags import FeatureFlags
 from core.ids import generate_id
 from core.identity import IdentityRepository, IdentityResolver
 from core.pipeline import Pipeline
+from core.paths import data_dir
+from core.primary_identity import PrimaryIdentityResolver
 from core.push_event_engine import get_event_engine
 from core.push_scheduler import PushScheduler
 from core.qq_whitelist import QQWhitelistManager
@@ -41,11 +51,21 @@ from core.world_port import build_world_port
 from config.persona_loader import load_settings, load_proactive_config
 from knowledge.kb import KnowledgeBase
 from memory.memory_store import LongTermMemory
+from core.message_batcher import MessageBatcher
 from tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 
 _COMPANION = None
+
+
+def _resolve_companion_data_path(settings: dict | None) -> Path:
+    if (os.environ.get("AERIE_DATA_DIR") or "").strip():
+        return data_dir()
+    paths_cfg = settings.get("paths", {}) if isinstance(settings, dict) else {}
+    if isinstance(paths_cfg, dict) and paths_cfg.get("data"):
+        return Path(str(paths_cfg["data"]))
+    return data_dir()
 
 
 def get_companion():
@@ -58,10 +78,17 @@ class Companion:
         settings: dict | None = None,
         *,
         database: Any = None,
+        runtime_config_service: Any = None,
     ) -> None:
         global _COMPANION
         self.settings = settings or load_settings()
-        self.feature_flags = FeatureFlags()
+        self.runtime_config_service = runtime_config_service
+        self.feature_flags = FeatureFlags(
+            runtime_config_service=runtime_config_service,
+        )
+        self.primary_identity_resolver = PrimaryIdentityResolver(
+            runtime_config_service=runtime_config_service,
+        )
 
         # R0.3.7: load centralized behavior config (single source of truth).
         self.behavior_cfg = load_behavior_config()
@@ -82,6 +109,34 @@ class Companion:
             self.db,
             enabled=self.feature_flags.is_enabled("conversation_model_v1"),
         )
+        self.conversation_summary_repository = ConversationSummaryRepository(
+            self.db,
+        )
+        self.summary_refresh_planner = SummaryRefreshPlanner(
+            self.conversation_summary_repository,
+        )
+        self.context_assembler = ContextAssembler(
+            self.conversation_repository,
+            self.conversation_summary_repository,
+            max_total_chars=24_000,
+            recent_message_limit=24,
+        )
+
+        self.data_path = _resolve_companion_data_path(self.settings)
+        attachment_root = Path(
+            os.environ.get(
+                "AERIE_DESKTOP_ATTACHMENT_ROOT",
+                str(self.data_path / "desktop_attachments"),
+            )
+        )
+        try:
+            self.desktop_attachment_service = DesktopAttachmentService(
+                self.db,
+                storage_root=attachment_root,
+            )
+        except Exception:
+            logger.exception("desktop attachment service initialization failed")
+            self.desktop_attachment_service = None
 
         # ── Core engines (single instantiation — no duplicates) ──
         # Phase 9 Batch 1: emotion state store persists PAD + threshold
@@ -100,6 +155,7 @@ class Companion:
             behavior_cfg=self.behavior_cfg,
             brain=self.brain,
         )
+        self._emotion_last_sampled_at = int(time.time() * 1000)
         self.memory = LongTermMemory(self.db)
         self.knowledge = KnowledgeBase(self.db)
 
@@ -150,12 +206,13 @@ class Companion:
 
         # Communication
         qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
+        primary_selection = self.get_primary_user_selection()
         self.qq = QQClient(qq_cfg)
         # v13.9: QQ whitelist manager
         self.qq_whitelist = QQWhitelistManager(self.db)
         self.qq.set_whitelist(self.qq_whitelist)
         self.router = Router(
-            self_qq=int(qq_cfg.get("self_qq", 0)),
+            self_qq=primary_selection.user_id if primary_selection else -1,
             friends_qq=qq_cfg.get("friends_qq", []),
         )
         self.splitter = SemanticMessageSplitter()
@@ -188,6 +245,10 @@ class Companion:
             settings=self.settings,
             identity_resolver=self.identity_resolver,
             conversation_repository=self.conversation_repository,
+            context_assembler=self.context_assembler,
+            summary_planner=self.summary_refresh_planner,
+            attachment_service=self.desktop_attachment_service,
+            memory_store=self.memory,
         )
         self.pipeline.world_snapshot_provider = self._world_snapshot_for_context
         self.pipeline.relationship_snapshot_provider = self._relationship_snapshot_for_context
@@ -212,6 +273,7 @@ class Companion:
                 self.chat_request_service = ChatRequestService(
                     repository=self.chat_request_repository,
                     identity_repository=self.identity_repository,
+                    attachment_service=self.desktop_attachment_service,
                 )
                 self.chat_request_worker = ChatRequestWorker(
                     repository=self.chat_request_repository,
@@ -221,6 +283,16 @@ class Companion:
                 )
                 self.chat_request_service.set_worker(self.chat_request_worker)
                 self.chat_request_queue_ready = True
+
+        # Message batcher (Task 7: batch request processing)
+        self.message_batcher: MessageBatcher | None = None
+        try:
+            self.message_batcher = MessageBatcher()
+            self.message_batcher.register_callback(self._on_message_batch_ready)
+            logger.info("MessageBatcher initialized and callback registered")
+        except Exception:
+            logger.exception("MessageBatcher init failed; batching disabled")
+            self.message_batcher = None
 
         # Push scheduler
         proactive_cfg = load_proactive_config()
@@ -334,16 +406,19 @@ class Companion:
             # ── Phase 3: 业务层启动 ──
             # Start push scheduler
             self._push_task = asyncio.create_task(self.push_scheduler.start())
+            if self.qq.connectivity_test:
+                self.push_scheduler.pause("qq_connectivity_test")
+                logger.info("[Startup] QQ connectivity test mode; delivery is disabled")
+            else:
+                # Block-4A R1.5: run brief once + emit show event
+                # (8s delay is inside _boot_brief itself)
+                self._boot_brief_task = asyncio.create_task(self._boot_brief())
 
-            # Block-4A R1.5: run brief once + emit show event
-            # (8s delay is inside _boot_brief itself)
-            self._boot_brief_task = asyncio.create_task(self._boot_brief())
-
-            # boot_greeting: trigger immediately (QQ is already ready)
-            # Set the flag FIRST so the state-change callback doesn't
-            # fire a duplicate (lifecycle.connect may fire after this).
-            self._boot_greeting_fired = True
-            asyncio.create_task(self._boot_qq_greeting())
+                # boot_greeting: trigger immediately (QQ is already ready)
+                # Set the flag FIRST so the state-change callback doesn't
+                # fire a duplicate (lifecycle.connect may fire after this).
+                self._boot_greeting_fired = True
+                asyncio.create_task(self._boot_qq_greeting())
         else:
             logger.warning(
                 "[Startup] QQ not ready after %ss; starting in degraded mode "
@@ -368,6 +443,11 @@ class Companion:
         - First time QQ logs in → fire boot_greeting
         """
         from communication.qq_client import STATE_LOGGED_IN, STATE_DISCONNECTED
+
+        qq_client = getattr(self, "qq", None)
+        if qq_client is not None and getattr(qq_client, "connectivity_test", False):
+            logger.info("[QQ State] connectivity test transition: %s", new_state)
+            return
 
         if new_state == STATE_LOGGED_IN:
             # Resume push scheduler if it was paused due to QQ
@@ -752,6 +832,10 @@ class Companion:
             except Exception:
                 logger.exception("chat request worker stop error")
         try:
+            await self.pipeline.shutdown_background_tasks()
+        except Exception:
+            logger.exception("pipeline background task cleanup error")
+        try:
             await self.queue.stop()
         except Exception:
             pass
@@ -814,8 +898,7 @@ class Companion:
           3. force=True 触发 boot_greeting scene (绕过 ProactiveJudge + PushPolicy)
           4. 成功后写 flag,失败不写(下次启动可重试)
         """
-        flag_dir = Path(self.settings.get("paths", {}).get("data", "./data")) if isinstance(
-            self.settings.get("paths"), dict) else Path("./data")
+        flag_dir = self.data_path
         flag_dir.mkdir(parents=True, exist_ok=True)
         # R8.0+: 60s 窗口 — flag 不再分日期,而是检查 mtime
         flag_path = flag_dir / "boot_greeting_last_sent.flag"
@@ -976,12 +1059,7 @@ class Companion:
                 )
             except Exception:
                 logger.debug("relationship observation failed", exc_info=True)
-        if self.pipeline:
-            try:
-                await self.pipeline.handle(msg)
-            except Exception:
-                logger.exception("pipeline.handle error")
-        # Block-4B R2.2: reset user-absence clock on inbound message.
+
         if self.desire:
             try:
                 self.desire.mark_user_active()
@@ -991,6 +1069,94 @@ class Companion:
             self.push_event_engine.record_user_activity()
         except Exception:
             logger.debug("push event activity record failed", exc_info=True)
+
+        await self._submit_incoming_message(msg)
+
+    async def _submit_incoming_message(self, msg: IncomingMessage) -> None:
+        if self.message_batcher is not None:
+            try:
+                await self.message_batcher.submit_message(msg)
+                return
+            except Exception:
+                logger.exception("message batcher submit failed, falling back to direct pipeline")
+
+        if self.pipeline:
+            try:
+                force_full = (msg.source == "local")
+                await self.pipeline.handle(msg, force_full=force_full)
+            except Exception:
+                logger.exception("pipeline.handle error")
+
+    async def submit_local_message(self, msg: IncomingMessage) -> None:
+        if self.desire:
+            try:
+                self.desire.mark_user_active()
+            except Exception:
+                logger.debug("desire.mark_user_active failed")
+        try:
+            self.push_event_engine.record_user_activity()
+        except Exception:
+            logger.debug("push event activity record failed", exc_info=True)
+
+        await self._submit_incoming_message(msg)
+
+    async def process_local_message_sync(self, msg: IncomingMessage) -> dict | None:
+        if self.desire:
+            try:
+                self.desire.mark_user_active()
+            except Exception:
+                logger.debug("desire.mark_user_active failed")
+        try:
+            self.push_event_engine.record_user_activity()
+        except Exception:
+            logger.debug("push event activity record failed", exc_info=True)
+
+        if self.pipeline:
+            try:
+                force_full = (msg.source == "local")
+                return await self.pipeline.handle(msg, force_full=force_full)
+            except Exception:
+                logger.exception("pipeline.handle sync error for local message")
+                return None
+        return None
+
+    async def _on_message_batch_ready(
+        self,
+        messages: list[IncomingMessage],
+        batch_id: str,
+    ) -> None:
+        logger.info(
+            "Processing message batch %s: %d messages",
+            batch_id,
+            len(messages),
+        )
+        if self.chat_request_queue_ready and self.chat_request_service is not None:
+            try:
+                self.chat_request_service.submit_batch(messages, batch_id)
+                logger.info(
+                    "Batch %s submitted to request queue (%d messages)",
+                    batch_id,
+                    len(messages),
+                )
+                return
+            except Exception:
+                logger.exception(
+                    "Failed to submit batch %s to request queue, falling back to direct pipeline",
+                    batch_id,
+                )
+
+        if self.pipeline:
+            try:
+                if len(messages) == 1:
+                    force_full = (messages[0].source == "local")
+                    await self.pipeline.handle(messages[0], force_full=force_full)
+                else:
+                    await self.pipeline.handle(messages=messages, batch_id=batch_id)
+            except Exception:
+                logger.exception(
+                    "pipeline.handle batch error: batch_id=%s",
+                    batch_id,
+                )
 
     async def _run_daily_decay(self) -> None:
         """Background task: apply daily emotion decay at midnight."""
@@ -1027,15 +1193,11 @@ class Companion:
             await asyncio.sleep(60)
 
     def get_primary_identity(self):
-        """Return configured primary QQ user id and normalized identity."""
-        try:
-            master_id = int(
-                self.settings.get("qq", {}).get("self_qq", 0)
-            )
-        except (TypeError, ValueError):
-            master_id = 0
-        if not master_id:
+        """Return the validated primary user id and normalized identity."""
+        selection = self.get_primary_user_selection()
+        if selection is None:
             return None
+        master_id = selection.user_id
         return (
             master_id,
             self.identity_resolver.resolve(
@@ -1044,16 +1206,64 @@ class Companion:
             ),
         )
 
+    def get_primary_user_selection(self):
+        """Return the effective primary user and its non-secret source."""
+        resolver = getattr(self, "primary_identity_resolver", None)
+        if resolver is None:
+            resolver = PrimaryIdentityResolver(
+                runtime_config_service=getattr(
+                    self,
+                    "runtime_config_service",
+                    None,
+                ),
+            )
+            self.primary_identity_resolver = resolver
+        return resolver.resolve(
+            settings=getattr(self, "settings", None),
+            runtime_config_service=getattr(
+                self,
+                "runtime_config_service",
+                None,
+            ),
+        )
+
     def get_primary_emotion_state(self) -> dict:
         """Return emotion state for the configured primary Actor."""
         primary = self.get_primary_identity()
         if not primary:
-            return {}
+            now = int(time.time() * 1000)
+            return {
+                "status": "unavailable",
+                "error": "primary identity is not configured",
+                "primaryUserId": None,
+                "sampledAt": None,
+                "latestPersistedAt": None,
+                "serverNow": now,
+                "stale": True,
+            }
         master_id, identity = primary
-        return self.emotion.get_state(
+        state = dict(self.emotion.get_state(
             master_id,
             actor_id=identity.actor_id,
-        )
+        ))
+        state["primaryUserId"] = master_id
+        sampled_at = getattr(self, "_emotion_last_sampled_at", None)
+        state_store = getattr(self, "state_store", None)
+        if state_store is not None:
+            state.update(state_store.freshness_metadata(
+                master_id,
+                actor_id=identity.actor_id,
+                sampled_at=sampled_at,
+            ))
+        else:
+            now = int(time.time() * 1000)
+            state.update({
+                "sampledAt": sampled_at,
+                "latestPersistedAt": None,
+                "serverNow": now,
+                "stale": sampled_at is None or now - sampled_at > 10_000,
+            })
+        return state
 
     async def _emotion_tick_loop(self) -> None:
         """R7.5+: background tick loop for emotion dashboard liveness.
@@ -1094,6 +1304,7 @@ class Companion:
                         self.emotion.idle_tick(
                             actor_id=identity.actor_id,
                         )
+                        self._emotion_last_sampled_at = int(time.time() * 1000)
                     if thr_ticks >= 30:
                         thr_ticks = 0
                         self.emotion.tick_decay(
@@ -1123,19 +1334,12 @@ class Companion:
     async def _dispatch_push(self, scene_name: str, scene_cfg: dict) -> bool:
         """Generate one proactive message and deliver it independently."""
         try:
-            master_id = int(self.settings.get("qq", {}).get("self_qq", 0))
-            if not master_id:
-                import os
-                env_qq = os.environ.get("SELF_QQ") or os.environ.get("MASTER_QQ")
-                if env_qq and env_qq.isdigit() and env_qq != "123456789":
-                    master_id = int(env_qq)
-            if not master_id:
-                master_id = int(getattr(self.qq, "self_id", 0) or 0)
-
-            delivery_v2 = self.feature_flags.is_enabled("proactive_delivery_v2")
-            if not master_id and not delivery_v2:
-                logger.warning("[Push] No master QQ configured")
+            primary_selection = self.get_primary_user_selection()
+            if primary_selection is None:
+                logger.warning("[Push] No primary user configured")
                 return False
+            master_id = primary_selection.user_id
+            delivery_v2 = self.feature_flags.is_enabled("proactive_delivery_v2")
 
             mood = "neutral"
             if scene_cfg.get("mood_aware"):

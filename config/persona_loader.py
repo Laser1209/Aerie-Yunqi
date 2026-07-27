@@ -27,6 +27,16 @@ _DEFAULTS = {
     "proactive": {"enabled": True},
 }
 
+_DEFAULT_MESSAGE_BATCHING_CONFIG: dict[str, Any] = {
+    "enabled": True,
+    "window_seconds": 1.5,
+    "max_batch_size": 5,
+    "base_interval_seconds": 0.5,
+    "chars_per_second": 4,
+    "min_interval_seconds": 0.3,
+    "max_interval_seconds": 5.0,
+}
+
 def _load_yaml(filename: str) -> dict[str, Any]:
     path = _CONFIG_DIR / filename
     if not path.exists():
@@ -43,15 +53,21 @@ def _load_yaml(filename: str) -> dict[str, Any]:
 
 
 def load_settings() -> dict[str, Any]:
-    """Load main settings from config/settings.yaml."""
+    """Load main settings from config/settings.yaml.
+
+    Returns deep-merged dict (file overrides defaults for known sections).
+    """
     try:
-        return _load_yaml("settings.yaml")
+        file_cfg = _load_yaml("settings.yaml")
+        defaults = {"message_batching": dict(_DEFAULT_MESSAGE_BATCHING_CONFIG)}
+        merged = _deep_merge(defaults, file_cfg)
+        return merged
     except Exception:
         import logging
         logging.getLogger(__name__).exception(
-            "Unexpected error loading settings.yaml; returning empty dict"
+            "Unexpected error loading settings.yaml; returning defaults"
         )
-        return {}
+        return {"message_batching": dict(_DEFAULT_MESSAGE_BATCHING_CONFIG)}
 
 
 def load_persona() -> dict[str, Any]:
@@ -429,6 +445,65 @@ def get_napcat_config() -> dict[str, Any]:
 def get_http_config() -> dict[str, Any]:
     settings = load_settings()
     return dict(settings.get("http_api", {}))
+
+
+def get_message_batching_config() -> dict[str, Any]:
+    """Get message batching configuration with type-safe defaults.
+
+    Returns a dict containing:
+        enabled (bool): Whether message batching is enabled
+        window_seconds (float): Time window in seconds for collecting messages
+        max_batch_size (int): Maximum number of messages per batch
+        base_interval_seconds (float): Base interval between subsequent replies
+        chars_per_second (int): Reading/typing speed in characters per second
+        min_interval_seconds (float): Minimum interval between replies
+        max_interval_seconds (float): Maximum interval between replies
+
+    All values are coerced to correct types with safe fallbacks.
+    """
+    settings = load_settings()
+    raw = settings.get("message_batching", {})
+    if not isinstance(raw, dict):
+        raw = {}
+
+    def _bool(key: str, default: bool) -> bool:
+        val = raw.get(key, default)
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, (int, float)):
+            return bool(val)
+        if isinstance(val, str):
+            return val.strip().lower() in ("1", "true", "yes", "on")
+        return default
+
+    def _float(key: str, default: float) -> float:
+        val = raw.get(key, default)
+        try:
+            return max(0.0, float(val))
+        except (TypeError, ValueError):
+            return default
+
+    def _int(key: str, default: int) -> int:
+        val = raw.get(key, default)
+        try:
+            return max(1, int(val))
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "enabled": _bool("enabled", _DEFAULT_MESSAGE_BATCHING_CONFIG["enabled"]),
+        "window_seconds": _float("window_seconds", _DEFAULT_MESSAGE_BATCHING_CONFIG["window_seconds"]),
+        "max_batch_size": _int("max_batch_size", _DEFAULT_MESSAGE_BATCHING_CONFIG["max_batch_size"]),
+        "base_interval_seconds": _float("base_interval_seconds", _DEFAULT_MESSAGE_BATCHING_CONFIG["base_interval_seconds"]),
+        "chars_per_second": _int("chars_per_second", _DEFAULT_MESSAGE_BATCHING_CONFIG["chars_per_second"]),
+        "min_interval_seconds": _float("min_interval_seconds", _DEFAULT_MESSAGE_BATCHING_CONFIG["min_interval_seconds"]),
+        "max_interval_seconds": _float("max_interval_seconds", _DEFAULT_MESSAGE_BATCHING_CONFIG["max_interval_seconds"]),
+    }
+
+
+def is_message_batching_enabled() -> bool:
+    """Convenience function to check if message batching is enabled."""
+    return get_message_batching_config()["enabled"]
 
 
 class ConfigHotReloader:

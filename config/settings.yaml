@@ -1,17 +1,25 @@
 feature_flags:
-  chat_request_queue_v1: false
+  chat_request_queue_v1: true
   chat_stream_v1: false
-  context_budget_v1: false
-  conversation_model_v1: false
+  context_budget_v1: true
+  conversation_model_v1: true
   identity_contract_v1: false
-  image_assets_v1: false
+  image_assets_v1: true
   migration_framework_v1: true
   mobile_gateway_v1: false
   persona_hub_source_v1: false
-  proactive_delivery_v2: false
+  proactive_delivery_v2: true
   world_image_candidates_v1: false
   world_inprocess_v1: false
   world_sidecar_v1: false
+message_batching:
+  enabled: true
+  window_seconds: 1.5
+  max_batch_size: 5
+  base_interval_seconds: 0.5
+  chars_per_second: 4
+  min_interval_seconds: 0.3
+  max_interval_seconds: 5.0
 office:
   dir: F:\文件\Aerie
 proactive:
@@ -23,4 +31,4 @@ verify_batch4:
   ping: pong
   ts: 1784404889
 weather:
-  city: 济南
+  city: ''

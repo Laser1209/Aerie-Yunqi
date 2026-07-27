@@ -206,10 +206,30 @@ class TestChatSendEndpoint:
         assert "reply" in data
         assert data["reply"] == "嗯。"
 
-    def test_chat_send_no_user_id_uses_master(self):
+    def test_chat_send_no_user_id_uses_master(self, monkeypatch):
         # Without user_id, it should use master QQ from config
+        monkeypatch.setattr(
+            mock_companion,
+            "get_primary_user_selection",
+            MagicMock(return_value=type("Selection", (), {"user_id": 3998874040})()),
+        )
         resp = client.post("/api/chat/send", json={"text": "你好"})
         assert resp.status_code == 200
+
+    def test_chat_send_dynamic_mock_identity_is_treated_as_unconfigured(
+        self,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            mock_companion,
+            "get_primary_user_selection",
+            MagicMock(return_value=MagicMock()),
+        )
+
+        resp = client.post("/api/chat/send", json={"text": "你好"})
+
+        assert resp.status_code == 409
+        assert resp.json()["error"] == "primary_identity_unconfigured"
 
 
 def test_todo_mutations_emit_timeline_changed(monkeypatch):
@@ -375,3 +395,13 @@ def test_system_stats_include_backend_diagnostics(api_db):
     assert data["database_path"] == str(api_db.db_path.resolve())
     assert data["project_root"] == str(api_server.PROJECT_ROOT)
     assert {"uptime", "uptime_seconds", "cpu", "memory", "message_count"} <= data.keys()
+    assert {
+        "cpu_percent",
+        "memory_percent",
+        "network_receive_kbps",
+        "network_send_kbps",
+        "sampled_at",
+        "sampledAt",
+    } <= data.keys()
+    assert data["sampled_at"]
+    assert data["sampledAt"] == data["sampled_at"]

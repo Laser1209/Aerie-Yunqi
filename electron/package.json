@@ -13,6 +13,8 @@
     "check:forbidden": "python ../tools/check_forbidden.py",
     "check:tokens": "python ../tools/check_tokens.py",
     "check:all": "npm run check:emojis && npm run check:forbidden && npm run check:tokens",
+    "test:unit": "node --test tests/*.test.js",
+    "test:e2e": "node tests/e2e/desktop-audit.js",
     "prebuild": "npm run check:emojis && npm run build:icons",
     "lint": "echo 'No JS lint configured'"
   },
@@ -21,6 +23,7 @@
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.9.0",
+    "playwright-core": "^1.62.0",
     "sharp": "^0.32.6"
   },
   "build": {
@@ -41,7 +44,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "requestedExecutionLevel": "requireAdministrator"

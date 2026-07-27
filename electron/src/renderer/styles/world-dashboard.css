@@ -32,6 +32,36 @@
   justify-content: flex-end;
 }
 
+.world-dashboard-lifecycle-actions {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.world-dashboard-lifecycle-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.world-dashboard-lifecycle-item {
+  min-width: 0;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.world-dashboard-lifecycle-item strong,
+.world-dashboard-lifecycle-item span {
+  overflow-wrap: anywhere;
+}
+
+.world-dashboard-runtime-error:not(:empty) {
+  color: var(--error);
+}
+
 .world-dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -156,7 +186,12 @@
 
   .world-dashboard-grid,
   .world-dashboard-columns,
-  .world-dashboard-snapshot-grid {
+  .world-dashboard-snapshot-grid,
+  .world-dashboard-lifecycle-grid {
     grid-template-columns: 1fr;
+  }
+
+  .world-dashboard-lifecycle-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

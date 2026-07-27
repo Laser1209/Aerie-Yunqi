@@ -1,9 +1,13 @@
 {
-  "daily_count": 0,
+  "daily_count": 3,
   "enabled": true,
   "feedback": {},
-  "last_push_at": "2026-07-22T18:30:18.980180",
+  "last_push_at": "2026-07-26T22:30:06.648657",
   "mute_until": null,
   "scene_blocks": {},
-  "today": "2026-07-23"
+  "scene_last_sent": {
+    "goodnight": "2026-07-26T22:30:06.648657",
+    "idle_care": "2026-07-26T21:32:17.319593"
+  },
+  "today": "2026-07-26"
 }

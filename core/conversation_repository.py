@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Iterator
@@ -12,6 +13,36 @@ from core.ids import generate_id
 
 class RequestConflict(RuntimeError):
     pass
+
+
+class InvalidHistoryCursor(ValueError):
+    pass
+
+
+def _encode_history_cursor(row_id: int) -> str:
+    payload = json.dumps(
+        {"v": 1, "row": int(row_id)},
+        separators=(",", ":"),
+    ).encode("ascii")
+    return urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_history_cursor(value: str | None) -> int | None:
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str) or len(value) > 128:
+        raise InvalidHistoryCursor("invalid history cursor")
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        payload = json.loads(urlsafe_b64decode(padded.encode("ascii")))
+        if payload.get("v") != 1:
+            raise ValueError
+        row_id = int(payload["row"])
+        if row_id <= 0:
+            raise ValueError
+        return row_id
+    except (KeyError, TypeError, ValueError, UnicodeError, json.JSONDecodeError):
+        raise InvalidHistoryCursor("invalid history cursor") from None
 
 
 def resolve_conversation_id(
@@ -33,10 +64,113 @@ def resolve_conversation_id(
     return f"conv_{digest[:32]}"
 
 
+def _legacy_conversation_id(
+    actor_id: str | None,
+    channel: str | None,
+    channel_account_id: str | None,
+    user_id: int,
+) -> str:
+    payload = "\x1f".join(
+        (
+            "legacy_chat_log",
+            actor_id or "",
+            channel or "",
+            channel_account_id or "",
+            str(user_id),
+        )
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"conv_{digest[:32]}"
+
+
+def _resolve_related_conversation_ids(
+    *,
+    actor_id: str | None,
+    channel: str | None,
+    channel_account_id: str | None,
+    user_id: int,
+) -> list[str]:
+    primary = resolve_conversation_id(
+        actor_id=actor_id,
+        channel=channel,
+        channel_account_id=channel_account_id,
+        user_id=user_id,
+    )
+    candidates = [
+        primary,
+        _legacy_conversation_id(actor_id, channel, channel_account_id, user_id),
+        _legacy_conversation_id(None, channel, channel_account_id, user_id),
+        _legacy_conversation_id(actor_id, None, None, user_id),
+        _legacy_conversation_id(None, None, None, user_id),
+    ]
+    seen = set()
+    result = []
+    for cid in candidates:
+        if cid not in seen:
+            seen.add(cid)
+            result.append(cid)
+    return result
+
+
 class ConversationRepository:
     def __init__(self, database: Any, *, enabled: bool) -> None:
         self.database = database
         self.enabled = enabled
+
+    def _find_user_conversation_ids(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        actor_id: str | None,
+        channel: str | None,
+        channel_account_id: str | None,
+        user_id: int,
+    ) -> list[str]:
+        ids: list[str] = []
+        seen: set[str] = set()
+
+        def add(cid: str | None) -> None:
+            if cid and cid not in seen:
+                seen.add(cid)
+                ids.append(cid)
+
+        primary = resolve_conversation_id(
+            actor_id=actor_id,
+            channel=channel,
+            channel_account_id=channel_account_id,
+            user_id=user_id,
+        )
+        add(primary)
+
+        if self._table_exists(conn, "chat_log"):
+            linked_rows = conn.execute(
+                """SELECT DISTINCT m.conversation_id
+                   FROM messages m
+                   JOIN chat_log cl ON cl.id = m.legacy_chat_log_id
+                   WHERE cl.user_id = ?""",
+                (int(user_id),),
+            ).fetchall()
+            for row in linked_rows:
+                add(row["conversation_id"])
+
+        for cid in _resolve_related_conversation_ids(
+            actor_id=actor_id,
+            channel=channel,
+            channel_account_id=channel_account_id,
+            user_id=user_id,
+        ):
+            add(cid)
+
+        existing: list[str] = []
+        for cid in ids:
+            if conn.execute(
+                "SELECT 1 FROM conversations WHERE conversation_id = ? LIMIT 1",
+                (cid,),
+            ).fetchone():
+                existing.append(cid)
+        if not existing:
+            existing = [primary]
+        return existing
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -496,18 +630,20 @@ class ConversationRepository:
     ) -> list[dict[str, Any]]:
         if not self.enabled:
             return []
-        conversation_id = resolve_conversation_id(
-            actor_id=actor_id,
-            channel=channel,
-            channel_account_id=channel_account_id,
-            user_id=user_id,
-        )
         with self._connection() as conn:
+            conversation_ids = self._find_user_conversation_ids(
+                conn,
+                actor_id=actor_id,
+                channel=channel,
+                channel_account_id=channel_account_id,
+                user_id=user_id,
+            )
+            ex_ph = ",".join("?" * len(conversation_ids))
             rows = conn.execute(
-                """WITH recent_turns AS (
+                f"""WITH recent_turns AS (
                        SELECT turn_id, created_at, rowid AS turn_order
                        FROM turns
-                       WHERE conversation_id = ?
+                       WHERE conversation_id IN ({ex_ph})
                          AND status = 'completed'
                        ORDER BY created_at DESC, turn_order DESC
                        LIMIT ?
@@ -516,9 +652,302 @@ class ConversationRepository:
                    FROM recent_turns rt
                    JOIN messages m ON m.turn_id = rt.turn_id
                    ORDER BY rt.created_at ASC, rt.turn_order ASC, m.sequence ASC""",
-                (conversation_id, limit),
+                tuple(conversation_ids) + (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def history_page(
+        self,
+        *,
+        actor_id: str | None,
+        channel: str | None,
+        channel_account_id: str | None,
+        user_id: int,
+        conversation_id: str | None = None,
+        cursor: str | None = None,
+        direction: str = "older",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Read a stable cursor page without imposing a history ceiling.
+
+        ``items`` are always returned in chronological order.  The cursor is
+        opaque to callers and is based on SQLite insertion order, which also
+        disambiguates messages sharing the same timestamp.  When the
+        normalized conversation model is disabled, the same contract is
+        served from the legacy ``chat_log`` table.
+        """
+        if direction not in {"older", "newer"}:
+            raise ValueError("direction must be 'older' or 'newer'")
+        if not isinstance(limit, int) or isinstance(limit, bool):
+            raise ValueError("limit must be an integer")
+        limit = max(1, min(limit, 200))
+        anchor = _decode_history_cursor(cursor)
+        if direction == "newer" and anchor is None:
+            raise InvalidHistoryCursor("newer history requires a cursor")
+
+        with self._connection() as conn:
+            if not self.enabled or not self._table_exists(conn, "messages"):
+                return self._legacy_history_page(
+                    conn,
+                    user_id=user_id,
+                    anchor=anchor,
+                    direction=direction,
+                    limit=limit,
+                )
+            resolved_conversation_id = conversation_id or resolve_conversation_id(
+                actor_id=actor_id,
+                channel=channel,
+                channel_account_id=channel_account_id,
+                user_id=user_id,
+            )
+            if anchor is None and direction == "older":
+                related_ids = self._find_user_conversation_ids(
+                    conn,
+                    actor_id=actor_id,
+                    channel=channel,
+                    channel_account_id=channel_account_id,
+                    user_id=user_id,
+                )
+                if len(related_ids) <= 1:
+                    return self._normalized_history_page(
+                        conn,
+                        conversation_id=resolved_conversation_id,
+                        anchor=anchor,
+                        direction=direction,
+                        limit=limit,
+                    )
+                return self._merged_history_page(
+                    conn,
+                    conversation_ids=related_ids,
+                    primary_conversation_id=resolved_conversation_id,
+                    limit=limit,
+                )
+            return self._normalized_history_page(
+                conn,
+                conversation_id=resolved_conversation_id,
+                anchor=anchor,
+                direction=direction,
+                limit=limit,
+            )
+
+    @staticmethod
+    def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+        return conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone() is not None
+
+    def _normalized_history_page(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        conversation_id: str,
+        anchor: int | None,
+        direction: str,
+        limit: int,
+    ) -> dict[str, Any]:
+        comparator = "<" if direction == "older" else ">"
+        order = "DESC" if direction == "older" else "ASC"
+        params: list[Any] = [conversation_id]
+        anchor_sql = ""
+        if anchor is not None:
+            anchor_sql = f" AND rowid {comparator} ?"
+            params.append(anchor)
+        params.append(limit + 1)
+        rows = conn.execute(
+            f"""SELECT rowid AS history_rowid, message_id, conversation_id,
+                       turn_id, role, content, attachments,
+                       response_group_id, sequence, channel,
+                       channel_account_id, actor_id, created_at
+                FROM messages
+                WHERE conversation_id = ?{anchor_sql}
+                ORDER BY rowid {order}
+                LIMIT ?""",
+            tuple(params),
+        ).fetchall()
+        selected = list(rows[:limit])
+        if direction == "older":
+            selected.reverse()
+        return self._build_page(
+            conn,
+            selected,
+            table="messages",
+            partition_sql="conversation_id = ?",
+            partition_params=(conversation_id,),
+            direction=direction,
+        )
+
+    def _merged_history_page(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        conversation_ids: list[str],
+        primary_conversation_id: str,
+        limit: int,
+    ) -> dict[str, Any]:
+        placeholders = ",".join("?" * len(conversation_ids))
+        rows = conn.execute(
+            f"""SELECT rowid AS history_rowid, message_id, conversation_id,
+                       turn_id, role, content, attachments,
+                       response_group_id, sequence, channel,
+                       channel_account_id, actor_id, created_at
+                FROM messages
+                WHERE conversation_id IN ({placeholders})
+                ORDER BY rowid DESC
+                LIMIT ?""",
+            tuple(conversation_ids) + (limit + 1,),
+        ).fetchall()
+        selected = list(rows[:limit])
+        selected.reverse()
+        if not selected:
+            return self._empty_page()
+        oldest_rowid = int(selected[0]["history_rowid"])
+        newest_rowid = int(selected[-1]["history_rowid"])
+        has_older = conn.execute(
+            f"SELECT 1 FROM messages WHERE conversation_id IN ({placeholders}) "
+            "AND rowid < ? LIMIT 1",
+            tuple(conversation_ids) + (oldest_rowid,),
+        ).fetchone() is not None
+        items: list[dict[str, Any]] = []
+        for row in selected:
+            item = dict(row)
+            row_id = int(item.pop("history_rowid"))
+            item["cursor"] = _encode_history_cursor(row_id)
+            item["id"] = item["message_id"]
+            item["ts"] = item.get("created_at")
+            item["attachments"] = self._decode_attachments(
+                item.get("attachments")
+            )
+            items.append(item)
+        older_cursor = _encode_history_cursor(oldest_rowid) if has_older else None
+        return {
+            "items": items,
+            "nextCursor": older_cursor,
+            "hasMore": has_older,
+            "olderCursor": older_cursor,
+            "newerCursor": None,
+            "hasOlder": has_older,
+            "hasNewer": False,
+        }
+
+    def _legacy_history_page(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        user_id: int,
+        anchor: int | None,
+        direction: str,
+        limit: int,
+    ) -> dict[str, Any]:
+        if not self._table_exists(conn, "chat_log"):
+            return self._empty_page()
+        comparator = "<" if direction == "older" else ">"
+        order = "DESC" if direction == "older" else "ASC"
+        params: list[Any] = [int(user_id)]
+        anchor_sql = ""
+        if anchor is not None:
+            anchor_sql = f" AND id {comparator} ?"
+            params.append(anchor)
+        params.append(limit + 1)
+        rows = conn.execute(
+            f"""SELECT id AS history_rowid, id, role, content,
+                       attachments, created_at
+                FROM chat_log
+                WHERE user_id = ?{anchor_sql}
+                ORDER BY id {order}
+                LIMIT ?""",
+            tuple(params),
+        ).fetchall()
+        selected = list(rows[:limit])
+        if direction == "older":
+            selected.reverse()
+        return self._build_page(
+            conn,
+            selected,
+            table="chat_log",
+            partition_sql="user_id = ?",
+            partition_params=(int(user_id),),
+            direction=direction,
+        )
+
+    def _build_page(
+        self,
+        conn: sqlite3.Connection,
+        rows: list[sqlite3.Row],
+        *,
+        table: str,
+        partition_sql: str,
+        partition_params: tuple[Any, ...],
+        direction: str,
+    ) -> dict[str, Any]:
+        if not rows:
+            return self._empty_page()
+        oldest = int(rows[0]["history_rowid"])
+        newest = int(rows[-1]["history_rowid"])
+        key = "rowid" if table == "messages" else "id"
+        has_older = conn.execute(
+            f"SELECT 1 FROM {table} WHERE {partition_sql} "
+            f"AND {key} < ? LIMIT 1",
+            partition_params + (oldest,),
+        ).fetchone() is not None
+        has_newer = conn.execute(
+            f"SELECT 1 FROM {table} WHERE {partition_sql} "
+            f"AND {key} > ? LIMIT 1",
+            partition_params + (newest,),
+        ).fetchone() is not None
+
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            row_id = int(item.pop("history_rowid"))
+            item["cursor"] = _encode_history_cursor(row_id)
+            if "message_id" in item:
+                item["id"] = item["message_id"]
+                item["ts"] = item.get("created_at")
+            item["attachments"] = self._decode_attachments(
+                item.get("attachments")
+            )
+            items.append(item)
+
+        older_cursor = _encode_history_cursor(oldest) if has_older else None
+        newer_cursor = _encode_history_cursor(newest) if has_newer else None
+        next_cursor = older_cursor if direction == "older" else newer_cursor
+        has_more = has_older if direction == "older" else has_newer
+        return {
+            "items": items,
+            "nextCursor": next_cursor,
+            "hasMore": has_more,
+            "olderCursor": older_cursor,
+            "newerCursor": newer_cursor,
+            "hasOlder": has_older,
+            "hasNewer": has_newer,
+        }
+
+    @staticmethod
+    def _decode_attachments(value: Any) -> list[dict[str, Any]]:
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if not value:
+            return []
+        try:
+            payload = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+        if not isinstance(payload, list):
+            return []
+        return [item for item in payload if isinstance(item, dict)]
+
+    @staticmethod
+    def _empty_page() -> dict[str, Any]:
+        return {
+            "items": [],
+            "nextCursor": None,
+            "hasMore": False,
+            "olderCursor": None,
+            "newerCursor": None,
+            "hasOlder": False,
+            "hasNewer": False,
+        }
 
     def _insert_message(
         self,

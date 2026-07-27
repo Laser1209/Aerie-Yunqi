@@ -776,3 +776,98 @@ test("cancelled request clears typing bubble", () => {
     0,
   );
 });
+
+test("non-ready attachments block send while ready records use id-only contract", async () => {
+  const { manager, document, calls } = createManager({
+    request(options) {
+      if (options.path === "/api/chat/send") {
+        return {
+          status: 202,
+          data: { request_id: "req_attachment", status: "queued" },
+        };
+      }
+      return { data: {} };
+    },
+  });
+  const input = document.getElementById("chat-input");
+  input.value = "read it";
+  manager._pendingAttachments = [{
+    attachmentId: "att_1",
+    name: "notes.txt",
+    state: "processing",
+    storage_relpath: "must-not-leak",
+  }];
+  await manager.send();
+  assert.equal(calls.filter((call) => call.path === "/api/chat/send").length, 0);
+
+  manager._pendingAttachments[0].state = "ready";
+  await manager.send();
+  const send = calls.find((call) => call.path === "/api/chat/send");
+  assert.equal(send.body.attachments[0].attachmentId, "att_1");
+  assert.equal(send.body.attachments[0].state, "ready");
+  assert.equal("storage_relpath" in send.body.attachments[0], false);
+});
+
+test("renderer keeps at most 500 message elements", () => {
+  const { manager, document } = createManager();
+  for (let index = 0; index < 510; index += 1) {
+    manager._render({ id: `msg_${index}`, role: "user", content: String(index) });
+  }
+  const messages = document.getElementById("chat-messages").querySelectorAll(".chat-msg");
+  assert.equal(messages.length, 500);
+  assert.equal(messages[0].getAttribute("data-id"), "msg_10");
+});
+
+test("history loader consumes cursor page contract and exposes load-earlier control", async () => {
+  const { manager, document, calls } = createManager({
+    request(options) {
+      if (options.path.startsWith("/api/chat/history/page")) {
+        return {
+          data: {
+            items: [
+              { id: "msg_a", cursor: "cursor_a", role: "user", content: "A" },
+              { id: "msg_b", cursor: "cursor_b", role: "assistant", content: "B" },
+            ],
+            olderCursor: "cursor_a",
+            newerCursor: null,
+            hasOlder: true,
+            hasNewer: false,
+          },
+        };
+      }
+      return { data: {} };
+    },
+  });
+  await manager._loadHistoryPage("initial");
+  assert.ok(calls.some((call) => call.path.includes("/api/chat/history/page")));
+  assert.equal(manager._history.olderCursor, "cursor_a");
+  assert.equal(
+    document.getElementById("chat-messages").querySelectorAll(".chat-msg").length,
+    2,
+  );
+  assert.equal(
+    document.getElementById("chat-messages").querySelectorAll(".chat-history-control").length,
+    1,
+  );
+});
+
+test("chat retries primary identity after backend-ready", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "..", "src", "renderer", "js", "chat.js"),
+    "utf8",
+  );
+  assert.match(source, /onBackendReady\(\(\) =>/);
+  assert.match(source, /if \(!this\._identityReady\) this\._bootstrapRuntimeIdentity\(\)/);
+  assert.match(source, /data\.primaryIdentity\.primaryUserId/);
+  assert.match(source, /identityError\.remove\(\)/);
+});
+
+test("uploader source has no client-owned extension or size allowlist", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "..", "src", "renderer", "js", "chat-uploader.js"),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /const\s+ALLOWED_EXT/);
+  assert.doesNotMatch(source, /const\s+MAX_FILE_BYTES/);
+  assert.match(source, /\/api\/attachments\/capabilities/);
+});

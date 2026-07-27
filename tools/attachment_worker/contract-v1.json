@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aerie desktop attachment worker request v1",
+  "type": "object",
+  "required": ["version", "attachmentId", "path", "allowedRoot", "category", "analysisMode"],
+  "properties": {
+    "version": { "const": 1 },
+    "attachmentId": { "type": "string", "minLength": 1 },
+    "path": { "type": "string", "minLength": 1 },
+    "allowedRoot": { "type": "string", "minLength": 1 },
+    "category": { "type": "string" },
+    "analysisMode": { "enum": ["extract", "metadata"] },
+    "chunkChars": { "type": "integer", "minimum": 500, "maximum": 8000 },
+    "maxOutputChars": { "type": "integer", "minimum": 500, "maximum": 250000 },
+    "zipLimits": { "type": "object" }
+  },
+  "additionalProperties": false
+}

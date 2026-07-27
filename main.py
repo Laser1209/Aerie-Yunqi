@@ -23,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 # `getattr(main, ...)` so they must exist at import time.
 PROCESS_START_TIME = time.time()
 PROCESS_START_ISO = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(PROCESS_START_TIME))
+BACKEND_INSTANCE_ID = os.getenv("AERIE_BACKEND_INSTANCE_ID", "").strip()
 
 
 def _git_commit_short() -> str:
@@ -96,20 +97,29 @@ async def _main() -> None:
     # Load .env
     try:
         from dotenv import load_dotenv
-        load_dotenv()
+        configured_env = os.getenv("AERIE_ENV_FILE", "").strip()
+        load_dotenv(configured_env or None)
     except Exception:
         pass
 
     from config.persona_loader import load_settings, get_http_config
     from core.companion import Companion
     from core.api_server import start_api
+    from core.paths import data_dir
+    from core.runtime_config import RuntimeConfigService
 
     settings = load_settings()
     http_cfg = get_http_config()
     host = http_cfg.get("host", "127.0.0.1")
-    port = int(http_cfg.get("port", 7890))
+    port = int(os.getenv("AERIE_BACKEND_PORT") or http_cfg.get("port", 7890))
 
-    companion = Companion(settings=settings)
+    runtime_config_service = RuntimeConfigService(
+        state_path=data_dir() / "runtime_config.json",
+    )
+    companion = Companion(
+        settings=settings,
+        runtime_config_service=runtime_config_service,
+    )
     await companion.start()
 
     # v9.1: config hot-reloader — watches config/ YAML files and

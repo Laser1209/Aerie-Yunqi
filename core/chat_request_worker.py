@@ -6,8 +6,8 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from communication.message import CancellationToken, CancellationTooLate
-from core.chat_request_repository import ClaimedRequest
+from communication.message import CancellationToken, CancellationTooLate, IncomingMessage
+from core.chat_request_repository import ClaimedRequest, RequestContext
 
 
 logger = logging.getLogger(__name__)
@@ -190,6 +190,16 @@ class ChatRequestWorker:
     async def _execute_claimed(self, claimed: ClaimedRequest) -> None:
         context = claimed.context
         request_id = context.request_id
+        batch_id = context.batch_id
+        is_batch = batch_id is not None
+
+        if is_batch:
+            await self._execute_batch(
+                primary_claimed=claimed,
+                batch_id=batch_id,
+            )
+            return
+
         execution = asyncio.current_task()
         if execution is None:
             raise RuntimeError("chat request execution task is unavailable")
@@ -236,6 +246,176 @@ class ChatRequestWorker:
                 self._heartbeat_tasks.pop(request_id, None)
             self._cancellation_tokens.pop(request_id, None)
             self._cancellation_reasons.pop(request_id, None)
+
+    async def _execute_batch(
+        self,
+        *,
+        primary_claimed: ClaimedRequest,
+        batch_id: str,
+    ) -> None:
+        primary_context = primary_claimed.context
+        primary_request_id = primary_context.request_id
+
+        remaining_claimed = self.repository.claim_remaining_batch(
+            batch_id=batch_id,
+            lease_owner=self.worker_id,
+            lease_seconds=self.lease_seconds,
+            exclude_request_id=primary_request_id,
+        )
+
+        all_claimed: list[ClaimedRequest] = [primary_claimed] + remaining_claimed
+        all_contexts: list[RequestContext] = [c.context for c in all_claimed]
+        all_request_ids: list[str] = [ctx.request_id for ctx in all_contexts]
+
+        logger.info(
+            "Processing batch %s: %d requests (primary=%s)",
+            batch_id,
+            len(all_claimed),
+            primary_request_id,
+        )
+
+        execution = asyncio.current_task()
+        if execution is None:
+            raise RuntimeError("chat request batch execution task is unavailable")
+
+        for req_id in all_request_ids:
+            self._running_tasks[req_id] = execution
+
+        heartbeats: list[asyncio.Task[None]] = []
+        for req_id in all_request_ids:
+            hb = asyncio.create_task(
+                self._heartbeat_loop(req_id, execution),
+                name=f"chat-request-heartbeat-{req_id}",
+            )
+            self._heartbeat_tasks[req_id] = hb
+            heartbeats.append(hb)
+
+        token = CancellationToken()
+        for req_id in all_request_ids:
+            self._cancellation_tokens[req_id] = token
+
+        messages = [self._context_to_message(ctx) for ctx in all_contexts]
+
+        try:
+            results = await self.pipeline.handle(
+                messages=messages,
+                batch_id=batch_id,
+                cancellation_token=token,
+            )
+            results_list = results if isinstance(results, list) else []
+            self.repository.mark_batch_completed(
+                batch_id=batch_id,
+                lease_owner=self.worker_id,
+                results={},
+            )
+            for claimed, result_data in zip(all_claimed, results_list):
+                if not isinstance(result_data, dict):
+                    result_data = {}
+                self._emit_claimed_status(
+                    "chat_request_completed",
+                    claimed,
+                    "completed",
+                    sequence=self._terminal_sequence(result_data),
+                )
+            logger.info(
+                "Batch %s completed: %d requests processed",
+                batch_id,
+                len(all_claimed),
+            )
+        except asyncio.CancelledError:
+            self._finalize_batch_cancelled(all_claimed)
+        except CancellationTooLate as exc:
+            self._fail_batch(all_claimed, exc.reason)
+        except Exception:
+            logger.exception(
+                "chat request batch pipeline failed: batch_id=%s worker_id=%s",
+                batch_id,
+                self.worker_id,
+            )
+            self._fail_batch(all_claimed, "pipeline_failed")
+        finally:
+            for hb in heartbeats:
+                hb.cancel()
+            await asyncio.gather(*heartbeats, return_exceptions=True)
+            for req_id in all_request_ids:
+                self._running_tasks.pop(req_id, None)
+                self._heartbeat_tasks.pop(req_id, None)
+                self._cancellation_tokens.pop(req_id, None)
+                self._cancellation_reasons.pop(req_id, None)
+            self._work_event.set()
+
+    @staticmethod
+    def _context_to_message(context: RequestContext) -> IncomingMessage:
+        identity = context.identity
+        source = "local" if identity.channel == "desktop" else identity.channel
+        return IncomingMessage(
+            user_id=identity.user_id,
+            content=context.input_content,
+            msg_type="private",
+            source=source or "local",
+            raw_event={},
+            reply_to_id=context.reply_to_id,
+            attachments=list(context.attachments),
+            actor_id=identity.actor_id,
+            channel=identity.channel,
+            channel_account_id=identity.channel_account_id,
+        )
+
+    def _fail_batch(self, claimed_list: list[ClaimedRequest], error_code: str) -> None:
+        if not claimed_list:
+            return
+        batch_id = claimed_list[0].context.batch_id
+        try:
+            self.repository.mark_batch_failed(
+                batch_id=batch_id,
+                lease_owner=self.worker_id,
+                error_code=error_code,
+            )
+        except Exception:
+            logger.exception(
+                "chat request batch failure finalization failed: batch_id=%s",
+                batch_id,
+            )
+        for claimed in claimed_list:
+            self._emit_claimed_status(
+                "chat_request_failed",
+                claimed,
+                "failed",
+                error_code=error_code,
+                sequence=0,
+            )
+
+    def _finalize_batch_cancelled(self, claimed_list: list[ClaimedRequest]) -> None:
+        if not claimed_list:
+            return
+        batch_id = claimed_list[0].context.batch_id
+        reasons = set()
+        for claimed in claimed_list:
+            req_id = claimed.context.request_id
+            reason = self._cancellation_reasons.pop(req_id, None)
+            if reason:
+                reasons.add(reason)
+        if reasons & {"worker_stopped", "lease_lost"}:
+            self._fail_batch(claimed_list, "worker_stopped" if "worker_stopped" in reasons else "lease_lost")
+            return
+        try:
+            self.repository.mark_batch_failed(
+                batch_id=batch_id,
+                lease_owner=self.worker_id,
+                error_code="pipeline_cancelled",
+            )
+        except Exception:
+            logger.exception(
+                "chat request batch cancellation finalization failed: batch_id=%s",
+                batch_id,
+            )
+        for claimed in claimed_list:
+            self._emit_claimed_status(
+                "chat_request_cancelled",
+                claimed,
+                "cancelled",
+                sequence=1,
+            )
 
     async def _heartbeat_loop(
         self,

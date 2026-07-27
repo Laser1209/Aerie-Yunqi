@@ -17,6 +17,9 @@ class EmotionDashboard {
   constructor() {
     this.pollInterval = null;
     this._visible = false;
+    this._initialized = false;
+    this._requestInFlight = false;
+    this._hasLiveData = false;
     this._padHistory = null;   // Phase 9 Batch 5: cached history series
     this._persona = null;      // R6.4: cached persona for fallback defaults
     this._hasRendered = false; // R6.4: render fallback once before first fetch
@@ -26,15 +29,10 @@ class EmotionDashboard {
   }
 
   init() {
-    // R6.4: pull persona immediately so defaults reflect the latest doc.
-    this._loadPersonaForDefaults();
-    // Render fallback once so the UI is never blank on first paint.
-    this._renderFallback();
-    // Start polling for emotion data
-    this.pollInterval = setInterval(() => this._fetch(), 3000);
-    // R6.4: refresh persona every 60s so external YAML edits flow through.
-    this._personaInterval = setInterval(() => this._loadPersonaForDefaults(), 60_000);
-    this._fetch(); // immediate first fetch
+    if (this._initialized) return;
+    this._initialized = true;
+    this._renderWaiting("等待数据");
+    if (this._visible) this._startPolling();
   }
 
   // ── R6.4: Persona → defaults (Big Five + archetype) ──
@@ -43,13 +41,7 @@ class EmotionDashboard {
       if (!window.aerie || !window.aerie.api) return;
       const r = await window.aerie.api.request({ method: "GET", path: "/api/persona" });
       if (r && r.data && !r.data.error) {
-        const wasEmpty = !this._persona;
         this._persona = r.data;
-        // R6.4: re-render fallback so persona-driven values stay in sync
-        // with the latest doc. Force the render even if we've already
-        // rendered once before.
-        this._hasRendered = false;
-        this._renderFallback();
       }
     } catch (_) {
       // Non-fatal — keep using baked-in defaults.
@@ -89,53 +81,94 @@ class EmotionDashboard {
   }
 
   _renderFallback() {
-    // Render once with persona-derived defaults so the panel is never blank.
-    if (this._hasRendered) return;
+    // Kept as a compatibility hook for settings.js. Defaults are not live
+    // telemetry and must never overwrite a successfully sampled state.
+    if (!this._hasLiveData) this._renderWaiting("等待数据");
+  }
+
+  _renderWaiting(message) {
     this._hasRendered = true;
-    const pad = this._baselinePad();
-    this._setPADCard("pad-p", pad.P, "愉悦度");
-    this._setPADCard("pad-a", pad.A, "唤醒度");
-    this._setPADCard("pad-d", pad.D, "支配度");
-    for (const [slot, info] of Object.entries(this._baselineThresholds())) {
-      this._setThresholdBar(slot, info);
+    this._prevPad = null;
+    for (const id of ["pad-p", "pad-a", "pad-d"]) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const ring = el.querySelector(".pad-card-ring");
+      if (ring) ring.style.setProperty("--pad-pct", "0%");
+      const value = el.querySelector(".pad-card-value");
+      if (value) value.textContent = "--";
+      const raw = el.querySelector(".pad-card-raw");
+      if (raw) raw.textContent = (raw.getAttribute("data-raw") || "") + "=--";
     }
+    for (const slot of ["patience", "anxiety", "desire", "tenderness"]) {
+      const el = document.getElementById("threshold-" + slot);
+      if (!el) continue;
+      const fill = el.querySelector(".threshold-bar-fill");
+      if (fill) fill.style.width = "0%";
+      const value = el.querySelector(".threshold-bar-value");
+      if (value) value.textContent = "-- / --";
+    }
+    const text = document.getElementById("emotion-label-text");
+    if (text) text.textContent = message || "等待数据";
+    this._setFreshness(message || "等待数据", true);
   }
 
   destroy() {
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-      this.pollInterval = null;
-    }
-    if (this._personaInterval) {
-      clearInterval(this._personaInterval);
-      this._personaInterval = null;
-    }
+    this._stopPolling();
+    this._initialized = false;
   }
 
   setVisible(v) {
-    this._visible = v;
-    if (v) {
-      this._fetch();
+    const visible = Boolean(v);
+    if (this._visible === visible) return;
+    this._visible = visible;
+    if (visible) {
+      if (this._initialized) this._startPolling();
       // Phase 9 Batch 5: when the panel becomes visible, also pull the
       // history series so the chart fills in immediately.
       if (window.emotionHistory) window.emotionHistory.refresh();
+    } else {
+      this._stopPolling();
     }
   }
 
+  _startPolling() {
+    this._stopPolling();
+    this._loadPersonaForDefaults();
+    this.pollInterval = setInterval(() => this._fetch(), 3000);
+    this._personaInterval = setInterval(
+      () => this._loadPersonaForDefaults(),
+      60_000,
+    );
+    this._fetch();
+  }
+
+  _stopPolling() {
+    if (this.pollInterval) clearInterval(this.pollInterval);
+    if (this._personaInterval) clearInterval(this._personaInterval);
+    this.pollInterval = null;
+    this._personaInterval = null;
+  }
+
   async _fetch() {
-    if (!this._visible) return;
+    if (!this._visible || this._requestInFlight) return;
+    this._requestInFlight = true;
     try {
-      if (!window.aerie) return;
+      if (!window.aerie || !window.aerie.api) return;
       const r = await window.aerie.api.request({ method: "GET", path: "/api/emotion/state" });
-      if (r.data && !r.data.error) {
-        this._render(r.data);
-        // Notify the history module about the freshest label so the
-        // chart annotation can move accordingly.
-        if (window.emotionHistory) {
-          window.emotionHistory.onStateUpdate(r.data);
-        }
+      if (!r || (Number.isInteger(r.status) && (r.status < 200 || r.status >= 300))
+          || !r.data || r.data.error) {
+        throw new Error(r && r.data && r.data.error || "emotion state unavailable");
       }
-    } catch (_) {}
+      this._render(r.data);
+      if (window.emotionHistory) {
+        window.emotionHistory.onStateUpdate(r.data);
+      }
+    } catch (_) {
+      if (this._hasLiveData) this._setFreshness("连接中断", true);
+      else this._renderWaiting("后端连接中");
+    } finally {
+      this._requestInFlight = false;
+    }
   }
 
   _render(data) {
@@ -145,6 +178,11 @@ class EmotionDashboard {
     const P = this._padVal(pad, "P", "pleasure");
     const A = this._padVal(pad, "A", "arousal");
     const D = this._padVal(pad, "D", "dominance");
+    if (![P, A, D].every(Number.isFinite)) {
+      this._renderWaiting("等待数据");
+      return;
+    }
+    this._hasLiveData = true;
     this._setPADCard("pad-p", P, "愉悦度");
     this._setPADCard("pad-a", A, "唤醒度");
     this._setPADCard("pad-d", D, "支配度");
@@ -180,6 +218,7 @@ class EmotionDashboard {
 
     // Eruption banner (Phase 7: SVG warning icon, not emoji)
     this._renderEruptionBanner(data.eruption);
+    this._setFreshnessFromState(data);
   }
 
   _renderEruptionBanner(eruption) {
@@ -205,12 +244,53 @@ class EmotionDashboard {
   }
 
   _padVal(pad, upperKey, lowerKey) {
-    if (pad == null) return 0;
+    if (pad == null) return null;
     const v = pad[upperKey];
     if (typeof v === "number" && !Number.isNaN(v)) return v;
     const v2 = pad[lowerKey];
     if (typeof v2 === "number" && !Number.isNaN(v2)) return v2;
-    return 0;
+    return null;
+  }
+
+  _setFreshnessFromState(data) {
+    const raw = data.sampledAt || data.sampled_at || data.serverNow;
+    const sampled = this._formatTimestamp(raw);
+    const prefix = data.stale ? "数据已过期" : "实时";
+    this._setFreshness(
+      sampled ? prefix + " · 更新于 " + sampled : prefix,
+      Boolean(data.stale),
+    );
+  }
+
+  _setFreshness(message, stale) {
+    let el = document.getElementById("emotion-freshness");
+    if (!el && document.createElement) {
+      const label = document.getElementById("emotion-label");
+      const host = label && label.parentNode;
+      if (host && host.appendChild) {
+        el = document.createElement("span");
+        el.id = "emotion-freshness";
+        el.className = "emotion-freshness";
+        host.appendChild(el);
+      }
+    }
+    if (el) {
+      el.textContent = message;
+      if (el.classList && el.classList.toggle) {
+        el.classList.toggle("is-stale", Boolean(stale));
+      }
+    }
+    const panel = document.getElementById("panel-emotion");
+    if (panel && panel.dataset) panel.dataset.freshness = stale ? "stale" : "fresh";
+  }
+
+  _formatTimestamp(value) {
+    if (value == null || value === "") return "";
+    const parsed = typeof value === "number" ? value : Date.parse(String(value));
+    if (!Number.isFinite(parsed)) return "";
+    const d = new Date(parsed);
+    const pad = (n) => String(n).padStart(2, "0");
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
   }
 
   _setPADCard(id, value, label) {

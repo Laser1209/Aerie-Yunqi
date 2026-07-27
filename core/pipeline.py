@@ -31,6 +31,7 @@ from core.feature_flags import FeatureFlags
 from core.ids import generate_id
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
+from core.content_validator import ContentValidator
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,11 @@ class Pipeline:
         settings: dict | None = None,
         identity_resolver: Any = None,
         conversation_repository: Any = None,
+        context_assembler: Any = None,
+        summary_planner: Any = None,
+        summary_summarizer: Any = None,
+        attachment_service: Any = None,
+        memory_store: Any = None,
     ) -> None:
         self.router = router
         self.emotion = emotion_engine
@@ -80,9 +86,20 @@ class Pipeline:
         self.self_evolver = self_evolver
         self.identity_resolver = identity_resolver
         self.conversation_repository = conversation_repository
+        self.context_assembler = context_assembler
+        self.summary_planner = summary_planner
+        self.summary_summarizer = (
+            summary_summarizer or self._default_rolling_summary
+        )
+        self.attachment_service = attachment_service
+        self.memory_store = memory_store or getattr(context_builder, "memory", None)
+        self._summary_tasks: set[asyncio.Task[Any]] = set()
+        self._summary_inflight: set[str] = set()
         self._splitter = SemanticMessageSplitter()
         # v13.9: 回复校验器（准确性 Guard + 质量 Judge）
         self.validator = ResponseValidator()
+        # Task 5: Content validator — ensures replies have meaningful text after tag stripping
+        self.content_validator = ContentValidator(brain)
 
         # v13.9.8: 任务规划器（Pipeline 主路径集成，配置开关控制）
         self._task_planner = None
@@ -106,15 +123,37 @@ class Pipeline:
         msg: IncomingMessage | None = None,
         force_full: bool = False,
         *,
+        messages: list[IncomingMessage] | None = None,
+        batch_id: str | None = None,
         request_context: RequestContext | None = None,
         cancellation_token: CancellationToken | None = None,
-    ) -> dict | None:
-        """Handle one incoming message end-to-end.
+    ) -> dict | list[dict] | None:
+        """Handle one or more incoming messages end-to-end.
 
-        Returns dict with reply info, or None if skipped (BASIC stranger).
+        Single mode (backward compatible):
+            Pass msg=IncomingMessage -> returns dict with reply info
+
+        Batch mode (Task 4):
+            Pass messages=list[IncomingMessage], batch_id=str -> returns list[dict]
+
+        Returns dict (single) or list[dict] (batch) with reply info,
+        or None if skipped (BASIC stranger).
         """
+        is_batch = messages is not None and len(messages) > 0 and batch_id is not None
+
+        if is_batch:
+            if len(messages) == 1:
+                msg = messages[0]
+            else:
+                return await self._handle_batch(
+                    messages=messages,
+                    batch_id=batch_id,
+                    force_full=force_full,
+                    cancellation_token=cancellation_token,
+                )
+
         if msg is None and request_context is None:
-            raise ValueError("msg or request_context is required")
+            raise ValueError("msg or request_context is required (or messages for batch mode)")
         if request_context is not None:
             msg = self._message_from_request_context(request_context, msg)
         assert msg is not None
@@ -128,10 +167,17 @@ class Pipeline:
             if request_context is not None
             else msg.content
         )
-        context_attachments = self._context_attachments(
+        (
+            context_attachments,
+            attachment_ids,
+            attachment_snippets,
+            persisted_attachments,
+        ) = self._prepare_attachments(
             msg.attachments,
             request_context=request_context,
         )
+        if request_context is None:
+            msg.attachments = persisted_attachments
 
         if self.identity_resolver and request_context is None:
             self.identity_resolver.resolve_message(msg)
@@ -157,6 +203,8 @@ class Pipeline:
                 route_mode,
                 model_content=model_content,
                 context_attachments=context_attachments,
+                attachment_ids=attachment_ids,
+                attachment_snippets=attachment_snippets,
                 request_state=request_state,
             )
             self.cognition.commit(trace, route_mode)
@@ -301,6 +349,13 @@ class Pipeline:
             self_model_snapshot=self_model_snapshot,
             **context_budget_kwargs,
         )
+        ctx_messages, continuity_audit = self._assemble_continuity_context(
+            base_messages=ctx_messages,
+            msg=msg,
+            current_user_content=model_content,
+            attachment_snippets=attachment_snippets,
+            request_context=request_context,
+        )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
@@ -318,6 +373,8 @@ class Pipeline:
         )
         if audit:
             context_record["context_budget"] = audit
+        if continuity_audit:
+            context_record["continuity"] = continuity_audit
         self.cognition.record(trace, "context", context_record)
 
         # ══════════════════════════════════════════════
@@ -463,11 +520,29 @@ class Pipeline:
         except Exception:
             # Self-check is best-effort; never break the pipeline.
             logger.exception("output_self_check failed; using sanitized text as-is")
+
+        # Task 5: Content validation — ensure reply has meaningful text after tag stripping
+        content_remedied = False
+        try:
+            last_user_msg_for_ctx = model_content
+            reply_text, content_remedied = await self.content_validator.validate_and_fix(
+                reply_text,
+                context={"last_user_message": last_user_msg_for_ctx},
+            )
+            if content_remedied:
+                self.cognition.record(trace, "content_validation", {
+                    "remedied": True,
+                    "final_length": len(reply_text),
+                })
+        except Exception:
+            logger.exception("content_validator failed; using current text as-is")
+
         self.cognition.record(trace, "postprocess", {
             "tune_label": (emotion_info or {}).get("label"),
             "eruption_mode": (eruption_info or {}).get("mode") if eruption_info else None,
             "raw_chars": len(reply_text_raw),
             "tuned_chars": len(reply_text),
+            "content_remedied": content_remedied,
         })
 
         # ══════════════════════════════════════════════
@@ -588,6 +663,14 @@ class Pipeline:
                     "response_group_id"
                 )
 
+        attachment_bind_error = self._after_message_persisted(
+            attachment_ids=attachment_ids,
+            canonical_result=canonical_result,
+            user_legacy_chat_log_id=user_row_id,
+            msg=msg,
+            request_context=request_context,
+        )
+
         # Phase 9: stage 9 — output
         self.cognition.record(trace, "output", {
             "ai_msg_ids": ai_row_ids,
@@ -641,6 +724,8 @@ class Pipeline:
             )
         if persist_errors:
             result["persist_error"] = "; ".join(persist_errors)
+        if attachment_bind_error:
+            result["attachment_bind_error"] = attachment_bind_error
 
         # ══════════════════════════════════════════════
         # 12. Emit assistant event for each segment (UI gets one bubble per segment)
@@ -852,6 +937,170 @@ class Pipeline:
             prepared.append(trusted)
         return prepared
 
+    def _prepare_attachments(
+        self,
+        attachments: list[dict],
+        *,
+        request_context: RequestContext | None,
+    ) -> tuple[list[dict], list[str], list[str], list[dict]]:
+        source = list(attachments or [])
+        desktop_ids: list[str] = []
+        item_ids: list[str | None] = []
+        for attachment in source:
+            if not isinstance(attachment, dict):
+                item_ids.append(None)
+                continue
+            attachment_id = attachment.get("attachmentId")
+            alias = attachment.get("id")
+            if attachment_id is None and alias is None:
+                item_ids.append(None)
+                continue
+            if attachment_id is None:
+                attachment_id = alias
+            if alias is not None and alias != attachment_id:
+                raise ValueError("desktop attachment id mismatch")
+            if (
+                not isinstance(attachment_id, str)
+                or not attachment_id.strip()
+                or attachment_id != attachment_id.strip()
+                or attachment_id in desktop_ids
+            ):
+                raise ValueError("invalid desktop attachment id")
+            desktop_ids.append(attachment_id)
+            item_ids.append(attachment_id)
+
+        if not desktop_ids:
+            prepared = self._context_attachments(
+                source,
+                request_context=request_context,
+            )
+            return prepared, [], [], source
+
+        resolver = getattr(
+            self.attachment_service,
+            "resolve_ready_for_send",
+            None,
+        )
+        if not callable(resolver):
+            raise ValueError("desktop attachment service is unavailable")
+        records = resolver(desktop_ids)
+        by_id = {
+            str(record.get("attachmentId") or record.get("id") or ""): record
+            for record in records
+            if isinstance(record, dict)
+        }
+        if set(by_id) != set(desktop_ids):
+            raise ValueError("desktop attachment resolution was incomplete")
+
+        context_attachments: list[dict] = []
+        persisted_attachments: list[dict] = []
+        for attachment, attachment_id in zip(source, item_ids):
+            if attachment_id is not None:
+                trusted = dict(by_id[attachment_id])
+                context_attachments.append(trusted)
+                persisted_attachments.append(trusted)
+                continue
+            if not isinstance(attachment, dict):
+                continue
+            trusted_legacy = self._context_attachments(
+                [attachment],
+                request_context=request_context,
+            )
+            context_attachments.extend(trusted_legacy)
+            persisted_attachments.append(dict(attachment))
+
+        snippets: list[str] = []
+        snippet_loader = getattr(self.attachment_service, "context_snippets", None)
+        if callable(snippet_loader):
+            try:
+                snippets = list(
+                    snippet_loader(desktop_ids, max_chars=4000) or []
+                )
+            except Exception:
+                logger.exception(
+                    "desktop attachment snippets unavailable; using metadata only"
+                )
+        return (
+            context_attachments,
+            desktop_ids,
+            snippets,
+            persisted_attachments,
+        )
+
+    def _assemble_continuity_context(
+        self,
+        *,
+        base_messages: list[dict],
+        msg: IncomingMessage,
+        current_user_content: str,
+        attachment_snippets: list[str],
+        request_context: RequestContext | None,
+    ) -> tuple[list[dict], dict[str, Any] | None]:
+        assembler = self.context_assembler
+        if assembler is None or not base_messages:
+            return base_messages, None
+        system_prompt = str(base_messages[0].get("content") or "")
+        memories = self._retrieve_memory_snippets(
+            msg,
+            current_user_content,
+        )
+        try:
+            assembled = assembler.assemble(
+                system_prompt=system_prompt,
+                current_user_content=current_user_content,
+                actor_id=msg.actor_id,
+                channel=msg.channel,
+                channel_account_id=msg.channel_account_id,
+                user_id=msg.user_id,
+                conversation_id=(
+                    request_context.conversation_id
+                    if request_context is not None
+                    else None
+                ),
+                memories=memories,
+                attachment_snippets=attachment_snippets,
+            )
+            messages = getattr(assembled, "messages", None)
+            audit = getattr(assembled, "audit", None)
+            if not isinstance(messages, list) or not messages:
+                raise ValueError("continuity assembler returned no messages")
+            return messages, dict(audit) if isinstance(audit, dict) else None
+        except Exception:
+            logger.exception(
+                "continuity context assembly failed; using legacy context"
+            )
+            return base_messages, None
+
+    def _retrieve_memory_snippets(
+        self,
+        msg: IncomingMessage,
+        query: str,
+    ) -> list[str]:
+        retrieve = getattr(self.memory_store, "retrieve", None)
+        if not callable(retrieve):
+            return []
+        try:
+            rows = retrieve(
+                msg.user_id,
+                query,
+                5,
+                actor_id=msg.actor_id,
+            )
+        except Exception:
+            logger.debug("continuity memory retrieval failed", exc_info=True)
+            return []
+        snippets: list[str] = []
+        for row in rows or []:
+            if not isinstance(row, dict):
+                try:
+                    row = dict(row)
+                except Exception:
+                    continue
+            content = str(row.get("content") or "").strip()
+            if content:
+                snippets.append(content)
+        return snippets
+
     def _extract_trusted_attachment_markdown(
         self,
         attachment: dict[str, Any],
@@ -916,6 +1165,8 @@ class Pipeline:
         *,
         model_content: str,
         context_attachments: list[dict],
+        attachment_ids: list[str],
+        attachment_snippets: list[str],
         request_state: _RequestRunState,
     ) -> dict | None:
         """BASIC 模式轻量对话链路。
@@ -974,6 +1225,13 @@ class Pipeline:
             attachments=context_attachments if context_attachments else None,
             **context_budget_kwargs,
         )
+        ctx_messages, continuity_audit = self._assemble_continuity_context(
+            base_messages=ctx_messages,
+            msg=msg,
+            current_user_content=model_content,
+            attachment_snippets=attachment_snippets,
+            request_context=request_state.context,
+        )
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
         context_record = {
@@ -989,6 +1247,8 @@ class Pipeline:
         )
         if audit:
             context_record["context_budget"] = audit
+        if continuity_audit:
+            context_record["continuity"] = continuity_audit
         self.cognition.record(trace, "context", context_record)
 
         # 4. 调 LLM（无工具，纯对话）
@@ -1032,11 +1292,29 @@ class Pipeline:
         except Exception:
             pass
 
+        # Task 5: Content validation for BASIC lightweight mode
+        content_remedied = False
+        try:
+            last_user_msg_for_ctx = model_content
+            reply_text, content_remedied = await self.content_validator.validate_and_fix(
+                reply_text,
+                context={"last_user_message": last_user_msg_for_ctx},
+            )
+            if content_remedied:
+                self.cognition.record(trace, "content_validation", {
+                    "remedied": True,
+                    "final_length": len(reply_text),
+                    "lightweight": True,
+                })
+        except Exception:
+            logger.exception("BASIC content_validator failed; using current text as-is")
+
         self.cognition.record(trace, "postprocess", {
             "tune_label": (emotion_info or {}).get("label"),
             "raw_chars": len(reply_text_raw),
             "tuned_chars": len(reply_text),
             "lightweight": True,
+            "content_remedied": content_remedied,
         })
 
         # 5.5 Response Validation（v13.9: BASIC 模式也做轻量校验）
@@ -1134,6 +1412,14 @@ class Pipeline:
                     "response_group_id"
                 )
 
+        attachment_bind_error = self._after_message_persisted(
+            attachment_ids=attachment_ids,
+            canonical_result=canonical_result,
+            user_legacy_chat_log_id=user_row_id,
+            msg=msg,
+            request_context=request_state.context,
+        )
+
         self.cognition.record(trace, "output", {
             "ai_msg_ids": ai_row_ids,
             "user_msg_id": user_row_id,
@@ -1170,6 +1456,8 @@ class Pipeline:
             )
         if persist_errors:
             result["persist_error"] = "; ".join(persist_errors)
+        if attachment_bind_error:
+            result["attachment_bind_error"] = attachment_bind_error
 
         # 9. Emit 事件（前端展示用）
         if self._checkpoint_cancel(request_state, "before_event"):
@@ -1229,6 +1517,176 @@ class Pipeline:
             self.send_queue.enqueue(reply)
         result["event_sequence"] = request_state.sequence
         return result
+
+    def _after_message_persisted(
+        self,
+        *,
+        attachment_ids: list[str],
+        canonical_result: dict[str, str] | None,
+        user_legacy_chat_log_id: int,
+        msg: IncomingMessage,
+        request_context: RequestContext | None,
+    ) -> str | None:
+        conversation_id = (
+            canonical_result.get("conversation_id")
+            if canonical_result is not None
+            else (
+                request_context.conversation_id
+                if request_context is not None
+                else None
+            )
+        )
+        if conversation_id is None:
+            try:
+                from core.conversation_repository import resolve_conversation_id
+
+                conversation_id = resolve_conversation_id(
+                    actor_id=msg.actor_id,
+                    channel=msg.channel,
+                    channel_account_id=msg.channel_account_id,
+                    user_id=msg.user_id,
+                )
+            except Exception:
+                logger.debug(
+                    "legacy attachment conversation id unavailable",
+                    exc_info=True,
+                )
+        if attachment_ids and user_legacy_chat_log_id:
+            message_id = self._canonical_user_message_id(canonical_result)
+            if not message_id:
+                message_id = str(user_legacy_chat_log_id)
+            binder = getattr(self.attachment_service, "bind_message", None)
+            if callable(binder):
+                try:
+                    binder(
+                        attachment_ids,
+                        message_id=str(message_id),
+                        conversation_id=conversation_id,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "desktop attachment bind failed after message persistence"
+                    )
+                    bind_error = type(exc).__name__
+                else:
+                    bind_error = None
+            else:
+                bind_error = "attachment_service_unavailable"
+        else:
+            bind_error = None
+
+        if canonical_result is not None and conversation_id:
+            self._schedule_summary_refresh(str(conversation_id))
+        return bind_error
+
+    def _canonical_user_message_id(
+        self,
+        canonical_result: dict[str, str] | None,
+    ) -> str | None:
+        if not canonical_result:
+            return None
+        turn_id = canonical_result.get("turn_id")
+        if not turn_id:
+            return None
+        query_one = getattr(self.db, "query_one", None)
+        if not callable(query_one):
+            return None
+        try:
+            row = query_one(
+                "SELECT message_id FROM messages "
+                "WHERE turn_id = ? AND role = 'user' "
+                "ORDER BY sequence ASC LIMIT 1",
+                (turn_id,),
+            )
+        except Exception:
+            logger.debug("canonical user message lookup failed", exc_info=True)
+            return None
+        if not row:
+            return None
+        try:
+            return str(row["message_id"])
+        except (KeyError, TypeError):
+            return str(getattr(row, "message_id", "") or "") or None
+
+    def _schedule_summary_refresh(self, conversation_id: str) -> None:
+        if self.summary_planner is None or conversation_id in self._summary_inflight:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.debug("summary refresh skipped outside an event loop")
+            return
+        self._summary_inflight.add(conversation_id)
+        task = loop.create_task(
+            self._refresh_summary(conversation_id),
+            name=f"conversation-summary-{conversation_id}",
+        )
+        self._summary_tasks.add(task)
+        task.add_done_callback(self._summary_tasks.discard)
+
+    async def _refresh_summary(self, conversation_id: str) -> None:
+        try:
+            job = await asyncio.to_thread(
+                self.summary_planner.prepare,
+                conversation_id,
+            )
+            if job is None:
+                return
+            await asyncio.to_thread(
+                self.summary_planner.complete,
+                job,
+                self.summary_summarizer,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "conversation summary refresh failed; existing context remains active"
+            )
+        finally:
+            self._summary_inflight.discard(conversation_id)
+
+    async def wait_for_background_tasks(self) -> None:
+        """Wait for currently scheduled continuity work (primarily for QA)."""
+        while self._summary_tasks:
+            tasks = list(self._summary_tasks)
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def shutdown_background_tasks(self) -> None:
+        tasks = list(self._summary_tasks)
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._summary_tasks.clear()
+        self._summary_inflight.clear()
+
+    @staticmethod
+    def _default_rolling_summary(
+        previous: str,
+        messages: Any,
+    ) -> str:
+        max_chars = 11_500
+        previous_text = " ".join(str(previous or "").split())[:5_500]
+        rows = list(messages or [])
+        prefix = f"previous: {previous_text}" if previous_text else ""
+        separator_budget = 1 if prefix and rows else 0
+        remaining = max_chars - len(prefix) - separator_budget
+        per_message = max(80, remaining // max(len(rows), 1))
+        lines: list[str] = []
+        for row in rows:
+            if isinstance(row, dict):
+                role = str(row.get("role") or "message")
+                content = " ".join(str(row.get("content") or "").split())
+            else:
+                role = "message"
+                content = " ".join(str(row or "").split())
+            line = f"{role}: {content}"[:per_message]
+            if line:
+                lines.append(line)
+        result = "\n".join(part for part in (prefix, *lines) if part)
+        return result[:max_chars] or "completed conversation turn"
 
     def _load_history(
         self,
@@ -1522,3 +1980,743 @@ class Pipeline:
             "observation": " | ".join(observation_bits),
             "react_source": "synthesized",
         }
+
+    # ══════════════════════════════════════════════════════════════
+    # Task 4: Batch processing support
+    # ══════════════════════════════════════════════════════════════
+
+    async def _handle_batch(
+        self,
+        messages: list[IncomingMessage],
+        batch_id: str,
+        *,
+        force_full: bool = False,
+        cancellation_token: CancellationToken | None = None,
+    ) -> list[dict]:
+        """Handle a batch of messages end-to-end.
+
+        Batch processing stages:
+          1. Route: based on all messages in batch
+          2. Emotion: comprehensive update to avoid jitter
+          3. History: loaded once, reused for entire batch
+          4. Context: merged messages with sequence numbers
+          5. Brain: single LLM call with batch prompt
+          6. Postprocess: per-reply sanitization and checks
+          7. Output: per-message persistence with batch_id
+          8. Send: OutgoingReply list with sequence_index
+        """
+        logger.info(
+            "Batch %s: processing %d messages",
+            batch_id,
+            len(messages),
+        )
+
+        request_state = _RequestRunState(
+            context=None,
+            token=cancellation_token,
+        )
+
+        first_msg = messages[0]
+        user_id = first_msg.user_id
+        actor_id = first_msg.actor_id
+        channel = first_msg.channel
+        channel_account_id = first_msg.channel_account_id
+        source = first_msg.source
+        msg_type = first_msg.msg_type
+
+        combined_content = "\n".join(m.content for m in messages)
+
+        all_attachments: list[dict] = []
+        for m in messages:
+            all_attachments.extend(m.attachments or [])
+        (
+            context_attachments,
+            attachment_ids,
+            attachment_snippets,
+            persisted_attachments,
+        ) = self._prepare_attachments(all_attachments, request_context=None)
+
+        if self.identity_resolver:
+            for m in messages:
+                try:
+                    self.identity_resolver.resolve_message(m)
+                except Exception:
+                    pass
+
+        trace = self.cognition.begin(user_id, source, combined_content)
+        self.cognition.record(trace, "batch", {
+            "batch_id": batch_id,
+            "message_count": len(messages),
+        })
+
+        route_mode = self.router.route(user_id)
+        if force_full or source == "local":
+            route_mode = "FULL"
+        self.cognition.record(trace, "route", {"mode": route_mode, "batch": True})
+
+        if self.decision_engine:
+            try:
+                decision = self.decision_engine.decide_for_message(
+                    user_id=user_id,
+                    route_mode=route_mode,
+                    source=source,
+                )
+                self.cognition.record_decision(trace, decision)
+            except Exception:
+                logger.exception("[Batch %s] decision engine error", batch_id)
+
+        if self.recall_manager and source == "qq":
+            try:
+                for m in messages:
+                    await self.recall_manager.handle_user_negative(user_id, m.content)
+            except Exception:
+                logger.exception("[Batch %s] handle_user_negative error", batch_id)
+
+        try:
+            await self.emotion.update_trajectory_async(
+                user_id,
+                combined_content,
+                actor_id=actor_id,
+            )
+        except Exception:
+            logger.exception("[Batch %s] emotion update error", batch_id)
+
+        history = self._load_history(first_msg, legacy_limit=20)
+
+        emotion_info = None
+        eruption_info = None
+        try:
+            state = self.emotion.get_state(user_id, actor_id=actor_id)
+            emotion_info = {
+                "label": state.get("label", "neutral"),
+                "pad": state.get("pad", {}),
+                "thresholds": state.get("thresholds", {}),
+            }
+            eruption_info = state.get("eruption")
+        except Exception:
+            pass
+
+        self.cognition.record(trace, "emotion", {
+            "label": (emotion_info or {}).get("label"),
+            "pad": (emotion_info or {}).get("pad"),
+            "batch": True,
+        })
+        self.cognition.record(trace, "threshold", (emotion_info or {}).get("thresholds"))
+
+        time_context = None
+        try:
+            from core.calendar_manager import CalendarManager
+            time_context = CalendarManager(self.db).get_agent_snapshot(user_id)
+        except Exception:
+            logger.warning("[Batch %s] calendar snapshot unavailable", batch_id, exc_info=True)
+        context_budget_enabled = self._context_budget_enabled()
+        context_budget_kwargs = (
+            self._context_budget_kwargs(first_msg)
+            if context_budget_enabled
+            else {}
+        )
+        world_snapshot = self._call_optional_context_provider("world_snapshot_provider")
+        relationship_snapshot = self._call_optional_context_provider(
+            "relationship_snapshot_provider",
+            user_id,
+        )
+        self_model_snapshot = self._call_optional_context_provider(
+            "self_model_snapshot_provider",
+            world_snapshot,
+            relationship_snapshot,
+        )
+
+        batch_user_content = self._build_batch_user_content(messages)
+
+        ctx_messages = self.ctx_builder.build(
+            user_id,
+            batch_user_content,
+            route_mode,
+            history_msgs=history,
+            emotion_info=emotion_info,
+            eruption_info=eruption_info,
+            reply_to=None,
+            attachments=context_attachments if context_attachments else None,
+            time_context=time_context,
+            world_snapshot=world_snapshot,
+            relationship_snapshot=relationship_snapshot,
+            self_model_snapshot=self_model_snapshot,
+            **context_budget_kwargs,
+        )
+
+        if ctx_messages:
+            last_user_idx = -1
+            for i in range(len(ctx_messages) - 1, -1, -1):
+                if ctx_messages[i].get("role") == "user":
+                    last_user_idx = i
+                    break
+            if last_user_idx >= 0:
+                ctx_messages[last_user_idx]["content"] = batch_user_content
+
+        ctx_messages, continuity_audit = self._assemble_continuity_context(
+            base_messages=ctx_messages,
+            msg=first_msg,
+            current_user_content=batch_user_content,
+            attachment_snippets=attachment_snippets,
+            request_context=None,
+        )
+        tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
+
+        system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
+        history_chars = sum(len(m.get("content", "")) for m in ctx_messages[1:])
+        context_record = {
+            "messages": len(ctx_messages),
+            "system_prompt_chars": system_chars,
+            "history_chars": history_chars,
+            "tools_offered": bool(tools),
+            "batch": True,
+            "batch_size": len(messages),
+        }
+        audit = self._context_budget_audit() if context_budget_enabled else None
+        if audit:
+            context_record["context_budget"] = audit
+        if continuity_audit:
+            context_record["continuity"] = continuity_audit
+        self.cognition.record(trace, "context", context_record)
+
+        office_mgr = get_office_mode_manager()
+        office_ctx = office_mgr.detect(combined_content, history)
+        is_office = office_ctx.is_office_mode()
+
+        if is_office and ctx_messages:
+            sys_content = ctx_messages[0].get("content", "")
+            ctx_messages[0]["content"] = office_mgr.augment_system_prompt(sys_content)
+            system_chars = len(ctx_messages[0]["content"])
+
+        self.cognition.record(trace, "office_mode", {
+            "mode": office_ctx.mode.value if office_ctx.mode else "auto",
+            "detected": office_ctx.detected_mode.value if office_ctx.detected_mode else None,
+            "is_office": is_office,
+            "task_type": office_ctx.task_type.value if office_ctx.task_type else None,
+            "confidence": office_ctx.confidence,
+            "keywords": office_ctx.task_keywords,
+        })
+
+        self._checkpoint_cancel(request_state, "before_model")
+        response = await self.brain.chat(
+            ctx_messages,
+            tools=tools,
+            tool_registry=self.tool_registry,
+            preferred_provider=office_mgr.get_preferred_provider() if is_office else None,
+        )
+        self._checkpoint_cancel(request_state, "after_model")
+        raw_text = getattr(response, "text", "") or ""
+        react_trace = getattr(response, "react_trace", None)
+        tool_results = getattr(response, "tool_results", None) or []
+        model_name = getattr(response, "model", "unknown")
+        usage = getattr(response, "usage", None) or {}
+
+        react_trace = self._ensure_react_trace(react_trace, trace, raw_text, tool_results)
+        reply_text_raw = self._strip_think(raw_text)
+
+        self.cognition.record(trace, "brain", {
+            "model": model_name,
+            "tokens": usage,
+            "raw_chars": len(raw_text),
+            "react": react_trace,
+            "batch": True,
+        })
+        self.cognition.record_react(trace, react_trace)
+
+        tool_summary: list[dict] = []
+        for tr in tool_results:
+            try:
+                self.db.insert("tool_call_log", {
+                    "ts": int(__import__("time").time() * 1000),
+                    "user_id": user_id,
+                    "tool_name": tr.get("name", "unknown"),
+                    "arguments": json.dumps(tr.get("arguments", {}), ensure_ascii=False),
+                    "result": json.dumps(tr.get("result", {}), ensure_ascii=False)[:2000],
+                    "success": 1 if tr.get("success", True) else 0,
+                    "duration_ms": tr.get("duration_ms", 0),
+                })
+            except Exception:
+                logger.exception("[Batch %s] tool_call_log insert error", batch_id)
+            tool_summary.append({
+                "name": tr.get("name"),
+                "success": tr.get("success", True),
+                "duration_ms": tr.get("duration_ms", 0),
+            })
+        self.cognition.record(trace, "tools", tool_summary)
+
+        parsed_replies = self._parse_batch_replies(reply_text_raw, len(messages), batch_id)
+
+        if len(parsed_replies) != len(messages):
+            logger.warning(
+                "[Batch %s] LLM returned %d replies for %d messages, falling back to single processing",
+                batch_id,
+                len(parsed_replies),
+                len(messages),
+            )
+            results = []
+            for i, m in enumerate(messages):
+                try:
+                    single_result = await self.handle(
+                        msg=m,
+                        force_full=force_full,
+                        cancellation_token=cancellation_token,
+                    )
+                    if single_result:
+                        single_result["batch_id"] = batch_id
+                        single_result["sequence_index"] = i
+                        single_result["batch_fallback"] = True
+                        results.append(single_result)
+                except Exception:
+                    logger.exception("[Batch %s] fallback single processing failed for message %d", batch_id, i)
+            self.cognition.commit(trace, route_mode)
+            return results
+
+        results: list[dict] = []
+        all_ai_row_ids: list[int] = []
+        all_user_row_ids: list[int] = []
+        qq_outgoing_replies: list[OutgoingReply] = []
+        local_emit_items: list[dict] = []
+
+        for seq_idx, (msg, reply_text_raw_single) in enumerate(zip(messages, parsed_replies)):
+            try:
+                reply_text = self.emotion.tune(reply_text_raw_single, actor_id=actor_id)
+                try:
+                    from core.screen_action_sanitizer import sanitize as _sanitize_action
+                    reply_text = _sanitize_action(reply_text)
+                except Exception:
+                    logger.exception("[Batch %s] screen_action_sanitizer failed for seq %d", batch_id, seq_idx)
+                try:
+                    from core.output_self_check import OutputSelfCheck
+                    _self_check = OutputSelfCheck()
+                    _sc_result = _self_check.check(reply_text)
+                    if _sc_result.warnings:
+                        self.cognition.record(trace, "self_check", {
+                            "warnings": _sc_result.warnings,
+                            "perspective_shift": _sc_result.perspective_shift,
+                            "stray_brackets_fixed": _sc_result.stray_brackets_fixed,
+                            "typo_fixes": _sc_result.typo_fixes,
+                            "severity": "warn",
+                            "sequence_index": seq_idx,
+                        })
+                    reply_text = _sc_result.cleaned_text
+                except Exception:
+                    logger.exception("[Batch %s] output_self_check failed for seq %d", batch_id, seq_idx)
+
+                # Task 5: Content validation for batch mode (per-reply)
+                content_remedied = False
+                try:
+                    reply_text, content_remedied = await self.content_validator.validate_and_fix(
+                        reply_text,
+                        context={"last_user_message": msg.content},
+                        batch_id=batch_id,
+                        sequence_index=seq_idx,
+                    )
+                    if content_remedied:
+                        self.cognition.record(trace, "content_validation", {
+                            "remedied": True,
+                            "final_length": len(reply_text),
+                            "batch": True,
+                            "sequence_index": seq_idx,
+                        })
+                except Exception:
+                    logger.exception("[Batch %s] content_validator failed for seq %d", batch_id, seq_idx)
+
+                try:
+                    vr = await self.validator.validate(
+                        reply_text,
+                        user_message=msg.content,
+                        context_history=history,
+                        route_mode="OFFICE" if is_office else route_mode,
+                    )
+                    if vr.issues:
+                        self.cognition.record(trace, "validation", {
+                            "passed": vr.passed,
+                            "guard_passed": vr.guard_passed,
+                            "judge_score": vr.judge_score,
+                            "rewrite_count": vr.rewrite_count,
+                            "issues": vr.issues,
+                            "sequence_index": seq_idx,
+                        })
+                except Exception:
+                    logger.exception("[Batch %s] validation failed for seq %d", batch_id, seq_idx)
+
+                segments = self._splitter.split(reply_text) or [reply_text]
+
+                user_row_id = 0
+                try:
+                    self._checkpoint_cancel(request_state, "before_legacy_user")
+                    user_row_id = self._insert_chat_log_safe(
+                        role="user",
+                        user_id=msg.user_id,
+                        content=msg.content,
+                        msg_type=msg.msg_type,
+                        route_mode=route_mode,
+                        reply_to_id=msg.reply_to_id,
+                        attachments=json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
+                        actor_id=msg.actor_id,
+                        channel=msg.channel,
+                        channel_account_id=msg.channel_account_id,
+                        batch_id=batch_id,
+                        sequence_index=seq_idx,
+                    )
+                    if user_row_id:
+                        request_state.terminal_side_effect_committed = True
+                except CancellationTooLate:
+                    raise
+                except Exception:
+                    logger.exception("[Batch %s] db insert user msg error seq=%d", batch_id, seq_idx)
+
+                ai_row_ids: list[int] = []
+                try:
+                    for seg in segments:
+                        self._checkpoint_cancel(request_state, "before_legacy_assistant")
+                        rid = self._insert_chat_log_safe(
+                            role="assistant",
+                            user_id=msg.user_id,
+                            content=seg,
+                            msg_type=msg.msg_type,
+                            route_mode=route_mode,
+                            actor_id=msg.actor_id,
+                            channel=msg.channel,
+                            channel_account_id=msg.channel_account_id,
+                            batch_id=batch_id,
+                            sequence_index=seq_idx,
+                        )
+                        ai_row_ids.append(rid)
+                        all_ai_row_ids.append(rid)
+                        if rid:
+                            request_state.terminal_side_effect_committed = True
+                except CancellationTooLate:
+                    raise
+                except Exception:
+                    logger.exception("[Batch %s] db insert ai msg error seq=%d", batch_id, seq_idx)
+
+                all_user_row_ids.append(user_row_id)
+
+                result = {
+                    "reply": reply_text,
+                    "user_msg_id": user_row_id,
+                    "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
+                    "ai_msg_ids": ai_row_ids,
+                    "segments": segments,
+                    "route_mode": route_mode,
+                    "emotion": emotion_info.get("label") if emotion_info else "unknown",
+                    "cognition_id": trace.get("id", 0),
+                    "persisted": user_row_id > 0 and len(ai_row_ids) == len(segments),
+                    "canonical_completed": False,
+                    "batch_id": batch_id,
+                    "sequence_index": seq_idx,
+                }
+                results.append(result)
+
+                if source == "local":
+                    user_emit_data = {
+                        "event_type": "user",
+                        "kwargs": {
+                            "role": "user",
+                            "id": user_row_id,
+                            "user_id": msg.user_id,
+                            "content": msg.content,
+                            "source": source,
+                        }
+                    }
+                    local_emit_items.append({
+                        "seq_idx": seq_idx,
+                        "seg_idx": -1,
+                        "type": "user",
+                        "data": user_emit_data,
+                        "reply_text": "",
+                        "emotion": emotion_info.get("label") if emotion_info else None,
+                        "is_eruption": bool(eruption_info and eruption_info.get("mode")),
+                        "thresholds": (emotion_info or {}).get("thresholds", {}) or {},
+                        "is_last_in_message": False,
+                    })
+                    for seg_idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
+                        emit_kwargs = {
+                            "role": "assistant",
+                            "id": rid,
+                            "user_id": msg.user_id,
+                            "content": seg,
+                            "source": source,
+                        }
+                        if seg_idx == 0:
+                            if emotion_info:
+                                emit_kwargs["emotion"] = emotion_info["label"]
+                            if eruption_info:
+                                emit_kwargs["eruption"] = eruption_info["mode"]
+                        local_emit_items.append({
+                            "seq_idx": seq_idx,
+                            "seg_idx": seg_idx,
+                            "type": "assistant",
+                            "data": {"event_type": "assistant", "kwargs": emit_kwargs},
+                            "reply_text": seg,
+                            "emotion": emotion_info.get("label") if emotion_info else None,
+                            "is_eruption": bool(eruption_info and eruption_info.get("mode")),
+                            "thresholds": (emotion_info or {}).get("thresholds", {}) or {},
+                            "is_last_in_message": seg_idx == len(segments) - 1,
+                        })
+
+                if source == "qq" and ai_row_ids:
+                    reply_to_qq_mid = 0
+                    if msg.reply_to_id:
+                        try:
+                            q = self.db.query_one(
+                                "SELECT qq_message_id FROM chat_log WHERE id = ?",
+                                (msg.reply_to_id,),
+                            )
+                            if q and q.get("qq_message_id"):
+                                reply_to_qq_mid = int(q["qq_message_id"])
+                        except Exception:
+                            pass
+                    outgoing = OutgoingReply(
+                        user_id=msg.user_id,
+                        content=reply_text,
+                        msg_id=ai_row_ids[0],
+                        reply_to_qq_message_id=reply_to_qq_mid,
+                        cognition_id=int(trace.get("id") or 0),
+                        batch_id=batch_id,
+                        sequence_index=seq_idx,
+                    )
+                    if eruption_info and eruption_info.get("mode"):
+                        try:
+                            setattr(outgoing, "eruption_mode", eruption_info["mode"])
+                        except Exception:
+                            pass
+                    qq_outgoing_replies.append(outgoing)
+
+            except Exception:
+                logger.exception("[Batch %s] error processing message seq=%d", batch_id, seq_idx)
+
+        if qq_outgoing_replies:
+            self.send_queue.enqueue_batch(qq_outgoing_replies)
+
+        if local_emit_items:
+            await self._emit_local_batch_with_pacing(local_emit_items, batch_id, user_id)
+
+        self.cognition.record(trace, "postprocess", {
+            "tune_label": (emotion_info or {}).get("label"),
+            "eruption_mode": (eruption_info or {}).get("mode") if eruption_info else None,
+            "batch": True,
+            "reply_count": len(parsed_replies),
+        })
+        self.cognition.record(trace, "split", {
+            "batch": True,
+            "per_message_segments": [len(r.get("segments", [])) for r in results],
+        })
+        self.cognition.record(trace, "output", {
+            "ai_msg_ids": all_ai_row_ids,
+            "user_msg_ids": all_user_row_ids,
+            "source": source,
+            "batch": True,
+            "batch_id": batch_id,
+            "message_count": len(messages),
+            "result_count": len(results),
+        })
+        self.cognition.commit(trace, route_mode)
+
+        if self.self_evolver:
+            try:
+                self.self_evolver.maybe_propose(
+                    user_id=user_id,
+                    user_message=combined_content,
+                    react_trace=react_trace,
+                    tool_results=tool_results,
+                )
+            except Exception:
+                logger.exception("[Batch %s] self_evolver error", batch_id)
+
+        logger.info(
+            "Batch %s: completed, %d results",
+            batch_id,
+            len(results),
+        )
+        return results
+
+    def _insert_chat_log_safe(self, **kwargs) -> int:
+        """Safely insert into chat_log, gracefully handling missing columns.
+
+        First tries with all provided fields (including batch_id/sequence_index).
+        If that fails due to column issues, retries without the new batch fields.
+        """
+        batch_fields = {"batch_id", "sequence_index"}
+        try:
+            return self.db.insert("chat_log", kwargs)
+        except Exception as e:
+            err_msg = str(e).lower()
+            if any(field in err_msg for field in ["no column named", "has no column", "unknown column", "batch_id"]):
+                logger.debug("chat_log may not have batch columns yet, retrying without batch fields")
+                safe_kwargs = {k: v for k, v in kwargs.items() if k not in batch_fields}
+                return self.db.insert("chat_log", safe_kwargs)
+            raise
+
+    @staticmethod
+    def _build_batch_user_content(messages: list[IncomingMessage]) -> str:
+        """Build the user content block for batch processing.
+
+        Format:
+            [用户连续发送了多条消息，请按顺序分别回复每条消息]
+            --- 消息 1 ---
+            {message1_content}
+            --- 消息 2 ---
+            {message2_content}
+            ...
+
+            请按以下格式回复：
+            === 回复 1 ===
+            (对消息1的回复，包含对话正文、动作、心理)
+            === 回复 2 ===
+            (对消息2的回复)
+            ...
+        """
+        lines = ["[用户连续发送了多条消息，请按顺序分别回复每条消息]"]
+        for i, msg in enumerate(messages, 1):
+            lines.append(f"--- 消息 {i} ---")
+            lines.append(msg.content)
+        lines.append("")
+        lines.append("请按以下格式回复：")
+        for i in range(1, len(messages) + 1):
+            lines.append(f"=== 回复 {i} ===")
+            lines.append(f"(对消息{i}的回复，包含对话正文、动作、心理)")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _parse_batch_replies(raw_text: str, expected_count: int, batch_id: str) -> list[str]:
+        """Parse LLM batch response into individual replies.
+
+        Expected format:
+            === 回复 1 ===
+            (reply content)
+            === 回复 2 ===
+            (reply content)
+            ...
+
+        Robust handling:
+        - Flexible separator matching
+        - Trims whitespace
+        - Handles missing/extra separators gracefully
+        """
+        import re
+
+        separator_pattern = re.compile(r"===\s*回复\s*(\d+)\s*===", re.MULTILINE)
+
+        matches = list(separator_pattern.finditer(raw_text))
+        if not matches:
+            logger.warning("[Batch %s] no reply separators found in LLM response", batch_id)
+            return []
+
+        replies = [""] * expected_count
+
+        for i, match in enumerate(matches):
+            try:
+                reply_num = int(match.group(1)) - 1
+            except (ValueError, IndexError):
+                reply_num = i
+
+            if reply_num < 0 or reply_num >= expected_count:
+                continue
+
+            start = match.end()
+            if i + 1 < len(matches):
+                end = matches[i + 1].start()
+                content = raw_text[start:end]
+            else:
+                content = raw_text[start:]
+
+            content = content.strip()
+            content = re.sub(r"^[\s\n\r]+|[\s\n\r]+$", "", content)
+            replies[reply_num] = content
+
+        replies = [r for r in replies if r]
+        return replies
+
+    async def _emit_local_batch_with_pacing(
+        self,
+        emit_items: list[dict],
+        batch_id: str,
+        user_id: int,
+    ) -> None:
+        import random
+        import re
+        from config.persona_loader import get_message_batching_config
+        from core.persona_pacing import compute_persona_interval
+
+        cfg = get_message_batching_config()
+        base_interval = cfg["base_interval_seconds"]
+        cps = cfg["chars_per_second"]
+        min_interval = cfg["min_interval_seconds"]
+        max_interval = cfg["max_interval_seconds"]
+
+        def _strip_tags(text: str) -> str:
+            if not text:
+                return text
+            text = re.sub(r'<thought>.*?</thought>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<action>.*?</action>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            return text.strip()
+
+        last_seq_idx = -1
+        last_seg_idx = -1
+        last_item_type = None
+        is_first_assistant_segment = True
+
+        for item in emit_items:
+            seq_idx = item.get("seq_idx", 0)
+            seg_idx = item.get("seg_idx", -1)
+            item_type = item.get("type")
+            item_data = item.get("data", {})
+            reply_text = item.get("reply_text", "")
+            emotion_label = item.get("emotion") or "neutral"
+            is_eruption = item.get("is_eruption", False)
+            threshold_summary = item.get("thresholds", {}) or {}
+            is_last_in_message = item.get("is_last_in_message", False)
+
+            need_interval = False
+            interval = 0.0
+            interval_reason = ""
+
+            if item_type == "assistant":
+                if is_first_assistant_segment:
+                    is_first_assistant_segment = False
+                    need_interval = False
+                else:
+                    if seq_idx == last_seq_idx and last_item_type == "assistant":
+                        interval, style = compute_persona_interval(
+                            segment_index=last_seg_idx,
+                            emotion_label=emotion_label,
+                            threshold=threshold_summary,
+                            is_eruption=is_eruption,
+                            segment_content=reply_text,
+                        )
+                        need_interval = interval > 0
+                        interval_reason = f"intra-msg seg (style={style})"
+                    elif seq_idx > last_seq_idx:
+                        plain = _strip_tags(reply_text)
+                        char_count = len(plain)
+                        if char_count > 0:
+                            char_interval = base_interval + (char_count / max(cps, 1))
+                            jitter = random.uniform(0.7, 1.3)
+                            interval = char_interval * jitter
+                            interval = max(min_interval, min(interval, max_interval))
+                            need_interval = True
+                            interval_reason = "inter-msg batch"
+
+            if need_interval and interval > 0:
+                logger.debug(
+                    "local batch emit pacing: batch_id=%s seq=%d seg=%d reason=%s interval=%.3fs",
+                    batch_id, seq_idx, seg_idx, interval_reason, interval,
+                )
+                await asyncio.sleep(interval)
+
+            try:
+                event_type = item_data.get("event_type", "")
+                kwargs = item_data.get("kwargs", {})
+                emit(event_type, **kwargs)
+            except Exception:
+                logger.debug(
+                    "local batch emit failed: batch_id=%s seq=%d seg=%d type=%s",
+                    batch_id, seq_idx, seg_idx, item_type,
+                    exc_info=True,
+                )
+
+            last_seq_idx = seq_idx
+            last_seg_idx = seg_idx
+            last_item_type = item_type

@@ -72,12 +72,15 @@
 - [x] C3.7 图片观察不默认污染长期记忆
   - 验证: 上传图片并识别后，长期记忆未新增未经准入的图片事实
   - 证据: `ImageObservation.memory_eligibility.eligible=false` 默认写入结果；`core/image_service.py` 未新增 `LongTermMemory`、`LayeredMemory` 或 `.store()` 记忆写入调用；`test_phase10_image_workflow.py` 覆盖中文截图、实物图、低置信度和异常 confidence
-- [ ] C3.8 VisualIntentRouter 环境图不挂角色参考图
+- [x] C3.8 VisualIntentRouter 环境图不挂角色参考图
   - 验证: environment_object 请求的 reference_assets 为空
-- [ ] C3.9 VisualIntentRouter 自拍冻结身份版本
+  - 证据: [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py)、命令 `python -m pytest tests/test_phase10_image_workflow.py::test_generation_environment_object_routes_without_reference_assets -q` 通过
+- [x] C3.9 VisualIntentRouter 自拍冻结身份版本
   - 验证: role_selfie 或 role_in_scene 请求包含 PersonaConfig visual identity revision
-- [ ] C3.10 主动图片置信度不足可回退
+  - 证据: [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py)、命令 `python -m pytest tests/test_phase10_image_workflow.py::test_generation_role_selfie_freezes_visual_identity_revision -q` 通过
+- [x] C3.10 主动图片置信度不足可回退
   - 验证: 低置信度分类不直接调用生图 provider，产生询问或文字回退
+  - 证据: [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py)、命令 `python -m pytest tests/test_phase10_image_workflow.py::test_generation_low_confidence_visual_intent_does_not_call_provider -q` 通过
 - [ ] C3.11 前端附件预览可读
   - 验证: 图片、文本/Markdown、表格、PDF/PPT/Office 投影均有可读预览或明确降级状态
 - [ ] C3.12 前端不泄露本机路径

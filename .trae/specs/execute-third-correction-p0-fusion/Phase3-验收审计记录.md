@@ -5,7 +5,7 @@ change-id: execute-third-correction-p0-fusion
 doc-type: audit-record
 audit-type: phase-acceptance
 phase: Phase 3
-status: task-3-3-accepted
+status: task-3-4-accepted
 tags:
   - Aerie
   - 第三次修正计划
@@ -16,7 +16,7 @@ tags:
 # Phase 3 验收审计记录
 
 > [!warning]
-> Phase 3 当前仅完成 Task 3.1 Electron UTF-8 chunk 解码、Task 3.2 附件 Artifact 管线收敛与 Task 3.3 ImageObservation 结构化输出验收。Task 3.4-3.6 尚未启动，本记录不代表 Phase 3 整体通过。
+> Phase 3 当前已完成 Task 3.1 Electron UTF-8 chunk 解码、Task 3.2 附件 Artifact 管线收敛、Task 3.3 ImageObservation 结构化输出与 Task 3.4 VisualIntentRouter 主动图片路由验收。Task 3.5-3.6 尚未启动，本记录不代表 Phase 3 整体通过。
 
 ## 关联文档
 
@@ -35,11 +35,11 @@ tags:
 | 审计日期 | 2026-07-27 |
 | 审计人 | TRAE |
 | 执行负责人 | TRAE |
-| 关联任务范围 | Task 3.1-Task 3.3 |
-| 关联检查项 | C3.1-C3.4、C3.6-C3.7 |
+| 关联任务范围 | Task 3.1-Task 3.4 |
+| 关联检查项 | C3.1-C3.4、C3.6-C3.10 |
 | 启动审计记录 | [Phase3-启动审计记录.md](./Phase3-启动审计记录.md) |
-| 阶段完成声明 | Task 3.1-Task 3.3 已完成，Phase 3 整体未完成 |
-| 本阶段结论 | Task 3.1-Task 3.3 通过 |
+| 阶段完成声明 | Task 3.1-Task 3.4 已完成，Phase 3 整体未完成 |
+| 本阶段结论 | Task 3.1-Task 3.4 通过 |
 
 ## 交付物核对
 
@@ -82,8 +82,9 @@ tags:
 | 兼容回退 | `core/api_server.py` | 保留 `process_local_message_sync` 优先路径，并兼容 pipeline-only companion | 无 | accepted |
 | 图片观察结构 | `core/image_service.py` | 在 workflow 成功分支构建保守 ImageObservation，不改变 `answer` 兼容字段 | 无 | accepted |
 | 记忆准入边界 | `core/image_service.py` | 默认 `memory_eligibility.eligible=false`，不新增长期记忆写入 | 无 | accepted |
-| 图片观察结构 | `core/image_service.py` | 在 workflow 成功分支构建保守 ImageObservation，不改变 `answer` 兼容字段 | 无 | accepted |
-| 记忆准入边界 | `core/image_service.py` | 默认 `memory_eligibility.eligible=false`，不新增长期记忆写入 | 无 | accepted |
+| 视觉意图路由 | `core/image_service.py` | `VisualIntentRouter` 在 provider 前路由，environment_object 不挂参考图 | 无 | accepted |
+| 身份版本冻结 | `core/image_service.py` | role_selfie/role_in_scene 冻结 `visual_identity_revision` | 无 | accepted |
+| 低置信度回退 | `core/image_service.py` | 置信度不足时不调用 provider，返回 `needs_clarification` | 无 | accepted |
 
 ## 运行时调试证据
 
@@ -100,11 +101,9 @@ tags:
 | RED 验证 | 新增 provider 非法 confidence 测试 | `python -m pytest tests/test_phase10_image_workflow.py::test_vision_observation_handles_invalid_provider_confidence -q` | 失败，`float(not-a-number)` 抛错，证明边界测试命中 | 终端命令输出 | accepted |
 | GREEN 验证 | confidence 防御后运行图片 workflow | `python -m pytest tests/test_phase10_image_workflow.py -q` | 13/13 通过 | 终端命令输出 | accepted |
 | 累积回归 | 验证 Task 3.1-3.3 不回退 | Electron、附件、图片三组回归 | 11/11、28/28、13/13 全部通过 | 终端命令输出 | accepted |
-| RED 验证 | 新增 ImageObservation 结构化测试 | `python -m pytest tests/test_phase10_image_workflow.py::test_vision_builds_chinese_screenshot_image_observation tests/test_phase10_image_workflow.py::test_vision_builds_object_relation_image_observation tests/test_phase10_image_workflow.py::test_vision_low_confidence_observation_records_uncertainty -q` | 失败，缺少 `result["observation"]`，证明测试命中目标缺陷 | 终端命令输出 | accepted |
-| GREEN 验证 | 实现 ImageObservation 后运行专项测试 | 同上 | 3/3 通过 | 终端命令输出 | accepted |
-| RED 验证 | 新增 provider 非法 confidence 测试 | `python -m pytest tests/test_phase10_image_workflow.py::test_vision_observation_handles_invalid_provider_confidence -q` | 失败，`float("not-a-number")` 抛错，证明边界测试命中 | 终端命令输出 | accepted |
-| GREEN 验证 | confidence 防御后运行图片 workflow | `python -m pytest tests/test_phase10_image_workflow.py -q` | 13/13 通过 | 终端命令输出 | accepted |
-| 累积回归 | 验证 Task 3.1-3.3 不回退 | Electron、附件、图片三组回归 | 11/11、28/28、13/13 全部通过 | 终端命令输出 | accepted |
+| RED 验证 | 新增 VisualIntentRouter 三项测试 | `python -m pytest tests/test_phase10_image_workflow.py::test_generation_environment_object_routes_without_reference_assets tests/test_phase10_image_workflow.py::test_generation_role_selfie_freezes_visual_identity_revision tests/test_phase10_image_workflow.py::test_generation_low_confidence_visual_intent_does_not_call_provider -q` | 失败，`ImportError: cannot import name 'VisualIntentRouter'`，证明测试命中目标缺陷 | 终端命令输出 | accepted |
+| GREEN 验证 | 实现 VisualIntentRouter 后运行专项测试 | 同上 | 3/3 通过 | 终端命令输出 | accepted |
+| 累积回归 | 验证 Task 3.1-3.4 不回退 | Electron、附件、图片三组回归 | 11/11、28/28、16/16 全部通过 | 终端命令输出 | accepted |
 
 ## 安全审计
 
@@ -118,8 +117,7 @@ tags:
 | 附件输入边界 | 是否避免客户端附件 `markdown/content/path/url` 污染桌面附件事实源 | pass | [api_server.py](../../../core/api_server.py)、[test_desktop_shared_api_contract.py](../../../tests/test_desktop_shared_api_contract.py) | 带 `attachmentId` 的桌面附件只保留 ID，旧 legacy 上传附件仍隔离在 `/uploads` 兼容路径 |
 | 图片输入边界 | 是否新增真实模型调用、外部服务或长期记忆写入 | pass | [image_service.py](../../../core/image_service.py) | 不改 provider 路由，不新增 memory store 调用；仅返回结构化 observation |
 | 图片敏感信息 | 是否暴露本机绝对路径或 provider 私密字段 | pass | [image_service.py](../../../core/image_service.py) | `source.image_url` 使用 `/uploads/...`，`audit_refs` 仅包含 sha256 |
-| 图片输入边界 | 是否新增真实模型调用、外部服务或长期记忆写入 | pass | [image_service.py](../../../core/image_service.py) | 不改 provider 路由，不新增 memory store 调用；仅返回结构化 observation |
-| 图片敏感信息 | 是否暴露本机绝对路径或 provider 私密字段 | pass | [image_service.py](../../../core/image_service.py) | `source.image_url` 使用 `/uploads/...`，`audit_refs` 仅包含 sha256 |
+| 视觉意图安全 | VisualIntentRouter 是否新增真实模型调用或泄露身份资产 | pass | [image_service.py](../../../core/image_service.py) | 路由使用关键词匹配，不调用真实模型；environment_object 的 `reference_assets` 强制为空；身份资产只在 role/couple 意图时从 metadata 读取 |
 
 ## Electron 真实体验审计
 
@@ -143,10 +141,6 @@ tags:
 | `python -m pytest tests/test_desktop_shared_api_contract.py::test_chat_send_desktop_attachment_uses_only_attachment_id_boundary -q` | Task 3.2 RED 验证 | failed-as-expected | 旧 `/uploads` markdown 旁路被调用 | 终端命令输出 |
 | `python -m pytest tests/test_desktop_shared_api_contract.py::test_chat_send_desktop_attachment_uses_only_attachment_id_boundary tests/test_phase4_api.py::test_api_queue_flag_off_supports_legacy_pipeline_only_companion -q` | Task 3.2 专项回归 | pass | 2/2 通过，0 failed | 终端命令输出 |
 | `python -m pytest tests/test_desktop_attachments.py tests/test_desktop_shared_api_contract.py::test_desktop_attachment_http_lifecycle_has_no_public_paths tests/test_desktop_shared_api_contract.py::test_chat_send_desktop_attachment_uses_only_attachment_id_boundary tests/test_phase4_api.py::test_api_queue_flag_on_returns_202_queued_without_waiting_pipeline tests/test_phase4_api.py::test_api_queue_flag_off_preserves_legacy_200_shape_and_empty_400 tests/test_phase4_api.py::test_api_queue_flag_off_supports_legacy_pipeline_only_companion tests/test_continuity_pipeline_integration.py -q` | 附件/API/pipeline 累积回归 | pass | 31/31 通过，0 failed | 终端命令输出 |
-| `python -m pytest tests/test_phase10_image_workflow.py::test_vision_builds_chinese_screenshot_image_observation tests/test_phase10_image_workflow.py::test_vision_builds_object_relation_image_observation tests/test_phase10_image_workflow.py::test_vision_low_confidence_observation_records_uncertainty -q` | Task 3.3 RED/GREEN | failed-as-expected → pass | RED 缺 `observation`；GREEN 3/3 通过 | 终端命令输出 |
-| `python -m pytest tests/test_phase10_image_workflow.py::test_vision_observation_handles_invalid_provider_confidence -q` | Task 3.3 边界 RED/GREEN | failed-as-expected → pass | RED 非法 confidence 抛错；GREEN 1/1 通过 | 终端命令输出 |
-| `python -m pytest tests/test_phase10_image_workflow.py -q` | 图片 workflow 全量回归 | pass | 13/13 通过，0 failed | 终端命令输出 |
-| `python -m pytest tests/test_desktop_attachments.py tests/test_desktop_shared_api_contract.py::test_chat_send_desktop_attachment_uses_only_attachment_id_boundary tests/test_phase4_api.py::test_api_queue_flag_off_supports_legacy_pipeline_only_companion tests/test_continuity_pipeline_integration.py -q` | Task 3.2 邻近回归 | pass | 28/28 通过，0 failed | 终端命令输出 |
 | `python -m pytest tests/test_phase10_image_workflow.py::test_vision_builds_chinese_screenshot_image_observation tests/test_phase10_image_workflow.py::test_vision_builds_object_relation_image_observation tests/test_phase10_image_workflow.py::test_vision_low_confidence_observation_records_uncertainty -q` | Task 3.3 RED/GREEN | failed-as-expected → pass | RED 缺 `observation`；GREEN 3/3 通过 | 终端命令输出 |
 | `python -m pytest tests/test_phase10_image_workflow.py::test_vision_observation_handles_invalid_provider_confidence -q` | Task 3.3 边界 RED/GREEN | failed-as-expected → pass | RED 非法 confidence 抛错；GREEN 1/1 通过 | 终端命令输出 |
 | `python -m pytest tests/test_phase10_image_workflow.py -q` | 图片 workflow 全量回归 | pass | 13/13 通过，0 failed | 终端命令输出 |
@@ -184,5 +178,4 @@ tags:
 | 2026-07-27 | 创建 Phase 3 未开始验收门禁 | 不通过 | 本文件 |
 | 2026-07-27 | 验收 Task 3.1 Electron UTF-8 chunk 解码修复 | Task 3.1 通过 | [main.js](../../../electron/src/main.js)、[sse-bridge.test.js](../../../electron/tests/sse-bridge.test.js) |
 | 2026-07-27 | 验收 Task 3.2 附件 Artifact 管线收敛 | Task 3.2 通过 | [api_server.py](../../../core/api_server.py)、[test_desktop_shared_api_contract.py](../../../tests/test_desktop_shared_api_contract.py)、[test_phase4_api.py](../../../tests/test_phase4_api.py) |
-| 2026-07-27 | 验收 Task 3.3 ImageObservation 结构化输出 | Task 3.3 通过 | [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) |
 | 2026-07-27 | 验收 Task 3.3 ImageObservation 结构化输出 | Task 3.3 通过 | [image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) |

@@ -83,12 +83,13 @@
   - [x] SubTask 3.3.5: 增加中文截图、实物图、低置信度不确定性测试
   - 证据：[image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py)、命令 `python -m pytest tests/test_phase10_image_workflow.py -q` 通过 13/13；Task 3.1/3.2 累积回归 `node --test .\tests\sse-bridge.test.js .\tests\system-status.test.js` 通过 11/11，附件邻近回归通过 28/28
 
-- [ ] Task 3.4: 实现 VisualIntentRouter 主动图片路由
-  - [ ] SubTask 3.4.1: 定义 role_selfie、role_in_scene、couple_photo、environment_object、document_snapshot、meme_sticker 意图
-  - [ ] SubTask 3.4.2: 接入 PersonaConfig.visual_identity revision 冻结规则
-  - [ ] SubTask 3.4.3: 接入 WorldSnapshot 与 OfficeContext 环境图来源
-  - [ ] SubTask 3.4.4: 确保 environment_object 的 reference_assets 必须为空
-  - [ ] SubTask 3.4.5: 增加角色自拍、环境图、置信度不足回退测试
+- [x] Task 3.4: 实现 VisualIntentRouter 主动图片路由
+  - [x] SubTask 3.4.1: 定义 role_selfie、role_in_scene、couple_photo、environment_object、document_snapshot、meme_sticker 意图
+  - [x] SubTask 3.4.2: 接入 PersonaConfig.visual_identity revision 冻结规则
+  - [x] SubTask 3.4.3: 接入 WorldSnapshot 与 OfficeContext 环境图来源
+  - [x] SubTask 3.4.4: 确保 environment_object 的 reference_assets 必须为空
+  - [x] SubTask 3.4.5: 增加角色自拍、环境图、置信度不足回退测试
+  - 证据：[image_service.py](../../../core/image_service.py)、[test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py)、命令 `python -m pytest tests/test_phase10_image_workflow.py -q` 通过 16/16；累积回归 Electron 11/11、附件邻近 28/28
 
 - [ ] Task 3.5: 补齐前端附件预览与安全动作
   - [ ] SubTask 3.5.1: 聊天气泡与历史库共用附件渲染状态

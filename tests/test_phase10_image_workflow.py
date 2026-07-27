@@ -27,6 +27,7 @@ from core.image_service import (
     ImageValidationError,
     ImageVisionResult,
     ImageWorkflow,
+    VisualIntentRouter,
 )
 
 
@@ -192,6 +193,99 @@ def test_generation_success_persists_asset_and_plans_delivery_once(tmp_path):
         "delivery_created": False,
     }
     assert len(provider.calls) == 1
+
+
+def test_generation_environment_object_routes_without_reference_assets(tmp_path):
+    provider = FakeGenerationProvider()
+    service = ImageWorkflow(
+        upload_base=tmp_path / "uploads",
+        feature_enabled=True,
+        generation_provider=provider,
+        visual_intent_router=VisualIntentRouter(),
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.generate_image(
+        prompt="拍一下桌上的西瓜",
+        idempotency_key="environment-object",
+        owner_id="master",
+        metadata={
+            "world_snapshot": {
+                "instance_id": "ws_1",
+                "revision": 7,
+                "location": "home",
+                "activity": "eating_watermelon",
+            }
+        },
+    )
+
+    assert result["status"] == "completed"
+    visual_request = result["visual_request"]
+    assert visual_request["visual_intent"] == "environment_object"
+    assert visual_request["reference_assets"] == []
+    assert visual_request["world_snapshot_id"] == "ws_1"
+    assert visual_request["world_context"]["location"] == "home"
+    assert provider.calls[0]["metadata"]["visual_request"] == visual_request
+
+
+def test_generation_role_selfie_freezes_visual_identity_revision(tmp_path):
+    provider = FakeGenerationProvider()
+    service = ImageWorkflow(
+        upload_base=tmp_path / "uploads",
+        feature_enabled=True,
+        generation_provider=provider,
+        visual_intent_router=VisualIntentRouter(),
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.generate_image(
+        prompt="发张你的自拍",
+        idempotency_key="role-selfie",
+        owner_id="master",
+        metadata={
+            "persona_config": {
+                "id": "persona_5872",
+                "visual_identity": {
+                    "visual_identity_revision": 3,
+                    "selfie_reference_asset_id": "asset_selfie",
+                },
+            }
+        },
+    )
+
+    visual_request = result["visual_request"]
+    assert visual_request["visual_intent"] == "role_selfie"
+    assert visual_request["persona_id"] == "persona_5872"
+    assert visual_request["identity_revision"] == 3
+    assert visual_request["reference_assets"] == ["asset_selfie"]
+    assert "face_identity" in visual_request["must_preserve"]
+
+
+def test_generation_low_confidence_visual_intent_does_not_call_provider(tmp_path):
+    provider = FakeGenerationProvider()
+    service = ImageWorkflow(
+        upload_base=tmp_path / "uploads",
+        feature_enabled=True,
+        generation_provider=provider,
+        visual_intent_router=VisualIntentRouter(min_confidence=0.8),
+        id_factory=lambda prefix: f"{prefix}-fixed",
+    )
+
+    result = service.generate_image(
+        prompt="拍一张照片",
+        idempotency_key="low-confidence-visual-intent",
+        owner_id="master",
+    )
+
+    assert result["status"] == "rejected"
+    assert result["error_code"] == "visual_intent_low_confidence"
+    assert result["visual_request"]["status"] == "needs_clarification"
+    assert result["side_effects"] == {
+        "provider_called": False,
+        "asset_created": False,
+        "delivery_created": False,
+    }
+    assert provider.calls == []
 
 
 def test_brain_generation_provider_accepts_base64_image_bytes(tmp_path):

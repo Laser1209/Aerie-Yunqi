@@ -99,6 +99,125 @@ class ImageVisionResult:
     observation: dict[str, Any] = field(default_factory=dict)
 
 
+class VisualIntentRouter:
+    """Route visual generation requests before any provider receives reference assets.
+
+    Determines visual intent from prompt + metadata, freezes identity revision
+    for role images, and ensures environment_object never mounts reference assets.
+    Does not call real models; uses deterministic keyword matching.
+    """
+
+    _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("role_selfie", ("自拍", "发张你的", "你的照片", "selfie")),
+        ("role_in_scene", ("你在", "你拍", "你正在", "你窗边")),
+        ("couple_photo", ("合照", "我们的照片", "couple")),
+        ("environment_object", ("拍一下", "桌上的", "西瓜", "小狗", "窗户", "environment")),
+        ("document_snapshot", ("截图", "文档", "document")),
+        ("meme_sticker", ("表情包", "贴纸", "meme", "sticker")),
+    )
+
+    _ROLE_INTENTS = frozenset({"role_selfie", "role_in_scene"})
+    _ENVIRONMENT_INTENTS = frozenset({"environment_object"})
+
+    def __init__(self, *, min_confidence: float = 0.5) -> None:
+        self.min_confidence = float(min_confidence)
+
+    def route(
+        self,
+        *,
+        prompt: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        prompt_text = str(prompt or "")
+        metadata = dict(metadata or {})
+
+        scores: dict[str, float] = {}
+        for intent, keywords in self._INTENT_KEYWORDS:
+            score = 0.0
+            for kw in keywords:
+                if kw in prompt_text:
+                    score += 0.5
+            if score > 0:
+                scores[intent] = min(score, 1.0)
+
+        if not scores:
+            return {
+                "status": "needs_clarification",
+                "visual_intent": "unknown",
+                "confidence": 0.0,
+                "reason": "no_intent_keywords_matched",
+                "reference_assets": [],
+            }
+
+        best_intent = max(scores, key=scores.get)
+        confidence = scores[best_intent]
+        if confidence < self.min_confidence:
+            return {
+                "status": "needs_clarification",
+                "visual_intent": best_intent,
+                "confidence": confidence,
+                "reason": "low_confidence",
+                "reference_assets": [],
+            }
+
+        return self._build_visual_request(best_intent, confidence, metadata)
+
+    def _build_visual_request(
+        self,
+        intent: str,
+        confidence: float,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        reference_assets: list[str] = []
+        persona_id = ""
+        identity_revision = 0
+        world_snapshot_id = ""
+        world_context: dict[str, Any] = {}
+        must_preserve: list[str] = []
+
+        if intent in self._ROLE_INTENTS:
+            persona_config = metadata.get("persona_config") or {}
+            visual_identity = persona_config.get("visual_identity") or {}
+            persona_id = str(persona_config.get("id", ""))
+            identity_revision = int(visual_identity.get("visual_identity_revision", 0))
+            selfie_asset = visual_identity.get("selfie_reference_asset_id", "")
+            if selfie_asset:
+                reference_assets.append(str(selfie_asset))
+            must_preserve = ["face_identity", "age_impression", "hair_style", "character_vibe"]
+        elif intent == "couple_photo":
+            persona_config = metadata.get("persona_config") or {}
+            visual_identity = persona_config.get("visual_identity") or {}
+            persona_id = str(persona_config.get("id", ""))
+            identity_revision = int(visual_identity.get("visual_identity_revision", 0))
+            selfie_asset = visual_identity.get("selfie_reference_asset_id", "")
+            if selfie_asset:
+                reference_assets.append(str(selfie_asset))
+            couple_asset = visual_identity.get("couple_reference_asset_id", "")
+            if couple_asset:
+                reference_assets.append(str(couple_asset))
+            must_preserve = ["face_identity", "relationship_facts"]
+        elif intent in self._ENVIRONMENT_INTENTS:
+            reference_assets = []
+            world_snapshot = metadata.get("world_snapshot") or {}
+            world_snapshot_id = str(world_snapshot.get("instance_id", ""))
+            world_context = {
+                k: v for k, v in world_snapshot.items()
+                if k != "instance_id"
+            }
+
+        return {
+            "status": "ok",
+            "visual_intent": intent,
+            "confidence": confidence,
+            "persona_id": persona_id,
+            "identity_revision": identity_revision,
+            "reference_assets": reference_assets,
+            "world_snapshot_id": world_snapshot_id,
+            "world_context": world_context,
+            "must_preserve": must_preserve,
+        }
+
+
 class ImageGenerationProvider(Protocol):
     provider_id: str
     model: str
@@ -363,6 +482,7 @@ class ImageWorkflow:
         store: JsonImageWorkflowStore | None = None,
         id_factory: Any | None = None,
         clock: Any | None = None,
+        visual_intent_router: VisualIntentRouter | None = None,
     ) -> None:
         self.upload_base = Path(upload_base)
         if not self.upload_base.is_absolute():
@@ -371,6 +491,7 @@ class ImageWorkflow:
             self.upload_base = self.upload_base.resolve()
         self.feature_enabled = bool(feature_enabled)
         self.generation_provider = generation_provider or BrainImageGenerationProvider(None)
+        self.visual_intent_router = visual_intent_router
         self.vision_provider = vision_provider or BrainImageVisionProvider(None)
         self.safety_policy = safety_policy or ImageSafetyPolicy()
         self.store = store or JsonImageWorkflowStore(
@@ -427,6 +548,28 @@ class ImageWorkflow:
             self._record_result(result, operation, idem, fingerprint, owner)
             return result
 
+        visual_request: dict[str, Any] | None = None
+        if self.visual_intent_router is not None:
+            visual_request = self.visual_intent_router.route(
+                prompt=prompt_text,
+                metadata=metadata or {},
+            )
+            if visual_request.get("status") == "needs_clarification":
+                result = self._base_result(
+                    operation=operation,
+                    request_id=request_id,
+                    idempotency_key=idem,
+                    status="rejected",
+                    safety=safety,
+                    owner_id=owner,
+                    audit={"prompt_sha256": prompt_sha},
+                    provider_attempted=False,
+                    error_code="visual_intent_low_confidence",
+                )
+                result["visual_request"] = visual_request
+                self._record_result(result, operation, idem, fingerprint, owner)
+                return result
+
         provider = self.generation_provider
         provider_id = str(getattr(provider, "provider_id", "unknown"))
         model = str(getattr(provider, "model", "unknown"))
@@ -436,6 +579,8 @@ class ImageWorkflow:
             "prompt_sha256": prompt_sha,
             **(metadata or {}),
         }
+        if visual_request is not None:
+            metadata_payload["visual_request"] = visual_request
 
         try:
             generated = provider.generate(
@@ -544,6 +689,8 @@ class ImageWorkflow:
                 "delivery_created": True,
             },
         )
+        if visual_request is not None:
+            result["visual_request"] = visual_request
         self._record_result(result, operation, idem, fingerprint, owner)
         return result
 

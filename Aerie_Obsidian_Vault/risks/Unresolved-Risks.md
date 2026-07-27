@@ -37,6 +37,13 @@ related_validations:
 | R-TC-007 | 附件旧新路径继续分裂 | 同一文件出现多个 attachment id 或 artifact 来源 | AI 上下文、历史、预览不一致 | P0 要求统一 AttachmentEnvelope 与 Artifact | [[../modules/AttachmentEnvelope]] | C3.3、C3.5 |
 | R-TC-008 | 图片观察污染长期记忆 | 上传图像后未确认即写入长期事实 | 记忆污染和隐私风险 | ImageObservation 默认不可长期写入 | [[../modules/ImageObservation]] | C3.7 |
 
+## R-TC-004：QQ 真实账号被误触发发送或读取
+
+- 决策：ADR-TC-006
+- 关联：[[../modules/DesktopSurfaceAdapter]]、[[../dependencies/Pyisland-eIsland-Desktop-Touch]]
+- 验证：C4.6
+- 说明：Electron 真实体验审计或桌面触达操作可能触发 QQ/NapCat 真实消息发送或读取，必须在用户明确授权前阻止真实链路调用
+
 ## R-TC-001：范围膨胀破坏 P0 闭环
 
 - 决策：ADR-TC-001

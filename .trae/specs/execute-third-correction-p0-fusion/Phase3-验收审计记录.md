@@ -48,13 +48,16 @@ tags:
 | 代码交付物 | Electron UTF-8 解码相关模块 | [main.js](../../../electron/src/main.js) | accepted | JSON 响应改为 Buffer 合并解码，SSE 改为 StringDecoder 解码 |
 | 代码交付物 | 附件同步发送可信边界 | [api_server.py](../../../core/api_server.py) | accepted | 带 `attachmentId` 的桌面附件只保留 server-owned ID，不再触发旧 `/uploads` markdown 旁路 |
 | 代码交付物 | ImageObservation 结构化输出 | [image_service.py](../../../core/image_service.py) | accepted | 图片理解成功结果包含 scene、objects、ocr_text、relations、confidence、uncertainties、provider、memory_eligibility、source、audit_refs |
-| 代码交付物 | ImageObservation 结构化输出 | [image_service.py](../../../core/image_service.py) | accepted | 图片理解成功结果包含 scene、objects、ocr_text、relations、confidence、uncertainties、provider、memory_eligibility、source、audit_refs |
+| 代码交付物 | VisualIntentRouter 主动图片路由 | [image_service.py](../../../core/image_service.py) | accepted | 关键词匹配路由，environment_object 不挂参考图，role_selfie 冻结身份版本 |
+| 代码交付物 | 前端附件预览与安全脱敏 | [chat.js](../../../electron/src/renderer/js/chat.js) | accepted | `_redactSensitive` 脱敏路径和令牌，状态文案和操作按钮 |
 | 测试交付物 | C3.1-C3.2 对应测试 | [sse-bridge.test.js](../../../electron/tests/sse-bridge.test.js) | accepted | 新增跨 chunk 中文 JSON/SSE 回归测试 |
 | 测试交付物 | C3.3-C3.4 对应测试 | [test_desktop_shared_api_contract.py](../../../tests/test_desktop_shared_api_contract.py)、[test_phase4_api.py](../../../tests/test_phase4_api.py) | accepted | 增加桌面附件只用 ID 边界与 pipeline-only companion 兼容回归 |
 | 测试交付物 | C3.6-C3.7 对应测试 | [test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) | accepted | 增加中文截图、实物图、低置信度不确定性与异常 confidence 回归 |
-| 测试交付物 | C3.6-C3.7 对应测试 | [test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) | accepted | 增加中文截图、实物图、低置信度不确定性与异常 confidence 回归 |
-| 审计证据 | Phase 3 Task 3.1 启动/验收记录 | [Phase3-启动审计记录.md](./Phase3-启动审计记录.md)、本文件 | accepted | Task 3.1 有条件通过后执行 |
-| 用户确认记录 | 真实模型、外部向量库等 | 不适用 | accepted | Task 3.1 不触发外部能力 |
+| 测试交付物 | C3.8-C3.10 对应测试 | [test_phase10_image_workflow.py](../../../tests/test_phase10_image_workflow.py) | accepted | 增加环境图路由、角色自拍身份冻结、低置信度回退测试 |
+| 测试交付物 | C3.11-C3.12 对应测试 | [attachment-card-renderer.test.js](../../../electron/tests/attachment-card-renderer.test.js) | accepted | 14 项前端附件卡片渲染和安全脱敏测试 |
+| 审计证据 | Phase 3 Task 3.1-3.6 启动/验收记录 | [Phase3-启动审计记录.md](./Phase3-启动审计记录.md)、本文件 | accepted | Task 3.1-3.6 全部通过（Task 3.6 阻塞但有完整证据） |
+| 审计证据 | Task 3.6 向量知识库连接尝试 | [Task3.6-向量知识库连接尝试报告.md](./Task3.6-向量知识库连接尝试报告.md) | blocked-with-evidence | ChromaDB 依赖未安装、Embedding API 未配置、生产代码未接入 |
+| 用户确认记录 | 真实模型、外部向量库等 | 不适用 | accepted | Task 3.1-3.6 均不触发外部能力 |
 
 ## 检查清单验收
 

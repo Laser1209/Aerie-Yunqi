@@ -1,54 +1,52 @@
-# Tasks · Aerie 第三次修正计划 P1 陪伴融合与能力扩展
+﻿# Tasks · Aerie 第三次修正计划 P1 陪伴融合与能力扩展
 
 > 本任务列表用于执行 `execute-p1-companion-fusion`。严格度与 P0 一致：每个阶段启动前完成启动审计，完成后完成验收审计；TDD RED/GREEN；累积验证覆盖 P0+P1；决策记录随任务推进。
 
 ## 阶段 P1-A · 陪伴状态与关系面板底座
 
-- [ ] Task P1-A.1: 补全 C3.5 AI 上下文 Artifact 边界
-  - [ ] SubTask P1-A.1.1: 定位 context_builder 中附件进入上下文的拼接点
-  - [ ] SubTask P1-A.1.2: 为 PDF/Office/表格/幻灯片附件添加 trusted_boundary、part_id、page/sheet/slide/range、parser_warning
-  - [ ] SubTask P1-A.1.3: 增加 TDD RED 测试：多页 PDF、多 sheet 表格、解析警告场景
-  - [ ] SubTask P1-A.1.4: 实现 GREEN，通过 RED 测试
-  - [ ] SubTask P1-A.1.5: 累积回归 P0 附件邻近测试
-  - 依赖: P0 Task 3.2 附件管线
+- [x] Task P1-A.1: 补全 C3.5 AI 上下文 Artifact 边界
+  - [x] SubTask P1-A.1.1: 定位 context_builder 中附件进入上下文的拼接点
+  - [x] SubTask P1-A.1.2: 为 PDF/Office/表格/幻灯片附件添加 trusted_boundary、part_id、page/sheet/slide/range、parser_warning
+  - [x] SubTask P1-A.1.3: 增加 TDD RED 测试：多页 PDF、多 sheet 表格、解析警告场景
+  - [x] SubTask P1-A.1.4: 实现 GREEN，通过 RED 测试
+  - [x] SubTask P1-A.1.5: 累积回归 P0 附件邻近测试
+    - 证据: [test_p1_a1_artifact_context_boundary.py](../../../tests/test_p1_a1_artifact_context_boundary.py)；5/5 通过；P0 附件 44/44 回归通过
 
-- [ ] Task P1-A.2: 实现 CompanionState 陪伴状态模型
-  - [ ] SubTask P1-A.2.1: 定义 CompanionState 数据结构（relationship_stage、care_followups、pending_topics、recent_pain_points、recent_joy_points）
-  - [ ] SubTask P1-A.2.2: 实现状态读写接口与持久化
-  - [ ] SubTask P1-A.2.3: 增加 TDD RED 测试：记录 pain_point、调度 care_followup、pending_topic 续接
-  - [ ] SubTask P1-A.2.4: 实现 GREEN
-  - 依赖: 无
+- [x] Task P1-A.2: 实现 CompanionState 陪伴状态模型
+  - [x] SubTask P1-A.2.1: 定义 CompanionState 数据结构（relationship_stage、care_followups、pending_topics、recent_pain_points、recent_joy_points）
+  - [x] SubTask P1-A.2.2: 实现状态读写接口与持久化
+  - [x] SubTask P1-A.2.3: 增加 TDD RED 测试：记录 pain_point、调度 care_followup、pending_topic 续接
+  - [x] SubTask P1-A.2.4: 实现 GREEN
+    - 证据: [companion_state.py](../../../core/companion_state.py)、[test_p1_a2_companion_state.py](../../../tests/test_p1_a2_companion_state.py)；13/13 通过`n`n- [x] Task P1-A.3: 实现共情响应策略链
+  - [x] SubTask P1-A.3.1: 定义 validate_input → reflect → clarify → support → next_step 策略接口
+  - [x] SubTask P1-A.3.2: 实现策略选择逻辑（基于消息情感、上下文）
+  - [x] SubTask P1-A.3.3: 增加 TDD RED 测试：挫败表达、困惑表达、喜悦表达场景
+  - [x] SubTask P1-A.3.4: 实现 GREEN
+  - 证据: [empathy_strategy.py](../../../core/empathy_strategy.py)、[test_p1_a3_empathy_strategy.py](../../../tests/test_p1_a3_empathy_strategy.py)；25/25 通过；CompanionState 13/13 回归通过
 
-- [ ] Task P1-A.3: 实现共情响应策略链
-  - [ ] SubTask P1-A.3.1: 定义 validate_input → reflect → clarify → support → next_step 策略接口
-  - [ ] SubTask P1-A.3.2: 实现策略选择逻辑（基于消息情感、上下文）
-  - [ ] SubTask P1-A.3.3: 增加 TDD RED 测试：挫败表达、困惑表达、喜悦表达场景
-  - [ ] SubTask P1-A.3.4: 实现 GREEN
-  - 依赖: Task P1-A.2
+- [x] Task P1-A.4: 扩展记忆可见性与用户控制
+  - [x] SubTask P1-A.4.1: 为记忆条目添加 source_message_id、confidence、user_confirmed、expires_at、deleted_at
+  - [x] SubTask P1-A.4.2: 实现记忆列表查询与删除接口
+  - [x] SubTask P1-A.4.3: 增加 TDD RED 测试：查询记忆、删除记忆、过期记忆不出现
+  - [x] SubTask P1-A.4.4: 实现 GREEN
+  - 证据: [long_permanent.py](../../../memory/layers/long_permanent.py)、[test_p1_a4_memory_visibility.py](../../../tests/test_p1_a4_memory_visibility.py)；12/12 通过
 
-- [ ] Task P1-A.4: 扩展记忆可见性与用户控制
-  - [ ] SubTask P1-A.4.1: 为记忆条目添加 source_message_id、confidence、user_confirmed、expires_at、deleted_at
-  - [ ] SubTask P1-A.4.2: 实现记忆列表查询与删除接口
-  - [ ] SubTask P1-A.4.3: 增加 TDD RED 测试：查询记忆、删除记忆、过期记忆不出现
-  - [ ] SubTask P1-A.4.4: 实现 GREEN
-  - 依赖: 无
+- [x] Task P1-A.5: 实现角色配置版本化 PersonaConfig
+  - [x] SubTask P1-A.5.1: 定义六类输入合并结构（identity_facts → visual_identity → background → speaking_style → active_rules → current_state）
+  - [x] SubTask P1-A.5.2: 实现 revision 记录与旧 revision 失效逻辑
+  - [x] SubTask P1-A.5.3: 增加 TDD RED 测试：保存新 revision、旧 revision 失效、revision 变化使旧候选失效
+  - [x] SubTask P1-A.5.4: 实现 GREEN
+  - 证据: [persona_config.py](../../../core/persona_config.py)、[test_p1_a5_persona_config.py](../../../tests/test_p1_a5_persona_config.py)；10/10 通过；VisualIntentRouter 16/16 回归通过
 
-- [ ] Task P1-A.5: 实现角色配置版本化 PersonaConfig
-  - [ ] SubTask P1-A.5.1: 定义六类输入合并结构（identity_facts → visual_identity → background → speaking_style → active_rules → current_state）
-  - [ ] SubTask P1-A.5.2: 实现 revision 记录与旧 revision 失效逻辑
-  - [ ] SubTask P1-A.5.3: 增加 TDD RED 测试：保存新 revision、旧 revision 失效、revision 变化使旧候选失效
-  - [ ] SubTask P1-A.5.4: 实现 GREEN
-  - 依赖: P0 Task 3.4 VisualIntentRouter
-
-- [ ] Task P1-A.6: 实现关系/成长/记忆面板前端
-  - [ ] SubTask P1-A.6.1: 创建面板组件框架（聊天记录、成长、关系、记忆、向量星云）
-  - [ ] SubTask P1-A.6.2: 关系面板展示熟悉度、信任感、好感度、芥蒂感、即时情绪、今日变化
-  - [ ] SubTask P1-A.6.3: 记忆面板展示只读列表与删除操作
-  - [ ] SubTask P1-A.6.4: 成长面板展示成长事件轨迹
-  - [ ] SubTask P1-A.6.5: 验证面板不暴露原始模型分数或内部路径
-  - [ ] SubTask P1-A.6.6: 增加 TDD RED 测试：面板渲染、数据绑定、安全脱敏
-  - [ ] SubTask P1-A.6.7: 实现 GREEN
-  - 依赖: Task P1-A.2、Task P1-A.4
+- [x] Task P1-A.6: 实现关系/成长/记忆面板前端
+  - [x] SubTask P1-A.6.1: 创建面板组件框架（聊天记录、成长、关系、记忆、向量星云）
+  - [x] SubTask P1-A.6.2: 关系面板展示熟悉度、信任感、好感度、芥蒂感、即时情绪、今日变化
+  - [x] SubTask P1-A.6.3: 记忆面板展示只读列表与删除操作
+  - [x] SubTask P1-A.6.4: 成长面板展示成长事件轨迹
+  - [x] SubTask P1-A.6.5: 验证面板不暴露原始模型分数或内部路径
+  - [x] SubTask P1-A.6.6: 增加 TDD RED 测试：面板渲染、数据绑定、安全脱敏
+  - [x] SubTask P1-A.6.7: 实现 GREEN
+  - 证据: [panels.js](../../../electron/src/renderer/js/panels.js)、[panels-renderer.test.js](../../../electron/tests/panels-renderer.test.js)；11/11 通过；附件卡片 14/14 回归通过
 
 ## 阶段 P1-B · 桌面办公入口与 Pyisland/eIsland 融合
 

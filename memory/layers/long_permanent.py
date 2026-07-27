@@ -178,6 +178,12 @@ class LongTermMemoryLayer(BaseMemoryLayer):
         # 存 SQLite
         if self.db:
             try:
+                # 处理 user_confirmed 布尔→整型
+                uc = item.user_confirmed
+                if isinstance(uc, bool):
+                    uc_int = 1 if uc else 0
+                else:
+                    uc_int = int(uc) if uc else 0
                 data = {
                     "user_id": item.user_id,
                     "memory_type": item.memory_type.value if isinstance(item.memory_type, MemoryType) else item.memory_type,
@@ -190,17 +196,25 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     "accessed_at": item.accessed_at,
                     "source": item.source,
                     "has_embedding": has_embedding,
+                    "source_message_id": item.source_message_id or "",
+                    "confidence": item.confidence if item.confidence is not None else 0.5,
+                    "user_confirmed": uc_int,
+                    "expires_at": item.expires_at,
+                    "deleted_at": item.deleted_at,
                 }
 
                 # 判断 id 是否为数字（兼容 INTEGER PRIMARY KEY）
                 id_is_int = False
                 int_id = None
+                str_id = None
                 try:
                     if item.id and str(item.id).isdigit():
                         int_id = int(item.id)
                         id_is_int = True
+                    else:
+                        str_id = str(item.id) if item.id else None
                 except (ValueError, TypeError):
-                    pass
+                    str_id = str(item.id) if item.id else None
 
                 if id_is_int and hasattr(self.db, "update"):
                     # 有数字 id：先尝试 update，失败再 insert
@@ -220,22 +234,21 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     # 无数字 id 或无 update 方法：直接 insert
                     if id_is_int:
                         data["id"] = int_id
-                    new_id = self.db.insert("long_term_memory", data)
-                    if new_id:
-                        item.id = str(new_id)
+                        new_id = self.db.insert("long_term_memory", data)
+                        if new_id:
+                            item.id = str(new_id)
+                    elif str_id:
+                        data["id"] = str_id
+                        self.db.insert("long_term_memory", data)
+                        # TEXT PRIMARY KEY 不被 rowid 覆盖，保持原 id
                 else:
                     # fallback：直接用 execute
+                    cols = list(data.keys())
+                    placeholders = ", ".join(["?"] * len(cols))
+                    col_list = ", ".join(cols)
                     self.db.execute(
-                        """
-                        INSERT INTO long_term_memory
-                        (user_id, memory_type, content, metadata, importance,
-                         access_count, created_at, updated_at, accessed_at, source, has_embedding)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        tuple(data[k] for k in [
-                            "user_id", "memory_type", "content", "metadata", "importance",
-                            "access_count", "created_at", "updated_at", "accessed_at", "source", "has_embedding",
-                        ]),
+                        f"INSERT INTO long_term_memory ({col_list}) VALUES ({placeholders})",
+                        tuple(data[k] for k in cols),
                     )
             except Exception:
                 logger.exception("Failed to store in SQLite")
@@ -429,7 +442,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
 
     def _row_to_item(self, row: Dict[str, Any]) -> MemoryItem:
         item = MemoryItem(
-            id=row["id"],
+            id=str(row["id"]),
             user_id=row["user_id"],
             layer=MemoryLayer.LONG_TERM,
             memory_type=MemoryType(row.get("memory_type", "fact")),
@@ -440,6 +453,11 @@ class LongTermMemoryLayer(BaseMemoryLayer):
             updated_at=row.get("updated_at", 0),
             accessed_at=row.get("accessed_at", 0),
             source=row.get("source", ""),
+            source_message_id=row.get("source_message_id") or None,
+            confidence=row.get("confidence", 0.5) if row.get("confidence") is not None else 0.5,
+            user_confirmed=bool(row.get("user_confirmed", 0)),
+            expires_at=row.get("expires_at"),
+            deleted_at=row.get("deleted_at"),
         )
         meta_str = row.get("metadata", "{}")
         if meta_str:
@@ -448,6 +466,40 @@ class LongTermMemoryLayer(BaseMemoryLayer):
             except Exception:
                 item.metadata = {}
         return item
+
+    async def list_active_memories(
+        self,
+        user_id: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[MemoryItem]:
+        """列出活跃记忆（排除已删除和已过期），按 confidence 降序排列."""
+        if not self.db:
+            return []
+        now = time.time()
+        try:
+            sql = """
+                SELECT * FROM long_term_memory
+                WHERE user_id = ?
+                  AND (deleted_at IS NULL OR deleted_at = 0)
+                  AND (expires_at IS NULL OR expires_at = 0 OR expires_at > ?)
+                ORDER BY confidence DESC, importance DESC, created_at DESC
+                LIMIT ? OFFSET ?
+            """
+            rows = self.db.query(sql, (user_id, now, limit, offset))
+            return [self._row_to_item(r) for r in rows]
+        except Exception:
+            logger.exception("Failed to list active memories")
+            return []
+
+    async def delete_memory(self, memory_id: str) -> bool:
+        """软删除：设置 deleted_at 为当前时间戳."""
+        return await self.update(memory_id, deleted_at=time.time())
+
+    async def update_user_confirmed(self, memory_id: str, confirmed: bool) -> bool:
+        """更新用户确认标记."""
+        uc_int = 1 if confirmed else 0
+        return await self.update(memory_id, user_confirmed=uc_int)
 
     async def _bump_access(self, memory_id: str) -> None:
         """更新访问计数和时间."""

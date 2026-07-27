@@ -4,29 +4,29 @@
 
 ## §P1-A · 陪伴状态与关系面板底座
 
-- [ ] C-P1-A.1 AI 上下文 Artifact 边界完整
+- [x] C-P1-A.1 AI 上下文 Artifact 边界完整
   - 验证: 附件进入上下文时包含 trusted_boundary、part_id、page/sheet/slide/range、parser_warning
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [test_p1_a1_artifact_context_boundary.py](../../../tests/test_p1_a1_artifact_context_boundary.py)；5/5 通过；trusted_boundary/part_id/page_range/sheet_range/parser_warning 全部覆盖
 
-- [ ] C-P1-A.2 CompanionState 陪伴状态模型可用
+- [x] C-P1-A.2 CompanionState 陪伴状态模型可用
   - 验证: relationship_stage、care_followups、pending_topics、recent_pain_points、recent_joy_points 可读写与持久化
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [companion_state.py](../../../core/companion_state.py)、[test_p1_a2_companion_state.py](../../../tests/test_p1_a2_companion_state.py)；13/13 通过
 
-- [ ] C-P1-A.3 共情响应策略链生效
+- [x] C-P1-A.3 共情响应策略链生效
   - 验证: validate_input → reflect → clarify → support → next_step 策略可按场景选择
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [empathy_strategy.py](../../../core/empathy_strategy.py)、[test_p1_a3_empathy_strategy.py](../../../tests/test_p1_a3_empathy_strategy.py)；25/25 通过
 
-- [ ] C-P1-A.4 记忆可见性与用户控制
+- [x] C-P1-A.4 记忆可见性与用户控制
   - 验证: source_message_id、confidence、user_confirmed、expires_at、deleted_at 存在；用户可查看与删除
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [long_permanent.py](../../../memory/layers/long_permanent.py)、[test_p1_a4_memory_visibility.py](../../../tests/test_p1_a4_memory_visibility.py)；12/12 通过
 
-- [ ] C-P1-A.5 PersonaConfig 版本化
+- [x] C-P1-A.5 PersonaConfig 版本化
   - 验证: 六类输入合并、revision 记录、旧 revision 失效
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [persona_config.py](../../../core/persona_config.py)、[test_p1_a5_persona_config.py](../../../tests/test_p1_a5_persona_config.py)；10/10 通过
 
-- [ ] C-P1-A.6 关系/成长/记忆面板前端可读
+- [x] C-P1-A.6 关系/成长/记忆面板前端可读
   - 验证: 关系面板展示熟悉度等指标；记忆面板可查看与删除；成长面板展示轨迹；不暴露原始模型分数或内部路径
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [panels.js](../../../electron/src/renderer/js/panels.js)、[panels-renderer.test.js](../../../electron/tests/panels-renderer.test.js)；11/11 通过；分数映射为等级不暴露原始值；安全脱敏通过
 
 ## §P1-B · 桌面办公入口与 Pyisland/eIsland 融合
 

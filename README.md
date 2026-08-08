@@ -17,7 +17,9 @@
 | **QQ 接入 / QQ Bridge**      | NapCat OneBot11 WebSocket                                                                                                                   |
 | **官网 / Spotlight**         | [https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/) · React 18 + Vite 6 + Tailwind + Framer Motion |
 | **世界模拟 / World Service** | 独立 Python sidecar + SQLite storage                                                                                                        |
-| **验证 / Tests**             | 覆盖 Phase 0-15、v13.9、E2E 与 Electron 检查文件                                                                                            |
+| **向量知识库 / Vector KB**   | ChromaDB 语义检索 · 本地 ONNX 离线 embedding · 生产记忆已切 LayeredMemory                                                              |
+| **移动端 / Mobile**          | Android 移动网关 · 多端会话与文件能力 · 账号鉴权                                                                                          |
+| **验证 / Tests**             | 覆盖 Phase 0-15、P1 陪伴融合、v13.9、E2E 与 Electron 检查文件                                                                               |
 | **交付 / Release**           | `Spotlight/src/config/release.ts` 指向 `v0.1.0-beta.1` 便携版与安装包                                                                   |
 
 ---
@@ -35,8 +37,10 @@
 | **电脑操控 / Computer Control**             | 权限分级、键鼠、截图、UIA、受限 Shell、审计日志           |
 | **文件与文档 / File & Docs**                | 文件整理、文档写作、上传处理、图片工作流                  |
 | **多模态 / Multimodal**                     | 图片输入、TTS 输出、语音与 QQ 深耕能力                    |
-| **世界模拟 / World Simulation**             | world port、domain、sidecar、dashboard API 与候选图片管线 |
-| **自进化 / Self Evolution**                 | L1-L4 演进、Skill 创建、安全沙箱、代码修改闸门            |
+| **世界模拟 / World Simulation** | world port、domain、sidecar、dashboard API 与候选图片管线 |
+| **向量知识库 / Vector KB**     | ChromaDB 语义检索、本地 ONNX 离线 embedding、LayeredMemory 多层记忆生产接线 |
+| **多端 / Mobile & Multi-client** | Android 移动网关、移动会话/文件/身份鉴权、多端消息通道 |
+| **自进化 / Self Evolution**    | L1-L4 演进、Skill 创建、安全沙箱、代码修改闸门            |
 | **Spotlight 官网 / Web Spotlight**          | 6 页面产品站、发布下载页、Remotion 视频素材工程           |
 
 ---
@@ -154,6 +158,7 @@ npm run build
 | `config/persona_behavior.yaml` | 行为与表达节奏配置                   |
 | `config/proactive.yaml`        | 主动推送场景、频控、静默时段         |
 | `data/personas/`               | Persona Hub 运行态数据               |
+| `data/chroma/`                 | 向量知识库 ChromaDB 本地存储          |
 | `data/briefs/`                 | 每日简报缓存                         |
 | `data/audit/`                  | 权限与电脑操控审计日志               |
 | `logs/`                        | 后端与诊断日志                       |

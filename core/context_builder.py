@@ -766,6 +766,12 @@ class ContextBuilder:
             if thought_tags:
                 text += "- 心理活动用 <thought>...</thought> 包裹。\n"
             text += "- 标签内纯自然语言，不嵌套，不带换行。\n"
+            text += (
+                "- 说完就后悔/想收回上一条已发消息时，可用可执行指令 "
+                "<recall reason=\"原因\">…</recall>，框架会自动撤回你上一条已发送的"
+                "消息并从正文剔除该标签；<recall> 是框架指令(会执行)，<action> 只是"
+                "描写(不执行)。不要频繁使用撤回。\n"
+            )
 
         return text.strip()
 

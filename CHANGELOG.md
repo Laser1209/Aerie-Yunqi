@@ -9,6 +9,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased] - 2026-08-09
+
+> **三端撤回 + 消息合并重构 / Multi-channel Recall & Message Merge Rebuild**
+> 按端口(QQ/本地/未来微信)解耦的撤回系统 + LLM 主动撤回指令 + 首条立即/动态合并的消息编排。
+
+### ✨ Features / 新功能
+- **三端撤回解耦**：新增 `communication/recall/` 包（`RecallAdapter` 协议 + QQ/Local/WeChatClawbot 三端实现），`RecallManager` 改为按 `(channel, channel_account_id)` 记录与预算，撤回能力经适配器按端口分派
+- **LLM 主动撤回指令**：新增 `core/recall_instruction.py`，解析并执行 AI 输出的 `<recall reason="...">` 指令（与纯文本 `<action>` 严格分离），执行后从正文剔除并撤回上一条已发消息；`config/persona.yaml` 的 `recall.triggers` 从死配置变为有消费方
+- **本地端撤回补全**：`companion.recall_message` 通用化，纯本地消息可撤回（DB 标记 + 前端"已撤回"呈现），不再报 `no_qq_message_id`
+- **消息合并重构**：`MessageBatcher` 首条立即提交、后续消息动态缓冲，当前批完成后作为新批处理，不再等固定窗口
+- **撤回判断联动**：新增 `core/message_orchestrator.py`（`RecallJudge`），新批到达且上一批已产出时决策是否撤回首条再合并重算
+
+### 🔌 三端撤回能力
+- **QQ 端**：NapCat `delete_msg` 真实撤回
+- **本地/桌面端**：DB 标记 + 前端事件
+- **微信端**：架构预留桩（`channel="clawbot"`），调研归档见 `.trae/documents/Aerie_微信接入调研与方案.md`；iLink 协议暂无可调用撤回端点，`<recall>` 自动降级为仅本地标记
+
+### 🧪 Tests / 测试
+- 新增 `tests/test_recall_adapters.py`、`tests/test_recall_instruction.py`、`tests/test_message_orchestrator.py`
+- 更新 `tests/test_message_batcher.py` 为新"首条立即"语义（15 用例全绿）
+
+---
+
 ## [Unreleased] - 2026-07-21
 
 > **文档同步 / Documentation Sync**

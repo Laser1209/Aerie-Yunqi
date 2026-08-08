@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Phase 4 Recall tests."""
+"""Aerie · 云栖 v0.1.0-beta.1 — Phase 4 Recall tests."""
 import asyncio
 import time
 from communication.recall_manager import RecallManager, RecallConfig
@@ -30,7 +30,7 @@ class TestRecallManagerBasics:
         rm.record_sent(1, "hi")
         time.sleep(0.05)
         # force old timestamp
-        rm._last_sent[1].timestamp -= 30
+        rm._last_sent[("qq", "1")].timestamp -= 30
         can, why = rm.can_recall(1)
         assert can is False
         assert why == "window_expired"
@@ -38,7 +38,7 @@ class TestRecallManagerBasics:
     def test_session_limit_enforced(self):
         rm = RecallManager(config=RecallConfig(window_seconds=120, min_recall_gap_seconds=0, max_recalls_per_session=2))
         rm.record_sent(1, "hi")
-        rm._session_recall_count[1] = 2
+        rm._session_recall_count[("qq", "1")] = 2
         can, why = rm.can_recall(1)
         assert can is False
         assert why == "session_limit"
@@ -46,16 +46,16 @@ class TestRecallManagerBasics:
     def test_min_gap_cooldown(self):
         rm = RecallManager(config=RecallConfig(window_seconds=120, min_recall_gap_seconds=60, max_recalls_per_session=5))
         rm.record_sent(1, "hi")
-        rm._last_recall_at[1] = time.time()
+        rm._last_recall_at[("qq", "1")] = time.time()
         can, why = rm.can_recall(1)
         assert can is False
         assert why == "cooldown"
 
     def test_reset_session_clears_count(self):
         rm = RecallManager(config=RecallConfig())
-        rm._session_recall_count[1] = 3
+        rm._session_recall_count[("qq", "1")] = 3
         rm.reset_session(1)
-        assert rm._session_recall_count[1] == 0
+        assert rm._session_recall_count == {}
 
 
 class TestRecallManagerAsync:
@@ -89,10 +89,10 @@ class TestRecallManagerAsync:
         rm = RecallManager(config=RecallConfig())
         rm.record_sent(1, "hi")
         rm.attach_qq_message_id(1, 99999)
-        assert rm._last_sent[1].qq_message_id == 99999
+        assert rm._last_sent[("qq", "1")].qq_message_id == 99999
 
     def test_record_sent_with_segments(self):
         rm = RecallManager(config=RecallConfig())
         rm.record_sent(1, "x", msg_id=1, segments=["x", "y", "z"])
-        assert rm._last_sent[1].segments == ["x", "y", "z"]
-        assert rm._last_sent[1].msg_id == 1
+        assert rm._last_sent[("qq", "1")].segments == ["x", "y", "z"]
+        assert rm._last_sent[("qq", "1")].msg_id == 1

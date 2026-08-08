@@ -54,6 +54,7 @@ from core.knowledge_indexer import resolve_embedding_fn
 from memory.layers import LayeredMemory
 from memory.layers.sync_adapter import LayeredMemorySyncAdapter
 from core.message_batcher import MessageBatcher
+from core.message_orchestrator import RecallJudge
 from tools import register_all_tools
 
 logger = logging.getLogger(__name__)
@@ -303,6 +304,21 @@ class Companion:
         except Exception:
             logger.exception("MessageBatcher init failed; batching disabled")
             self.message_batcher = None
+
+        # Gate 5: 撤回判断联动 (RecallJudge)
+        self.recall_judge: RecallJudge | None = None
+        try:
+            self.recall_judge = RecallJudge(
+                self.recall_manager,
+                window_seconds=self.recall_manager.config.window_seconds,
+            )
+        except Exception:
+            logger.exception("RecallJudge init failed; recall judge disabled")
+            self.recall_judge = None
+
+        # Gate 4: 批次完成 → 通知 batcher 刷新该 conversation 的缓冲
+        if self.chat_request_worker is not None:
+            self.chat_request_worker.batch_completed_hook = self._on_batch_completed
 
         # Push scheduler
         proactive_cfg = load_proactive_config()
@@ -1013,22 +1029,30 @@ class Companion:
         ]
         return await self.qq.send_message_with_segments(user_id, segments)
 
-    async def recall_qq_message(self, msg_id: int) -> dict[str, Any]:
-        """Recall an AI message by chat_log.id. Syncs to QQ + local DB."""
+    async def recall_message(self, msg_id: int) -> dict[str, Any]:
+        """Recall an AI message by chat_log.id (通用, 按 channel 分派).
+
+        - QQ 消息: RecallManager.try_recall → NapCat delete_msg 真实撤回
+        - 本地消息: DB 标记 is_recalled=1 + 前端事件 (无真实协议撤回)
+        """
         try:
             row = self.db.query_one(
-                "SELECT id, user_id, role, qq_message_id FROM chat_log WHERE id = ?",
+                "SELECT id, user_id, role, channel, channel_account_id, qq_message_id "
+                "FROM chat_log WHERE id = ?",
                 (msg_id,),
             )
             if not row:
                 return {"status": "error", "reason": "not_found"}
             if row["role"] != "assistant":
                 return {"status": "error", "reason": "only_assistant_can_be_recalled_via_this_endpoint"}
-            if not row.get("qq_message_id"):
-                return {"status": "error", "reason": "no_qq_message_id"}
 
+            channel = row.get("channel") or (
+                "qq" if row.get("qq_message_id") else "local"
+            )
+            account = row.get("channel_account_id") or str(row["user_id"])
             ok = await self.recall_manager.try_recall(
-                row["user_id"], reason="manual_api"
+                row["user_id"], reason="manual_api",
+                channel=channel, channel_account_id=account,
             )
             if ok.get("status") == "ok":
                 self.db.update(
@@ -1048,10 +1072,13 @@ class Companion:
                     user_id=row["user_id"],
                     role="assistant",
                 )
-                return {"status": "ok", "msg_id": msg_id, "qq_recalled": ok.get("qq_recalled", False)}
+                return {
+                    "status": "ok", "msg_id": msg_id,
+                    "qq_recalled": ok.get("qq_recalled", False), "channel": channel,
+                }
             return {"status": "error", "reason": ok.get("reason", "unknown")}
         except Exception as e:
-            logger.exception("recall_qq_message error")
+            logger.exception("recall_message error")
             return {"status": "error", "reason": str(e)}
 
     async def _on_qq_message(self, msg: IncomingMessage) -> None:
@@ -1140,6 +1167,39 @@ class Companion:
             batch_id,
             len(messages),
         )
+        # Gate 5: 撤回判断联动 —— 新批到达且上一批已产出时, 决定是否撤回首条再合并重算
+        if self.recall_judge is not None and messages:
+            first = messages[0]
+            if self.recall_manager is not None:
+                # 仅当新批非首条 (上一批已产出) 时才判定; 首条无"前批"可撤
+                try:
+                    key = (first.channel or "qq", first.channel_account_id or str(first.user_id))
+                    has_prev = key in self.recall_manager._last_sent
+                except Exception:
+                    has_prev = False
+                if has_prev:
+                    decision = self.recall_judge.should_recall_prev(
+                        prev_reply="",
+                        new_msg=first.content,
+                        channel=first.channel or "qq",
+                        channel_account_id=first.channel_account_id,
+                        user_id=first.user_id,
+                    )
+                    if decision.recall:
+                        logger.info(
+                            "RecallJudge: recall previous reply (%s), user=%s",
+                            decision.reason,
+                            first.user_id,
+                        )
+                        try:
+                            await self.recall_manager.try_recall(
+                                first.user_id,
+                                reason="recall_judge",
+                                channel=first.channel or "qq",
+                                channel_account_id=first.channel_account_id,
+                            )
+                        except Exception:
+                            logger.exception("recall_judge try_recall failed")
         if self.chat_request_queue_ready and self.chat_request_service is not None:
             try:
                 self.chat_request_service.submit_batch(messages, batch_id)
@@ -1167,6 +1227,19 @@ class Companion:
                     "pipeline.handle batch error: batch_id=%s",
                     batch_id,
                 )
+            finally:
+                # Gate 4: 直接路径同步处理完 → 通知 batcher 刷新缓冲
+                await self._on_batch_completed(messages[0] if messages else None)
+
+    async def _on_batch_completed(self, first_message) -> None:
+        """Gate 4: 批次完成后通知 batcher, 让缓冲消息作为新批处理."""
+        if self.message_batcher is None or first_message is None:
+            return
+        try:
+            conv_id = MessageBatcher.get_conversation_id(first_message)
+            await self.message_batcher.on_batch_completed(conv_id)
+        except Exception:
+            logger.exception("on_batch_completed bridge failed")
 
     async def _run_daily_decay(self) -> None:
         """Background task: apply daily emotion decay at midnight."""

@@ -1,9 +1,14 @@
-"""Aerie · 云栖 v0.1.0-beta.1 — Message batcher with time-window and size-limit support.
+"""Aerie · 云栖 v0.2.0 — Message batcher (首条立即 + 动态缓冲).
 
-Collects incoming messages within a configurable time window per conversation,
-then triggers a registered callback for batch processing.
+Gate 4 重构: 修复 D5 (首条也要等窗口)。
+新语义 per conversation:
+  - 首条消息: 立即提交处理 (不再等 window_seconds)
+  - 处理期间到达的新消息: 进入待并入缓冲, 不阻塞首条
+  - 当前批完成后 (on_batch_completed): 若缓冲非空, 作为新批次 dispatch
+
+保留: max_batch_size 作为缓冲封顶; window_seconds 作为缓冲安全兜底
+(兜底仅在当前批未运行时才 flush, 保证同 conversation 串行不被破坏)。
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -19,35 +24,36 @@ logger = logging.getLogger(__name__)
 BatchCallback = Callable[[list[IncomingMessage], str], Awaitable[None]]
 
 
-class _ConversationBatch:
-    """Internal state for a single conversation's active batch."""
+class _ConversationState:
+    """单个 conversation 的动态缓冲状态."""
 
     __slots__ = (
         "conversation_id",
-        "batch_id",
-        "messages",
-        "timer_task",
+        "running",
+        "pending",
+        "pending_batch_id",
         "lock",
+        "timer_task",
     )
 
     def __init__(self, conversation_id: str) -> None:
         self.conversation_id = conversation_id
-        self.batch_id: str = uuid.uuid4().hex
-        self.messages: list[IncomingMessage] = []
-        self.timer_task: asyncio.Task | None = None
+        self.running = False            # 当前批已提交 & 正在被处理
+        self.pending: list[IncomingMessage] = []
+        self.pending_batch_id: str | None = None
         self.lock = asyncio.Lock()
+        self.timer_task: asyncio.Task | None = None
 
 
 class MessageBatcher:
-    """Async message batcher singleton with time-window and max-batch-size support.
+    """Async message batcher singleton (首条立即 + 动态缓冲).
 
-    Collects messages per conversation_id:
-    - First message starts an asyncio timer (window_seconds)
-    - Messages arriving within the window join the same batch
-    - When the window expires OR max_batch_size is reached, the batch
-      is submitted to all registered callbacks
-    - If batching is disabled (enabled=False), messages are submitted
-      immediately as single-message batches
+    每 conversation 维护一个状态:
+      - 首条消息到达 → 立即 dispatch 为单条批, 标记 running。
+      - 运行中到达 → 缓冲到 pending; 达到 max_batch_size 则在下次完成时 flush。
+      - on_batch_completed(conversation_id) 被 worker/companion 调用 →
+        running 置 false, 若有 pending 则作为新批 dispatch。
+      - window_seconds 作为缓冲兜底计时 (仅在未运行时 flush, 保证串行)。
     """
 
     _instance: MessageBatcher | None = None
@@ -63,7 +69,7 @@ class MessageBatcher:
             return
         self._initialized = True
         self._callbacks: list[BatchCallback] = []
-        self._active_batches: dict[str, _ConversationBatch] = {}
+        self._states: dict[str, _ConversationState] = {}
         self._global_lock = asyncio.Lock()
         self._config = get_message_batching_config()
         logger.info(
@@ -127,8 +133,10 @@ class MessageBatcher:
     async def submit_message(self, message: IncomingMessage) -> None:
         """Submit a message for batching.
 
-        If batching is disabled, the message is immediately passed to callbacks
-        as a single-message batch.
+        Disabled -> immediately dispatch as single-message batch.
+        Otherwise:
+          - First message (not running) -> dispatch immediately.
+          - While running -> buffer into pending (flushed on completion).
         """
         conversation_id = self.get_conversation_id(message)
 
@@ -137,69 +145,80 @@ class MessageBatcher:
             return
 
         async with self._global_lock:
-            batch = self._active_batches.get(conversation_id)
-            if batch is None:
-                batch = _ConversationBatch(conversation_id)
-                self._active_batches[conversation_id] = batch
-                logger.debug("New batch started for %s: %s", conversation_id, batch.batch_id)
+            state = self._states.get(conversation_id)
+            if state is None:
+                state = _ConversationState(conversation_id)
+                self._states[conversation_id] = state
 
-        async with batch.lock:
-            batch.messages.append(message)
-            msg_count = len(batch.messages)
+        async with state.lock:
+            if not state.running:
+                # 首条消息: 立即提交 (不再等窗口)
+                state.running = True
+                await self._dispatch_batch([message], uuid.uuid4().hex)
+                return
+
+            # 当前批运行中: 缓冲新消息
+            state.pending.append(message)
+            if state.pending_batch_id is None:
+                state.pending_batch_id = uuid.uuid4().hex
             logger.debug(
-                "Message added to batch %s (conv=%s): count=%d, content=%r",
-                batch.batch_id,
-                conversation_id,
-                msg_count,
-                message.content[:50],
+                "Buffered message for %s (pending=%d): %r",
+                conversation_id, len(state.pending), message.content[:50],
             )
-
-            if msg_count >= self._config["max_batch_size"]:
-                await self._finalize_batch(batch, reason="max_size")
-            elif batch.timer_task is None:
-                batch.timer_task = asyncio.create_task(
-                    self._window_timer(batch),
-                    name=f"batch-timer-{batch.batch_id[:8]}",
-                )
-                logger.debug(
-                    "Timer started for batch %s: %.2fs window",
-                    batch.batch_id,
-                    self._config["window_seconds"],
+            # 缓冲区满: 由 on_batch_completed 在下一次完成时 flush
+            if state.timer_task is None:
+                state.timer_task = asyncio.create_task(
+                    self._buffer_timer(state),
+                    name=f"buffer-timer-{conversation_id[:8]}",
                 )
 
-    async def _window_timer(self, batch: _ConversationBatch) -> None:
-        """Wait for the configured window, then finalize the batch on timeout."""
+    async def _buffer_timer(self, state: _ConversationState) -> None:
+        """缓冲兜底计时: 仅在未运行时 flush, 保证串行不被打断."""
         try:
-            await asyncio.sleep(self._config["window_seconds"])
-            async with batch.lock:
-                if batch.messages:
-                    await self._finalize_batch(batch, reason="timeout")
+            while True:
+                await asyncio.sleep(self._config["window_seconds"])
+                async with state.lock:
+                    if not state.pending:
+                        state.timer_task = None
+                        return
+                    if not state.running:
+                        await self._flush_pending(state)
+                        state.timer_task = None
+                        return
+                    # 仍在运行 -> 继续等 (由 on_batch_completed 触发 flush)
         except asyncio.CancelledError:
-            logger.debug("Timer cancelled for batch %s", batch.batch_id)
+            state.timer_task = None
             raise
 
-    async def _finalize_batch(self, batch: _ConversationBatch, reason: str) -> None:
-        """Finalize and dispatch a batch, cleaning up state."""
-        if batch.timer_task is not None and not batch.timer_task.done():
-            batch.timer_task.cancel()
+    async def on_batch_completed(self, conversation_id: str) -> None:
+        """由 worker/companion 在批次处理完成后调用.
 
-        messages = list(batch.messages)
-        batch_id = batch.batch_id
+        若该 conversation 有缓冲消息, 立即作为新批次 dispatch (保持串行)。
+        """
+        state = self._states.get(conversation_id)
+        if state is None:
+            return
+        async with state.lock:
+            if state.timer_task is not None and not state.timer_task.done():
+                state.timer_task.cancel()
+                state.timer_task = None
+            state.running = False
+            if state.pending:
+                await self._flush_pending(state)
 
-        async with self._global_lock:
-            self._active_batches.pop(batch.conversation_id, None)
-
-        batch.messages.clear()
-        batch.timer_task = None
-
+    async def _flush_pending(self, state: _ConversationState) -> None:
+        """将 pending 缓冲作为一批 dispatch (调用方需持有 state.lock)."""
+        if not state.pending:
+            return
+        messages = list(state.pending)
+        batch_id = state.pending_batch_id or uuid.uuid4().hex
+        state.pending.clear()
+        state.pending_batch_id = None
+        state.running = True
         logger.info(
-            "Batch %s finalized (conv=%s, reason=%s, size=%d)",
-            batch_id,
-            batch.conversation_id,
-            reason,
-            len(messages),
+            "Flushing buffered batch %s (conv=%s, size=%d)",
+            batch_id, state.conversation_id, len(messages),
         )
-
         await self._dispatch_batch(messages, batch_id)
 
     async def _dispatch_batch(self, messages: list[IncomingMessage], batch_id: str) -> None:
@@ -227,44 +246,41 @@ class MessageBatcher:
             try:
                 await callback(messages, batch_id)
             except Exception:
-                logger.exception(
-                    "Batch callback failed for batch %s", batch_id
-                )
+                logger.exception("Batch callback failed for batch %s", batch_id)
 
     async def flush_all(self) -> None:
-        """Immediately finalize all active batches. Useful for graceful shutdown."""
-        logger.info("Flushing all active batches...")
+        """Immediately finalize all active states (graceful shutdown)."""
+        logger.info("Flushing all active conversation states...")
         async with self._global_lock:
-            batches = list(self._active_batches.values())
-            self._active_batches.clear()
-
-        for batch in batches:
-            async with batch.lock:
-                if batch.messages:
-                    if batch.timer_task is not None and not batch.timer_task.done():
-                        batch.timer_task.cancel()
-                    messages = list(batch.messages)
-                    batch.messages.clear()
-                    batch.timer_task = None
+            states = list(self._states.values())
+            self._states.clear()
+        for state in states:
+            async with state.lock:
+                if state.timer_task is not None and not state.timer_task.done():
+                    state.timer_task.cancel()
+                    state.timer_task = None
+                state.running = False
+                if state.pending:
+                    messages = list(state.pending)
+                    batch_id = state.pending_batch_id or uuid.uuid4().hex
+                    state.pending.clear()
+                    state.pending_batch_id = None
                     logger.info(
-                        "Flushing batch %s (conv=%s, size=%d)",
-                        batch.batch_id,
-                        batch.conversation_id,
-                        len(messages),
+                        "Flushing buffered batch %s (conv=%s, size=%d)",
+                        batch_id, state.conversation_id, len(messages),
                     )
-                    await self._dispatch_batch(messages, batch.batch_id)
-
-        logger.info("All active batches flushed")
+                    await self._dispatch_batch(messages, batch_id)
+        logger.info("All active conversation states flushed")
 
     async def get_active_batch_count(self) -> int:
-        """Return the number of currently active (open) batches."""
+        """Return the number of currently active (running/buffered) states."""
         async with self._global_lock:
-            return len(self._active_batches)
+            return len(self._states)
 
     async def get_active_conversations(self) -> list[str]:
-        """Return list of conversation_ids with active batches."""
+        """Return list of conversation_ids with active states."""
         async with self._global_lock:
-            return list(self._active_batches.keys())
+            return list(self._states.keys())
 
 
 def get_message_batcher() -> MessageBatcher:

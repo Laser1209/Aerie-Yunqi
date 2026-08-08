@@ -2048,6 +2048,14 @@ async def audio_transcribe(
             "error": str(e),
         }, status_code=500)
 
+class _RecallRecord:
+    """轻量撤回记录 (喂给 RecallAdapter)."""
+    __slots__ = ("msg_id", "qq_message_id")
+    def __init__(self, msg_id: int, qq_message_id) -> None:
+        self.msg_id = msg_id
+        self.qq_message_id = qq_message_id
+
+
 @app.post("/api/chat/recall/{msg_id}")
 async def chat_recall(msg_id: int) -> dict:
     """Recall a chat message. Marks DB + syncs to QQ via NapCat delete_msg.
@@ -2093,9 +2101,16 @@ async def chat_recall(msg_id: int) -> dict:
 
     # If assistant message and has QQ id, recall via QQ
     qq_recalled = False
-    if row["role"] == "assistant" and row.get("qq_message_id"):
+    if row["role"] == "assistant":
+        # 按 channel 分派真实撤回 (QQ → NapCat delete_msg, local → 本地标记)
+        channel = row.get("channel") or ("qq" if row.get("qq_message_id") else "local")
         try:
-            qq_recalled = await comp.qq.recall_message(int(row["qq_message_id"]))
+            from communication.recall.factory import get_recall_adapter
+            adapter = get_recall_adapter(channel, qq_client=getattr(comp, "qq", None))
+            outcome = await adapter.recall(
+                _RecallRecord(msg_id=msg_id, qq_message_id=row.get("qq_message_id"))
+            )
+            qq_recalled = bool(outcome.recalled and not adapter.local_mark_only())
         except Exception:
             pass
 

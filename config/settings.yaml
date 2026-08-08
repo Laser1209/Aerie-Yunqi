@@ -9,6 +9,7 @@ feature_flags:
   mobile_gateway_v1: false
   persona_hub_source_v1: false
   proactive_delivery_v2: true
+  recall_llm_instruction_v1: true
   world_image_candidates_v1: false
   world_inprocess_v1: false
   world_sidecar_v1: false

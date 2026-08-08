@@ -234,7 +234,9 @@ class Pipeline:
         # ══════════════════════════════════════════════
         if self.recall_manager and msg.source == "qq":
             try:
-                await self.recall_manager.handle_user_negative(msg.user_id, msg.content)
+                await self.recall_manager.handle_user_negative(
+                    msg.user_id, msg.content, channel=msg.source,
+                )
             except Exception:
                 logger.exception("handle_user_negative error")
 
@@ -446,8 +448,11 @@ class Pipeline:
             react_trace, trace, raw_text, tool_results
         )
 
-        # Strip <think> block from user-visible text
+        # Strip  thinking block from user-visible text
         reply_text_raw = self._strip_think(raw_text)
+
+        # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
+        reply_text_raw = await self._handle_recall_instruction(reply_text_raw, msg)
 
         self.cognition.record(trace, "brain", {
             "model": model_name,
@@ -1157,6 +1162,71 @@ class Pipeline:
             "channel": context.identity.channel,
         }
 
+    # ══════════════════════════════════════════════
+    # Gate 2: LLM 主动撤回指令 (recall_instruction)
+    # ══════════════════════════════════════════════
+    def _recall_instruction_enabled(self) -> bool:
+        try:
+            return FeatureFlags().is_enabled("recall_llm_instruction_v1")
+        except Exception:
+            return False
+
+    def _llm_recall_trigger_enabled(self) -> bool:
+        """recall.triggers 是否允许 LLM 主动撤回 (不再死配置).
+
+        命中 send_after_thinking / regret_correction 任一即视为开启。
+        """
+        try:
+            triggers = set(self.recall_manager.config.triggers or [])
+        except Exception:
+            triggers = set()
+        return bool(triggers & {"send_after_thinking", "regret_correction"})
+
+    async def _handle_recall_instruction(
+        self,
+        raw_text: str,
+        msg: IncomingMessage,
+    ) -> str:
+        """从 LLM 原始输出中解析并执行 <recall> 指令.
+
+        返回剔除撤回指令标签后的正文 (标签绝不发送给用户)。无指令/禁用/
+        无 recall_manager 时原样返回。受 feature flag 与 RecallManager
+        预算 (window/cooldown/session) 双重约束, 不越权撤回。
+        """
+        if not self.recall_manager or not self._recall_instruction_enabled():
+            return raw_text
+        if not raw_text:
+            return raw_text
+        # 激活 persona.yaml 的 recall.triggers（不再死配置）:
+        # 仅当配置允许「LLM 主动撤回」类触发器时才消费 <recall> 指令。
+        if not self._llm_recall_trigger_enabled():
+            return raw_text
+        from core.recall_instruction import (
+            extract_recall_instruction,
+            strip_recall_instruction,
+            execute_recall_instruction,
+        )
+        inst = extract_recall_instruction(raw_text)
+        if inst is None:
+            return raw_text
+        channel = getattr(msg, "channel", None) or getattr(msg, "source", None) or "qq"
+        account = getattr(msg, "channel_account_id", None)
+        try:
+            result = await execute_recall_instruction(
+                self.recall_manager,
+                channel=channel,
+                channel_account_id=account,
+                user_id=msg.user_id,
+                reason=inst.reason or "llm_instruction",
+            )
+            logger.info(
+                "LLM recall instruction executed: reason=%r status=%s channel=%s",
+                inst.reason, result.get("status"), channel,
+            )
+        except Exception:
+            logger.exception("LLM recall instruction execution failed")
+        return strip_recall_instruction(raw_text)
+
     async def _handle_basic_lightweight(
         self,
         msg: IncomingMessage,
@@ -1266,6 +1336,9 @@ class Pipeline:
 
         # 剥掉 <think> 块
         reply_text_raw = self._strip_think(raw_text)
+
+        # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
+        reply_text_raw = await self._handle_recall_instruction(reply_text_raw, msg)
 
         self.cognition.record(trace, "brain", {
             "model": model_name,
@@ -2068,7 +2141,9 @@ class Pipeline:
         if self.recall_manager and source == "qq":
             try:
                 for m in messages:
-                    await self.recall_manager.handle_user_negative(user_id, m.content)
+                    await self.recall_manager.handle_user_negative(
+                        user_id, m.content, channel=source,
+                    )
             except Exception:
                 logger.exception("[Batch %s] handle_user_negative error", batch_id)
 
@@ -2279,6 +2354,10 @@ class Pipeline:
 
         for seq_idx, (msg, reply_text_raw_single) in enumerate(zip(messages, parsed_replies)):
             try:
+                # Gate 2: 批内逐条解析 <recall>, 执行撤回 (按该条 msg 的 channel), 并从正文剔除
+                reply_text_raw_single = await self._handle_recall_instruction(
+                    reply_text_raw_single, msg
+                )
                 reply_text = self.emotion.tune(reply_text_raw_single, actor_id=actor_id)
                 try:
                     from core.screen_action_sanitizer import sanitize as _sanitize_action

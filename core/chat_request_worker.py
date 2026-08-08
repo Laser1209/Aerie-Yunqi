@@ -25,6 +25,7 @@ class ChatRequestWorker:
         lease_seconds: int = 30,
         heartbeat_seconds: float = 10,
         worker_id: str = "chat-request-worker",
+        batch_completed_hook: Callable[[IncomingMessage | None], Awaitable] | None = None,
     ) -> None:
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be positive")
@@ -43,6 +44,7 @@ class ChatRequestWorker:
         self.lease_seconds = lease_seconds
         self.heartbeat_seconds = heartbeat_seconds
         self.worker_id = worker_id
+        self.batch_completed_hook = batch_completed_hook
 
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._heartbeat_tasks: dict[str, asyncio.Task[None]] = {}
@@ -308,6 +310,11 @@ class ChatRequestWorker:
                 lease_owner=self.worker_id,
                 results={},
             )
+            if self.batch_completed_hook is not None:
+                try:
+                    await self.batch_completed_hook(messages[0] if messages else None)
+                except Exception:
+                    logger.exception("batch_completed_hook failed for batch %s", batch_id)
             for claimed, result_data in zip(all_claimed, results_list):
                 if not isinstance(result_data, dict):
                     result_data = {}

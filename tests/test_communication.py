@@ -99,7 +99,7 @@ class TestRecallManager:
     @pytest.mark.asyncio
     async def test_handle_negative_outside_window(self, rm):
         rm.on_message_sent(1, "很久之前的消息")
-        rm._last_sent[1].timestamp = time.time() - 300
+        rm._last_sent[("qq", "1")].timestamp = time.time() - 300
         result = await rm.handle_user_negative(1, "别说了")
         assert result is False
 
@@ -117,7 +117,7 @@ class TestRecallManager:
     @pytest.mark.asyncio
     async def test_maybe_poke_on_silence_triggers(self, rm):
         rm.on_message_sent(1, "你在吗")
-        rm._last_sent[1].timestamp = time.time() - 320
+        rm._last_sent[("qq", "1")].timestamp = time.time() - 320
         result = await rm.maybe_poke_on_silence(1)
         assert result is True
 

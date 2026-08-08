@@ -111,10 +111,11 @@ def test_environment_object_never_mounts_reference_assets():
 
 
 def test_low_confidence_visual_intent_returns_text_without_provider():
+    # "拍一下这个角落" 只命中 environment_object 的 "拍一下" 单个关键词 => 置信度 0.5 < 0.9
     scheduler = ProactiveVisualScheduler(min_confidence=0.9)
     decision = scheduler.plan(
         snapshot=_snapshot(),
-        candidates=[_candidate(topic="拍一下桌上的西瓜")],
+        candidates=[_candidate(topic="这个角落")],
     )
     assert decision is not None
     assert decision.message

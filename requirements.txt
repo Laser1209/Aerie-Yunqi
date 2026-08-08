@@ -1,4 +1,4 @@
-﻿# Aerie · 云栖 v0.1.0-beta.1 — Python Backend Dependencies
+# Aerie · 云栖 v0.1.0-beta.1 — Python Backend Dependencies
 # Code-level elements (package names) must use pure English
 #
 # Install: pip install -r requirements.txt
@@ -115,7 +115,7 @@ pytest-asyncio==1.4.0
 #
 # pip install chromadb easyocr openai-whisper
 #
-# chromadb>=1.5.9
+chromadb>=1.5.9
 # easyocr>=1.7.2
 # openai-whisper>=20250625
 

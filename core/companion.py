@@ -50,7 +50,9 @@ from core.tool_registry import ToolRegistry
 from core.world_port import build_world_port
 from config.persona_loader import load_settings, load_proactive_config
 from knowledge.kb import KnowledgeBase
-from memory.memory_store import LongTermMemory
+from core.knowledge_indexer import resolve_embedding_fn
+from memory.layers import LayeredMemory
+from memory.layers.sync_adapter import LayeredMemorySyncAdapter
 from core.message_batcher import MessageBatcher
 from tools import register_all_tools
 
@@ -156,7 +158,15 @@ class Companion:
             brain=self.brain,
         )
         self._emotion_last_sampled_at = int(time.time() * 1000)
-        self.memory = LongTermMemory(self.db)
+        # P1-D.5.3: 生产记忆切换到四层 LayeredMemory，并注入 embedding_fn（优先
+        # ChromaDB 本地 ONNX 离线 embedding），实现向量语义检索。
+        # 用同步适配器桥接旧 LongTermMemory 接口，context_builder/pipeline 无需改动。
+        self._layered_memory = LayeredMemory(
+            db=self.db,
+            chroma_persist_dir=os.getenv("AERIE_CHROMA_DIR", "data/chroma"),
+            embedding_fn=resolve_embedding_fn(),
+        )
+        self.memory = LayeredMemorySyncAdapter(self._layered_memory)
         self.knowledge = KnowledgeBase(self.db)
 
         # Phase 9 Batch 7 (B7.2): single cognition engine instance,

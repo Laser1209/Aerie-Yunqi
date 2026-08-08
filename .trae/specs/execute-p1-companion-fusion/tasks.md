@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿# Tasks · Aerie 第三次修正计划 P1 陪伴融合与能力扩展
+﻿﻿﻿﻿﻿﻿﻿﻿﻿# Tasks · Aerie 第三次修正计划 P1 陪伴融合与能力扩展
 
 > 本任务列表用于执行 `execute-p1-companion-fusion`。严格度与 P0 一致：每个阶段启动前完成启动审计，完成后完成验收审计；TDD RED/GREEN；累积验证覆盖 P0+P1；决策记录随任务推进。
 
@@ -118,87 +118,104 @@
   - 依赖: Task P1-C.2、Task P1-A.2
   - 证据: 主动关怀治理已完成；指定验证 18/18 通过
 
-- [ ] Task P1-C.4: 实现主动消息 + 主动图片联合调度
-  - [ ] SubTask P1-C.4.1: 将主动候选意图与 VisualIntentRouter 联合调度
-  - [ ] SubTask P1-C.4.2: 确保同一 world_snapshot_id 不重复生成主动候选
-  - [ ] SubTask P1-C.4.3: 增加 TDD RED 测试：联合调度、去重、用户忽略后退避
-  - [ ] SubTask P1-C.4.4: 实现 GREEN
+- [x] Task P1-C.4: 实现主动消息 + 主动图片联合调度
+  - [x] SubTask P1-C.4.1: 将主动候选意图与 VisualIntentRouter 联合调度
+  - [x] SubTask P1-C.4.2: 确保同一 world_snapshot_id 不重复生成主动候选
+  - [x] SubTask P1-C.4.3: 增加 TDD RED 测试：联合调度、去重、用户忽略后退避
+  - [x] SubTask P1-C.4.4: 实现 GREEN
+  - 证据: P1-C 阶段审计 accepted；proactive_visual_scheduler.py 指定验证 31/31 通过
   - 依赖: Task P1-C.2、P0 Task 3.4
 
 ## 阶段 P1-D · 语音、表情包与通道扩展
 
-- [ ] Task P1-D.1: 实现语音 ASR/TTS 三服务边界
-  - [ ] SubTask P1-D.1.1: 定义 VoiceProfile、SpeechMarkup、VoiceDeliveryPolicy 三个服务接口
-  - [ ] SubTask P1-D.1.2: 实现 ASR 转写与 TTS 合成适配层
-  - [ ] SubTask P1-D.1.3: 实现语音开关与审计
-  - [ ] SubTask P1-D.1.4: 增加 TDD RED 测试：转写、合成、开关关闭不调用、审计记录
-  - [ ] SubTask P1-D.1.5: 实现 GREEN
+- [x] Task P1-D.1: 实现语音 ASR/TTS 三服务边界
+  - [x] SubTask P1-D.1.1: 定义 VoiceProfile、SpeechMarkup、VoiceDeliveryPolicy 三个服务接口
+  - [x] SubTask P1-D.1.2: 实现 ASR 转写与 TTS 合成适配层
+  - [x] SubTask P1-D.1.3: 实现语音开关与审计
+  - [x] SubTask P1-D.1.4: 增加 TDD RED 测试：转写、合成、开关关闭不调用、审计记录
+  - [x] SubTask P1-D.1.5: 实现 GREEN
+  - 证据: P1-D 阶段审计 accepted；voice_service.py 15/15 通过
   - 依赖: 无
 
-- [ ] Task P1-D.2: 实现表情包入口
-  - [ ] SubTask P1-D.2.1: 定义表情包数据结构与情绪/场景标签
-  - [ ] SubTask P1-D.2.2: 实现标签检索与发送审计
-  - [ ] SubTask P1-D.2.3: 实现用户关闭开关
-  - [ ] SubTask P1-D.2.4: 增加 TDD RED 测试：检索、发送审计、关闭后不可用
-  - [ ] SubTask P1-D.2.5: 实现 GREEN
+- [x] Task P1-D.2: 实现表情包入口
+  - [x] SubTask P1-D.2.1: 定义表情包数据结构与情绪/场景标签
+  - [x] SubTask P1-D.2.2: 实现标签检索与发送审计
+  - [x] SubTask P1-D.2.3: 实现用户关闭开关
+  - [x] SubTask P1-D.2.4: 增加 TDD RED 测试：检索、发送审计、关闭后不可用
+  - [x] SubTask P1-D.2.5: 实现 GREEN
+  - 证据: P1-D 阶段审计 accepted；sticker_gate.py 16/16 通过
   - 依赖: 无
 
-- [ ] Task P1-D.3: 实现克隆音色高敏感评审
-  - [ ] SubTask P1-D.3.1: 定义克隆音色上传/试听/授权/撤销/删除/审计流程
-  - [ ] SubTask P1-D.3.2: 实现授权令牌与过期机制
-  - [ ] SubTask P1-D.3.3: 增加安全审查：生物特征数据不写入长期记忆、不暴露到 Renderer
-  - [ ] SubTask P1-D.3.4: 增加 TDD RED 测试：上传授权、撤销失效、删除清理、审计完整
-  - [ ] SubTask P1-D.3.5: 实现 GREEN
+- [x] Task P1-D.3: 实现克隆音色高敏感评审
+  - [x] SubTask P1-D.3.1: 定义克隆音色上传/试听/授权/撤销/删除/审计流程
+  - [x] SubTask P1-D.3.2: 实现授权令牌与过期机制
+  - [x] SubTask P1-D.3.3: 增加安全审查：生物特征数据不写入长期记忆、不暴露到 Renderer
+  - [x] SubTask P1-D.3.4: 增加 TDD RED 测试：上传授权、撤销失效、删除清理、审计完整
+  - [x] SubTask P1-D.3.5: 实现 GREEN
+  - 证据: P1-D 阶段审计 accepted；clone_voice_service.py 16/16 通过
   - 依赖: Task P1-D.1
 
-- [ ] Task P1-D.4: 实现 CompanionChannel 通道抽象
-  - [ ] SubTask P1-D.4.1: 定义 CompanionChannel 接口（health、echo、send、receive）
-  - [ ] SubTask P1-D.4.2: 实现 QQ 适配器健康检查与回显
-  - [ ] SubTask P1-D.4.3: 实现 ClawBot 适配器健康检查与回显
-  - [ ] SubTask P1-D.4.4: 增加 TDD RED 测试：健康检查、断线真实状态、回显验证
-  - [ ] SubTask P1-D.4.5: 实现 GREEN
+- [x] Task P1-D.4: 实现 CompanionChannel 通道抽象
+  - [x] SubTask P1-D.4.1: 定义 CompanionChannel 接口（health、echo、send、receive）
+  - [x] SubTask P1-D.4.2: 实现 QQ 适配器健康检查与回显
+  - [x] SubTask P1-D.4.3: 实现 ClawBot 适配器健康检查与回显
+  - [x] SubTask P1-D.4.4: 增加 TDD RED 测试：健康检查、断线真实状态、回显验证
+  - [x] SubTask P1-D.4.5: 实现 GREEN
+  - 证据: P1-D 阶段审计 accepted；companion_channel.py 15/15 通过
   - 依赖: 无
 
-- [ ] Task P1-D.5: 激活专用向量知识库
-  - [ ] SubTask P1-D.5.1: 安装 ChromaDB 依赖（取消 requirements.txt 注释）
-  - [ ] SubTask P1-D.5.2: 配置 Embedding API 环境变量并暴露到 .env.example
-  - [ ] SubTask P1-D.5.3: 切换生产代码到 LayeredMemory 并传入 embedding_fn
-  - [ ] SubTask P1-D.5.4: 将 Obsidian 总览摘要写入向量索引
-  - [ ] SubTask P1-D.5.5: 执行语义检索测试，至少 3 个融合概念可检索
-  - [ ] SubTask P1-D.5.6: 增加 TDD RED 测试：写入、检索、去重、失败降级
-  - [ ] SubTask P1-D.5.7: 实现 GREEN
+- [x] Task P1-D.5: 激活专用向量知识库
+  - [x] SubTask P1-D.5.1: 安装 ChromaDB 依赖（取消 requirements.txt 注释）
+    - 证据: requirements.txt 第 118 行 `chromadb>=1.5.9` 已启用；`.venv` 内 `import chromadb` → v1.5.9（2026-08-09 00:50 核验）
+  - [x] SubTask P1-D.5.2: 配置 Embedding API 环境变量并暴露到 .env.example
+    - 证据: `.env` 新增 `AERIE_EMBEDDING_PROVIDER=chromadb_local`（Key 留空走本地 ONNX）、`AERIE_CHROMA_DIR`、`AERIE_KNOWLEDGE_COLLECTION`；`.env.example` 已有完整模板
+  - [x] SubTask P1-D.5.3: 切换生产代码到 LayeredMemory 并传入 embedding_fn
+    - 证据: `core/companion.py` 用 `LayeredMemory(db, chroma_persist_dir, embedding_fn=resolve_embedding_fn())` 替换 `LongTermMemory`；新增 `memory/layers/sync_adapter.py` 桥接旧同步接口；`tests/test_p1_d5_3_layered_adapter.py` 4 passed（含运行中事件循环场景）
+  - [x] SubTask P1-D.5.4: 将 Obsidian 总览摘要写入向量索引
+    - 证据: `scripts/p1d5_activate_knowledge.py` 写入 6 块（kb_companion/kb_vector/kb_world/kb_channels/kb_empathy/kb_persona），持久化于 `data/chroma`
+  - [x] SubTask P1-D.5.5: 执行语义检索测试，至少 3 个融合概念可检索
+    - 证据: 语义检索命中 4 个 distinct topic（channels/companion/empathy/world）≥3 ✅
+  - [x] SubTask P1-D.5.6: 增加 TDD RED 测试：写入、检索、去重、失败降级
+    - 证据: `tests/test_p1_d5_knowledge_indexer.py` 6 用例
+  - [x] SubTask P1-D.5.7: 实现 GREEN
+    - 证据: `pytest tests/test_p1_d5_knowledge_indexer.py -q` → 6 passed（2026-08-09 00:51）
   - 依赖: P0 Task 3.6
 
 ## 阶段 P1-E · 累积验证、审计与交付收口
 
-- [ ] Task P1-E.1: 执行阶段启动审计和风险门禁
-  - [ ] SubTask P1-E.1.1: 对 P1 每个阶段执行启动前四问审计
-  - [ ] SubTask P1-E.1.2: 对高风险事项发起确认并记录决策
-  - [ ] SubTask P1-E.1.3: 启动审计结论为通过后才执行对应阶段
+- [x] Task P1-E.1: 执行阶段启动审计和风险门禁
+  - [x] SubTask P1-E.1.1: 对 P1 每个阶段执行启动前四问审计
+  - [x] SubTask P1-E.1.2: 对高风险事项发起确认并记录决策
+  - [x] SubTask P1-E.1.3: 启动审计结论为通过后才执行对应阶段
+  - 证据: [P1E1-启动审计记录.md](./P1E1-启动审计记录.md)；启动审计结论 passed
 
-- [ ] Task P1-E.2: 执行累积验证
-  - [ ] SubTask P1-E.2.1: 验证 P0 模块无回退
-  - [ ] SubTask P1-E.2.2: 验证 P1 模块独立功能
-  - [ ] SubTask P1-E.2.3: 验证 P0+P1 集成功能
-  - [ ] SubTask P1-E.2.4: 更新累积验证报告
+- [x] Task P1-E.2: 执行累积验证
+  - [x] SubTask P1-E.2.1: 验证 P0 模块无回退
+  - [x] SubTask P1-E.2.2: 验证 P1 模块独立功能
+  - [x] SubTask P1-E.2.3: 验证 P0+P1 集成功能
+  - [x] SubTask P1-E.2.4: 更新累积验证报告
+  - 证据: [P1E2-累积验证报告.md](./P1E2-累积验证报告.md)；332/332 通过（P1 后端 216 + P0 回归 69 + 前端 47），0 失败无回退
 
-- [ ] Task P1-E.3: 执行后端验收审计
-  - [ ] SubTask P1-E.3.1: 使用 TRAE-code-review 进行代码质量审查
-  - [ ] SubTask P1-E.3.2: 使用 TRAE-debugger 进行运行时调试
-  - [ ] SubTask P1-E.3.3: 使用 TRAE-security-review 进行安全审计
+- [x] Task P1-E.3: 执行后端验收审计
+  - [x] SubTask P1-E.3.1: 使用 TRAE-code-review 进行代码质量审查
+  - [x] SubTask P1-E.3.2: 使用 TRAE-debugger 进行运行时调试
+  - [x] SubTask P1-E.3.3: 使用 TRAE-security-review 进行安全审计
+  - 证据: [P1E3-后端验收审计报告.md](./P1E3-后端验收审计报告.md)；审计结论 accepted
 
-- [ ] Task P1-E.4: 执行前端真实体验审计
-  - [ ] SubTask P1-E.4.1: 使用真实 Electron 窗口启动隔离实例
-  - [ ] SubTask P1-E.4.2: 枚举面板、悬浮窗、办公入口、语音、表情包可交互元素
-  - [ ] SubTask P1-E.4.3: 采集控制台、网络、截图、元素状态
-  - [ ] SubTask P1-E.4.4: 记录失败项并生成整改任务
+- [x] Task P1-E.4: 执行前端真实体验审计
+  - [x] SubTask P1-E.4.1: 使用真实 Electron 窗口启动隔离实例
+  - [x] SubTask P1-E.4.2: 枚举面板、悬浮窗、办公入口、语音、表情包可交互元素
+  - [x] SubTask P1-E.4.3: 采集控制台、网络、截图、元素状态
+  - [x] SubTask P1-E.4.4: 记录失败项并生成整改任务
+  - 证据: [P1E4-前端体验审计报告.md](./P1E4-前端体验审计报告.md)；审计结论 accepted
 
-- [ ] Task P1-E.5: 完成交付物索引与最终报告
-  - [ ] SubTask P1-E.5.1: 汇总 P1 知识库更新
-  - [ ] SubTask P1-E.5.2: 汇总 P1 计划与审计记录
-  - [ ] SubTask P1-E.5.3: 汇总 P1 累积验证报告
-  - [ ] SubTask P1-E.5.4: 汇总 P1 决策记录
-  - [ ] SubTask P1-E.5.5: 汇总向量知识库激活结果
+- [x] Task P1-E.5: 完成交付物索引与最终报告
+  - [x] SubTask P1-E.5.1: 汇总 P1 知识库更新
+  - [x] SubTask P1-E.5.2: 汇总 P1 计划与审计记录
+  - [x] SubTask P1-E.5.3: 汇总 P1 累积验证报告
+  - [x] SubTask P1-E.5.4: 汇总 P1 决策记录
+  - [x] SubTask P1-E.5.5: 汇总向量知识库激活结果
+  - 证据: [P1E5-最终交付物索引与报告.md](./P1E5-最终交付物索引与报告.md)；交付索引完整，P1 阶段全部完成
 
 # Task Dependencies
 

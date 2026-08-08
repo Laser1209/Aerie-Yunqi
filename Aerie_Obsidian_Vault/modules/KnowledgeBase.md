@@ -33,7 +33,13 @@ related_validations:
   - **P1-C.1 已完成**：WorldSimulation tick 生成 WorldSnapshot，含 phase/location/activity/energy/social/nearby_objects/available_visual_topics/world_snapshot_id/tick_id/created_at；10/10 通过、41 回归通过。
   - **P1-C.2 已完成**：ProactiveCandidateScorer 生成 life_share/care_followup/unfinished_topic/mood_shift/attention_ack 候选；19/19 通过。
   - **P1-C.3 已完成**：ProactiveCareGovernor 挂心事项回访、未完话题续接、沉默问候、每日上限与退避；18/18 通过。
-  - 向量知识库仍为 blocked-with-evidence 状态，P1 新增的主动候选/关怀治理/世界快照模块尚未建立向量索引。
+  - **P1-D 阶段进展（2026-08-09T00:21:43）**：
+    - **P1-D.1 已完成**：语音 ASR/TTS 三服务边界（VoiceProfile/SpeechMarkup/VoiceDeliveryPolicy）明确；15/15 通过。
+    - **P1-D.2 已完成**：表情包入口（StickerCatalog 标签检索 + StickerGate 发送审计与开关）；16/16 通过。
+    - **P1-D.3 已完成**：克隆音色高敏感评审（上传/试听/授权/撤销/删除/审计，生物特征不写长期记忆、不暴露 Renderer）；16/16 通过。
+    - **P1-D.4 已完成**：CompanionChannel 通道抽象（QQ/ClawBot 本地桩适配器，health/echo/send/receive）；15/15 通过。
+    - **P1-D.5 已激活（2026-08-09T00:50 起）**：专用向量知识库由 blocked 升级为 **activated-with-evidence**。4 项硬阻塞全部解决——chromadb 1.5.9 已装、`.env` 已配置 embedding（Key 留空走 ChromaDB 本地 ONNX 离线模型）、`.env.example` 已有模板、生产代码已接入 `LayeredMemory`（P1-D.5.3）。`scripts/p1d5_activate_knowledge.py` 写入 6 块知识摘要，语义检索命中 4 个融合概念（≥3 达标），幂等去重与 `data/chroma` 持久化验证通过。完整证据见 [P1D5-向量知识库激活成功审计.md](../../.trae/specs/execute-p1-companion-fusion/P1D5-向量知识库激活成功审计.md)、[P1D53-生产记忆切换LayeredMemory审计.md](../../.trae/specs/execute-p1-companion-fusion/P1D53-生产记忆切换LayeredMemory审计.md)。
+  - 向量知识库已激活，长期记忆层已接入向量语义检索；P1 新增的主动候选/关怀治理/世界快照模块摘要已建立向量索引。
 
 ## 目标状态
 

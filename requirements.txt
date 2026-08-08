@@ -87,8 +87,10 @@ pytesseract==0.3.13
 
 # ============================================================
 # Information feeds (core/brief_fetcher.py) --------- verified=yes
+# v0.1.1: Trafilatura crawler (正文提取) + Hacker News + 今日热榜聚合
 # ============================================================
 feedparser==6.0.12
+trafilatura==2.2.0
 
 # ============================================================
 # Windows integration ------------------------------ verified=yes

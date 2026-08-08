@@ -88,7 +88,18 @@ SELF_QQ=123456789
 HTTP_API_PORT=7890
 NAPCAT_WS_URL=ws://127.0.0.1:3001
 LOG_LEVEL=INFO
+
+# ── 资讯抓取（可选）─────────────────────────────
+# 今日热榜 DailyHotApi 聚合端点（news 分层抓取的 aggregator 层）
+# 默认自建 http://127.0.0.1:6688；也可指向任意部署了 DailyHotApi 的实例
+DAILYHOT_API_BASE=http://127.0.0.1:6688
+# Bocha 网页搜索（news 最终兜底层，可选；留空则跳过该层）
+# BOCHA_API_KEY=your_bocha_api_key_here
 ```
+
+> **资讯抓取说明 / News Feeds**：每日简报新闻采用分层混合爬虫，按 `SECTIONS_PRIORITY` 依次尝试，直到拿到数据：
+> `hn`（Hacker News）→ `crawl`（Trafilatura 爬虫）→ `aggregator`（今日热榜）→ `hot`（百度热搜）→ `bocha`（网页搜索）。
+> Hacker News 与百度热搜无需 API Key 即可用；Trafilatura 正文提取依赖 `trafilatura`（见 `requirements.txt`）。
 
 ### 3. 启动 NapCat
 

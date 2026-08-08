@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v0.1.0-beta.1 — Daily Brief Fetcher (Block-4A R1.1).
+"""Aerie · 云栖 v0.1.1 — Daily Brief Fetcher (Block-4A R1.1).
 
 Fetches 5 categories of content for the daily brief popup:
   - AI 公司最新动向
@@ -7,10 +7,18 @@ Fetches 5 categories of content for the daily brief popup:
   - 国家新闻
   - 天气
 
-All sources go through RSS feeds (no API key required) except weather,
-which delegates to the local Baidu map MCP tool when available and
-falls back to a stub otherwise. The fetcher enforces a strict RSS
-domain whitelist to prevent SSRF and a per-source 8s timeout.
+News sources use a layered hybrid crawler (v0.1.1), replacing the previous
+chaotic RSS mix with authoritative, high-star tooling:
+  - hn        : Hacker News Algolia API (reachable, single request, hundreds of items)
+  - crawl     : Trafilatura crawler (Apache-2.0, ~5.6k stars) over curated feeds,
+                with full-text extraction for clean summaries
+  - aggregator: 今日热榜 DailyHotApi (aggregates 36氪/澎湃/IT之家/虎嗅/腾讯/网易 etc.)
+  - bocha     : Bocha web-search fallback (needs BOCHA_API_KEY)
+
+Each section tries its tiers in priority order (SECTIONS_PRIORITY) until items
+are found. Weather delegates to the local Baidu map MCP tool when available and
+falls back to a stub otherwise. A strict domain whitelist guards the crawl tier
+against SSRF and each source has an 8s timeout.
 
 Output structure (returned by `run_all`):
   {
@@ -45,34 +53,53 @@ def _briefs_dir() -> Path:
     return briefs_dir()
 
 # ══════════════════════════════════════════════════
-# RSS 源白名单（防 SSRF）
+# 新闻源配置（Trafilatura 爬虫 + Hacker News + 今日热榜聚合）
 # ══════════════════════════════════════════════════
-RSS_SOURCES: dict[str, list[dict[str, str]]] = {
-    # AI 公司动向：智源 / Hugging Face 官方博客
+# v0.1.1: 替换原先混乱的 RSS 源，改为"分层抓取"：
+#   1. hn         — Hacker News Algolia（权威、可达、单请求返回数百条）
+#   2. crawl      — Trafilatura 爬虫（高星权威库）抓取精选权威 Feed 并提取正文摘要
+#   3. aggregator — 今日热榜 DailyHotApi（聚合 36氪/澎湃/IT之家/虎嗅/腾讯/网易等权威源）
+#   4. bocha      — Bocha 网页搜索（最终兜底，需 BOCHA_API_KEY）
+# 每 section 按 SECTIONS_PRIORITY 顺序尝试，直到拿到非空条目为止。
+
+# 精选权威 Feed（crawl 层：feedparser 列表 + trafilatura 正文提取）
+CRAWL_FEEDS: dict[str, list[dict[str, str]]] = {
     "ai_news": [
-        {"name": "智源研究院",  "url": "https://hub.baai.ac.cn/rss",            "domain": "hub.baai.ac.cn"},
-        {"name": "机器之心",    "url": "https://www.jiqizhixin.com/rss",         "domain": "jiqizhixin.com"},
-        {"name": "量子位",      "url": "https://www.qbitai.com/feed",            "domain": "qbitai.com"},
+        {"name": "机器之心", "url": "https://www.jiqizhixin.com/rss", "domain": "jiqizhixin.com"},
+        {"name": "量子位",   "url": "https://www.qbitai.com/feed",     "domain": "qbitai.com"},
     ],
-    # IT 行业新闻
     "it_news": [
-        {"name": "36氪",        "url": "https://36kr.com/feed",                 "domain": "36kr.com"},
-        {"name": "机器之心",    "url": "https://www.jiqizhixin.com/rss",         "domain": "jiqizhixin.com"},
-        {"name": "虎嗅",        "url": "https://www.huxiu.com/rss",              "domain": "huxiu.com"},
+        {"name": "36氪",     "url": "https://36kr.com/feed",          "domain": "36kr.com"},
+        {"name": "虎嗅",     "url": "https://www.huxiu.com/rss",      "domain": "huxiu.com"},
     ],
-    # 国际新闻
     "intl_news": [
-        {"name": "BBC 中文",    "url": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "domain": "feeds.bbci.co.uk"},
-        {"name": "BBC 中文",    "url": "https://www.bbc.co.uk/zhongwen/simp/index.xml",  "domain": "bbc.co.uk"},
-        {"name": "路透中文",    "url": "https://cn.reuters.com/rss/CNTopGenNews",         "domain": "reuters.com"},
+        {"name": "BBC 中文", "url": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "domain": "feeds.bbci.co.uk"},
     ],
-    # 国家新闻 — HTTPS only, modern Chinese sources that don't gate on User-Agent
     "cn_news": [
-        {"name": "新华网",      "url": "https://www.news.cn/rss/xinhuanet.xml",          "domain": "news.cn"},
-        {"name": "人民网",      "url": "https://www.people.com.cn/rss/feed.xml",         "domain": "people.com.cn"},
-        {"name": "中国网",      "url": "https://www.china.com.cn/rss/news.xml",          "domain": "china.com.cn"},
+        {"name": "新华网",   "url": "https://www.news.cn/rss/xinhuanet.xml", "domain": "news.cn"},
+        {"name": "人民网",   "url": "https://www.people.com.cn/rss/feed.xml", "domain": "people.com.cn"},
     ],
 }
+
+# 今日热榜 DailyHotApi 平台映射（聚合层）
+# 端点默认自建 http://127.0.0.1:6688，可用环境变量 DAILYHOT_API_BASE 覆盖
+DAILYHOT_PLATFORMS: dict[str, list[str]] = {
+    "ai_news":   ["36kr", "thepaper"],
+    "it_news":   ["ithome", "36kr", "huxiu", "juejin"],
+    "intl_news": ["netease-news", "qq-news", "sina-news"],
+    "cn_news":   ["thepaper", "netease-news", "qq-news"],
+}
+
+# 每 section 的抓取优先级
+SECTIONS_PRIORITY: dict[str, list[str]] = {
+    "ai_news":   ["hn", "crawl", "aggregator", "bocha"],
+    "it_news":   ["hn", "crawl", "aggregator", "bocha"],
+    "intl_news": ["hn", "crawl", "aggregator", "bocha"],
+    "cn_news":   ["hot", "crawl", "aggregator", "bocha"],
+}
+
+# 百度实时热搜 —— 权威国内源，接口稳定可达（JSON 直出）
+BAIDU_HOT_URL = "https://top.baidu.com/api/board?platform=wise&tab=realtime"
 
 # 每源 timeout
 SOURCE_TIMEOUT_SEC = 8
@@ -129,117 +156,330 @@ def _safe_url(url: str, allowed_domain: str) -> bool:
         return False
 
 
-async def _fetch_rss_source(url: str, allowed_domain: str, limit: int) -> list[dict]:
-    """Fetch a single RSS feed; return up to `limit` items.
+async def _fetch_crawl_source(url: str, allowed_domain: str, limit: int) -> list[dict]:
+    """Crawl a curated feed: list via feedparser, enrich the top item via Trafilatura.
 
-    R6.6: re-raises on failure (instead of swallowing) so the upstream
-    ``_fetch_section`` can capture the error message in its err field.
+    R6.6: re-raises on failure (instead of swallowing) so the upstream tier
+    dispatcher can capture the error message in its error list.
     """
     if not _safe_url(url, allowed_domain):
-        logger.warning("brief_fetcher: rejected non-whitelisted URL %s", url)
+        logger.warning("brief_fetcher: rejected non-whitelisted feed URL %s", url)
         return []
     try:
-        import feedparser  # type: ignore  # noqa: F401 (defensive lazy import)
+        import feedparser  # type: ignore
+        import trafilatura  # type: ignore
     except ImportError:
-        logger.warning("brief_fetcher: feedparser not installed; skipping")
+        logger.warning("brief_fetcher: feedparser/trafilatura not installed; skipping %s", url)
         return []
     try:
-        # Offload the blocking feedparser call to a thread so we don't stall the loop.
+        # Offload the blocking crawl to a thread so we don't stall the loop.
         items = await asyncio.wait_for(
-            asyncio.to_thread(_make_parse(url, allowed_domain, limit)),
+            asyncio.to_thread(_crawl_parse, url, allowed_domain, limit),
             timeout=SOURCE_TIMEOUT_SEC,
         )
         return items
     except asyncio.TimeoutError:
-        logger.warning("brief_fetcher: timeout on %s", url)
+        logger.warning("brief_fetcher: timeout on crawl %s", url)
         return []
     except Exception as e:
-        logger.warning("brief_fetcher: error on %s: %s", url, e)
-        # R6.6: re-raise so _fetch_section can capture the message in errors[]
+        logger.warning("brief_fetcher: crawl error on %s: %s", url, e)
+        # R6.6: re-raise so the tier dispatcher can capture the message.
         raise
 
 
-# User-Agent for RSS fetch — many Chinese news sites reject requests
-# without a browser-like UA. The default Python UA is sometimes blocked.
-def _make_parse(url: str, allowed_domain: str, limit: int):
-    """Closure factory: build a parse() with proper UA + fallback."""
-    import feedparser  # type: ignore
-    # feedparser accepts a custom UA via the `agent` argument.
-    UA = "Mozilla/5.0 (AerieBrief/1.0; +https://example.com/aerie)"
+def _crawl_parse(url: str, allowed_domain: str, limit: int) -> list[dict]:
+    """Parse a feed; for the first item with a thin summary, crawl the real
+    article with Trafilatura to produce a clean full-text summary.
 
-    def _parse() -> list[dict]:
-        parsed = feedparser.parse(url, agent=UA)
-        items: list[dict] = []
-        for e in parsed.entries[:limit]:
-            items.append({
-                "title":   getattr(e, "title", "")[:200],
-                "summary": (getattr(e, "summary", "") or "")[:280],
-                "url":     getattr(e, "link", ""),
-                "source":  allowed_domain,
-                "ts":      int(time.time()),
-            })
-        return items
-
-    return _parse
-
-
-async def _fetch_section(
-    section: str, sources: list[dict], limit: int
-) -> tuple[list[dict], str | None]:
-    """Fetch all RSS sources for a section concurrently; aggregate + cap.
-
-    R6.6: surface the first non-empty error message instead of silently
-    returning []. The previous behavior swallowed all exceptions inside
-    ``_fetch_rss_source`` and produced a list that looked identical to
-    "the network worked, just no items", which made the daily-brief
-    UI display empty sections without any explanation.
-
-    R7.0: if RSS returns nothing AND Bocha is enabled, fall back to
-    Bocha Web Search API. The fallback result is returned with a
-    ``source_kind="bocha"`` tag so the UI can show "Bocha 兜底" badge.
+    Many Chinese news sites reject requests without a browser-like UA, so we
+    always send one.
     """
+    import feedparser  # type: ignore
+    import trafilatura  # type: ignore
+
+    UA = "Mozilla/5.0 (AerieBrief/1.0; +https://example.com/aerie)"
+    parsed = feedparser.parse(url, agent=UA)
+    items: list[dict] = []
+    for idx, e in enumerate(parsed.entries[:limit]):
+        title = (getattr(e, "title", "") or "").strip()
+        if not title:
+            continue
+        link = getattr(e, "link", "") or ""
+        summary = (getattr(e, "summary", "") or getattr(e, "description", "") or "").strip()
+        # 正文摘要过薄时，用 Trafilatura 抓取文章正文（真正的"爬虫"）。
+        # 只对首条做正文抓取，避免拖慢整体抓取。
+        if idx == 0 and (not summary or len(summary) < 40) and link:
+            try:
+                html = trafilatura.fetch_url(link)
+                if html:
+                    text = trafilatura.extract(
+                        html, include_comments=False, include_tables=False, favor_recall=False
+                    )
+                    if text:
+                        summary = text.strip()
+            except Exception:
+                pass
+        items.append({
+            "title":       title[:200],
+            "summary":     summary[:280],
+            "url":         link,
+            "source":      allowed_domain,
+            "ts":          int(time.time()),
+            "source_kind": "crawl",
+        })
+    return items
+
+
+# Hacker News Algolia — 权威科技新闻，单请求返回数百条，稳定性高。
+# Algolia 搜索 API：https://hn.algolia.com/api
+HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
+# 各科技板块的 HN 差异化查询：ai_news 用 AI 主题搜索，其余用 front_page 首页。
+HN_SECTION_QUERIES: dict[str, str | None] = {
+    "ai_news":   "AI LLM machine learning agent language model",
+    "it_news":   None,  # front_page
+    "intl_news": None,  # front_page
+}
+
+
+def _hn_get(url: str) -> dict:
+    """Synchronous Hacker News GET via urllib; returns parsed JSON or {}."""
+    import json as _json
+    import urllib.request
+    import urllib.error
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "AerieBrief/1.0 (+https://example.com/aerie)", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=SOURCE_TIMEOUT_SEC) as resp:
+            return _json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except Exception as e:
+        logger.warning("brief_fetcher: hn request error: %s", e)
+        return {}
+
+
+async def _fetch_hn_section(section: str, limit: int) -> tuple[list[dict], str | None]:
+    """Fetch Hacker News front page via Algolia. Returns (items, error_str).
+
+    Reachable and authoritative; a single request returns up to 50 hits. Each
+    item follows the shared news shape so downstream code is source-agnostic.
+    """
+    try:
+        import urllib.parse
+        n = min(50, max(10, limit))
+        query = HN_SECTION_QUERIES.get(section)
+        params = f"hitsPerPage={n}&tags=story" if query else f"tags=front_page&hitsPerPage={n}"
+        if query:
+            params += "&query=" + urllib.parse.quote(query)
+        data = await asyncio.wait_for(
+            asyncio.to_thread(_hn_get, f"{HN_SEARCH_URL}?{params}"),
+            timeout=SOURCE_TIMEOUT_SEC,
+        )
+        hits = (data or {}).get("hits") or []
+        if not hits:
+            return [], "hn_empty"
+        items: list[dict] = []
+        for h in hits:
+            title = (h.get("title") or "").strip()
+            if not title:
+                continue
+            hn_id = h.get("objectID") or ""
+            url = h.get("url") or f"https://news.ycombinator.com/item?id={hn_id}"
+            points = h.get("points") or 0
+            comments = h.get("num_comments") or 0
+            items.append({
+                "title":       title[:200],
+                "summary":     f"Hacker News 热门 · {points} points · {comments} 评论",
+                "url":         url,
+                "source":      "Hacker News",
+                "ts":          int(h.get("created_at_i") or time.time()),
+                "source_kind": "hn",
+            })
+        return items[:limit], None
+    except asyncio.TimeoutError:
+        return [], "hn_timeout"
+    except Exception as e:
+        logger.warning("brief_fetcher: hn fetch failed: %s", e)
+        return [], f"hn: {type(e).__name__}: {e}"
+
+
+# 今日热榜 DailyHotApi —— 聚合权威新闻源的免费接口。
+# 端点默认自建 http://127.0.0.1:6688，可用环境变量 DAILYHOT_API_BASE 覆盖。
+# 官方在线实例 https://api-hot.imsyy.top 在不同网络下可能不可达，故按需配置。
+DAILYHOT_TIMEOUT_SEC = 8
+
+
+def _dailyhot_base() -> str:
+    import os
+    return (os.environ.get("DAILYHOT_API_BASE") or "http://127.0.0.1:6688").rstrip("/")
+
+
+def _hot_get(url: str) -> dict:
+    """Synchronous DailyHotApi GET; re-raises so gather captures per-platform errors."""
+    import json as _json
+    import urllib.request
+    import urllib.error
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "AerieBrief/1.0 (+https://example.com/aerie)", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=DAILYHOT_TIMEOUT_SEC) as resp:
+            return _json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except urllib.error.HTTPError as e:
+        logger.warning("brief_fetcher: dailyhot HTTP %s on %s", e.code, url)
+        raise
+    except Exception as e:
+        logger.warning("brief_fetcher: dailyhot request error %s: %s", url, e)
+        raise
+
+
+async def _fetch_aggregator_section(section: str, limit: int) -> tuple[list[dict], str | None]:
+    """Fetch a section from 今日热榜 aggregator platforms (configurable endpoint)."""
+    platforms = DAILYHOT_PLATFORMS.get(section) or []
+    if not platforms:
+        return [], "no_platform"
+    base = _dailyhot_base()
     results = await asyncio.gather(
-        *[_fetch_rss_source(s["url"], s["domain"], limit) for s in sources],
+        *[asyncio.to_thread(_hot_get, f"{base}/{p}") for p in platforms],
         return_exceptions=True,
     )
     flat: list[dict] = []
+    errs: list[str] = []
+    for p, r in zip(platforms, results):
+        if isinstance(r, BaseException):
+            errs.append(f"{p}: {type(r).__name__}")
+            continue
+        payload = r or {}
+        for it in (payload.get("data") or [])[:limit]:
+            flat.append({
+                "title":       (it.get("title") or "")[:200],
+                "summary":     (it.get("desc") or it.get("hotValue") or "")[:280],
+                "url":         it.get("url") or it.get("mobileUrl") or "",
+                "source":      (payload.get("title") or p)[:60],
+                "ts":          int(time.time()),
+                "source_kind": "aggregator",
+            })
+    if flat:
+        return flat[:limit], None
+    err = " | ".join(errs[:3])[:240] if errs else "aggregator_empty"
+    return [], err
+
+
+def _baidu_hot_get() -> dict:
+    """Synchronous Baidu realtime-hot GET via urllib; returns parsed JSON or {}."""
+    import json as _json
+    import urllib.request
+    req = urllib.request.Request(
+        BAIDU_HOT_URL,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=SOURCE_TIMEOUT_SEC) as resp:
+            return _json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except Exception as e:
+        logger.warning("brief_fetcher: baidu hot request error: %s", e)
+        return {}
+
+
+async def _fetch_baidu_hot(limit: int) -> tuple[list[dict], str | None]:
+    """Fetch Baidu realtime hot search (authoritative, reachable Chinese source)."""
+    try:
+        data = await asyncio.wait_for(
+            asyncio.to_thread(_baidu_hot_get),
+            timeout=SOURCE_TIMEOUT_SEC,
+        )
+        items: list[dict] = []
+        cards = ((data or {}).get("data") or {}).get("cards") or []
+        rank = 0
+        for card in cards:
+            for block in card.get("content") or []:
+                for it in block.get("content") or []:
+                    word = (it.get("word") or "").strip()
+                    if not word:
+                        continue
+                    rank += 1
+                    items.append({
+                        "title":       word[:200],
+                        "summary":     f"百度实时热搜 · 第 {rank} 位",
+                        "url":         it.get("url") or f"https://www.baidu.com/s?wd={word}",
+                        "source":      "百度热搜",
+                        "ts":          int(time.time()),
+                        "source_kind": "hot",
+                    })
+                    if len(items) >= limit:
+                        return items, None
+        if items:
+            return items, None
+        return [], "baidu_hot_empty"
+    except asyncio.TimeoutError:
+        return [], "baidu_hot_timeout"
+    except Exception as e:
+        logger.warning("brief_fetcher: baidu hot fetch failed: %s", e)
+        return [], f"baidu_hot: {type(e).__name__}: {e}"
+
+
+def _fetch_crawl_section_factory(section: str, limit: int):
+    """Build the crawl tier: aggregate all curated feeds for a section concurrently."""
+    feeds = CRAWL_FEEDS.get(section) or []
+
+    async def _run() -> tuple[list[dict], str | None]:
+        if not feeds:
+            return [], "no_feed"
+        results = await asyncio.gather(
+            *[_fetch_crawl_source(f["url"], f["domain"], limit) for f in feeds],
+            return_exceptions=True,
+        )
+        flat: list[dict] = []
+        errs: list[str] = []
+        for r in results:
+            if isinstance(r, list):
+                flat.extend(r)
+            elif isinstance(r, BaseException):
+                errs.append(f"{type(r).__name__}: {r}")
+        flat.sort(key=lambda x: x.get("ts", 0), reverse=True)
+        if flat:
+            return flat[:limit], None
+        err = " | ".join(errs[:2])[:240] if errs else "crawl_empty"
+        return [], err
+
+    return _run
+
+
+async def _fetch_section(section: str, limit: int) -> tuple[list[dict], str | None]:
+    """Fetch a news section by trying its tiers in SECTIONS_PRIORITY order.
+
+    Tiers (hn → crawl → aggregator → bocha) are tried until one yields items.
+    The tier list for each section is declared in SECTIONS_PRIORITY. All items
+    share the same news shape, so downstream (compose_brief / UI) never cares
+    which tier produced them. When a section ends up empty, a concise joined
+    error string is returned so the brief UI can explain why (instead of
+    showing a blank section with no reason).
+    """
+    priorities = SECTIONS_PRIORITY.get(section) or ["bocha"]
+    tier_handlers: dict[str, Any] = {
+        "hn":         lambda: _fetch_hn_section(section, limit),
+        "crawl":      _fetch_crawl_section_factory(section, limit),
+        "aggregator": lambda: _fetch_aggregator_section(section, limit),
+        "hot":        lambda: _fetch_baidu_hot(limit),
+        "bocha":      lambda: _fetch_bocha_section(section, limit),
+    }
     err_parts: list[str] = []
-    for r in results:
-        if isinstance(r, list):
-            flat.extend(r)
-        elif isinstance(r, BaseException):
-            err_parts.append(f"{type(r).__name__}: {r}")
-    flat.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    err: str | None = None
-
-    # R7.0: Bocha fallback when RSS yielded zero items
-    used_fallback = False
-    if not flat and _bocha_enabled() and section in BOCHA_SECTION_QUERIES:
+    for tier in priorities:
+        handler = tier_handlers.get(tier)
+        if not handler:
+            continue
         try:
-            bocha_items, bocha_err = await _fetch_bocha_section(section, limit)
-            if bocha_items:
-                flat = bocha_items
-                used_fallback = True
-                err = None  # fallback succeeded → not an error
-                logger.info(
-                    "brief_fetcher: %s fell back to Bocha (got %d items)",
-                    section, len(bocha_items),
-                )
-            elif bocha_err:
-                err_parts.append(f"bocha: {bocha_err}")
-        except Exception as e:
-            err_parts.append(f"bocha_exception: {e}")
-
-    if not flat:
-        if err_parts:
-            err = " | ".join(err_parts[:3])[:240]
-        else:
-            err = "empty_or_failed"
-    if used_fallback and flat:
-        # Tag every item so the UI can show "Bocha 兜底" badge.
-        for it in flat:
-            it["source_kind"] = "bocha"
-    return flat[:limit], err
+            items, err = await handler()
+        except Exception as e:  # defensive: a tier must never crash the brief
+            err_parts.append(f"{tier}: {type(e).__name__}: {e}")
+            continue
+        if items:
+            return items[:limit], None
+        if err:
+            err_parts.append(f"{tier}: {err}")
+    err = " | ".join(err_parts[:3])[:240] if err_parts else "empty_or_failed"
+    return [], err
 
 
 async def _fetch_bocha_section(section: str, limit: int) -> tuple[list[dict], str | None]:
@@ -330,19 +570,19 @@ def _bocha_post(api_key: str, payload: dict) -> dict:
 
 
 async def fetch_ai_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
-    return await _fetch_section("ai_news", RSS_SOURCES["ai_news"], limit)
+    return await _fetch_section("ai_news", limit)
 
 
 async def fetch_it_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
-    return await _fetch_section("it_news", RSS_SOURCES["it_news"], limit)
+    return await _fetch_section("it_news", limit)
 
 
 async def fetch_intl_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
-    return await _fetch_section("intl_news", RSS_SOURCES["intl_news"], limit)
+    return await _fetch_section("intl_news", limit)
 
 
 async def fetch_cn_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[dict], str | None]:
-    return await _fetch_section("cn_news", RSS_SOURCES["cn_news"], limit)
+    return await _fetch_section("cn_news", limit)
 
 
 async def fetch_weather(city: str = "") -> dict | None:

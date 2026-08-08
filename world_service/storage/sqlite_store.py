@@ -353,9 +353,35 @@ def _image_candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
+def _json_default(value: Any) -> Any:
+    """json.dumps 兜底: 把可序列化的领域对象(WorldSnapshot 等)转成 dict.
+
+    WorldSnapshot 是 dict-style dataclass, 支持 to_dict()/keys()/items(),
+    但 json.dumps 不会自动调用它们, 导致 "Object of type WorldSnapshot is
+    not JSON serializable"。统一在此递归兜底, 一处覆盖
+    heartbeat / append_event / checkpoint 全部序列化路径。
+    """
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return to_dict()
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, (set, frozenset)):
+        return list(value)
+    raise TypeError(
+        f"Object of type {type(value).__name__} is not JSON serializable"
+    )
+
+
 def _redacted_payload(payload: dict[str, Any]) -> dict[str, Any]:
     keys = sorted(str(key) for key in (payload or {}).keys())
-    raw = json.dumps(payload or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    raw = json.dumps(
+        payload or {},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=_json_default,
+    )
     return {
         "payload_keys": keys,
         "payload_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),

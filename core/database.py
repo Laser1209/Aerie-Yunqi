@@ -459,6 +459,13 @@ class Database:
         )
 
     def _migrate_requests(self, conn: sqlite3.Connection) -> None:
+        # requests 表仅在 migration_framework_v1 开启时创建 (phase4_request_queue_migrations)。
+        # flag off 时该表不存在, 需跳过, 否则 PRAGMA 空集后 ALTER 会报 "no such table"。
+        table_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='requests' LIMIT 1"
+        ).fetchone()
+        if not table_exists:
+            return
         existing = {
             row["name"]
             for row in conn.execute("PRAGMA table_info(requests)").fetchall()

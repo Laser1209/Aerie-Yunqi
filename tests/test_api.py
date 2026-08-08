@@ -40,6 +40,9 @@ mock_companion.pipeline.handle = AsyncMock(return_value={
     "route_mode": "FULL",
     "emotion": "neutral",
 })
+# MagicMock 会自动创建任何属性为 callable, 需显式禁用 process_local_message_sync,
+# 否则 _process_local_message 会 await 一个普通 MagicMock 而报错 (而非走 pipeline).
+mock_companion.process_local_message_sync = None
 mock_companion.tool_registry = MagicMock()
 mock_companion.tool_registry.get_openai_schema = MagicMock(return_value=[
     {"type": "function", "function": {"name": "get_time", "description": "获取当前时间"}},

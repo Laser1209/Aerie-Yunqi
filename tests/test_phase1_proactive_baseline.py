@@ -82,6 +82,7 @@ async def test_inbound_message_records_event_engine_activity():
     companion = Companion.__new__(Companion)
     companion.pipeline = SimpleNamespace(handle=AsyncMock())
     companion.desire = None
+    companion.message_batcher = None      # 禁用批处理器, 走直接 pipeline 路径
     companion.push_event_engine = SimpleNamespace(
         record_user_activity=MagicMock()
     )
@@ -133,6 +134,11 @@ def _make_push_companion(*, flag_enabled: bool, qq_online: bool = True):
     }
     companion.feature_flags = SimpleNamespace(
         is_enabled=MagicMock(return_value=flag_enabled)
+    )
+    # 提供确定性的主用户选择, 否则 get_primary_user_selection 走
+    # PrimaryIdentityResolver(mock 未注入) 且 user_id 会是 MagicMock.
+    companion.get_primary_user_selection = MagicMock(
+        return_value=SimpleNamespace(user_id=7)
     )
     companion.qq = SimpleNamespace(
         is_logged_in=qq_online,

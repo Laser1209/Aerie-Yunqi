@@ -662,7 +662,11 @@ def test_companion_primary_emotion_state_uses_master_qq_actor():
     from core.companion import Companion
 
     companion = object.__new__(Companion)
-    companion.settings = {"qq": {"self_qq": "10001"}}
+    # 主用户选择已抽取为 get_primary_user_selection (PrimaryIdentityResolver),
+    # 直接 mock 返回确定的 user_id, 与共享 DB 状态解耦, 避免跨测试顺序污染。
+    companion.get_primary_user_selection = MagicMock(
+        return_value=MagicMock(user_id=10001)
+    )
     companion.identity_resolver = MagicMock()
     companion.identity_resolver.resolve.return_value = MagicMock(
         actor_id="actor_primary"
@@ -689,7 +693,8 @@ def test_companion_primary_emotion_state_skips_when_master_is_unknown():
     from core.companion import Companion
 
     companion = object.__new__(Companion)
-    companion.settings = {"qq": {"self_qq": 0}}
+    # 主用户选择返回 None -> get_primary_identity 返回 None -> unavailable.
+    companion.get_primary_user_selection = MagicMock(return_value=None)
     companion.identity_resolver = MagicMock()
     companion.emotion = MagicMock()
 

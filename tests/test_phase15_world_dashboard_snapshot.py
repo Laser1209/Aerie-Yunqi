@@ -95,7 +95,12 @@ def test_world_dashboard_snapshot_api_returns_redacted_whitelisted_data(monkeypa
     monkeypatch.setattr(
         api_server,
         "get_companion",
-        lambda: SimpleNamespace(get_world_dashboard_snapshot=snapshot),
+        # 需提供 get_primary_user_selection, 否则 _primary_user_id 返回 None,
+        # 端点会走 "unavailable" 分支而非调用 snapshot handler。
+        lambda: SimpleNamespace(
+            get_world_dashboard_snapshot=snapshot,
+            get_primary_user_selection=lambda: SimpleNamespace(user_id=7),
+        ),
     )
 
     response = client.get("/api/world/dashboard/snapshot")

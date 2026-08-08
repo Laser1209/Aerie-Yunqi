@@ -69,7 +69,7 @@ def test_world_24_hour_clock_pause_resume_and_checkpoint_restore(tmp_path):
 
     assert phases[0] == "night"
     assert phases[7] == "morning"
-    assert phases[13] == "afternoon"
+    assert phases[13] == "noon"      # 阶段定义 noon=12:00–14:00, 13点属 noon
     assert phases[19] == "evening"
     assert phases[23] == "night"
     revision = service.get_state()["revision"]

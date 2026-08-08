@@ -1,4 +1,4 @@
-﻿# Tasks · Aerie 第三次修正计划 P1 陪伴融合与能力扩展
+﻿﻿﻿﻿﻿﻿﻿﻿# Tasks · Aerie 第三次修正计划 P1 陪伴融合与能力扩展
 
 > 本任务列表用于执行 `execute-p1-companion-fusion`。严格度与 P0 一致：每个阶段启动前完成启动审计，完成后完成验收审计；TDD RED/GREEN；累积验证覆盖 P0+P1；决策记录随任务推进。
 
@@ -50,65 +50,73 @@
 
 ## 阶段 P1-B · 桌面办公入口与 Pyisland/eIsland 融合
 
-- [ ] Task P1-B.1: 创建 DesktopSurfaceAdapter 与悬浮窗状态机
-  - [ ] SubTask P1-B.1.1: 创建 `electron/src/desktop_surface/` 模块结构
-  - [ ] SubTask P1-B.1.2: 实现悬浮窗状态机（collapsed → peek → expanded → tool-panel）
-  - [ ] SubTask P1-B.1.3: 增加 TDD RED 测试：合法转换、非法转换拒绝
-  - [ ] SubTask P1-B.1.4: 实现 GREEN
+- [x] Task P1-B.1: 创建 DesktopSurfaceAdapter 与悬浮窗状态机
+  - [x] SubTask P1-B.1.1: 创建 `electron/src/desktop_surface/` 模块结构
+  - [x] SubTask P1-B.1.2: 实现悬浮窗状态机（collapsed → peek → expanded → tool-panel）
+  - [x] SubTask P1-B.1.3: 增加 TDD RED 测试：合法转换、非法转换拒绝
+  - [x] SubTask P1-B.1.4: 实现 GREEN
   - 依赖: 无
+  - 证据: [state-machine.js](../../../electron/src/desktop_surface/state-machine.js)、[desktop-surface-state-machine.test.js](../../../electron/tests/desktop-surface-state-machine.test.js)；state-machine 18/18 通过
 
-- [ ] Task P1-B.2: 实现 OfficeContext 系统上下文
-  - [ ] SubTask P1-B.2.1: 定义 OfficeContext 数据结构（active_window、focused_task、clipboard_candidate、network_state、battery_state、calendar_due、notification_budget）
-  - [ ] SubTask P1-B.2.2: 实现上下文采集与更新
-  - [ ] SubTask P1-B.2.3: 增加 TDD RED 测试：上下文更新、过期淘汰、敏感字段脱敏
-  - [ ] SubTask P1-B.2.4: 实现 GREEN
+- [x] Task P1-B.2: 实现 OfficeContext 系统上下文
+  - [x] SubTask P1-B.2.1: 定义 OfficeContext 数据结构（active_window、focused_task、clipboard_candidate、network_state、battery_state、calendar_due、notification_budget）
+  - [x] SubTask P1-B.2.2: 实现上下文采集与更新
+  - [x] SubTask P1-B.2.3: 增加 TDD RED 测试：上下文更新、过期淘汰、敏感字段脱敏
+  - [x] SubTask P1-B.2.4: 实现 GREEN
   - 依赖: Task P1-B.1
+  - 证据: [office_context.py](../../../core/office_context.py)、[test_p1_b2_office_context.py](../../../tests/test_p1_b2_office_context.py)；office_context 14/14 通过
 
-- [ ] Task P1-B.3: 实现 ActionRegistry 工具注册
-  - [ ] SubTask P1-B.3.1: 定义工具注册接口与风险级别（low/medium/high）
-  - [ ] SubTask P1-B.3.2: 注册低风险工具（打开 URL、显示状态、音量/亮度调整）
-  - [ ] SubTask P1-B.3.3: 实现危险动作二次确认机制
-  - [ ] SubTask P1-B.3.4: 增加 TDD RED 测试：低风险直接执行、高风险需确认、未注册工具拒绝
-  - [ ] SubTask P1-B.3.5: 实现 GREEN
+- [x] Task P1-B.3: 实现 ActionRegistry 工具注册
+  - [x] SubTask P1-B.3.1: 定义工具注册接口与风险级别（low/medium/high）
+  - [x] SubTask P1-B.3.2: 注册低风险工具（打开 URL、显示状态、音量/亮度调整）
+  - [x] SubTask P1-B.3.3: 实现危险动作二次确认机制
+  - [x] SubTask P1-B.3.4: 增加 TDD RED 测试：低风险直接执行、高风险需确认、未注册工具拒绝
+  - [x] SubTask P1-B.3.5: 实现 GREEN
   - 依赖: Task P1-B.1
+  - 证据: [action_registry.py](../../../core/action_registry.py)、[test_p1_b3_action_registry.py](../../../tests/test_p1_b3_action_registry.py)；action_registry 12/12 通过
 
-- [ ] Task P1-B.4: 实现办公最小闭环
-  - [ ] SubTask P1-B.4.1: 剪贴板翻译（检测 clipboard_candidate → 翻译 → 展示）
-  - [ ] SubTask P1-B.4.2: 截图问图（复用 P0 ImageObservation）
-  - [ ] SubTask P1-B.4.3: 时间天气状态
-  - [ ] SubTask P1-B.4.4: 增加 TDD RED 测试：三个闭环的功能与安全边界
-  - [ ] SubTask P1-B.4.5: 实现 GREEN
+- [x] Task P1-B.4: 实现办公最小闭环
+  - [x] SubTask P1-B.4.1: 剪贴板翻译（检测 clipboard_candidate → 翻译 → 展示）
+  - [x] SubTask P1-B.4.2: 截图问图（复用 P0 ImageObservation）
+  - [x] SubTask P1-B.4.3: 时间天气状态
+  - [x] SubTask P1-B.4.4: 增加 TDD RED 测试：三个闭环的功能与安全边界
+  - [x] SubTask P1-B.4.5: 实现 GREEN
   - 依赖: Task P1-B.2、Task P1-B.3、P0 Task 3.3
+  - 证据: [office_loops.py](../../../core/office_loops.py)、[test_p1_b4_office_loops.py](../../../tests/test_p1_b4_office_loops.py)；office_loops 14/14 通过
 
-- [ ] Task P1-B.5: 实现 companion_mode 与 office_mode 模式切换
-  - [ ] SubTask P1-B.5.1: 实现模式切换接口与 trace 记录
-  - [ ] SubTask P1-B.5.2: 增加 TDD RED 测试：模式切换、模式不串场、trace 写入
-  - [ ] SubTask P1-B.5.3: 实现 GREEN
+- [x] Task P1-B.5: 实现 companion_mode 与 office_mode 模式切换
+  - [x] SubTask P1-B.5.1: 实现模式切换接口与 trace 记录
+  - [x] SubTask P1-B.5.2: 增加 TDD RED 测试：模式切换、模式不串场、trace 写入
+  - [x] SubTask P1-B.5.3: 实现 GREEN
   - 依赖: Task P1-B.1
+  - 证据: [mode_switch.py](../../../core/mode_switch.py)、[test_p1_b5_mode_switch.py](../../../tests/test_p1_b5_mode_switch.py)；mode_switch 12/12 通过；P1-B 后端累计 78/78、前端 54/54 通过
 
 ## 阶段 P1-C · 主动消息升级与世界模拟联动
 
-- [ ] Task P1-C.1: 实现 WorldSimulation tick 与 WorldSnapshot
-  - [ ] SubTask P1-C.1.1: 定义 WorldSnapshot 结构（phase、location、activity、energy、social、nearby_objects、available_visual_topics）
-  - [ ] SubTask P1-C.1.2: 实现 tick 调度与快照生成
-  - [ ] SubTask P1-C.1.3: 增加 TDD RED 测试：tick 生成快照、快照字段完整、同一 tick 不重复
-  - [ ] SubTask P1-C.1.4: 实现 GREEN
+- [x] Task P1-C.1: 实现 WorldSimulation tick 与 WorldSnapshot
+  - [x] SubTask P1-C.1.1: 定义 WorldSnapshot 结构（phase、location、activity、energy、social、nearby_objects、available_visual_topics）
+  - [x] SubTask P1-C.1.2: 实现 tick 调度与快照生成
+  - [x] SubTask P1-C.1.3: 增加 TDD RED 测试：tick 生成快照、快照字段完整、同一 tick 不重复
+  - [x] SubTask P1-C.1.4: 实现 GREEN
   - 依赖: 无
+  - 证据: WorldSimulation 与 WorldSnapshot 已完成；指定验证 10/10 通过，额外回归 41 项通过
 
-- [ ] Task P1-C.2: 实现主动候选意图与打分
-  - [ ] SubTask P1-C.2.1: 定义候选意图类型（life_share、care_followup、unfinished_topic、mood_shift、attention_ack）
-  - [ ] SubTask P1-C.2.2: 实现打分逻辑（世界新鲜度、关系相关性、情绪变化、用户偏好、最近重复度）
-  - [ ] SubTask P1-C.2.3: 增加 TDD RED 测试：候选生成、打分排序、低分过滤
-  - [ ] SubTask P1-C.2.4: 实现 GREEN
+- [x] Task P1-C.2: 实现主动候选意图与打分
+  - [x] SubTask P1-C.2.1: 定义候选意图类型（life_share、care_followup、unfinished_topic、mood_shift、attention_ack）
+  - [x] SubTask P1-C.2.2: 实现打分逻辑（世界新鲜度、关系相关性、情绪变化、用户偏好、最近重复度）
+  - [x] SubTask P1-C.2.3: 增加 TDD RED 测试：候选生成、打分排序、低分过滤
+  - [x] SubTask P1-C.2.4: 实现 GREEN
   - 依赖: Task P1-C.1、Task P1-A.2
+  - 证据: 主动候选意图与打分链路已完成；指定验证 19/19 通过
 
-- [ ] Task P1-C.3: 实现主动关怀治理
-  - [ ] SubTask P1-C.3.1: 实现挂心事项到期回访
-  - [ ] SubTask P1-C.3.2: 实现未完话题续接
-  - [ ] SubTask P1-C.3.3: 实现沉默问候（每日上限、最小间隔、退避）
-  - [ ] SubTask P1-C.3.4: 增加 TDD RED 测试：回访触发、续接触发、退避递增、每日上限
-  - [ ] SubTask P1-C.3.5: 实现 GREEN
+- [x] Task P1-C.3: 实现主动关怀治理
+  - [x] SubTask P1-C.3.1: 实现挂心事项到期回访
+  - [x] SubTask P1-C.3.2: 实现未完话题续接
+  - [x] SubTask P1-C.3.3: 实现沉默问候（每日上限、最小间隔、退避）
+  - [x] SubTask P1-C.3.4: 增加 TDD RED 测试：回访触发、续接触发、退避递增、每日上限
+  - [x] SubTask P1-C.3.5: 实现 GREEN
   - 依赖: Task P1-C.2、Task P1-A.2
+  - 证据: 主动关怀治理已完成；指定验证 18/18 通过
 
 - [ ] Task P1-C.4: 实现主动消息 + 主动图片联合调度
   - [ ] SubTask P1-C.4.1: 将主动候选意图与 VisualIntentRouter 联合调度

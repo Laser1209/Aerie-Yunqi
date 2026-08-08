@@ -30,39 +30,39 @@
 
 ## §P1-B · 桌面办公入口与 Pyisland/eIsland 融合
 
-- [ ] C-P1-B.1 悬浮窗状态机正确
+- [x] C-P1-B.1 悬浮窗状态机正确
   - 验证: collapsed → peek → expanded → tool-panel 合法转换可执行；非法转换被拒绝
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [state-machine.js](../../../electron/src/desktop_surface/state-machine.js)、[desktop-surface-state-machine.test.js](../../../electron/tests/desktop-surface-state-machine.test.js)；state-machine 18/18 通过
 
-- [ ] C-P1-B.2 OfficeContext 上下文采集
+- [x] C-P1-B.2 OfficeContext 上下文采集
   - 验证: active_window、focused_task、clipboard_candidate、network_state、battery_state、calendar_due、notification_budget 可采集与更新
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [office_context.py](../../../core/office_context.py)、[test_p1_b2_office_context.py](../../../tests/test_p1_b2_office_context.py)；office_context 14/14 通过
 
-- [ ] C-P1-B.3 ActionRegistry 工具注册
+- [x] C-P1-B.3 ActionRegistry 工具注册
   - 验证: 低风险工具直接执行；高风险工具需二次确认；未注册工具被拒绝
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [action_registry.py](../../../core/action_registry.py)、[test_p1_b3_action_registry.py](../../../tests/test_p1_b3_action_registry.py)；action_registry 12/12 通过
 
-- [ ] C-P1-B.4 办公最小闭环可用
+- [x] C-P1-B.4 办公最小闭环可用
   - 验证: 剪贴板翻译、截图问图、时间天气状态三个闭环功能与安全边界通过
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [office_loops.py](../../../core/office_loops.py)、[test_p1_b4_office_loops.py](../../../tests/test_p1_b4_office_loops.py)；office_loops 14/14 通过
 
-- [ ] C-P1-B.5 模式切换不串场
+- [x] C-P1-B.5 模式切换不串场
   - 验证: companion_mode 与 office_mode 切换写入 trace；模式不串场
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: [mode_switch.py](../../../core/mode_switch.py)、[test_p1_b5_mode_switch.py](../../../tests/test_p1_b5_mode_switch.py)；mode_switch 12/12 通过；P1-B 后端累计 78/78、前端 54/54 通过
 
 ## §P1-C · 主动消息升级与世界模拟联动
 
-- [ ] C-P1-C.1 WorldSimulation tick 生成快照
+- [x] C-P1-C.1 WorldSimulation tick 生成快照
   - 验证: tick 生成 WorldSnapshot；字段完整；同一 tick 不重复
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: WorldSimulation 与 WorldSnapshot 已完成；指定验证 10/10 通过，额外回归 41 项通过
 
-- [ ] C-P1-C.2 主动候选意图打分
+- [x] C-P1-C.2 主动候选意图打分
   - 验证: 候选意图生成、打分排序、低分过滤
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: 主动候选意图与打分链路已完成；指定验证 19/19 通过
 
-- [ ] C-P1-C.3 主动关怀治理
+- [x] C-P1-C.3 主动关怀治理
   - 验证: 挂心事项回访、未完话题续接、沉默问候退避、每日上限
-  - 证据: 待 TDD RED/GREEN 完成后填写
+  - 证据: 主动关怀治理已完成；指定验证 18/18 通过
 
 - [ ] C-P1-C.4 主动消息 + 主动图片联合调度
   - 验证: 联合调度可执行；同一 world_snapshot_id 不重复；用户忽略后退避

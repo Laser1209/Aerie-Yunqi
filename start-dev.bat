@@ -2,11 +2,15 @@
 setlocal EnableExtensions
 
 set "ROOT_DIR=%~dp0"
-set "PYTHON_EXE=%ROOT_DIR%.venv\Scripts\python.exe"
+REM 优先使用 F 盘虚拟环境（避免 C 盘堆积，F 盘为推荐安装位置），
+REM 不存在时回退到项目内 .venv
+set "VENV_DIR=%ROOT_DIR%.venv"
+if exist "F:\Roaming\Aerie-Yunqi\.venv\Scripts\python.exe" set "VENV_DIR=F:\Roaming\Aerie-Yunqi\.venv"
+set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
 set "REQ_FILE=%ROOT_DIR%requirements.txt"
 set "ELECTRON_DIR=%ROOT_DIR%electron"
 set "ELECTRON_BIN=%ELECTRON_DIR%\node_modules\.bin\electron.cmd"
-if not defined AERIE_USER_DATA_DIR set "AERIE_USER_DATA_DIR=%TEMP%\Aerie-Yunqi-Dev"
+if not defined AERIE_USER_DATA_DIR set "AERIE_USER_DATA_DIR=F:\Roaming\Aerie-Yunqi\electron-user-data"
 
 cd /d "%ROOT_DIR%" || goto :fail_cd
 

@@ -28,6 +28,12 @@ related_validations:
 - 关键实现候选包括 [long_permanent.py](file:///e:/Agent_reply/memory/layers/long_permanent.py)、[brain.py](file:///e:/Agent_reply/core/brain.py) 与 [kb.py](file:///e:/Agent_reply/knowledge/kb.py)。
 - **Task 3.6 探测结论（2026-07-28T00:00:00）**：阻塞——ChromaDB 依赖未安装（`requirements.txt` 中被注释）、Embedding API 环境变量全部未配置、生产代码未接入 `LayeredMemory`、`data/chroma` 目录不存在。
 - 完整阻塞证据见 [Task3.6-向量知识库连接尝试报告.md](../../.trae/specs/execute-third-correction-p0-fusion/Task3.6-向量知识库连接尝试报告.md)。
+- **P1 阶段进展（2026-07-28T06:08:36）**：
+  - **P1-B 已完成**：桌面 Surface 状态机（18/18）、OfficeContext（14/14）、ActionRegistry（12/12）、OfficeLoops（14/14）、ModeSwitch（12/12）；后端累计 78/78、前端 54/54。
+  - **P1-C.1 已完成**：WorldSimulation tick 生成 WorldSnapshot，含 phase/location/activity/energy/social/nearby_objects/available_visual_topics/world_snapshot_id/tick_id/created_at；10/10 通过、41 回归通过。
+  - **P1-C.2 已完成**：ProactiveCandidateScorer 生成 life_share/care_followup/unfinished_topic/mood_shift/attention_ack 候选；19/19 通过。
+  - **P1-C.3 已完成**：ProactiveCareGovernor 挂心事项回访、未完话题续接、沉默问候、每日上限与退避；18/18 通过。
+  - 向量知识库仍为 blocked-with-evidence 状态，P1 新增的主动候选/关怀治理/世界快照模块尚未建立向量索引。
 
 ## 目标状态
 

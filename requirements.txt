@@ -61,7 +61,11 @@ openai==2.45.0
 # Block-3: attachments go through markitdown before LLM sees them
 # -------------------------------------------------- verified=yes
 # ============================================================
-markitdown[all]==0.1.6
+# Note: `[all]` extra requires youtube-transcript-api~=1.0.0 which is NOT
+# published on PyPI (only 0.x and 1.2.3+ exist), so pip resolution fails on
+# this machine.  We pin the same extra set minus the two Azure cloud-service
+# extras (az-content-understanding / az-doc-intel) which are unused locally.
+markitdown[audio-transcription,docx,outlook,pdf,pptx,xls,xlsx,youtube-transcription]==0.1.6
 
 # ============================================================
 # Document generation (core/doc_writer.py) ---------- verified=yes

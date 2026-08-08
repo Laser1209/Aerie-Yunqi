@@ -122,6 +122,9 @@ class WorldSnapshot:
     revision: int = 0
     seed_sha256: str = ""
     snapshot_id: str = ""
+    world_snapshot_id: str = ""
+    tick_id: str = ""
+    created_at: str = ""
 
     # ── dict-style backward compatibility ───────────────────────
     def __getitem__(self, key: str) -> Any:
@@ -324,6 +327,9 @@ class WorldSimulation:
             revision=self._ticks,
             seed_sha256=_sha256(self.seed),
             snapshot_id=instance_id,
+            world_snapshot_id=instance_id,
+            tick_id=f"tick-{ts}",
+            created_at=now.isoformat(),
         )
         if action_result:
             # 兼容旧行为: 把 last_action 注入
@@ -360,6 +366,9 @@ class WorldSimulation:
                 "available_visual_topics",
                 "instance_id",
                 "timestamp",
+                "world_snapshot_id",
+                "tick_id",
+                "created_at",
             )
             if key in source
         }

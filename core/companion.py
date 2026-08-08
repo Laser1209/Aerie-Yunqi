@@ -978,10 +978,24 @@ class Companion:
             # judge_override 让 ProactiveJudge 强制放行(中位数基线即可)
             # R8.0+: force=True bypasses ProactiveJudge and PushPolicy
             # so the greeting fires unconditionally on every launch.
+            # R8.2+: 不再硬编码"看头像"死梗 — 按时段选通用问候, 并注入
+            # 当天真实上下文(待办数 / 天气), 让 LLM 有依据地润色。
+            greeting = self._boot_greeting_template()
+            todo_frag = self._boot_todo_fragment()
+            try:
+                weather_frag = await asyncio.wait_for(
+                    self._boot_weather_fragment(), timeout=6.0
+                )
+            except Exception:
+                weather_frag = ""
+            template = (
+                f"{greeting}今天{datetime.now():%Y年%m月%d日}，"
+                f"{todo_frag}{weather_frag}".strip()
+            )
             ok = await self.push_scheduler._dispatch(
                 "boot_greeting",
                 {
-                    "template": "刚醒。盯着屏幕看你头像。",
+                    "template": template,
                     "custom_dispatcher": "boot_greeting",
                     "mood_aware": True,
                     "exempt_quiet": True,
@@ -1015,6 +1029,57 @@ class Companion:
             return
         except Exception:
             logger.exception("boot_qq_greeting failed")
+
+    # ── R8.2+: boot greeting 内容构建 ─────────────────────────
+    @staticmethod
+    def _boot_greeting_template() -> str:
+        """R8.2+: 按时段选择开机问候的通用开场(替代硬编码死梗)。
+
+        仅返回问候语, 具体日期/待办/天气由调用方拼接成完整模板,
+        再交给 Brain.generate_push 润色。
+        """
+        hour = datetime.now().hour
+        if 5 <= hour < 11:
+            return "早安宝贝，新的一天我陪你。"
+        if 11 <= hour < 14:
+            return "中午好宝贝，忙了一上午，记得好好吃饭。"
+        if 14 <= hour < 18:
+            return "下午好宝贝，我一直都在。"
+        if 18 <= hour < 23:
+            return "晚上好宝贝，今天辛苦啦。"
+        return "夜深了宝贝，该休息了。"
+
+    @staticmethod
+    def _boot_todo_fragment() -> str:
+        """R8.2+: 开机问候附带真实待办数; 0 件时给正向反馈。失败则返回空。"""
+        try:
+            from core import todo_manager
+            remaining = int(todo_manager.stats().get("remaining") or 0)
+        except Exception:
+            logger.exception("boot_greeting: todo stats failed")
+            return ""
+        if remaining <= 0:
+            return "今天的事都做完啦，真棒。"
+        return f"你还有 {remaining} 件事待办。"
+
+    @staticmethod
+    async def _boot_weather_fragment() -> str:
+        """R8.2+: 开机问候附带今日天气; 获取失败则返回空, 不阻塞问候。"""
+        try:
+            from core import weather_service
+            w = await weather_service.fetch_weather_for_current_location()
+            city = str(w.get("city") or "").strip()
+            desc = str(w.get("desc") or "").strip()
+            temp = str(w.get("temp") or "").strip()
+            if not desc or desc in ("—", "获取失败"):
+                return ""
+            parts = [f"{city}今天{desc}"]
+            if temp and temp not in ("—", ""):
+                parts.append(f"{temp}度")
+            return "，".join(parts) + "。"
+        except Exception:
+            logger.exception("boot_greeting: weather fetch failed")
+            return ""
 
     async def _send_to_qq(self, reply: OutgoingReply) -> bool:
         return await self.qq.send_message(reply.user_id, reply.content)

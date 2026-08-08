@@ -55,7 +55,10 @@ scenes:
   # R8.1+: force=true 让 push_scheduler 跳过 ProactiveJudge + PushPolicy
   # 抑制,确保每次启动都发。flag 60s 窗口防快速重启刷屏。
   boot_greeting:
-    template: "刚醒。盯着屏幕看你头像。"
+    # R8.2+: 运行时由 companion._boot_qq_greeting 按时段生成通用问候,
+    # 并注入当天真实待办数 / 天气作为上下文后交给 LLM 润色。
+    # 此处仅作静态参考, 实际发送内容以运行时模板为准。
+    template: "早安宝贝，今天{date}，你还有{todo_count}件事待办，{weather}。"
     custom_dispatcher: "boot_greeting"
     mood_aware: true
     exempt_quiet: true

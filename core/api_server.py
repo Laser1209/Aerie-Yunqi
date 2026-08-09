@@ -4913,6 +4913,11 @@ async def brief_today() -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     cached = brief_fetcher.load_brief(today)
     if cached and cached.get("ai_news") is not None:
+        # Never serve stale todo snapshots baked into an old cache file (e.g.
+        # sample todos seeded by a previous backend run). Refresh live todos
+        # from the DB so deleted tasks do not reappear on restart.
+        cached["todos"] = brief_fetcher.get_today_todos(today)
+        cached["todo_stats"] = brief_fetcher.get_todo_stats(today)
         return {"date": today, "brief": cached}
 
     # Lazy generate

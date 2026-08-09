@@ -111,6 +111,7 @@ class WorldImageCandidateConsumer:
         clock: Callable[[], datetime] | None = None,
         delivery_online: Callable[[], bool] | None = None,
         prompt_resolver: Callable[[str, dict[str, Any]], str] | None = None,
+        sender: Callable[[dict[str, Any], dict[str, Any]], Any] | None = None,
     ) -> None:
         self.feature_flags = feature_flags
         self.image_workflow = image_workflow
@@ -122,6 +123,7 @@ class WorldImageCandidateConsumer:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.delivery_online = delivery_online
         self.prompt_resolver = prompt_resolver or self._default_prompt_for_candidate
+        self.sender = sender
 
     async def consume_replay(self, *, last_seq: int | None = None) -> list[dict[str, Any]]:
         replay = getattr(self.world_port, "replay_events", None)
@@ -331,6 +333,7 @@ class WorldImageCandidateConsumer:
             workflow_result=workflow_result,
         )
         if completed:
+            await self._deliver(workflow_result)
             self._record_push(candidate["scene"])
             self._record_budget("proactive")
         acked = await self._ack(_event_sequence(event))
@@ -470,6 +473,32 @@ class WorldImageCandidateConsumer:
                 "side_effects": dict(_NO_SIDE_EFFECTS),
                 "delivery_plan": None,
             }
+
+    async def _deliver(self, workflow_result: dict[str, Any]) -> bool:
+        """Deliver a completed image to an external channel via the injected sender.
+
+        Best-effort: the workflow already produced the asset and delivery plan;
+        a channel the consumer knows how to reach (``qq``) is handed to the
+        sender, which resolves the local asset path and pushes it.  Delivery
+        failures are logged but never change the workflow's ``completed``
+        status or block the ACK, so the pipeline stays decoupled from QQ.
+        """
+        if self.sender is None or not callable(self.sender):
+            return False
+        plan = workflow_result.get("delivery_plan")
+        if not isinstance(plan, dict):
+            return False
+        channel = str(plan.get("channel") or "").lower()
+        if channel not in {"qq", "local_chat"}:
+            return False
+        try:
+            result = self.sender(plan, workflow_result)
+            if hasattr(result, "__await__"):
+                result = await result
+            return bool(result)
+        except Exception:
+            logger.debug("world image candidate delivery failed", exc_info=True)
+            return False
 
     def _record_push(self, scene: str) -> None:
         if self.push_policy is None or not hasattr(self.push_policy, "record"):

@@ -64,6 +64,17 @@ logger = logging.getLogger(__name__)
 _COMPANION = None
 
 
+def _api_base_url() -> str:
+    """Backend origin the Electron renderer must use to load uploaded images.
+
+    The renderer window is loaded from ``file://`` (not the backend origin),
+    so any image src in a chat bubble has to be an absolute URL pointing at
+    the API server that serves ``/uploads``.
+    """
+    port = os.environ.get("AERIE_BACKEND_PORT") or "7890"
+    return f"http://127.0.0.1:{port}"
+
+
 def _resolve_companion_data_path(settings: dict | None) -> Path:
     if (os.environ.get("AERIE_DATA_DIR") or "").strip():
         return data_dir()
@@ -545,6 +556,67 @@ class Companion:
         consumer = self._get_world_image_candidate_consumer()
         return await consumer.consume_replay(last_seq=last_seq)
 
+    async def publish_image_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        """Publish an AI image decision and consume it so it reaches local chat.
+
+        This is the publisher behind "AI-generated images auto-inject into the
+        local chat bubble": it appends a redacted ImageCandidate to the world
+        outbox, then immediately consumes it.  The Phase 14 consumer runs the
+        image workflow and, for ``local_chat``, emits an assistant bubble with
+        the generated image.  If the world is disabled or the publisher is
+        unavailable the call fails closed (no image, no side effect).
+        """
+        world_port = getattr(self, "world_port", None)
+        publish = getattr(world_port, "publish_image_candidate", None)
+        if not callable(publish):
+            return {
+                "status": "disabled",
+                "reason": "world_publisher_unavailable",
+                "candidate_id": str((candidate or {}).get("candidate_id") or ""),
+                "acked": False,
+            }
+
+        payload = dict(candidate or {})
+        try:
+            result = publish(payload)
+            if hasattr(result, "__await__"):
+                result = await result
+        except Exception:
+            logger.warning("world image candidate publish failed", exc_info=True)
+            return {
+                "status": "failed",
+                "reason": "publish_failed",
+                "candidate_id": str(payload.get("candidate_id") or ""),
+                "acked": False,
+            }
+
+        result = result if isinstance(result, dict) else {}
+        if str(result.get("status") or "") != "accepted":
+            return {
+                "status": str(result.get("status") or "rejected"),
+                "reason": str(result.get("reason") or "") or "publish_rejected",
+                "candidate_id": str(result.get("candidate_id") or ""),
+                "acked": False,
+            }
+
+        # Consume from the event we just published so the generated image
+        # auto-injects into the local chat (or QQ) on this same call.
+        seq = max(0, int(result.get("sequence") or 0) - 1)
+        try:
+            consumed = await self.process_world_image_candidates_once(last_seq=seq)
+        except Exception:
+            logger.warning("world image candidate consume failed after publish", exc_info=True)
+            consumed = []
+        return {
+            "status": "published",
+            "candidate_id": str(result.get("candidate_id") or ""),
+            "channel": str(result.get("channel") or ""),
+            "target": str(result.get("target") or ""),
+            "sequence": int(result.get("sequence") or 0),
+            "event_id": str(result.get("event_id") or ""),
+            "consumed": consumed,
+        }
+
     async def approve_world_image_candidate(
         self,
         approval: dict[str, Any],
@@ -686,6 +758,63 @@ class Companion:
             except Exception:
                 return True
 
+        def _resolve_generated_asset_path(workflow_result: dict) -> str | None:
+            asset = workflow_result.get("asset") if isinstance(workflow_result, dict) else {}
+            if not isinstance(asset, dict):
+                return None
+            saved = str(asset.get("saved_as") or "").strip()
+            if not saved or "\x00" in saved:
+                return None
+            base = (Path.cwd() / "uploads").resolve()
+            try:
+                target = (base / saved).resolve()
+                target.relative_to(base)
+            except (OSError, ValueError):
+                return None
+            return str(target) if target.is_file() else None
+
+        async def _deliver_world_image(plan: dict, workflow_result: dict) -> bool:
+            channel = str(plan.get("channel") or "").lower()
+            if channel == "local_chat":
+                return _deliver_local_chat_image(plan, workflow_result)
+            target = str(plan.get("target") or "").strip()
+            if not target.isdigit():
+                primary = self.get_primary_user_selection()
+                target = str(getattr(primary, "user_id", "") or "") if primary else ""
+            if not target.isdigit():
+                logger.warning("[WorldImage] no valid QQ target for delivery")
+                return False
+            image_ref = _resolve_generated_asset_path(workflow_result)
+            if not image_ref:
+                logger.warning("[WorldImage] generated asset missing for delivery")
+                return False
+            return await self.qq.send_image(int(target), image_ref)
+
+        def _deliver_local_chat_image(plan: dict, workflow_result: dict) -> bool:
+            asset = workflow_result.get("asset") if isinstance(workflow_result, dict) else {}
+            url = str(asset.get("url") or "") if isinstance(asset, dict) else ""
+            if not url:
+                url = str(plan.get("asset_url") or "")
+            if not url:
+                logger.warning("[WorldImage] no asset url for local chat delivery")
+                return False
+            base = _api_base_url()
+            image_url = url if url.startswith("http") else base + (url if url.startswith("/") else "/" + url)
+            target = str(plan.get("target") or "").strip() or "master"
+            message_id = generate_id("message")
+            from core import chat_events
+
+            chat_events.emit(
+                "assistant",
+                role="assistant",
+                id=message_id,
+                user_id=target,
+                content=f"![图片]({image_url})",
+                source="local_chat",
+            )
+            logger.info("[WorldImage] delivered generated image to local chat: %s", image_url)
+            return True
+
         self.world_image_candidate_consumer = WorldImageCandidateConsumer(
             feature_flags=self.feature_flags,
             image_workflow=workflow,
@@ -695,6 +824,7 @@ class Companion:
             image_budget=image_budget,
             store=JsonWorldImageCandidateStore(data_dir() / "world_image_candidates.json"),
             delivery_online=delivery_online,
+            sender=_deliver_world_image,
         )
         return self.world_image_candidate_consumer
 

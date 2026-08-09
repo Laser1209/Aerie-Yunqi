@@ -250,6 +250,14 @@ class RemoteWorldAdapter:
             return []
         return [self._event_from_payload(row) for row in rows]
 
+    async def publish_image_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        try:
+            result = self.client.publish_image_candidate(dict(candidate or {}))
+            return result if isinstance(result, dict) else {"status": "rejected"}
+        except Exception:
+            logger.debug("remote world publish_image_candidate unavailable", exc_info=True)
+            return {"status": "degraded", "reason": "sidecar_unavailable"}
+
     async def ack(self, seq: int) -> dict[str, Any]:
         try:
             return self.client.ack(consumer_id=self.consumer_id, seq=seq)

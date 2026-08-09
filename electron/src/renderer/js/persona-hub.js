@@ -94,6 +94,7 @@ class PersonaHubPanel {
 
               <div class="persona-nav-list">
                 <div class="persona-nav-item persona-nav-item--active" data-section="basic">基础信息</div>
+                <div class="persona-nav-item" data-section="three_view">三视图</div>
                 <div class="persona-nav-item" data-section="personality">性格设定</div>
                 <div class="persona-nav-item" data-section="background">背景故事</div>
                 <div class="persona-nav-item" data-section="behavior">行为规范</div>
@@ -128,6 +129,32 @@ class PersonaHubPanel {
                 <div class="persona-form-row">
                   <label class="persona-form-label">年龄</label>
                   <input type="number" class="persona-form-input" id="persona-field-age" placeholder="例如：22" min="0" max="200">
+                </div>
+              </div>
+
+              <!-- Three View -->
+              <div class="persona-section persona-section--hidden" id="persona-section-three_view">
+                <h3 class="persona-section__title">三视图（辅助生图参考）</h3>
+                <p class="persona-section__hint">
+                  上传该人设的正面 / 侧面 / 背面参考图，作为图生图时锁定角色外观的参考。
+                  每张 PNG/JPG，≤8MB。切换人设时三视图会跟随切换。
+                </p>
+                <div class="persona-three-view-grid">
+                  ${["front", "side", "back"].map((view) => `
+                    <div class="persona-three-view-card" data-view="${view}">
+                      <div class="persona-three-view-card__img" data-role="preview">
+                        <span>+</span>
+                      </div>
+                      <div class="persona-three-view-card__label">
+                        ${{ front: "正面 Front", side: "侧面 Side", back: "背面 Back" }[view]}
+                      </div>
+                      <input type="file" class="persona-three-view-upload" accept="image/*" hidden>
+                      <div class="persona-three-view-card__actions">
+                        <button type="button" class="persona-btn persona-btn--primary" data-role="upload">上传</button>
+                        <button type="button" class="persona-btn persona-btn--ghost" data-role="remove">删除</button>
+                      </div>
+                    </div>
+                  `).join("")}
                 </div>
               </div>
 
@@ -276,6 +303,20 @@ class PersonaHubPanel {
       panel.querySelector("#persona-editor-avatar-upload").click();
     });
 
+    // Three-view: upload / remove
+    panel.querySelectorAll(".persona-three-view-card").forEach((card) => {
+      const uploadInput = card.querySelector(".persona-three-view-upload");
+      const uploadBtn = card.querySelector('[data-role="upload"]');
+      const removeBtn = card.querySelector('[data-role="remove"]');
+      uploadBtn.addEventListener("click", () => uploadInput.click());
+      uploadInput.addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) this._uploadThreeView(card, file);
+        uploadInput.value = "";
+      });
+      removeBtn.addEventListener("click", () => this._removeThreeView(card));
+    });
+
     // Nav
     panel.querySelectorAll(".persona-nav-item").forEach((item) => {
       item.addEventListener("click", () => {
@@ -413,6 +454,7 @@ class PersonaHubPanel {
       }
       this._fillForm(r.data.persona);
       this._showEditor();
+      this._loadThreeViewSummary(id);
     } catch (e) {
       console.error("load persona detail failed:", e);
       alert("加载人设失败: " + (e.message || "unknown"));
@@ -676,6 +718,82 @@ class PersonaHubPanel {
     const avatarEl = document.getElementById("persona-editor-avatar");
     if (avatarEl) {
       avatarEl.innerHTML = '<span id="persona-editor-avatar-text">+</span>';
+    }
+  }
+
+  async _loadThreeViewSummary(personaId) {
+    if (!personaId) return;
+    try {
+      const r = await window.aerie.api.request({
+        method: "GET",
+        path: `/api/persona/three-view?persona_id=${encodeURIComponent(personaId)}`,
+      });
+      const views = (r && r.data && r.data.views) || {};
+      document.querySelectorAll(".persona-three-view-card").forEach((card) => {
+        const view = card.getAttribute("data-view");
+        const info = views[view] || {};
+        const preview = card.querySelector('[data-role="preview"]');
+        if (preview) {
+          preview.innerHTML = info.present
+            ? `<img src="${info.dataurl}" alt="${view}">`
+            : "<span>+</span>";
+        }
+      });
+    } catch (e) {
+      console.error("load three-view summary failed:", e);
+    }
+  }
+
+  async _uploadThreeView(card, file) {
+    const view = card.getAttribute("data-view");
+    if (!this._currentId) {
+      alert("请先保存人设再上传三视图");
+      return;
+    }
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let r = null;
+      if (window.aerie && window.aerie.api && window.aerie.api.upload) {
+        r = await window.aerie.api.upload({
+          path: `/api/persona/three-view/${encodeURIComponent(this._currentId)}/${view}`,
+          filename: file.name || `${view}.png`,
+          contentType: file.type,
+          bytes: Array.from(buf),
+        });
+      }
+      if (!r || !r.data || r.data.status !== "ok") {
+        throw new Error((r && r.data && r.data.error) || "上传失败");
+      }
+      const preview = card.querySelector('[data-role="preview"]');
+      if (preview) {
+        preview.innerHTML = r.data.dataurl
+          ? `<img src="${r.data.dataurl}" alt="${view}">`
+          : "<span>+</span>";
+      }
+    } catch (e) {
+      console.error("upload three-view failed:", e);
+      alert("三视图上传失败: " + (e.message || "unknown"));
+    }
+  }
+
+  async _removeThreeView(card) {
+    const view = card.getAttribute("data-view");
+    if (!this._currentId) return;
+    if (!confirm(`确定删除该人设的 ${view} 三视图吗？`)) return;
+    try {
+      const r = await window.aerie.api.request({
+        method: "DELETE",
+        path: `/api/persona/three-view/${encodeURIComponent(this._currentId)}/${view}`,
+      });
+      if (r && r.data && r.data.status === "ok") {
+        const preview = card.querySelector('[data-role="preview"]');
+        if (preview) preview.innerHTML = "<span>+</span>";
+      } else {
+        throw new Error((r && r.data && r.data.error) || "删除失败");
+      }
+    } catch (e) {
+      console.error("remove three-view failed:", e);
+      alert("三视图删除失败: " + (e.message || "unknown"));
     }
   }
 

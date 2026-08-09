@@ -10,10 +10,12 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
 import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +27,21 @@ _ACTIVE_FILE = "_active.json"
 _DEFAULT_TEMPLATE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "preset_templates"
 )
+
+# 三视图（辅助生图参考图）存储约定：data_dir/personas/three_views/<persona_id>/
+# 每套人设独立一份，切换人设即切换三视图，与 persona hub 的隔离模型保持一致。
+_THREE_VIEW_DIR_NAME = "three_views"
+_THREE_VIEW_VIEWS = ("front", "side", "back")
+_THREE_VIEW_RETENTION_DAYS = 28
+
+
+def _sniff_image_ext(data: bytes) -> Optional[str]:
+    """Sniff PNG/JPEG from magic bytes; returns ext or None."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:2] == b"\xff\xd8":
+        return "jpg"
+    return None
 
 
 class PersonaManager:
@@ -378,6 +395,13 @@ class PersonaManager:
             target = self._personas_dir / f"{persona_id}.json"
             if target.exists():
                 target.unlink()
+            # 一并清理该人设的三视图目录，避免孤立残留
+            tv_dir = self._personas_dir / _THREE_VIEW_DIR_NAME / persona_id
+            if tv_dir.exists():
+                try:
+                    shutil.rmtree(tv_dir)
+                except OSError:
+                    pass
 
         return True, "ok"
 
@@ -406,6 +430,132 @@ class PersonaManager:
             data = dict(self._personas[persona_id])
             data.pop("is_builtin", None)
             return data
+
+    # ── 三视图（辅助生图参考图）──
+    # 数据模型：data_dir/personas/three_views/<persona_id>/{front,side,back}.<ext>
+    # 每套人设独立一份；persona 删除时一并清理。
+
+    def three_view_dir(self, persona_id: str) -> Path:
+        """返回某套人设的三视图目录（不存在则创建）。"""
+        d = self._personas_dir / _THREE_VIEW_DIR_NAME / persona_id
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def save_three_view(
+        self,
+        persona_id: str,
+        view: str,
+        data: bytes,
+        ext: Optional[str] = None,
+    ) -> Tuple[bool, str]:
+        """保存一张三视图（front/side/back），返回 (ok, url_suffix)。"""
+        view = (view or "").strip().lower()
+        if view not in _THREE_VIEW_VIEWS:
+            return False, f"invalid view: {view}"
+        real_ext = _sniff_image_ext(data) or (ext or "png").lower().lstrip(".")
+        if real_ext == "jpeg":
+            real_ext = "jpg"
+        if real_ext not in {"png", "jpg"}:
+            return False, "unsupported image format"
+        with self._rw_lock:
+            d = self.three_view_dir(persona_id)
+            target = d / f"{view}.{real_ext}"
+            # 清理同视角其它格式的旧文件，保证每个视角至多一张 canonical 图
+            for sibling_ext in ("png", "jpg"):
+                if sibling_ext == real_ext:
+                    continue
+                sibling = d / f"{view}.{sibling_ext}"
+                if sibling.exists():
+                    try:
+                        sibling.unlink()
+                    except OSError:
+                        pass
+            try:
+                with open(target, "wb") as fp:
+                    fp.write(data)
+            except OSError as e:
+                return False, f"write failed: {e}"
+        return True, f"{view}.{real_ext}"
+
+    def load_three_view(
+        self,
+        persona_id: str,
+        view: str,
+    ) -> Optional[Tuple[bytes, str]]:
+        """读取某张三视图，返回 (bytes, mime)；不存在返回 None。"""
+        view = (view or "").strip().lower()
+        if view not in _THREE_VIEW_VIEWS:
+            return None
+        d = self._personas_dir / _THREE_VIEW_DIR_NAME / persona_id
+        if not d.exists():
+            return None
+        for ext in ("png", "jpg"):
+            p = d / f"{view}.{ext}"
+            if p.exists() and p.is_file():
+                try:
+                    return p.read_bytes(), ("image/jpeg" if ext == "jpg" else "image/png")
+                except OSError:
+                    return None
+        return None
+
+    def get_three_view_summary(self, persona_id: str) -> Dict[str, Any]:
+        """返回该人设三视图摘要：每视角的 dataURL / URL / 是否存在。"""
+        result: Dict[str, Any] = {}
+        for view in _THREE_VIEW_VIEWS:
+            pair = self.load_three_view(persona_id, view)
+            if pair is None:
+                result[view] = {"present": False, "url": "", "dataurl": ""}
+                continue
+            data, mime = pair
+            ext = "jpeg" if mime == "image/jpeg" else "png"
+            dataurl = "data:" + mime + ";base64," + base64.b64encode(data).decode("ascii")
+            result[view] = {
+                "present": True,
+                "url": f"/api/persona/three-view/{persona_id}/{view}?v={int(time.time() * 1000)}",
+                "dataurl": dataurl,
+            }
+        return result
+
+    def delete_three_view(self, persona_id: str, view: str) -> Tuple[bool, str]:
+        """删除某张三视图。view 为 "*" 时删除整套。"""
+        view = (view or "").strip().lower()
+        if view not in _THREE_VIEW_VIEWS and view != "*":
+            return False, f"invalid view: {view}"
+        with self._rw_lock:
+            d = self._personas_dir / _THREE_VIEW_DIR_NAME / persona_id
+            if not d.exists():
+                return True, "ok"
+            if view == "*":
+                try:
+                    shutil.rmtree(d)
+                except OSError as e:
+                    return False, f"remove failed: {e}"
+            else:
+                removed = False
+                for ext in ("png", "jpg"):
+                    p = d / f"{view}.{ext}"
+                    if p.exists():
+                        try:
+                            p.unlink()
+                            removed = True
+                        except OSError as e:
+                            return False, f"remove failed: {e}"
+                if not removed:
+                    return True, "ok"
+        return True, "ok"
+
+    def prune_three_view_backups(self) -> None:
+        """清理超过保留期的三视图目录（由调用方定期触发，best-effort）。"""
+        root = self._personas_dir / _THREE_VIEW_DIR_NAME
+        if not root.exists():
+            return
+        cutoff = time.time() - _THREE_VIEW_RETENTION_DAYS * 86400
+        for pid_dir in root.iterdir():
+            try:
+                if pid_dir.is_dir() and pid_dir.stat().st_mtime < cutoff:
+                    shutil.rmtree(pid_dir)
+            except OSError:
+                pass
 
     # ── 内部方法 ────────────────────────────────────
 

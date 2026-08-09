@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — NapCat OneBot11 WebSocket client.
+"""Aerie · 云栖 v0.1.0-beta.1 — NapCat OneBot11 WebSocket client.
 
 Connects to NapCat's OneBot11 WS server (port 3001).
 Receives QQ messages, passes them to the message handler.
@@ -559,6 +559,28 @@ class QQClient:
             _msg_id = (resp.get("data") or {}).get("message_id")
             return True
         return False
+
+    async def send_image(self, user_id: int, image_ref: str, caption: str = "") -> bool:
+        """Send a single image (optionally with a caption) to a QQ private user.
+
+        ``image_ref`` is passed to OneBot11's image ``file`` field: an
+        absolute local path, a ``file://`` URI, or an http(s) URL NapCat can
+        fetch.  Safe to call while QQ is offline — it returns False instead
+        of raising, so proactive deliveries degrade gracefully.
+        """
+        if self._disabled or self._connectivity_test:
+            logger.info("QQ send_image skipped by process safety mode")
+            return False
+        if not self.is_connected:
+            logger.warning("Cannot send image: QQ WS not connected")
+            return False
+
+        segments: list[dict] = []
+        caption_clean = strip_thought_action_tags(caption or "")
+        if caption_clean:
+            segments.append({"type": "text", "data": {"text": caption_clean}})
+        segments.append({"type": "image", "data": {"file": image_ref}})
+        return await self.send_message_with_segments(int(user_id), segments)
 
     async def stop(self) -> None:
         self._running = False

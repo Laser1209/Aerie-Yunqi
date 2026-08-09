@@ -168,6 +168,15 @@ class WorldPort(Protocol):
     ) -> dict[str, Any]:
         ...
 
+    async def publish_image_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        ...
+
+    async def replay_events(self, *, last_seq: int | None = None) -> list[WorldEvent]:
+        ...
+
+    async def ack(self, seq: int) -> dict[str, Any]:
+        ...
+
 
 class NullWorldAdapter:
     """No-op adapter used when world flags are disabled or unavailable."""
@@ -227,6 +236,19 @@ class NullWorldAdapter:
             "fallbackAdapter": "null",
             "errorCode": "" if accepted else "world_disabled",
         }
+
+    async def publish_image_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "status": "disabled",
+            "reason": "world_disabled",
+            "candidate_id": str((candidate or {}).get("candidate_id") or ""),
+        }
+
+    async def replay_events(self, *, last_seq: int | None = None) -> list[WorldEvent]:
+        return []
+
+    async def ack(self, seq: int) -> dict[str, Any]:
+        return {"status": "ok", "consumer_id": "core", "last_seq": 0}
 
     def get_world_snapshot(self) -> dict[str, Any] | None:
         return None
@@ -293,6 +315,11 @@ class InProcessWorldAdapter:
         self._control_results: dict[str, dict[str, Any]] = {}
         self._subscribers: dict[str, tuple[set[str], asyncio.Queue[WorldEvent]]] = {}
         self._observed_keys: dict[str, str] = {}
+        # Phase 14: durable-in-memory ImageCandidate outbox + consumer cursor.
+        # The consumer pulls via replay_events(last_seq) and ACKs via ack(seq),
+        # so proactive image delivery works identically to the Sidecar path.
+        self._outbox: list[WorldEvent] = []
+        self._ack_seq = 0
         self._lock = asyncio.Lock()
 
     async def get_state(self) -> WorldSnapshot:
@@ -535,6 +562,55 @@ class InProcessWorldAdapter:
             if "*" in topics or event.topic in topics:
                 queue.put_nowait(event)
 
+    async def publish_image_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        """Append a redacted ImageCandidate to the in-memory outbox.
+
+        This is the in-process equivalent of the Sidecar's
+        ``publish_image_candidate``: the payload is normalized/redacted, an
+        event is appended to ``world.image_candidates``, and subscribers are
+        notified.  Returns the public event id + sequence so callers can
+        consume from exactly this event.
+        """
+        public = redact_image_candidate(candidate)
+        async with self._lock:
+            self._sequence += 1
+            event = WorldEvent(
+                event_id=f"world_evt_{uuid.uuid4().hex}",
+                topic="image_candidates",
+                event_type="world.image_candidate.published",
+                sequence=self._sequence,
+                occurred_at=_now_iso(),
+                payload=public,
+            )
+            self._outbox.append(event)
+            subscribers = list(self._subscribers.values())
+        self._publish(event, subscribers)
+        return {
+            "status": "accepted",
+            "candidate_id": str(public.get("candidate_id") or ""),
+            "idempotency_key": str(public.get("idempotency_key") or ""),
+            "channel": str(public.get("channel") or ""),
+            "target": str(public.get("target") or ""),
+            "sequence": event.sequence,
+            "event_id": event.event_id,
+        }
+
+    async def replay_events(
+        self,
+        *,
+        last_seq: int | None = None,
+    ) -> list[WorldEvent]:
+        """Return ImageCandidate events after ``last_seq`` (default: ACK cursor)."""
+        start = max(0, int(last_seq if last_seq is not None else self._ack_seq))
+        async with self._lock:
+            return [event for event in self._outbox if event.sequence > start]
+
+    async def ack(self, seq: int) -> dict[str, Any]:
+        """Advance the consumer ACK cursor past ``seq``."""
+        async with self._lock:
+            self._ack_seq = max(self._ack_seq, int(seq or 0))
+            return {"status": "ok", "consumer_id": "core", "last_seq": self._ack_seq}
+
 
 @dataclass(frozen=True)
 class CapabilityNegotiation:
@@ -647,3 +723,61 @@ def _stable_digest(value: Any) -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+_IMAGE_CANDIDATE_SENSITIVE_KEYS = (
+    "prompt",
+    "raw_prompt",
+    "message_text",
+    "raw_text",
+    "caption",
+    "credential",
+    "token",
+)
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def redact_image_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Normalize + redact an ImageCandidate payload to its public fields.
+
+    Mirrors the Sidecar sqlite_store contract so in-process and sidecar
+    candidates are byte-for-byte equivalent from the consumer's viewpoint.
+    Raw prompt/message text is never stored as-is; it is collapsed into
+    ``sensitive_keys`` plus a digest.
+    """
+    payload = candidate if isinstance(candidate, dict) else {}
+    candidate_id = str(
+        payload.get("candidate_id")
+        or payload.get("id")
+        or f"cand_{uuid.uuid4().hex}"
+    )
+    idempotency_key = str(payload.get("idempotency_key") or candidate_id)
+    sensitive = {
+        key: payload.get(key)
+        for key in _IMAGE_CANDIDATE_SENSITIVE_KEYS
+        if key in payload
+    }
+    public = {
+        "candidate_id": candidate_id,
+        "idempotency_key": idempotency_key,
+        "scene": str(payload.get("scene") or "idle_care"),
+        "owner_id": str(payload.get("owner_id") or "master"),
+        "channel": str(payload.get("channel") or "local_chat"),
+        "target": str(payload.get("target") or ""),
+        "prompt_key": str(payload.get("prompt_key") or "default"),
+        "reason_code": str(payload.get("reason_code") or ""),
+        "source": str(payload.get("source") or "generated"),
+        "score": _safe_float(payload.get("score"), 0.0),
+        "expires_at": str(payload.get("expires_at") or ""),
+        "created_at": str(payload.get("created_at") or ""),
+    }
+    if sensitive:
+        public["sensitive_keys"] = sorted(str(key) for key in sensitive.keys())
+        public["sensitive_sha256"] = _stable_digest(sensitive)
+    return public

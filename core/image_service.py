@@ -937,16 +937,44 @@ class ImageWorkflow:
         self,
         reference_assets: list[str],
     ) -> tuple[bytes | None, str]:
-        """Resolve the first usable reference image to ``(bytes, mime)``."""
+        """Resolve the first usable reference image to ``(bytes, mime)``.
+
+        Supports two reference forms:
+        - a normal upload path (as before),
+        - a ``three_view:<view>`` token (front/side/back) that resolves to the
+          active persona's stored three-view reference, so图生图 can lock the
+          character's appearance without the caller re-uploading the image.
+        """
         for ref in reference_assets or []:
             try:
-                resolved = self._resolve_upload_reference(str(ref))
+                ref_str = str(ref)
+                if ref_str.startswith("three_view:"):
+                    resolved = self._resolve_three_view_reference(ref_str)
+                else:
+                    resolved = self._resolve_upload_reference(ref_str)
                 mime = _guess_mime(resolved.name)
                 return resolved.read_bytes(), mime
             except Exception:
                 logger.debug("image edit reference asset unusable: %s", ref, exc_info=True)
                 continue
         return None, "image/png"
+
+    def _resolve_three_view_reference(self, ref: str) -> Path:
+        """Resolve ``three_view:<view>`` to the active persona's stored file."""
+        view = str(ref).split(":", 1)[1] if ":" in str(ref) else ""
+        from core.persona_hub import get_persona_manager
+
+        mgr = get_persona_manager()
+        pair = mgr.load_three_view(mgr.get_active_id(), view)
+        if pair is None:
+            raise ImageValidationError()
+        # Persist to a temp file under upload_base so the read path stays
+        # consistent and _url_for_upload_path (if ever needed) keeps working.
+        ext = "png" if pair[1] == "image/png" else "jpg"
+        tmp = self.upload_base / ".three_view" / f"{view}.{ext}"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(pair[0])
+        return tmp
 
     def understand_image(
         self,

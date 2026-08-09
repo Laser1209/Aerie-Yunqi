@@ -625,6 +625,74 @@ async def world_candidate_approve(request: Request) -> dict[str, Any]:
     )
 
 
+@app.post("/api/world/image-candidates/publish")
+async def world_image_candidate_publish(request: Request) -> dict[str, Any]:
+    """Publish an AI image decision so the generated image lands in local chat.
+
+    Thin adapter over :meth:`Companion.publish_image_candidate`.  Accepts only
+    public candidate fields; the world normalizes + redacts the payload, then
+    the Phase 14 consumer runs the image workflow and injects the result into
+    the local chat bubble (or QQ) for the given channel.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    payload = body if isinstance(body, dict) else {}
+
+    comp = get_companion()
+    if comp is None:
+        return {
+            "status": "unavailable",
+            "reason": "companion_unavailable",
+            "channel": str(payload.get("channel") or "local_chat"),
+        }
+
+    publisher = getattr(comp, "publish_image_candidate", None)
+    if not callable(publisher):
+        return {
+            "status": "unavailable",
+            "reason": "publisher_unavailable",
+            "channel": str(payload.get("channel") or "local_chat"),
+        }
+
+    candidate = {
+        "candidate_id": _world_dashboard_safe_text(payload.get("candidate_id")),
+        "idempotency_key": _world_dashboard_safe_text(payload.get("idempotency_key")),
+        "scene": _world_dashboard_safe_text(payload.get("scene")) or "local_send",
+        "owner_id": _world_dashboard_safe_text(payload.get("owner_id")) or "master",
+        "channel": _world_dashboard_safe_text(payload.get("channel")) or "local_chat",
+        "target": _world_dashboard_safe_text(payload.get("target")),
+        "prompt_key": _world_dashboard_safe_text(payload.get("prompt_key")),
+        "reason_code": _world_dashboard_safe_text(payload.get("reason_code")),
+        "source": _world_dashboard_safe_text(payload.get("source")) or "generated",
+        "score": float(payload.get("score") or 0.0) if isinstance(payload.get("score"), (int, float)) else 0.0,
+    }
+
+    try:
+        result = publisher(candidate)
+        if hasattr(result, "__await__"):
+            result = await result
+    except Exception:
+        logger.warning("world image candidate publish failed", exc_info=True)
+        return {
+            "status": "failed",
+            "reason": "publish_failed",
+            "channel": candidate["channel"],
+        }
+
+    result = result if isinstance(result, dict) else {}
+    return {
+        "status": _world_dashboard_safe_text(result.get("status") or "failed"),
+        "reason": _world_dashboard_safe_text(result.get("reason") or ""),
+        "candidateId": _world_dashboard_safe_text(result.get("candidate_id")),
+        "channel": _world_dashboard_safe_text(result.get("channel")),
+        "target": _world_dashboard_safe_text(result.get("target")),
+        "sequence": int(result.get("sequence") or 0),
+        "consumed": result.get("consumed") if isinstance(result.get("consumed"), list) else [],
+    }
+
+
 # ── Health ──────────────────────────────────────────
 
 # Runtime configuration
@@ -2028,6 +2096,62 @@ async def image_generate(request: Request) -> dict:
         request_id=result.get("request_id", ""),
         status=result.get("status", ""),
         delivery_created=bool((result.get("side_effects") or {}).get("delivery_created")),
+    )
+    return result
+
+
+@app.post("/api/images/edit")
+async def image_edit(request: Request) -> dict:
+    """Run the Phase 10 auditable image-to-image (图生图) workflow.
+
+    ``reference`` accepts an upload path (``uploads/...``) or the token
+    ``three_view:front`` which resolves to the active persona's front
+    three-view reference image — the minimal path for using the 三视图
+    to lock the character's appearance during image editing.
+    """
+    try:
+        body = await _read_json_object(request)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    reference = body.get("reference") if isinstance(body.get("reference"), list) else None
+    if not reference:
+        single = str(body.get("reference") or body.get("image_ref") or "")
+        reference = [single] if single else None
+    if not reference:
+        return JSONResponse({"error": "reference is required"}, status_code=400)
+
+    try:
+        workflow = _build_image_workflow()
+        result = workflow.generate_image_edit(
+            prompt=str(body.get("prompt") or ""),
+            reference_assets=[str(r) for r in reference],
+            idempotency_key=str(body.get("idempotency_key") or ""),
+            owner_id=str(body.get("owner_id") or "master"),
+            delivery=body.get("delivery") if isinstance(body.get("delivery"), dict) else None,
+            conversation_id=(
+                str(body.get("conversation_id"))
+                if body.get("conversation_id") is not None
+                else None
+            ),
+        )
+    except Exception as e:
+        try:
+            from core.image_service import ImageWorkflowError
+        except Exception:  # pragma: no cover - import failure fallback
+            ImageWorkflowError = ()  # type: ignore[assignment]
+        if isinstance(e, ImageWorkflowError):
+            return _image_workflow_error_response(e)
+        logger.exception("image edit workflow failed")
+        return JSONResponse(
+            {"error": "image workflow failed", "code": "image_workflow_error"},
+            status_code=500,
+        )
+
+    emit(
+        "image_edit_workflow",
+        request_id=result.get("request_id", ""),
+        status=result.get("status", ""),
     )
     return result
 
@@ -5019,6 +5143,105 @@ async def persona_avatar_get() -> Response:
             "Expires": "0",
         },
     )
+
+
+# ── 三视图（辅助生图参考图）──
+# 每套人设独立存 front/side/back 三张参考图，用于图生图锁定角色外观。
+# 数据层由 persona_manager 的 three_view_* 方法负责（data_dir/personas/three_views/）。
+
+
+def _three_view_max_bytes() -> int:
+    try:
+        return max(64 * 1024, int(os.environ.get("AERIE_THREE_VIEW_MAX_BYTES", "0") or "0") or 8 * 1024 * 1024)
+    except Exception:
+        return 8 * 1024 * 1024
+
+
+@app.get("/api/persona/three-view")
+async def persona_three_view_summary(persona_id: str = Query(default="")) -> dict:
+    """返回人设三视图摘要（每视角 dataURL/url/是否存在）。默认当前激活人设。"""
+    try:
+        pid = persona_id or _persona_mgr.get_active_id()
+        if not _persona_mgr.has_persona(pid):
+            return JSONResponse({"error": "persona not found"}, status_code=404)
+        return {
+            "status": "ok",
+            "persona_id": pid,
+            "views": _persona_mgr.get_three_view_summary(pid),
+        }
+    except Exception as e:
+        logger.exception("persona three-view summary error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/persona/three-view/{persona_id}/{view}")
+async def persona_three_view_get(persona_id: str, view: str) -> Response:
+    """读取某张三视图原始字节。"""
+    try:
+        pair = _persona_mgr.load_three_view(persona_id, view)
+        if pair is None:
+            return JSONResponse({"error": "not set"}, status_code=404)
+        data, ct = pair
+        return Response(
+            content=data,
+            media_type=ct,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+    except Exception as e:
+        logger.exception("persona three-view get error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/persona/three-view/{persona_id}/{view}")
+async def persona_three_view_upload(
+    persona_id: str,
+    view: str,
+    file: UploadFile = File(...),
+) -> dict:
+    """上传一张三视图。PNG/JPG，≤8MB。"""
+    try:
+        if not _persona_mgr.has_persona(persona_id):
+            return JSONResponse({"error": "persona not found"}, status_code=404)
+        data = await file.read()
+        if len(data) > _three_view_max_bytes():
+            return JSONResponse({"error": "file too large"}, status_code=413)
+        if len(data) < 4:
+            return JSONResponse({"error": "empty file"}, status_code=400)
+        ok, suffix = _persona_mgr.save_three_view(persona_id, view, data, ext=file.filename or "")
+        if not ok:
+            return JSONResponse({"error": suffix}, status_code=400)
+        pair = _persona_mgr.load_three_view(persona_id, view)
+        dataurl = ""
+        if pair:
+            import base64 as _b64
+            dataurl = "data:" + pair[1] + ";base64," + _b64.b64encode(pair[0]).decode("ascii")
+        return {
+            "status": "ok",
+            "persona_id": persona_id,
+            "view": view,
+            "file": suffix,
+            "dataurl": dataurl,
+        }
+    except Exception as e:
+        logger.exception("persona three-view upload error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.delete("/api/persona/three-view/{persona_id}/{view}")
+async def persona_three_view_delete(persona_id: str, view: str) -> dict:
+    """删除某张三视图；view 传 '*' 删除整套。"""
+    try:
+        ok, msg = _persona_mgr.delete_three_view(persona_id, view)
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=400)
+        return {"status": "ok", "persona_id": persona_id, "view": view}
+    except Exception as e:
+        logger.exception("persona three-view delete error")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── v13.0: Persona Hub (人设中心) ──────────────────────

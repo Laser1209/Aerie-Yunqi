@@ -2,8 +2,8 @@
 setlocal EnableExtensions
 
 set "ROOT_DIR=%~dp0"
-REM 优先使用 F 盘虚拟环境（避免 C 盘堆积，F 盘为推荐安装位置），
-REM 不存在时回退到项目内 .venv
+REM ����ʹ�� F �����⻷�������� C �̶ѻ���F ��Ϊ�Ƽ���װλ�ã���
+REM ������ʱ���˵���Ŀ�� .venv
 set "VENV_DIR=%ROOT_DIR%.venv"
 if exist "F:\Roaming\Aerie-Yunqi\.venv\Scripts\python.exe" set "VENV_DIR=F:\Roaming\Aerie-Yunqi\.venv"
 set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
@@ -15,6 +15,14 @@ if not defined AERIE_USER_DATA_DIR set "AERIE_USER_DATA_DIR=F:\Roaming\Aerie-Yun
 cd /d "%ROOT_DIR%" || goto :fail_cd
 
 echo ============================================
+echo        d8888                  d8b          
+echo       d88888                  Y8P          
+echo      d88P888                               
+echo     d88P 888  .d88b.  888d888 888  .d88b.  
+echo    d88P  888 d8P  Y8b 888P"   888 d8P  Y8b 
+echo   d88P   888 88888888 888     888 88888888 
+echo  d8888888888 Y8b.     888     888 Y8b.     
+echo d88P     888  "Y8888  888     888  "Y8888  
 echo  Aerie Yunqi v0.1.0-beta.1 - Dev Startup
 echo ============================================
 echo Root: %ROOT_DIR%

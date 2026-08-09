@@ -1,7 +1,7 @@
 {
-  "revision": 2,
+  "revision": 5,
   "schema_version": 1,
-  "updated_at": "2026-07-26T12:19:02.928968+00:00",
+  "updated_at": "2026-08-09T04:42:12.778996+00:00",
   "values": {
     "runtime_control_v1": true,
     "world_dashboard_control_v1": true,

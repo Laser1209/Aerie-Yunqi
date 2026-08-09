@@ -329,6 +329,18 @@ class Companion:
         # Push scheduler
         proactive_cfg = load_proactive_config()
         self.push_scheduler = PushScheduler(proactive_cfg)
+        # UI overlay: settings.yaml proactive.max_per_day / min_interval_min
+        # override the proactive.yaml defaults (consistent with image budget).
+        try:
+            _pset = (self.settings or {}).get("proactive", {})
+            _pol = self.push_scheduler.policy
+            if isinstance(_pset, dict):
+                if _pset.get("max_per_day") is not None:
+                    _pol.max_per_day = int(_pset["max_per_day"])
+                if _pset.get("min_interval_min") is not None:
+                    _pol.min_interval_min = int(_pset["min_interval_min"])
+        except Exception:
+            logger.debug("apply proactive frequency overlay failed", exc_info=True)
         self.push_scheduler.set_dispatcher(self._dispatch_push)
         self.push_event_engine = get_event_engine()
         self.push_event_engine.bind_scheduler(self.push_scheduler)
@@ -643,6 +655,20 @@ class Companion:
             vision_provider=BrainImageVisionProvider(getattr(self, "brain", None)),
         )
 
+        try:
+            from core.image_budget import ImageBudget
+
+            settings = getattr(self, "settings", None) or {}
+            proactive_cfg = settings.get("proactive", {}) if isinstance(settings, dict) else {}
+            image_max_per_day = int(proactive_cfg.get("image_max_per_day", 0) or 0)
+            image_budget = ImageBudget(
+                state_path=data_dir() / "image_budget_state.json",
+                limits={"proactive": image_max_per_day},
+            )
+        except Exception:
+            logger.debug("image budget init failed; disabling proactive limit", exc_info=True)
+            image_budget = None
+
         def delivery_online() -> bool:
             try:
                 return not bool(getattr(scheduler, "is_paused", False))
@@ -655,6 +681,7 @@ class Companion:
             world_port=getattr(self, "world_port", None),
             push_policy=push_policy,
             proactive_judge=getattr(self, "proactive_judge", None),
+            image_budget=image_budget,
             store=JsonWorldImageCandidateStore(data_dir() / "world_image_candidates.json"),
             delivery_online=delivery_online,
         )

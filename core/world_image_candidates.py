@@ -106,6 +106,7 @@ class WorldImageCandidateConsumer:
         world_port: Any | None = None,
         push_policy: Any | None = None,
         proactive_judge: Any | None = None,
+        image_budget: Any | None = None,
         store: JsonWorldImageCandidateStore | None = None,
         clock: Callable[[], datetime] | None = None,
         delivery_online: Callable[[], bool] | None = None,
@@ -116,6 +117,7 @@ class WorldImageCandidateConsumer:
         self.world_port = world_port
         self.push_policy = push_policy
         self.proactive_judge = proactive_judge
+        self.image_budget = image_budget
         self.store = store or JsonWorldImageCandidateStore()
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.delivery_online = delivery_online
@@ -273,6 +275,19 @@ class WorldImageCandidateConsumer:
                 record=record,
             )
 
+        budget_allowed, budget_reason = self._budget_can_record()
+        if not budget_allowed:
+            record = self._record("suppressed", candidate, event, reason=budget_reason)
+            acked = await self._ack(_event_sequence(event))
+            return self._result(
+                status="suppressed",
+                event=event,
+                candidate=candidate,
+                reason=budget_reason,
+                acked=acked,
+                record=record,
+            )
+
         judge_decision = self._judge(candidate)
         suppress_reason = str(getattr(judge_decision, "suppress_reason", "") or "")
         if suppress_reason:
@@ -317,6 +332,7 @@ class WorldImageCandidateConsumer:
         )
         if completed:
             self._record_push(candidate["scene"])
+            self._record_budget("proactive")
         acked = await self._ack(_event_sequence(event))
         return self._result(
             status=status,
@@ -392,6 +408,24 @@ class WorldImageCandidateConsumer:
         except Exception:
             logger.debug("world image candidate push policy failed", exc_info=True)
             return False, "policy_error"
+
+    def _budget_can_record(self) -> tuple[bool, str]:
+        if self.image_budget is None or not hasattr(self.image_budget, "can_record"):
+            return True, "ok"
+        try:
+            allowed, reason = self.image_budget.can_record("proactive")
+            return bool(allowed), str(reason or "ok")
+        except Exception:
+            logger.debug("world image candidate budget check failed", exc_info=True)
+            return False, "daily_image_limit"
+
+    def _record_budget(self, kind: str) -> None:
+        if self.image_budget is None or not hasattr(self.image_budget, "record"):
+            return
+        try:
+            self.image_budget.record(kind)
+        except Exception:
+            logger.debug("world image candidate budget record failed", exc_info=True)
 
     def _judge(self, candidate: dict[str, Any]) -> Any:
         if self.proactive_judge is None or not hasattr(self.proactive_judge, "evaluate"):

@@ -363,6 +363,77 @@ class BrainImageGenerationProvider:
             error_code=str(raw.get("status") or "provider_unavailable"),
         )
 
+    def generate_edit(
+        self,
+        *,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+        request_id: str,
+        owner_id: str,
+        metadata: dict[str, Any],
+    ) -> ImageGenerationResult:
+        """Image-to-image edit via the legacy ``Brain.generate_image_edit`` surface.
+
+        Best-effort: if the Brain lacks an edit path or the provider cannot
+        serve edits, we return ``unavailable`` (never raise).
+        """
+        if self.brain is None or not hasattr(self.brain, "generate_image_edit"):
+            return ImageGenerationResult(
+                status="unavailable",
+                provider_id=self.provider_id,
+                model=self.model,
+                error_code="image_edit_unsupported",
+            )
+        try:
+            raw = self.brain.generate_image_edit(
+                prompt,
+                image_bytes,
+                mime_type=mime_type,
+            )
+        except Exception:
+            return ImageGenerationResult(
+                status="unavailable",
+                provider_id=self.provider_id,
+                model=self.model,
+                error_code="image_edit_unsupported",
+            )
+        if not isinstance(raw, dict):
+            return ImageGenerationResult(
+                status="unavailable",
+                provider_id=self.provider_id,
+                model=self.model,
+                error_code="image_edit_unsupported",
+            )
+        provider_id = str(raw.get("provider") or self.provider_id)
+        model = str(raw.get("model") or self.model)
+        image_bytes_b64 = raw.get("image_bytes_b64")
+        if image_bytes_b64:
+            try:
+                decoded = base64.b64decode(str(image_bytes_b64), validate=True)
+            except Exception:
+                return ImageGenerationResult(
+                    status="failed",
+                    provider_id=provider_id,
+                    model=model,
+                    error_code="invalid_provider_image_bytes",
+                )
+            return ImageGenerationResult(
+                status="ok",
+                image_bytes=decoded,
+                mime_type=str(raw.get("mime_type") or "image/png"),
+                provider_id=provider_id,
+                model=model,
+                external_id=str(raw.get("external_id") or ""),
+            )
+        return ImageGenerationResult(
+            status=str(raw.get("status") or "unavailable"),
+            provider_id=provider_id,
+            model=model,
+            error_code=str(raw.get("error_code") or raw.get("status") or "image_edit_unsupported"),
+        )
+
+
 
 class BrainImageVisionProvider:
     """Adapter around the legacy ``Brain.see_image`` surface."""
@@ -693,6 +764,190 @@ class ImageWorkflow:
             result["visual_request"] = visual_request
         self._record_result(result, operation, idem, fingerprint, owner)
         return result
+
+    def generate_image_edit(
+        self,
+        *,
+        prompt: str,
+        reference_assets: list[str],
+        idempotency_key: str,
+        owner_id: str = "master",
+        delivery: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Image-to-image workflow (best-effort).
+
+        Mirrors :meth:`generate_image` but feeds a reference image to the
+        provider's edit path. If the provider cannot serve edits, it returns
+        ``unavailable`` without raising, so the surrounding loop never breaks.
+        """
+        operation = "image_edit"
+        if not self.feature_enabled:
+            return self._disabled_result(operation)
+
+        prompt_text = str(prompt or "")
+        owner = self._normalize_owner(owner_id)
+        idem = self._normalize_idempotency_key(idempotency_key)
+        reference_bytes, mime = self._resolve_reference_assets(reference_assets)
+        if reference_bytes is None:
+            result = self._base_result(
+                operation=operation,
+                request_id=self.id_factory("imgedit"),
+                idempotency_key=idem,
+                status="rejected",
+                safety=self.safety_policy.review_generation_prompt(prompt_text),
+                owner_id=owner,
+                audit={"prompt_sha256": _sha256_text(prompt_text)},
+                provider_attempted=False,
+                error_code="missing_reference_asset",
+            )
+            self._record_result(result, operation, idem, "", owner)
+            return result
+
+        safety = self.safety_policy.review_generation_prompt(prompt_text)
+        if not safety.allowed:
+            result = self._base_result(
+                operation=operation,
+                request_id=self.id_factory("imgedit"),
+                idempotency_key=idem,
+                status="rejected",
+                safety=safety,
+                owner_id=owner,
+                audit={"prompt_sha256": _sha256_text(prompt_text)},
+                provider_attempted=False,
+            )
+            self._record_result(result, operation, idem, "", owner)
+            return result
+
+        provider = self.generation_provider
+        provider_id = str(getattr(provider, "provider_id", "unknown"))
+        model = str(getattr(provider, "model", "unknown"))
+        if not hasattr(provider, "generate_edit"):
+            result = self._base_result(
+                operation=operation,
+                request_id=self.id_factory("imgedit"),
+                idempotency_key=idem,
+                status="failed",
+                safety=safety,
+                owner_id=owner,
+                audit={"prompt_sha256": _sha256_text(prompt_text)},
+                provider_attempted=False,
+                provider={"id": provider_id, "model": model, "status": "not_called"},
+                error_code="image_edit_unsupported",
+            )
+            self._record_result(result, operation, idem, "", owner)
+            return result
+
+        request_id = self.id_factory("imgedit")
+        metadata_payload = {
+            "conversation_id": conversation_id or "",
+            "idempotency_key": idem,
+            "prompt_sha256": _sha256_text(prompt_text),
+            "reference_assets": list(reference_assets),
+            **(metadata or {}),
+        }
+        try:
+            generated = provider.generate_edit(
+                prompt=prompt_text,
+                image_bytes=reference_bytes,
+                mime_type=mime,
+                request_id=request_id,
+                owner_id=owner,
+                metadata=metadata_payload,
+            )
+        except Exception:
+            logger.warning("image edit provider failed", exc_info=True)
+            generated = ImageGenerationResult(
+                status="failed",
+                provider_id=provider_id,
+                model=model,
+                error_code="provider_failed",
+            )
+
+        provider_public = {
+            "id": str(generated.provider_id or provider_id),
+            "model": str(generated.model or model),
+            "status": str(generated.status or "unknown"),
+        }
+        if generated.status != "ok":
+            result = self._base_result(
+                operation=operation,
+                request_id=request_id,
+                idempotency_key=idem,
+                status="failed",
+                safety=safety,
+                owner_id=owner,
+                audit={"prompt_sha256": _sha256_text(prompt_text)},
+                provider_attempted=True,
+                provider=provider_public,
+                error_code=str(generated.error_code or generated.status or "provider_failed"),
+            )
+            self._record_result(result, operation, idem, "", owner)
+            return result
+
+        image_bytes = self._read_generation_bytes(generated)
+        if not image_bytes:
+            result = self._base_result(
+                operation=operation,
+                request_id=request_id,
+                idempotency_key=idem,
+                status="failed",
+                safety=safety,
+                owner_id=owner,
+                audit={"prompt_sha256": _sha256_text(prompt_text)},
+                provider_attempted=True,
+                provider=provider_public,
+                error_code="provider_failed",
+            )
+            self._record_result(result, operation, idem, "", owner)
+            return result
+
+        asset = self._persist_generated_asset(
+            request_id=request_id,
+            image_bytes=image_bytes,
+            mime_type=generated.mime_type or "image/png",
+        )
+        delivery_plan = self._create_delivery_plan(
+            request_id=request_id,
+            asset=asset,
+            delivery=self._normalize_delivery(delivery),
+        )
+        result = self._base_result(
+            operation=operation,
+            request_id=request_id,
+            idempotency_key=idem,
+            status="completed",
+            safety=safety,
+            owner_id=owner,
+            audit={"prompt_sha256": _sha256_text(prompt_text)},
+            provider_attempted=True,
+            provider=provider_public,
+            asset=asset,
+            delivery_plan=delivery_plan,
+            side_effects={
+                "provider_called": True,
+                "asset_created": True,
+                "delivery_created": True,
+            },
+        )
+        self._record_result(result, operation, idem, "", owner)
+        return result
+
+    def _resolve_reference_assets(
+        self,
+        reference_assets: list[str],
+    ) -> tuple[bytes | None, str]:
+        """Resolve the first usable reference image to ``(bytes, mime)``."""
+        for ref in reference_assets or []:
+            try:
+                resolved = self._resolve_upload_reference(str(ref))
+                mime = _guess_mime(resolved.name)
+                return resolved.read_bytes(), mime
+            except Exception:
+                logger.debug("image edit reference asset unusable: %s", ref, exc_info=True)
+                continue
+        return None, "image/png"
 
     def understand_image(
         self,
@@ -1091,6 +1346,19 @@ class ImageWorkflow:
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _guess_mime(filename: str) -> str:
+    """Guess a mime type from a filename suffix (defaults to PNG)."""
+    suffix = Path(str(filename)).suffix.lower()
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+    }.get(suffix, "image/png")
 
 
 def _sha256_bytes(data: bytes) -> str:

@@ -1598,6 +1598,90 @@ def _brain_generate_image(self, prompt: str) -> dict:
     }
 
 
+def _brain_generate_image_edit(
+    self,
+    prompt: str,
+    image_bytes: bytes,
+    *,
+    mime_type: str = "image/png",
+    size: str | None = None,
+) -> dict:
+    """Edit / image-to-image via the ``/images/edits`` endpoint.
+
+    Best-effort: many OpenAI-compatible relays expose an ``/images/edits``
+    endpoint that accepts ``image`` + ``prompt``. If the endpoint is missing,
+    times out, or returns no image, we degrade to ``unavailable`` so the
+    calling workflow never hard-fails.
+    """
+    api_key = _first_env("AERIE_IMAGE_API_KEY", "OPENAI_IMAGE_API_KEY")
+    if not api_key:
+        return {
+            "status": "stub",
+            "provider": "openai_compatible_image",
+            "model": "unknown",
+            "output_path": None,
+            "note": "image_edit requires an image API key",
+        }
+    base_url = (
+        _first_env("AERIE_IMAGE_BASE_URL", "OPENAI_IMAGE_BASE_URL")
+        or "https://api.openai.com/v1"
+    )
+    model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL") or "gpt-image-1"
+    size = size or _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+    try:
+        response = httpx.post(
+            _openai_compatible_url(base_url, "images/edits"),
+            headers={"Authorization": f"Bearer {api_key}"},
+            data={
+                "model": model,
+                "prompt": prompt or "",
+                "n": "1",
+                "size": size,
+                "response_format": "b64_json",
+            },
+            files={
+                "image": (
+                    "reference.png",
+                    image_bytes,
+                    mime_type or "image/png",
+                )
+            },
+            timeout=_provider_timeout_seconds(),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        first = data[0] if isinstance(data, list) and data else {}
+        image_b64 = str(first.get("b64_json") or "")
+        if not image_b64:
+            return {
+                "status": "unavailable",
+                "provider": "openai_compatible_image",
+                "model": model,
+                "output_path": None,
+                "error_code": "image_edit_missing_b64_json",
+            }
+        return {
+            "status": "ok",
+            "provider": "openai_compatible_image",
+            "model": model,
+            "prompt": (prompt or "")[:200],
+            "image_bytes_b64": image_b64,
+            "mime_type": "image/png",
+            "output_path": None,
+            "external_id": str(first.get("revised_prompt") or ""),
+        }
+    except Exception:
+        logger.warning("image edit provider call failed", exc_info=True)
+        return {
+            "status": "unavailable",
+            "provider": "openai_compatible_image",
+            "model": model,
+            "output_path": None,
+            "error_code": "image_edit_unsupported",
+        }
+
+
 def _brain_speak_text(self, text: str) -> dict:
     """Synthesize speech via the ``voice_tts`` provider.
 
@@ -1906,6 +1990,7 @@ Brain._load_ai_options = _brain_load_ai_options
 Brain.get_ai_options = _brain_get_ai_options
 Brain.bge_embed = _brain_bge_embed
 Brain.generate_image = _brain_generate_image
+Brain.generate_image_edit = _brain_generate_image_edit
 Brain.speak_text = _brain_speak_text
 Brain.see_image = _brain_see_image
 Brain.safe_shell = _brain_safe_shell

@@ -382,3 +382,76 @@ async def test_companion_exposes_one_shot_candidate_consumer(tmp_path):
     assert [result["status"] for result in results] == ["completed"]
     assert workflow.calls
     assert port.acks == [7]
+
+
+class BudgetStub:
+    """Minimal stand-in mirroring ImageBudget.can_record/record."""
+
+    def __init__(self, allowed: bool = True, reason: str = "ok") -> None:
+        self.allowed = allowed
+        self.reason = reason
+        self.recorded: list[str] = []
+
+    def can_record(self, kind: str):
+        return self.allowed, self.reason
+
+    def record(self, kind: str) -> None:
+        self.recorded.append(kind)
+
+
+@pytest.mark.asyncio
+async def test_daily_image_limit_rejects_and_acks_without_workflow(tmp_path):
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    workflow = WorkflowStub()
+    port = WorldPortStub()
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=workflow,
+        world_port=port,
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        image_budget=BudgetStub(False, "daily_image_limit"),
+        store=JsonWorldImageCandidateStore(tmp_path / "budget-reject.json"),
+        clock=_clock,
+    )
+
+    result = await consumer.process_event(_candidate_event())
+
+    assert result["status"] == "suppressed"
+    assert result["reason"] == "daily_image_limit"
+    assert result["acked"] is True
+    assert workflow.calls == []
+    assert port.acks == [7]
+
+
+@pytest.mark.asyncio
+async def test_completed_proactive_image_records_budget(tmp_path):
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    workflow = WorkflowStub()
+    port = WorldPortStub()
+    budget = BudgetStub(True, "ok")
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=workflow,
+        world_port=port,
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        image_budget=budget,
+        store=JsonWorldImageCandidateStore(tmp_path / "budget-record.json"),
+        clock=_clock,
+    )
+
+    result = await consumer.process_event(_candidate_event())
+
+    assert result["status"] == "completed"
+    assert budget.recorded == ["proactive"]
+    assert workflow.calls
+

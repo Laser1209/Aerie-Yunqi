@@ -4068,9 +4068,26 @@ async def stats_tokens(user_id: int | None = Query(default=None)) -> dict:
 async def settings_get() -> dict:
     """Return current merged settings (YAML + defaults)."""
     try:
-        return load_settings()
+        result = load_settings()
     except Exception as e:
         return {"error": str(e)}
+
+    # Attach live proactive image budget readout (read-only, best-effort).
+    try:
+        comp = get_companion()
+        consumer = getattr(comp, "world_image_candidate_consumer", None)
+        budget = getattr(consumer, "image_budget", None)
+        if budget is not None and hasattr(budget, "snapshot"):
+            snap = budget.snapshot()
+            pro = snap.get("proactive", {}) or {}
+            if isinstance(result, dict):
+                result.setdefault("proactive", {})["image_used_today"] = int(pro.get("used", 0))
+                if "image_max_per_day" not in result["proactive"]:
+                    result["proactive"]["image_max_per_day"] = int(pro.get("limit", 0))
+    except Exception:
+        logger.debug("settings_get: proactive image budget readout failed", exc_info=True)
+    return result
+
 
 
 @app.put("/api/settings")

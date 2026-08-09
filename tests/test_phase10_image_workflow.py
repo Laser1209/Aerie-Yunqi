@@ -582,3 +582,93 @@ def test_generate_endpoint_flag_off_uses_disabled_contract_without_new_workflow(
     assert response.status_code == 200
     assert response.json()["status"] == "disabled"
     assert not (tmp_path / "uploads" / ".image_assets" / "image_workflows.json").exists()
+
+
+def test_image_edit_degrades_when_provider_lacks_edit_support(tmp_path):
+    # FakeGenerationProvider only exposes generate() (no generate_edit).
+    provider = FakeGenerationProvider()
+    service = _workflow(tmp_path, provider)
+
+    # First write a reference asset into the uploads dir.
+    uploads = tmp_path / "uploads"
+    uploads.mkdir(parents=True, exist_ok=True)
+    ref = uploads / "ref.png"
+    ref.write_bytes(_png_bytes())
+
+    result = service.generate_image_edit(
+        prompt="turn it into a night scene",
+        reference_assets=["uploads/ref.png"],
+        idempotency_key="edit-nosupport",
+        owner_id="master",
+        delivery={"channel": "local_chat"},
+    )
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "image_edit_unsupported"
+    assert result["side_effects"]["provider_called"] is False
+    assert result["asset"] is None
+
+
+def test_image_edit_rejects_missing_reference_asset(tmp_path):
+    provider = FakeGenerationProvider()
+    service = _workflow(tmp_path, provider)
+
+    result = service.generate_image_edit(
+        prompt="edit something",
+        reference_assets=["uploads/does-not-exist.png"],
+        idempotency_key="edit-missing",
+        owner_id="master",
+    )
+
+    assert result["status"] == "rejected"
+    assert result["error_code"] == "missing_reference_asset"
+    assert result["side_effects"]["provider_called"] is False
+
+
+class FakeEditProvider:
+    """Provider exposing both generate() and generate_edit()."""
+
+    provider_id = "fake_edit"
+    model = "fake-edit-model"
+
+    def __init__(self) -> None:
+        self.edits: list[dict] = []
+
+    def generate(self, *, prompt, request_id, owner_id, metadata):
+        raise AssertionError("generate should not be called")
+
+    def generate_edit(self, *, prompt, image_bytes, mime_type, request_id, owner_id, metadata):
+        self.edits.append({"prompt": prompt, "image_bytes": image_bytes})
+        return ImageGenerationResult(
+            status="ok",
+            image_bytes=_png_bytes((8, 8), color=(200, 60, 60)),
+            mime_type="image/png",
+            provider_id=self.provider_id,
+            model=self.model,
+            external_id="edit-ext-1",
+        )
+
+
+def test_image_edit_success_persists_asset_and_delivery_plan(tmp_path):
+    provider = FakeEditProvider()
+    service = _workflow(tmp_path, provider)
+
+    uploads = tmp_path / "uploads"
+    uploads.mkdir(parents=True, exist_ok=True)
+    (uploads / "ref.png").write_bytes(_png_bytes())
+
+    result = service.generate_image_edit(
+        prompt="make it sunset",
+        reference_assets=["uploads/ref.png"],
+        idempotency_key="edit-ok",
+        owner_id="master",
+        delivery={"channel": "local_chat", "target": "desktop"},
+    )
+
+    assert result["status"] == "completed"
+    assert provider.edits and provider.edits[0]["image_bytes"] == _png_bytes()
+    assert result["asset"]["is_image"] is True
+    assert result["delivery_plan"]["status"] == "planned"
+    assert result["delivery_plan"]["channel"] == "local_chat"
+    assert result["side_effects"]["asset_created"] is True
+

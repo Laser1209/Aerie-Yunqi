@@ -25,6 +25,9 @@ office:
   dir: F:\文件\Aerie
 proactive:
   system_notifications: true
+  max_per_day: 5
+  min_interval_min: 30
+  image_max_per_day: 10
 qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0

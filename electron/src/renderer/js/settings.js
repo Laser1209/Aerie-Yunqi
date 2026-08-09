@@ -368,6 +368,33 @@ class SettingsPanel {
       }
       document.getElementById("setting-proactive").checked = proactive.enabled !== false;
 
+      // Daily proactive message frequency controls.
+      const maxPerDayEl = document.getElementById("setting-proactive-max-per-day");
+      if (maxPerDayEl) {
+        const v = Number(proactive.max_per_day != null ? proactive.max_per_day : 0);
+        maxPerDayEl.value = String([3, 5, 8, 10].includes(v) ? v : 5);
+      }
+      const minIntervalEl = document.getElementById("setting-proactive-min-interval");
+      if (minIntervalEl) {
+        const v = Number(proactive.min_interval_min != null ? proactive.min_interval_min : 0);
+        minIntervalEl.value = String([15, 30, 60].includes(v) ? v : 30);
+      }
+
+      // Daily proactive image limit + today's usage readout.
+      const limitEl = document.getElementById("setting-proactive-image-limit");
+      if (limitEl) {
+        const limit = (proactive.image_max_per_day != null) ? Number(proactive.image_max_per_day) : 0;
+        limitEl.value = String([6, 10, 20, 0].includes(limit) ? limit : 0);
+      }
+      const usageEl = document.getElementById("setting-proactive-image-usage");
+      if (usageEl) {
+        const used = (proactive.image_used_today != null) ? Number(proactive.image_used_today) : 0;
+        const max = (proactive.image_max_per_day != null) ? Number(proactive.image_max_per_day) : 0;
+        usageEl.textContent = max > 0
+          ? `今日已用 ${used} / 上限 ${max} · Used ${used}/${max} today`
+          : `今日已用 ${used} · Used ${used} today (不限制 / Unlimited)`;
+      }
+
       // R7.1: my-location picker.
       const cityInput = document.getElementById("setting-weather-city");
       const hint = document.getElementById("setting-weather-hint");
@@ -399,6 +426,9 @@ class SettingsPanel {
       },
       proactive: {
         enabled: document.getElementById("setting-proactive").checked,
+        max_per_day: Number(document.getElementById("setting-proactive-max-per-day")?.value || 5),
+        min_interval_min: Number(document.getElementById("setting-proactive-min-interval")?.value || 30),
+        image_max_per_day: Number(document.getElementById("setting-proactive-image-limit")?.value || 0),
       },
       // R7.1: empty string ⇒ resolver falls back to IP auto-detect.
       weather: {

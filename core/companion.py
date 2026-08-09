@@ -369,8 +369,6 @@ class Companion:
         self._daily_decay_task: asyncio.Task | None = None
         self._push_task: asyncio.Task | None = None
         self._boot_brief_task: asyncio.Task | None = None
-        # R7.5+: 应用启动后主动 QQ 推送任务
-        self._boot_qq_task: asyncio.Task | None = None
         # R7.5: 10s background tick for emotion dashboard liveness.
         self._emotion_tick_task: asyncio.Task | None = None
         # Block-4B R2.2: 24h desire engine (lazy-created on first start()).
@@ -467,10 +465,12 @@ class Companion:
                 self._boot_brief_task = asyncio.create_task(self._boot_brief())
 
                 # boot_greeting: trigger immediately (QQ is already ready)
-                # Set the flag FIRST so the state-change callback doesn't
-                # fire a duplicate (lifecycle.connect may fire after this).
-                self._boot_greeting_fired = True
-                asyncio.create_task(self._boot_qq_greeting())
+                # Guard on _boot_greeting_fired so the state-change callback
+                # (which may have fired first during connect) and this path
+                # can't both launch a greeting task → would send twice.
+                if not self._boot_greeting_fired:
+                    self._boot_greeting_fired = True
+                    asyncio.create_task(self._boot_qq_greeting())
         else:
             logger.warning(
                 "[Startup] QQ not ready after %ss; starting in degraded mode "
@@ -893,12 +893,6 @@ class Companion:
             self._boot_brief_task.cancel()
             try:
                 await self._boot_brief_task
-            except asyncio.CancelledError:
-                pass
-        if self._boot_qq_task:
-            self._boot_qq_task.cancel()
-            try:
-                await self._boot_qq_task
             except asyncio.CancelledError:
                 pass
         if self._emotion_tick_task:

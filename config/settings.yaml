@@ -1,3 +1,6 @@
+douyin:
+  api_base_url: https://api.justoneapi.com
+  api_token: hTyHR6DVMd4jjZlN
 feature_flags:
   chat_request_queue_v1: true
   chat_stream_v1: false
@@ -14,20 +17,20 @@ feature_flags:
   world_inprocess_v1: true
   world_sidecar_v1: false
 message_batching:
-  enabled: true
-  window_seconds: 1.5
-  max_batch_size: 5
   base_interval_seconds: 0.5
   chars_per_second: 4
-  min_interval_seconds: 0.3
+  enabled: true
+  max_batch_size: 5
   max_interval_seconds: 5.0
+  min_interval_seconds: 0.3
+  window_seconds: 1.5
 office:
   dir: F:\文件\Aerie
 proactive:
-  system_notifications: true
+  image_max_per_day: 10
   max_per_day: 5
   min_interval_min: 30
-  image_max_per_day: 10
+  system_notifications: true
 qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0
@@ -35,12 +38,9 @@ verify_batch4:
   ping: pong
   ts: 1784404889
 weather:
-  city: ''
-douyin:
-  api_base_url: https://api.justoneapi.com  # JustOneAPI 域名
-  api_token: 'hTyHR6DVMd4jjZlN'                             # JustOneAPI Token（也可用环境变量 JUSTONEAPI_TOKEN）
+  city: 济南
 world:
-  location: ''            # 世界独立位置（城市）。空 = 自动/IP/兜底
-  tick_interval_sec: 300  # 后台真实时间推进间隔（秒）
-  reality_refresh_sec: 1800  # 真实天气/附近地点/实时事件刷新间隔（秒）
-  random_events_per_day: 3   # 每日随机生活事件条数（0 = 关闭）
+  location: 济南
+  random_events_per_day: 3
+  reality_refresh_sec: 1800
+  tick_interval_sec: 300

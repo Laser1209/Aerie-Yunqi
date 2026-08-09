@@ -72,17 +72,38 @@ async def test_clearing_manual_city_uses_auto_location(monkeypatch, tmp_path, is
 
 
 @pytest.mark.asyncio
-async def test_fetch_weather_returns_standard_stub_when_mcp_unavailable(monkeypatch, tmp_path, isolated_settings):
+async def test_fetch_weather_returns_standard_stub_when_mcp_and_http_unavailable(monkeypatch, tmp_path, isolated_settings):
     isolated_settings["weather"]["city"] = "巴黎"
     _, _, weather_service, _ = reload_location_modules(monkeypatch, tmp_path)
+    # 模拟 Open-Meteo 也失败 → 应回退到标准 stub。
+    monkeypatch.setattr(weather_service, "_open_meteo_weather", lambda city: None)
 
     weather = await weather_service.fetch_weather_for_current_location()
 
     assert weather["city"] == "巴黎"
     assert weather["manual"] is True
-    assert weather["source"] == "manual"
     assert weather["forecast"] == []
     assert weather["stub"] is True
+
+
+@pytest.mark.asyncio
+async def test_fetch_weather_uses_real_open_meteo_when_mcp_unavailable(monkeypatch, tmp_path, isolated_settings):
+    isolated_settings["weather"]["city"] = "巴黎"
+    _, _, weather_service, _ = reload_location_modules(monkeypatch, tmp_path)
+    # 百度 MCP 不可用，但 Open-Meteo 返回真实天气 → 不再返回假 stub。
+    monkeypatch.setattr(
+        weather_service,
+        "_open_meteo_weather",
+        lambda city: {"temperature": "21", "weather": "小雨", "wind": "12 km/h", "forecast": [], "suggestion": "s"},
+    )
+
+    weather = await weather_service.fetch_weather_for_current_location()
+
+    assert weather["city"] == "巴黎"
+    assert weather["source"] == "open_meteo"
+    assert weather["stub"] is False
+    assert weather["temp"] == "21"
+    assert weather["desc"] == "小雨"
 
 
 def test_update_today_weather_updates_cached_brief(monkeypatch, tmp_path):

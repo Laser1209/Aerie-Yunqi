@@ -858,6 +858,46 @@ async def world_control(request: Request) -> Response:
     return JSONResponse(result)
 
 
+@app.post("/api/world/reality/refresh")
+async def world_reality_refresh(request: Request) -> Response:
+    """立即拉取并注入当前世界城市的真实数据（天气/附近地点/实时事件）。
+
+    在仪表盘保存世界位置后调用，让位置改动无需等待后台刷新周期即可生效。
+    受主进程 Token 鉴权保护。
+    """
+    if not _main_process_request_authorized(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    companion = get_companion()
+    if companion is None:
+        return JSONResponse({"error": "backend_not_ready"}, status_code=503)
+    world_port = getattr(companion, "world_port", None)
+    setter = getattr(world_port, "set_reality", None)
+    if not callable(setter):
+        return JSONResponse({"error": "world_unavailable"}, status_code=503)
+
+    try:
+        settings = load_settings() or {}
+        city = str((settings.get("world") or {}).get("location") or "").strip()
+        if not city:
+            from core.location_resolver import resolve_location_async
+            city = str((await resolve_location_async()).get("city") or "").strip()
+        result: dict[str, Any] = {"status": "ok", "city": city, "weather": {}}
+        if city:
+            from core.world_reality import fetch_reality
+            reality = await fetch_reality(city)
+            setter(reality)
+            result["city"] = city
+            result["weather"] = reality.get("weather") or {}
+            result["nearby"] = len(reality.get("nearby_places") or [])
+            result["events"] = len(reality.get("city_events") or [])
+        else:
+            result["status"] = "no_city"
+        return JSONResponse(result)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("world reality refresh failed: %s", e)
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
+
+
 @app.get("/api/health")
 async def health(request: Request) -> dict:
     comp = get_companion()
@@ -4099,6 +4139,20 @@ async def settings_put(request: Request) -> dict:
     """Update settings (partial merge)."""
     try:
         body = await request.json()
+        if isinstance(body, dict):
+            # 统一世界位置与天气城市：两者之一非空时同步到另一个，
+            # 避免世界位置与天气各用各的城市导致"改了没生效"。
+            world_loc = ""
+            weather_city = ""
+            if isinstance(body.get("world"), dict):
+                world_loc = str(body["world"].get("location") or "").strip()
+            if isinstance(body.get("weather"), dict):
+                weather_city = str(body["weather"].get("city") or "").strip()
+            if world_loc and not weather_city:
+                body.setdefault("weather", {})["city"] = world_loc
+                weather_city = world_loc
+            if weather_city and not world_loc:
+                body.setdefault("world", {})["location"] = weather_city
         save_settings(body)
         if isinstance(body, dict) and isinstance(body.get("weather"), dict) and "city" in body["weather"]:
             try:

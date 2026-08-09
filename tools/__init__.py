@@ -94,6 +94,14 @@ def register_all_tools(registry) -> None:
         import logging
         logging.getLogger(__name__).warning("douyin search tools registration failed: %s", e)
 
+    # 通用多平台搜索（JustOneAPI）
+    try:
+        from tools.social_search import register_social_search_tools
+        register_social_search_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("social search tools registration failed: %s", e)
+
     # [扩展] v0.1.0-beta.1: computer control tools — previously never registered,
     # so LLM Function Calling could not invoke any computer_control actions.
     # ZERO-BREAKING: adds new tool entries without touching existing ones.

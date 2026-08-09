@@ -463,10 +463,20 @@ function createWorldDashboardHost({
         body: { world: { location: safeText(city) } },
       });
       const data = response && response.data && typeof response.data === "object" ? response.data : {};
+      // 保存后立即刷新真实数据，避免等待后台刷新周期。
+      let refresh = {};
+      try {
+        const rr = await apiRequest({ method: "POST", path: "/api/world/reality/refresh", body: {} });
+        const rd = rr && rr.data && typeof rr.data === "object" ? rr.data : {};
+        refresh = { refreshStatus: String(rd.status || "ok"), weather: rd.weather || {} };
+      } catch (_) {
+        refresh = { refreshStatus: "unavailable" };
+      }
       return {
         status: String(data.status || "ok"),
         city: safeText(city),
         sideEffects,
+        ...refresh,
       };
     } catch (_) {
       return { status: "backend_unreachable", city: safeText(city), sideEffects };

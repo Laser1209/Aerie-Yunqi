@@ -6,6 +6,8 @@ import inspect
 import json
 import logging
 import time
+import urllib.request
+from typing import Any
 
 from core.paths import city_cache_path
 
@@ -13,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 _CACHE_TTL_SEC = 24 * 3600
 _FALLBACK_CITY = "上海"
+
+# 百度地图 MCP 不可用时，用 ip-api.com 做真实 IP 定位（免费、无需 key）。
+_HTTP_IP_API = "http://ip-api.com/json/?lang=zh-CN&fields=status,city,country"
+_HTTP_IP_TIMEOUT_SEC = 6.0
 
 
 def _read_settings_city() -> str:
@@ -130,6 +136,21 @@ async def _call_map_ip_location_async() -> object:
         return None
 
 
+def _http_ip_city() -> str:
+    """百度地图 MCP 不可用时，用 ip-api.com 做真实 IP 定位（best-effort）。"""
+    try:
+        req = urllib.request.Request(_HTTP_IP_API, headers={"User-Agent": "aerie/1.0"})
+        with urllib.request.urlopen(req, timeout=_HTTP_IP_TIMEOUT_SEC) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if isinstance(data, dict) and data.get("status") == "success":
+            city = str(data.get("city") or "").strip()
+            if city and city not in {"None", "null"}:
+                return city
+    except Exception as e:
+        logger.debug("location_resolver: http ip city failed: %s", e)
+    return ""
+
+
 def resolve_location(*, force_refresh: bool = False) -> dict:
     manual = _read_settings_city()
     if manual:
@@ -138,7 +159,7 @@ def resolve_location(*, force_refresh: bool = False) -> dict:
         cached = _read_cache()
         if cached:
             return _location(cached, "cache")
-    detected = _parse_ip_city(_call_map_ip_location())
+    detected = _parse_ip_city(_call_map_ip_location()) or _http_ip_city()
     if detected:
         _write_cache(detected)
         return _location(detected, "ip")
@@ -153,7 +174,7 @@ async def resolve_location_async(*, force_refresh: bool = False) -> dict:
         cached = _read_cache()
         if cached:
             return _location(cached, "cache")
-    detected = _parse_ip_city(await _call_map_ip_location_async())
+    detected = _parse_ip_city(await _call_map_ip_location_async()) or _http_ip_city()
     if detected:
         _write_cache(detected)
         return _location(detected, "ip")

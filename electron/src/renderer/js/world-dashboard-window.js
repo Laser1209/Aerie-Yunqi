@@ -130,7 +130,8 @@
     setText(els.worldTime, formatWorldTime(state));
 
     const summary = obj(state.worldSummary);
-    setText(els.location, str(summary.location) || "--");
+    // 顶部"位置"应展示用户设置的世界所在城市，而非时段地点(home/study)。
+    setText(els.location, str(summary.city) || str(summary.location) || "--");
     setText(els.activity, str(summary.activity) || "--");
     setText(els.energy, formatEnergy(summary.energy));
     setText(els.phase, str(summary.phase) || "--");
@@ -521,7 +522,17 @@
       btn.textContent = "保存中…";
       try {
         const res = await bridge.setWorldLocation(city);
-        btn.textContent = (res && res.status === "ok") ? "已保存 ✓" : "保存失败";
+        const status = res && res.status;
+        if (status === "ok") {
+          const w = (res && res.weather) || {};
+          const temp = str(w.temp);
+          const desc = str(w.desc);
+          btn.textContent = temp && desc && temp !== "—"
+            ? `已保存 · ${city} ${temp}° ${desc}` : "已保存 ✓";
+          refresh();
+        } else {
+          btn.textContent = "保存失败";
+        }
       } catch (_) {
         btn.textContent = "保存失败";
       }

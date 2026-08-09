@@ -926,7 +926,7 @@ class CognitionPanel {
 
         let dir = null;
         try {
-          dir = await window.aerie.dialog.openDirectory({
+          dir = await window.aerie.electron.dialog.openDirectory({
             title: `选择要${spec.label}的文件夹`,
           });
         } catch (e) {

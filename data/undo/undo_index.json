@@ -13,7 +13,14 @@
       "created_at": 1786287126.0558949,
       "executed": true,
       "executed_at": 1786287126.0582778
+    },
+    {
+      "undo_id": "undo_1786287620_0002",
+      "description": "一键整理 屏幕快照",
+      "created_at": 1786287620.9746356,
+      "executed": true,
+      "executed_at": 1786287621.352224
     }
   ],
-  "updated_at": 1786287126.1014163
+  "updated_at": 1786287621.353191
 }

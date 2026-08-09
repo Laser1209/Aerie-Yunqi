@@ -90,11 +90,14 @@ DAILYHOT_PLATFORMS: dict[str, list[str]] = {
     "cn_news":   ["thepaper", "netease-news", "qq-news"],
 }
 
-# 每 section 的抓取优先级
+# 每 section 的抓取优先级（v0.1.2：中文源优先）
+# 原 ai/it/intl 以 hn(Hacker News 英文) 优先，命中英文后中文源永远轮不到。
+# 现改为 中文权威 Feed(crawl) → 今日热榜中文聚合(aggregator) → 百度热搜(hot) → bocha 兜底。
+# hn handler 仍保留在 tier_handlers 中，仅不再被优先级命中。
 SECTIONS_PRIORITY: dict[str, list[str]] = {
-    "ai_news":   ["hn", "crawl", "aggregator", "bocha"],
-    "it_news":   ["hn", "crawl", "aggregator", "bocha"],
-    "intl_news": ["hn", "crawl", "aggregator", "bocha"],
+    "ai_news":   ["crawl", "aggregator", "hot", "bocha"],
+    "it_news":   ["crawl", "aggregator", "hot", "bocha"],
+    "intl_news": ["crawl", "aggregator", "hot", "bocha"],
     "cn_news":   ["hot", "crawl", "aggregator", "bocha"],
 }
 
@@ -446,15 +449,21 @@ def _fetch_crawl_section_factory(section: str, limit: int):
     return _run
 
 
+def _is_chinese_text(text: str) -> bool:
+    """Return True if the text contains at least one CJK (Chinese) character."""
+    import re
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
 async def _fetch_section(section: str, limit: int) -> tuple[list[dict], str | None]:
     """Fetch a news section by trying its tiers in SECTIONS_PRIORITY order.
 
-    Tiers (hn → crawl → aggregator → bocha) are tried until one yields items.
-    The tier list for each section is declared in SECTIONS_PRIORITY. All items
-    share the same news shape, so downstream (compose_brief / UI) never cares
-    which tier produced them. When a section ends up empty, a concise joined
-    error string is returned so the brief UI can explain why (instead of
-    showing a blank section with no reason).
+    Tiers (crawl → aggregator → hot → bocha) are tried until one yields
+    Chinese items. The tier list for each section is declared in
+    SECTIONS_PRIORITY. All items share the same news shape, so downstream
+    (compose_brief / UI) never cares which tier produced them. When a section
+    ends up empty, a concise joined error string is returned so the brief UI
+    can explain why (instead of showing a blank section with no reason).
     """
     priorities = SECTIONS_PRIORITY.get(section) or ["bocha"]
     tier_handlers: dict[str, Any] = {
@@ -475,7 +484,11 @@ async def _fetch_section(section: str, limit: int) -> tuple[list[dict], str | No
             err_parts.append(f"{tier}: {type(e).__name__}: {e}")
             continue
         if items:
-            return items[:limit], None
+            zh_items = [it for it in items if _is_chinese_text(it.get("title", ""))]
+            if zh_items:
+                return zh_items[:limit], None
+            err_parts.append(f"{tier}: non_chinese")
+            continue
         if err:
             err_parts.append(f"{tier}: {err}")
     err = " | ".join(err_parts[:3])[:240] if err_parts else "empty_or_failed"
@@ -709,7 +722,7 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
         "weather":   weather if isinstance(weather, dict) else None,
         "todos":     get_today_todos(today),
         "todo_stats": get_todo_stats(today),
-        "trends":    _generate_trends_from_news(ai_news + it_news),
+        "trends":    _generate_trends_accumulated(ai_news + it_news),
         "errors":    errors,
         "ts":        int(time.time()),
     }
@@ -900,6 +913,94 @@ def _generate_trends_from_news(news_items: list[dict]) -> list[dict]:
             "summary": f"共收录 {len(news_items)} 条科技新闻，建议关注行业最新动向",
             "keywords": ["科技", "行业动态"],
             "related_count": len(news_items),
+        })
+    return trends[:5]
+
+
+def _load_history_titles(days: int = 7) -> list[str]:
+    """Collect news titles from the last N daily brief JSON files.
+
+    Scans data/briefs/*.json (YYYY-MM-DD), keeps the newest ``days`` files
+    (excluding today), and flattens all 4 news sections' titles into one list.
+    """
+    from datetime import timedelta
+    today = datetime.now().strftime("%Y-%m-%d")
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    titles: list[str] = []
+    brief_dir = _briefs_dir()
+    if not brief_dir.exists():
+        return titles
+    for p in sorted(brief_dir.glob("*.json")):
+        name = p.stem
+        if len(name) != 10 or name >= today or name < cutoff:
+            continue
+        try:
+            payload = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for section in ("ai_news", "it_news", "intl_news", "cn_news"):
+            for it in payload.get(section) or []:
+                t = (it.get("title") or "").strip()
+                if t:
+                    titles.append(t)
+    return titles
+
+
+def _generate_trends_accumulated(
+    news_items: list[dict], history_titles: list[str] | None = None, days: int = 7
+) -> list[dict]:
+    """Extract trends with cross-day accumulation judgment.
+
+    For each keyword group, count today's hits (from ``news_items``) and how
+    often it appeared in the recent past (from ``history_titles``). Each trend
+    carries:
+      - new_today: int  —— today's related item count
+      - accum_days: int —— how many of the past ``days`` the topic appeared
+      - momentum:  str  —— "new" | "rising" | "steady" | "cooling"
+    """
+    keyword_groups = {
+        "大模型 & AI Agent": ["大模型", "LLM", "GPT", "Claude", "Agent", "智能体", "推理"],
+        "开源生态": ["开源", "GitHub", "Open Source", "发布", "上线"],
+        "算力 & 芯片": ["芯片", "算力", "GPU", "NPU", "推理卡", "H100"],
+        "产品 & 应用": ["产品", "应用", "APP", "工具", "平台", "服务"],
+        "融资 & 商业化": ["融资", "估值", "亿美元", "收购", "商业化"],
+    }
+    history = history_titles if history_titles is not None else _load_history_titles(days)
+
+    def _hits(title_list, kws):
+        n = 0
+        for t in title_list:
+            low = t.lower()
+            for kw in kws:
+                if kw.lower() in low:
+                    n += 1
+                    break
+        return n
+
+    trends: list[dict] = []
+    for group_name, kws in keyword_groups.items():
+        today_n = _hits([(it.get("title") or "") for it in news_items], kws)
+        hist_n = _hits(history, kws)
+        if today_n == 0 and hist_n == 0:
+            continue
+        accum_days = min(hist_n, days) or (1 if today_n else 0)
+        if hist_n == 0 and today_n > 0:
+            momentum = "new"
+        elif today_n >= hist_n:
+            momentum = "rising"
+        elif today_n == 0 and hist_n > 0:
+            momentum = "cooling"
+        else:
+            momentum = "steady"
+        trends.append({
+            "id": len(trends) + 1,
+            "title": group_name,
+            "summary": f"今日 {today_n} 条，近7天累计出现约 {accum_days} 次，{momentum}",
+            "keywords": kws[:3],
+            "related_count": today_n,
+            "new_today": today_n,
+            "accum_days": accum_days,
+            "momentum": momentum,
         })
     return trends[:5]
 

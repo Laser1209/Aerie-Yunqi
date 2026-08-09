@@ -79,14 +79,16 @@ def _open_meteo_geocode(city: str) -> tuple[float, float] | None:
 
 
 def _open_meteo_weather(city: str) -> dict[str, Any] | None:
-    """通过 Open-Meteo 拉取真实当前天气，返回可直接喂给 normalize_weather 的 dict。"""
+    """通过 Open-Meteo 拉取真实当前天气 + 未来 5 天预报，返回可直接喂给 normalize_weather 的 dict。"""
     latlon = _open_meteo_geocode(city)
     if latlon is None:
         return None
     lat, lon = latlon
     url = (
         f"{_OPEN_METEO_FORECAST}?latitude={lat}&longitude={lon}"
-        "&current_weather=true&timezone=Asia%2FShanghai"
+        "&current_weather=true"
+        "&daily=weather_code,temperature_2m_max,temperature_2m_min"
+        "&forecast_days=5&timezone=Asia%2FShanghai"
     )
     data = _http_get_json(url)
     if not data:
@@ -94,6 +96,21 @@ def _open_meteo_weather(city: str) -> dict[str, Any] | None:
     cur = data.get("current_weather")
     if not isinstance(cur, dict):
         return None
+    # 解析未来 5 天 daily 预报
+    daily = data.get("daily") or {}
+    forecast: list[dict] = []
+    times = daily.get("time") or []
+    codes = daily.get("weather_code") or []
+    highs = daily.get("temperature_2m_max") or []
+    lows = daily.get("temperature_2m_min") or []
+    for i, d in enumerate(times):
+        forecast.append({
+            "date": str(d),
+            "day": str(d),
+            "weather": _WMO_DESC.get(int(codes[i]) if i < len(codes) else 0, "多云"),
+            "temp_max": str(int(round(float(highs[i])))) if i < len(highs) and highs[i] is not None else "—",
+            "temp_min": str(int(round(float(lows[i])))) if i < len(lows) and lows[i] is not None else "—",
+        })
     code = int(cur.get("weathercode") or 0)
     desc = _WMO_DESC.get(code, "多云")
     temp = cur.get("temperature")
@@ -102,7 +119,7 @@ def _open_meteo_weather(city: str) -> dict[str, Any] | None:
         "temperature": str(int(round(float(temp)))) if temp is not None else "—",
         "weather": desc,
         "wind": f"{wind} km/h" if wind is not None else "",
-        "forecast": [],
+        "forecast": forecast,
         "suggestion": "根据实时天气，记得带合适的衣物。",
     }
 

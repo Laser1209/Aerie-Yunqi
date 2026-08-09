@@ -137,7 +137,7 @@ class PersonaHubPanel {
                 <h3 class="persona-section__title">三视图（辅助生图参考）</h3>
                 <p class="persona-section__hint">
                   上传该人设的正面 / 侧面 / 背面参考图，作为图生图时锁定角色外观的参考。
-                  每张 PNG/JPG，≤8MB。切换人设时三视图会跟随切换。
+                  每张 PNG/JPG，超过 8MB 会自动压缩至上限内。切换人设时三视图会跟随切换。
                 </p>
                 <div class="persona-three-view-grid">
                   ${["front", "side", "back"].map((view) => `

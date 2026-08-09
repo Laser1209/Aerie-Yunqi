@@ -606,3 +606,80 @@
 .dark .persona-slider {
   background: var(--bg-600, #3a3a3c);
 }
+
+/* ── Three View (三视图参考图) ── */
+
+.persona-section__hint {
+  margin: -10px 0 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-400, #8e8e93);
+}
+
+.persona-three-view-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.persona-three-view-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px;
+  background: var(--bg-100, #f7f7fa);
+  border: 1px solid var(--bg-300, #e5e5ea);
+  border-radius: 14px;
+}
+
+.persona-three-view-card__img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--color-static-ffb3cc, #ffb3cc) 0%, var(--color-static-ff8fb1, #ff8fb1) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.persona-three-view-card__img span {
+  color: var(--color-static-fff, #fff);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.persona-three-view-card__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.persona-three-view-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-700, #3c3c43);
+  margin-bottom: 12px;
+}
+
+.persona-three-view-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.persona-btn--sm {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.dark .persona-three-view-card {
+  background: var(--bg-800, #2c2c2e);
+  border-color: var(--bg-600, #3a3a3c);
+}
+
+.dark .persona-three-view-card__label {
+  color: var(--text-200, #c7c7cc);
+}

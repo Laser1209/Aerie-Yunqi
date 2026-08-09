@@ -1,11 +1,11 @@
 {
-  "score": 54.9,
-  "ts": 1786296276.2261949,
+  "score": 54.48,
+  "ts": 1786300522.320995,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.5003906947374344,
+    "user_absence_hours": 0.08362617750962575,
     "emotion_overdraft": 6.0,
     "patience_loss": 49.6,
     "weather_impact": 0.0,
@@ -13,30 +13,6 @@
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1786276727.9115465,
-      "score": 66.96,
-      "variables": {
-        "user_absence_hours": 0.8334309002425936,
-        "emotion_overdraft": 6.287915971118483,
-        "patience_loss": 55.5,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 8.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786277027.93781,
-      "score": 67.72,
-      "variables": {
-        "user_absence_hours": 0.9167710372474458,
-        "emotion_overdraft": 7.125464496815299,
-        "patience_loss": 55.5,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 8.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1786277327.971199,
       "score": 67.3,
@@ -606,6 +582,30 @@
       "score": 54.9,
       "variables": {
         "user_absence_hours": 0.5003906947374344,
+        "emotion_overdraft": 6.0,
+        "patience_loss": 49.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786300134.099332,
+      "score": 54.48,
+      "variables": {
+        "user_absence_hours": 0.0836293754975001,
+        "emotion_overdraft": 6.0,
+        "patience_loss": 49.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786300522.3209975,
+      "score": 54.48,
+      "variables": {
+        "user_absence_hours": 0.08362617750962575,
         "emotion_overdraft": 6.0,
         "patience_loss": 49.6,
         "weather_impact": 0.0,

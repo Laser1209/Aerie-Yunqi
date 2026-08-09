@@ -30,7 +30,7 @@ import time
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import uvicorn
 import yaml
@@ -5157,6 +5157,50 @@ def _three_view_max_bytes() -> int:
         return 8 * 1024 * 1024
 
 
+def _compress_three_view_image(data: bytes, max_bytes: int) -> Tuple[bytes, str]:
+    """将图片压缩到 max_bytes 以内，返回 (bytes, ext)。
+
+    超限图片自动降质/降采样为 JPEG，尽力压到上限内。
+    PIL 不可用时抛出 RuntimeError，由调用方兜底拒绝。
+    """
+    try:
+        from io import BytesIO
+        from PIL import Image
+    except Exception as e:  # pragma: no cover - PIL 通常可用
+        raise RuntimeError(f"PIL unavailable: {e}")
+
+    img = Image.open(BytesIO(data))
+    img.load()
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+
+    best: bytes | None = None
+    quality = 88
+    scale = 1.0
+    for _ in range(30):
+        w = max(1, int(img.width * scale))
+        h = max(1, int(img.height * scale))
+        probe = img.resize((w, h), Image.LANCZOS) if scale < 1.0 else img
+        buf = BytesIO()
+        probe.save(buf, format="JPEG", quality=quality, optimize=True)
+        out = buf.getvalue()
+        if len(out) <= max_bytes:
+            return out, "jpg"
+        # 记录当前最接近目标的结果，供最终兜底
+        if best is None or len(out) < len(best):
+            best = out
+        # 逐级降质，质量到下限后改降采样
+        if quality > 30:
+            quality -= 10
+        else:
+            scale *= 0.7
+            quality = 88
+
+    if best is not None:
+        return best, "jpg"
+    raise RuntimeError("cannot compress image under limit")
+
+
 @app.get("/api/persona/three-view")
 async def persona_three_view_summary(persona_id: str = Query(default="")) -> dict:
     """返回人设三视图摘要（每视角 dataURL/url/是否存在）。默认当前激活人设。"""
@@ -5202,15 +5246,20 @@ async def persona_three_view_upload(
     view: str,
     file: UploadFile = File(...),
 ) -> dict:
-    """上传一张三视图。PNG/JPG，≤8MB。"""
+    """上传一张三视图。PNG/JPG，超过 8MB 自动压缩至上限内。"""
     try:
         if not _persona_mgr.has_persona(persona_id):
             return JSONResponse({"error": "persona not found"}, status_code=404)
         data = await file.read()
-        if len(data) > _three_view_max_bytes():
-            return JSONResponse({"error": "file too large"}, status_code=413)
         if len(data) < 4:
             return JSONResponse({"error": "empty file"}, status_code=400)
+        max_bytes = _three_view_max_bytes()
+        if len(data) > max_bytes:
+            try:
+                data, _ = _compress_three_view_image(data, max_bytes)
+            except Exception as e:
+                logger.warning("three-view compress failed: %s", e)
+                return JSONResponse({"error": "file too large and cannot be compressed"}, status_code=413)
         ok, suffix = _persona_mgr.save_three_view(persona_id, view, data, ext=file.filename or "")
         if not ok:
             return JSONResponse({"error": suffix}, status_code=400)

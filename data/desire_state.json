@@ -1,42 +1,18 @@
 {
-  "score": 60.28,
-  "ts": 1786272840.692609,
+  "score": 67.49,
+  "ts": 1786273700.239062,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.08334956069787343,
-    "emotion_overdraft": 5.622421454432802,
+    "user_absence_hours": 0.1666961717605591,
+    "emotion_overdraft": 7.523748145879848,
     "patience_loss": 55.7,
     "weather_impact": 0.0,
-    "time_of_day_boost": 0.0,
+    "time_of_day_boost": 8.0,
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1786251720.865351,
-      "score": 61.64,
-      "variables": {
-        "user_absence_hours": 0.3337661061022017,
-        "emotion_overdraft": 6.385962457666212,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786252020.8958092,
-      "score": 59.79,
-      "variables": {
-        "user_absence_hours": 0.4171097765366236,
-        "emotion_overdraft": 3.9646043169104654,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1786252321.4992793,
       "score": 61.72,
@@ -610,6 +586,30 @@
         "patience_loss": 55.7,
         "weather_impact": 0.0,
         "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786273400.205625,
+      "score": 66.54,
+      "variables": {
+        "user_absence_hours": 0.08335404435793559,
+        "emotion_overdraft": 6.443290253544913,
+        "patience_loss": 55.7,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786273700.2390652,
+      "score": 67.49,
+      "variables": {
+        "user_absence_hours": 0.1666961717605591,
+        "emotion_overdraft": 7.523748145879848,
+        "patience_loss": 55.7,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
         "anniversary_boost": 0.0
       }
     }

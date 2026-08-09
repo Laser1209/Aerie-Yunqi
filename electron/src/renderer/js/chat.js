@@ -1024,6 +1024,14 @@ class ChatManager {
     return this._upsertRequestState({ ...view, client_id: clientId });
   }
 
+  _isWorkMode() {
+    const office = window.officeMode;
+    if (office && typeof office.isOfficeActive === "function") {
+      return office.isOfficeActive();
+    }
+    return false;
+  }
+
   _requestStatusLabel(status) {
     return {
       queued: "排队中",
@@ -1046,6 +1054,14 @@ class ChatManager {
     }
     if (!messageEl) return;
     messageEl.setAttribute("data-request-id", requestId);
+    // 非办公模式：日常闲聊完成时不展示"已完成"徽标（仅工作/办公模式保留）。
+    // 办公模式(含 auto 下识别为工作的消息)才显示，见 _isWorkMode()。
+    if (state.status === "completed" && !this._isWorkMode()) {
+      messageEl.removeAttribute("data-request-status");
+      const existing = messageEl.querySelector(".chat-request-status");
+      if (existing) existing.remove();
+      return;
+    }
     messageEl.setAttribute("data-request-status", state.status || "");
     let statusEl = messageEl.querySelector(".chat-request-status");
     if (!statusEl) {

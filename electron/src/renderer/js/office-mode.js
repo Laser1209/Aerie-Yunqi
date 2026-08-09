@@ -46,6 +46,7 @@ class OfficeModeController {
         try { payload = JSON.parse(raw); } catch (_) { return; }
         if (payload && payload.type === "office_mode_changed") {
           this._currentMode = (payload.mode) || "auto";
+          if (payload.detected_mode) this._detectedMode = payload.detected_mode;
           this._updateButtonState();
         }
       });
@@ -66,6 +67,16 @@ class OfficeModeController {
     } catch (e) {
       console.warn("load office mode failed:", e);
     }
+  }
+
+  // 实际是否处于工作(办公)模式：
+  //   - 显式 office → 是
+  //   - auto 且当前消息被识别为办公 → 是
+  //   - 其余 → 否（日常闲聊，不显示"已完成"徽标）
+  isOfficeActive() {
+    if (this._currentMode === "office") return true;
+    if (this._currentMode === "auto") return this._detectedMode === "office";
+    return false;
   }
 
   _toggleMenu(btn) {

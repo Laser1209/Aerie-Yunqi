@@ -975,7 +975,7 @@ body {
     var(--ring-color) calc(var(--pad-pct, 50%)),
     var(--color-border) calc(var(--pad-pct, 50%))
   );
-  --mask-size: 56px;
+  --mask-size: 28px;
   mask: radial-gradient(circle, transparent var(--mask-size), black var(--mask-size));
   -webkit-mask: radial-gradient(circle, transparent var(--mask-size), black var(--mask-size));
 }

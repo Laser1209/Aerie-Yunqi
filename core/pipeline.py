@@ -385,6 +385,13 @@ class Pipeline:
         office_mgr = get_office_mode_manager()
         office_ctx = office_mgr.detect(model_content, history)
         is_office = office_ctx.is_office_mode()
+        # 同步办公模式判定到前端：auto 模式下按当前消息识别结果更新
+        # detected_mode，前端据此决定是否显示"已完成"徽标（仅工作消息显示）。
+        emit(
+            "office_mode_changed",
+            mode=office_ctx.mode.value if office_ctx.mode else "auto",
+            detected_mode=office_ctx.detected_mode.value if office_ctx.detected_mode else None,
+        )
 
         if is_office and ctx_messages:
             # 增强系统提示词
@@ -2257,6 +2264,12 @@ class Pipeline:
         office_mgr = get_office_mode_manager()
         office_ctx = office_mgr.detect(combined_content, history)
         is_office = office_ctx.is_office_mode()
+        # 同步办公模式判定到前端（与主处理路径一致），见 office_mode_changed。
+        emit(
+            "office_mode_changed",
+            mode=office_ctx.mode.value if office_ctx.mode else "auto",
+            detected_mode=office_ctx.detected_mode.value if office_ctx.detected_mode else None,
+        )
 
         if is_office and ctx_messages:
             sys_content = ctx_messages[0].get("content", "")

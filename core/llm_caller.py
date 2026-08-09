@@ -214,7 +214,7 @@ class LLMCaller:
             "model_env": "DEEPSEEK_MODEL",
             "model_default": "deepseek-chat",
             "tools_env": "DS_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "grok": {
             "base_url_env": "GROK_BASE_URL",
@@ -222,7 +222,7 @@ class LLMCaller:
             "model_env": "GROK_MODEL",
             "model_default": "grok-4.5",
             "tools_env": "GROK_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "openai": {
             "base_url_env": "OPENAI_BASE_URL",
@@ -230,7 +230,7 @@ class LLMCaller:
             "model_env": "OPENAI_MODEL",
             "model_default": "Qwen/Qwen2.5-7B-Instruct",
             "tools_env": "OPENAI_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "siliconflow": {
             "base_url_env": "SILICONFLOW_BASE_URL",
@@ -238,7 +238,7 @@ class LLMCaller:
             "model_env": "SILICONFLOW_MODEL",
             "model_default": "google/gemma-4-26B-A4B-it",
             "tools_env": "SF_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "qwen": {
             "base_url_env": "QWEN_BASE_URL",
@@ -246,7 +246,7 @@ class LLMCaller:
             "model_env": "QWEN_MODEL",
             "model_default": "qwen-plus",
             "tools_env": "QWEN_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "doubao": {
             "base_url_env": "DOUBAO_BASE_URL",
@@ -262,7 +262,7 @@ class LLMCaller:
             "model_env": "GEMINI_MODEL",
             "model_default": "gemini-2.0-flash-exp",
             "tools_env": "GEMINI_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "minimax": {
             "base_url_env": "MINIMAX_BASE_URL",
@@ -270,7 +270,7 @@ class LLMCaller:
             "model_env": "MINIMAX_MODEL",
             "model_default": "MiniMax-M3",
             "tools_env": "MINIMAX_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "bigmodel": {
             "base_url_env": "BIGMODEL_BASE_URL",
@@ -278,7 +278,7 @@ class LLMCaller:
             "model_env": "BIGMODEL_MODEL",
             "model_default": "glm-4-plus",
             "tools_env": "BIGMODEL_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
         "dashscope": {
             "base_url_env": "DASHSCOPE_BASE_URL",
@@ -286,7 +286,7 @@ class LLMCaller:
             "model_env": "DASHSCOPE_MODEL",
             "model_default": "qwen-plus",
             "tools_env": "DASHSCOPE_SUPPORTS_TOOLS",
-            "tools_default": "false",
+            "tools_default": "true",
         },
     }
 

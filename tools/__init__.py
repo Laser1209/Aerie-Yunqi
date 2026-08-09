@@ -115,6 +115,14 @@ def register_all_tools(registry) -> None:
         import logging
         logging.getLogger(__name__).warning("computer tools registration failed: %s", e)
 
+    # 知识库写入工具：让 AI 主动把重要信息沉淀进知识库
+    try:
+        from tools.knowledge_tools import register_knowledge_tools
+        register_knowledge_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("knowledge tools registration failed: %s", e)
+
     # 打印工具注册统计，便于排查
     try:
         import logging

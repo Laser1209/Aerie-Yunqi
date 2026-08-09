@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -461,6 +462,9 @@ class Pipeline:
 
         # Strip  thinking block from user-visible text
         reply_text_raw = self._strip_think(raw_text)
+
+        # Strip a leading [MM-DD HH:MM] timestamp the model may echo back
+        reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
 
         # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
         reply_text_raw = await self._handle_recall_instruction(reply_text_raw, msg)
@@ -1245,6 +1249,8 @@ class Pipeline:
                 user_id=msg.user_id,
                 reason=inst.reason or "llm_instruction",
             )
+            if result.get("status") == "ok":
+                self._mark_recalled_message(result, msg)
             logger.info(
                 "LLM recall instruction executed: reason=%r status=%s channel=%s",
                 inst.reason, result.get("status"), channel,
@@ -1252,6 +1258,40 @@ class Pipeline:
         except Exception:
             logger.exception("LLM recall instruction execution failed")
         return strip_recall_instruction(raw_text)
+
+    def _mark_recalled_message(self, result: dict, msg: IncomingMessage) -> None:
+        """LLM <recall> 撤回成功后, 本地落库 + 发 recall 事件.
+
+        与 Companion.recall_message 保持一致的标记/事件契约: 前端收到
+        recall 事件后把对应气泡替换为居中的"<人设名> 撤回了一条消息"。
+        QQ 平台侧由 NapCat 原生显示撤回提示, 这里仅同步本地聊天记录。
+        """
+        msg_id = result.get("msg_id")
+        if msg_id:
+            try:
+                self.db.update(
+                    "chat_log",
+                    {
+                        "is_recalled": 1,
+                        "recalled_at": datetime.now().isoformat(timespec="seconds"),
+                        "msg_state": "recalled",
+                    },
+                    "id = ?",
+                    (msg_id,),
+                )
+            except Exception:
+                logger.exception("LLM recall mark failed msg_id=%s", msg_id)
+        try:
+            from core.chat_events import emit as _emit
+            _emit(
+                "recall",
+                id=msg_id,
+                user_id=msg.user_id,
+                role="assistant",
+                channel=result.get("channel", "local"),
+            )
+        except Exception:
+            logger.exception("LLM recall event emit failed")
 
     async def _handle_basic_lightweight(
         self,
@@ -1360,8 +1400,11 @@ class Pipeline:
         model_name = getattr(response, "model", "unknown")
         usage = getattr(response, "usage", None) or {}
 
-        # 剥掉 <think> 块
+        # 剥掉  thinking 块
         reply_text_raw = self._strip_think(raw_text)
+
+        # 剥掉模型可能回显的历史时间戳前缀 [MM-DD HH:MM]
+        reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
 
         # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
         reply_text_raw = await self._handle_recall_instruction(reply_text_raw, msg)
@@ -1965,9 +2008,27 @@ class Pipeline:
 
     @staticmethod
     def _strip_think(text: str) -> str:
-        """Remove <think>…</think> block from user-visible text."""
+        """Remove  thinking… response block from user-visible text."""
         import re
-        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        return re.sub(r" thinking.*? response", "", text, flags=re.DOTALL).strip()
+
+    _HIST_LABEL_RE = re.compile(r"\[\d{2}-\d{2} ?\d{2}:\d{2}\]\s*")
+
+    @classmethod
+    def _strip_leading_timestamp(cls, text: str) -> str:
+        """Strip any ``[MM-DD HH:MM] `` timestamp markers the model may echo.
+
+        History messages are prefixed with this label so the LLM can tell when
+        each turn happened (see context_builder._hist_label). Some models
+        imitate that format and sprinkle timestamps into their own reply
+        (leading and mid-text alike), which would otherwise leak into the
+        user-visible message. The ``[MM-DD HH:MM]`` shape is unique enough to
+        this injected marker that we remove every occurrence; the user's
+        companion text never legitimately uses this exact bracket format.
+        """
+        if not text:
+            return text
+        return cls._HIST_LABEL_RE.sub("", text).strip()
 
     @staticmethod
     def _ensure_react_trace(
@@ -2330,6 +2391,9 @@ class Pipeline:
 
         react_trace = self._ensure_react_trace(react_trace, trace, raw_text, tool_results)
         reply_text_raw = self._strip_think(raw_text)
+
+        # Strip a leading [MM-DD HH:MM] timestamp the model may echo back
+        reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
 
         self.cognition.record(trace, "brain", {
             "model": model_name,

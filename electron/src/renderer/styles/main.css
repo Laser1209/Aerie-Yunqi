@@ -1515,7 +1515,29 @@ body {
   justify-content: flex-end;
 }
 
-/* ===== Phase 4: Recalled message bubble ===== */
+/* ===== Phase 4: Recalled message (centered system notice) ===== */
+.chat-msg--recalled {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+  animation: none;
+  padding: 2px 8px;
+}
+.chat-msg--recalled .chat-msg__name,
+.chat-msg--recalled .chat-msg__meta-time,
+.chat-msg--recalled .chat-msg__avatar { display: none; }
+.chat-msg__recall-notice {
+  margin: 2px auto;
+  padding: 6px 14px;
+  max-width: 80%;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  text-align: center;
+  background: var(--bg-100);
+  border-radius: 12px;
+  white-space: nowrap;
+}
 .chat-msg--recalled .chat-bubble {
   background: var(--bg-100) !important;
   color: var(--color-text-muted);

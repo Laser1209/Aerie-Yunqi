@@ -17,6 +17,9 @@
   --brief-pill-radius: 10px;
   --brief-ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
   --brief-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 展开态抽屉宽度。backdrop 模糊层与抽屉主体共用此值，避免两者不同步
+     （此前 backdrop 仍是 880px，导致展开时模糊区被多挤开 320px）。 */
+  --brief-expanded-width: 560px;
 }
 
 /* ── backdrop (scrim) ───────────────────────────── */
@@ -41,7 +44,7 @@
   visibility: visible;
 }
 .brief-drawer-backdrop.is-expanded {
-  right: min(880px, 92vw);
+  right: min(var(--brief-expanded-width, 560px), 92vw);
 }
 
 /* ── drawer shell (Liquid Glass) ───────────────── */
@@ -81,7 +84,7 @@
 
 /* R7.3+: expanded mode —— 纵向扩容展示更多信息，而非横向变宽 */
 .brief-drawer.brief-drawer--expanded {
-  width: 560px;
+  width: var(--brief-expanded-width, 560px);
   max-width: 92vw;
   border-top-left-radius: 26px;
   border-bottom-left-radius: 26px;

@@ -362,11 +362,16 @@ class ChatManager {
     } catch (_) { /* fail-soft: keep empty */ }
   }
 
+  _recallNoticeHtml() {
+    const name = (this._personaCache && this._personaCache.name) || "伊塔";
+    return `<div class="chat-msg__recall-notice">${this._escapeHtml(name)} 撤回了一条消息</div>`;
+  }
+
   _markRecalled(msgId) {
     const el = this._el.messages.querySelector(`[data-id="${msgId}"]`);
     if (!el) return;
     el.classList.add("chat-msg--recalled");
-    el.innerHTML = `<div class="chat-bubble chat-bubble--recalled">（消息已撤回）</div>`;
+    el.innerHTML = this._recallNoticeHtml();
   }
 
   _startPoll() {
@@ -823,7 +828,7 @@ class ChatManager {
     div.className = "chat-msg chat-msg--recalled";
     div.setAttribute("data-id", id);
     div.setAttribute("data-msg-id", id);
-    div.innerHTML = `<div class="chat-bubble chat-bubble--recalled">（消息已撤回）</div>`;
+    div.innerHTML = this._recallNoticeHtml();
     if (before) this._el.messages.insertBefore(div, before);
     else this._el.messages.appendChild(div);
   }

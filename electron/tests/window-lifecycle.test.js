@@ -52,8 +52,10 @@ test("dynamic island uses its native hit area without cursor polling", () => {
 });
 
 test("dynamic island has a low-power opt-out", () => {
-  assert.match(source, /AERIE_DISABLE_DYNAMIC_ISLAND\s*!==\s*"1"/);
-  assert.match(source, /if \(dynamicIslandEnabled\) createDynamicIsland\(\)/);
+  // R8.1: the env opt-out moved inside _applyIslandEnabledToWindow; the guard
+  // must appear before createDynamicIsland() so headless/CI machines can skip it.
+  assert.match(source, /AERIE_DISABLE_DYNAMIC_ISLAND\s*===\s*"1"/);
+  assert.match(source, /if \(process\.env\.AERIE_DISABLE_DYNAMIC_ISLAND === "1"\)[\s\S]*?createDynamicIsland\(\)/);
 });
 
 test("dynamic island preserves native topmost state on Windows", () => {

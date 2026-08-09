@@ -5,7 +5,6 @@ const { app, BrowserWindow, Tray, ipcMain, nativeImage, screen, Menu, dialog, No
 // Keep a deliberate escape hatch for machines with broken GPU drivers.
 const useSoftwareRendering = process.env.AERIE_SOFTWARE_RENDERING === "1";
 if (useSoftwareRendering) app.disableHardwareAcceleration();
-const dynamicIslandEnabled = process.env.AERIE_DISABLE_DYNAMIC_ISLAND !== "1";
 // Electron's "floating" level is placed behind the Windows taskbar and can
 // lose the native TOPMOST flag. The island is intentionally visible above
 // normal and fullscreen app windows, so use the level that preserves TOPMOST.

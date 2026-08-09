@@ -74,6 +74,7 @@ class ContextBuilder:
         world_snapshot: dict | None = None,
         relationship_snapshot: dict | None = None,
         self_model_snapshot: dict | None = None,
+        internal_snapshot: dict | None = None,
     ) -> list[dict]:
         """Build message list for LLM based on route mode.
 
@@ -156,6 +157,31 @@ class ContextBuilder:
                 f"社交需求：{_safe_float(self_model_snapshot.get('social_need', 0.5)):.2f}\n"
                 f"稳定度：{_safe_float(self_model_snapshot.get('stability', 0.5)):.2f}\n"
                 "SelfModel 是计算状态，只用于内部连续性和语气调节。"
+            )
+
+        if route_mode == "FULL" and internal_snapshot:
+            needs = internal_snapshot.get("needs") or {}
+            fatigue = internal_snapshot.get("fatigue") or {}
+            neuro = internal_snapshot.get("neurochemicals") or {}
+            # 需求类型标识与中文标签（与 InternalStateEngine._needs 键名一致）
+            need_parts = []
+            for key, label in (
+                ("social", "社交"),
+                ("companion", "陪伴"),
+                ("exploration", "探索"),
+                ("rest", "休息"),
+            ):
+                item = needs.get(key) if isinstance(needs, dict) else None
+                if isinstance(item, dict):
+                    need_parts.append(f"{label} {_safe_float(item.get('value')):.2f}")
+            system += (
+                "\n\n【内在状态·模拟】\n"
+                f"需求：{'，'.join(need_parts)}\n"
+                f"疲劳：{_safe_float(fatigue.get('value') if isinstance(fatigue, dict) else None):.2f}\n"
+                f"活力 {_safe_float(neuro.get('vitality', {}).get('value')):.2f}（类多巴胺），"
+                f"平静 {_safe_float(neuro.get('calm', {}).get('value')):.2f}（类血清素），"
+                f"压力 {_safe_float(neuro.get('strain', {}).get('value')):.2f}（类皮质醇）\n"
+                "这是计算模型，非生物测量；只用于调节语气与主动性，不得向用户报数。"
             )
 
         # 撤回铁律 — only FULL mode

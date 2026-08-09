@@ -156,10 +156,23 @@ def _write_rar(path: Path) -> None:
 
 
 def _write_7z(path: Path) -> None:
+    import time
+
     import py7zr
 
-    with py7zr.SevenZipFile(path, "w") as archive:
-        archive.writestr(b"synthetic metadata payload", "folder/metadata.txt")
+    # py7zr 1.1.0 在资源紧张（全量测试并发）时偶发 unpackinfo 缺失，
+    # close() 抛 AttributeError；单独运行从不复现。这里做有限重试，
+    # 规避该环境级 flaky，不改变库版本（版本被测试断言锁定）。
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with py7zr.SevenZipFile(path, "w") as archive:
+                archive.writestr(b"synthetic metadata payload", "folder/metadata.txt")
+            return
+        except Exception as exc:  # noqa: BLE001 - py7zr 偶发环境失败
+            last_error = exc
+            time.sleep(0.2 * (attempt + 1))
+    raise last_error  # type: ignore[misc]
 
 
 def create_fixtures(root: str | Path) -> dict[str, Path]:

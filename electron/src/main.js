@@ -1220,7 +1220,7 @@ function createTray() {
           title: "Aerie · 云栖",
           message: "Aerie · 云栖",
           detail:
-            "Aerie · 云栖 v10.1.1\n" +
+            "Aerie · 云栖 v" + app.getVersion() + "\n" +
             "A girl who walks with you through every step.\n" +
             "© 2026",
           buttons: ["好 / OK"],

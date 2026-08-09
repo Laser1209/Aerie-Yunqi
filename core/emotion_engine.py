@@ -11,7 +11,6 @@ Aligned with System_Features.md §11 and Ita.md §8-9.
 from __future__ import annotations
 import json
 import logging
-import random
 import time
 from typing import Any
 
@@ -502,8 +501,7 @@ class EmotionEngine:
             cur = float(state.get(k, 0.0))
             base = float(self._baseline.get(k, 0.0))
             ema = 0.98 * cur + 0.02 * base
-            noise = random.gauss(0.0, 0.01)
-            state[k] = max(-0.95, min(0.95, ema + noise))
+            state[k] = max(-0.95, min(0.95, ema))
         return dict(state)
 
     def tick_decay(

@@ -336,6 +336,11 @@ class Pipeline:
             world_snapshot,
             relationship_snapshot,
         )
+        internal_snapshot = self._call_optional_context_provider(
+            "internal_snapshot_provider",
+            world_snapshot,
+            relationship_snapshot,
+        )
         ctx_messages = self.ctx_builder.build(
             msg.user_id,
             model_content,
@@ -349,6 +354,7 @@ class Pipeline:
             world_snapshot=world_snapshot,
             relationship_snapshot=relationship_snapshot,
             self_model_snapshot=self_model_snapshot,
+            internal_snapshot=internal_snapshot,
             **context_budget_kwargs,
         )
         ctx_messages, continuity_audit = self._assemble_continuity_context(
@@ -387,11 +393,8 @@ class Pipeline:
         is_office = office_ctx.is_office_mode()
         # 同步办公模式判定到前端：auto 模式下按当前消息识别结果更新
         # detected_mode，前端据此决定是否显示"已完成"徽标（仅工作消息显示）。
-        emit(
-            "office_mode_changed",
-            mode=office_ctx.mode.value if office_ctx.mode else "auto",
-            detected_mode=office_ctx.detected_mode.value if office_ctx.detected_mode else None,
-        )
+        # 事件统一在事件发射阶段 emit（见下方 office_mode_changed），
+        # 以携带完整事件契约，并遵循取消检查点语义。
 
         if is_office and ctx_messages:
             # 增强系统提示词
@@ -765,6 +768,20 @@ class Pipeline:
                     user_id=msg.user_id,
                     content=msg.content,
                     source=msg.source,
+                    **self._event_contract(
+                        request_state,
+                        message_id=user_row_id,
+                    ),
+                )
+            except Exception:
+                pass
+            # office_mode_changed：纳入统一事件契约并携带完整信封字段，
+            # 前端据此决定是否显示"已完成"徽标（仅工作消息显示）。
+            try:
+                emit(
+                    "office_mode_changed",
+                    mode=office_ctx.mode.value if office_ctx.mode else "auto",
+                    detected_mode=office_ctx.detected_mode.value if office_ctx.detected_mode else None,
                     **self._event_contract(
                         request_state,
                         message_id=user_row_id,
@@ -2207,6 +2224,11 @@ class Pipeline:
             world_snapshot,
             relationship_snapshot,
         )
+        internal_snapshot = self._call_optional_context_provider(
+            "internal_snapshot_provider",
+            world_snapshot,
+            relationship_snapshot,
+        )
 
         batch_user_content = self._build_batch_user_content(messages)
 
@@ -2223,6 +2245,7 @@ class Pipeline:
             world_snapshot=world_snapshot,
             relationship_snapshot=relationship_snapshot,
             self_model_snapshot=self_model_snapshot,
+            internal_snapshot=internal_snapshot,
             **context_budget_kwargs,
         )
 

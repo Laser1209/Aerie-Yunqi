@@ -353,7 +353,7 @@ def test_emotion_idle_tick_and_threshold_decay_are_actor_scoped():
 
     reset_threshold_engine()
     engine = EmotionEngine()
-    engine.update_trajectory(10001, "想你了", actor_id="actor_primary")
+    engine.update_trajectory(10001, "你好棒", actor_id="actor_primary")
     before = engine.get_state(10001, actor_id="actor_primary")
 
     engine.idle_tick(actor_id="actor_primary")

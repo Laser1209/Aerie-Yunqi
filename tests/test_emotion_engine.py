@@ -179,6 +179,42 @@ class TestEmotionEngineTune:
         assert result == "嗯。"
 
 
+class TestEmotionEngineIdleTick:
+    """Test idle_tick() deterministic EMA drift toward baseline (TR-6.1)."""
+
+    @pytest.fixture
+    def engine(self):
+        return EmotionEngine()
+
+    def test_idle_tick_converges_to_baseline_and_is_deterministic(self, engine):
+        # Push PAD away from baseline (0) so idle drift is measurable.
+        for _ in range(20):
+            engine.update_trajectory(USER_ID, "我爱你")
+        start = dict(engine._state)
+
+        def run_idle_ticks(n=30):
+            engine._state = dict(start)  # reset to identical starting point
+            for _ in range(n):
+                engine.idle_tick(actor_id=None)
+            return dict(engine._state)
+
+        # Two independent runs from the same start must be identical (no noise).
+        pad_a = run_idle_ticks()
+        pad_b = run_idle_ticks()
+        assert pad_a == pad_b
+
+        # PAD drifts deterministically toward baseline (0 for default config)
+        # and stays clamped to [-0.95, 0.95].
+        engine._state = dict(start)
+        for _ in range(50):
+            engine.idle_tick(actor_id=None)
+            for k in ("P", "A", "D"):
+                assert -0.95 <= engine._state[k] <= 0.95
+        # After many ticks, magnitude is strictly smaller than the abrupt start.
+        for k in ("P", "A", "D"):
+            assert abs(engine._state[k]) <= abs(start[k]) + 1e-9
+
+
 class TestEmotionCenters:
     """Test EMOTION_CENTERS and KEYWORD_DELTAS constants."""
 

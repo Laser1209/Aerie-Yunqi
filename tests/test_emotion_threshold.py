@@ -101,7 +101,7 @@ class TestScanText:
 
     def test_scan_anxiety_trigger(self, engine):
         engine.scan_text("分手吧")
-        assert engine.slots["anxiety"].value == 60
+        assert engine.slots["anxiety"].value == 40
 
     def test_scan_desire_trigger(self, engine):
         engine.scan_text("想你了")
@@ -129,6 +129,34 @@ class TestScanText:
         engine.scan_text("好烦 好烦")
         # "好烦" matches ["好烦"] keyword group (patience, 15), second match skipped
         assert engine.slots["patience"].value == 15
+
+    def test_large_delta_no_single_message_burst(self, engine):
+        """TR-7.1: 削减后单条触发消息不再瞬间触发爆发，需叠加多次调用才触发."""
+        # 各处单条消息新增 delta 均远低于对应槽位阈值
+        assert engine.slots["anxiety"].threshold == 100
+        assert engine.slots["patience"].threshold == 100
+
+        for text, slot in [
+            ("分手", "anxiety"),
+            ("不爱你了", "anxiety"),
+            ("别找我了", "anxiety"),
+            ("你有病", "patience"),
+        ]:
+            engine2 = CumulativeEmotionEngine()
+            eruptions = engine2.scan_text(text)
+            assert eruptions == [], f"单条 '{text}' 不应触发 {slot} 爆发: {eruptions}"
+            assert 0 < engine2.slots[slot].value < engine2.slots[slot].threshold
+
+        # 需叠加多次调用才达到阈值（以 delta 最大的"分手"为例，40*3=120 ≥ 100）
+        engine3 = CumulativeEmotionEngine()
+        for _ in range(2):
+            engine3.scan_text("分手")
+        assert engine3.slots["anxiety"].value == 80
+        assert engine3.slots["anxiety"].value < engine3.slots["anxiety"].threshold
+        engine3.scan_text("分手")  # 第三次达到阈值 → 触发爆发，value 归零、threshold 上升
+        assert engine3._eruptions, "叠加到阈值后应触发爆发"
+        assert engine3.slots["anxiety"].value == 0
+        assert engine3.slots["anxiety"].threshold == 120  # anxiety post_decay=+20
 
 
 class TestDailyDecay:

@@ -277,6 +277,7 @@ class Companion:
         self.pipeline.world_snapshot_provider = self._world_snapshot_for_context
         self.pipeline.relationship_snapshot_provider = self._relationship_snapshot_for_context
         self.pipeline.self_model_snapshot_provider = self._self_model_snapshot_for_context
+        self.pipeline.internal_snapshot_provider = self._internal_snapshot_for_context
         self.chat_request_queue_requested = self.feature_flags.is_enabled(
             "chat_request_queue_v1",
         )
@@ -730,6 +731,21 @@ class Companion:
             return provider(world_snapshot, relationship_snapshot)
         except Exception:
             logger.debug("self model snapshot unavailable", exc_info=True)
+            return None
+
+    def _internal_snapshot_for_context(
+        self,
+        world_snapshot: dict | None,
+        relationship_snapshot: dict | None,
+    ) -> dict | None:
+        internal = getattr(self, "internal_state", None)
+        if not callable(getattr(internal, "compute", None)):
+            return None
+        try:
+            emotion = self.get_primary_emotion_state()
+            return internal.compute(world_snapshot, emotion, relationship_snapshot)
+        except Exception:
+            logger.debug("internal state snapshot unavailable", exc_info=True)
             return None
 
     def _active_persona_id(self) -> str:
@@ -1218,10 +1234,12 @@ class Companion:
         )
         if relationship_observer is not None:
             try:
+                emotion_pad = self.get_primary_emotion_state().get("pad", {})
                 relationship_observer.observe_user_message(
                     user_id=msg.user_id,
                     persona_id=self._active_persona_id(),
                     text=msg.content,
+                    pleasure=emotion_pad.get("P"),
                 )
             except Exception:
                 logger.debug("relationship observation failed", exc_info=True)

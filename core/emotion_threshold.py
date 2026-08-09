@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Cumulative emotion threshold engine.
+"""Aerie · 云栖 v0.1.0-beta.1 — Cumulative emotion threshold engine.
 
 Four hidden emotion slots with bursting behavior.
 Aligned with Ita.md §9 and System_Features.md §11.5.
@@ -72,9 +72,9 @@ TEXT_TRIGGERS: list[tuple[list[str], str, float]] = [
     (["你有病", "滚", "滚开"], "patience", 30),
     (["你好烦", "太烦了"], "patience", 20),
     # ── 不安值 (Anxiety) ──
-    (["分手", "离开", "结束", "再见"], "anxiety", 60),
-    (["不爱你了", "不喜欢你了", "喜欢别人"], "anxiety", 50),
-    (["别找我了", "不要你了"], "anxiety", 55),
+    (["分手", "离开", "结束", "再见"], "anxiety", 40),
+    (["不爱你了", "不喜欢你了", "喜欢别人"], "anxiety", 35),
+    (["别找我了", "不要你了"], "anxiety", 40),
     # ── 渴望值 (Desire) ──
     (["想你", "想你了", "好想你"], "desire", 15),
     (["爱你", "我爱你", "喜欢你"], "desire", 20),

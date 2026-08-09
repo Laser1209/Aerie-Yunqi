@@ -47,27 +47,36 @@ class RelationshipEngine:
         user_id: int | str,
         persona_id: str = "default",
         text: str,
+        pleasure: float | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(user_id=user_id, persona_id=persona_id)
-        label, valence = self._estimate_valence(text)
-        rate = self.learning_rate
-        if valence > 0:
-            state["agent_to_user"]["attachment"] = _clamp01(state["agent_to_user"]["attachment"] + rate * 0.5)
-            state["agent_to_user"]["trust"] = _clamp01(state["agent_to_user"]["trust"] + rate * 0.6)
-            state["agent_to_user"]["care"] = _clamp01(state["agent_to_user"]["care"] + rate * 0.4)
-            state["user_to_agent"]["warmth"] = _clamp01(state["user_to_agent"]["warmth"] + rate * 0.7)
-            state["user_to_agent"]["engagement"] = _clamp01(state["user_to_agent"]["engagement"] + rate * 0.4)
-            state["user_to_agent"]["trust"] = _clamp01(state["user_to_agent"]["trust"] + rate * 0.5)
-            state["security"] = _clamp01(state["security"] + rate * 0.4)
-            state["conflict"] = _clamp01(state["conflict"] - rate * 0.5)
-        elif valence < 0:
-            state["agent_to_user"]["trust"] = _clamp01(state["agent_to_user"]["trust"] - rate * 0.5)
-            state["user_to_agent"]["warmth"] = _clamp01(state["user_to_agent"]["warmth"] - rate * 0.6)
-            state["user_to_agent"]["trust"] = _clamp01(state["user_to_agent"]["trust"] - rate * 0.5)
-            state["security"] = _clamp01(state["security"] - rate * 0.5)
-            state["conflict"] = _clamp01(state["conflict"] + rate)
+        if pleasure is not None:
+            # 有情绪愉悦度 P：以 P 作为 valence（P>0 正、P<0 负、强度 |P|），跳过关键词判定
+            valence = max(-0.95, min(0.95, float(pleasure)))
+            label = "positive" if valence > 0 else ("negative" if valence < 0 else "neutral")
         else:
-            state["user_to_agent"]["engagement"] = _clamp01(state["user_to_agent"]["engagement"] + rate * 0.1)
+            # 未传 P 时回退关键词判定，保持事件路径行为不变
+            label, valence = self._estimate_valence(text)
+        # 按 valence 强度缩放涨跌幅度：强情感更明显、弱情感更平缓
+        strength = min(1.0, abs(valence))
+        eff_rate = self.learning_rate * (0.5 + 0.5 * strength)
+        if valence > 0:
+            state["agent_to_user"]["attachment"] = _clamp01(state["agent_to_user"]["attachment"] + eff_rate * 0.5)
+            state["agent_to_user"]["trust"] = _clamp01(state["agent_to_user"]["trust"] + eff_rate * 0.6)
+            state["agent_to_user"]["care"] = _clamp01(state["agent_to_user"]["care"] + eff_rate * 0.4)
+            state["user_to_agent"]["warmth"] = _clamp01(state["user_to_agent"]["warmth"] + eff_rate * 0.7)
+            state["user_to_agent"]["engagement"] = _clamp01(state["user_to_agent"]["engagement"] + eff_rate * 0.4)
+            state["user_to_agent"]["trust"] = _clamp01(state["user_to_agent"]["trust"] + eff_rate * 0.5)
+            state["security"] = _clamp01(state["security"] + eff_rate * 0.4)
+            state["conflict"] = _clamp01(state["conflict"] - eff_rate * 0.6)
+        elif valence < 0:
+            state["agent_to_user"]["trust"] = _clamp01(state["agent_to_user"]["trust"] - eff_rate * 0.5)
+            state["user_to_agent"]["warmth"] = _clamp01(state["user_to_agent"]["warmth"] - eff_rate * 0.6)
+            state["user_to_agent"]["trust"] = _clamp01(state["user_to_agent"]["trust"] - eff_rate * 0.5)
+            state["security"] = _clamp01(state["security"] - eff_rate * 0.5)
+            state["conflict"] = _clamp01(state["conflict"] + eff_rate * 0.8)
+        else:
+            state["user_to_agent"]["engagement"] = _clamp01(state["user_to_agent"]["engagement"] + eff_rate * 0.1)
 
         state["user_emotion"] = {
             "label": label,

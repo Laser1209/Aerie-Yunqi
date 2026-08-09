@@ -7,11 +7,22 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Optional
 
 from .persona_hub import get_persona_manager
 
 logger = logging.getLogger(__name__)
+
+# world phase 英文 → 中文，供 LLM 中文语境理解时段。
+_WORLD_PHASE_CN: dict[str, str] = {
+    "night": "深夜",
+    "morning": "上午",
+    "noon": "中午",
+    "afternoon": "下午",
+    "evening": "晚上",
+    "unknown": "未知",
+}
 
 
 def _safe_float(value: Any, default: float = 0.5) -> float:
@@ -19,6 +30,22 @@ def _safe_float(value: Any, default: float = 0.5) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _hist_label(row: dict) -> str:
+    """给一条历史消息生成绝对时间前缀，如 `[08-09 04:07] `。
+
+    消息可能来自 turns/messages（created_at）或 legacy chat_log（created_at/ts）。
+    无法解析时返回空串，保证不破坏原有内容。
+    """
+    ts = row.get("created_at") or row.get("ts")
+    if not ts:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(ts))
+    except (ValueError, TypeError):
+        return ""
+    return f"[{dt.strftime('%m-%d %H:%M')}] "
 
 
 class ContextBuilder:
@@ -81,15 +108,22 @@ class ContextBuilder:
             event_lines = [f"- {item['start_time'][11:16]} {item['title']}" for item in time_context.get("today_events", [])[:5]]
             todo_lines = [f"- {item['title']}（{item.get('priority', 'medium')}）" for item in time_context.get("today_todos", [])[:5]]
             anniversary_lines = [f"- {item['start_time'][:10]} {item['title']}" for item in time_context.get("upcoming_anniversaries", [])[:5]]
-            system += "\n\n【时间快照】\n日期：" + str(time_context.get("date", ""))
+            system += "\n\n【时间快照】"
+            system += "\n当前时间：" + str(time_context.get("datetime", ""))
+            system += "\n当前时段：" + str(time_context.get("time_period_cn", ""))
+            system += "\n日期：" + str(time_context.get("date", ""))
             system += "\n今日事件：\n" + ("\n".join(event_lines) or "- 无")
             system += "\n今日未完成任务：\n" + ("\n".join(todo_lines) or "- 无")
             system += "\n未来 7 天纪念日：\n" + ("\n".join(anniversary_lines) or "- 无")
 
         if route_mode == "FULL" and world_snapshot:
+            phase_cn = _WORLD_PHASE_CN.get(
+                world_snapshot.get("phase", "unknown"),
+                "未知",
+            )
             system += (
                 "\n\n【世界状态·模拟】\n"
-                f"时段：{world_snapshot.get('phase', 'unknown')}\n"
+                f"时段：{phase_cn}\n"
                 f"地点：{world_snapshot.get('location', 'unknown')}\n"
                 f"活动：{world_snapshot.get('activity', 'idle')}\n"
                 f"精力：{_safe_float(world_snapshot.get('energy', 0.5)):.2f}\n"
@@ -232,7 +266,7 @@ class ContextBuilder:
                 messages.append(
                     {
                         "role": h.get("role", "user"),
-                        "content": h.get("content", ""),
+                        "content": _hist_label(h) + str(h.get("content", "")),
                     }
                 )
 

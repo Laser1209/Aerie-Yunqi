@@ -199,3 +199,53 @@ class TestContextBuilderPersona9_10:
         # 至少 3 处 "9/10" 出现（L1 + L2 + L4）
         count = system.count("9/10")
         assert count >= 3, f"FULL mode system prompt should have ≥3 '9/10' markers, got {count}"
+
+
+class TestContextBuilderTimePerception:
+    """时间感知修复：时间快照含时分+中文时段、world phase 中文映射、历史带时间前缀。"""
+
+    @pytest.fixture
+    def builder(self):
+        return ContextBuilder()
+
+    def test_time_snapshot_includes_datetime_and_period(self, builder):
+        time_context = {
+            "date": "2026-08-09",
+            "datetime": "2026-08-09 16:48",
+            "time_period_cn": "下午",
+            "today_events": [],
+            "today_todos": [],
+            "upcoming_anniversaries": [],
+        }
+        msgs = builder.build(3998874040, "看看腿我就去", "FULL", time_context=time_context)
+        system = msgs[0]["content"]
+        assert "当前时间：2026-08-09 16:48" in system
+        assert "当前时段：下午" in system
+
+    def test_world_phase_mapped_to_chinese(self, builder):
+        world_snapshot = {
+            "phase": "afternoon",
+            "location": "studio",
+            "activity": "drawing",
+            "energy": 0.5,
+        }
+        msgs = builder.build(3998874040, "看看腿我就去", "FULL", world_snapshot=world_snapshot)
+        system = msgs[0]["content"]
+        assert "时段：下午" in system
+        assert "afternoon" not in system
+
+    def test_history_messages_get_timestamp_prefix(self, builder):
+        history = [
+            {"role": "user", "content": "我睡觉去了", "created_at": "2026-08-09 04:06:47"},
+            {"role": "assistant", "content": "晚安", "created_at": "2026-08-09 04:06:47"},
+        ]
+        msgs = builder.build(3998874040, "看看腿我就去", "FULL", history_msgs=history)
+        contents = [m["content"] for m in msgs[1:-1]]
+        assert "[08-09 04:06] 我睡觉去了" in contents
+        assert "[08-09 04:06] 晚安" in contents
+
+    def test_history_without_timestamp_unchanged(self, builder):
+        history = [{"role": "user", "content": "没有时间的消息"}]
+        msgs = builder.build(3998874040, "看看腿我就去", "FULL", history_msgs=history)
+        contents = [m["content"] for m in msgs[1:-1]]
+        assert "没有时间的消息" in contents

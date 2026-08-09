@@ -34,6 +34,26 @@ REPEAT_TYPES = {"none", "daily", "weekly", "monthly", "yearly"}
 REMIND_BEFORE_VALUES = {-1, 0, 5, 15, 30, 60, 1440}
 
 
+def _time_period_cn(now: datetime) -> str:
+    """把当前时刻映射为中文时段，供 Agent 时间快照使用。
+
+    边界与 world phase（night/morning/noon/afternoon/evening）对齐但更细，
+    可区分 16:48（下午）与 19:30（晚上），避免 LLM 依赖粗粒度英文 phase 猜时间。
+    """
+    h = now.hour
+    if 5 <= h < 8:
+        return "清晨"
+    if 8 <= h < 12:
+        return "上午"
+    if 12 <= h < 14:
+        return "中午"
+    if 14 <= h < 18:
+        return "下午"
+    if 18 <= h < 22:
+        return "晚上"
+    return "深夜"
+
+
 def _normalize_choice(value: Any, allowed: set[str], field: str) -> str:
     normalized = str(value).strip().lower()
     if normalized not in allowed:
@@ -379,9 +399,14 @@ class CalendarManager:
         end = (now + timedelta(days=7)).strftime("%Y-%m-%dT23:59:59")
         today = self.get_timeline(date + "T00:00:00", date + "T23:59:59", user_id)
         upcoming = self.list_events(date + "T00:00:00", end, "anniversary", 20, user_id)
-        return {"date": date, "today_events": [i for i in today["items"] if i["kind"] == "event"],
-                "today_todos": [i for i in today["items"] if i["kind"] == "todo" and not i["completed"]],
-                "upcoming_anniversaries": [{"title": i["title"], "start_time": i["start_time"]} for i in upcoming[:10]]}
+        return {
+            "date": date,
+            "datetime": now.strftime("%Y-%m-%d %H:%M"),
+            "time_period_cn": _time_period_cn(now),
+            "today_events": [i for i in today["items"] if i["kind"] == "event"],
+            "today_todos": [i for i in today["items"] if i["kind"] == "todo" and not i["completed"]],
+            "upcoming_anniversaries": [{"title": i["title"], "start_time": i["start_time"]} for i in upcoming[:10]],
+        }
 
     def get_stats(self) -> dict:
         """获取日历统计信息"""

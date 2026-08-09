@@ -12,9 +12,10 @@
   let b3 = { internal: {}, trends: [], cognition: [], permissions: {} };
   let eventFilter = "all";
 
-  const PAD_COLORS = { P: "#7aa2f7", A: "#bb9af7", D: "#9ece6a" };
-  const NEURO_COLORS = { vitality: "#7aa2f7", calm: "#9ece6a", strain: "#f7768e" };
-  const REL_COLORS = { attachment: "#7aa2f7", trust: "#9ece6a", security: "#bb9af7", conflict: "#f7768e" };
+  // 与主程序主题一致的品牌色（与 CSS --wdw-pad-* 对应）
+  const PAD_COLORS = { P: "#007aff", A: "#5e5ce6", D: "#34c759" };
+  const NEURO_COLORS = { vitality: "#007aff", calm: "#34c759", strain: "#ff3b30" };
+  const REL_COLORS = { attachment: "#007aff", trust: "#34c759", security: "#5e5ce6", conflict: "#ff3b30" };
 
   function $(id) { return document.getElementById(id); }
 
@@ -61,6 +62,14 @@
     document.querySelectorAll("[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => runControl(btn.getAttribute("data-action"), btn));
     });
+    // 无外壳窗口控制
+    $("wdw-min").addEventListener("click", () => { const b = api(); if (b && b.minimize) b.minimize(); });
+    $("wdw-close").addEventListener("click", () => { const b = api(); if (b && b.close) b.close(); });
+    // 窗口尺寸变化时重绘趋势图（若内在状态页可见）
+    window.addEventListener("resize", () => {
+      const panel = document.querySelector('[data-page-panel="internal"]');
+      if (panel && !panel.hidden) requestAnimationFrame(() => drawTrends());
+    });
     document.addEventListener("visibilitychange", () => {
       visible = !document.hidden;
       if (visible) { refresh(); loadB3(); } else { stopPolling(); }
@@ -78,7 +87,8 @@
     document.querySelectorAll(".wdw-page").forEach((p) => {
       p.hidden = p.getAttribute("data-page-panel") !== page;
     });
-    if (page === "internal") drawTrends();
+    // 内在状态页变为可见后，等布局完成再绘制趋势图，保证 canvas 使用真实渲染宽度。
+    if (page === "internal") requestAnimationFrame(() => drawTrends());
   }
 
   function api() { return window.world || null; }
@@ -496,6 +506,11 @@
 
   // ── 趋势图（本地 canvas，无 CDN） ──────────────────────────────
   function drawTrends() {
+    const canvases = [$("wdw-chart-pad"), $("wdw-chart-neuro"), $("wdw-chart-rel")];
+    // 内在状态页未渲染（hidden 或尚未布局）时跳过，等可见后再画，
+    // 避免用 0/300px 回退宽度绘制导致画布被拉伸、比例失真。
+    if (canvases.some((c) => c && c.clientWidth <= 0)) return;
+
     const trends = Array.isArray(b3.trends) ? b3.trends : [];
     const padSeries = { P: [], A: [], D: [] };
     const neuroSeries = { vitality: [], calm: [], strain: [] };
@@ -521,11 +536,12 @@
         relSeries.conflict.push(numAny(rel.conflict));
       }
     });
+    // PAD 取值范围为 [-1,1]，需按 [-1,1] 域绘制，否则负值塌缩到底部、比例失真。
     drawChart($("wdw-chart-pad"), [
       { label: "愉悦 P", color: PAD_COLORS.P, values: padSeries.P },
       { label: "唤醒 A", color: PAD_COLORS.A, values: padSeries.A },
       { label: "支配 D", color: PAD_COLORS.D, values: padSeries.D },
-    ]);
+    ], { min: -1, max: 1 });
     drawChart($("wdw-chart-neuro"), [
       { label: "活力", color: NEURO_COLORS.vitality, values: neuroSeries.vitality },
       { label: "平静", color: NEURO_COLORS.calm, values: neuroSeries.calm },
@@ -539,21 +555,30 @@
     ]);
   }
 
-  function drawChart(canvas, series) {
+  function drawChart(canvas, series, opts) {
     if (!canvas || !canvas.getContext) return;
     const ctx = canvas.getContext("2d");
+    const cfg = opts && typeof opts === "object" ? opts : {};
+    const lo = Number.isFinite(cfg.min) ? cfg.min : 0;
+    const hi = Number.isFinite(cfg.max) ? cfg.max : 1;
+    const span = hi - lo || 1;
     const dpr = window.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || 300;
-    const cssH = canvas.height || 120;
+    const cssH = canvas.clientHeight || 120;
     canvas.width = Math.max(1, Math.round(cssW * dpr));
     canvas.height = Math.max(1, Math.round(cssH * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
+    // 主题色：从 CSS 变量读取，随主程序明暗主题自适应。
+    const cs = getComputedStyle(document.documentElement);
+    const gridColor = (cs.getPropertyValue("--wdw-bar") || "").trim() || "#e5e5ea";
+    const textColor = (cs.getPropertyValue("--wdw-text") || "").trim() || "#1d1d1f";
+    const mutedColor = (cs.getPropertyValue("--wdw-muted") || "").trim() || "#8e8e93";
     const padX = 8, padY = 8;
     const w = cssW - padX * 2;
     const h = cssH - padY * 2;
     // 网格
-    ctx.strokeStyle = "#242a36";
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let i = 0; i <= 4; i++) {
@@ -574,13 +599,14 @@
       ctx.beginPath();
       vals.forEach((v, i) => {
         const x = padX + (maxLen <= 1 ? 0 : w * i / (maxLen - 1));
-        const y = padY + h - clamp01(v) * h;
+        const t = (v - lo) / span;
+        const y = padY + h - Math.max(0, Math.min(1, t)) * h;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       });
       ctx.stroke();
     });
     if (!hasData) {
-      ctx.fillStyle = "#8a93a3";
+      ctx.fillStyle = mutedColor;
       ctx.font = "11px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("暂无趋势数据", cssW / 2, cssH / 2 + 4);
@@ -594,7 +620,7 @@
       const ly = padY + 8 + i * 12;
       ctx.fillStyle = s.color;
       ctx.fillRect(lx - 34, ly - 7, 8, 8);
-      ctx.fillStyle = "#e6e9ef";
+      ctx.fillStyle = textColor;
       ctx.fillText(s.label, lx - 8, ly);
     });
   }

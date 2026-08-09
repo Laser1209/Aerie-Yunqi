@@ -9,12 +9,18 @@
   <link rel="stylesheet" href="styles/world-dashboard-window.css" />
 </head>
 <body class="wdw-body">
-  <!-- 顶部状态栏 -->
+  <!-- 顶部状态栏（无外壳窗口：整条可拖拽 + 窗口控制） -->
   <header class="wdw-topbar">
     <div class="wdw-brand">AERIE.WORLD</div>
     <div class="wdw-topbar-right">
       <span id="wdw-status" class="wdw-status wdw-status--idle" data-status="idle">离线</span>
       <span id="wdw-world-time" class="wdw-time">--:--:--</span>
+      <div class="wdw-winctrl">
+        <button id="wdw-min" class="wdw-winctrl-btn" title="最小化" type="button" aria-label="最小化">─</button>
+        <button id="wdw-close" class="wdw-winctrl-btn wdw-winctrl-btn--close" title="关闭" type="button" aria-label="关闭">
+          <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
     </div>
   </header>
 

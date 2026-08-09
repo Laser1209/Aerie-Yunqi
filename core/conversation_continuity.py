@@ -3,9 +3,25 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Iterator, Sequence
 
 from core.conversation_repository import ConversationRepository
+
+
+def _hist_label(row: dict) -> str:
+    """给一条历史消息生成绝对时间前缀，如 `[08-09 04:07] `。
+
+    无法解析时间时返回空串，保证不破坏原有内容。
+    """
+    ts = row.get("created_at") or row.get("ts")
+    if not ts:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(ts))
+    except (ValueError, TypeError):
+        return ""
+    return f"[{dt.strftime('%m-%d %H:%M')}] "
 
 
 class SummaryConflict(RuntimeError):
@@ -360,10 +376,12 @@ class ContextAssembler:
             content = str(item.get("content") or "")
             if not content:
                 continue
-            if used + len(content) > budget:
+            label = _hist_label(item)
+            entry_len = len(label) + len(content)
+            if used + entry_len > budget:
                 continue
-            history.append({"role": role, "content": content})
-            used += len(content)
+            history.append({"role": role, "content": label + content})
+            used += entry_len
         history.reverse()
         messages = [{"role": "system", "content": system}]
         messages.extend(history)

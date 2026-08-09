@@ -1785,14 +1785,14 @@ class Pipeline:
         try:
             if msg.actor_id and msg.channel:
                 history = self.db.query(
-                    "SELECT role, content FROM chat_log "
+                    "SELECT role, content, created_at FROM chat_log "
                     "WHERE actor_id = ? AND channel = ? "
                     f"ORDER BY id DESC LIMIT {legacy_limit}",
                     (msg.actor_id, msg.channel),
                 )
             else:
                 history = self.db.query(
-                    "SELECT role, content FROM chat_log WHERE user_id = ? "
+                    "SELECT role, content, created_at FROM chat_log WHERE user_id = ? "
                     f"ORDER BY id DESC LIMIT {legacy_limit}",
                     (msg.user_id,),
                 )

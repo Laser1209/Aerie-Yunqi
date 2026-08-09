@@ -228,3 +228,32 @@ def test_remind_before_minus_one_disables_reminders(tmp_path):
 
     assert event["remind_before"] == -1
     assert reminders == []
+
+
+@pytest.mark.parametrize(
+    "hour,expected",
+    [
+        (6, "清晨"),
+        (10, "上午"),
+        (13, "中午"),
+        (16, "下午"),
+        (20, "晚上"),
+        (23, "深夜"),
+        (2, "深夜"),
+        (4, "深夜"),
+    ],
+)
+def test_time_period_cn_maps_hours_to_chinese(hour, expected):
+    from core.calendar_manager import _time_period_cn
+
+    assert _time_period_cn(datetime(2026, 8, 9, hour, 0)) == expected
+
+
+def test_get_agent_snapshot_includes_datetime_and_time_period_cn(tmp_path):
+    manager = CalendarManager(make_db(tmp_path))
+
+    snapshot = manager.get_agent_snapshot(7, datetime(2026, 8, 9, 16, 48, 0))
+
+    assert snapshot["datetime"] == "2026-08-09 16:48"
+    assert snapshot["time_period_cn"] == "下午"
+    assert snapshot["date"] == "2026-08-09"

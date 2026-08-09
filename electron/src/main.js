@@ -1098,7 +1098,9 @@ function openWorldDashboardWindow() {
     minWidth: 400,
     minHeight: 520,
     title: "AERIE.WORLD · 世界仪表盘",
-    backgroundColor: "#101318",
+    backgroundColor: "#ffffff",
+    frame: false,
+    icon: ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, "world-dashboard-preload.js"),
       contextIsolation: true,

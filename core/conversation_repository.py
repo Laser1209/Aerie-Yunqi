@@ -648,7 +648,7 @@ class ConversationRepository:
                        ORDER BY created_at DESC, turn_order DESC
                        LIMIT ?
                    )
-                   SELECT m.role, m.content, m.sequence, m.channel
+                   SELECT m.role, m.content, m.sequence, m.channel, rt.created_at
                    FROM recent_turns rt
                    JOIN messages m ON m.turn_id = rt.turn_id
                    ORDER BY rt.created_at ASC, rt.turn_order ASC, m.sequence ASC""",

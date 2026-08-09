@@ -9,58 +9,97 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [Unreleased] - 2026-08-09
+## [0.2.0-beta.1] - 2026-08-10
 
-> **三端撤回 + 消息合并重构 / Multi-channel Recall & Message Merge Rebuild**
-> 按端口(QQ/本地/未来微信)解耦的撤回系统 + LLM 主动撤回指令 + 首条立即/动态合并的消息编排。
+> **能力大版本升级 / Major Beta Release**
+> 从 0.1.0-beta.1 基线以来，完成 P1 陪伴融合、世界模拟、三端撤回、多模态生图、向量知识库与移动端网关等系统性能力实装。
+> 按 Keep a Changelog 规范将此前若干 Unreleased 段合并为本版本，并明确标注为 `0.2.0-beta.1`。
 
 ### ✨ Features / 新功能
+
+#### 陪伴融合 (P1) / Companion Fusion
+- **内在状态接入**：`core/internal_state.py` + `emotion_state_store.py` 落地，情绪/关系自然化全量实现，PAD 情绪、欲望引擎、关系建模与拟人化节奏统一接入
+- **同理心策略**：`core/empathy_strategy.py`（`test_p1_a3`），根据对话情境自适应同理心表达
+- **记忆可见性**：LayeredMemory 生产记忆切换（见下方"向量知识库"），P1 记忆可见性合同落地
+- **人设配置**：`persona_config.py` / `persona_behavior.yaml` 行为与表达节奏配置化
+- **通道抽象**：`core/companion_channel.py` 多通道抽象 + 3 层适配器（`test_p1_d4` / `test_p1_d5`）
+
+#### 三端撤回 + 消息合并重构 / Multi-channel Recall & Message Merge
 - **三端撤回解耦**：新增 `communication/recall/` 包（`RecallAdapter` 协议 + QQ/Local/WeChatClawbot 三端实现），`RecallManager` 改为按 `(channel, channel_account_id)` 记录与预算，撤回能力经适配器按端口分派
 - **LLM 主动撤回指令**：新增 `core/recall_instruction.py`，解析并执行 AI 输出的 `<recall reason="...">` 指令（与纯文本 `<action>` 严格分离），执行后从正文剔除并撤回上一条已发消息；`config/persona.yaml` 的 `recall.triggers` 从死配置变为有消费方
 - **本地端撤回补全**：`companion.recall_message` 通用化，纯本地消息可撤回（DB 标记 + 前端"已撤回"呈现），不再报 `no_qq_message_id`
 - **消息合并重构**：`MessageBatcher` 首条立即提交、后续消息动态缓冲，当前批完成后作为新批处理，不再等固定窗口
 - **撤回判断联动**：新增 `core/message_orchestrator.py`（`RecallJudge`），新批到达且上一批已产出时决策是否撤回首条再合并重算
+- **QQ 端**：NapCat `delete_msg` 真实撤回；**本地/桌面端**：DB 标记 + 前端事件；**微信端**：架构预留桩（`channel="clawbot"`），iLink 协议暂无可调用撤回端点，`<recall>` 自动降级为仅本地标记
 
-### 🔌 三端撤回能力
-- **QQ 端**：NapCat `delete_msg` 真实撤回
-- **本地/桌面端**：DB 标记 + 前端事件
-- **微信端**：架构预留桩（`channel="clawbot"`），调研归档见 `.trae/documents/Aerie_微信接入调研与方案.md`；iLink 协议暂无可调用撤回端点，`<recall>` 自动降级为仅本地标记
+#### 多模态生图与视觉 / Multimodal Image & Vision
+- **三视图生图辅助**：人设面板可上传正/侧/背三视图参考图（`GET/POST/DELETE /api/persona/three-view/...`），经 `three_view:front` token 锁定角色外观；超限自动压缩，大小经 `AERIE_THREE_VIEW_MAX_BYTES` 配置（默认 8MB）
+- **图片候选人生成推送**：`world_image_candidates_v1` 开关 + `POST /api/world/image-candidates/publish`，支持 `qq` / `local_chat` 双通道交付；本地聊天以绝对 URL + `.chat-bubble img` 样式渲染
+- **QQ 发图**：`QQClient.send_image()` 以 OneBot11 图片段发送图片到 QQ
+- **主动发图预算管控**：`core/image_budget.py` + `proactive.image_max_per_day`（默认 20）限制每日主动发图量
+- **图生图能力 (img2img)**：`core/image_service.py` 支持基于参考图生成
+- **SiliconFlow 视觉技能**：新增 `skills/local/siliconflow-vision/`，复用 `SILICONFLOW_API_KEY`，让纯文本 LLM 具备图片识别/描述能力
 
-### 🧪 Tests / 测试
-- 新增 `tests/test_recall_adapters.py`、`tests/test_recall_instruction.py`、`tests/test_message_orchestrator.py`
-- 更新 `tests/test_message_batcher.py` 为新"首条立即"语义（15 用例全绿）
+#### 世界模拟 / World Simulation (Phase 11-15)
+- **世界端口与领域**：`world_port.py` / `world_simulation.py`，`world_inprocess_v1`（默认开）与 `world_sidecar_v1` 双模式
+- **世界现实与天气**：`world_reality.py` + `weather_service.py`，真实数据同步，`world.location=济南`
+- **世界仪表盘**：`/world/dashboard`、`/world/snapshot` API + Electron `world-dashboard-host.js`，新增世界位置配置与真实数据同步
+- **WorldSnapshot**：确定性计算，`world.random_events_per_day` / `world.reality_refresh_sec` / `world.tick_interval_sec` 可配置
+- **Sidecar**：`world_service/main.py` + SQLite 存储（`world_service/storage/sqlite_store.py`）
 
----
+#### 向量知识库与记忆 / Vector KB & Memory
+- **专用向量知识库激活**：`core/knowledge_indexer.py` 将桌面附件分块索引进独立 Chroma 库（`data/chroma_attachments`），检索命中注入上下文
+- **生产记忆切换 LayeredMemory**：`memory/layers/` 分层记忆（transient/short/long/permanent），`scripts/migrate_long_term_memory.py` 迁移旧数据
+- **知识库写入工具**：新增知识库写入工具并启用全局工具支持（`tools` 全量接入 Function Calling）
 
-## [Unreleased] - 2026-07-21
+#### 移动端网关 / Mobile Gateway
+- **Android 移动网关**：`core/mobile_gateway.py` + `mobile_chat.py` + `mobile_files.py` + `mobile_identity.py`，多端会话、文件能力与账号鉴权（`mobile_gateway_v1` 开关）
+- **重启可观测**：backend restart helper 改为 project-root 安全、可观测执行
+- **消息顺序保序**：移动端消息段顺序保留，历史游标 honor camel-case
 
-> **文档同步 / Documentation Sync**
-> 根据当前仓库结构、运行入口、Spotlight 官网、World Service 与 Phase 测试状态，同步根文档说明。
+#### 简报与资讯 / Brief & News
+- **分层混合爬虫**：`brief_fetcher.py` 按 `SECTIONS_PRIORITY` 逐层尝试（hn → crawl → aggregator → hot → bocha），Hacker News 与百度热搜无需 API Key
+- **GitHub Trending 订阅**：`brief_subscriptions.sources.github_trending` 可订阅热门仓库（`min_stars=200`）
+- **全屏天气预报**：brief-drawer 新增全屏天气展示与抽屉样式优化
 
-### 📝 Documentation / 文档
-- **README.md 当前状态更新**：补充 Electron 桌面端、Python 后端、NapCat、Spotlight 官网、World Service、Phase 0-15 测试与发布资源状态
-- **线上官网地址同步**：在当前状态、快速开始、发布资源与文档索引中补充 `https://laser1209.github.io/Aerie_Spotlight/`
-- **运行说明校准**：按当前源码结构整理 Python 后端、NapCat、Electron 与 Spotlight 的启动流程
-- **验证命令校准**：保留 `pytest tests`、重点 Phase 测试、Electron `check:all` 与 Spotlight 构建命令，移除未在 `electron/package.json` 暴露的 `npm test` 指引
-- **项目结构更新**：新增 `world_service/`、`Spotlight/`、`docs/`、`.trae/documents/` 等当前实际目录说明
-- **配置与排障更新**：补充配置热加载、运行数据、日志、官网构建与发布资源说明
+#### 办公与文档 / Office & Docs
+- **文档写作工具链**：`core/doc_writer.py` 文档写作工具（报告/规格/研究等）
+- **文件整理增强**：`file_organizer.py` 文件整理、去重与过期清理
+- **办公模式匹配**：`office_mode.py` 办公模式关键词匹配与徽标显示控制
+- **LLMCaller 命名收敛**：核心模块从 `Brain` 收敛到 `core/llm_caller.py`（`test_llm_caller` 全链路测试）
 
-### Fixed / 修复
-- **灵动岛原生置顶**：Windows 使用保留 `WS_EX_TOPMOST` 的窗口层级，并在主窗口显示、聚焦、最大化、还原和全屏切换后重新确认置顶
-- **窗口生命周期**：二次启动统一唤回现有窗口；只有托盘或可见灵动岛可恢复窗口时才执行“关闭即隐藏”
-- **导航时序**：主窗口加载完成前缓存 tab/日报导航，修正灵动岛日报入口与通知日历入口的目标协议
-- **打包托盘图标**：打包态改用实际进入 `app.asar` 的 `builder/icon.ico`
-- **API 路由与日报问候**：限制 self-evolve 详情路由为整数，并将日报日期传入问候生成合同
-- **渲染安全**：恢复 Electron 默认 renderer sandbox，保持 `contextIsolation` 与禁用 `nodeIntegration`
+### 🔧 Changed / 变更
+- **版本号**：0.1.0-beta.1 → 0.2.0-beta.1
+- **LLM 时间感知修正**：修复 LLM 时间感知偏差，优化对话历史与时间展示；输出端剥离 `[MM-DD HH:MM]` 时间戳标记（`pipeline._strip_leading_timestamp`），系统提示新增"时间戳铁律"防止模型模仿历史格式
+- **开机问候升级**：`boot_greeting` 支持动态上下文生成，`_boot_greeting_fired` 守卫避免开场双消息
+- **多平台通用搜索工具**：`tools/social_search.py` 等，世界仪表盘与天气功能同步优化
+- **每日简报缓存**：修复 todo 数据过时问题，移除自动生成示例待办逻辑
+- **Electron 动态岛**：修复环境变量开关逻辑位置；灵动岛原生置顶、窗口生命周期、导航时序、打包托盘图标、渲染安全（sandbox + contextIsolation）等多项修复
+
+### 🐛 Fixed / 修复
+- **Electron 渲染层**：灵动岛原生置顶（`WS_EX_TOPMOST` 保留）、窗口二次启动唤回、导航缓存时序、打包托盘图标、renderer sandbox 恢复
+- **移动端**：消息段顺序保序、历史游标 camel-case、backend restart project-root 安全与可观测
+- **简报**：缓存 todo 数据过时、移除自动示例待办
+- **时间戳**：LLM 输出残留 `[MM-DD HH:MM]` 标记剥离
 
 ### Performance / 性能
-- **首屏初始化**：隐藏面板改为首次进入时初始化，全局控制器延后到首帧之后启动
-- **日报合成**：收敛为单层背景模糊，移除嵌套 filter、位移动画和会触发 sibling layer 丢失的 hover transform
-- **灵动岛空闲负载**：移除常驻粒子循环；媒体状态查询改为单飞、带超时的自适应轮询，隐藏时暂停
+- **Electron 首屏初始化**：隐藏面板延迟初始化，全局控制器延后启动
+- **日报合成**：收敛单层背景模糊，移除嵌套 filter 与触发 sibling layer 丢失的 transform
+- **灵动岛空闲负载**：移除常驻粒子循环，媒体状态单飞自适应轮询，隐藏时暂停
 
-### Tests / 测试
-- 新增日报 compositor、renderer 性能、窗口生命周期、导航队列、媒体轮询与原生置顶合同测试
-- 新增 self-evolve 静态路由与日报日期传递回归测试
+### 🔌 API 接口新增 / New API Endpoints
+- `POST /api/world/image-candidates/publish` 图片候选人发布（channel: `qq` / `local_chat`）
+- `GET/POST/DELETE /api/persona/three-view/{persona_id}/{view}` 三视图参考图管理
+
+### 🧪 Tests / 测试
+- **Python 单测**：107 个 `test_*.py` 文件覆盖 Phase 0-15、P1 陪伴融合、v13.9、E2E 与验证脚本
+- 新增 `test_recall_adapters.py`、`test_recall_instruction.py`、`test_message_orchestrator.py`、`test_persona_three_view.py`、`test_desktop_attachment_vector_index.py`、`test_llm_caller.py` 等
+- 更新 `test_message_batcher.py` 为新"首条立即"语义（15 用例全绿）
+- **Electron**：16 个 `.test.js` 文件覆盖窗口生命周期、日报、napcat、persona-hub、chat-store、panels、system-status 等
+
+### 📝 Documentation / 文档
+- 同步 README 当前状态（版本、能力、启动流程、验证命令、项目结构、配置与排障）
+- 补充线上官网地址 `https://laser1209.github.io/Aerie_Spotlight/`、World Service、Phase 0-15 测试与发布资源说明
 
 ---
 

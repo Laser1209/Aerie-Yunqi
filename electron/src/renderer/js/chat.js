@@ -17,11 +17,8 @@ class ChatManager {
       input: document.getElementById("chat-input"),
       sendBtn: document.getElementById("chat-send-btn"),
     };
-    this._seenIds = new Set();
     this._requests = new Map();          // request_id -> RequestViewState
     this._clientToRequest = new Map();   // client_id -> request_id
-    this._seenEventIds = new Set();
-    this._requestSequences = new Map();  // request_id -> { next, pending }
     this._clientCounter = 0;
     this._reducedMotion = this._prefersReducedMotion();
     this._masterQQ = opts.masterQQ || null;
@@ -39,6 +36,9 @@ class ChatManager {
       loading: false,
     };
     this._maxDomMessages = 500;
+    // 单一数据源: 判重/排序/请求状态/稳定元素 id 映射全由 store 接管,
+    // DOM 层只认 store 产出的渲染意图(Intent)。
+    this._store = window.createChatStore({ maxMessages: this._maxDomMessages });
 
     // Block-2 A1: persona + master avatar cache
     // R7.5: avatar_dataurl is the base64 inline form. The renderer
@@ -350,19 +350,6 @@ class ChatManager {
     this._refreshAvatarsInDom();
   }
 
-  // R6.6: re-render every message in the DOM with the current persona
-  // cache. Cheap because the message list is small (≤ a few hundred)
-  // and it only runs after a known persona change.
-  _rerenderVisible() {
-    if (!this._el || !this._el.messages) return;
-    const messages = this._messages || [];
-    if (!messages.length) return;
-    this._el.messages.innerHTML = messages
-      .map((m) => this._renderMessage(m))
-      .join("");
-    this._scrollToBottom();
-  }
-
   async _loadMasterAvatar() {
     try {
       const r = await this._request({
@@ -427,15 +414,13 @@ class ChatManager {
       const empty = this._el.messages && this._el.messages.querySelector(".chat-empty");
       if (empty) empty.remove();
       for (const item of page.items) {
-        if (this._seenIds.has(item.id)) continue;
-        this._seenIds.add(item.id);
+        const before = direction === "older" ? firstMessage : null;
         if (item.is_recalled) {
-          this._renderRecalledStub(item, direction === "older" ? firstMessage : null);
+          this._reconcileRecalled(item.id, before);
         } else {
-          this._render(item, {
-            before: direction === "older" ? firstMessage : null,
-            autoScroll: false,
-          });
+          for (const intent of this._store.ingestSignal(item, "history")) {
+            this._applyIntent(intent, { before, autoScroll: false });
+          }
         }
         const numericId = Number(item.id);
         if (Number.isFinite(numericId) && numericId > this._sinceId) this._sinceId = numericId;
@@ -489,8 +474,6 @@ class ChatManager {
     const nodes = Array.from(this._el.messages.querySelectorAll(".chat-msg"));
     while (nodes.length > this._maxDomMessages) {
       const removed = removeSide === "newest" ? nodes.pop() : nodes.shift();
-      const id = removed && removed.getAttribute("data-id");
-      if (id) this._seenIds.delete(id);
       if (removed) removed.remove();
     }
     const remaining = Array.from(this._el.messages.querySelectorAll(".chat-msg"));
@@ -507,17 +490,6 @@ class ChatManager {
     }
   }
 
-  _renderRecalledStub(item, before = null) {
-    if (!this._el.messages) return;
-    const div = document.createElement("div");
-    div.className = "chat-msg chat-msg--recalled";
-    div.setAttribute("data-id", item.id);
-    if (item.cursor) div.setAttribute("data-history-cursor", item.cursor);
-    div.innerHTML = `<div class="chat-bubble chat-bubble--recalled">（消息已撤回）</div>`;
-    if (before) this._el.messages.insertBefore(div, before);
-    else this._el.messages.appendChild(div);
-  }
-
   _prefersReducedMotion() {
     try {
       return Boolean(
@@ -527,47 +499,6 @@ class ChatManager {
     } catch (_) {
       return false;
     }
-  }
-
-  _clientIdForRequest(requestId) {
-    if (!requestId) return "";
-    for (const [clientId, mappedRequestId] of this._clientToRequest.entries()) {
-      if (mappedRequestId === requestId) return clientId;
-    }
-    return "";
-  }
-
-  _findBubbleForRequest(requestId, role) {
-    if (!requestId || !this._el.messages) return null;
-    const classes = role === "assistant"
-      ? [".chat-msg--assistant", ".chat-msg--typing"]
-      : [".chat-msg--user"];
-    for (const selector of classes) {
-      const candidates = this._el.messages.querySelectorAll(selector) || [];
-      for (const candidate of candidates) {
-        if (
-          candidate &&
-          typeof candidate.getAttribute === "function" &&
-          candidate.getAttribute("data-request-id") === requestId
-        ) {
-          return candidate;
-        }
-      }
-    }
-
-    const clientId = this._clientIdForRequest(requestId);
-    if (clientId) {
-      const bubble = this._el.messages.querySelector(`[data-id="${clientId}"]`);
-      if (bubble) return bubble;
-    }
-
-    if (role === "assistant") {
-      const typingBubbles = this._el.messages.querySelectorAll(".chat-msg--typing") || [];
-      if (typingBubbles.length === 1) {
-        return typingBubbles[0];
-      }
-    }
-    return null;
   }
 
   _requestTypingLabel(status) {
@@ -739,98 +670,45 @@ class ChatManager {
   _syncRequestTypingBubble(state) {
     if (!state || !state.request_id || !this._el.messages) return null;
     const requestId = String(state.request_id);
-    const bubbleId = "typing_" + requestId;
-    const bubble = this._el.messages.querySelector(`[data-id="${bubbleId}"]`);
+    // 与 store 的 requestIdToDomId 稳定键一致: req_<request_id>。
+    // 输入中气泡与最终消息共用同一元素, 不做 id 偷换。
+    const domId = "req_" + requestId;
+    const bubble = this._el.messages.querySelector(`[data-id="${domId}"]`);
     const active = ["running", "cancelling"].includes(state.status);
     if (!active) {
-      if (bubble && bubble.parentNode) {
+      // 仅在仍是输入中气泡时移除; 已升级为真实内容则保留。
+      if (bubble && bubble.getAttribute("data-chat-typing") === "true") {
         bubble.remove();
       }
       return null;
     }
 
     const typingMsg = {
-      id: bubbleId,
+      id: domId,
       role: "assistant",
       request_id: requestId,
       request_status: state.status,
       status: state.status,
       content: "",
+      typing: true,
       source: state.channel || "local",
     };
-    if (bubble) {
-      bubble.className = "chat-msg chat-msg--assistant chat-msg--typing";
-      if (this._reducedMotion) {
-        bubble.className += " chat-msg--typing--reduced";
-      }
-      bubble.setAttribute("data-id", bubbleId);
-      bubble.setAttribute("data-msg-id", bubbleId);
-      bubble.setAttribute("data-request-id", requestId);
-      bubble.setAttribute("data-request-status", state.status || "");
-      bubble.setAttribute("data-chat-typing", "true");
-      bubble.innerHTML = this._buildMessageHtml(typingMsg, { typing: true });
-      return bubble;
-    }
-
-    this._render({
-      ...typingMsg,
-      typing: true,
-    });
-    return this._el.messages.querySelector(`[data-id="${bubbleId}"]`);
-  }
-
-  _promoteBubbleIdentity(el, msg) {
-    if (!el || !msg) return;
-    el.setAttribute("data-id", msg.id);
-    el.setAttribute("data-msg-id", msg.id);
-    if (msg.request_id) {
-      el.setAttribute("data-request-id", msg.request_id);
-    }
-  }
-
-  _updateUserBubble(el, msg) {
-    this._promoteBubbleIdentity(el, msg);
-    if (msg.request_id) {
-      el.setAttribute("data-request-id", msg.request_id);
-    }
-    el.setAttribute("data-request-status", "");
-    if (msg.id && Number.isFinite(Number(msg.id))) {
-      const numericId = Number(msg.id);
-      if (numericId > this._sinceId) this._sinceId = numericId;
-    }
-    if (msg.id) {
-      this._seenIds.add(msg.id);
-    }
-  }
-
-  _updateTypingBubble(el, msg) {
-    if (!el) return;
-    el.className = "chat-msg chat-msg--assistant";
-    el.setAttribute("data-id", msg.id);
-    el.setAttribute("data-msg-id", msg.id);
-    if (msg.request_id) {
-      el.setAttribute("data-request-id", msg.request_id);
-    }
-    el.setAttribute("data-request-status", "");
-    el.setAttribute("data-chat-typing", "false");
-    el.innerHTML = this._buildMessageHtml(msg, { typing: false });
-    if (msg.id) {
-      this._seenIds.add(msg.id);
-      const numericId = Number(msg.id);
-      if (Number.isFinite(numericId) && numericId > this._sinceId) {
-        this._sinceId = numericId;
-      }
-    }
-  }
-
-  _requestTypingBubbleForRequest(requestId) {
-    if (!requestId || !this._el.messages) return null;
-    return this._el.messages.querySelector(`[data-id="typing_${requestId}"]`);
+    this._reconcileMessage(typingMsg, { autoScroll: true });
+    return this._el.messages.querySelector(`[data-id="${domId}"]`);
   }
 
   _newClientId() {
     this._clientCounter += 1;
     return "client_" + Date.now() + "_" + this._clientCounter;
+  }
+
+  // 通过 request_id 反查乐观 client_id(请求状态链路)。
+  _clientIdForRequest(requestId) {
+    if (!requestId) return "";
+    for (const [clientId, mappedRequestId] of this._clientToRequest.entries()) {
+      if (mappedRequestId === requestId) return clientId;
+    }
+    return "";
   }
 
   _normalizeChatSignal(signal) {
@@ -854,93 +732,105 @@ class ChatManager {
   }
 
   _ingestChatSignal(signal, transport = "unknown") {
-    const normalized = this._normalizeChatSignal(signal);
+    let normalized = this._normalizeChatSignal(signal);
     if (!normalized) return;
-
-    const eventId = normalized.event_id;
-    if (eventId) {
-      if (this._seenEventIds.has(eventId)) return;
-      this._seenEventIds.add(eventId);
+    // 用户乐观气泡升级: 真实回显带 request_id 但无 client_id, 用
+    // _clientToRequest 把它关联回乐观气泡的稳定 domId, 让 store 原地
+    // 更新而非新建重复元素(取代旧 _updateUserBubble 的 id 偷换)。
+    if (normalized.role === "user" && normalized.request_id) {
+      const clientId = this._clientIdForRequest(normalized.request_id);
+      if (clientId && this._store.clientIdToDomId.has(clientId)) {
+        normalized = {
+          ...normalized,
+          client_id: clientId,
+          domId: this._store.clientIdToDomId.get(clientId),
+        };
+      }
     }
-
-    const sequence = Number(normalized.sequence);
-    if (
-      normalized.request_id &&
-      Number.isInteger(sequence) &&
-      sequence >= 0
-    ) {
-      this._ingestSequencedSignal(normalized, transport, sequence);
-      return;
-    }
-    this._applyChatSignal(normalized, transport);
-  }
-
-  _ingestSequencedSignal(signal, transport, sequence) {
-    const requestId = signal.request_id;
-    let tracker = this._requestSequences.get(requestId);
-    if (!tracker) {
-      tracker = {
-        next: sequence === 0 ? 0 : 1,
-        pending: new Map(),
-      };
-      this._requestSequences.set(requestId, tracker);
-    }
-    if (sequence < tracker.next) return;
-    tracker.pending.set(sequence, { signal, transport });
-    while (tracker.pending.has(tracker.next)) {
-      const current = tracker.pending.get(tracker.next);
-      tracker.pending.delete(tracker.next);
-      this._applyChatSignal(current.signal, current.transport);
-      tracker.next += 1;
+    // 判重(seenEventIds/seenRealIds)、分片排序(requestSequences)、
+    // 稳定 domId 映射全由 store 接管; 这里只把意图翻译成 DOM 操作。
+    for (const intent of this._store.ingestSignal(normalized, transport)) {
+      this._applyIntent(intent);
     }
   }
 
-  _applyChatSignal(signal, transport = "unknown") {
-    if (signal.type === "recall" || signal.is_recalled) {
-      if (signal.id) this._markRecalled(signal.id);
+  // 唯一的 DOM 应用入口: 把 store 产出的渲染意图应用到消息列表。
+  // 每个逻辑消息只对应一个 [data-id] 元素, data-id 稳定永不改写。
+  _applyIntent(intent, { before = null, autoScroll = true } = {}) {
+    if (!intent) return;
+    switch (intent.action) {
+      case "upsert":
+      case "typing":
+        this._reconcileMessage(intent.msg, { before, autoScroll });
+        break;
+      case "recall":
+        this._reconcileRecalled(intent.id);
+        break;
+      case "status":
+        // 请求状态(取消/重试/徽标)走 chat.js 的请求状态owner, 便于
+        // cancel/retry/restore 复用同一份状态。
+        this._upsertRequestState(intent.state);
+        break;
+      case "remove":
+        this._removeMessage(intent.id);
+        break;
+    }
+  }
+
+  // 创建或原地更新一个 .chat-msg 元素。同一 domId 永远命中同一元素。
+  _reconcileMessage(msg, { before = null, autoScroll = true } = {}) {
+    if (!this._el.messages) return;
+    const empty = this._el.messages.querySelector(".chat-empty");
+    if (empty) empty.remove();
+    const domId = msg.id;
+    let el = this._el.messages.querySelector(`[data-id="${domId}"]`);
+    const create = !el;
+    if (create) {
+      el = document.createElement("div");
+      if (before) this._el.messages.insertBefore(el, before);
+      else this._el.messages.appendChild(el);
+    }
+    el.className = "chat-msg chat-msg--" + msg.role + (msg.typing ? " chat-msg--typing" : "");
+    if (msg.typing && this._reducedMotion) el.className += " chat-msg--typing--reduced";
+    el.setAttribute("data-id", domId);
+    if (msg.msgId) el.setAttribute("data-msg-id", msg.msgId);
+    else el.removeAttribute("data-msg-id");
+    if (msg.request_id) el.setAttribute("data-request-id", msg.request_id);
+    else el.removeAttribute("data-request-id");
+    el.setAttribute("data-request-status", msg.request_status || msg.status || "");
+    if (msg.typing) el.setAttribute("data-chat-typing", "true");
+    else el.removeAttribute("data-chat-typing");
+    el.innerHTML = this._buildMessageHtml(msg, { typing: Boolean(msg.typing) });
+    this._bindMessageActions(el, msg);
+    if (msg.msgId) {
+      const numericId = Number(msg.msgId);
+      if (Number.isFinite(numericId) && numericId > this._sinceId) this._sinceId = numericId;
+    }
+    this._trimMessageWindow("oldest");
+    if (create && autoScroll) this._el.messages.scrollTop = this._el.messages.scrollHeight;
+    return el;
+  }
+
+  // 撤回: 命中已有元素则标记, 否则创建撤回占位。id 为稳定 domId。
+  _reconcileRecalled(id, before = null) {
+    if (!this._el.messages || !id) return;
+    const existing = this._el.messages.querySelector(`[data-id="${id}"]`);
+    if (existing) {
+      this._markRecalled(id);
       return;
     }
+    const div = document.createElement("div");
+    div.className = "chat-msg chat-msg--recalled";
+    div.setAttribute("data-id", id);
+    div.setAttribute("data-msg-id", id);
+    div.innerHTML = `<div class="chat-bubble chat-bubble--recalled">（消息已撤回）</div>`;
+    if (before) this._el.messages.insertBefore(div, before);
+    else this._el.messages.appendChild(div);
+  }
 
-    if (signal.request_id || this._inferRequestStatus(signal)) {
-      this._upsertRequestState(signal);
-    }
-
-    if (signal.request_id && signal.role === "user") {
-      const existingUser = this._findBubbleForRequest(signal.request_id, "user");
-      if (existingUser) {
-        this._updateUserBubble(existingUser, signal);
-        return;
-      }
-    }
-
-    if (signal.request_id && signal.role === "assistant") {
-      const typingBubble = this._requestTypingBubbleForRequest(signal.request_id);
-      if (typingBubble) {
-        this._updateTypingBubble(typingBubble, signal);
-        const requestState = this._requests.get(signal.request_id);
-        if (
-          requestState &&
-          ["running", "cancelling"].includes(requestState.status)
-        ) {
-          this._syncRequestTypingBubble(requestState);
-        }
-        return;
-      }
-    }
-
-    if (!signal || !["user", "assistant"].includes(signal.role)) {
-      return;
-    }
-    if (signal.id && this._seenIds.has(signal.id)) return;
-    if (signal.id) {
-      this._seenIds.add(signal.id);
-      const numericId = Number(signal.id);
-      if (Number.isFinite(numericId) && numericId > this._sinceId) {
-        this._sinceId = numericId;
-      }
-    }
-    signal.transport = signal.transport || transport;
-    this._render(signal);
+  _removeMessage(id) {
+    const el = this._el.messages && this._el.messages.querySelector(`[data-id="${id}"]`);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
   _inferRequestStatus(signal) {
@@ -1183,16 +1073,19 @@ class ChatManager {
     }));
     const clientId = this._newClientId();
 
-    // Optimistic render
-    this._render({
-      id: clientId,
+    // Optimistic render — 走 store, 稳定 domId = clientId, 后续真实回显原地升级。
+    for (const intent of this._store.ingestSignal({
+      client_id: clientId,
+      domId: clientId,
       role: "user",
       content: text,
       reply_to_id: replyToId,
       reply_to_content: this._quotedMsg?.content || "",
       reply_to_role: this._quotedMsg?.role || "",
       attachments,
-    });
+    })) {
+      this._applyIntent(intent);
+    }
 
     // Clear quote and attachments
     this._cancelQuote();
@@ -1216,19 +1109,27 @@ class ChatManager {
       }
       if (resp.data && resp.data.user_msg_id) {
         const realId = resp.data.user_msg_id;
-        const tempEl = this._el.messages.querySelector(`[data-id="${clientId}"]`);
-        if (tempEl) {
-          tempEl.setAttribute("data-id", realId);
-          tempEl.setAttribute("data-msg-id", realId);
+        // 通过 store 原地升级乐观气泡(稳定 domId = clientId), 不偷换 data-id。
+        for (const intent of this._store.ingestSignal({
+          id: realId,
+          client_id: clientId,
+          role: "user",
+          content: text,
+        })) {
+          this._applyIntent(intent);
         }
-        this._seenIds.add(realId);
-        if (realId > this._sinceId) this._sinceId = realId;
       }
       if (resp.data && resp.data.reply) {
         // Server reply already pushed via IPC; this is a fallback
       }
     } catch (err) {
-      this._render({ id: clientId + "_err", role: "assistant", content: "发送失败: " + err.message });
+      for (const intent of this._store.ingestSignal({
+        id: clientId + "_err",
+        role: "assistant",
+        content: "发送失败: " + err.message,
+      })) {
+        this._applyIntent(intent);
+      }
     }
   }
 
@@ -1382,73 +1283,31 @@ class ChatManager {
   }
 
   // ── Render ──
-  _render(msg, { before = null, autoScroll = true } = {}) {
-    if (!this._el.messages) return;
-    const empty = this._el.messages.querySelector(".chat-empty");
-    if (empty) empty.remove();
-
-    // Remove temp optimistic bubble if a real one is arriving
-    if (msg.id && !String(msg.id).startsWith("temp_")) {
-      const oldTemps = this._el.messages.querySelectorAll('[data-id^="temp_"]');
-      oldTemps.forEach((t) => {
-        if (t.getAttribute("data-temp-text") === msg.content) t.remove();
-      });
-    }
-
-    // Don't re-render duplicate real messages
-    if (
-      msg.id &&
-      !String(msg.id).startsWith("temp_") &&
-      this._el.messages.querySelector(`[data-id="${msg.id}"]`)
-    ) {
-      return;
-    }
-
-    if (msg.is_recalled) {
-      this._renderRecalledStub(msg);
-      return;
-    }
-
-    const div = document.createElement("div");
-    div.className = "chat-msg chat-msg--" + msg.role;
-    if (msg.typing) {
-      div.className += " chat-msg--typing";
-      if (this._reducedMotion) {
-        div.className += " chat-msg--typing--reduced";
-      }
-    }
-    div.setAttribute("data-id", msg.id);
-    if (msg.id) div.setAttribute("data-msg-id", msg.id);
-    if (msg.cursor) div.setAttribute("data-history-cursor", msg.cursor);
-    if (msg.id) div.setAttribute("data-temp-text", msg.content);
-    if (msg.id) div.setAttribute("data-request-id", msg.request_id || "");
-    if (msg.id) div.setAttribute("data-request-status", msg.request_status || msg.status || "");
-    if (msg.typing) div.setAttribute("data-chat-typing", "true");
-    div.innerHTML = this._buildMessageHtml(msg, { typing: Boolean(msg.typing) });
-    if (before) this._el.messages.insertBefore(div, before);
-    else this._el.messages.appendChild(div);
-
+  // 绑定单条消息元素上的事件(右键菜单 / 附件 / 引用跳转 / 代码高亮)。
+  // 创建与更新逻辑集中在 _reconcileMessage, 此处只负责交互绑定。
+  _bindMessageActions(el, msg) {
+    if (!el || !msg) return;
     // Bind right-click on the message to open the action menu
-    div.addEventListener("contextmenu", (e) => {
+    el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       if (msg.id && !String(msg.id).startsWith("temp_")) {
         this._showActionMenu(msg, e.clientX, e.clientY);
       }
     });
 
-    for (const button of div.querySelectorAll("[data-attachment-open]")) {
+    for (const button of el.querySelectorAll("[data-attachment-open]")) {
       button.addEventListener("click", () => {
         this._openAttachment(button.getAttribute("data-attachment-open"));
       });
     }
-    for (const button of div.querySelectorAll("[data-attachment-retry]")) {
+    for (const button of el.querySelectorAll("[data-attachment-retry]")) {
       button.addEventListener("click", () => {
         this._retryAttachment(button.getAttribute("data-attachment-retry"));
       });
     }
 
     // Bind quote overlay click → jump to original
-    const quoteOverlay = div.querySelector(".chat-quote-overlay");
+    const quoteOverlay = el.querySelector(".chat-quote-overlay");
     if (quoteOverlay) {
       quoteOverlay.addEventListener("click", () => {
         const targetId = quoteOverlay.getAttribute("data-reply-to");
@@ -1465,13 +1324,10 @@ class ChatManager {
     // them up. highlight.js only auto-highlights on initial page load,
     // so we re-trigger for every newly inserted message.
     if (window.hljs && typeof window.hljs.highlightElement === "function") {
-      div.querySelectorAll("pre code").forEach((el) => {
-        try { window.hljs.highlightElement(el); } catch (_) {}
+      el.querySelectorAll("pre code").forEach((code) => {
+        try { window.hljs.highlightElement(code); } catch (_) {}
       });
     }
-
-    this._trimMessageWindow("oldest");
-    if (autoScroll) this._el.messages.scrollTop = this._el.messages.scrollHeight;
   }
 
   /* R7.4: split a message into text / action / thought segments and

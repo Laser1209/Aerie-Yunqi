@@ -67,7 +67,7 @@ from core.event_stream import stream as event_stream_generator
 from core.self_evolver import SelfEvolver
 from core.computer_control import ComputerController, PermissionLevel
 from core.file_organizer import FileOrganizer
-from core.doc_writer import DocWriter
+from core.doc_writer import DocWriter, DocType, ExportFormat
 from core.calendar_manager import CalendarManager
 from core.persona_hub import get_persona_manager
 from core.multimodal_input import AudioTranscriber
@@ -4093,6 +4093,142 @@ async def doc_writer_list(limit: int = Query(default=20, ge=1, le=100)) -> dict:
     except Exception as e:
         logger.exception("doc_writer_list error")
         return {"error": str(e)}
+
+
+def _resolve_doc_type(raw: str) -> DocType:
+    """将字符串解析为 DocType，非法值抛 ValueError。"""
+    try:
+        return DocType(raw)
+    except ValueError:
+        raise ValueError(
+            f"未知文档类型: {raw}，可选: {', '.join(t.value for t in DocType)}"
+        )
+
+
+def _resolve_export_format(raw: str) -> ExportFormat:
+    """将字符串解析为 ExportFormat，非法值抛 ValueError。"""
+    try:
+        return ExportFormat(raw)
+    except ValueError:
+        raise ValueError(
+            f"未知导出格式: {raw}，可选: {', '.join(f.value for f in ExportFormat)}"
+        )
+
+
+def _resolve_style(raw: str) -> str:
+    """校验 HTML 样式，仅支持 default/elegant/minimal。"""
+    if raw not in ("default", "elegant", "minimal"):
+        return "default"
+    return raw
+
+
+@app.post("/api/doc_writer/create")
+async def doc_writer_create(request: Request):
+    """创建文档对象（不落盘，返回文档结构 + 默认字段）。"""
+    body = await request.json()
+    try:
+        doc_type = _resolve_doc_type(body.get("doc_type", ""))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    title = body.get("title", "").strip()
+    if not title:
+        return JSONResponse({"error": "title 不能为空"}, status_code=400)
+
+    doc = _doc_writer.create_document(
+        doc_type=doc_type,
+        title=title,
+        fields=body.get("fields") or {},
+        content=body.get("content", ""),
+    )
+    return {
+        "success": True,
+        "document": doc.to_dict(),
+        "default_fields": _doc_writer.get_template_fields(doc_type),
+        "templates": [t.value for t in DocType],
+    }
+
+
+@app.post("/api/doc_writer/render")
+async def doc_writer_render(request: Request):
+    """渲染文档为指定格式的字符串（预览，不落盘）。
+
+    fmt: md/html/pdf/docx；style: default/elegant/minimal（仅 HTML 生效）。
+    PDF/DOCX 无对应依赖时由后端回退为 HTML/Markdown 内容。
+    """
+    body = await request.json()
+    try:
+        doc_type = _resolve_doc_type(body.get("doc_type", ""))
+        fmt = _resolve_export_format(body.get("fmt", "md"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    title = body.get("title", "").strip() or "未命名文档"
+    doc = _doc_writer.create_document(
+        doc_type=doc_type,
+        title=title,
+        fields=body.get("fields") or {},
+        content=body.get("content", ""),
+    )
+    style = _resolve_style(body.get("style", "default"))
+
+    try:
+        if fmt in (ExportFormat.PDF, ExportFormat.DOCX):
+            # 预览态：渲染为对应回退内容字符串
+            if fmt == ExportFormat.PDF:
+                content = doc.render_html(style=style)
+                actual_format = "html"
+            else:
+                content = doc.render_markdown()
+                actual_format = "md"
+        else:
+            content = _doc_writer.render(doc, fmt, style)
+            actual_format = fmt.value
+        return {"success": True, "format": actual_format, "content": content,
+                "document": doc.to_dict()}
+    except Exception as e:
+        logger.exception("doc_writer_render error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/doc_writer/export")
+async def doc_writer_export(request: Request):
+    """导出文档为文件，落盘到 data/documents。
+
+    fmt: md/html/pdf/docx；style: default/elegant/minimal（仅 HTML 生效）。
+    PDF/DOCX 依赖缺失时回退为 HTML/Markdown 文件并标注 actual_format。
+    """
+    body = await request.json()
+    try:
+        doc_type = _resolve_doc_type(body.get("doc_type", ""))
+        fmt = _resolve_export_format(body.get("fmt", "md"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    title = body.get("title", "").strip() or "未命名文档"
+    doc = _doc_writer.create_document(
+        doc_type=doc_type,
+        title=title,
+        fields=body.get("fields") or {},
+        content=body.get("content", ""),
+    )
+    style = _resolve_style(body.get("style", "default"))
+    filename = body.get("filename")
+
+    try:
+        filepath = _doc_writer.export(doc, fmt, filename=filename, style=style)
+        actual_format = filepath.suffix.lstrip(".").lower()
+        return {
+            "success": True,
+            "requested_format": fmt.value,
+            "actual_format": actual_format,
+            "name": filepath.name,
+            "path": str(filepath),
+            "size": filepath.stat().st_size if filepath.exists() else 0,
+        }
+    except Exception as e:
+        logger.exception("doc_writer_export error")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── Calendar ────────────────────────────────────────

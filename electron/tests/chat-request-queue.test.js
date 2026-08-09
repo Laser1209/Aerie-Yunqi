@@ -100,6 +100,11 @@ class FakeElement {
     return this.attributes.get(name) || null;
   }
 
+  removeAttribute(name) {
+    this.attributes.delete(name);
+    if (name === "class") this.className = "";
+  }
+
   closest() {
     return null;
   }
@@ -285,6 +290,11 @@ function loadChatModule({ request, stubSideEffects = true, matchMediaMatches = f
     Date,
     Promise,
   };
+  const storeSource = fs.readFileSync(
+    path.join(__dirname, "..", "src", "renderer", "js", "chat-store.js"),
+    "utf8",
+  );
+  vm.runInNewContext(storeSource, sandbox);
   const source = fs.readFileSync(
     path.join(__dirname, "..", "src", "renderer", "js", "chat.js"),
     "utf8",
@@ -455,8 +465,6 @@ test("ipc sse and poll share one ingest path", async () => {
 
 test("event_id deduplicates across transports", () => {
   const { manager } = createManager();
-  const rendered = [];
-  manager._render = (msg) => rendered.push(msg);
 
   manager._ingestChatSignal({
     event_id: "evt_once",
@@ -471,8 +479,9 @@ test("event_id deduplicates across transports", () => {
     content: "duplicate",
   }, "sse");
 
-  assert.equal(rendered.length, 1);
-  assert.equal(rendered[0].content, "first");
+  const nodes = manager._el.messages.querySelectorAll(".chat-msg");
+  assert.equal(nodes.length, 1);
+  assert.ok(nodes[0].innerHTML.includes("first"));
 });
 
 test("request sequence buffers out-of-order events", () => {
@@ -555,13 +564,12 @@ test("terminal request status after message sequences is applied", () => {
 
 test("legacy numeric message ids remain compatible", () => {
   const { manager } = createManager();
-  const rendered = [];
-  manager._render = (msg) => rendered.push(msg);
 
   manager._ingestChatSignal({ id: 42, role: "assistant", content: "once" }, "poll");
   manager._ingestChatSignal({ id: 42, role: "assistant", content: "duplicate" }, "ipc");
 
-  assert.equal(rendered.length, 1);
+  const nodes = manager._el.messages.querySelectorAll(".chat-msg");
+  assert.equal(nodes.length, 1);
   assert.equal(manager._sinceId, 42);
 });
 
@@ -620,11 +628,12 @@ test("sse disconnect is best effort and status polling recovers truth", async ()
 test("request-scoped user bubbles are rebound in place instead of duplicating", () => {
   const { manager } = createManager();
 
-  manager._render({
-    id: "client_user_phase7",
+  manager._ingestChatSignal({
+    client_id: "client_user_phase7",
+    domId: "client_user_phase7",
     role: "user",
     content: "我想继续",
-  });
+  }, "local");
   manager._bindClientRequest("client_user_phase7", {
     request_id: "req_user_phase7",
     conversation_id: "conv_user_phase7",
@@ -645,18 +654,21 @@ test("request-scoped user bubbles are rebound in place instead of duplicating", 
   const users = manager._el.messages.children.filter((node) =>
     node.className.includes("chat-msg--user")
   );
+  // 原地升级: data-id 稳定为乐观气泡的 client domId, 真实 id 记在 data-msg-id。
   assert.equal(users.length, 1);
-  assert.equal(users[0].getAttribute("data-id"), "901");
+  assert.equal(users[0].getAttribute("data-id"), "client_user_phase7");
+  assert.equal(users[0].getAttribute("data-msg-id"), "901");
 });
 
-test("running request shows typing bubble then preserves assistant bubble order", () => {
+test("running request shows typing bubble then first assistant segment replaces it", () => {
   const { manager } = createManager();
 
-  manager._render({
-    id: "client_phase7",
+  manager._ingestChatSignal({
+    client_id: "client_phase7",
+    domId: "client_phase7",
     role: "user",
     content: "帮我拆两段",
-  });
+  }, "local");
   manager._bindClientRequest("client_phase7", {
     request_id: "req_phase7",
     conversation_id: "conv_phase7",
@@ -706,11 +718,13 @@ test("running request shows typing bubble then preserves assistant bubble order"
   const typingNodes = topLevel.filter((node) =>
     node.className.includes("chat-msg--typing"),
   );
+  // 首个分片原地替换 typing(输入中→最终同一元素), 后续分片各自独立气泡。
   assert.equal(assistantNodes.length, 2);
-  assert.equal(typingNodes.length, 1);
+  assert.equal(typingNodes.length, 0);
   assert.ok(assistantNodes[0].innerHTML.includes("第一段"));
   assert.ok(assistantNodes[1].innerHTML.includes("第二段"));
-  assert.ok(topLevel[assistantNodes.length + 1].className.includes("chat-msg--typing"));
+  // 独立分片各自有稳定的 data-id, 不互相覆盖。
+  assert.notEqual(assistantNodes[0].getAttribute("data-id"), assistantNodes[1].getAttribute("data-id"));
 
   manager._ingestChatSignal({
     event_id: "evt_phase7_done",
@@ -811,7 +825,11 @@ test("non-ready attachments block send while ready records use id-only contract"
 test("renderer keeps at most 500 message elements", () => {
   const { manager, document } = createManager();
   for (let index = 0; index < 510; index += 1) {
-    manager._render({ id: `msg_${index}`, role: "user", content: String(index) });
+    manager._ingestChatSignal({
+      id: "msg_" + index,
+      role: "user",
+      content: String(index),
+    }, "test");
   }
   const messages = document.getElementById("chat-messages").querySelectorAll(".chat-msg");
   assert.equal(messages.length, 500);

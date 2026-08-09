@@ -1660,6 +1660,83 @@ def tool_file_cleanup(source_dir: str,
         return {"success": False, "error": str(e)}
 
 
+# ── 文档写作工具（doc_write）───────────────────────
+#
+# DeepSeek 理解用户"帮我写一份报告/简历/技术规格"等语义后调用本工具，
+# 工具内部调用 core.doc_writer 用模板渲染文档。
+
+def tool_doc_write(doc_type: str,
+                   title: str,
+                   content: str = "",
+                   fields: dict | None = None,
+                   fmt: str = "md",
+                   style: str = "default",
+                   export: bool = False) -> dict:
+    """按模板写文档：用 5 类模板之一生成结构化文档。
+
+    Args:
+        doc_type: 模板类型（diary/report/spec/research/resume）
+        title: 文档标题
+        content: 正文内容（对应模板的 content 字段）
+        fields: 附加模板字段（如 author/weather/summary 等）
+        fmt: 导出格式（md/html/pdf/docx，默认 md）
+        style: HTML 样式（default/elegant/minimal，仅 html 生效）
+        export: 是否落盘导出为文件；False 仅返回渲染内容
+    """
+    try:
+        from core.doc_writer import DocWriter, DocType, ExportFormat
+        writer = DocWriter()
+        try:
+            doc_type_enum = DocType(doc_type)
+        except ValueError:
+            return {
+                "success": False,
+                "error": f"未知文档类型: {doc_type}，可选: {', '.join(t.value for t in DocType)}",
+            }
+        try:
+            fmt_enum = ExportFormat(fmt)
+        except ValueError:
+            return {
+                "success": False,
+                "error": f"未知导出格式: {fmt}，可选: {', '.join(f.value for f in ExportFormat)}",
+            }
+
+        doc = writer.create_document(
+            doc_type=doc_type_enum,
+            title=title,
+            fields=fields or {},
+            content=content,
+        )
+
+        if export:
+            filepath = writer.export(doc, fmt_enum, style=style)
+            return {
+                "success": True,
+                "exported": True,
+                "name": filepath.name,
+                "path": str(filepath),
+                "format": filepath.suffix.lstrip(".").lower(),
+                "preview": doc.render_markdown()[:2000],
+            }
+
+        # 非导出：返回渲染内容，默认 Markdown（便于在对话中展示）
+        if fmt_enum == ExportFormat.HTML:
+            rendered = doc.render_html(style=style)
+        else:
+            rendered = doc.render_markdown()
+        return {
+            "success": True,
+            "exported": False,
+            "format": fmt_enum.value,
+            "content": rendered,
+            "title": doc.title,
+            "doc_type": doc_type,
+        }
+    except Exception as e:
+        logger.exception("doc_write error")
+        return {"success": False, "error": str(e)}
+
+
 # ── 注册到 ToolRegistry ──────────────────────────
 
 _OFFICE_TOOL_SCHEMAS = {
@@ -2464,6 +2541,55 @@ _OFFICE_TOOL_SCHEMAS = {
             },
         },
     },
+    "doc_write": {
+        "type": "function",
+        "function": {
+            "name": "doc_write",
+            "description": "按模板写文档：用 5 类模板（日记/报告/技术规格/研究报告/简历）生成结构化文档，可渲染为 Markdown/HTML 或导出为 md/html/pdf/docx 文件。用于用户要求写报告、简历、日记、技术规格、研究报告等场景。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_type": {
+                        "type": "string",
+                        "description": "模板类型",
+                        "enum": ["diary", "report", "spec", "research", "resume"],
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "文档标题",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "正文内容（对应模板的 content 字段）",
+                        "default": "",
+                    },
+                    "fields": {
+                        "type": "object",
+                        "description": "附加模板字段（如 author/weather/summary 等，各模板字段不同）",
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "fmt": {
+                        "type": "string",
+                        "description": "导出格式",
+                        "enum": ["md", "html", "pdf", "docx"],
+                        "default": "md",
+                    },
+                    "style": {
+                        "type": "string",
+                        "description": "HTML 样式（仅 html 生效）",
+                        "enum": ["default", "elegant", "minimal"],
+                        "default": "default",
+                    },
+                    "export": {
+                        "type": "boolean",
+                        "description": "是否落盘导出为文件；False 仅返回渲染内容",
+                        "default": False,
+                    },
+                },
+                "required": ["doc_type", "title"],
+            },
+        },
+    },
 }
 
 
@@ -2474,6 +2600,8 @@ def register_office_tools(registry) -> int:
     tool_funcs = {
         # 文件管理类
         "document_create": tool_document_create,
+        # 文档写作（模板化：5 类模板 + 4 种导出 + 3 种 HTML 样式）
+        "doc_write": tool_doc_write,
         "document_read": tool_document_read,
         "file_search": tool_file_search,
         "directory_list": tool_directory_list,

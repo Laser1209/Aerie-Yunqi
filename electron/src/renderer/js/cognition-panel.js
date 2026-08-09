@@ -71,6 +71,7 @@ class CognitionPanel {
     this._bindFileOrganizerQuick(); // v13.9: 文件整理四个快捷按钮
     this._bindQQWhitelist();   // v13.9: QQ whitelist management
     this._bindCCLevelButtons(); // v13.9: computer control permission level buttons
+    this._bindDocWriter();      // v13.9: 文档写作模板/样式/导出交互
     this._loadHistory();
     this._loadStats();
     this._loadPendingProposals();
@@ -1251,6 +1252,211 @@ class CognitionPanel {
         }).join("");
       }
     });
+  }
+
+  // ── v13.9: 文档写作交互（模板 → 填字段 → 选样式 → 预览/导出）──
+  _bindDocWriter() {
+    const tplMap = { 日记: "diary", 报告: "report", 规格: "spec", 研究: "research", 简历: "resume" };
+    document.querySelectorAll(".cog-dw-tpl").forEach((tpl) => {
+      tpl.addEventListener("click", () => {
+        const nameEl = tpl.querySelector(".cog-dw-tpl-name");
+        const name = nameEl ? nameEl.textContent.trim() : "";
+        const docType = tplMap[name] || name;
+        if (!docType) return;
+        this._openDocComposer(docType, name);
+      });
+    });
+  }
+
+  _docTypeFields(docType) {
+    // 各模板常见字段兜底；后端 create 返回的 default_fields 优先覆盖
+    const common = { author: "", date: "" };
+    const byType = {
+      diary: { weather: "", mood: "", location: "" },
+      report: { report_type: "", department: "", summary: "" },
+      spec: { version: "", reviewers: "" },
+      research: { topic: "", method: "", keywords: "" },
+      resume: { job_target: "", skills: "", education: "" },
+    };
+    return Object.assign(common, byType[docType] || {});
+  }
+
+  async _openDocComposer(docType, label) {
+    const modal = document.getElementById("cog-modal");
+    const body = document.getElementById("cog-modal-body");
+    const title = document.getElementById("cog-modal-title");
+    if (!modal || !body) return;
+    title.textContent = "文档写作 · " + (label || docType);
+    body.innerHTML = '<div class="cog-modal-loading">加载中…</div>';
+    modal.classList.remove("hidden");
+
+    let defaultFields = {};
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/doc_writer/create",
+        body: { doc_type: docType, title: "新文档" },
+      });
+      defaultFields = (r.data && r.data.default_fields) || {};
+    } catch (_) {
+      defaultFields = {};
+    }
+    const fields = Object.assign(this._docTypeFields(docType), defaultFields);
+    body.innerHTML = this._renderDocComposer(docType, label, fields);
+    this._wireDocComposer(docType);
+  }
+
+  _renderDocComposer(docType, label, fields) {
+    const fieldLabels = {
+      author: "作者", date: "日期", weather: "天气", mood: "心情", location: "地点",
+      report_type: "报告类型", department: "部门", summary: "摘要", version: "版本",
+      reviewers: "评审人", topic: "主题", method: "方法", keywords: "关键词",
+      job_target: "求职意向", skills: "技能", education: "教育背景",
+    };
+    const fieldInputs = Object.keys(fields).map((k) => `
+      <div class="cog-dw-form-cell">
+        <label class="cog-dw-form-label">${this._escape(fieldLabels[k] || k)}</label>
+        <input id="cog-dw-field-${this._escape(k)}" class="cog-input" value="${this._escape(String(fields[k] || ""))}">
+      </div>
+    `).join("");
+
+    return `
+      <div class="cog-dw-composer">
+        <div class="cog-dw-form-cell">
+          <label class="cog-dw-form-label">标题 · Title</label>
+          <input id="cog-dw-title" class="cog-input" placeholder="${this._escape(label || docType)}标题">
+        </div>
+        <div class="cog-dw-form-grid">${fieldInputs}</div>
+        <div class="cog-dw-form-cell">
+          <label class="cog-dw-form-label">正文 · Content</label>
+          <textarea id="cog-dw-content" class="cog-input cog-textarea" rows="6" placeholder="正文内容…"></textarea>
+        </div>
+        <div class="cog-dw-form-cell">
+          <label class="cog-dw-form-label">HTML 样式 · Style</label>
+          <div class="cog-dw-options">
+            <label class="cog-dw-opt"><input type="radio" name="cog-dw-style" value="default" checked><span>默认</span></label>
+            <label class="cog-dw-opt"><input type="radio" name="cog-dw-style" value="elegant"><span>雅致</span></label>
+            <label class="cog-dw-opt"><input type="radio" name="cog-dw-style" value="minimal"><span>极简</span></label>
+          </div>
+        </div>
+        <div class="cog-dw-form-cell">
+          <label class="cog-dw-form-label">导出格式 · Format</label>
+          <div class="cog-dw-options">
+            <label class="cog-dw-opt"><input type="radio" name="cog-dw-fmt" value="md" checked><span>Markdown</span></label>
+            <label class="cog-dw-opt"><input type="radio" name="cog-dw-fmt" value="html"><span>HTML</span></label>
+            <label class="cog-dw-opt"><input type="radio" name="cog-dw-fmt" value="pdf"><span>PDF</span></label>
+            <label class="cog-dw-opt"><input type="radio" name="cog-dw-fmt" value="docx"><span>Word</span></label>
+          </div>
+        </div>
+        <div class="cog-dw-composer-actions">
+          <button id="cog-dw-preview" class="btn btn-secondary">预览</button>
+          <button id="cog-dw-export" class="btn btn-primary">导出</button>
+          <span id="cog-dw-notice" class="cog-dw-notice"></span>
+        </div>
+        <div id="cog-dw-result" class="cog-dw-result"></div>
+      </div>
+    `;
+  }
+
+  _wireDocComposer(docType) {
+    const previewBtn = document.getElementById("cog-dw-preview");
+    const exportBtn = document.getElementById("cog-dw-export");
+    if (previewBtn) previewBtn.addEventListener("click", () => this._docPreview(docType));
+    if (exportBtn) exportBtn.addEventListener("click", () => this._docExport(docType));
+  }
+
+  _collectDocForm(docType) {
+    const val = (id) => {
+      const el = document.getElementById(id);
+      return el ? el.value.trim() : "";
+    };
+    const fields = this._docTypeFields(docType);
+    Object.keys(fields).forEach((k) => {
+      const el = document.getElementById("cog-dw-field-" + k);
+      if (el) fields[k] = el.value.trim();
+    });
+    const styleEl = document.querySelector('input[name="cog-dw-style"]:checked');
+    const fmtEl = document.querySelector('input[name="cog-dw-fmt"]:checked');
+    return {
+      doc_type: docType,
+      title: val("cog-dw-title") || "未命名文档",
+      content: val("cog-dw-content"),
+      fields,
+      style: styleEl ? styleEl.value : "default",
+      fmt: fmtEl ? fmtEl.value : "md",
+    };
+  }
+
+  _docNotice(msg, isError) {
+    const el = document.getElementById("cog-dw-notice");
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.toggle("error", !!isError);
+  }
+
+  async _docPreview(docType) {
+    const form = this._collectDocForm(docType);
+    const resultEl = document.getElementById("cog-dw-result");
+    if (!resultEl) return;
+    this._docNotice("预览中…");
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/doc_writer/render",
+        body: form,
+      });
+      const data = r.data;
+      if (!data || data.error) {
+        this._docNotice((data && data.error) || "预览失败", true);
+        return;
+      }
+      const content = data.content || "";
+      const fmt = data.format || form.fmt;
+      if (fmt === "html") {
+        resultEl.innerHTML = '<iframe class="cog-dw-preview-iframe" srcdoc="'
+          + this._escape(content).replace(/"/g, "&quot;") + '"></iframe>';
+      } else {
+        resultEl.innerHTML = '<pre class="cog-dw-preview">' + this._escape(content) + "</pre>";
+      }
+      this._docNotice("预览完成 · " + fmt);
+    } catch (e) {
+      this._docNotice(e.message || "预览失败", true);
+    }
+  }
+
+  async _docExport(docType) {
+    const form = this._collectDocForm(docType);
+    this._docNotice("导出中…");
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/doc_writer/export",
+        body: form,
+      });
+      const data = r.data;
+      if (!data || data.error) {
+        this._docNotice((data && data.error) || "导出失败", true);
+        return;
+      }
+      this._docNotice("已导出 → " + data.path);
+      const resultEl = document.getElementById("cog-dw-result");
+      if (resultEl) {
+        resultEl.innerHTML = '<div class="cog-dw-exported">'
+          + '<span>已导出 <b>' + this._escape(data.name) + "</b>（"
+          + this._escape(data.actual_format || data.requested_format) + "）</span>"
+          + '<button id="cog-dw-open" class="btn btn-secondary btn-sm">打开文件</button>'
+          + "</div>";
+        const openBtn = document.getElementById("cog-dw-open");
+        if (openBtn) {
+          openBtn.addEventListener("click", () => {
+            try { window.aerie.electron.shell.openPath(data.path); } catch (_) {}
+          });
+        }
+      }
+      this._loadDocWriterData();
+    } catch (e) {
+      this._docNotice(e.message || "导出失败", true);
+    }
   }
 
   // ── QQ Whitelist (v13.9) ────────────────────────

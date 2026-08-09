@@ -309,6 +309,8 @@ def _world_dashboard_public_world_summary(value: Any) -> dict[str, Any]:
             ("phase", "phase"),
             ("location", "location"),
             ("activity", "activity"),
+            ("weather", "weather", "weather_mood"),
+            ("weatherMood", "weather_mood", "weather"),
             ("sequence", "sequence"),
             ("revision", "revision"),
             ("paused", "paused"),
@@ -511,6 +513,53 @@ async def world_dashboard_snapshot(
         )
 
     return _world_dashboard_public_snapshot(result, handler_called=True)
+
+
+@app.get("/api/internal/state")
+async def internal_state(
+    user_id: int | None = Query(default=None),
+) -> dict[str, Any]:
+    """Read-only internal-state snapshot (needs / fatigue / neuro-like metrics).
+
+    Phase 15 Batch 3 (B3.1). Deterministic and source-tracked; always labelled
+    "计算模型，非生物测量" — never a medical measurement. Exposes no write path.
+    """
+    comp = get_companion()
+    handler = getattr(comp, "get_internal_state", None) if comp else None
+    if not callable(handler):
+        return {"status": "backend_unavailable", "label": "计算模型，非生物测量"}
+    try:
+        result = handler(user_id=user_id or 0)
+        if hasattr(result, "__await__"):
+            result = await result
+        if not isinstance(result, dict):
+            result = {}
+        result.setdefault("status", "ready")
+        return result
+    except Exception:
+        logger.warning("internal state handler failed", exc_info=True)
+        return {"status": "failed", "label": "计算模型，非生物测量"}
+
+
+@app.get("/api/internal/history")
+async def internal_history(
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    """Read-only internal-state trend sequence for the dashboard chart."""
+    comp = get_companion()
+    handler = getattr(comp, "get_internal_history", None) if comp else None
+    if not callable(handler):
+        return {"status": "backend_unavailable", "items": []}
+    try:
+        items = handler(limit=limit)
+        if hasattr(items, "__await__"):
+            items = await items
+        if not isinstance(items, list):
+            items = []
+        return {"status": "ready", "items": items}
+    except Exception:
+        logger.warning("internal history handler failed", exc_info=True)
+        return {"status": "failed", "items": []}
 
 
 @app.post("/api/world/candidates/approve")
@@ -751,6 +800,58 @@ async def world_runtime_bind(request: Request) -> Response:
     return JSONResponse(
         {"accepted": True, "adapter": "remote", "instanceId": instance_id}
     )
+
+
+@app.post("/api/world/control")
+async def world_control(request: Request) -> Response:
+    """世界控制台 HTTP 控制接口（Phase 15 Batch 2）。
+
+    受 `X-Aerie-Main-Token` 鉴权保护，仅主进程可调。动作转发到
+    ``world_port.control``（inprocess / sidecar 任一模均支持）。
+    支持 pause / resume / start / stop / restart / enable / disable 等，
+    其余动作（如 speed / fastforward / seed / checkpoint / replay）在
+    适配器不支持时返回 ``accepted=false`` + ``errorCode=unsupported_action``。
+    """
+    if not _main_process_request_authorized(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    companion = get_companion()
+    if companion is None:
+        return JSONResponse({"error": "backend_not_ready"}, status_code=503)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+    action = str((body or {}).get("action") or "").strip()
+    if not action:
+        return JSONResponse({"error": "missing_action"}, status_code=400)
+
+    world_port = getattr(companion, "world_port", None)
+    control = getattr(world_port, "control", None)
+    if not callable(control):
+        return JSONResponse(
+            {"accepted": False, "rejected": True, "errorCode": "world_unavailable"}
+        )
+
+    expected_revision = (body or {}).get("expectedRevision", (body or {}).get("expected_revision"))
+    idempotency_key = str((body or {}).get("idempotencyKey") or (body or {}).get("idempotency_key") or "")
+    try:
+        result = control(
+            action,
+            expected_revision=int(expected_revision) if expected_revision is not None else None,
+            idempotency_key=idempotency_key,
+        )
+        if hasattr(result, "__await__"):
+            result = await result
+    except Exception:
+        logger.warning("world control failed", exc_info=True)
+        return JSONResponse(
+            {"accepted": False, "rejected": True, "errorCode": "control_failed"}
+        )
+
+    if not isinstance(result, dict):
+        result = {"accepted": bool(result), "rejected": not bool(result)}
+    result.setdefault("action", action)
+    return JSONResponse(result)
 
 
 @app.get("/api/health")
@@ -2418,6 +2519,51 @@ async def emotion_history(
         "bucket_ms": bucket_ms,
         "items": items,
         **freshness,
+    }
+
+
+# ── Phase 15 Batch 2: Memory archive (只读记忆档案) ──
+_MEMORY_LAYERS: tuple[str, ...] = ("transient", "working", "long_term", "permanent")
+
+
+@app.get("/api/memory/list")
+async def memory_list(
+    user_id: int | None = Query(default=None),
+    layer: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict:
+    """只读记忆档案列表（按层分组）。
+
+    复用四层 LayeredMemory 的 list_by_user，仅暴露公开元数据字段，
+    不做任何写入/删除，避免前端误操作记忆。
+    """
+    comp = get_companion()
+    if user_id is None:
+        user_id = _primary_user_id(comp) if comp is not None else None
+    if user_id is None:
+        return {"layers": {}, "total": 0}
+
+    memory = getattr(comp, "memory", None)
+    list_by_user = getattr(memory, "list_by_user", None)
+    if not callable(list_by_user):
+        return {"layers": {}, "total": 0}
+
+    layers = _MEMORY_LAYERS
+    if layer:
+        layers = (layer,) if layer in _MEMORY_LAYERS else ()
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    total = 0
+    for name in layers:
+        rows = list_by_user(user_id=int(user_id), layer=name, limit=int(limit))
+        grouped[name] = [dict(row) for row in (rows or [])]
+        total += len(grouped[name])
+
+    return {
+        "user_id": int(user_id),
+        "layers": grouped,
+        "total": total,
+        "sampledAt": int(time.time() * 1000),
     }
 
 

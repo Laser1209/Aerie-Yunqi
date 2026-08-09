@@ -85,6 +85,7 @@ let pythonProc = null;
 let mainWindow = null;
 let tray = null;
 let dynamicIsland = null;
+let worldDashboardWindow = null;
 let isQuitting = false;
 let mainWindowReady = false;
 let pendingMainNavigation = null;
@@ -1083,6 +1084,36 @@ function createDynamicIsland() {
   });
 }
 
+// ── World Dashboard 独立窗口 ──────────────────
+// R7.x: "显示插件/隐藏插件"真正弹窗/关窗。窗口为单实例，关闭按钮等同 hide 语义。
+function openWorldDashboardWindow() {
+  if (worldDashboardWindow && !worldDashboardWindow.isDestroyed()) {
+    worldDashboardWindow.show();
+    worldDashboardWindow.focus();
+    return worldDashboardWindow;
+  }
+  worldDashboardWindow = new BrowserWindow({
+    width: 520,
+    height: 720,
+    minWidth: 400,
+    minHeight: 520,
+    title: "AERIE.WORLD · 世界仪表盘",
+    backgroundColor: "#101318",
+    webPreferences: {
+      preload: path.join(__dirname, "world-dashboard-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  worldDashboardWindow.loadFile(path.join(__dirname, "renderer", "world-dashboard-window.html"));
+  worldDashboardWindow.on("closed", () => {
+    // 关窗（含 X 按钮）同步宿主 hide 语义，保持状态一致。
+    worldDashboardWindow = null;
+    try { worldDashboardHost.hide(); } catch (_) {}
+  });
+  return worldDashboardWindow;
+}
+
 // ── Dynamic Island Mouse Input ──────────────
 let _islandIgnoreState = false;
 let _islandExpanded = false;
@@ -1236,11 +1267,67 @@ ipcMain.handle("world-dashboard:get-snapshot", async () => {
   return await worldDashboardHost.getSnapshot();
 });
 
+// 独立仪表盘窗口专用：直接拉取后端快照 + 情绪状态（供 world.getState() 使用）。
+// 不经过 host 的 isEnabled 门控：世界以 inprocess/sidecar 任一模式运行时，
+// 后端快照即返回真实数据，仪表盘应如实展示。
+ipcMain.handle("world-dashboard:get-state", async () => {
+  let snapshot = {};
+  let emotion = {};
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/world/dashboard/snapshot" });
+    snapshot = (r && r.data && typeof r.data === "object") ? r.data : {};
+  } catch (_) {}
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/emotion/state" });
+    emotion = (r && r.data && typeof r.data === "object") ? r.data : {};
+  } catch (_) {}
+  return { ...snapshot, emotion };
+});
+
+// 只读记忆档案（P6）：白名单专用方法，仅返回公开元数据。
+ipcMain.handle("world-dashboard:get-memory", async () => {
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/memory/list" });
+    return (r && r.data && typeof r.data === "object") ? r.data : { layers: {}, total: 0 };
+  } catch (_) {
+    return { layers: {}, total: 0 };
+  }
+});
+
+// 第三批（B3.2）只读聚合：内在状态 + 趋势 + 决策观察 + 插件设置。
+// 一次 IPC 并行拉取，供 9 页中的 内在状态/决策/设置 复用。绝不暴露写路径。
+ipcMain.handle("world-dashboard:get-b3", async () => {
+  const out = { internal: {}, trends: [], cognition: [], permissions: {} };
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/internal/state" });
+    out.internal = (r && r.data && typeof r.data === "object") ? r.data : {};
+  } catch (_) {}
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/internal/history?limit=60" });
+    const d = (r && r.data && typeof r.data === "object") ? r.data : {};
+    out.trends = Array.isArray(d.items) ? d.items : [];
+  } catch (_) {}
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/cognition/recent?limit=30" });
+    const d = (r && r.data && typeof r.data === "object") ? r.data : {};
+    out.cognition = Array.isArray(d.traces) ? d.traces : [];
+  } catch (_) {}
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/permissions/config" });
+    out.permissions = (r && r.data && typeof r.data === "object") ? r.data : {};
+  } catch (_) {}
+  return out;
+});
+
 ipcMain.handle("world-dashboard:show", async () => {
+  openWorldDashboardWindow();
   return await worldDashboardHost.show();
 });
 
 ipcMain.handle("world-dashboard:hide", async () => {
+  if (worldDashboardWindow && !worldDashboardWindow.isDestroyed()) {
+    worldDashboardWindow.close();
+  }
   return await worldDashboardHost.hide();
 });
 
@@ -2688,6 +2775,10 @@ app.on("before-quit", (event) => {
     dynamicIsland.setClosable(true);
     dynamicIsland.close();
     dynamicIsland = null;
+  }
+  if (worldDashboardWindow && !worldDashboardWindow.isDestroyed()) {
+    worldDashboardWindow.destroy();
+    worldDashboardWindow = null;
   }
   if (tray) tray.destroy();
 });

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>AERIE.WORLD · 世界仪表盘</title>
+  <link rel="stylesheet" href="styles/world-dashboard-window.css" />
+</head>
+<body class="wdw-body">
+  <!-- 顶部状态栏 -->
+  <header class="wdw-topbar">
+    <div class="wdw-brand">AERIE.WORLD</div>
+    <div class="wdw-topbar-right">
+      <span id="wdw-status" class="wdw-status wdw-status--idle" data-status="idle">离线</span>
+      <span id="wdw-world-time" class="wdw-time">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- 9 页导航 -->
+  <nav class="wdw-nav" aria-label="仪表盘页面">
+    <button class="wdw-nav-btn is-active" data-page="world" type="button">世界</button>
+    <button class="wdw-nav-btn" data-page="timeline" type="button">时间线</button>
+    <button class="wdw-nav-btn" data-page="internal" type="button">内在</button>
+    <button class="wdw-nav-btn" data-page="relationship" type="button">关系</button>
+    <button class="wdw-nav-btn" data-page="decision" type="button">决策</button>
+    <button class="wdw-nav-btn" data-page="memory" type="button">记忆</button>
+    <button class="wdw-nav-btn" data-page="image" type="button">图片</button>
+    <button class="wdw-nav-btn" data-page="console" type="button">控制台</button>
+    <button class="wdw-nav-btn" data-page="settings" type="button">设置</button>
+  </nav>
+
+  <main class="wdw-main">
+    <!-- P1 世界总览 -->
+    <section class="wdw-page" data-page-panel="world" aria-labelledby="wdw-world-title">
+      <div class="wdw-card wdw-card--world">
+        <h2 id="wdw-world-title" class="wdw-card-title">世界总览</h2>
+        <div id="wdw-world-scene" class="wdw-scene" data-phase="day" data-weather="neutral">
+          <div class="wdw-scene-meta">
+            <dl class="wdw-kv">
+              <div><dt>地点</dt><dd id="wdw-location">--</dd></div>
+              <div><dt>活动</dt><dd id="wdw-activity">--</dd></div>
+              <div><dt>精力</dt><dd id="wdw-energy">--</dd></div>
+              <div><dt>阶段</dt><dd id="wdw-phase">--</dd></div>
+              <div><dt>天气</dt><dd id="wdw-weather">--</dd></div>
+              <div><dt>时间</dt><dd id="wdw-generated">--</dd></div>
+            </dl>
+          </div>
+        </div>
+        <!-- 情绪 PAD 摘要 -->
+        <h3 class="wdw-subtitle">情绪（PAD）</h3>
+        <div class="wdw-card-head">
+          <span id="wdw-emotion-label" class="wdw-emotion-label">neutral</span>
+          <span class="wdw-note">计算模型，非生物测量</span>
+        </div>
+        <div class="wdw-pad">
+          <div class="wdw-pad-row" data-key="P">
+            <span class="wdw-pad-name">愉悦度</span>
+            <div class="wdw-bar"><div id="wdw-pad-P" class="wdw-bar-fill" style="width:0%"></div></div>
+            <span id="wdw-pad-P-val" class="wdw-pad-val">0.00</span>
+          </div>
+          <div class="wdw-pad-row" data-key="A">
+            <span class="wdw-pad-name">唤醒度</span>
+            <div class="wdw-bar"><div id="wdw-pad-A" class="wdw-bar-fill" style="width:0%"></div></div>
+            <span id="wdw-pad-A-val" class="wdw-pad-val">0.00</span>
+          </div>
+          <div class="wdw-pad-row" data-key="D">
+            <span class="wdw-pad-name">支配度</span>
+            <div class="wdw-bar"><div id="wdw-pad-D" class="wdw-bar-fill" style="width:0%"></div></div>
+            <span id="wdw-pad-D-val" class="wdw-pad-val">0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 事件流（带过滤） -->
+      <div class="wdw-card wdw-card--events">
+        <div class="wdw-card-head">
+          <h2 id="wdw-events-title" class="wdw-card-title">事件流</h2>
+          <div class="wdw-events-filters" role="group" aria-label="事件分类过滤">
+            <button class="wdw-chip is-active" data-cat="all" type="button">全部</button>
+            <button class="wdw-chip" data-cat="world" type="button">世界</button>
+            <button class="wdw-chip" data-cat="relationship" type="button">关系</button>
+            <button class="wdw-chip" data-cat="memory" type="button">记忆</button>
+            <button class="wdw-chip" data-cat="image" type="button">图片</button>
+            <button class="wdw-chip" data-cat="system" type="button">系统</button>
+            <button id="wdw-events-refresh" class="wdw-btn" type="button">刷新</button>
+          </div>
+        </div>
+        <ul id="wdw-events" class="wdw-events" aria-live="polite">
+          <li class="wdw-events-empty">等待数据…</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- P2 今日时间线（活动区间聚合） -->
+    <section class="wdw-page" data-page-panel="timeline" aria-labelledby="wdw-timeline-title" hidden>
+      <div class="wdw-card">
+        <div class="wdw-card-head">
+          <h2 id="wdw-timeline-title" class="wdw-card-title">今日时间线</h2>
+          <span class="wdw-note">按阶段聚合活动区间</span>
+        </div>
+        <div id="wdw-timeline" class="wdw-timeline">
+          <p class="wdw-events-empty">等待数据…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- P3 内在状态（需求/疲劳/类神经化学 + 趋势） -->
+    <section class="wdw-page" data-page-panel="internal" aria-labelledby="wdw-internal-title" hidden>
+      <div class="wdw-card">
+        <div class="wdw-card-head">
+          <h2 id="wdw-internal-title" class="wdw-card-title">内在状态</h2>
+          <span class="wdw-note">计算模型，非生物测量</span>
+        </div>
+        <div id="wdw-internal" class="wdw-internal">
+          <p class="wdw-events-empty">等待数据…</p>
+        </div>
+        <h3 class="wdw-subtitle">趋势</h3>
+        <div id="wdw-trends" class="wdw-trends">
+          <div class="wdw-trend-block">
+            <div class="wdw-trend-head">
+              <span>PAD 情绪</span>
+              <span class="wdw-note">非生物测量</span>
+            </div>
+            <canvas id="wdw-chart-pad" class="wdw-chart" height="120" aria-label="PAD 情绪趋势图"></canvas>
+          </div>
+          <div class="wdw-trend-block">
+            <div class="wdw-trend-head">
+              <span>类神经化学</span>
+              <span class="wdw-note">计算指标</span>
+            </div>
+            <canvas id="wdw-chart-neuro" class="wdw-chart" height="120" aria-label="类神经化学趋势图"></canvas>
+          </div>
+          <div class="wdw-trend-block">
+            <div class="wdw-trend-head">
+              <span>关系水平</span>
+              <span class="wdw-note">仅用于语气调节</span>
+            </div>
+            <canvas id="wdw-chart-rel" class="wdw-chart" height="120" aria-label="关系趋势图"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- P4 关系面板 -->
+    <section class="wdw-page" data-page-panel="relationship" aria-labelledby="wdw-relationship-title" hidden>
+      <div class="wdw-card wdw-card--relationship">
+        <div class="wdw-card-head">
+          <h2 id="wdw-relationship-title" class="wdw-card-title">关系</h2>
+          <span id="wdw-relationship-label" class="wdw-emotion-label">--</span>
+        </div>
+        <div id="wdw-relationship-bars" class="wdw-rels">
+          <p class="wdw-events-empty">暂无关系数据</p>
+        </div>
+        <p class="wdw-note">关系水平仅用于调节语气与边界，不向用户报数</p>
+      </div>
+      <div class="wdw-card">
+        <h3 class="wdw-subtitle">修复历史</h3>
+        <div id="wdw-relationship-history" class="wdw-list">
+          <p class="wdw-events-empty">暂无修复历史</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- P5 决策观察器 -->
+    <section class="wdw-page" data-page-panel="decision" aria-labelledby="wdw-decision-title" hidden>
+      <div class="wdw-card">
+        <div class="wdw-card-head">
+          <h2 id="wdw-decision-title" class="wdw-card-title">决策观察器</h2>
+          <span class="wdw-note">结构化决策轨迹</span>
+        </div>
+        <div id="wdw-decision" class="wdw-list">
+          <p class="wdw-events-empty">等待数据…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- P6 记忆档案 -->
+    <section class="wdw-page" data-page-panel="memory" aria-labelledby="wdw-memory-title" hidden>
+      <div class="wdw-card wdw-card--memory">
+        <div class="wdw-card-head">
+          <h2 id="wdw-memory-title" class="wdw-card-title">记忆档案</h2>
+          <button id="wdw-memory-refresh" class="wdw-btn" type="button">刷新</button>
+        </div>
+        <div id="wdw-memory-groups" class="wdw-memory">
+          <p class="wdw-events-empty">暂无记忆</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- P7 图片工作台 -->
+    <section class="wdw-page" data-page-panel="image" aria-labelledby="wdw-image-title" hidden>
+      <div class="wdw-card">
+        <div class="wdw-card-head">
+          <h2 id="wdw-image-title" class="wdw-card-title">图片工作台</h2>
+          <span class="wdw-note">候选 · 审核 · 交付</span>
+        </div>
+        <div id="wdw-image-candidates" class="wdw-list">
+          <p class="wdw-events-empty">等待数据…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- P8 世界控制台 -->
+    <section class="wdw-page" data-page-panel="console" aria-labelledby="wdw-console-title" hidden>
+      <div class="wdw-card wdw-card--console">
+        <div class="wdw-card-head">
+          <h2 id="wdw-console-title" class="wdw-card-title">世界控制台</h2>
+          <span id="wdw-console-status" class="wdw-emotion-label">--</span>
+        </div>
+        <div class="wdw-console" role="group" aria-label="世界控制动作">
+          <button id="wdw-ctl-pause" class="wdw-btn" type="button" data-action="pause">暂停</button>
+          <button id="wdw-ctl-resume" class="wdw-btn" type="button" data-action="resume">恢复</button>
+          <button id="wdw-ctl-start" class="wdw-btn" type="button" data-action="start">启动</button>
+          <button id="wdw-ctl-stop" class="wdw-btn" type="button" data-action="stop">停止</button>
+          <button id="wdw-ctl-restart" class="wdw-btn" type="button" data-action="restart">重启</button>
+        </div>
+        <p id="wdw-console-msg" class="wdw-note" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- P9 插件设置 -->
+    <section class="wdw-page" data-page-panel="settings" aria-labelledby="wdw-settings-title" hidden>
+      <div class="wdw-card">
+        <div class="wdw-card-head">
+          <h2 id="wdw-settings-title" class="wdw-card-title">插件设置</h2>
+          <span class="wdw-note">Persona · 权限 · 联网 · 资源</span>
+        </div>
+        <div id="wdw-settings" class="wdw-list">
+          <p class="wdw-events-empty">等待数据…</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/world-dashboard-window.js"></script>
+</body>
+</html>

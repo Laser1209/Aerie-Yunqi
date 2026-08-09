@@ -229,3 +229,50 @@ async def test_companion_world_dashboard_snapshot_uses_world_port_without_raw_pa
     assert "redacted-token" not in rendered
     assert "rawPrompt" not in rendered
     assert "rawThought" not in rendered
+
+
+def test_relationship_snapshot_maps_nested_relationship_engine_state():
+    """Gate B2.1: RelationshipEngine 的嵌套状态必须映射为仪表盘公开字段，不再返回空。"""
+    from core.companion import _dashboard_safe_relationship
+
+    raw = {
+        "user_id": "7",
+        "persona_id": "default",
+        "agent_to_user": {"attachment": 0.58, "trust": 0.64, "care": 0.7},
+        "user_to_agent": {"warmth": 0.52, "engagement": 0.48, "trust": 0.5},
+        "security": 0.56,
+        "conflict": 0.03,
+        "user_emotion": {"label": "neutral", "valence": 0.0},
+        "source": "computed",
+        "revision": 3,
+    }
+
+    public = _dashboard_safe_relationship(raw)
+
+    assert public["attachment"] == 0.58
+    assert public["agentTrust"] == 0.64
+    assert public["trust"] == 0.64
+    assert public["care"] == 0.7
+    assert public["warmth"] == 0.52
+    assert public["security"] == 0.56
+    assert public["conflict"] == 0.03
+    assert public["revision"] == 3
+    # 关键：非空（gate 验收点）
+    assert set(("attachment", "agentTrust", "security", "conflict")).issubset(public.keys())
+
+
+def test_relationship_snapshot_flat_shape_preserves_existing_contract():
+    """扁平形态（warmth/trust/summary）沿用原契约，输出 key 保持不变。"""
+    from core.companion import _dashboard_safe_relationship
+
+    public = _dashboard_safe_relationship(
+        {"persona_id": "default", "warmth": 0.73, "trust": 0.81, "summary": "stable"}
+    )
+    assert public == {"persona_id": "default", "warmth": 0.73, "trust": 0.81, "summary": "stable"}
+
+
+def test_relationship_snapshot_empty_input_returns_empty():
+    from core.companion import _dashboard_safe_relationship
+
+    assert _dashboard_safe_relationship(None) == {}
+    assert _dashboard_safe_relationship({}) == {}

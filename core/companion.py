@@ -36,6 +36,7 @@ from core.desktop_attachments import DesktopAttachmentService
 from core.emotion_engine import EmotionEngine
 from core.emotion_state_store import EmotionStateStore
 from core.emotion_threshold import get_threshold_engine
+from core.internal_state import InternalStateEngine
 from core.feature_flags import FeatureFlags
 from core.ids import generate_id
 from core.identity import IdentityRepository, IdentityResolver
@@ -188,6 +189,11 @@ class Companion:
         # boots, which looks like the engine "just turned on" and not
         # like a real emotion continuation.
         self._warmup_threshold_from_history()
+
+        # Phase 15 Batch 3 (B3.1): deterministic internal-state model
+        # (needs / fatigue / neurochemical-like computed metrics). Read by
+        # the dashboard's 内在状态 page; never a medical measurement.
+        self.internal_state = InternalStateEngine()
 
         # Tool registry
         # v13.9: 全局共享的 ComputerController 单例，确保权限设置全局生效
@@ -588,6 +594,25 @@ class Companion:
             "imageCandidates": _dashboard_image_candidates(events),
             "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
         }
+
+    def get_internal_state(self, user_id: int | str = 0) -> dict[str, Any]:
+        """Compute the current internal-state snapshot (needs/fatigue/neuro).
+
+        Phase 15 Batch 3 (B3.1). Deterministic, source-tracked, and always
+        labelled "计算模型，非生物测量" (never a medical measurement). Read-only.
+        """
+        world = self._world_snapshot_for_context()
+        emotion = self.get_primary_emotion_state()
+        relationship = self._relationship_snapshot_for_context(
+            int(user_id) if str(user_id).isdigit() else 0,
+        )
+        snapshot = self.internal_state.compute(world, emotion, relationship)
+        snapshot.setdefault("status", "ready")
+        return snapshot
+
+    def get_internal_history(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return the recent internal-state snapshots for the trend chart."""
+        return self.internal_state.history(limit=limit)
 
     def _get_world_image_candidate_consumer(self) -> Any:
         existing = getattr(self, "world_image_candidate_consumer", None)
@@ -1679,6 +1704,8 @@ def _dashboard_world_summary(
             ("phase", "phase"),
             ("location", "location"),
             ("activity", "activity"),
+            ("weather", "weather", "weather_mood"),
+            ("weatherMood", "weather_mood", "weather"),
             ("sequence", "sequence"),
             ("revision", "revision"),
             ("paused", "paused"),
@@ -1689,22 +1716,47 @@ def _dashboard_world_summary(
 
 
 def _dashboard_safe_relationship(value: dict[str, Any] | None) -> dict[str, Any]:
-    return _dashboard_pick(
-        _dashboard_safe_mapping(value),
-        (
-            ("user_id", "user_id", "userId"),
-            ("persona_id", "persona_id", "personaId"),
-            ("warmth", "warmth"),
-            ("trust", "trust"),
-            ("affinity", "affinity"),
-            ("tension", "tension"),
-            ("familiarity", "familiarity"),
-            ("conflict", "conflict"),
-            ("closeness", "closeness"),
-            ("summary", "summary"),
-            ("updated_at", "updated_at", "updatedAt"),
-        ),
-    )
+    # 兼容两类数据形态：
+    #   A. RelationshipEngine 的嵌套状态（agent_to_user / user_to_agent / security / conflict）
+    #   B. 扁平化的关系字段（warmth / trust / affinity / tension / ...）
+    # 统一映射为仪表盘公开字段，避免因 key 不匹配而整段丢失（G3）。
+    data = _dashboard_safe_mapping(value)
+    if not data:
+        return {}
+    agent_to_user = _dashboard_safe_mapping(data.get("agent_to_user"))
+    user_to_agent = _dashboard_safe_mapping(data.get("user_to_agent"))
+    user_emotion = _dashboard_safe_mapping(data.get("user_emotion"))
+
+    candidates: list[tuple[str, Any]] = [
+        ("user_id", data.get("user_id") or data.get("userId")),
+        ("persona_id", data.get("persona_id") or data.get("personaId")),
+        # 嵌套形态优先，扁平形态兜底
+        ("attachment", agent_to_user.get("attachment") or data.get("attachment")),
+        ("agentTrust", agent_to_user.get("trust") or data.get("agentTrust")),
+        ("care", agent_to_user.get("care") or data.get("care")),
+        ("warmth", user_to_agent.get("warmth") or data.get("warmth")),
+        ("engagement", user_to_agent.get("engagement") or data.get("engagement")),
+        ("userTrust", user_to_agent.get("trust") or data.get("userTrust")),
+        ("trust", data.get("trust") or agent_to_user.get("trust")),
+        ("security", data.get("security")),
+        ("conflict", data.get("conflict")),
+        ("affinity", data.get("affinity")),
+        ("tension", data.get("tension")),
+        ("familiarity", data.get("familiarity")),
+        ("closeness", data.get("closeness")),
+        ("summary", data.get("summary")),
+        ("userEmotionLabel", user_emotion.get("label")),
+        ("userEmotionValence", user_emotion.get("valence")),
+        ("source", data.get("source")),
+        ("revision", data.get("revision")),
+        ("updated_at", data.get("updated_at") or data.get("updatedAt")),
+    ]
+    public: dict[str, Any] = {}
+    for output_key, raw in candidates:
+        public_value = _dashboard_public_scalar(raw)
+        if public_value not in ("", None, [], {}):
+            public[output_key] = public_value
+    return public
 
 
 def _dashboard_safe_self_model(value: dict[str, Any] | None) -> dict[str, Any]:

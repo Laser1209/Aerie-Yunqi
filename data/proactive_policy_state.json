@@ -1,12 +1,12 @@
 {
-  "daily_count": 1,
+  "daily_count": 2,
   "enabled": true,
   "feedback": {},
-  "last_push_at": "2026-08-09T12:27:20.492304",
+  "last_push_at": "2026-08-09T13:42:18.007146",
   "mute_until": null,
   "scene_blocks": {},
   "scene_last_sent": {
-    "idle_care": "2026-08-09T12:27:20.492304"
+    "idle_care": "2026-08-09T13:42:18.007146"
   },
   "today": "2026-08-09"
 }

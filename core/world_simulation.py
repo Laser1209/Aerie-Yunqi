@@ -96,6 +96,19 @@ _ACTIVITY_TOPIC_PREFIXES: dict[str, list[str]] = {
     "idle": ["quiet_moment"],
 }
 
+# ── Weather moods (P1 设计缺口 G4) ───────────────────────────────
+# weather_mood 由 seed + ts + phase 确定性派生（seed 参与环境计算 G5）。
+# 固定 seed + 同一时刻 → 结果稳定可复现；不同 seed → 环境略有差异。
+_WEATHER_MOODS: tuple[tuple[str, str], ...] = (
+    ("clear", "晴"),
+    ("partly_cloudy", "多云"),
+    ("cloudy", "阴"),
+    ("rain", "雨"),
+    ("windy", "风"),
+    ("fog", "雾"),
+)
+_DEFAULT_WEATHER_MOOD = "neutral"
+
 
 @dataclass
 class WorldSnapshot:
@@ -114,6 +127,8 @@ class WorldSnapshot:
     available_visual_topics: list[str] = field(default_factory=list)
     instance_id: str = ""
     timestamp: float = 0.0
+    weather: str = ""
+    weather_mood: str = "neutral"
 
     # 兼容字段 (历史 API)
     ts: int = 0
@@ -262,6 +277,26 @@ class WorldSimulation:
                 topics.append(topic)
         return topics
 
+    def _compute_weather(self, phase: str, ts: int) -> str:
+        """确定性天气派生：seed + ts + phase 决定 weather_mood (G4/G5)。
+
+        开启条件由 config 的 ``weather_enabled`` 控制（默认开启）。
+        关闭或数据缺失时回退 ``neutral``，保证后端兼容不报错。
+        """
+        enabled = bool(self.config.get("weather_enabled", True))
+        if not enabled:
+            return _DEFAULT_WEATHER_MOOD
+        digest = _sha256(
+            json.dumps(
+                {"seed": self.seed, "ts": ts, "phase": phase},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        idx = int(digest[:8], 16) % len(_WEATHER_MOODS)
+        mood, _label = _WEATHER_MOODS[idx]
+        return mood
+
     # ── main tick ───────────────────────────────────────────────
     def tick(self, action: WorldAction | None = None) -> WorldSnapshot:
         now = self.clock()
@@ -330,6 +365,8 @@ class WorldSimulation:
             world_snapshot_id=instance_id,
             tick_id=f"tick-{ts}",
             created_at=now.isoformat(),
+            weather_mood=self._compute_weather(phase_name, ts),
+            weather=self._compute_weather(phase_name, ts),
         )
         if action_result:
             # 兼容旧行为: 把 last_action 注入
@@ -369,6 +406,8 @@ class WorldSimulation:
                 "world_snapshot_id",
                 "tick_id",
                 "created_at",
+                "weather",
+                "weather_mood",
             )
             if key in source
         }

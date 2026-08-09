@@ -138,3 +138,50 @@ class LayeredMemorySyncAdapter:
             self._run(self._layered.decay_long_term())
         except Exception:
             pass
+
+    def list_by_user(
+        self,
+        user_id: int,
+        layer: str = "long_term",
+        limit: int = 50,
+        memory_type: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        """按层列出用户的记忆（只读，供记忆档案页使用）。"""
+        from memory.layers.base import MemoryLayer, MemoryType
+
+        try:
+            layer_enum = MemoryLayer(layer)
+        except ValueError:
+            layer_enum = MemoryLayer.LONG_TERM
+        mtype: Optional[MemoryType] = None
+        if memory_type:
+            try:
+                mtype = MemoryType(memory_type)
+            except ValueError:
+                mtype = None
+        try:
+            items = self._run(
+                self._layered.list_by_user(
+                    user_id=int(user_id),
+                    layer=layer_enum,
+                    limit=int(limit),
+                    memory_type=mtype,
+                )
+            )
+        except Exception:
+            return []
+        rows: list[dict[str, Any]] = []
+        for item in items or []:
+            d = item.to_dict() if hasattr(item, "to_dict") else {}
+            rows.append({
+                "id": d.get("id"),
+                "layer": d.get("layer") or layer_enum.value,
+                "memory_type": d.get("memory_type"),
+                "content": str(d.get("content", "")),
+                "importance": d.get("importance"),
+                "source": d.get("source"),
+                "created_at": d.get("created_at"),
+                "updated_at": d.get("updated_at"),
+                "confidence": d.get("confidence"),
+            })
+        return rows[: int(limit)]

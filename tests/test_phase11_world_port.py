@@ -185,8 +185,13 @@ if (audit.includes("secret-token-value")) {
 
 
 @pytest.mark.asyncio
-async def test_companion_initializes_world_port_without_starting_world_loop(phase4_db):
+async def test_companion_initializes_world_port_without_starting_world_loop(phase4_db, monkeypatch):
     from core.companion import Companion
+
+    # 该测试聚焦"初始化不启动世界循环"，故强制关闭世界 flag，
+    # 使结果不随 config/settings.yaml 的 world_inprocess_v1 而变化。
+    monkeypatch.setenv("AERIE_FEATURE_WORLD_INPROCESS_V1", "false")
+    monkeypatch.setenv("AERIE_FEATURE_WORLD_SIDECAR_V1", "false")
 
     companion = Companion(
         settings={"qq": {"self_qq": 7, "friends": [], "startup_wait_timeout": 0.01}},

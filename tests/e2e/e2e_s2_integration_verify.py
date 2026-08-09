@@ -22,7 +22,8 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Ensure repo root on path (脚本位于 tests/e2e，仓库根为其上级目录)
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -239,26 +240,17 @@ def test_t4_agent_full_integration() -> bool:
         if not ok_complexity or not ok_provider:
             all_ok = False
 
-        # 4.4 验证 Agent 有 S2 属性
-        # 通过源代码间接验证（不实例化，避免依赖 Companion）
-        import inspect
-        agent_src = inspect.getsource(Agent.__init__)
-        ok_provider_router = "provider_router" in agent_src
-        ok_budget = "budget_tracker" in agent_src
-        _check("4.4 Agent.__init__ 有 provider_router", ok_provider_router)
-        _check("4.5 Agent.__init__ 有 budget_tracker", ok_budget)
-        if not ok_provider_router or not ok_budget:
-            all_ok = False
-
-        # 4.6 验证 perceive 方法中有复杂度评估
-        perceive_src = inspect.getsource(Agent.perceive)
-        ok_eval = "provider_router.evaluate" in perceive_src
-        ok_select = "select_provider" in perceive_src
-        ok_budget_status = "budget_status" in perceive_src
-        _check("4.6 perceive 中有复杂度评估", ok_eval)
-        _check("4.7 perceive 中有 provider 选择", ok_select)
-        _check("4.8 perceive 中有预算状态", ok_budget_status)
-        if not ok_eval or not ok_select or not ok_budget_status:
+        # 4.4 S2 独立模块可导入
+        # (Agent 已收敛为薄门面，provider_router/budget_tracker 不再挂在 Agent 上，
+        #  改为直接验证独立模块可导入)
+        try:
+            import importlib
+            importlib.import_module("core.provider_router")
+            importlib.import_module("core.budget_tracker")
+            _check("4.4 core.provider_router 可导入", True)
+            _check("4.5 core.budget_tracker 可导入", True)
+        except Exception as e:
+            _check("4.4 S2 独立模块可导入", False, str(e))
             all_ok = False
 
     except Exception as e:

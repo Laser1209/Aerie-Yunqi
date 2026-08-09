@@ -6,7 +6,7 @@ Steps:
   1. ProactiveJudge 6 mock states — 覆盖 scene / tone / suppress 三类信号
   2. CronScheduler._dispatch — judge 抑制路径 (dispatcher 不被调)
   3. CronScheduler._dispatch — judge 通过路径 (tone_hint 透传)
-  4. Brain.generate_push — tone_hint 解析 + 屏幕隔空铁律注入
+  4. LLMCaller.generate_push — tone_hint 解析 + 屏幕隔空铁律注入
   5. 端到端联调 — ProactiveJudge → _dispatch → 模拟 dispatcher 收到 tone
 
 Pure local — 不依赖 LLM / DB / backend.
@@ -26,7 +26,7 @@ import asyncio
 import sys
 from typing import Any
 
-from core.brain import TONE_PROMPTS
+from core.llm_caller import TONE_PROMPTS
 from core.proactive_judge import (
     ProactiveJudge,
     SCENE_THRESHOLDS,
@@ -302,17 +302,17 @@ def main() -> int:
                sched.policy.daily_count == 1, f"got {sched.policy.daily_count}")
     asyncio.run(step5())
 
-    # ── 6. Brain.generate_push · tone_hint 解析 ─────
-    _stage("6. Brain.generate_push · tone_hint + 屏幕隔空铁律")
+    # ── 6. LLMCaller.generate_push · tone_hint 解析 ─────
+    _stage("6. LLMCaller.generate_push · tone_hint + 屏幕隔空铁律")
 
     async def step6() -> None:
         nonlocal passed, failed
-        from core.brain import Brain
-        b = Brain()
+        from core.llm_caller import LLMCaller
+        b = LLMCaller()
         # 没设 LLM,会走 fallback。但 system_msg 在 chat() 之前组装,
         # 我们用 monkey patch 拦截 chat 看 prompt。
-        from core.brain import Brain as _Brain
-        original_chat = _Brain.chat
+        from core.llm_caller import LLMCaller as _LLMCaller
+        original_chat = _LLMCaller.chat
         seen_system: list[str] = []
 
         async def stub_chat(self, messages, *a, **kw):  # type: ignore
@@ -322,7 +322,7 @@ def main() -> int:
             # 模拟 LLM 不可用 → 让 generate_push 走 fallback
             raise RuntimeError("no provider")
 
-        _Brain.chat = stub_chat
+        _LLMCaller.chat = stub_chat
         try:
             # tone=collapse_seeking
             out = await b.generate_push(
@@ -339,7 +339,7 @@ def main() -> int:
             )
             expect("fallback 仍输出原模板", out == "你还在吗。", f"got {out!r}")
         finally:
-            _Brain.chat = original_chat
+            _LLMCaller.chat = original_chat
 
         expect("system_msg 至少生成 1 次", len(seen_system) >= 1)
         if seen_system:

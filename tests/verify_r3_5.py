@@ -2,9 +2,9 @@
 import sys
 sys.path.insert(0, ".")
 
-from core.brain import Brain
+from core.llm_caller import LLMCaller
 
-b = Brain()
+b = LLMCaller()
 print("--- ai_options ---")
 opts = b.get_ai_options()
 for o in opts:

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>认知面板高度诊断</title>
+<link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles/icons.css">
+<link rel="stylesheet" href="styles/themes/yita-pink.css">
+<link rel="stylesheet" href="styles/cognition-panel.css">
+<style>
+  html,body{margin:0;height:100%;}
+  .app-body{display:flex;height:100%;}
+  .app-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .tab-content{flex:1;overflow:hidden;position:relative;}
+  .tab-panel{display:none;position:absolute;inset:0;overflow:auto;}
+  .tab-panel.active{display:flex;flex-direction:column;}
+  #measure{position:fixed;top:0;left:0;background:#000;color:#0f0;z-index:99999;font:11px monospace;padding:8px;white-space:pre-wrap;max-width:100%;}
+</style>
+</head>
+<body>
+<div class="app-body">
+<div class="app-main">
+<div class="tab-content">
+  <section id="panel-cognition" class="tab-panel active">
+    <div class="cognition-panel">
+      <div class="cog-tabs"><button class="cog-tab">大脑中枢</button><button class="cog-tab">自进化</button><button class="cog-tab">电脑操控</button><button class="cog-tab">QQ白名单</button><button class="cog-tab">文件整理</button><button class="cog-tab">文档写作</button></div>
+      <div class="cog-tab-content">
+
+        <div class="cog-tab-pane active" id="p-brain">
+          <div class="cognition-toolbar"><select><option>全部来源</option></select><input type="text" placeholder="搜索"><button class="btn btn-secondary btn-sm">刷新</button><button class="btn btn-secondary btn-sm">暂停</button><button class="btn btn-secondary btn-sm">清屏</button></div>
+          <div class="cog-section"><h3><span class="cog-section-title">最近一次 9 阶段时间轴</span><span class="cog-section-sub">Last trace</span></h3><div class="cog-timeline"><div class="cog-tl-grid"><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">1</span><span class="cog-tl-name">路由</span><span class="cog-tl-en">route</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">2</span><span class="cog-tl-name">情感</span><span class="cog-tl-en">emotion</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">3</span><span class="cog-tl-name">阈值</span><span class="cog-tl-en">threshold</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">4</span><span class="cog-tl-name">上下文</span><span class="cog-tl-en">context</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">5</span><span class="cog-tl-name">大脑</span><span class="cog-tl-en">brain</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">6</span><span class="cog-tl-name">工具</span><span class="cog-tl-en">tools</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">7</span><span class="cog-tl-name">拆段</span><span class="cog-tl-en">split</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">8</span><span class="cog-tl-name">后处理</span><span class="cog-tl-en">post</span></div><div class="cog-tl-cell cog-tl-cell--done"><span class="cog-tl-num">9</span><span class="cog-tl-name">输出</span><span class="cog-tl-en">output</span></div></div></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">决策权重赛马</span><span class="cog-section-sub">Decision race</span></h3><div class="cog-decision-race"><div class="cog-timeline-empty">等待决策</div></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">实时 stream</span><span class="cog-section-sub">last 50</span></h3><div class="cog-stream"><div class="cog-timeline-empty">等待事件</div></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">历史 trace</span><span class="cog-section-sub">Click row</span></h3><ul class="cog-list"><li class="cog-row"><span class="cog-row-id">#1</span><span class="cog-row-src cog-row-src--qq">QQ</span><span class="cog-row-msg">你好</span></li></ul></div>
+        </div>
+
+        <div class="cog-tab-pane" id="p-se">
+          <div class="cog-v2-hero"><div class="cog-v2-hero-icon"><svg class="icon icon--40"><use href="#icon-ui-dna"/></svg></div><div class="cog-v2-hero-text"><h3>自进化 L4</h3><p>代码自修改 · 4 道生存闸门 · 24h 回滚窗口</p></div><div class="cog-v2-hero-stats"><div class="cog-v2-stat"><span class="cog-v2-stat-label">总提案</span><span class="cog-v2-stat-value">0</span></div></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">生存闸门状态</span><span class="cog-section-sub">Viability gates</span></h3><div class="cog-gates-grid"><div class="cog-gate-card"><div class="cog-gate-name">安全审查</div><div class="cog-gate-status cog-gate-status--idle">待机</div></div><div class="cog-gate-card"><div class="cog-gate-name">语法检查</div><div class="cog-gate-status cog-gate-status--pass">通过</div></div></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">最近提案</span><span class="cog-section-sub">Recent</span></h3><div class="cog-se-list"><div class="cog-timeline-empty">暂无提案</div></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">审计日志</span><span class="cog-section-sub">Audit</span></h3><div class="cog-se-journal"><div class="cog-timeline-empty">暂无日志</div></div></div>
+        </div>
+
+        <div class="cog-tab-pane" id="p-cc">
+          <div class="cog-v2-hero"><div class="cog-v2-hero-icon"><svg class="icon icon--40"><use href="#icon-ui-mouse"/></svg></div><div class="cog-v2-hero-text"><h3>电脑操控</h3><p>3 级权限 · 键鼠/截图/UIA · 危险命令拦截</p></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">权限档位</span><span class="cog-section-sub">Permission</span></h3><div class="cog-cc-levels"><div class="cog-cc-level"><div class="cog-cc-level-name">仅查看</div></div><div class="cog-cc-level"><div class="cog-cc-level-name">标准</div></div><div class="cog-cc-level"><div class="cog-cc-level-name">完全</div></div></div></div>
+        </div>
+
+        <div class="cog-tab-pane" id="p-qq">
+          <div class="cog-v2-hero"><div class="cog-v2-hero-icon"><svg class="icon icon--40"><use href="#icon-ui-shield"/></svg></div><div class="cog-v2-hero-text"><h3>QQ 白名单</h3><p>仅白名单内 QQ 号可触发</p></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">白名单开关</span></h3><div class="qq-wl-toggle-row"><label class="qq-wl-switch"><input type="checkbox"><span class="qq-wl-slider"></span></label><span class="qq-wl-toggle-label">启用</span></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">添加白名单</span></h3><div class="qq-wl-add-form"><input class="qq-wl-input" placeholder="QQ号"><button class="btn btn-primary">添加</button></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">白名单列表</span></h3><div class="qq-wl-list"><div class="cog-timeline-empty">暂无</div></div></div>
+        </div>
+
+        <div class="cog-tab-pane" id="p-fo">
+          <div class="cog-v2-hero"><div class="cog-v2-hero-icon"><svg class="icon icon--40"><use href="#icon-ui-folder"/></svg></div><div class="cog-v2-hero-text"><h3>文件整理</h3><p>AI 智能分类 · 预览执行 · 7 天撤销</p></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">快速整理</span></h3><div class="cog-fo-quick"><div class="cog-fo-quick-item"><div class="cog-fo-name">图片</div></div><div class="cog-fo-quick-item"><div class="cog-fo-name">文档</div></div></div></div>
+        </div>
+
+        <div class="cog-tab-pane" id="p-dw">
+          <div class="cog-v2-hero"><div class="cog-v2-hero-icon"><svg class="icon icon--40"><use href="#icon-ui-file-text"/></svg></div><div class="cog-v2-hero-text"><h3>文档写作</h3><p>5 类模板 · 4 种导出格式</p></div></div>
+          <div class="cog-section"><h3><span class="cog-section-title">文档模板</span></h3><div class="cog-dw-templates"><div class="cog-dw-tpl"><div class="cog-dw-tpl-name">日记</div></div><div class="cog-dw-tpl"><div class="cog-dw-tpl-name">报告</div></div></div></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+</div>
+</div>
+</div>
+<pre id="measure"></pre>
+</body>
+</html>

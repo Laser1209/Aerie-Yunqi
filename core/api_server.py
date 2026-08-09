@@ -1843,8 +1843,8 @@ def _is_image_upload(filename: str, content_type: str | None) -> bool:
 
 def _build_image_workflow():
     from core.image_service import (
-        BrainImageGenerationProvider,
-        BrainImageVisionProvider,
+        LLMCallerImageGenerationProvider,
+        LLMCallerImageVisionProvider,
         ImageWorkflow,
     )
 
@@ -1852,8 +1852,8 @@ def _build_image_workflow():
     return ImageWorkflow(
         upload_base=_upload_root(),
         feature_enabled=_image_assets_enabled(),
-        generation_provider=BrainImageGenerationProvider(brain),
-        vision_provider=BrainImageVisionProvider(brain),
+        generation_provider=LLMCallerImageGenerationProvider(brain),
+        vision_provider=LLMCallerImageVisionProvider(brain),
     )
 
 
@@ -4908,7 +4908,7 @@ async def brief_today() -> dict:
     """Return today's brief JSON. If missing, lazily generate."""
     from datetime import datetime
     from core import brief_fetcher
-    from core.brain import Brain
+    from core.llm_caller import LLMCaller
 
     today = datetime.now().strftime("%Y-%m-%d")
     cached = brief_fetcher.load_brief(today)
@@ -4930,7 +4930,7 @@ async def brief_today() -> dict:
     # Compose greeting
     greeting = ""
     try:
-        brain = Brain()
+        brain = LLMCaller()
         greeting = await brain.compose_brief_greeting(
             time_of_day=sections.get("time_of_day", "morning"),
             date_str=today,
@@ -4991,7 +4991,7 @@ async def brief_run(request: Request, limit: int = Query(default=0, ge=0, le=50)
     """
     from datetime import datetime
     from core import brief_fetcher
-    from core.brain import Brain
+    from core.llm_caller import LLMCaller
 
     # Body can also carry a limit, but query param wins (more idiomatic).
     body_limit = 0
@@ -5011,7 +5011,7 @@ async def brief_run(request: Request, limit: int = Query(default=0, ge=0, le=50)
         return JSONResponse({"error": str(e)}, status_code=500)
     today = sections.get("date") or datetime.now().strftime("%Y-%m-%d")
     try:
-        brain = Brain()
+        brain = LLMCaller()
         greeting = await brain.compose_brief_greeting(
             time_of_day=sections.get("time_of_day", "morning"),
             date_str=today,
@@ -5123,9 +5123,9 @@ async def brain_ai_options() -> dict:
     Plus the default provider id.
     """
     try:
-        from core.brain import Brain
-        opts = Brain().get_ai_options()
-        default = Brain().get_default_provider()
+        from core.llm_caller import LLMCaller
+        opts = LLMCaller().get_ai_options()
+        default = LLMCaller().get_default_provider()
         return {
             "default": default,
             "count": len(opts),
@@ -5142,7 +5142,7 @@ async def brain_shell(request: Request) -> dict:
     Body: {"command": "dir", "args": ["uploads"]}
     """
     try:
-        from core.brain import Brain
+        from core.llm_caller import LLMCaller
         try:
             body = await request.json()
         except Exception:
@@ -5152,7 +5152,7 @@ async def brain_shell(request: Request) -> dict:
         args = body.get("args") or []
         if not cmd:
             return JSONResponse({"error": "missing command"}, status_code=400)
-        result = Brain().safe_shell(cmd, args)
+        result = LLMCaller().safe_shell(cmd, args)
         return result
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

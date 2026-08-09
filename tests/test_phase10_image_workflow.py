@@ -20,7 +20,7 @@ from PIL import Image
 import core.api_server as api_server
 from core.api_server import app
 from core.image_service import (
-    BrainImageGenerationProvider,
+    LLMCallerImageGenerationProvider,
     IdempotencyConflict,
     ImageGenerationResult,
     ImageSafetyPolicy,
@@ -302,7 +302,7 @@ def test_brain_generation_provider_accepts_base64_image_bytes(tmp_path):
     service = ImageWorkflow(
         upload_base=tmp_path / "uploads",
         feature_enabled=True,
-        generation_provider=BrainImageGenerationProvider(BrainWithImageBytes()),
+        generation_provider=LLMCallerImageGenerationProvider(BrainWithImageBytes()),
         id_factory=lambda prefix: f"{prefix}-fixed",
     )
 

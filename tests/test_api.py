@@ -154,7 +154,7 @@ def test_self_evolve_stats_route_is_not_captured_by_detail(monkeypatch):
 
 def test_brief_greeting_receives_date(monkeypatch):
     from core import brief_fetcher
-    from core import brain as brain_module
+    from core import llm_caller as brain_module
 
     sections = {
         "date": "2026-07-21",
@@ -166,7 +166,7 @@ def test_brief_greeting_receives_date(monkeypatch):
     brain = MagicMock()
     brain.compose_brief_greeting = AsyncMock(return_value="Good afternoon")
     brain.compose_brief = AsyncMock(return_value="Brief")
-    monkeypatch.setattr(brain_module, "Brain", lambda: brain)
+    monkeypatch.setattr(brain_module, "LLMCaller", lambda: brain)
     monkeypatch.setattr(brief_fetcher, "load_brief", MagicMock(return_value=None))
     monkeypatch.setattr(
         brief_fetcher,

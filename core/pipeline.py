@@ -1908,7 +1908,7 @@ class Pipeline:
         Pipeline._extract_react continues to work. New code should read
         the react_trace directly off the BrainResponse.
         """
-        from core.brain import _build_react_from_text
+        from core.llm_caller import _build_react_from_text
         return _build_react_from_text(text, tool_calls_present=False)
 
     @staticmethod
@@ -2080,7 +2080,7 @@ class Pipeline:
           2. Emotion: comprehensive update to avoid jitter
           3. History: loaded once, reused for entire batch
           4. Context: merged messages with sequence numbers
-          5. Brain: single LLM call with batch prompt
+          5. LLMCaller: single LLM call with batch prompt
           6. Postprocess: per-reply sanitization and checks
           7. Output: per-message persistence with batch_id
           8. Send: OutgoingReply list with sequence_index

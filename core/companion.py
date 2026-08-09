@@ -16,8 +16,9 @@ from communication.router import Router
 from communication.send_queue import SendQueue
 from communication.splitter import SemanticMessageSplitter
 from config.persona_loader import load_behavior_config
-from core.brain import Brain
+from core.llm_caller import LLMCaller
 from core.cognition import CognitionEngine
+from core.decision import MultiLayerDecision
 from core.computer_control import ComputerController, PermissionLevel
 from core.conversation_continuity import (
     ContextAssembler,
@@ -155,7 +156,7 @@ class Companion:
         # it for LLM-driven PAD inference. The keyword path is still
         # always available as a fallback when the LLM call fails.
         # OWNER: companion.py — always pass this instance to downstream modules.
-        self.brain = Brain()
+        self.brain = LLMCaller()
         # R0.3.7: pass behavior_cfg so EmotionEngine reads PAD centers
         # and threshold slots from config/persona_behavior.yaml.
         self.emotion = EmotionEngine(
@@ -264,6 +265,7 @@ class Companion:
             db=self.db,
             self_evolver=self.self_evolver,
             cognition=self.cognition,
+            decision_engine=MultiLayerDecision(),
             settings=self.settings,
             identity_resolver=self.identity_resolver,
             conversation_repository=self.conversation_repository,
@@ -640,8 +642,8 @@ class Companion:
             return existing
 
         from core.image_service import (
-            BrainImageGenerationProvider,
-            BrainImageVisionProvider,
+            LLMCallerImageGenerationProvider,
+            LLMCallerImageVisionProvider,
             ImageWorkflow,
         )
         from core.paths import data_dir
@@ -659,8 +661,8 @@ class Companion:
         workflow = ImageWorkflow(
             upload_base=(Path.cwd() / "uploads").resolve(),
             feature_enabled=self.feature_flags.is_enabled("image_assets_v1"),
-            generation_provider=BrainImageGenerationProvider(getattr(self, "brain", None)),
-            vision_provider=BrainImageVisionProvider(getattr(self, "brain", None)),
+            generation_provider=LLMCallerImageGenerationProvider(getattr(self, "brain", None)),
+            vision_provider=LLMCallerImageVisionProvider(getattr(self, "brain", None)),
         )
 
         try:
@@ -1096,7 +1098,7 @@ class Companion:
         """R8.2+: 按时段选择开机问候的通用开场(替代硬编码死梗)。
 
         仅返回问候语, 具体日期/待办/天气由调用方拼接成完整模板,
-        再交给 Brain.generate_push 润色。
+        再交给 LLMCaller.generate_push 润色。
         """
         hour = datetime.now().hour
         if 5 <= hour < 11:

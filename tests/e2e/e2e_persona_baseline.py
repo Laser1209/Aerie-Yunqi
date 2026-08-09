@@ -41,7 +41,7 @@ if _REPO_ROOT not in sys.path:
 
 from config.persona_loader import load_persona  # noqa: E402
 from core.context_builder import _PERSONA_L1, _PERSONA_L2  # noqa: E402
-from core.brain import TONE_PROMPTS  # noqa: E402
+from core.llm_caller import TONE_PROMPTS  # noqa: E402
 
 
 def _check(label: str, ok: bool, detail: str = "") -> None:

@@ -15,7 +15,8 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Ensure repo root on path (脚本位于 tests/e2e，仓库根为其上级目录)
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -323,10 +324,10 @@ def test_t6_agent_integration() -> bool:
         if not ok_complexity or not ok_provider:
             all_ok = False
 
-        # 验证 Agent 有 provider_router 属性
-        ok_router_attr = hasattr(Agent, "__init__")  # 间接验证
-        _check("6.3 Agent 类结构完整", ok_router_attr)
-        if not ok_router_attr:
+        # 验证 Agent 为薄门面，暴露 handle 方法
+        ok_facade = hasattr(Agent, "handle") and callable(Agent.handle)
+        _check("6.3 Agent.handle 门面方法存在", ok_facade)
+        if not ok_facade:
             all_ok = False
 
     except Exception as e:

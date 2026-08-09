@@ -291,8 +291,8 @@ class ImageSafetyPolicy:
         return SafetyDecision(True)
 
 
-class BrainImageGenerationProvider:
-    """Adapter around the legacy ``Brain.generate_image`` surface."""
+class LLMCallerImageGenerationProvider:
+    """Adapter around the legacy ``LLMCaller.generate_image`` surface."""
 
     provider_id = "image_sdxl"
     model = "sdxl"
@@ -373,9 +373,8 @@ class BrainImageGenerationProvider:
         owner_id: str,
         metadata: dict[str, Any],
     ) -> ImageGenerationResult:
-        """Image-to-image edit via the legacy ``Brain.generate_image_edit`` surface.
-
-        Best-effort: if the Brain lacks an edit path or the provider cannot
+        """Image-to-image edit via the legacy ``LLMCaller.generate_image_edit`` surface.
+        Best-effort: if the LLMCaller lacks an edit path or the provider cannot
         serve edits, we return ``unavailable`` (never raise).
         """
         if self.brain is None or not hasattr(self.brain, "generate_image_edit"):
@@ -435,8 +434,8 @@ class BrainImageGenerationProvider:
 
 
 
-class BrainImageVisionProvider:
-    """Adapter around the legacy ``Brain.see_image`` surface."""
+class LLMCallerImageVisionProvider:
+    """Adapter around the legacy ``LLMCaller.see_image`` surface."""
 
     provider_id = "vision_llava"
     model = "llava"
@@ -561,9 +560,9 @@ class ImageWorkflow:
         else:
             self.upload_base = self.upload_base.resolve()
         self.feature_enabled = bool(feature_enabled)
-        self.generation_provider = generation_provider or BrainImageGenerationProvider(None)
+        self.generation_provider = generation_provider or LLMCallerImageGenerationProvider(None)
         self.visual_intent_router = visual_intent_router
-        self.vision_provider = vision_provider or BrainImageVisionProvider(None)
+        self.vision_provider = vision_provider or LLMCallerImageVisionProvider(None)
         self.safety_policy = safety_policy or ImageSafetyPolicy()
         self.store = store or JsonImageWorkflowStore(
             self.upload_base / ".image_assets" / "image_workflows.json"

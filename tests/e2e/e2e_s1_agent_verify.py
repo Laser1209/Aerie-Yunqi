@@ -21,8 +21,8 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Ensure repo root on path
-_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Ensure repo root on path (脚本位于 tests/e2e，仓库根为其上级目录)
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -76,26 +76,13 @@ def test_t1_structure() -> bool:
         if not ok:
             all_ok = False
 
-    # 1.3 Agent 六步方法
-    agent_methods = [
-        "perceive", "reason", "decide", "act", "reflect", "express",
-        "run", "handle",
-    ]
-    for method in agent_methods:
-        ok = hasattr(Agent, method) and callable(getattr(Agent, method))
-        _check(f"1.3 Agent.{method}() 存在", ok)
-        if not ok:
-            all_ok = False
-
-    # 1.4 双轨模式属性
-    ok = hasattr(Agent, "use_agent_path")
-    _check("1.4 use_agent_path 属性存在", ok)
+    # 1.3 Agent 薄门面 handle 方法
+    # (六步编排 perceive/reason/decide/act/reflect/express/run 已收敛到 Pipeline，
+    #  Agent 现仅暴露 handle 门面方法)
+    ok = hasattr(Agent, "handle") and callable(Agent.handle)
+    _check("1.3 Agent.handle() 存在", ok)
     if not ok:
         all_ok = False
-
-    # 1.5 反思队列属性
-    ok = hasattr(Agent, 'reflection_queue') or True  # 实例属性，在 __init__ 中
-    _check("1.5 reflection_queue 实例属性", True, "通过 __init__ 初始化")
 
     return all_ok
 
@@ -248,7 +235,7 @@ def test_t4_zero_regression() -> bool:
 
     # 4.3 核心模块都能导入
     core_modules = [
-        "core.brain", "core.emotion_engine", "core.cognition",
+        "core.llm_caller", "core.emotion_engine", "core.cognition",
         "memory.memory_store", "core.tool_registry",
         "core.self_evolver", "core.context_builder",
         "core.decision", "core.persona_pacing",

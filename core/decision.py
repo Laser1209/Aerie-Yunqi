@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Multi-layer decision system (Phase 9: §10.2).
+"""Aerie · 云栖 v0.1.0-beta.1 — Multi-layer decision system (Phase 9: §10.2).
 
 Implements the 4-layer weighted decision described in
 OpenCloud_Companion_System_Features.md §10.2:
@@ -111,14 +111,14 @@ class MultiLayerDecision:
         }
 
         # Apply each layer in order
-        for layer_name, fn in (
-            ("L1", self._apply_core),
-            ("L2", self._apply_personality),
-            ("L3", self._apply_mood),
-            ("L4", self._apply_context),
+        for layer_name, weight_key, fn in (
+            ("L1", "L1_core", self._apply_core),
+            ("L2", "L2_personality", self._apply_personality),
+            ("L3", "L3_mood", self._apply_mood),
+            ("L4", "L4_context", self._apply_context),
         ):
             partial = fn(cands, context)
-            weight = self.WEIGHTS[f"L{layer_name[1]}_" if False else layer_name]
+            weight = self.WEIGHTS[weight_key]
             for c in cands:
                 sc = partial.get(c.id, 0.5)
                 layers[c.id][layer_name] = round(sc, 4)

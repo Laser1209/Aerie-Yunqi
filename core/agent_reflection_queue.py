@@ -1,10 +1,11 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — 异步反思队列 (S1 M1.3).
+"""Aerie · 云栖 v0.1.0-beta.1 — 异步反思队列 (S1 M1.3).
 
 将 self_evolver 的提案触发从主流程中彻底解耦，
 使用 asyncio.Queue 实现生产者-消费者模式，确保用户响应零阻塞。
 
 设计原则:
-  - 生产者: Agent.reflect() 只负责把反思任务塞进队列，立即返回
+  - 生产者: 外部把反思任务塞进队列，立即返回（原 Agent.reflect 六步路径已随
+    P2-C/D 收敛删除，本队列保留为独立异步反思能力，供直接调用）
   - 消费者: 后台 worker 协程逐条处理反思任务，调用 self_evolver
   - 背压: 队列满时丢弃旧任务，保证主流程不被拖慢
   - 持久化: 处理结果写入 reflection_log 表，供 Cognition Panel 查看

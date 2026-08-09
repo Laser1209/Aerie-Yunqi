@@ -28,7 +28,10 @@
   gap: 14px;
   padding: 18px 22px 28px;
   height: 100%;
-  overflow-y: auto;
+  /* Fixed panel: header + tabs stay put, only the active pane scrolls
+     (.cog-tab-content owns the scroll region). Prevents the panel from
+     growing with content (stretched) or clipping it (cropped). */
+  overflow: hidden;
   background:
     radial-gradient(1200px 480px at 8% -10%, var(--cog-shell-grad-1), transparent 60%),
     radial-gradient(900px 420px at 110% 0%, var(--cog-shell-grad-2), transparent 55%);
@@ -868,6 +871,11 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* Scroll owner for the fixed panel: consumes the remaining height below
+     the header + tabs so every element of the active pane is reachable. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .cog-tab-pane {
   display: none;
@@ -969,7 +977,7 @@
   gap: 10px;
 }
 .cog-gate-card {
-  padding: 14px 12px;
+  padding: 16px 12px;
   border-radius: 12px;
   background: var(--cog-glass-bg);
   border: 1px solid var(--cog-glass-border);
@@ -1111,8 +1119,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: var(--cog-glass-bg);
   border: 1px solid var(--cog-glass-border);
   font-size: 11px;
@@ -1126,7 +1134,7 @@
 .cog-cc-type {
   flex-shrink: 0;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 10px;
   font-weight: 500;
 }
@@ -1355,8 +1363,8 @@
   gap: 12px;
   padding: 12px 14px;
   border-radius: 10px;
-  background: rgba(255, 105, 180, 0.06);
-  border: 1px solid rgba(255, 105, 180, 0.15);
+  background: var(--cog-glass-bg);
+  border: 1px solid var(--cog-glass-border);
 }
 .qq-wl-toggle-label {
   font-size: 13px;
@@ -1422,15 +1430,15 @@
   flex: 1;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 105, 180, 0.2);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--cog-shell-text);
+  border: 1px solid var(--cog-glass-border);
+  background: rgba(13, 10, 26, 0.7);
+  color: var(--cog-glass-text);
   font-size: 13px;
   outline: none;
   transition: border-color .2s, box-shadow .2s;
 }
 .qq-wl-input:focus {
-  border-color: rgba(255, 105, 180, 0.5);
+  border-color: var(--cog-pulse);
   box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.1);
 }
 .qq-wl-bulk-actions {
@@ -1452,14 +1460,14 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 105, 180, 0.12);
+  border-radius: 10px;
+  background: var(--cog-glass-bg);
+  border: 1px solid var(--cog-glass-border);
   transition: background .2s, border-color .2s;
 }
 .qq-wl-item:hover {
-  background: rgba(255, 105, 180, 0.06);
-  border-color: rgba(255, 105, 180, 0.25);
+  background: var(--cog-row-hover);
+  border-color: rgba(255, 91, 156, 0.45);
 }
 .qq-wl-item.disabled {
   opacity: 0.5;
@@ -1484,19 +1492,19 @@
 .qq-wl-item-number {
   font-size: 13px;
   font-weight: 600;
-  color: var(--cog-shell-text);
+  color: var(--cog-glass-text);
   margin-bottom: 2px;
 }
 .qq-wl-item-remark {
   font-size: 11px;
-  color: var(--color-text-muted, #888);
+  color: var(--cog-glass-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .qq-wl-item-meta {
   font-size: 10px;
-  color: var(--color-text-muted, #888);
+  color: var(--cog-glass-muted);
   margin-top: 2px;
 }
 .qq-wl-item-actions {
@@ -1505,18 +1513,19 @@
   flex-shrink: 0;
 }
 .qq-wl-item-btn {
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 105, 180, 0.2);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--cog-shell-text);
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, rgba(255,105,180,0.2));
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: 11px;
   cursor: pointer;
   transition: all .2s;
 }
 .qq-wl-item-btn:hover {
-  background: rgba(255, 105, 180, 0.15);
-  border-color: rgba(255, 105, 180, 0.4);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-fg);
 }
 .qq-wl-item-btn.danger:hover {
   background: rgba(244, 67, 54, 0.2);

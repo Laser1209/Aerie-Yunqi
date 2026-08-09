@@ -610,13 +610,13 @@ class CronScheduler:
         """
         try:
             from core import brief_fetcher
-            from core.brain import Brain
+            from core.llm_caller import LLMCaller
             from datetime import datetime
             today = datetime.now().strftime("%Y-%m-%d")
             cached = brief_fetcher.load_brief(today)
             if not cached:
                 sections = await brief_fetcher.run_all()
-                md = await Brain().compose_brief(sections)
+                md = await LLMCaller().compose_brief(sections)
                 brief_fetcher.save_brief(today, sections, html=md)
             # Emit the brief:show event so renderer can pop iframe.
             try:
@@ -640,7 +640,7 @@ class CronScheduler:
     ) -> bool:
         """Block-4B R2.2: route desire-engine triggers to short text push.
 
-        Uses Brain.generate_push for tone; if dispatcher (QQ client) is
+        Uses LLMCaller.generate_push for tone; if dispatcher (QQ client) is
         available, sends a single short message. Records on policy so the
         daily cap is honored.
 

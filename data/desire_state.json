@@ -1,474 +1,18 @@
 {
-  "score": 67.49,
-  "ts": 1786273700.239062,
+  "score": 70.34,
+  "ts": 1786285827.682532,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.1666961717605591,
-    "emotion_overdraft": 7.523748145879848,
-    "patience_loss": 55.7,
+    "user_absence_hours": 0.7500950758987003,
+    "emotion_overdraft": 5.111704368378553,
+    "patience_loss": 55.0,
     "weather_impact": 0.0,
-    "time_of_day_boost": 8.0,
+    "time_of_day_boost": 15.0,
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1786252321.4992793,
-      "score": 61.72,
-      "variables": {
-        "user_absence_hours": 0.5006020004881753,
-        "emotion_overdraft": 6.272688469634812,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786252621.535076,
-      "score": 62.39,
-      "variables": {
-        "user_absence_hours": 0.583952182730039,
-        "emotion_overdraft": 7.010753298663014,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786252921.5677674,
-      "score": 61.89,
-      "variables": {
-        "user_absence_hours": 0.667296162976159,
-        "emotion_overdraft": 6.274257495981868,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786253221.7482872,
-      "score": 61.82,
-      "variables": {
-        "user_absence_hours": 0.7506791834698783,
-        "emotion_overdraft": 6.082582729409676,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786253521.7709572,
-      "score": 61.82,
-      "variables": {
-        "user_absence_hours": 0.8340192364321815,
-        "emotion_overdraft": 5.980152573116463,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786254135.2615416,
-      "score": 62.4,
-      "variables": {
-        "user_absence_hours": 0.0836286750766966,
-        "emotion_overdraft": 7.6513062682857855,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786256251.6220608,
-      "score": 61.29,
-      "variables": {
-        "user_absence_hours": 0.0836295908027225,
-        "emotion_overdraft": 6.251871527397222,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786256551.6500263,
-      "score": 61.4,
-      "variables": {
-        "user_absence_hours": 0.16697184801101683,
-        "emotion_overdraft": 6.293962875248,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786256852.1574671,
-      "score": 60.72,
-      "variables": {
-        "user_absence_hours": 0.25044574704435135,
-        "emotion_overdraft": 5.332125948552897,
-        "patience_loss": 56.2,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786257152.1801503,
-      "score": 60.19,
-      "variables": {
-        "user_absence_hours": 0.3337869820992152,
-        "emotion_overdraft": 4.693600874138507,
-        "patience_loss": 56.1,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786257452.2128882,
-      "score": 61.32,
-      "variables": {
-        "user_absence_hours": 0.4171282724539439,
-        "emotion_overdraft": 6.002524093536001,
-        "patience_loss": 56.1,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786258000.7881486,
-      "score": 61.27,
-      "variables": {
-        "user_absence_hours": 0.08363735410902236,
-        "emotion_overdraft": 6.356251200083531,
-        "patience_loss": 56.1,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786258303.63445,
-      "score": 62.24,
-      "variables": {
-        "user_absence_hours": 0.16775930007298787,
-        "emotion_overdraft": 7.4655166675845415,
-        "patience_loss": 56.1,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786258603.6699035,
-      "score": 62.09,
-      "variables": {
-        "user_absence_hours": 0.25110306441783903,
-        "emotion_overdraft": 7.1758333405815495,
-        "patience_loss": 56.1,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786258903.7027504,
-      "score": 60.17,
-      "variables": {
-        "user_absence_hours": 0.33444405641820696,
-        "emotion_overdraft": 4.794393977818621,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786259203.7288868,
-      "score": 60.47,
-      "variables": {
-        "user_absence_hours": 0.41778664151827494,
-        "emotion_overdraft": 5.059800086677696,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786259504.5485566,
-      "score": 60.54,
-      "variables": {
-        "user_absence_hours": 0.5013460071881612,
-        "emotion_overdraft": 5.050038503614599,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786259804.591286,
-      "score": 61.21,
-      "variables": {
-        "user_absence_hours": 0.5846901178359986,
-        "emotion_overdraft": 5.783803559025663,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786260104.6418025,
-      "score": 61.21,
-      "variables": {
-        "user_absence_hours": 0.6680343417988883,
-        "emotion_overdraft": 5.674838429549429,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786260404.6693473,
-      "score": 60.88,
-      "variables": {
-        "user_absence_hours": 0.7513796691762077,
-        "emotion_overdraft": 5.161627158213763,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786260705.4185526,
-      "score": 62.07,
-      "variables": {
-        "user_absence_hours": 0.834923042456309,
-        "emotion_overdraft": 6.541285065643714,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786261005.4477208,
-      "score": 61.72,
-      "variables": {
-        "user_absence_hours": 0.9182644489076403,
-        "emotion_overdraft": 6.00224162105133,
-        "patience_loss": 56.0,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786261305.4700823,
-      "score": 59.69,
-      "variables": {
-        "user_absence_hours": 1.0016044225957659,
-        "emotion_overdraft": 3.4896718629359254,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786261605.4914753,
-      "score": 61.11,
-      "variables": {
-        "user_absence_hours": 1.0849435759915247,
-        "emotion_overdraft": 5.1564798313718425,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786261906.7896042,
-      "score": 62.06,
-      "variables": {
-        "user_absence_hours": 1.1686375190152063,
-        "emotion_overdraft": 6.238711931218218,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786262207.6654146,
-      "score": 61.96,
-      "variables": {
-        "user_absence_hours": 1.2522144165966247,
-        "emotion_overdraft": 6.005740776439618,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786262507.683548,
-      "score": 61.85,
-      "variables": {
-        "user_absence_hours": 1.3355527510245642,
-        "emotion_overdraft": 5.766838828074176,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786262807.7027438,
-      "score": 63.21,
-      "variables": {
-        "user_absence_hours": 1.418891158501307,
-        "emotion_overdraft": 7.368868284422197,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786263107.7266843,
-      "score": 61.9,
-      "variables": {
-        "user_absence_hours": 1.502231246497896,
-        "emotion_overdraft": 5.617114844039794,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786263408.6210296,
-      "score": 61.97,
-      "variables": {
-        "user_absence_hours": 1.585813016096751,
-        "emotion_overdraft": 5.6012985521902,
-        "patience_loss": 55.9,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786263708.6422954,
-      "score": 62.39,
-      "variables": {
-        "user_absence_hours": 1.6691523382398816,
-        "emotion_overdraft": 6.152873304089081,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786264008.6585307,
-      "score": 60.77,
-      "variables": {
-        "user_absence_hours": 1.7524901188082165,
-        "emotion_overdraft": 4.020247465364287,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786264308.6933382,
-      "score": 61.36,
-      "variables": {
-        "user_absence_hours": 1.835830563571718,
-        "emotion_overdraft": 4.655924824215376,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786264608.7245467,
-      "score": 62.92,
-      "variables": {
-        "user_absence_hours": 1.9191750650935704,
-        "emotion_overdraft": 6.496056768706559,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786264908.745307,
-      "score": 62.63,
-      "variables": {
-        "user_absence_hours": 2.002514354387919,
-        "emotion_overdraft": 6.0308180336376696,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786265208.7825897,
-      "score": 61.86,
-      "variables": {
-        "user_absence_hours": 2.085855248504215,
-        "emotion_overdraft": 4.96700254839061,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786265572.1232023,
-      "score": 60.72,
-      "variables": {
-        "user_absence_hours": 0.07308275010850694,
-        "emotion_overdraft": 6.057341861083129,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786265872.1459513,
-      "score": 60.15,
-      "variables": {
-        "user_absence_hours": 0.15642127262221442,
-        "emotion_overdraft": 5.245957999671465,
-        "patience_loss": 55.8,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1786266172.1656675,
       "score": 59.9,
@@ -610,6 +154,462 @@
         "patience_loss": 55.7,
         "weather_impact": 0.0,
         "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786274027.6788273,
+      "score": 64.79,
+      "variables": {
+        "user_absence_hours": 0.08336507168081071,
+        "emotion_overdraft": 4.259298486002546,
+        "patience_loss": 55.7,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786274327.7095575,
+      "score": 65.93,
+      "variables": {
+        "user_absence_hours": 0.16670879357390933,
+        "emotion_overdraft": 5.584712161793498,
+        "patience_loss": 55.7,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786274627.7387552,
+      "score": 64.6,
+      "variables": {
+        "user_absence_hours": 0.2500496922598945,
+        "emotion_overdraft": 3.9358048338163085,
+        "patience_loss": 55.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786274927.758331,
+      "score": 66.0,
+      "variables": {
+        "user_absence_hours": 0.33338851590951285,
+        "emotion_overdraft": 5.5820225833497865,
+        "patience_loss": 55.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786275227.7822278,
+      "score": 67.24,
+      "variables": {
+        "user_absence_hours": 0.41672729319996304,
+        "emotion_overdraft": 7.033577045449729,
+        "patience_loss": 55.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786275527.7991269,
+      "score": 67.17,
+      "variables": {
+        "user_absence_hours": 0.5000665055380927,
+        "emotion_overdraft": 6.8397973023407665,
+        "patience_loss": 55.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786275827.8339958,
+      "score": 68.2,
+      "variables": {
+        "user_absence_hours": 0.5834084896908867,
+        "emotion_overdraft": 8.016406709992895,
+        "patience_loss": 55.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786276127.8535786,
+      "score": 65.47,
+      "variables": {
+        "user_absence_hours": 0.6667478540208605,
+        "emotion_overdraft": 4.503756004535687,
+        "patience_loss": 55.6,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786276427.8791766,
+      "score": 68.87,
+      "variables": {
+        "user_absence_hours": 0.7500889907280605,
+        "emotion_overdraft": 8.779491837442393,
+        "patience_loss": 55.5,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786276727.9115465,
+      "score": 66.96,
+      "variables": {
+        "user_absence_hours": 0.8334309002425936,
+        "emotion_overdraft": 6.287915971118483,
+        "patience_loss": 55.5,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786277027.93781,
+      "score": 67.72,
+      "variables": {
+        "user_absence_hours": 0.9167710372474458,
+        "emotion_overdraft": 7.125464496815299,
+        "patience_loss": 55.5,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786277327.971199,
+      "score": 67.3,
+      "variables": {
+        "user_absence_hours": 1.0001124109162225,
+        "emotion_overdraft": 6.500253804714517,
+        "patience_loss": 55.5,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786277628.003856,
+      "score": 64.72,
+      "variables": {
+        "user_absence_hours": 1.0834548209110897,
+        "emotion_overdraft": 3.1647799751235697,
+        "patience_loss": 55.5,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786277928.0355823,
+      "score": 67.71,
+      "variables": {
+        "user_absence_hours": 1.1667967216173807,
+        "emotion_overdraft": 6.799543930204377,
+        "patience_loss": 55.5,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786278228.0602984,
+      "score": 66.85,
+      "variables": {
+        "user_absence_hours": 1.2501388817363315,
+        "emotion_overdraft": 5.7529171009492615,
+        "patience_loss": 55.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786278528.0862808,
+      "score": 67.37,
+      "variables": {
+        "user_absence_hours": 1.3334772395425372,
+        "emotion_overdraft": 6.294461462160095,
+        "patience_loss": 55.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786278828.1179338,
+      "score": 68.13,
+      "variables": {
+        "user_absence_hours": 1.4168208416965273,
+        "emotion_overdraft": 7.14380385439593,
+        "patience_loss": 55.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786279128.1464922,
+      "score": 66.87,
+      "variables": {
+        "user_absence_hours": 1.5001603931850858,
+        "emotion_overdraft": 5.459766041246937,
+        "patience_loss": 55.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786279428.1852782,
+      "score": 67.68,
+      "variables": {
+        "user_absence_hours": 1.5835044330358505,
+        "emotion_overdraft": 6.374329000470112,
+        "patience_loss": 55.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786279728.216363,
+      "score": 67.6,
+      "variables": {
+        "user_absence_hours": 1.6668469403849708,
+        "emotion_overdraft": 6.1643796962676864,
+        "patience_loss": 55.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786280028.2427366,
+      "score": 67.81,
+      "variables": {
+        "user_absence_hours": 1.750187502834532,
+        "emotion_overdraft": 6.445822457856444,
+        "patience_loss": 55.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786280328.263444,
+      "score": 69.35,
+      "variables": {
+        "user_absence_hours": 1.8335291041930517,
+        "emotion_overdraft": 8.265739218338986,
+        "patience_loss": 55.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786280628.28193,
+      "score": 68.01,
+      "variables": {
+        "user_absence_hours": 1.9168668829732471,
+        "emotion_overdraft": 6.489804016483037,
+        "patience_loss": 55.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786280928.30462,
+      "score": 65.96,
+      "variables": {
+        "user_absence_hours": 2.0002058435810937,
+        "emotion_overdraft": 3.8307595688716245,
+        "patience_loss": 55.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786281228.3416796,
+      "score": 67.72,
+      "variables": {
+        "user_absence_hours": 2.0835485666328006,
+        "emotion_overdraft": 5.92153696235231,
+        "patience_loss": 55.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786281528.3818579,
+      "score": 68.81,
+      "variables": {
+        "user_absence_hours": 2.1668932646512986,
+        "emotion_overdraft": 7.177897793134678,
+        "patience_loss": 55.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786281828.4150093,
+      "score": 69.04,
+      "variables": {
+        "user_absence_hours": 2.2502351083358128,
+        "emotion_overdraft": 7.492419109169695,
+        "patience_loss": 55.2,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786282128.4511733,
+      "score": 68.08,
+      "variables": {
+        "user_absence_hours": 2.33357895301448,
+        "emotion_overdraft": 6.185867035413533,
+        "patience_loss": 55.2,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786282646.8191555,
+      "score": 65.86,
+      "variables": {
+        "user_absence_hours": 0.08334956228733063,
+        "emotion_overdraft": 6.220847609440652,
+        "patience_loss": 55.2,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786283427.3884552,
+      "score": 66.34,
+      "variables": {
+        "user_absence_hours": 0.08335014740626018,
+        "emotion_overdraft": 6.81621180339657,
+        "patience_loss": 55.2,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786283727.4205294,
+      "score": 66.23,
+      "variables": {
+        "user_absence_hours": 0.16668822831577726,
+        "emotion_overdraft": 6.584127547400056,
+        "patience_loss": 55.2,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 8.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786284027.441466,
+      "score": 71.06,
+      "variables": {
+        "user_absence_hours": 0.25003172523445555,
+        "emotion_overdraft": 6.510790093821177,
+        "patience_loss": 55.1,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 15.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786284327.4835744,
+      "score": 71.57,
+      "variables": {
+        "user_absence_hours": 0.33337321552965377,
+        "emotion_overdraft": 7.0486641971221475,
+        "patience_loss": 55.1,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 15.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786284627.5209777,
+      "score": 72.13,
+      "variables": {
+        "user_absence_hours": 0.4167173324690925,
+        "emotion_overdraft": 7.641125865794485,
+        "patience_loss": 55.1,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 15.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786284927.5520103,
+      "score": 72.03,
+      "variables": {
+        "user_absence_hours": 0.5000598842567868,
+        "emotion_overdraft": 7.409151896818406,
+        "patience_loss": 55.1,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 15.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786285227.591755,
+      "score": 70.24,
+      "variables": {
+        "user_absence_hours": 0.583402911623319,
+        "emotion_overdraft": 5.068638851110224,
+        "patience_loss": 55.1,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 15.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786285527.636378,
+      "score": 69.03,
+      "variables": {
+        "user_absence_hours": 0.6667479893234041,
+        "emotion_overdraft": 3.46029343969243,
+        "patience_loss": 55.1,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 15.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786285827.6825385,
+      "score": 70.34,
+      "variables": {
+        "user_absence_hours": 0.7500950758987003,
+        "emotion_overdraft": 5.111704368378553,
+        "patience_loss": 55.0,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 15.0,
         "anniversary_boost": 0.0
       }
     }

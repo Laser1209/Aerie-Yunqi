@@ -61,10 +61,10 @@ class ContentValidator:
     """
 
     def __init__(self, brain: Any) -> None:
-        """Initialize with a Brain instance for regeneration.
+        """Initialize with a LLMCaller instance for regeneration.
 
         Args:
-            brain: core.brain.Brain instance (or compatible) with chat() method.
+            brain: core.llm_caller.LLMCaller instance (or compatible) with chat() method.
         """
         self.brain = brain
         self._metrics = {
@@ -193,7 +193,7 @@ def get_content_validator(brain: Any | None = None) -> ContentValidator:
     """Get or create the global ContentValidator singleton.
 
     Args:
-        brain: Brain instance (required on first call; ignored on subsequent calls).
+        brain: LLMCaller instance (required on first call; ignored on subsequent calls).
 
     Returns:
         ContentValidator instance.

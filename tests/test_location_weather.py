@@ -141,3 +141,30 @@ async def test_location_set_returns_weather_and_updates_brief(monkeypatch, tmp_p
     assert response["status"] == "ok"
     assert response["city"] == "巴黎"
     assert response["weather"]["city"] == "巴黎"
+
+
+def test_open_meteo_weather_returns_daily_forecast(monkeypatch):
+    """Open-Meteo 应解析未来 5 天 daily 预报，而非空数组。"""
+    import core.weather_service as ws
+
+    fake = {
+        "current_weather": {"weathercode": 0, "temperature": 21, "windspeed": 12},
+        "daily": {
+            "time": ["2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"],
+            "weather_code": [0, 61, 95, 2, 1],
+            "temperature_2m_max": [28, 25, 24, 27, 29],
+            "temperature_2m_min": [19, 18, 17, 18, 20],
+        },
+    }
+    monkeypatch.setattr(ws, "_open_meteo_geocode", lambda city: (48.8566, 2.3522))
+    monkeypatch.setattr(ws, "_http_get_json", lambda url: fake)
+
+    result = ws._open_meteo_weather("巴黎")
+
+    assert result is not None
+    forecast = result.get("forecast") or []
+    assert len(forecast) == 5
+    assert forecast[0]["date"] == "2026-08-10"
+    assert forecast[1]["weather"] == "小雨"   # WMO 61
+    assert forecast[1]["temp_max"] == "25"
+    assert forecast[1]["temp_min"] == "18"

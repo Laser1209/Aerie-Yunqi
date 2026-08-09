@@ -447,8 +447,13 @@ class BriefDrawer {
     ];
     fragment.appendChild(this._renderNewsSection(allNews));
 
-    /* 5. Weather (compact) */
-    if (data.weather) fragment.appendChild(this._renderWeatherCompact(data.weather));
+    /* 5. Weather */
+    if (data.weather) {
+      fragment.appendChild(
+        this._expanded ? this._renderWeatherFull(data.weather)
+                        : this._renderWeatherCompact(data.weather)
+      );
+    }
 
     this._body().innerHTML = "";
     this._body().appendChild(fragment);
@@ -743,10 +748,16 @@ class BriefDrawer {
         const kws = (t.keywords || []).slice(0, 3).map(k =>
           `<span class="brief-drawer__trend-tag">${_esc(k)}</span>`
         ).join("");
+        const momentum = t.momentum || "";
+        const momentumLabel = { new: "新", rising: "升温", steady: "持续", cooling: "回落" }[momentum] || "";
+        const accum = t.accum_days ? `<span class="brief-drawer__trend-accum">累计 ${t.accum_days}d</span>` : "";
+        const momentumTag = momentumLabel
+          ? `<span class="brief-drawer__trend-momentum brief-drawer__trend-momentum--${momentum}">${momentumLabel}</span>`
+          : "";
         item.innerHTML = `
           <div class="brief-drawer__trend-title">${_esc(t.title || "")}</div>
           <div class="brief-drawer__trend-summary">${_esc(t.summary || "")}</div>
-          ${kws ? `<div class="brief-drawer__trend-tags">${kws}</div>` : ""}
+          ${kws ? `<div class="brief-drawer__trend-tags">${kws}${momentumTag}${accum}</div>` : `${momentumTag}${accum}`}
         `;
         list.appendChild(item);
       }
@@ -785,7 +796,9 @@ class BriefDrawer {
     const cat = item._cat || "";
     const catLabel = SECTION_META[cat] ? SECTION_META[cat].label.split(" / ")[0] : "";
     const summary = item.summary || item.description || item.content || "";
-    const shortSummary = summary.length > 120 ? summary.slice(0, 120) + "..." : summary;
+    // 展开态展示完整摘要，收起态截断为 120 字，避免折叠时信息堆叠。
+    const shortSummary = (!this._expanded && summary.length > 120)
+      ? summary.slice(0, 120) + "..." : summary;
 
     a.innerHTML = `
       ${catLabel ? `<span class="brief-drawer__news-cat">${_esc(catLabel)}</span>` : ""}
@@ -798,6 +811,47 @@ class BriefDrawer {
       ` : ""}
     `;
     return a;
+  }
+
+  /* ── Section 5b: Weather (expanded full forecast) ─── */
+  _renderWeatherFull(weather) {
+    const section = _el("section", {
+      class: "brief-drawer__section brief-drawer__section--weather brief-drawer__section--weather-full",
+    });
+    const w = weather || {};
+    const sourceTag = this._sourceLabel(w.source, w.manual);
+    const qualityTag = w.error ? "天气异常" : (w.stub ? "离线兜底" : sourceTag);
+    const forecast = Array.isArray(w.forecast) ? w.forecast : [];
+    const nowRow = `
+      <div class="brief-drawer__weather-now">
+        <div class="brief-drawer__weather-now-main">
+          <span class="brief-drawer__weather-now-temp">${_esc(w.temp || "—")}°</span>
+          <span class="brief-drawer__weather-now-desc">${_esc(w.desc || "")}</span>
+        </div>
+        <div class="brief-drawer__weather-now-meta">
+          <span>${_esc(w.city || "定位中")}</span>
+          <span>${_esc(qualityTag)}</span>
+          ${w.humidity ? `<span>湿度 ${_esc(w.humidity)}</span>` : ""}
+          ${w.wind ? `<span>${_esc(w.wind)}</span>` : ""}
+          ${w.suggestion ? `<span>${_esc(w.suggestion)}</span>` : ""}
+        </div>
+      </div>
+    `;
+    const forecastRow = forecast.length ? `
+      <div class="brief-drawer__forecast-full">
+        ${forecast.map((f) => `
+          <div class="brief-drawer__forecast-full-day">
+            <div class="brief-drawer__forecast-full-date">${_esc(f.date || f.day || "未来")}</div>
+            <div class="brief-drawer__forecast-full-weather">${_esc(f.weather || f.desc || "—")}</div>
+            <div class="brief-drawer__forecast-full-temp">
+              <span class="brief-drawer__forecast-full-max">${_esc(f.temp_max || "—")}°</span>
+              <span class="brief-drawer__forecast-full-min">${_esc(f.temp_min || "—")}°</span>
+            </div>
+          </div>`).join("")}
+      </div>
+    ` : "";
+    section.innerHTML = nowRow + forecastRow;
+    return section;
   }
 
   /* ── Section 5: Weather (compact) ─────────────────── */

@@ -79,10 +79,10 @@
   transform: translateX(0);
 }
 
-/* R7.3: expanded mode (full-width) keeps the same glass, just wider. */
+/* R7.3+: expanded mode —— 纵向扩容展示更多信息，而非横向变宽 */
 .brief-drawer.brief-drawer--expanded {
-  width: 92vw;
-  max-width: 880px;
+  width: 560px;
+  max-width: 92vw;
   border-top-left-radius: 26px;
   border-bottom-left-radius: 26px;
   box-shadow: var(--glass-shadow),
@@ -1543,3 +1543,39 @@
 .brief-drawer__news-list::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
+
+/* ── Expanded full weather forecast ───────────────── */
+.brief-drawer__weather-full { padding: 8px 2px 4px; }
+.brief-drawer__weather-now {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 6px 0 10px;
+}
+.brief-drawer__weather-now-temp { font-size: 40px; font-weight: 300; line-height: 1; }
+.brief-drawer__weather-now-desc { font-size: 15px; color: var(--color-text-muted, #888); }
+.brief-drawer__weather-now-meta {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 12px; color: var(--color-text-muted, #888);
+}
+.brief-drawer__forecast-full {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px;
+}
+.brief-drawer__forecast-full-day {
+  border-radius: 10px; padding: 8px 6px; text-align: center;
+  background: color-mix(in srgb, var(--color-primary, #ffd1dc) 12%, transparent);
+}
+.brief-drawer__forecast-full-date { font-size: 11px; color: var(--color-text-muted, #888); }
+.brief-drawer__forecast-full-weather { font-size: 13px; margin: 4px 0; }
+.brief-drawer__forecast-full-temp { display: flex; justify-content: center; gap: 8px; font-size: 12px; }
+.brief-drawer__forecast-full-max { color: var(--color-text, #333); }
+.brief-drawer__forecast-full-min { color: var(--color-text-muted, #888); }
+
+/* ── Accumulated trend labels ─────────────────────── */
+.brief-drawer__trend-momentum {
+  font-size: 11px; padding: 1px 6px; border-radius: 999px; margin-left: 4px;
+  vertical-align: middle;
+}
+.brief-drawer__trend-momentum--new     { background: #ffe9a8; color: #7a5b00; }
+.brief-drawer__trend-momentum--rising  { background: #ffd1dc; color: #a13252; }
+.brief-drawer__trend-momentum--steady  { background: #d7ecff; color: #245a8f; }
+.brief-drawer__trend-momentum--cooling { background: #e7e7e7; color: #666; }
+.brief-drawer__trend-accum { font-size: 11px; color: var(--color-text-muted, #888); margin-left: 4px; }

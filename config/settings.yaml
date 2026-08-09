@@ -36,3 +36,11 @@ verify_batch4:
   ts: 1784404889
 weather:
   city: ''
+douyin:
+  api_base_url: https://api.justoneapi.com  # JustOneAPI 域名
+  api_token: 'hTyHR6DVMd4jjZlN'                             # JustOneAPI Token（也可用环境变量 JUSTONEAPI_TOKEN）
+world:
+  location: ''            # 世界独立位置（城市）。空 = 自动/IP/兜底
+  tick_interval_sec: 300  # 后台真实时间推进间隔（秒）
+  reality_refresh_sec: 1800  # 真实天气/附近地点/实时事件刷新间隔（秒）
+  random_events_per_day: 3   # 每日随机生活事件条数（0 = 关闭）

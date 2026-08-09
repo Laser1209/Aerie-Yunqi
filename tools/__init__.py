@@ -72,13 +72,6 @@ def register_all_tools(registry) -> None:
         logging.getLogger(__name__).warning("webbridge tools registration failed: %s", e)
 
     try:
-        from .douyin_tools import register_douyin_tools
-        register_douyin_tools(registry)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("douyin tools registration failed: %s", e)
-
-    try:
         from core.screen_tools import register_screen_tools
         register_screen_tools(registry)
     except Exception as e:
@@ -92,6 +85,14 @@ def register_all_tools(registry) -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("office tools registration failed: %s", e)
+
+    # Douyin search via JustOneAPI（聚合 API 主通道）
+    try:
+        from tools.douyin_search import register_douyin_tools
+        register_douyin_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("douyin search tools registration failed: %s", e)
 
     # [扩展] v0.1.0-beta.1: computer control tools — previously never registered,
     # so LLM Function Calling could not invoke any computer_control actions.

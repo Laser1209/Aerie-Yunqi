@@ -109,6 +109,18 @@ _WEATHER_MOODS: tuple[tuple[str, str], ...] = (
 )
 _DEFAULT_WEATHER_MOOD = "neutral"
 
+# 每日随机生活事件池（配合 random_events_per_day 使用；纯文本占位，非 LLM）。
+_RANDOM_EVENT_POOL: tuple[str, ...] = (
+    "今天路过常去的那家店，发现换了新的招牌",
+    "傍晚窗外天色很好看，适合发张照片给你",
+    "想起一个只有我们知道的小玩笑，嘴角不自觉上扬",
+    "午睡时做了个有点长的梦，醒来有点恍惚",
+    "路上看到一只猫在晒太阳，蹲下来看了好一会儿",
+    "今天耳机里单曲循环了一首很耳熟的老歌",
+    "阳台的花今天开了，颜色比想象中更亮",
+    "刚喝完一杯水，突然就想到你了",
+)
+
 
 @dataclass
 class WorldSnapshot:
@@ -129,6 +141,10 @@ class WorldSnapshot:
     timestamp: float = 0.0
     weather: str = ""
     weather_mood: str = "neutral"
+    weather_detail: str = ""
+    city: str = ""
+    random_events: list[str] = field(default_factory=list)
+    city_events: list[dict[str, str]] = field(default_factory=list)
 
     # 兼容字段 (历史 API)
     ts: int = 0
@@ -192,6 +208,7 @@ class WorldSimulation:
         self._ticks = 0
         self._snapshot: WorldSnapshot | None = None
         self._cached_second: int | None = None  # 秒级缓存键
+        self._reality: dict[str, Any] = {}  # 真实世界数据（weather/nearby/events）
 
     @staticmethod
     def minute(value: str) -> int:
@@ -297,6 +314,80 @@ class WorldSimulation:
         mood, _label = _WEATHER_MOODS[idx]
         return mood
 
+    # ── 真实世界注入（world_reality 提供，best-effort） ─────────────
+    def set_reality(self, reality: dict[str, Any] | None) -> None:
+        """注入真实天气/附近地点/实时事件；任何时刻缺失都保留既有回退逻辑。"""
+        self._reality = reality if isinstance(reality, dict) else {}
+
+    def _real_weather_mood(self) -> str:
+        """把真实天气描述映射为世界天气情绪；无真实天气则回退确定性派生。"""
+        weather = self._reality.get("weather") if isinstance(self._reality, dict) else None
+        desc = (weather or {}).get("desc") if isinstance(weather, dict) else ""
+        desc = str(desc or "").strip()
+        if "晴" in desc:
+            return "clear"
+        if "雨" in desc:
+            return "rain"
+        if "雾" in desc:
+            return "fog"
+        if "风" in desc:
+            return "windy"
+        if "阴" in desc:
+            return "cloudy"
+        if "云" in desc:
+            return "partly_cloudy"
+        return _DEFAULT_WEATHER_MOOD
+
+    def _real_weather_detail(self) -> str:
+        weather = self._reality.get("weather") if isinstance(self._reality, dict) else None
+        if not isinstance(weather, dict):
+            return ""
+        parts = [str(weather.get("temp") or "").strip(), str(weather.get("desc") or "").strip()]
+        detail = " ".join(p for p in parts if p)
+        if weather.get("city"):
+            detail = f"{weather.get('city')} {detail}".strip()
+        return detail
+
+    def _compute_random_events(self, now: datetime) -> list[str]:
+        """每日随机生活事件：seed + 日期 派生 → 同一天稳定、跨天不同。
+
+        ``random_events_per_day`` 为 0 时关闭。事件池按日洗牌后取前 N 条。
+        """
+        count = int(self.config.get("random_events_per_day", 3) or 0)
+        if count <= 0:
+            return []
+        key = json.dumps(
+            {"seed": self.seed, "date": now.strftime("%Y-%m-%d")},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        digest = _sha256(key)
+        pool = list(_RANDOM_EVENT_POOL)
+        # 用日种子洗牌（Fisher-Yates，纯确定性）
+        pool_len = len(pool)
+        a = int(digest[:16], 16)
+        for i in range(pool_len - 1, 0, -1):
+            a = (a * 1103515245 + 12345) & 0xFFFFFFFF
+            j = a % (i + 1)
+            pool[i], pool[j] = pool[j], pool[i]
+        return pool[:count]
+
+    def _reality_nearby_objects(self) -> list[str]:
+        places = self._reality.get("nearby_places") if isinstance(self._reality, dict) else None
+        if not isinstance(places, list):
+            return []
+        names = []
+        for p in places:
+            if isinstance(p, dict) and str(p.get("name") or "").strip():
+                names.append(str(p["name"]).strip())
+        return names
+
+    def _reality_city_events(self) -> list[dict[str, str]]:
+        events = self._reality.get("city_events") if isinstance(self._reality, dict) else None
+        if not isinstance(events, list):
+            return []
+        return [dict(e) for e in events if isinstance(e, dict)]
+
     # ── main tick ───────────────────────────────────────────────
     def tick(self, action: WorldAction | None = None) -> WorldSnapshot:
         now = self.clock()
@@ -328,8 +419,20 @@ class WorldSimulation:
         self._ticks += 1
         energy = self._compute_energy(phase_name, phase_data, now)
         social = str(phase_data.get("social", "private"))
-        nearby_objects = self._compute_nearby_objects(location, activity)
-        visual_topics = self._derive_visual_topics(activity, nearby_objects)
+
+        # 真实天气情绪（有真实天气则优先，否则确定性派生）。
+        real_mood = self._real_weather_mood()
+        weather_mood = real_mood if real_mood != _DEFAULT_WEATHER_MOOD else self._compute_weather(phase_name, ts)
+        weather_detail = self._real_weather_detail()
+
+        # 真实附近地点优先；无则用模板。
+        real_nearby = self._reality_nearby_objects()
+        if real_nearby:
+            nearby_objects = real_nearby[:6]
+            visual_topics = self._derive_visual_topics(activity, nearby_objects)
+        else:
+            nearby_objects = self._compute_nearby_objects(location, activity)
+            visual_topics = self._derive_visual_topics(activity, nearby_objects)
 
         instance_id = _sha256(
             json.dumps(
@@ -365,8 +468,12 @@ class WorldSimulation:
             world_snapshot_id=instance_id,
             tick_id=f"tick-{ts}",
             created_at=now.isoformat(),
-            weather_mood=self._compute_weather(phase_name, ts),
-            weather=self._compute_weather(phase_name, ts),
+            weather_mood=weather_mood,
+            weather=weather_mood,
+            weather_detail=weather_detail,
+            city=str((self._reality.get("city") if isinstance(self._reality, dict) else "") or ""),
+            random_events=self._compute_random_events(now),
+            city_events=self._reality_city_events(),
         )
         if action_result:
             # 兼容旧行为: 把 last_action 注入
@@ -408,6 +515,10 @@ class WorldSimulation:
                 "created_at",
                 "weather",
                 "weather_mood",
+                "weather_detail",
+                "city",
+                "random_events",
+                "city_events",
             )
             if key in source
         }

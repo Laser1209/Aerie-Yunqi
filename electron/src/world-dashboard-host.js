@@ -451,6 +451,28 @@ function createWorldDashboardHost({
     };
   }
 
+  async function setWorldLocation(city = "") {
+    if (typeof apiRequest !== "function") {
+      return { status: "backend_unavailable", sideEffects: { apiCalled: false } };
+    }
+    const sideEffects = { apiCalled: true };
+    try {
+      const response = await apiRequest({
+        method: "PUT",
+        path: "/api/settings",
+        body: { world: { location: safeText(city) } },
+      });
+      const data = response && response.data && typeof response.data === "object" ? response.data : {};
+      return {
+        status: String(data.status || "ok"),
+        city: safeText(city),
+        sideEffects,
+      };
+    } catch (_) {
+      return { status: "backend_unreachable", city: safeText(city), sideEffects };
+    }
+  }
+
   return {
     getStatus,
     getSnapshot,
@@ -468,6 +490,7 @@ function createWorldDashboardHost({
     restart: (input) => control("restart", input),
     approveCandidate,
     previewCreative,
+    setWorldLocation,
   };
 }
 

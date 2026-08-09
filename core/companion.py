@@ -96,9 +96,14 @@ class Companion:
 
         # R0.3.7: load centralized behavior config (single source of truth).
         self.behavior_cfg = load_behavior_config()
+        # 世界配置 = 行为默认 + settings.yaml world 覆盖（用户可在设置页调位置/节奏）。
+        self.world_config = dict(self.behavior_cfg.get("world_simulation", {}) or {})
+        _settings_world = (self.settings or {}).get("world", {}) or {}
+        if isinstance(_settings_world, dict):
+            self.world_config.update({k: v for k, v in _settings_world.items() if v is not None})
         self.world_port = build_world_port(
             feature_flags=self.feature_flags,
-            world_config=self.behavior_cfg.get("world_simulation", {}),
+            world_config=self.world_config,
             relationship_config=self.behavior_cfg.get("relationship", {}),
         )
 
@@ -404,6 +409,9 @@ class Companion:
         # Every 6th tick (≈60s) writes a snapshot so the history curve
         # stays alive even when no user messages arrive.
         self._emotion_tick_task = asyncio.create_task(self._emotion_tick_loop())
+
+        # 世界真实时间推进 + 真实数据刷新（inprocess 模式下主动 tick）。
+        self._world_loop_task = asyncio.create_task(self._run_world_loop())
 
         # Block-4B R2.2: start 24h desire engine (24h polling, not cron)
         try:
@@ -897,6 +905,12 @@ class Companion:
             self._emotion_tick_task.cancel()
             try:
                 await self._emotion_tick_task
+            except asyncio.CancelledError:
+                pass
+        if getattr(self, "_world_loop_task", None):
+            self._world_loop_task.cancel()
+            try:
+                await self._world_loop_task
             except asyncio.CancelledError:
                 pass
         if self.desire:
@@ -1464,6 +1478,60 @@ class Companion:
                 "stale": sampled_at is None or now - sampled_at > 10_000,
             })
         return state
+
+    async def _run_world_loop(self) -> None:
+        """世界真实时间推进 + 真实数据刷新（inprocess 模式）。
+
+        每 ``tick_interval_sec`` 主动调用 world_port.tick() 让世界随真实时钟
+        推进；每 ``reality_refresh_sec`` 拉取一次真实天气/附近地点/实时事件
+        并注入模拟（best-effort，失败静默回退到确定性默认）。
+        """
+        wp = getattr(self, "world_port", None)
+        # 仅 inprocess 世界（有 .world 且支持 set_reality）启用心跳。
+        if not wp or not hasattr(wp, "world") or not callable(getattr(wp, "set_reality", None)):
+            return
+        cfg = getattr(self, "world_config", {}) or {}
+        tick_sec = max(5, int(cfg.get("tick_interval_sec") or 300))
+        refresh_sec = max(tick_sec, int(cfg.get("reality_refresh_sec") or 1800))
+        city = str(cfg.get("location") or "").strip()
+        last_refresh = 0.0
+        while True:
+            try:
+                # 真实时间推进：即使没有消息，世界也随时钟演进。
+                wp.tick()
+                if not city:
+                    # 未配置世界位置 → 用自动定位解析一次。
+                    try:
+                        from core.location_resolver import resolve_location_async
+                        loc = await resolve_location_async()
+                        city = str(loc.get("city") or "").strip()
+                        if city:
+                            cfg["location"] = city
+                    except Exception:
+                        city = ""
+                now = asyncio.get_event_loop().time()
+                if now - last_refresh >= refresh_sec:
+                    # 每次刷新重新读取世界位置，让设置页改动无需重启即可生效。
+                    try:
+                        from config.persona_loader import load_settings
+                        _reloaded = (load_settings() or {}).get("world", {}) or {}
+                        if isinstance(_reloaded, dict) and str(_reloaded.get("location") or "").strip():
+                            city = str(_reloaded["location"]).strip()
+                        elif not city:
+                            city = str(cfg.get("location") or "").strip()
+                    except Exception:
+                        city = str(cfg.get("location") or "").strip()
+                    if city:
+                        from core.world_reality import fetch_reality
+                        reality = await fetch_reality(city)
+                        wp.set_reality(reality)
+                        wp.tick()
+                    last_refresh = now
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.debug("world loop tick failed", exc_info=True)
+            await asyncio.sleep(tick_sec)
 
     async def _emotion_tick_loop(self) -> None:
         """R7.5+: background tick loop for emotion dashboard liveness.

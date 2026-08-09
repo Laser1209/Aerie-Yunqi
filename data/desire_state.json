@@ -1,42 +1,18 @@
 {
-  "score": 61.95,
-  "ts": 1786266772.2215407,
+  "score": 59.81,
+  "ts": 1786267372.2853625,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.4064424040582445,
-    "emotion_overdraft": 7.310344037348319,
+    "user_absence_hours": 0.5731257647938198,
+    "emotion_overdraft": 4.427192008374373,
     "patience_loss": 55.7,
     "weather_impact": 0.0,
     "time_of_day_boost": 0.0,
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1786219669.8716462,
-      "score": 60.6,
-      "variables": {
-        "user_absence_hours": 0.005220527715153164,
-        "emotion_overdraft": 5.370290262530572,
-        "patience_loss": 56.3,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786249637.7635689,
-      "score": 60.3,
-      "variables": {
-        "user_absence_hours": 0.08364081044991811,
-        "emotion_overdraft": 4.894057302186489,
-        "patience_loss": 56.3,
-        "weather_impact": 0.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1786249941.120796,
       "score": 60.49,
@@ -607,6 +583,30 @@
       "variables": {
         "user_absence_hours": 0.4064424040582445,
         "emotion_overdraft": 7.310344037348319,
+        "patience_loss": 55.7,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786267072.2504458,
+      "score": 60.84,
+      "variables": {
+        "user_absence_hours": 0.48978315750757856,
+        "emotion_overdraft": 5.813053272033508,
+        "patience_loss": 55.7,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786267372.2853644,
+      "score": 59.81,
+      "variables": {
+        "user_absence_hours": 0.5731257647938198,
+        "emotion_overdraft": 4.427192008374373,
         "patience_loss": 55.7,
         "weather_impact": 0.0,
         "time_of_day_boost": 0.0,

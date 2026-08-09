@@ -1367,6 +1367,13 @@ ipcMain.handle("world-dashboard:preview-creative", async (_event, payload) => {
   return await worldDashboardHost.previewCreative(payload || {});
 });
 
+ipcMain.handle("world-dashboard:set-location", async (_event, payload) => {
+  const city = payload && typeof payload === "object" ? String(payload.city || "") : "";
+  const result = await worldDashboardHost.setWorldLocation(city);
+  await bindWorldConnectionToBackend(true);
+  return result;
+});
+
 // Dynamic Island IPC
 ipcMain.on("ui:open-main", () => {
   showMainWindow();

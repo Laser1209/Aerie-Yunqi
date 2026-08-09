@@ -16,6 +16,7 @@ const ALLOWED_METHODS = [
   "getB3",
   "minimize",
   "close",
+  "setWorldLocation",
 ];
 
 const world = {
@@ -39,6 +40,8 @@ const world = {
   // 无外壳窗口的窗口控制（复用主进程通用 IPC，作用于当前发送窗口）。
   minimize: () => ipcRenderer.invoke("window:minimize"),
   close: () => ipcRenderer.invoke("window:close"),
+  // 设置世界所在位置（城市），持久化到后端 settings。
+  setWorldLocation: (city) => ipcRenderer.invoke("world-dashboard:set-location", { city: String(city || "") }),
   // 订阅仪表盘状态更新。MVP 采用轮询实现：每 3s 拉取一次 getState 并回调。
   // 返回取消订阅函数。
   subscribe: (callback) => {

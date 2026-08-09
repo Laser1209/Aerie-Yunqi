@@ -334,6 +334,30 @@
 .wdw-row-badge--ok { color: var(--wdw-status-running); border-color: var(--wdw-status-running); }
 .wdw-row-badge--warn { color: var(--wdw-status-paused); border-color: var(--wdw-status-paused); }
 .wdw-row-badge--err { color: var(--wdw-status-offline); border-color: var(--wdw-status-offline); }
+.wdw-row--loc { flex-wrap: wrap; gap: 6px; }
+.wdw-row-meta--edit { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; justify-content: flex-end; }
+.wdw-loc-input {
+  width: 130px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--wdw-text);
+  background: var(--wdw-bg);
+  border: 1px solid var(--wdw-card-border);
+  border-radius: 6px;
+  outline: none;
+}
+.wdw-loc-input:focus { border-color: var(--wdw-accent); }
+.wdw-loc-save {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #ffffff;
+  background: var(--wdw-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wdw-loc-save:hover { filter: brightness(1.05); }
+.wdw-loc-save:disabled { opacity: 0.6; cursor: default; }
 
 /* ── 时间线聚合 ── */
 .wdw-timeline { display: flex; flex-direction: column; gap: 8px; }

@@ -486,9 +486,52 @@
     const dirs = Array.isArray(cfg.allowedDirs) ? cfg.allowedDirs : (Array.isArray(cfg.dirs) ? cfg.dirs : []);
     if (dirs.length) appendSettingRow("允许目录", dirs.length + " 项");
     appendSettingRow("Persona 映射", str(cfg.personaMapping) || str(cfg.persona_mapping) || str(cfg.persona) || "--");
+    appendWorldLocationEditor();
     if (!els.settings.childNodes.length) {
       els.settings.appendChild(p("等待数据…", "wdw-events-empty"));
     }
+  }
+  function appendWorldLocationEditor() {
+    // 世界独立位置（城市）：驱动真实天气 / 附近地点 / 实时事件。
+    const current = str(obj(b3.worldSummary).city) || "";
+    const row = document.createElement("div");
+    row.className = "wdw-row wdw-row--loc";
+    const main = document.createElement("span");
+    main.className = "wdw-row-main";
+    main.textContent = "世界所在位置（城市）";
+    const edit = document.createElement("span");
+    edit.className = "wdw-row-meta wdw-row-meta--edit";
+    const input = document.createElement("input");
+    input.className = "wdw-loc-input";
+    input.type = "text";
+    input.placeholder = "如：上海 / 巴黎";
+    input.value = current;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "wdw-loc-save";
+    btn.textContent = "保存";
+    btn.addEventListener("click", async () => {
+      const bridge = api();
+      const city = String(input.value || "").trim();
+      if (!bridge || typeof bridge.setWorldLocation !== "function") {
+        btn.textContent = "不可用";
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      try {
+        const res = await bridge.setWorldLocation(city);
+        btn.textContent = (res && res.status === "ok") ? "已保存 ✓" : "保存失败";
+      } catch (_) {
+        btn.textContent = "保存失败";
+      }
+      setTimeout(() => { btn.disabled = false; btn.textContent = "保存"; }, 1500);
+    });
+    edit.appendChild(input);
+    edit.appendChild(btn);
+    row.appendChild(main);
+    row.appendChild(edit);
+    els.settings.appendChild(row);
   }
   function appendSettingRow(label, value) {
     const row = document.createElement("div");

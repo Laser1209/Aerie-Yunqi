@@ -1,4 +1,4 @@
-﻿# Aerie · 云栖 v0.1.0-beta.1 — Persona Behavior Central Config
+# Aerie · 云栖 v0.1.0-beta.1 — Persona Behavior Central Config
 # Single source of truth for emotion, decision, desire, cognition visibility.
 # All modules MUST read from here; no hardcoded constants.
 # Aligned with Ita.md §8-9 and System_Features.md §11.
@@ -115,6 +115,12 @@ cognition:
   decision_visibility: true
   react_visibility: true
   max_recent_in_panel: 20
+
+world_simulation:
+  location: ''                    # 世界独立位置（城市）；空 = 自动/IP/兜底
+  tick_interval_sec: 300          # 后台真实时间推进间隔（秒）
+  reality_refresh_sec: 1800       # 真实天气/附近地点/实时事件刷新间隔（秒）
+  random_events_per_day: 3        # 每日随机生活事件条数（0 = 关闭）
 
 # ══════════════════════════════════════════════════
 # AI 选项（ai_options）— 顶层 11 provider

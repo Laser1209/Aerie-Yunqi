@@ -493,6 +493,12 @@ class InProcessWorldAdapter:
     def tick(self) -> dict[str, Any]:
         return dict(self.world.tick())
 
+    def set_reality(self, reality: dict[str, Any] | None) -> None:
+        """注入真实天气/附近地点/实时事件到世界模拟（best-effort）。"""
+        setter = getattr(self.world, "set_reality", None)
+        if callable(setter):
+            setter(reality)
+
     def get_world_snapshot(self) -> dict[str, Any] | None:
         return dict(self.world.get_snapshot())
 

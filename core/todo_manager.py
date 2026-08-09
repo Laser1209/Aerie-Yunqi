@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -84,7 +84,7 @@ def get_todos(date_str: str | None = None) -> list[dict[str, Any]]:
     db = _get_db()
     _import_legacy(date_str, db)
     rows = db.query(
-        "SELECT * FROM todo WHERE due_at >= ? AND due_at <= ? OR due_at IS NULL AND date(created_at) = ? ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, status, created_at",
+        "SELECT * FROM todo WHERE (due_at >= ? AND due_at <= ?) OR (due_at IS NULL AND date(created_at) = ?) ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, status, created_at",
         (date_str + "T00:00:00", date_str + "T23:59:59", date_str),
     )
     return [_row_to_todo(row) for row in rows]
@@ -146,15 +146,3 @@ def stats(date_str: str | None = None) -> dict[str, Any]:
     return {"total": len(todos), "completed": completed, "remaining": len(todos) - completed,
             "high_priority_remaining": sum(t["priority"] == "high" and not t["completed"] for t in todos),
             "percent": round(completed / len(todos) * 100, 1) if todos else 0}
-
-
-def seed_sample_todos(date_str: str | None = None) -> list[dict[str, Any]]:
-    date_str = date_str or _today_str()
-    existing = get_todos(date_str)
-    if existing:
-        return existing
-    now = datetime.now()
-    for title, priority, minutes in [("完善每日简报任务模块", "high", 90), ("给伊塔写一封感谢信", "medium", 20), ("整理本周学习笔记", "low", 60)]:
-        add_todo(title, priority, estimated_minutes=minutes, date_str=date_str,
-                 due_time=(now + timedelta(hours=4)).isoformat() if priority == "high" else None)
-    return get_todos(date_str)

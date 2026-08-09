@@ -835,14 +835,14 @@ def get_time_of_day() -> str:
 
 
 def get_today_todos(date_str: str | None = None) -> list[dict[str, Any]]:
-    """Get today's todos from todo_manager. Seeds sample todos on first run."""
+    """Return today's todos from todo_manager.
+
+    Returns only real user-created todos. Auto-seeding of sample/demo todos
+    has been removed to prevent fake tasks from appearing in the user's plan.
+    """
     try:
         from core import todo_manager
-        todos = todo_manager.get_todos(date_str)
-        if not todos:
-            todo_manager.seed_sample_todos(date_str)
-            todos = todo_manager.get_todos(date_str)
-        return todos
+        return todo_manager.get_todos(date_str)
     except Exception as e:
         logger.warning("brief_fetcher: get_today_todos failed: %s", e)
         return []

@@ -175,6 +175,7 @@ class Pipeline:
         ) = self._prepare_attachments(
             msg.attachments,
             request_context=request_context,
+            query=model_content,
         )
         if request_context is None:
             msg.attachments = persisted_attachments
@@ -971,6 +972,7 @@ class Pipeline:
         attachments: list[dict],
         *,
         request_context: RequestContext | None,
+        query: str | None = None,
     ) -> tuple[list[dict], list[str], list[str], list[dict]]:
         source = list(attachments or [])
         desktop_ids: list[str] = []
@@ -1043,7 +1045,7 @@ class Pipeline:
         if callable(snippet_loader):
             try:
                 snippets = list(
-                    snippet_loader(desktop_ids, max_chars=4000) or []
+                    snippet_loader(desktop_ids, max_chars=4000, query=query) or []
                 )
             except Exception:
                 logger.exception(
@@ -2131,7 +2133,11 @@ class Pipeline:
             attachment_ids,
             attachment_snippets,
             persisted_attachments,
-        ) = self._prepare_attachments(all_attachments, request_context=None)
+        ) = self._prepare_attachments(
+            all_attachments,
+            request_context=None,
+            query=combined_content,
+        )
 
         if self.identity_resolver:
             for m in messages:

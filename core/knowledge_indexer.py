@@ -151,13 +151,27 @@ class KnowledgeIndexer:
             "deduped": len(chunks) - len(new_chunks),
         }
 
-    def search(self, query: str, k: int = 3) -> list[dict[str, Any]]:
-        """语义检索, 返回 top-k 匹配知识块."""
+    def search(
+        self,
+        query: str,
+        k: int = 3,
+        where: Optional[dict[str, Any]] = None,
+    ) -> list[dict[str, Any]]:
+        """语义检索, 返回 top-k 匹配知识块.
+
+        ``where`` 透传给 ChromaDB 的 metadata 过滤 (例如按 attachment_id 限定).
+        """
         if not self.is_available() or not query:
             return []
         try:
             qemb = self.embedding_fn(str(query))
-            res = self._collection.query(query_embeddings=[qemb], n_results=int(k))
+            query_kwargs: dict[str, Any] = {"n_results": int(k)}
+            if where:
+                query_kwargs["where"] = where
+            res = self._collection.query(
+                query_embeddings=[qemb],
+                **query_kwargs,
+            )
             ids = res.get("ids", [[]])[0]
             docs = res.get("documents", [[]])[0]
             metas = res.get("metadatas", [[]])[0]

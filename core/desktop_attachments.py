@@ -14,6 +14,7 @@ from typing import Any, Callable, Iterator, Sequence
 
 from core.attachment_worker_runtime import DEFAULT_ARCHIVE_LIMITS, DEFAULT_ZIP_LIMITS
 from core.ids import generate_id
+from core.knowledge_indexer import KnowledgeIndexer, resolve_embedding_fn
 
 
 ATTACHMENT_STATES = (
@@ -595,6 +596,7 @@ class DesktopAttachmentService:
         storage_root: str | Path,
         scanner: Any | None = None,
         worker: Any | None = None,
+        embedding_fn: Callable[[str], list[float]] | None = None,
     ) -> None:
         self.repository = DesktopAttachmentRepository(database)
         self.storage_root = Path(storage_root).resolve()
@@ -604,6 +606,98 @@ class DesktopAttachmentService:
         self.ready_root.mkdir(parents=True, exist_ok=True)
         self.scanner = scanner or DesktopDefenderScanner()
         self.worker = worker
+        # Attachment chunk vector index. Uses its own ChromaDB dir so it never
+        # contends with the LayeredMemory client on data/chroma (same-process
+        # ChromaDB path lock). Lazy init; embedding falls back to deterministic
+        # hash when no remote/local embedding is configured.
+        self._embedding_fn = embedding_fn
+        self._vector_index: KnowledgeIndexer | None = None
+
+    def _vector(self) -> KnowledgeIndexer:
+        if self._vector_index is None:
+            self._vector_index = KnowledgeIndexer(
+                chroma_dir=os.getenv(
+                    "AERIE_CHROMA_ATTACHMENTS_DIR", "data/chroma_attachments"
+                ),
+                collection_name="attachment_chunks",
+                embedding_fn=self._embedding_fn or resolve_embedding_fn(),
+            )
+        return self._vector_index
+
+    def index_attachment(
+        self,
+        attachment_id: str,
+        chunks: Sequence[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Index a document's extracted chunks into the vector store (best-effort)."""
+        index = self._vector()
+        if not index.is_available() or not chunks:
+            return {"indexed": 0, "available": index.is_available()}
+        record = self.repository.get(attachment_id)
+        original_name = str(record["original_name"]) if record else attachment_id
+        records: list[dict[str, Any]] = []
+        for chunk in chunks:
+            content = str(chunk.get("content") or "").strip()
+            if not content:
+                continue
+            ordinal = int(chunk.get("ordinal", 0))
+            records.append(
+                {
+                    "id": f"att:{attachment_id}:{ordinal}",
+                    "text": content,
+                    "metadata": {
+                        "attachment_id": str(attachment_id),
+                        "original_name": original_name,
+                        "ordinal": ordinal,
+                    },
+                }
+            )
+        result = index.index_chunks(records)
+        if result.get("indexed"):
+            logger.info(
+                "attachment vector index: %s indexed=%s deduped=%s",
+                attachment_id,
+                result.get("indexed"),
+                result.get("deduped"),
+            )
+        return result
+
+    def search_chunks(
+        self,
+        attachment_ids: Sequence[str],
+        query: str,
+        k: int = 3,
+    ) -> list[dict[str, Any]]:
+        """Semantic search over indexed chunks, scoped to the given attachments."""
+        if not query:
+            return []
+        wanted = [str(v) for v in dict.fromkeys(attachment_ids or [])]
+        if not wanted:
+            return []
+        index = self._vector()
+        if not index.is_available():
+            return []
+        try:
+            hits = index.search(
+                query,
+                k=int(k),
+                where={"attachment_id": {"$in": wanted}},
+            )
+        except Exception:
+            logger.exception("attachment vector search failed")
+            return []
+        out: list[dict[str, Any]] = []
+        for hit in hits:
+            meta = dict(hit.get("metadata") or {})
+            out.append(
+                {
+                    "attachment_id": meta.get("attachment_id"),
+                    "original_name": meta.get("original_name"),
+                    "ordinal": meta.get("ordinal"),
+                    "content": str(hit.get("text") or ""),
+                }
+            )
+        return out
 
     def ingest(
         self,
@@ -738,6 +832,16 @@ class DesktopAttachmentService:
                 worker_metadata["contentKind"] = "metadata_only"
                 worker_metadata["semanticStatus"] = "not_required"
             self.repository.replace_chunks(attachment_id, chunks)
+            # Best-effort: index the extracted chunks into the vector store so
+            # the model can semantically retrieve parts of long documents that
+            # fall outside the flat snippet. Failure here must not fail the
+            # attachment — it just skips vector indexing for this file.
+            try:
+                self.index_attachment(attachment_id, chunks)
+            except Exception:
+                logger.exception(
+                    "attachment vector indexing failed (skipped): %s", attachment_id
+                )
             metadata = dict(record.get("metadata") or {})
             metadata.update(worker_metadata)
             metadata["workerPythonVersion"] = response.get("pythonVersion")
@@ -866,12 +970,37 @@ class DesktopAttachmentService:
         attachment_ids: Sequence[str],
         *,
         max_chars: int = 4000,
+        query: str | None = None,
     ) -> list[str]:
         artifacts = self.context_artifacts(attachment_ids, max_chars=max_chars)
-        return [
+        snippets = [
             f"[{art['original_name']}] {art['content']}"
             for art in artifacts
         ]
+        if query:
+            snippets.extend(self._semantic_snippets(attachment_ids, query))
+        return snippets
+
+    def _semantic_snippets(
+        self,
+        attachment_ids: Sequence[str],
+        query: str,
+        k: int = 3,
+    ) -> list[str]:
+        """Retrieve query-relevant chunks of the given attachments from the vector index."""
+        try:
+            hits = self.search_chunks(attachment_ids, query, k=k)
+        except Exception:
+            logger.exception("attachment semantic snippets unavailable")
+            return []
+        out: list[str] = []
+        for hit in hits:
+            content = str(hit.get("content") or "").strip()
+            if not content:
+                continue
+            name = str(hit.get("original_name") or hit.get("attachment_id") or "")
+            out.append(f"[{name} · 语义检索命中] {content}")
+        return out
 
     def context_artifacts(
         self,

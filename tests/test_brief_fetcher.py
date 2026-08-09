@@ -59,3 +59,34 @@ def test_accumulated_trend_loads_history_from_files(monkeypatch, tmp_path):
     )
     by_title = {t["title"]: t for t in trends}
     assert any("大模型" in k for k in by_title)
+
+
+@pytest.mark.asyncio
+async def test_fetch_github_trending_parses_items(monkeypatch, tmp_path):
+    """GitHub 高星项目抓取应解析出 stars/language/source 字段。"""
+    bf = _make_brief_fetcher(monkeypatch, tmp_path)
+    fake = {
+        "items": [
+            {"full_name": "openai/foo", "description": "cool lib",
+             "html_url": "https://github.com/openai/foo", "stargazers_count": 1234, "language": "Python"},
+            {"full_name": "a/b", "description": None, "html_url": "",
+             "stargazers_count": 0, "language": ""},
+        ]
+    }
+    monkeypatch.setattr(bf, "_github_get", lambda url: fake)
+    items, err = await bf.fetch_github_trending(5, 200)
+    assert err is None
+    assert len(items) == 2
+    assert items[0]["stars"] == 1234
+    assert items[0]["language"] == "Python"
+    assert items[0]["source"] == "GitHub ⭐1234"
+
+
+def test_brief_subscriptions_reads_settings(monkeypatch, tmp_path):
+    """订阅配置应从 settings.yaml 读取（含 github_trending 开关与星标阈值）。"""
+    bf = _make_brief_fetcher(monkeypatch, tmp_path)
+    subs = bf._brief_subscriptions()
+    assert subs.get("enabled") is True
+    gh = (subs.get("sources") or {}).get("github_trending") or {}
+    assert gh.get("enabled") is True
+    assert int(gh.get("min_stars") or 200) >= 100

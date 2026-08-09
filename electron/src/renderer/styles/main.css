@@ -2079,6 +2079,21 @@ body {
   margin-bottom: 6px;
 }
 
+/* 简报订阅 · Brief subscriptions */
+.settings-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border, #eee) 60%, transparent);
+}
+.settings-sub-row:last-of-type { border-bottom: none; }
+.settings-sub-name {
+  font-size: 12px;
+  color: var(--color-text, #333);
+}
+
 .di-settings-preview {
   display: flex;
   justify-content: center;

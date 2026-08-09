@@ -45,6 +45,14 @@ verify_batch4:
   ts: 1784404889
 weather:
   city: 济南
+# 简报可订阅内容源（仿"Braintoss"可扩展订阅模块）
+# 每个源可用 enabled 单独开关，未来可继续追加新源。
+brief_subscriptions:
+  enabled: true
+  sources:
+    github_trending:
+      enabled: true
+      min_stars: 200
 world:
   location: 济南
   random_events_per_day: 3

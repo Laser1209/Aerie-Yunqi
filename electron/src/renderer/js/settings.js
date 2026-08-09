@@ -409,6 +409,14 @@ class SettingsPanel {
               ? "已自动检测到: " + auto + " (留空将使用) / Auto-detected: " + auto + " (leave empty to use)"
               : "留空时简报会显示通过 IP 自动检测到的城市。/ Leave empty for IP auto-detect.");
       }
+
+      // Brief subscriptions (订阅源自选).
+      const subSrcs = ((s.brief_subscriptions || {}).sources) || {};
+      const gh = subSrcs.github_trending || {};
+      const ghEl = document.getElementById("setting-sub-github");
+      const ghMinEl = document.getElementById("setting-sub-github-min");
+      if (ghEl) ghEl.checked = gh.enabled !== false;
+      if (ghMinEl) ghMinEl.value = String(gh.min_stars != null ? gh.min_stars : 200);
     } catch (e) {
       console.warn("settings load failed", e);
     }
@@ -433,6 +441,16 @@ class SettingsPanel {
       // R7.1: empty string ⇒ resolver falls back to IP auto-detect.
       weather: {
         city: cityRaw,
+      },
+      // Brief subscriptions (订阅源自选).
+      brief_subscriptions: {
+        enabled: true,
+        sources: {
+          github_trending: {
+            enabled: document.getElementById("setting-sub-github")?.checked === true,
+            min_stars: Number(document.getElementById("setting-sub-github-min")?.value || 200),
+          },
+        },
       },
     };
     try {

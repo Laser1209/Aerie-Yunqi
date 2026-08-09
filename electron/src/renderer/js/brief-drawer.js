@@ -447,6 +447,11 @@ class BriefDrawer {
     ];
     fragment.appendChild(this._renderNewsSection(allNews));
 
+    /* 4b. GitHub high-star projects (订阅源，需后端订阅开启) */
+    if (data.github_trending && data.github_trending.length) {
+      fragment.appendChild(this._renderGithubSection(data.github_trending));
+    }
+
     /* 5. Weather */
     if (data.weather) {
       fragment.appendChild(
@@ -807,6 +812,47 @@ class BriefDrawer {
       ${item.url ? `
         <a class="brief-drawer__news-link" href="${_esc(item.url)}" target="_blank" rel="noopener">
           查看原文 ${_ICONS.external}
+        </a>
+      ` : ""}
+    `;
+    return a;
+  }
+
+  /* ── Section 4b: GitHub high-star projects (订阅源) ── */
+  _renderGithubSection(items) {
+    const section = _el("section", { class: "brief-drawer__section brief-drawer__section--github" });
+    const header = _el("div", { class: "brief-drawer__section-header" });
+    header.innerHTML = `
+      <div class="brief-drawer__section-title">
+        ${_ICONS.star || "★"} <span>GitHub 高星新项目</span>
+        <span class="brief-drawer__section-badge">${items.length} 个</span>
+      </div>
+    `;
+    section.appendChild(header);
+
+    const list = _el("div", { class: "brief-drawer__github-list" });
+    const displayLimit = this._expanded ? 10 : 5;
+    for (const it of items.slice(0, displayLimit)) {
+      list.appendChild(this._renderGithubItem(it));
+    }
+    section.appendChild(list);
+    return section;
+  }
+
+  _renderGithubItem(item) {
+    const a = _el("div", { class: "brief-drawer__github-item" });
+    const lang = item.language || "";
+    const stars = item.stars != null ? Number(item.stars).toLocaleString() : "";
+    a.innerHTML = `
+      <div class="brief-drawer__github-top">
+        <span class="brief-drawer__github-name">${_esc(item.title || "")}</span>
+        <span class="brief-drawer__github-stars">${stars ? `⭐ ${_esc(String(stars))}` : ""}</span>
+      </div>
+      ${lang ? `<span class="brief-drawer__github-lang">${_esc(lang)}</span>` : ""}
+      ${item.summary ? `<div class="brief-drawer__github-summary">${_esc(item.summary)}</div>` : ""}
+      ${item.url ? `
+        <a class="brief-drawer__news-link" href="${_esc(item.url)}" target="_blank" rel="noopener">
+          GitHub ${_ICONS.external}
         </a>
       ` : ""}
     `;

@@ -1111,6 +1111,23 @@
                 留空时简报会显示通过 IP 自动检测到的城市。/ Leave empty for IP auto-detect.
               </p>
             </div>
+            <div class="settings-group settings-group--brief-subscriptions">
+              <h3 class="settings-section-title">简报订阅 · Brief Subscriptions</h3>
+              <p class="settings-hint">选择每日简报中展示的可订阅内容源 / Choose subscribable content sources in the daily brief</p>
+              <div class="settings-sub-row">
+                <span class="settings-sub-name">GitHub 高星新项目 / GitHub trending</span>
+                <input type="checkbox" id="setting-sub-github" checked>
+              </div>
+              <div class="settings-sub-row">
+                <span class="settings-sub-name">最小星标数 / Min stars</span>
+                <select id="setting-sub-github-min">
+                  <option value="100">100</option>
+                  <option value="200" selected>200</option>
+                  <option value="500">500</option>
+                  <option value="1000">1000</option>
+                </select>
+              </div>
+            </div>
             <div class="settings-group">
               <label>主题</label>
               <select id="setting-theme">

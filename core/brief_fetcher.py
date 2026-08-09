@@ -38,6 +38,7 @@ import asyncio
 import json
 import logging
 import time
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -598,6 +599,108 @@ async def fetch_cn_news(limit: int = DEFAULT_LIMIT_PER_SECTION) -> tuple[list[di
     return await _fetch_section("cn_news", limit)
 
 
+# ══════════════════════════════════════════════════
+# 简报订阅源（仿"泉客松"可扩展订阅模块）
+# ══════════════════════════════════════════════════
+# settings.yaml 的 brief_subscriptions 块声明可订阅的内容源：
+#   brief_subscriptions:
+#     enabled: true          # 总开关
+#     sources:
+#       github_trending:     # 预设订阅源 1：GitHub 高星新项目
+#         enabled: true
+#         min_stars: 200
+#       <future_source>: ... # 未来可继续追加新的订阅源（内部加对应抓取器即可）
+# 前端设置面板可开关每个源；后端 run_all 按开关决定是否抓取。
+
+def _settings_data() -> dict:
+    import yaml
+    p = _PROJECT_ROOT / "config" / "settings.yaml"
+    try:
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception as e:
+        logger.warning("brief_fetcher: failed to read settings.yaml (%s): %s", p, e)
+        return {}
+
+
+def _brief_subscriptions() -> dict:
+    """Return the brief_subscriptions block (enabled + per-source config)."""
+    subs = _settings_data().get("brief_subscriptions") or {}
+    srcs = subs.get("sources") or {}
+    logger.debug(
+        "brief_fetcher: brief_subscriptions parsed -> enabled=%s, sources=%s",
+        subs.get("enabled"), list(srcs.keys()),
+    )
+    return subs
+
+
+GITHUB_TIMEOUT_SEC = 8
+
+
+def _github_get(url: str) -> dict:
+    """Synchronous GitHub REST GET. Returns parsed JSON or {} on failure."""
+    import json as _json
+    import os
+    import urllib.error
+    import urllib.request
+    headers = {
+        "User-Agent": "AerieBrief/1.0",
+        "Accept": "application/vnd.github+json",
+    }
+    token = os.environ.get("GITHUB_TOKEN")  # optional: raise unauthenticated rate limit
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=GITHUB_TIMEOUT_SEC) as resp:
+            body = resp.read().decode("utf-8", errors="ignore")
+            logger.debug("brief_fetcher: github GET ok -> HTTP %s (token=%s)", resp.status, bool(token))
+            return _json.loads(body)
+    except urllib.error.HTTPError as e:
+        logger.warning("brief_fetcher: github HTTP %s on %s: %s", e.code, url, e.reason)
+        return {}
+    except Exception as e:
+        logger.warning("brief_fetcher: github request error on %s: %s", url, e)
+        return {}
+
+
+async def fetch_github_trending(limit: int = 5, min_stars: int = 200) -> tuple[list[dict], str | None]:
+    """Fetch recent high-star GitHub repositories via the Search API.
+
+    Searches repos created in the last 14 days with more than ``min_stars``,
+    sorted by star count. Returns items with the same news shape as other
+    sections (title/summary/url/source), plus language/stars for richer cards.
+    """
+    from datetime import timedelta
+    created = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+    q = f"created:>{created} stars:>{int(min_stars)}"
+    url = (
+        "https://api.github.com/search/repositories"
+        f"?q={urllib.parse.quote(q)}&sort=stars&order=desc&per_page={limit}"
+    )
+    logger.debug("github_trending: created_since=%s min_stars=%s limit=%s", created, min_stars, limit)
+    payload = await asyncio.to_thread(_github_get, url)
+    items = payload.get("items") or []
+    if not items:
+        logger.warning("github_trending: no items (url=%s, api_msg=%s)", url, payload.get("message"))
+        return [], "github_empty"
+    logger.info("github_trending: got %d raw items, keeping %d", len(items), min(len(items), limit))
+    result = []
+    for it in items[:limit]:
+        stars = int(it.get("stargazers_count") or 0)
+        result.append({
+            "title": (it.get("full_name") or "")[:200],
+            "summary": (it.get("description") or "No description.")[:280],
+            "url": it.get("html_url") or "",
+            "source": f"GitHub ⭐{stars}",
+            "ts": int(time.time()),
+            "source_kind": "github",
+            "language": it.get("language") or "",
+            "stars": stars,
+        })
+    logger.debug("github_trending: parsed %d items", len(result))
+    return result, None
+
+
 async def fetch_weather(city: str = "") -> dict | None:
     from core.location_resolver import resolve_location_async
     from core.weather_service import fetch_weather_for_city, fetch_weather_for_current_location
@@ -671,23 +774,33 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
         # Never shrink a section below what feedback wants (e.g. DISLIKED=1).
         return max(feedback_cap, limit) if feedback_cap > 0 else limit
 
+    # 订阅配置：决定是否抓取可选的简报内容源（如 GitHub 高星新项目）。
+    subs = _brief_subscriptions()
+    gh_cfg = (subs.get("sources") or {}).get("github_trending") or {}
+    gh_enabled = bool(subs.get("enabled", True)) and bool(gh_cfg.get("enabled", True))
+    gh_min = int(gh_cfg.get("min_stars") or 200)
+    logger.debug("github_trending: subscription enabled=%s min_stars=%s", gh_enabled, gh_min)
+
+    tasks = [
+        fetch_ai_news(_cap("ai_news")),
+        fetch_it_news(_cap("it_news")),
+        fetch_intl_news(_cap("intl_news")),
+        fetch_cn_news(_cap("cn_news")),
+        fetch_weather(city),
+    ]
+    if gh_enabled:
+        tasks.append(fetch_github_trending(5, gh_min))
     try:
         result = await asyncio.wait_for(
-            asyncio.gather(
-                fetch_ai_news(_cap("ai_news")),
-                fetch_it_news(_cap("it_news")),
-                fetch_intl_news(_cap("intl_news")),
-                fetch_cn_news(_cap("cn_news")),
-                fetch_weather(city),
-                return_exceptions=True,
-            ),
+            asyncio.gather(*tasks, return_exceptions=True),
             timeout=TOTAL_TIMEOUT_SEC,
         )
     except asyncio.TimeoutError:
         logger.warning("brief_fetcher: total timeout %ds exceeded", TOTAL_TIMEOUT_SEC)
         return {"date": today, "errors": {"global": "total_timeout"}, "ts": int(time.time())}
 
-    ai_news_r, it_news_r, intl_news_r, cn_news_r, weather = result
+    ai_news_r, it_news_r, intl_news_r, cn_news_r, weather = result[:5]
+    github_r = result[5] if len(result) > 5 else None
     # Each of the four news returns is (items, err_str|None).
     def _unwrap_news(r):
         if isinstance(r, BaseException):
@@ -702,11 +815,15 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
     it_news, it_err = _unwrap_news(it_news_r)
     intl_news, intl_err = _unwrap_news(intl_news_r)
     cn_news, cn_err = _unwrap_news(cn_news_r)
+    github_items, gh_err = _unwrap_news(github_r) if gh_enabled else ([], None)
     errors: dict[str, str] = {}
     if ai_err:   errors["ai_news"]   = ai_err   # noqa: E701 (column-aligned)
     if it_err:   errors["it_news"]   = it_err   # noqa: E701
     if intl_err: errors["intl_news"] = intl_err  # noqa: E701
     if cn_err:   errors["cn_news"]   = cn_err   # noqa: E701
+    if gh_err:
+        errors["github_trending"] = gh_err  # noqa: E701
+        logger.warning("github_trending: fetch failed -> %s", gh_err)
     if isinstance(weather, Exception):
         errors["weather"] = f"{type(weather).__name__}: {weather}"
     elif weather is None:
@@ -720,6 +837,7 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
         "intl_news": intl_news,
         "cn_news":   cn_news,
         "weather":   weather if isinstance(weather, dict) else None,
+        "github_trending": github_items if gh_enabled else [],
         "todos":     get_today_todos(today),
         "todo_stats": get_todo_stats(today),
         "trends":    _generate_trends_accumulated(ai_news + it_news),

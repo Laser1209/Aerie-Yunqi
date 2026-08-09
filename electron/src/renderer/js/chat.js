@@ -186,7 +186,7 @@ class ChatManager {
     }
     // Global click outside menu to close
     document.addEventListener("click", (e) => {
-      if (!e.target.closest(".chat-msg-actions") && !e.target.closest(".chat-action-menu")) {
+      if (!e.target.closest(".chat-action-menu")) {
         this._closeAllActionMenus();
       }
     });
@@ -639,9 +639,6 @@ class ChatManager {
       html += this._parseMessage(msg.content || "");
     }
     html += `</div>`;
-    if (msg.id && !String(msg.id).startsWith("temp_") && !typing) {
-      html += `<div class="chat-msg-actions"><button class="chat-msg-actions__btn" data-msg-actions="${msg.id}">⋮</button></div>`;
-    }
     return html;
   }
 
@@ -1313,7 +1310,7 @@ class ChatManager {
     document.querySelectorAll(".chat-action-menu").forEach((m) => m.remove());
   }
 
-  _showActionMenu(msg, anchorEl) {
+  _showActionMenu(msg, clientX, clientY) {
     this._closeAllActionMenus();
     const menu = document.createElement("div");
     menu.className = "chat-action-menu";
@@ -1323,13 +1320,14 @@ class ChatManager {
 
     menu.innerHTML = `
       <button class="chat-action-menu__item" data-act="copy"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-copy"/></svg>复制</button>
-      <button class="chat-action-menu__item" data-act="quote"><svg class="icon icon--14" aria-hidden="true" style="transform: scaleX(-1) rotate(180deg)"><use href="#icon-ui-attach"/></svg>引用</button>
-      ${canRecall ? '<button class="chat-action-menu__item" data-act="recall"><svg class="icon icon--14" aria-hidden="true" style="transform: scaleX(-1)"><use href="#icon-ui-attach"/></svg>撤回</button>' : ""}
+      <button class="chat-action-menu__item" data-act="quote"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-reply"/></svg>引用</button>
+      ${canRecall ? '<button class="chat-action-menu__item" data-act="recall"><svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-trash"/></svg>撤回</button>' : ""}
     `;
-    const rect = anchorEl.getBoundingClientRect();
+    // Position at the right-click cursor, clamped so the menu never
+    // runs off-screen.
     menu.style.position = "fixed";
-    menu.style.top = rect.top + "px";
-    menu.style.right = window.innerWidth - rect.left + "px";
+    menu.style.left = Math.max(4, Math.min(clientX, window.innerWidth - 130)) + "px";
+    menu.style.top = Math.max(4, Math.min(clientY, window.innerHeight - 120)) + "px";
     document.body.appendChild(menu);
 
     menu.querySelectorAll(".chat-action-menu__item").forEach((btn) => {
@@ -1414,14 +1412,13 @@ class ChatManager {
     if (before) this._el.messages.insertBefore(div, before);
     else this._el.messages.appendChild(div);
 
-    // Bind action button
-    const actionsBtn = div.querySelector("[data-msg-actions]");
-    if (actionsBtn) {
-      actionsBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._showActionMenu(msg, actionsBtn);
-      });
-    }
+    // Bind right-click on the message to open the action menu
+    div.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (msg.id && !String(msg.id).startsWith("temp_")) {
+        this._showActionMenu(msg, e.clientX, e.clientY);
+      }
+    });
 
     for (const button of div.querySelectorAll("[data-attachment-open]")) {
       button.addEventListener("click", () => {

@@ -432,7 +432,7 @@ body {
 }
 .chat-history-control:disabled { cursor: wait; opacity: .65; }
 
-/* ===== R6.5: timestamp (hover-only, QQ desktop style) ===== */
+/* ===== timestamp (hover over the message row, overlaid on the bubble) ===== */
 .chat-msg__meta-time {
   display: none;
   position: absolute;
@@ -1383,29 +1383,6 @@ body {
 
 /* ===== Phase 4: Chat Action Menu (Recall / Quote / Copy) ===== */
 .chat-msg { position: relative; }
-.chat-msg-actions {
-  position: absolute; top: 4px; right: 8px;
-  opacity: 0; transition: opacity .2s;
-  z-index: 10;
-}
-/* User messages: action button goes on the LEFT (away from right-side avatar). */
-.chat-msg--user .chat-msg-actions { right: auto; left: 8px; }
-.chat-msg:hover .chat-msg-actions { opacity: 1; }
-.chat-msg-actions__btn {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  width: 24px; height: 24px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  font-size: 14px; color: var(--color-text);
-  transition: all .15s;
-}
-.chat-msg-actions__btn:hover {
-  background: var(--color-primary);
-  color: var(--color-primary-fg);
-  border-color: var(--color-primary);
-}
 .chat-action-menu {
   background: var(--color-surface);
   border: 1px solid var(--color-border);

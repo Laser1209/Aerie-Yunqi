@@ -1,4 +1,4 @@
-﻿"""Aerie v0.1.0-beta.1 · 文件整理模块
+"""Aerie v0.1.0-beta.1 · 文件整理模块
 
 功能：
   - 目录扫描与文件元数据提取
@@ -24,6 +24,7 @@ import os
 import time
 import json
 import shutil
+import hashlib
 import logging
 from enum import Enum
 from pathlib import Path
@@ -374,6 +375,53 @@ class OrganizePlan:
             "total_size": self.total_size,
             "total_size_human": self.total_size_human,
             "category_stats": self.category_stats,
+            "actions": [a.to_dict() for a in self.actions],
+            "created_at": self.created_at,
+        }
+
+
+@dataclass
+class CleanupPlan:
+    """清理计划（下载清理：哈希去重 / mtime 过期清理）
+
+    与 OrganizePlan 类似，但面向"删除/腾退"场景。动作仍用 MoveAction
+    表示，目标统一移到回收目录（去重→重复文件、过期→过期文件），
+    从而复用 UndoManager 实现可撤销，避免误删。
+    """
+    source_dir: str
+    target_dir: str
+    kind: str                                # "dedup" | "expired" | "downloads"
+    files: list[FileInfo] = field(default_factory=list)
+    actions: list[MoveAction] = field(default_factory=list)
+    summary: dict = field(default_factory=dict)
+    created_at: float = field(default_factory=time.time)
+
+    @property
+    def total_files(self) -> int:
+        return len(self.files)
+
+    @property
+    def total_size(self) -> int:
+        return sum(f.size for f in self.files)
+
+    @property
+    def total_size_human(self) -> str:
+        size = self.total_size
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if size < 1024:
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} PB"
+
+    def to_dict(self) -> dict:
+        return {
+            "source_dir": self.source_dir,
+            "target_dir": self.target_dir,
+            "kind": self.kind,
+            "total_files": self.total_files,
+            "total_size": self.total_size,
+            "total_size_human": self.total_size_human,
+            "summary": self.summary,
             "actions": [a.to_dict() for a in self.actions],
             "created_at": self.created_at,
         }
@@ -827,6 +875,77 @@ class UndoManager:
         return self._records.get(undo_id)
 
 
+# ── 下载清理辅助函数 ──────────────────────────────────────
+
+_HASH_READ_CHUNK = 64 * 1024   # 部分指纹采样块
+_FULL_HASH_CHUNK = 1024 * 1024  # 全文哈希读块
+
+
+def _format_bytes(size: int) -> str:
+    """字节数转人类可读（与 FileInfo.size_human 一致）"""
+    value = float(size)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if value < 1024:
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} PB"
+
+
+def _file_partial_fingerprint(path: Path, size: int) -> str:
+    """部分指纹：大小 + 首/中/尾采样，用于去重初筛（不读全文件）。"""
+    h = hashlib.sha256()
+    h.update(str(size).encode("utf-8"))
+    try:
+        with open(path, "rb") as f:
+            h.update(f.read(_HASH_READ_CHUNK))
+            mid = max(0, size // 2)
+            f.seek(mid)
+            h.update(f.read(_HASH_READ_CHUNK))
+            tail = max(0, size - _HASH_READ_CHUNK)
+            f.seek(tail)
+            h.update(f.read(_HASH_READ_CHUNK))
+    except OSError:
+        # 读取失败则退化为仅按大小，交由全文哈希阶段兜底
+        h.update(b"<unreadable>")
+    return h.hexdigest()
+
+
+def _file_full_hash(path: Path) -> str:
+    """全文 SHA-256，用于去重最终确认。"""
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(_FULL_HASH_CHUNK), b""):
+                h.update(chunk)
+    except OSError:
+        pass
+    return h.hexdigest()
+
+
+def _unique_target(parent: Path, name: str, used: set[str]) -> str:
+    """生成回收目录下唯一目标路径（避免重名覆盖）。
+
+    Args:
+        parent: 目标父目录
+        name: 目标文件名
+        used: 本次计划内已占用的绝对路径集合
+    """
+    parent = Path(parent)
+    candidate = parent / name
+    if str(candidate) not in used and not candidate.exists():
+        used.add(str(candidate))
+        return str(candidate)
+    stem = Path(name).stem
+    suffix = Path(name).suffix
+    counter = 1
+    while True:
+        candidate = parent / f"{stem}_{counter}{suffix}"
+        if str(candidate) not in used and not candidate.exists():
+            used.add(str(candidate))
+            return str(candidate)
+        counter += 1
+
+
 class FileOrganizer:
     """文件整理器（主入口）
 
@@ -959,6 +1078,297 @@ class FileOrganizer:
             plan,
             description=f"一键整理 {Path(source_dir).name}",
         )
+
+    # ── 下载清理（哈希去重 + mtime 过期清理）──────────────────
+
+    def find_duplicates(self, directory: str,
+                        recursive: bool = False) -> list[dict]:
+        """扫描并定位重复文件。
+
+        分层策略（参考电脑管家/开源整理工具）：
+        1. 先按文件大小分组（同大小才有重复可能）
+        2. 组内用"部分指纹"（首/中/尾采样 + 大小）初筛候选
+        3. 候选再做全文 SHA-256 确认，避免误判
+
+        Returns:
+            重复组列表，每组含 sha256、size、paths。
+        """
+        src = Path(directory)
+        files = self.scanner.scan(src, recursive=recursive)
+
+        by_size: dict[int, list[FileInfo]] = {}
+        for f in files:
+            by_size.setdefault(f.size, []).append(f)
+
+        groups: list[dict] = []
+        for size, items in by_size.items():
+            if len(items) < 2:
+                continue
+            # 部分指纹初筛
+            fp_groups: dict[str, list[FileInfo]] = {}
+            for f in items:
+                fp = _file_partial_fingerprint(Path(f.path), size)
+                fp_groups.setdefault(fp, []).append(f)
+            for fp, cands in fp_groups.items():
+                if len(cands) < 2:
+                    continue
+                # 全文哈希确认
+                hash_groups: dict[str, list[FileInfo]] = {}
+                for f in cands:
+                    h = _file_full_hash(Path(f.path))
+                    hash_groups.setdefault(h, []).append(f)
+                for h, dup_files in hash_groups.items():
+                    if len(dup_files) < 2:
+                        continue
+                    groups.append({
+                        "sha256": h,
+                        "size": size,
+                        "size_human": dup_files[0].size_human,
+                        "count": len(dup_files),
+                        "paths": [f.path for f in dup_files],
+                    })
+        return groups
+
+    def preview_dedup(self, source_dir: str,
+                      target_dir: Optional[str] = None,
+                      recursive: bool = False,
+                      keep: str = "newest") -> CleanupPlan:
+        """预览去重计划（dry-run）
+
+        Args:
+            source_dir: 源目录
+            target_dir: 去重文件回收目录（默认 <source>/重复文件）
+            recursive: 是否递归
+            keep: 每组保留哪个副本（newest=保留最新，oldest=保留最早）
+        """
+        src = Path(source_dir)
+        tgt = Path(target_dir) if target_dir else (src / "重复文件")
+        groups = self.find_duplicates(str(src), recursive)
+
+        used_targets: set[str] = set()
+        actions: list[MoveAction] = []
+        dup_files: list[FileInfo] = []
+        dup_count = 0
+        dup_size = 0
+
+        for g in groups:
+            members = sorted(
+                g["paths"],
+                key=lambda p: Path(p).stat().st_mtime,
+                reverse=(keep == "newest"),
+            )
+            keep_path = members[0]
+            for dup in members[1:]:
+                p = Path(dup)
+                st = p.stat()
+                target_path = _unique_target(tgt, p.name, used_targets)
+                actions.append(MoveAction(
+                    source=str(p),
+                    target=str(target_path),
+                    category=FileCategory.OTHER,
+                    file_size=st.st_size,
+                ))
+                dup_count += 1
+                dup_size += st.st_size
+                dup_files.append(FileInfo(
+                    path=str(p),
+                    name=p.name,
+                    size=st.st_size,
+                    extension=p.suffix.lower(),
+                    category=FileCategory.OTHER,
+                    created_at=st.st_ctime,
+                    modified_at=st.st_mtime,
+                ))
+
+        plan = CleanupPlan(
+            source_dir=str(src),
+            target_dir=str(tgt),
+            kind="dedup",
+            files=dup_files,
+            actions=actions,
+            summary={
+                "duplicate_groups": len(groups),
+                "duplicate_files": dup_count,
+                "duplicate_size": dup_size,
+                "duplicate_size_human": _format_bytes(dup_size),
+            },
+        )
+        return plan
+
+    def preview_expired_cleanup(self, source_dir: str,
+                                older_than_days: int = 30,
+                                target_dir: Optional[str] = None,
+                                recursive: bool = False,
+                                categories: Optional[list[str]] = None) -> CleanupPlan:
+        """预览过期清理计划（dry-run）
+
+        按修改时间（mtime）找出 N 天未使用的文件，移动到回收目录。
+        categories 为空则清理所有类型，否则仅清理指定类型。
+        """
+        src = Path(source_dir)
+        tgt = Path(target_dir) if target_dir else (src / "过期文件")
+        cutoff = time.time() - older_than_days * 86400
+        files = self.scanner.scan(src, recursive=recursive)
+
+        used_targets: set[str] = set()
+        actions: list[MoveAction] = []
+        expired_files: list[FileInfo] = []
+        expired_count = 0
+        expired_size = 0
+        cat_stats: dict[str, dict] = {}
+
+        for f in files:
+            if f.modified_at >= cutoff:
+                continue
+            if categories and f.category.value not in categories:
+                continue
+            cat_sub = tgt / CATEGORY_NAMES.get(f.category, f.category.value)
+            target_path = _unique_target(cat_sub, f.name, used_targets)
+            actions.append(MoveAction(
+                source=f.path,
+                target=str(target_path),
+                category=f.category,
+                file_size=f.size,
+            ))
+            expired_count += 1
+            expired_size += f.size
+            expired_files.append(f)
+
+            ck = f.category.value
+            if ck not in cat_stats:
+                cat_stats[ck] = {
+                    "name": CATEGORY_NAMES.get(f.category, ck),
+                    "count": 0,
+                    "size": 0,
+                }
+            cat_stats[ck]["count"] += 1
+            cat_stats[ck]["size"] += f.size
+
+        for stat in cat_stats.values():
+            stat["size_human"] = _format_bytes(stat["size"])
+
+        plan = CleanupPlan(
+            source_dir=str(src),
+            target_dir=str(tgt),
+            kind="expired",
+            files=expired_files,
+            actions=actions,
+            summary={
+                "older_than_days": older_than_days,
+                "expired_files": expired_count,
+                "expired_size": expired_size,
+                "expired_size_human": _format_bytes(expired_size),
+                "by_category": cat_stats,
+            },
+        )
+        return plan
+
+    def preview_downloads_cleanup(self, source_dir: str,
+                                  older_than_days: int = 30,
+                                  recursive: bool = False) -> CleanupPlan:
+        """预览下载清理（去重 + 过期，合并为一个计划）"""
+        src = Path(source_dir)
+        dedup_plan = self.preview_dedup(str(src), recursive=recursive)
+        expired_plan = self.preview_expired_cleanup(
+            str(src), older_than_days=older_than_days, recursive=recursive,
+        )
+
+        merged_targets: set[str] = set()
+        actions = list(dedup_plan.actions) + list(expired_plan.actions)
+        # 目标路径可能存在跨阶段重名，重算唯一目标
+        seen: set[str] = set()
+        for a in actions:
+            tgt_path = Path(a.target)
+            a.target = _unique_target(tgt_path.parent, tgt_path.name, seen)
+
+        plan = CleanupPlan(
+            source_dir=str(src),
+            target_dir=str(src),
+            kind="downloads",
+            files=dedup_plan.files + expired_plan.files,
+            actions=actions,
+            summary={
+                "dedup": dedup_plan.summary,
+                "expired": expired_plan.summary,
+                "older_than_days": older_than_days,
+            },
+        )
+        return plan
+
+    def execute_cleanup(self, plan: CleanupPlan,
+                        description: str = "") -> tuple[bool, str, str]:
+        """执行清理计划（可撤销）
+
+        Returns:
+            (是否成功, 消息, undo_id)
+        """
+        if not plan.actions:
+            return False, "没有需要清理的文件", ""
+
+        undo_record = self.undo_manager.create_record(
+            description=description or f"下载清理 {Path(plan.source_dir).name}",
+            actions=plan.actions,
+        )
+
+        success_count = 0
+        errors = []
+
+        for action in plan.actions:
+            try:
+                src = Path(action.source)
+                dst = Path(action.target)
+                if not src.exists():
+                    errors.append(f"源文件不存在: {action.source}")
+                    continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst))
+                success_count += 1
+            except Exception as e:
+                errors.append(f"{action.source}: {e}")
+                logger.error(f"清理移动失败 {action.source}: {e}")
+
+        self.undo_manager.mark_executed(undo_record.undo_id)
+
+        if errors and success_count == 0:
+            return False, f"清理失败: {'; '.join(errors[:3])}", undo_record.undo_id
+        elif errors:
+            msg = f"部分成功 ({success_count}/{len(plan.actions)})，{len(errors)} 个失败"
+            return True, msg, undo_record.undo_id
+        else:
+            msg = f"清理完成，共处理 {success_count} 个文件"
+            return True, msg, undo_record.undo_id
+
+    def quick_dedup(self, source_dir: str,
+                    target_dir: Optional[str] = None,
+                    recursive: bool = False,
+                    keep: str = "newest") -> tuple[bool, str, str]:
+        """一键去重（预览 + 执行）"""
+        plan = self.preview_dedup(source_dir, target_dir, recursive, keep)
+        if not plan.actions:
+            return False, "没有发现重复文件", ""
+        return self.execute_cleanup(plan, description=f"去重 {Path(source_dir).name}")
+
+    def quick_cleanup(self, source_dir: str,
+                      older_than_days: int = 30,
+                      target_dir: Optional[str] = None,
+                      recursive: bool = False,
+                      categories: Optional[list[str]] = None) -> tuple[bool, str, str]:
+        """一键过期清理（预览 + 执行）"""
+        plan = self.preview_expired_cleanup(
+            source_dir, older_than_days, target_dir, recursive, categories,
+        )
+        if not plan.actions:
+            return False, "没有过期文件需要清理", ""
+        return self.execute_cleanup(plan, description=f"过期清理 {Path(source_dir).name}")
+
+    def quick_downloads_cleanup(self, source_dir: str,
+                                older_than_days: int = 30,
+                                recursive: bool = False) -> tuple[bool, str, str]:
+        """一键下载清理（去重 + 过期，预览 + 执行）"""
+        plan = self.preview_downloads_cleanup(source_dir, older_than_days, recursive)
+        if not plan.actions:
+            return False, "没有需要清理的文件（无重复、无过期）", ""
+        return self.execute_cleanup(plan, description=f"下载清理 {Path(source_dir).name}")
 
     def _format_size(self, size: int) -> str:
         for unit in ["B", "KB", "MB", "GB", "TB"]:

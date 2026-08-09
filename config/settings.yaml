@@ -27,13 +27,19 @@ message_batching:
 office:
   dir: F:\文件\Aerie
 proactive:
-  image_max_per_day: 10
-  max_per_day: 5
-  min_interval_min: 30
+  enabled: true
+  image_max_per_day: 20
+  max_per_day: 10
+  min_interval_min: 15
   system_notifications: true
 qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0
+startup:
+  auto_start: false
+  start_minimized: false
+theme:
+  current: yita-pink
 verify_batch4:
   ping: pong
   ts: 1784404889

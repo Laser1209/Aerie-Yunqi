@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(main.PROJECT_ROOT).resolve()
 
-app = FastAPI(title="Aerie · 云栖", version="0.1.0-beta.1")
+app = FastAPI(title="Aerie · 云栖", version="0.2.0-beta.1")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -935,7 +935,7 @@ async def health(request: Request) -> dict:
     return {
         "status": overall,
         "app": "Aerie · 云栖",
-        "version": "0.1.0-beta.1",
+        "version": "0.2.0-beta.1",
         "uptime_seconds": uptime,
         "qq_connected": qq_ws_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
@@ -3923,6 +3923,142 @@ async def file_organizer_undo_list(limit: int = Query(default=20, ge=1, le=100))
     except Exception as e:
         logger.exception("file_organizer_undo_list error")
         return {"error": str(e)}
+
+
+def _validate_source_dir(source_dir: str) -> str | None:
+    """校验源目录存在且为目录，返回错误信息（合法返回 None）。"""
+    if not source_dir or not str(source_dir).strip():
+        return "source_dir 不能为空"
+    p = Path(source_dir).expanduser()
+    if not p.exists() or not p.is_dir():
+        return f"目录不存在或不是目录: {source_dir}"
+    return None
+
+
+@app.post("/api/file_organizer/quick_organize")
+async def file_organizer_quick_organize(request: Request):
+    """一键整理（按类别归档），用于图片/文档/视频整理按钮。"""
+    body = await request.json()
+    source_dir = body.get("source_dir")
+    err = _validate_source_dir(source_dir)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+
+    target_dir = body.get("target_dir")
+    recursive = bool(body.get("recursive", False))
+
+    plan = _file_organizer.preview_organize(source_dir, target_dir, recursive)
+
+    # 按类别过滤：仅整理指定类别的文件
+    category = body.get("category")
+    if category and plan.actions:
+        plan.actions = [a for a in plan.actions if a.category.value == category]
+        plan.files = [f for f in plan.files if f.category.value == category]
+
+    if not plan.actions:
+        return {"success": False, "message": "没有需要整理的文件", "plan": plan.to_dict()}
+
+    ok, message, undo_id = _file_organizer.execute_organize(
+        plan, description=f"一键整理 {Path(source_dir).name}",
+    )
+    return {"success": ok, "message": message, "undo_id": undo_id,
+            "plan": plan.to_dict(), "source_dir": source_dir}
+
+
+@app.post("/api/file_organizer/quick_dedup")
+async def file_organizer_quick_dedup(request: Request):
+    """一键去重（哈希去重，保留最新副本，多余的移入回收目录）。"""
+    body = await request.json()
+    source_dir = body.get("source_dir")
+    err = _validate_source_dir(source_dir)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+
+    recursive = bool(body.get("recursive", False))
+    keep = body.get("keep", "newest")
+    if keep not in ("newest", "oldest"):
+        keep = "newest"
+
+    plan = _file_organizer.preview_dedup(source_dir, recursive=recursive, keep=keep)
+    if not plan.actions:
+        return {"success": False, "message": "没有发现重复文件",
+                "plan": plan.to_dict(), "source_dir": source_dir}
+
+    ok, message, undo_id = _file_organizer.execute_cleanup(
+        plan, description=f"去重 {Path(source_dir).name}",
+    )
+    return {"success": ok, "message": message, "undo_id": undo_id,
+            "plan": plan.to_dict(), "source_dir": source_dir}
+
+
+@app.post("/api/file_organizer/quick_cleanup")
+async def file_organizer_quick_cleanup(request: Request):
+    """一键过期清理（按 mtime 清理 N 天未使用文件）。"""
+    body = await request.json()
+    source_dir = body.get("source_dir")
+    err = _validate_source_dir(source_dir)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+
+    recursive = bool(body.get("recursive", False))
+    try:
+        older_than_days = max(1, int(body.get("older_than_days", 30)))
+    except (TypeError, ValueError):
+        older_than_days = 30
+
+    plan = _file_organizer.preview_expired_cleanup(
+        source_dir, older_than_days=older_than_days, recursive=recursive,
+    )
+    if not plan.actions:
+        return {"success": False, "message": "没有过期文件需要清理",
+                "plan": plan.to_dict(), "source_dir": source_dir}
+
+    ok, message, undo_id = _file_organizer.execute_cleanup(
+        plan, description=f"过期清理 {Path(source_dir).name}",
+    )
+    return {"success": ok, "message": message, "undo_id": undo_id,
+            "plan": plan.to_dict(), "source_dir": source_dir}
+
+
+@app.post("/api/file_organizer/preview_cleanup")
+async def file_organizer_preview_cleanup(request: Request):
+    """预览清理计划（不执行），用于前端展示确认。"""
+    body = await request.json()
+    source_dir = body.get("source_dir")
+    err = _validate_source_dir(source_dir)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+
+    mode = body.get("mode", "downloads")
+    recursive = bool(body.get("recursive", False))
+    try:
+        older_than_days = max(1, int(body.get("older_than_days", 30)))
+    except (TypeError, ValueError):
+        older_than_days = 30
+
+    if mode == "dedup":
+        plan = _file_organizer.preview_dedup(source_dir, recursive=recursive)
+    elif mode == "expired":
+        plan = _file_organizer.preview_expired_cleanup(
+            source_dir, older_than_days=older_than_days, recursive=recursive,
+        )
+    else:
+        plan = _file_organizer.preview_downloads_cleanup(
+            source_dir, older_than_days=older_than_days, recursive=recursive,
+        )
+
+    return {"success": True, "plan": plan.to_dict(), "source_dir": source_dir}
+
+
+@app.post("/api/file_organizer/undo")
+async def file_organizer_undo(request: Request):
+    """撤销一次整理/清理操作。"""
+    body = await request.json()
+    undo_id = body.get("undo_id")
+    if not undo_id:
+        return JSONResponse({"error": "undo_id 不能为空"}, status_code=400)
+    ok, message, count = _file_organizer.undo(undo_id)
+    return {"success": ok, "message": message, "restored": count}
 
 
 # ── Doc Writer ──────────────────────────────────────

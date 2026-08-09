@@ -981,25 +981,27 @@ class Companion:
 
         行为:
           1. 等 8s,让 NapCat WS / 后端 / 情绪 / 隐藏槽位就绪
-          2. idempotency: 距上次发送 < 60s 则跳过(防快速重启刷屏)
-             R8.0+ 变更: 从"当天一次"改为"60s 窗口" — 用户要每次启动都欢迎
+          2. idempotency: 距上次发送 < 4h 则跳过(防每次重启都刷屏)
+             R8.0+ 变更: 从"当天一次"改为"60s 窗口"(每次启动都欢迎);
+             现按需求改为"4 小时内只欢迎一次"(跨重启生效)
           3. force=True 触发 boot_greeting scene (绕过 ProactiveJudge + PushPolicy)
           4. 成功后写 flag,失败不写(下次启动可重试)
         """
         flag_dir = self.data_path
         flag_dir.mkdir(parents=True, exist_ok=True)
-        # R8.0+: 60s 窗口 — flag 不再分日期,而是检查 mtime
+        # 4h 窗口 — flag 用 mtime 判断, 不区分日期
         flag_path = flag_dir / "boot_greeting_last_sent.flag"
+        greeting_window = 4 * 3600.0  # 4 hours
 
-        # ── 步骤 1: 60s idempotency (防快速重启刷屏) ──
+        # ── 步骤 1: idempotency (4h 内不重复欢迎) ──
         if flag_path.exists():
             try:
                 import time
                 mtime = flag_path.stat().st_mtime
                 elapsed = time.time() - mtime
-                if elapsed < 60.0:
+                if elapsed < greeting_window:
                     logger.info(
-                        "boot_qq_greeting: sent %.0fs ago (< 60s window), skip",
+                        "boot_qq_greeting: sent %.0fs ago (< 4h window), skip",
                         elapsed,
                     )
                     return
@@ -1028,7 +1030,7 @@ class Companion:
                 try:
                     import time
                     elapsed = time.time() - flag_path.stat().st_mtime
-                    if elapsed < 60.0:
+                    if elapsed < greeting_window:
                         logger.info(
                             "boot_qq_greeting: sent during wait window, skip",
                         )

@@ -1,0 +1,19 @@
+{
+  "records": [
+    {
+      "undo_id": "undo_1786287126_0000",
+      "description": "去重 tmph11zv0lj",
+      "created_at": 1786287126.0514333,
+      "executed": false,
+      "executed_at": null
+    },
+    {
+      "undo_id": "undo_1786287126_0001",
+      "description": "过期清理 tmph11zv0lj",
+      "created_at": 1786287126.0558949,
+      "executed": true,
+      "executed_at": 1786287126.0582778
+    }
+  ],
+  "updated_at": 1786287126.1014163
+}

@@ -68,6 +68,7 @@ class CognitionPanel {
     this._bindSse();
     this._bindV2Tabs();        // v2: 5 tab navigation
     this._bindV2Refresh();     // v2: refresh buttons on capability tabs
+    this._bindFileOrganizerQuick(); // v13.9: 文件整理四个快捷按钮
     this._bindQQWhitelist();   // v13.9: QQ whitelist management
     this._bindCCLevelButtons(); // v13.9: computer control permission level buttons
     this._loadHistory();
@@ -911,6 +912,70 @@ class CognitionPanel {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener("click", fn.bind(this));
     });
+  }
+
+  // ── v2: 文件整理快捷按钮（图片/文档/视频整理 + 下载清理）──
+  _bindFileOrganizerQuick() {
+    const items = document.querySelectorAll(".cog-fo-quick-item");
+    items.forEach((item) => {
+      item.addEventListener("click", async () => {
+        const nameEl = item.querySelector(".cog-fo-name");
+        const action = nameEl ? nameEl.textContent.trim() : "";
+        const spec = this._organizeCommandSpec(action);
+        if (!spec) return;
+
+        let dir = null;
+        try {
+          dir = await window.aerie.dialog.openDirectory({
+            title: `选择要${spec.label}的文件夹`,
+          });
+        } catch (e) {
+          console.error("[file-organizer] openDirectory failed", e);
+        }
+        if (!dir) return;
+
+        this._sendToChat(spec.build(dir));
+      });
+    });
+  }
+
+  _organizeCommandSpec(action) {
+    const map = {
+      "图片整理": {
+        label: "整理图片",
+        build: (dir) => `请帮我整理图片：把文件夹 "${dir}" 里的图片文件按类型归档到分类子文件夹。`,
+      },
+      "文档整理": {
+        label: "整理文档",
+        build: (dir) => `请帮我整理文档：把文件夹 "${dir}" 里的文档（PDF/Word/Excel/文本）按类型归档到分类子文件夹。`,
+      },
+      "视频整理": {
+        label: "整理视频",
+        build: (dir) => `请帮我整理视频：把文件夹 "${dir}" 里的视频文件按类型归档到分类子文件夹。`,
+      },
+      "下载清理": {
+        label: "清理下载",
+        build: (dir) => `请帮我清理下载文件夹：扫描 "${dir}"，用哈希去重找出重复文件并保留一份副本，同时清理修改时间超过 30 天未使用的过期文件。`,
+      },
+    };
+    return map[action] || null;
+  }
+
+  _sendToChat(message) {
+    try {
+      const chatTab = document.querySelector('[data-tab="chat"]');
+      if (chatTab) chatTab.click();
+      const input = document.getElementById("chat-input") || document.querySelector(".chat-input");
+      if (!input) return;
+      input.value = message;
+      if (window._chat && typeof window._chat.send === "function") {
+        window._chat.send();
+      } else {
+        input.focus();
+      }
+    } catch (e) {
+      console.error("[file-organizer] sendToChat failed", e);
+    }
   }
 
   // ── v2: 加载演示数据 ──────────────────────────

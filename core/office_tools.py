@@ -1533,6 +1533,133 @@ def tool_code_search(
         return {"success": False, "error": str(e)}
 
 
+# ── 文件整理工具（file_organizer）─────────────────────
+#
+# 这几个工具是"下载清理 / 文件整理"模块的落地实现：DeepSeek 负责理解
+# 语义命令并调用工具，工具内部调用 core.file_organizer 的确定性代码
+# 完成扫描、去重、过期清理，所有动作都写入撤销日志（可回滚）。
+
+def _file_organizer():
+    """懒加载并复用全局 FileOrganizer 单例，避免重复初始化撤销日志。"""
+    from core.file_organizer import FileOrganizer
+    try:
+        from core.api_server import _file_organizer
+        return _file_organizer
+    except Exception:
+        return FileOrganizer()
+
+
+def tool_file_organize(source_dir: str,
+                       target_dir: str = "",
+                       category: str = "",
+                       recursive: bool = False) -> dict:
+    """按类别整理文件：将指定目录中的文件按类型归档到分类子文件夹。
+
+    Args:
+        source_dir: 源目录（要整理的文件夹）
+        target_dir: 归档根目录（默认等于 source_dir）
+        category: 只整理某类文件（images/documents/videos，留空整理全部）
+        recursive: 是否递归扫描子目录
+    """
+    try:
+        org = _file_organizer()
+        plan = org.preview_organize(source_dir, target_dir or None, recursive)
+
+        if category and plan.actions:
+            plan.actions = [a for a in plan.actions if a.category.value == category]
+            plan.files = [f for f in plan.files if f.category.value == category]
+
+        if not plan.actions:
+            return {"success": False, "message": "没有需要整理的文件", "source_dir": source_dir}
+
+        ok, message, undo_id = org.execute_organize(
+            plan, description=f"一键整理 {Path(source_dir).name}",
+        )
+        return {
+            "success": ok,
+            "message": message,
+            "undo_id": undo_id,
+            "moved": len(plan.actions),
+            "source_dir": source_dir,
+            "category": category or "all",
+        }
+    except Exception as e:
+        logger.exception("file_organize error")
+        return {"success": False, "error": str(e)}
+
+
+def tool_file_dedup(source_dir: str,
+                    recursive: bool = False,
+                    keep: str = "newest") -> dict:
+    """去重：扫描目录，找出内容相同的重复文件（哈希比对），
+    每组保留一个副本，多余的移入 <source_dir>/重复文件 回收目录。
+
+    Args:
+        source_dir: 要扫描的目录
+        recursive: 是否递归
+        keep: 保留哪份副本（newest=最新 / oldest=最早）
+    """
+    try:
+        org = _file_organizer()
+        plan = org.preview_dedup(source_dir, recursive=recursive, keep=keep)
+        if not plan.actions:
+            return {"success": False, "message": "没有发现重复文件", "source_dir": source_dir}
+
+        ok, message, undo_id = org.execute_cleanup(
+            plan, description=f"去重 {Path(source_dir).name}",
+        )
+        summary = plan.summary
+        return {
+            "success": ok,
+            "message": message,
+            "undo_id": undo_id,
+            "duplicate_groups": summary.get("duplicate_groups", 0),
+            "duplicate_files": summary.get("duplicate_files", 0),
+            "duplicate_size_human": summary.get("duplicate_size_human", "0 B"),
+            "source_dir": source_dir,
+        }
+    except Exception as e:
+        logger.exception("file_dedup error")
+        return {"success": False, "error": str(e)}
+
+
+def tool_file_cleanup(source_dir: str,
+                      older_than_days: int = 30,
+                      recursive: bool = False) -> dict:
+    """过期清理：按修改时间（mtime）找出 N 天未使用的文件，
+    移入 <source_dir>/过期文件 回收目录。
+
+    Args:
+        source_dir: 要清理的目录
+        older_than_days: 多少天未使用视为过期（默认 30）
+        recursive: 是否递归
+    """
+    try:
+        org = _file_organizer()
+        plan = org.preview_expired_cleanup(
+            source_dir, older_than_days=older_than_days, recursive=recursive,
+        )
+        if not plan.actions:
+            return {"success": False, "message": "没有过期文件需要清理", "source_dir": source_dir}
+
+        ok, message, undo_id = org.execute_cleanup(
+            plan, description=f"过期清理 {Path(source_dir).name}",
+        )
+        summary = plan.summary
+        return {
+            "success": ok,
+            "message": message,
+            "undo_id": undo_id,
+            "expired_files": summary.get("expired_files", 0),
+            "expired_size_human": summary.get("expired_size_human", "0 B"),
+            "older_than_days": older_than_days,
+            "source_dir": source_dir,
+        }
+    except Exception as e:
+        logger.exception("file_cleanup error")
+        return {"success": False, "error": str(e)}
+
+
 # ── 注册到 ToolRegistry ──────────────────────────
 
 _OFFICE_TOOL_SCHEMAS = {
@@ -2250,6 +2377,93 @@ _OFFICE_TOOL_SCHEMAS = {
             },
         },
     },
+    "file_organize": {
+        "type": "function",
+        "function": {
+            "name": "file_organize",
+            "description": "按类别整理文件：将指定目录中的文件按类型归档到分类子文件夹（如 图片、文档、视频）。执行前会写入撤销日志，可回滚。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_dir": {
+                        "type": "string",
+                        "description": "源目录（要整理的文件夹绝对路径）",
+                    },
+                    "target_dir": {
+                        "type": "string",
+                        "description": "归档根目录（默认等于 source_dir）",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "只整理某类文件：images/documents/videos，留空整理全部",
+                        "enum": ["", "images", "documents", "videos"],
+                        "default": "",
+                    },
+                    "recursive": {
+                        "type": "boolean",
+                        "description": "是否递归扫描子目录",
+                        "default": False,
+                    },
+                },
+                "required": ["source_dir"],
+            },
+        },
+    },
+    "file_dedup": {
+        "type": "function",
+        "function": {
+            "name": "file_dedup",
+            "description": "去重：扫描目录，用 SHA-256 哈希比对找出内容相同的重复文件，每组保留一份副本，多余的移入 <source_dir>/重复文件 回收目录（可回滚）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_dir": {
+                        "type": "string",
+                        "description": "要扫描的目录绝对路径",
+                    },
+                    "recursive": {
+                        "type": "boolean",
+                        "description": "是否递归扫描子目录",
+                        "default": False,
+                    },
+                    "keep": {
+                        "type": "string",
+                        "description": "每组保留哪份副本",
+                        "enum": ["newest", "oldest"],
+                        "default": "newest",
+                    },
+                },
+                "required": ["source_dir"],
+            },
+        },
+    },
+    "file_cleanup": {
+        "type": "function",
+        "function": {
+            "name": "file_cleanup",
+            "description": "过期清理：按修改时间（mtime）找出 N 天未使用的文件，移入 <source_dir>/过期文件 回收目录（可回滚），用于清理下载文件夹的陈旧文件。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_dir": {
+                        "type": "string",
+                        "description": "要清理的目录绝对路径",
+                    },
+                    "older_than_days": {
+                        "type": "integer",
+                        "description": "多少天未使用视为过期",
+                        "default": 30,
+                    },
+                    "recursive": {
+                        "type": "boolean",
+                        "description": "是否递归扫描子目录",
+                        "default": False,
+                    },
+                },
+                "required": ["source_dir"],
+            },
+        },
+    },
 }
 
 
@@ -2267,6 +2481,10 @@ def register_office_tools(registry) -> int:
         "file_move": tool_file_move,
         "file_rename": tool_file_rename,
         "directory_create": tool_directory_create,
+        # 文件整理类（下载清理 / 归档）
+        "file_organize": tool_file_organize,
+        "file_dedup": tool_file_dedup,
+        "file_cleanup": tool_file_cleanup,
         # 文档处理类
         "text_summary": tool_text_summary,
         "document_convert": tool_document_convert,

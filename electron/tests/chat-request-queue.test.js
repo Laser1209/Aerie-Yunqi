@@ -202,6 +202,9 @@ function createDocument() {
       return body.querySelectorAll(selector);
     },
     addEventListener() {},
+    hasFocus() {
+      return false;
+    },
   };
 }
 

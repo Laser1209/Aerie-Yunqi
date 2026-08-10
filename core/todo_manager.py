@@ -90,6 +90,23 @@ def get_todos(date_str: str | None = None) -> list[dict[str, Any]]:
     return [_row_to_todo(row) for row in rows]
 
 
+def _normalize_due_time(due_time: str | None, date_str: str) -> str:
+    """Normalize a due time into a full timestamp for the given date.
+
+    The brief-drawer sends a bare "HH:MM" from <input type=time>. Storing it
+    verbatim breaks the by-day query in get_todos (a bare "10:00" sorts before
+    "2026-08-10T00:00:00" lexicographically, so the row is invisible that day).
+    Complete timestamps are kept as-is; bare times get the date prepended.
+    """
+    if not due_time:
+        return date_str + "T23:59:59"
+    try:
+        return datetime.fromisoformat(due_time).isoformat(timespec="seconds")
+    except ValueError:
+        # Bare "HH:MM[:SS]" -> prepend today's date.
+        return f"{date_str}T{due_time.strip()}"
+
+
 def add_todo(title: str, priority: str = "medium", notes: str | None = None,
              due_time: str | None = None, estimated_minutes: int | None = None,
              date_str: str | None = None) -> dict[str, Any]:
@@ -101,9 +118,12 @@ def add_todo(title: str, priority: str = "medium", notes: str | None = None,
     external_id = str(uuid.uuid4())
     db = _get_db()
     db.insert("todo", {"external_id": external_id, "user_id": 0, "title": title,
-        "notes": notes, "due_at": due_time or date_str + "T23:59:59", "priority": priority if priority in ("high", "medium", "low") else "medium",
+        "notes": notes, "due_at": _normalize_due_time(due_time, date_str), "priority": priority if priority in ("high", "medium", "low") else "medium",
         "status": "pending", "estimated_minutes": estimated_minutes, "created_at": now, "updated_at": now})
-    return next(t for t in get_todos(date_str) if t["id"] == external_id)
+    # Re-read the row by id instead of filtering get_todos: a normalized
+    # due_at must always be visible, and a missing row should never throw.
+    refreshed = db.query_one("SELECT * FROM todo WHERE external_id = ?", (external_id,))
+    return _row_to_todo(refreshed) if refreshed else get_todos(date_str)[-1]
 
 
 def get_todo(todo_id: str) -> dict[str, Any] | None:

@@ -1174,6 +1174,37 @@
 }
 .brief-drawer__todo-check svg { width: 12px; height: 12px; }
 
+/* Calendar events surfaced in Today Todos (read-only) */
+.brief-drawer__todo-card.is-event {
+  background: color-mix(in srgb, var(--color-primary, #ffd1dc) 8%, var(--glass-bg-1, transparent));
+  border-left: 3px solid var(--color-primary, #ff9a9e);
+}
+.brief-drawer__todo-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary, #ff9a9e) 60%, transparent);
+}
+.brief-drawer__todo-event-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+.brief-drawer__todo-event-tag {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--color-primary-fg, #fff);
+  background: var(--color-primary, #ff9a9e);
+  border-radius: 999px;
+  padding: 0 6px;
+  vertical-align: middle;
+}
+
 .brief-drawer__todo-content {
   flex: 1 1 auto;
   min-width: 0;

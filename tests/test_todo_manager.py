@@ -58,3 +58,22 @@ def test_legacy_todos_dir_falls_back_to_project_data(monkeypatch):
     monkeypatch.delenv("AERIE_DATA_DIR", raising=False)
 
     assert todo_manager._resolve_todos_dir() == Path(todo_manager.__file__).resolve().parent.parent / "data" / "todos"
+
+
+def test_add_todo_normalizes_bare_time_due(tmp_path, monkeypatch):
+    """A bare 'HH:MM' due_time must be date-prefixed so the day query sees it.
+
+    Regression: previously the row stored due_at='10:00', which sorts before
+    today's T00:00:00 and became invisible, and add_todo's next() then raised
+    StopIteration -> 500 on the API.
+    """
+    db = make_db(tmp_path)
+    monkeypatch.setattr(todo_manager, "_get_db", lambda: db)
+
+    todo = todo_manager.add_todo("带时间任务", due_time="10:00", date_str="2026-07-19")
+    assert todo["due_time"] == "2026-07-19T10:00"
+    assert any(item["id"] == todo["id"] for item in todo_manager.get_todos("2026-07-19"))
+
+    full = todo_manager.add_todo("完整时间", due_time="2026-07-19T14:30:00", date_str="2026-07-19")
+    assert full["due_time"] == "2026-07-19T14:30:00"
+

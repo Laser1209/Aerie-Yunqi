@@ -966,14 +966,47 @@ def get_time_of_day() -> str:
 
 
 def get_today_todos(date_str: str | None = None) -> list[dict[str, Any]]:
-    """Return today's todos from todo_manager.
+    """Return today's todos merged with today's calendar events.
 
-    Returns only real user-created todos. Auto-seeding of sample/demo todos
-    has been removed to prevent fake tasks from appearing in the user's plan.
+    Real user todos come from todo_manager. Calendar events of type
+    ``schedule``/``reminder`` (the ones a user wants surfaced in the plan) are
+    merged in as read-only ``kind="event"`` items so they also appear in the
+    brief's Today Todos — this is the "calendar -> todo" half of the sync.
+    Auto-seeding of sample/demo todos has been removed.
     """
     try:
+        date_str = date_str or datetime.now().strftime("%Y-%m-%d")
         from core import todo_manager
-        return todo_manager.get_todos(date_str)
+        todos = todo_manager.get_todos(date_str)
+        items = [dict(t, kind="todo") for t in todos]
+        try:
+            from core.calendar_manager import CalendarManager
+            from core.database import Database
+            cal = CalendarManager(Database())
+            timeline = cal.get_timeline(
+                date_str + "T00:00:00", date_str + "T23:59:59"
+            )
+            for ev in timeline["items"]:
+                if ev["kind"] != "event" or ev["type"] not in ("schedule", "reminder"):
+                    continue
+                start = ev.get("start_time") or ""
+                items.append({
+                    "id": ev["id"],
+                    "title": ev["title"],
+                    "completed": False,
+                    "priority": "medium",
+                    "due_time": start[11:16] if len(start) >= 16 else start,
+                    "notes": ev.get("description") or "",
+                    "estimated_minutes": None,
+                    "kind": "event",
+                    "event_type": ev.get("type"),
+                    "color": ev.get("color"),
+                })
+        except Exception as e:
+            logger.warning("brief_fetcher: merge calendar events failed: %s", e)
+        # Events (timed) first, then todos; stable by due time within each group.
+        items.sort(key=lambda it: (it.get("kind") != "event", it.get("due_time") or ""))
+        return items
     except Exception as e:
         logger.warning("brief_fetcher: get_today_todos failed: %s", e)
         return []

@@ -605,27 +605,37 @@ class BriefDrawer {
   }
 
   _renderTodoCard(todo) {
+    const isEvent = todo.kind === "event";
     const card = _el("div", {
       class: "brief-drawer__todo-card" +
         (todo.completed ? " is-done" : "") +
-        ` brief-drawer__todo-card--${todo.priority || "medium"}`,
+        ` brief-drawer__todo-card--${todo.priority || "medium"}` +
+        (isEvent ? " is-event" : ""),
       "data-todo-id": todo.id,
     });
 
-    const checkbox = _el("button", {
-      class: "brief-drawer__todo-check",
-      "aria-label": todo.completed ? "标记为未完成" : "标记为完成",
-      html: todo.completed ? _ICONS.check : "",
-    });
-    checkbox.addEventListener("click", () => this._onToggleTodo(todo.id));
+    const checkbox = isEvent
+      ? _el("span", { class: "brief-drawer__todo-dot" })
+      : _el("button", {
+          class: "brief-drawer__todo-check",
+          "aria-label": todo.completed ? "标记为未完成" : "标记为完成",
+          html: todo.completed ? _ICONS.check : "",
+        });
+    if (!isEvent) checkbox.addEventListener("click", () => this._onToggleTodo(todo.id));
 
     const content = _el("div", { class: "brief-drawer__todo-content" });
     content.innerHTML = `
-      <div class="brief-drawer__todo-title">${_esc(todo.title || "")}</div>
+      <div class="brief-drawer__todo-title">
+        ${isEvent ? `<span class="brief-drawer__todo-event-dot" style="background:${todo.color || "#ff9a9e"}"></span>` : ""}
+        ${_esc(todo.title || "")}
+        ${isEvent ? `<span class="brief-drawer__todo-event-tag">${todo.event_type === "reminder" ? "提醒" : "日程"}</span>` : ""}
+      </div>
       <div class="brief-drawer__todo-meta">
+        ${isEvent ? "" : `
         <span class="brief-drawer__todo-prio-tag brief-drawer__todo-prio-tag--${todo.priority || "medium"}">
           ${PRIORITY_LABELS[todo.priority] || "中"}
         </span>
+        `}
         ${todo.due_time ? `
           <span class="brief-drawer__todo-due-time">
             ${_ICONS.clock} ${_esc(todo.due_time)}
@@ -640,20 +650,23 @@ class BriefDrawer {
       ${todo.notes ? `<div class="brief-drawer__todo-notes">${_esc(todo.notes)}</div>` : ""}
     `;
 
-    const delBtn = _el("button", {
-      class: "brief-drawer__todo-delete",
-      title: "删除任务",
-      "aria-label": "删除任务",
-      html: _ICONS.trash,
-    });
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this._onDeleteTodo(todo.id);
-    });
+    let delBtn = null;
+    if (!isEvent) {
+      delBtn = _el("button", {
+        class: "brief-drawer__todo-delete",
+        title: "删除任务",
+        "aria-label": "删除任务",
+        html: _ICONS.trash,
+      });
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._onDeleteTodo(todo.id);
+      });
+    }
 
     card.appendChild(checkbox);
     card.appendChild(content);
-    card.appendChild(delBtn);
+    if (delBtn) card.appendChild(delBtn);
     return card;
   }
 
@@ -700,6 +713,8 @@ class BriefDrawer {
         if (input) input.value = "";
         if (form) form.style.display = "none";
         this._renderData(this._cached);
+      } else if (r && r.data && r.data.error) {
+        console.warn("brief-drawer: add todo rejected:", r.data.error);
       }
     } catch (e) {
       console.warn("brief-drawer: add todo failed", e);

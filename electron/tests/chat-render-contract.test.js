@@ -135,3 +135,33 @@ test("baseline: 撤回产生 recall 意图", () => {
   const r = s.ingestSignal({ id: "7", type: "recall" });
   assert.ok(r.some((i) => i.action === "recall" && i.id === "7"));
 });
+
+// ── 5. v2 新能力（重写引入，回归门禁）────────────────────
+
+test("v2: 普通历史消息跨通道去重（byKey 消息级去重）", () => {
+  const s = createChatStore();
+  s.ingestSignal({ id: "77", role: "assistant", content: "a" });
+  // 同一 id 从另一通道（poll/历史分页）再次到达 → 不再产生 upsert
+  const again = s.ingestSignal({ id: "77", role: "assistant", content: "a" });
+  assert.equal(again.filter((i) => i.action === "upsert").length, 0);
+});
+
+test("v2: 终态自动清理遗留 typing 气泡（分片从未到达）", () => {
+  const s = createChatStore();
+  s.ingestSignal({ request_id: "r9", role: "assistant", status: "running", typing: true, content: "" });
+  const out = s.ingestSignal({ request_id: "r9", status: "completed" });
+  assert.ok(out.some((i) => i.action === "remove"), "expected remove intent for stale typing");
+  assert.equal(s.messages().length, 0);
+});
+
+test("v2: 真实分片到达后终态不再误删真实消息", () => {
+  const s = createChatStore();
+  const run = s.ingestSignal({ request_id: "r10", role: "assistant", status: "running", typing: true, content: "" });
+  const typingDomId = run.find((i) => i.action === "typing").msg.domId;
+  s.ingestSignal({ request_id: "r10", role: "assistant", id: "88", content: "real", status: "running" });
+  const out = s.ingestSignal({ request_id: "r10", status: "completed" });
+  assert.equal(out.some((i) => i.action === "remove"), false);
+  const msg = s.getMessage(typingDomId);
+  assert.equal(msg.msgId, "88");
+  assert.equal(msg.typing, false);
+});

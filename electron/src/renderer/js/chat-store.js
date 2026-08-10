@@ -1,21 +1,30 @@
 "use strict";
 
 // chat-store.js — 聊天消息状态的单一数据源(纯逻辑, 无 DOM)。
-// 独占: 判重(seenRealIds/seenEventIds)、排序(messages)、请求状态(requests)、
-// 请求分片排序(requestSequences)、稳定元素 id 映射(realIdToDomId /
-// requestIdToDomId / clientIdToDomId)。
-// ingestSignal() 把规范化后的信号翻译成渲染意图(Intent), 由 DOM 层统一应用。
+//
+// v2 重写(主流架构)：
+//   1) 消息级去重归一化 —— byKey(逻辑消息 key) + seenEventIds(事件级) 双层去重。
+//      同一逻辑消息无论从哪条通道到达(IPC/SSE/poll/history)都映射到同一 domId，
+//      不再靠"通道形态"决定 domId，消灭重复渲染。
+//   2) 请求状态内聚 —— requests Map 管理请求生命周期，终态自动清理遗留 typing 气泡。
+//   3) 分片缓冲容错 —— 终态信号强制跳过 sequence 缺口，避免缓冲永久卡死。
+//   4) 单轨裁剪 —— maxMessages 只在 store 统一裁剪。
+//
+// 对外契约(重写必须保留)：createChatStore / ingestSignal / messages / getMessage /
+// requestState / markRecalled，以及 clientIdToDomId / requestIdToDomId /
+// seenEventIds / requestSequences / requests 的暴露。
 
 function createChatStore({ maxMessages = 500 } = {}) {
   const messages = [];             // 有序消息描述符(元素顺序)
   const byDomId = new Map();       // domId -> msg
+  const byKey = new Map();         // 逻辑消息 key -> domId（消息级去重）
   const realIdToDomId = new Map(); // 真实消息 id -> domId
   const requestIdToDomId = new Map(); // request_id -> domId
   const clientIdToDomId = new Map();  // client_id -> domId
   const seenEventIds = new Set();
-  const seenRealIds = new Set();   // 已渲染的真实消息 id
+  const seenRealIds = new Set();   // 已渲染的真实消息 id（兼容保留）
   const requestSequences = new Map(); // request_id -> { next, pending:Map }
-  const requestSegments = new Set();  // 已产出真实分片的 request_id(首个分片复用 typing domId)
+  const requestSegments = new Set();  // 已产出真实分片的 request_id
   const requests = new Map();      // request_id -> request state
 
   function trim() {
@@ -25,8 +34,18 @@ function createChatStore({ maxMessages = 500 } = {}) {
       if (dropped.msgId) {
         realIdToDomId.delete(dropped.msgId);
         seenRealIds.delete(dropped.msgId);
+        byKey.delete("m:" + dropped.msgId);
       }
+      if (dropped.clientId) byKey.delete("c:" + dropped.clientId);
     }
+  }
+
+  // 逻辑消息 key：同一逻辑消息不管从哪条通道来都归一到同一个 key
+  function messageKey(signal) {
+    if (signal.msgId) return "m:" + signal.msgId;
+    if (signal.id) return "m:" + signal.id;
+    if (signal.client_id) return "c:" + signal.client_id;
+    return "";
   }
 
   // 更新已存在元素或创建新元素, 返回 upsert 意图
@@ -34,9 +53,6 @@ function createChatStore({ maxMessages = 500 } = {}) {
     let msg = byDomId.get(domId);
     if (msg) {
       Object.assign(msg, patch, { id: domId });
-      // 返回快照: 同一 drain 循环内连续 upsert 同一 domId 时,
-      // 前一个 intent 引用的是会被后一个 Object.assign 改写的活对象。
-      // 快照保证每个 intent 携带其生成瞬间的状态, 互不污染。
       return { action: "upsert", msg: { ...msg } };
     }
     msg = { ...patch, id: domId };
@@ -57,6 +73,8 @@ function createChatStore({ maxMessages = 500 } = {}) {
     if (t === "chat_request_queued") return "queued";
     return "";
   }
+
+  const TERMINAL_STATUS = new Set(["completed", "failed", "cancelled"]);
 
   function upsertRequestState(signal) {
     const rid = signal.request_id;
@@ -79,6 +97,19 @@ function createChatStore({ maxMessages = 500 } = {}) {
     return next;
   }
 
+  // 终态清理：若该 request 只留下了 typing 气泡(真实分片从未到达)则移除
+  function removeTypingFor(requestId) {
+    const domId = requestIdToDomId.get(requestId);
+    if (!domId) return null;
+    const msg = byDomId.get(domId);
+    if (!msg || !msg.typing) return null;
+    byDomId.delete(domId);
+    const idx = messages.findIndex((m) => m.id === domId);
+    if (idx >= 0) messages.splice(idx, 1);
+    requestIdToDomId.delete(requestId);
+    return { action: "remove", id: domId };
+  }
+
   // 单条信号的渲染意图
   function applyOne(signal) {
     const intents = [];
@@ -95,11 +126,14 @@ function createChatStore({ maxMessages = 500 } = {}) {
     if (isStatusSignal) {
       const state = upsertRequestState(signal);
       if (state) intents.push({ action: "status", state });
+      // 终态: 自动清理该 request 遗留的 typing 气泡(分片从未到达时)
+      if (TERMINAL_STATUS.has(status)) {
+        const clean = removeTypingFor(signal.request_id);
+        if (clean) intents.push(clean);
+      }
     }
 
     // 助手消息: typing 与首个真实分片共用稳定 domId = req_<request_id>
-    // (输入中→最终原地更新, 见设计契约); 同一请求的后续分片各自独立 domId,
-    // 因为后端把每个 assistant segment 存为带独立 id 的独立消息。
     if (signal.role === "assistant" && signal.request_id) {
       const running =
         signal.typing === true || (signal.request_status || status) === "running";
@@ -109,20 +143,18 @@ function createChatStore({ maxMessages = 500 } = {}) {
           requestIdToDomId.get(signal.request_id) ||
           "req_" + signal.request_id;
         requestIdToDomId.set(signal.request_id, typingDomId);
-        intents.push({
-          action: "typing",
-          msg: {
-            id: typingDomId, role: "assistant", request_id: signal.request_id,
-            request_status: status || "running", status: status || "running",
-            content: "", domId: typingDomId, typing: true,
-          },
-        });
+        const typingMsg = {
+          id: typingDomId, role: "assistant", request_id: signal.request_id,
+          request_status: status || "running", status: status || "running",
+          content: "", domId: typingDomId, typing: true,
+        };
+        // typing 也进 store：供终态清理、真实分片原地替换（不再绕过 Store）
+        upsert(typingDomId, typingMsg);
+        intents.push({ action: "typing", msg: { ...typingMsg } });
         return intents;
       }
-      if (signal.id) {
-        if (seenRealIds.has(signal.id)) return intents;
-        seenRealIds.add(signal.id);
-      }
+      // 真实分片：同 id 重复到达去重
+      if (signal.id && seenRealIds.has(signal.id)) return intents;
       const isFirst = !requestSegments.has(signal.request_id);
       requestSegments.add(signal.request_id);
       const domId =
@@ -131,7 +163,12 @@ function createChatStore({ maxMessages = 500 } = {}) {
           ? (requestIdToDomId.get(signal.request_id) || "req_" + signal.request_id)
           : "req_" + signal.request_id + "_" + signal.id);
       requestIdToDomId.set(signal.request_id, domId);
-      if (signal.id) realIdToDomId.set(signal.id, domId);
+      if (signal.id) {
+        seenRealIds.add(signal.id);
+        realIdToDomId.set(signal.id, domId);
+      }
+      const key = messageKey(signal);
+      if (key) byKey.set(key, domId);
       intents.push(upsert(domId, {
         ...signal, id: domId, domId,
         msgId: signal.id, typing: false,
@@ -151,21 +188,30 @@ function createChatStore({ maxMessages = 500 } = {}) {
         if (seenRealIds.has(signal.id)) return intents;
         seenRealIds.add(signal.id);
         realIdToDomId.set(signal.id, domId);
+        byKey.set("m:" + signal.id, domId);
       }
+      if (signal.client_id) byKey.set("c:" + signal.client_id, domId);
       intents.push(upsert(domId, {
         ...signal, id: domId, domId, msgId: signal.id, typing: false,
       }));
       return intents;
     }
 
-    // 普通历史消息(无 request): domId = 真实 id
+    // 普通历史消息(无 request): domId = 真实 id, 消息级去重
     if (signal.id && (signal.role === "user" || signal.role === "assistant")) {
+      const key = "m:" + signal.id;
+      if (byKey.has(key)) return intents;   // 已渲染过, 不重复
       if (seenRealIds.has(signal.id)) return intents;
       seenRealIds.add(signal.id);
+      byKey.set(key, signal.id);
       intents.push(upsert(signal.id, { ...signal, id: signal.id, domId: signal.id, msgId: signal.id }));
     }
     return intents;
   }
+
+  // 分片缺口容错阈值(ms)：pending 中最小 seq 大于 next 且超过该时长，
+  // 说明前面的分片已丢失(SSE 溢出/断线/丢弃)，跳过缺口继续消费，避免永久卡死。
+  const SEQUENCE_FLUSH_MS = 3000;
 
   // 入口: 事件去重 + 乱序分片缓冲, 产出渲染意图数组
   function ingestSignal(signal) {
@@ -177,11 +223,20 @@ function createChatStore({ maxMessages = 500 } = {}) {
     }
 
     const sequence = Number(signal.sequence);
+
     if (signal.request_id && Number.isInteger(sequence) && sequence >= 0) {
       let tracker = requestSequences.get(signal.request_id);
       if (!tracker) {
-        tracker = { next: sequence === 0 ? 0 : 1, pending: new Map() };
+        tracker = { next: sequence === 0 ? 0 : 1, pending: new Map(), lastFlush: 0 };
         requestSequences.set(signal.request_id, tracker);
+      }
+      // 容错：pending 缺口超时后跳过(分片已丢失, 不能无限等)
+      const now = Date.now();
+      if (tracker.pending.size > 0 && now - tracker.lastFlush > SEQUENCE_FLUSH_MS) {
+        const minSeq = Math.min(...tracker.pending.keys());
+        if (minSeq > tracker.next) {
+          tracker.next = minSeq;
+        }
       }
       if (sequence < tracker.next) return [];
       tracker.pending.set(sequence, signal);
@@ -192,6 +247,7 @@ function createChatStore({ maxMessages = 500 } = {}) {
         out.push(...applyOne(cur));
         tracker.next += 1;
       }
+      tracker.lastFlush = now;
       return out;
     }
 

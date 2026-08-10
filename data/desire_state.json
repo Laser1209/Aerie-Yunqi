@@ -1,11 +1,11 @@
 {
-  "score": 47.37,
-  "ts": 1786379599.564395,
+  "score": 47.28,
+  "ts": 1786380752.6931202,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.16722799373997582,
+    "user_absence_hours": 0.08352458788288965,
     "emotion_overdraft": 6.0,
     "patience_loss": 42.4,
     "weather_impact": 0.0,
@@ -13,30 +13,6 @@
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1786356434.9648733,
-      "score": 55.47,
-      "variables": {
-        "user_absence_hours": 0.16669402096006605,
-        "emotion_overdraft": 6.0014288125411195,
-        "patience_loss": 48.5,
-        "weather_impact": 4.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786356734.9952426,
-      "score": 55.45,
-      "variables": {
-        "user_absence_hours": 0.250037382112609,
-        "emotion_overdraft": 6.000193355596592,
-        "patience_loss": 48.4,
-        "weather_impact": 4.0,
-        "time_of_day_boost": 0.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1786357035.0162542,
       "score": 55.53,
@@ -606,6 +582,30 @@
       "score": 47.37,
       "variables": {
         "user_absence_hours": 0.16722799373997582,
+        "emotion_overdraft": 6.0,
+        "patience_loss": 42.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786379899.5910182,
+      "score": 47.45,
+      "variables": {
+        "user_absence_hours": 0.25056866659058463,
+        "emotion_overdraft": 6.0,
+        "patience_loss": 42.4,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786380752.6931238,
+      "score": 47.28,
+      "variables": {
+        "user_absence_hours": 0.08352458788288965,
         "emotion_overdraft": 6.0,
         "patience_loss": 42.4,
         "weather_impact": 0.0,

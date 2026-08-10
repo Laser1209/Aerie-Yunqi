@@ -109,6 +109,11 @@ def project_legacy_to_persona(legacy: dict[str, Any], skeleton: dict[str, Any]) 
         "forbidden_user_terms": deepcopy(address.get("forbidden_user_terms") or []),
         "taboo_phrases": deepcopy(speech.get("taboo_phrases") or []),
     })
+    # 身份锚定：恋爱故事（怎么认识）同步到 hub relationship.story，由
+    # context_builder 注入每次对话的 system prompt 头部。
+    story = (legacy.get("relationship_story") or "").strip()
+    if story:
+        relationship["story"] = story
 
     # speech_examples：由 persona.yaml 的 speech.example_phrases / example_long 生成
     speech_examples = dict(skeleton.get("speech_examples") or {})

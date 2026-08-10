@@ -109,18 +109,8 @@ class ContextBuilder:
             route_mode,
             current_msg=current_msg,
             history_msgs=history_msgs,
+            time_context=time_context if route_mode in ("FULL", "AUTO") else None,
         )
-        if route_mode in ("FULL", "AUTO") and time_context:
-            event_lines = [f"- {item['start_time'][11:16]} {item['title']}" for item in time_context.get("today_events", [])[:5]]
-            todo_lines = [f"- {item['title']}（{item.get('priority', 'medium')}）" for item in time_context.get("today_todos", [])[:5]]
-            anniversary_lines = [f"- {item['start_time'][:10]} {item['title']}" for item in time_context.get("upcoming_anniversaries", [])[:5]]
-            system += "\n\n【时间快照】"
-            system += "\n当前时间：" + str(time_context.get("datetime", ""))
-            system += "\n当前时段：" + str(time_context.get("time_period_cn", ""))
-            system += "\n日期：" + str(time_context.get("date", ""))
-            system += "\n今日事件：\n" + ("\n".join(event_lines) or "- 无")
-            system += "\n今日未完成任务：\n" + ("\n".join(todo_lines) or "- 无")
-            system += "\n未来 7 天纪念日：\n" + ("\n".join(anniversary_lines) or "- 无")
 
         if route_mode == "FULL" and world_snapshot:
             phase_cn = _WORLD_PHASE_CN.get(
@@ -529,12 +519,18 @@ class ContextBuilder:
         route_mode: str,
         current_msg: str | None = None,
         history_msgs: list[dict] | None = None,
+        time_context: dict | None = None,
     ) -> str:
         """根据人设配置和模式层级构建系统提示词。"""
         parts = []
 
         # L1 · 核心身份（所有模式）
         parts.append(self._build_l1_identity(persona))
+
+        # L1.5 · 当前时间快照（FULL/AUTO）：放在头部安全区，
+        # 避免被尾部预算截断导致"感知不到当前时间"。
+        if route_mode in ("FULL", "AUTO") and time_context:
+            parts.append(self._build_time_context(time_context))
 
         # L2 · 关系深度（仅 FULL）
         if route_mode == "FULL":
@@ -857,6 +853,31 @@ class ContextBuilder:
 
 记住：稳比快重要。宁可多一步验证，也不要跳步出错。"""
 
+    def _build_time_context(self, time_context: dict) -> str:
+        """L1.5 · 当前时间快照（恒常注入头部，避免被尾部截断）。"""
+        event_lines = [
+            f"- {item['start_time'][11:16]} {item['title']}"
+            for item in time_context.get("today_events", [])[:5]
+        ]
+        todo_lines = [
+            f"- {item['title']}（{item.get('priority', 'medium')}）"
+            for item in time_context.get("today_todos", [])[:5]
+        ]
+        anniversary_lines = [
+            f"- {item['start_time'][:10]} {item['title']}"
+            for item in time_context.get("upcoming_anniversaries", [])[:5]
+        ]
+        lines = [
+            "【当前时间】",
+            "当前时间：" + str(time_context.get("datetime", "")),
+            "当前时段：" + str(time_context.get("time_period_cn", "")),
+            "日期：" + str(time_context.get("date", "")),
+            "今日事件：\n" + ("\n".join(event_lines) or "- 无"),
+            "今日未完成任务：\n" + ("\n".join(todo_lines) or "- 无"),
+            "未来 7 天纪念日：\n" + ("\n".join(anniversary_lines) or "- 无"),
+        ]
+        return "\n".join(lines)
+
     def _build_l1_identity(self, persona: dict) -> str:
         """L1 · 核心身份层。"""
         basic = persona.get("basic", {})
@@ -921,6 +942,15 @@ class ContextBuilder:
         if "四爱" in style:
             text += "**四爱主导位**：温柔但明确地主导关系，表达直接，不许不接。\n\n"
         text += f"你习惯叫用户{terms_str}等亲昵称呼。\n\n"
+
+        # 身份锚定：恋爱故事（怎么认识/我们的过去）是恒常设定，
+        # 位于 system 头部安全区，不参与尾部截断，防止"忘掉怎么认识"。
+        story = str(rel.get("story") or "").strip()
+        if story:
+            text += (
+                f"**我们的故事（身份锚定，回答'怎么认识的/我们的过去'时必须以此为准，"
+                f"不得编造或遗忘）**：\n{story}\n\n"
+            )
 
         # 经典语录从 speech_examples 里取
         examples = persona.get("speech_examples", {})

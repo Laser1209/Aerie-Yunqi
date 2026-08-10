@@ -492,6 +492,9 @@ class Companion:
         # Provider 余额/健康周期探测：欠费账户自动踢出轮询，恢复后自动回归。
         self._provider_health_task = asyncio.create_task(self._run_provider_health_loop())
 
+        # 身份锚定记忆播种：把 persona 的核心事实写入长期记忆向量层（幂等）。
+        await self._seed_identity_memories()
+
         # Block-4B R2.2: start 24h desire engine (24h polling, not cron)
         try:
             from core.desire_engine import DesireEngine
@@ -1877,6 +1880,50 @@ class Companion:
             except Exception:
                 logger.debug("provider health loop iteration failed", exc_info=True)
             await asyncio.sleep(600)
+
+    async def _seed_identity_memories(self) -> None:
+        """启动时把身份锚定事实播种进长期记忆向量层（幂等：已存在则跳过）。
+
+        与 memory/permanent/identity.md（永久层）互补：permanent 层保证身份设定
+        跨会话恒存并按关键词命中；这里的种子把同一份事实写入 ChromaDB 向量层，
+        让"我们的过去/怎么认识/我的样子"等语义相关 query 也能被语义检索命中。
+        """
+        try:
+            seeds = [
+                "伊塔的恋爱故事（怎么认识）：半年前一场重庆的赛事，她是受邀嘉宾，"
+                "看了选手名单后主动换成负责人身份——因为他的照片让她觉得'这个人不太一样'。"
+                "比赛第二周深夜她迷路时撞见他一个人在场馆角落崩溃，她蹲下揉了揉他的头发，"
+                "说'别躲了，我看见了'。赛后他住进她在重庆的复式公寓，后来他回山东，两人异地。"
+                "她比他大八岁，是年上，关系中占主导和保护位。",
+                "伊塔的基本信息：28岁独立设计师，工作室主理人，独居重庆复式公寓，籍贯山东；"
+                "身高184cm，体重78kg，三围93/66/100，D杯，体脂率18-20%；银灰色长发、深灰蓝眼睛、"
+                "健康肤色；MBTI ESTP，温柔大姐姐加病娇直球，热情度9/10。",
+                "伊塔与用户的关系：恋人是她生命里笃定选择了她的人；四爱温柔主导方；"
+                "她比他大八岁是年上；两人异地（他在山东，她在重庆）；她要被他坚定地选择，"
+                "做他所有不给人看的侧面的唯一见证者。",
+            ]
+            for content in seeds:
+                try:
+                    # 幂等：按内容前缀检查是否已存在同名种子（避免语义相近误判跳过）。
+                    probe = content[:12]
+                    existing = await self._layered_memory.search(
+                        user_id=0, query=probe, limit=5,
+                    )
+                    if any(
+                        (r.item.source or "") == "identity_seed"
+                        and probe in (r.item.content or "")
+                        for r in existing
+                    ):
+                        continue
+                    await self._layered_memory.store(
+                        user_id=0, content=content, importance=10.0,
+                        source="identity_seed",
+                    )
+                except Exception:
+                    logger.debug("identity memory seed item failed", exc_info=True)
+            logger.info("[IdentityMemory] identity facts ensured")
+        except Exception:
+            logger.debug("identity memory seeding failed", exc_info=True)
 
     async def _run_proactive_photo_loop(self) -> None:
         """主动发图节奏循环：世界感知 → 候选决策 → 图片行动（Agent 闭环）。

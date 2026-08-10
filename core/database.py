@@ -59,14 +59,24 @@ SCHEMA_SQL: list[str] = [
     """,
     """
     CREATE TABLE IF NOT EXISTS long_term_memory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,                -- 字符串 id（uuid），与 ChromaDB ids 一致
         user_id INTEGER NOT NULL,
-        actor_id TEXT DEFAULT NULL,
         memory_type TEXT NOT NULL,          -- preference | event | fact | etc.
         content TEXT NOT NULL,
         importance INTEGER DEFAULT 5,       -- 0-10
-        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-        accessed_at TEXT
+        created_at TEXT,
+        accessed_at TEXT,
+        actor_id TEXT,
+        source_message_id TEXT,
+        confidence REAL DEFAULT 0.5,
+        user_confirmed INTEGER DEFAULT 0,
+        expires_at REAL,
+        deleted_at REAL,
+        metadata TEXT,
+        access_count INTEGER DEFAULT 0,
+        updated_at TEXT,
+        source TEXT,
+        has_embedding INTEGER DEFAULT 0
     );
     """,
     """
@@ -409,11 +419,69 @@ class Database:
                 "PRAGMA table_info(long_term_memory)"
             ).fetchall()
         }
-        if "actor_id" not in existing:
-            conn.execute(
-                "ALTER TABLE long_term_memory "
-                "ADD COLUMN actor_id TEXT DEFAULT NULL"
-            )
+        # 旧库 id 为 INTEGER 主键，与 LongTermMemoryLayer 的字符串 id（uuid）
+        # 不匹配，任何写入都会 datatype mismatch。检测到后重建为 TEXT PRIMARY KEY。
+        id_type = next(
+            (str(row["type"] or "").upper() for row in conn.execute(
+                "PRAGMA table_info(long_term_memory)"
+            ) if row["name"] == "id"),
+            "TEXT",
+        )
+        if id_type != "TEXT":
+            self._rebuild_long_term_memory(conn)
+            return
+        migrations = [
+            ("actor_id", "TEXT DEFAULT NULL"),
+            ("metadata", "TEXT DEFAULT NULL"),
+            ("access_count", "INTEGER DEFAULT 0"),
+            ("updated_at", "TEXT"),
+            ("source", "TEXT DEFAULT NULL"),
+            ("has_embedding", "INTEGER DEFAULT 0"),
+            ("source_message_id", "TEXT DEFAULT NULL"),
+            ("confidence", "REAL DEFAULT 0.5"),
+            ("user_confirmed", "INTEGER DEFAULT 0"),
+            ("expires_at", "TEXT"),
+            ("deleted_at", "TEXT"),
+        ]
+        for col, decl in migrations:
+            if col not in existing:
+                conn.execute(f"ALTER TABLE long_term_memory ADD COLUMN {col} {decl}")
+
+    def _rebuild_long_term_memory(self, conn: sqlite3.Connection) -> None:
+        """把 long_term_memory 从 INTEGER 主键重建为 TEXT 主键（数据迁移保留）。"""
+        columns = (
+            "id, user_id, memory_type, content, importance, created_at, accessed_at, "
+            "actor_id, source_message_id, confidence, user_confirmed, expires_at, "
+            "deleted_at, metadata, access_count, updated_at, source, has_embedding"
+        )
+        conn.execute("ALTER TABLE long_term_memory RENAME TO long_term_memory_old")
+        conn.execute(
+            "CREATE TABLE long_term_memory ("
+            " id TEXT PRIMARY KEY,"
+            " user_id INTEGER NOT NULL,"
+            " memory_type TEXT NOT NULL,"
+            " content TEXT NOT NULL,"
+            " importance INTEGER DEFAULT 5,"
+            " created_at TEXT,"
+            " accessed_at TEXT,"
+            " actor_id TEXT,"
+            " source_message_id TEXT,"
+            " confidence REAL DEFAULT 0.5,"
+            " user_confirmed INTEGER DEFAULT 0,"
+            " expires_at REAL,"
+            " deleted_at REAL,"
+            " metadata TEXT,"
+            " access_count INTEGER DEFAULT 0,"
+            " updated_at TEXT,"
+            " source TEXT,"
+            " has_embedding INTEGER DEFAULT 0"
+            ")"
+        )
+        conn.execute(
+            f"INSERT INTO long_term_memory ({columns}) "
+            f"SELECT {columns} FROM long_term_memory_old"
+        )
+        conn.execute("DROP TABLE long_term_memory_old")
 
     def _migrate_emotion_state_snapshot(
         self,

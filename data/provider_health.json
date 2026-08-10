@@ -1,8 +1,8 @@
 {
   "providers": {
     "deepseek": {
-      "balance": 7.47,
-      "last_checked_at": "2026-08-10T16:33:19.713885+00:00",
+      "balance": 6.85,
+      "last_checked_at": "2026-08-10T16:46:40.278433+00:00",
       "reason": "",
       "status": "ok"
     },

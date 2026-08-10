@@ -903,6 +903,7 @@ class ConversationRepository:
             item["cursor"] = _encode_history_cursor(row_id)
             if "message_id" in item:
                 item["id"] = item["message_id"]
+            if not item.get("ts"):
                 item["ts"] = item.get("created_at")
             item["attachments"] = self._decode_attachments(
                 item.get("attachments")

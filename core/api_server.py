@@ -1564,6 +1564,8 @@ async def chat_history(
                     row["attachments"] = []
             else:
                 row["attachments"] = []
+            if not row.get("ts"):
+                row["ts"] = row.get("created_at")
         _hydrate_desktop_attachment_records(rows)
         return {
             "history": rows,
@@ -1596,6 +1598,18 @@ async def chat_poll(
             "SELECT * FROM chat_log WHERE user_id = ? AND id > ? ORDER BY id",
             (user_id, since_id),
         )
+        import json as _json
+        for row in rows:
+            if row.get("attachments"):
+                try:
+                    row["attachments"] = _json.loads(row["attachments"])
+                except Exception:
+                    row["attachments"] = []
+            else:
+                row["attachments"] = []
+            if not row.get("ts"):
+                row["ts"] = row.get("created_at")
+        _hydrate_desktop_attachment_records(rows)
         return {"items": rows, "user_id": user_id}
     except Exception as e:
         return {"items": [], "error": str(e)}

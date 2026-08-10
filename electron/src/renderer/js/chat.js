@@ -545,10 +545,8 @@ class ChatManager {
     html += `<div class="chat-msg__avatar-wrap">${avatarContent}</div>`;
     html += `<div class="chat-msg__body">`;
     html += `<div class="chat-msg__name">${this._escapeHtml(displayName)}</div>`;
-    const tsText = this._formatTime(msg.ts);
-    if (tsText) {
-      html += `<span class="chat-msg__meta-time">${tsText}</span>`;
-    }
+    const tsRaw = msg.ts ?? msg.created_at;
+    const tsText = this._formatTime(tsRaw);
     if (!typing && msg.reply_to_id && msg.reply_to_content) {
       const role = msg.reply_to_role === "user" ? "你" : "伊塔";
       html += `<div class="chat-quote-overlay" data-reply-to="${msg.reply_to_id}">
@@ -573,6 +571,9 @@ class ChatManager {
       </div>`;
     } else {
       html += this._parseMessage(msg.content || "");
+    }
+    if (tsText) {
+      html += `<span class="chat-msg__meta-time">${tsText}</span>`;
     }
     html += `</div>`;
     return html;
@@ -605,20 +606,55 @@ class ChatManager {
     return s;
   }
 
+  _attachmentVisual(category, extension, name) {
+    const ext = String(extension || name || "").split(".").pop().toLowerCase();
+    const cat = String(category || "").toLowerCase();
+    // Map category + extension to an SVG icon id + theme colors (soft pastel)
+    if (cat === "image" || ["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "heic"].includes(ext)) {
+      return { icon: "icon-ui-image",  bg: "#fff0f3", fg: "#ff5b9c" };
+    }
+    if (cat === "video" || ["mp4", "mov", "avi", "mkv", "webm", "flv", "m4v"].includes(ext)) {
+      return { icon: "icon-ui-video",  bg: "#eef3ff", fg: "#6e8efb" };
+    }
+    if (cat === "audio" || ["mp3", "wav", "flac", "aac", "ogg", "m4a"].includes(ext)) {
+      return { icon: "icon-ui-mic",    bg: "#fff6ec", fg: "#ff9f43" };
+    }
+    if (ext === "pdf") {
+      return { icon: "icon-ui-file-text", bg: "#ffeaea", fg: "#e74c3c" };
+    }
+    if (["doc", "docx", "txt", "md", "rtf", "odt"].includes(ext)) {
+      return { icon: "icon-ui-file-text", bg: "#eaf1ff", fg: "#3b82f6" };
+    }
+    if (["xls", "xlsx", "csv", "numbers"].includes(ext)) {
+      return { icon: "icon-ui-file-text", bg: "#e8f8ee", fg: "#10b981" };
+    }
+    if (["ppt", "pptx", "key"].includes(ext)) {
+      return { icon: "icon-ui-file-text", bg: "#fff3e6", fg: "#f59e0b" };
+    }
+    if (cat === "code" || ["py", "js", "ts", "html", "css", "java", "go", "rs", "c", "cpp", "h", "json", "yaml", "yml", "sh", "sql", "vue", "jsx", "tsx"].includes(ext)) {
+      return { icon: "icon-ui-file-text", bg: "#f3eeff", fg: "#8b5cf6" };
+    }
+    if (cat === "archive" || ["zip", "rar", "7z", "tar", "gz", "bz2", "xz", "apk"].includes(ext)) {
+      return { icon: "icon-ui-package", bg: "#fef3e2", fg: "#d97706" };
+    }
+    if (cat === "folder") {
+      return { icon: "icon-ui-folder", bg: "#eaf4ff", fg: "#2563eb" };
+    }
+    return { icon: "icon-ui-file-text", bg: "#f4f4f7", fg: "#6b7280" };
+  }
+
   _buildAttachmentCard(att) {
     const id = att.attachmentId || att.id || "";
     const state = att.state || "ready";
     const category = att.category || att.type || "file";
     const name = this._escapeHtml(att.name || "文件");
     const stateLabel = this._escapeHtml(this._attachmentStateLabel(state));
-    const size = this._escapeHtml(this._formatAttachmentSize(att.size));
+    const sizeStr = this._formatAttachmentSize(att.size);
+    const size = sizeStr ? this._escapeHtml(sizeStr) : "";
     const rawError = att.error && (att.error.message || att.error.code);
-    const error = rawError ? this._redactSensitive(rawError) : "";
-    const imageUrl = att.thumbnailUrl || att.thumbnail_url || "";
-    let preview = '<svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-attach"/></svg>';
-    if (category === "image" && imageUrl) {
-      preview = `<img src="${this._escapeHtml(attachmentPublicUrl(imageUrl))}" alt="">`;
-    }
+    const error = rawError ? this._escapeHtml(this._redactSensitive(rawError)) : "";
+    const ext = String(att.extension || att.name || "").split(".").pop().toUpperCase();
+    const visual = this._attachmentVisual(category, att.extension, att.name);
     const open = state === "ready" && id
       ? `<button type="button" data-attachment-open="${this._escapeHtml(id)}">打开</button>`
       : "";
@@ -631,12 +667,49 @@ class ChatManager {
     } else if (state === "unsupported") {
       notice = '<span class="chat-attach-card__notice">此文件类型暂不支持</span>';
     }
-    return `<div class="chat-attach-card" data-type="${this._escapeHtml(category)}" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">
-      ${preview}<span class="chat-attach-card__name">${name}</span>
-      <span class="chat-attach-card__meta">${size} ${stateLabel}</span>
-      ${notice}
-      ${error ? `<span class="chat-attach-card__error" title="${this._escapeHtml(error)}">${this._escapeHtml(error)}</span>` : ""}
-      <span class="chat-attach-card__actions">${open}${retry}</span>
+
+    // ── IMAGE category: standalone large thumbnail bubble ──
+    if (String(category).toLowerCase() === "image") {
+      let src = att.thumbnailUrl || att.thumbnail_url || "";
+      if (!src && att.downloadUrl) src = att.downloadUrl;
+      if (!src && att.download_url) src = att.download_url;
+      if (src) {
+        // Rewrite to absolute backend URL for Electron's file:// protocol
+        const absSrc = /^https?:|^data:/i.test(src)
+          ? src
+          : ("http://127.0.0.1:7890" + (src.startsWith("/") ? "" : "/") + src);
+        return `<div class="chat-attach-card chat-attach-card--image"
+                     data-type="image" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">
+          <div class="chat-attach-card__image-wrap">
+            <img src="${this._escapeHtml(absSrc)}" alt="${name}" loading="lazy">
+          </div>
+          <div class="chat-attach-card__image-meta">
+            <span class="chat-attach-card__image-name">${name}</span>
+            ${size ? `<span class="chat-attach-card__image-size">${size}</span>` : ""}
+          </div>
+          ${notice ? `<div class="chat-attach-card__notice-row">${notice}</div>` : ""}
+          ${error ? `<div class="chat-attach-card__error-row" title="${error}">${error}</div>` : ""}
+          ${(open || retry) ? `<div class="chat-attach-card__actions">${open}${retry}</div>` : ""}
+        </div>`;
+      }
+    }
+
+    // ── NON-IMAGE: horizontal file bubble card (large icon + name/size) ──
+    return `<div class="chat-attach-card chat-attach-card--file"
+                 data-type="${this._escapeHtml(category)}" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">
+      <div class="chat-attach-card__icon" style="background:${visual.bg}; color:${visual.fg}">
+        <svg class="icon icon--28" aria-hidden="true"><use href="#${visual.icon}"/></svg>
+        ${ext ? `<span class="chat-attach-card__ext" style="color:${visual.fg}">${this._escapeHtml(ext.slice(0, 5))}</span>` : ""}
+      </div>
+      <div class="chat-attach-card__info">
+        <span class="chat-attach-card__name">${name}</span>
+        <span class="chat-attach-card__meta">
+          ${size ? size + " · " : ""}${stateLabel}
+        </span>
+        ${notice ? `<span class="chat-attach-card__notice">${notice}</span>` : ""}
+        ${error ? `<span class="chat-attach-card__error" title="${error}">${error}</span>` : ""}
+      </div>
+      ${(open || retry) ? `<div class="chat-attach-card__actions">${open}${retry}</div>` : ""}
     </div>`;
   }
 
@@ -1310,6 +1383,18 @@ class ChatManager {
         this._retryAttachment(button.getAttribute("data-attachment-retry"));
       });
     }
+    // Clicking image thumbnail also opens the attachment
+    for (const imgCard of el.querySelectorAll(".chat-attach-card--image")) {
+      const cardId = imgCard.getAttribute("data-attachment-id");
+      const state = imgCard.getAttribute("data-state");
+      if (cardId && state === "ready") {
+        const img = imgCard.querySelector(".chat-attach-card__image-wrap img");
+        if (img) {
+          img.style.cursor = "zoom-in";
+          img.addEventListener("click", () => this._openAttachment(cardId));
+        }
+      }
+    }
 
     // Bind quote overlay click → jump to original
     const quoteOverlay = el.querySelector(".chat-quote-overlay");
@@ -1403,7 +1488,13 @@ class ChatManager {
         // (these are all in DOMPurify's default allow-list, so no
         // ADD_TAGS override is needed).
       });
-      return safe;
+      // Rewrite relative <img src="/..."> paths to absolute backend URL.
+      // Electron's file:// protocol cannot resolve /uploads/... correctly,
+      // so prefix the API base so images survive reload/restart.
+      return safe.replace(
+        /(<img[^>]+src=["'])(\/(?:uploads|api)[^"']*["'])/gi,
+        (_m, prefix, path) => prefix + "http://127.0.0.1:7890" + path,
+      );
     } catch (e) {
       console.warn("chat._renderMarkdown failed", e);
       return this._escapeHtml(body);

@@ -442,24 +442,25 @@ body {
 }
 .chat-history-control:disabled { cursor: wait; opacity: .65; }
 
-/* ===== timestamp (hover over the message row, overlaid on the bubble) ===== */
+/* ===== timestamp (displayed below bubble, always visible) ===== */
 .chat-msg__meta-time {
-  display: none;
-  position: absolute;
-  top: -2px;
-  left: 50%;
-  transform: translateX(-50%);
+  display: block;
+  clear: both;
+  margin-top: 4px;
   font-size: 10px;
-  color: var(--color-text-muted, #888);
-  background: var(--color-surface, #ffffff);
-  padding: 1px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
-  z-index: 2;
-  pointer-events: none;
+  color: var(--color-text-muted, #8e8e93);
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
-.chat-msg:hover .chat-msg__meta-time { display: block; }
+.chat-msg--user .chat-msg__body .chat-msg__meta-time {
+  text-align: right;
+  margin-right: 4px;
+}
+.chat-msg--assistant .chat-msg__body .chat-msg__meta-time {
+  text-align: left;
+  margin-left: 4px;
+}
 
 /* ===== R6.5: animations ===== */
 @keyframes chat-msg-enter {
@@ -1694,43 +1695,195 @@ body {
   border-radius: var(--radius-sm);
 }
 
-/* ===== Phase 5: Attachment cards (in chat bubble) ===== */
+/* ===== Phase 5: Attachment cards (WeChat/QQ bubble style) ===== */
 .chat-attachments {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 6px;
+  max-width: 100%;
 }
+
+/* Base card: soft rounded bubble, consistent with chat bubbles */
 .chat-attach-card {
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ── IMAGE card: standalone large thumbnail bubble ── */
+.chat-attach-card--image {
+  background: transparent;
+  padding: 0;
+  border: none;
+  max-width: 260px;
+}
+.chat-attach-card__image-wrap {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
   background: var(--bg-200);
-  padding: 8px;
+  line-height: 0;
   border: 1px solid var(--color-border);
-  max-width: 220px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
-.status-qq-badge--error {
-  background: rgba(231, 76, 60, 0.15);
-  color: var(--color-static-e74c3c, #e74c3c);
+.chat-attach-card__image-wrap img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+  cursor: pointer;
+  transition: transform 0.15s ease;
 }
-.chat-attach-card__name,
-.chat-attach-card__meta,
-.chat-attach-card__error { display: block; min-width: 0; overflow-wrap: anywhere; }
-.chat-attach-card__notice { display: block; color: var(--color-text-muted); font-size: 11px; font-style: italic; }
-.chat-attach-card__meta { color: var(--color-text-muted); font-size: 11px; }
-.chat-attach-card__error { color: var(--color-attach-failed); font-size: 11px; }
-.chat-attach-card__actions { display: inline-flex; gap: 4px; }
+.chat-attach-card__image-wrap img:hover {
+  transform: scale(1.01);
+}
+.chat-attach-card__image-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 0;
+}
+.chat-attach-card__image-name {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.chat-attach-card__image-size {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+.chat-attach-card__notice-row,
+.chat-attach-card__error-row {
+  padding: 4px 4px 0;
+  display: block;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+.chat-attach-card__error-row {
+  color: var(--color-attach-failed);
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+/* ── FILE card: horizontal bubble with large colored icon ── */
+.chat-attach-card--file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background-color: var(--bg-200);
+  border: 1px solid var(--color-border);
+  max-width: 320px;
+  min-width: 220px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.chat-attach-card[data-state="failed"].chat-attach-card--file {
+  border-color: rgba(227, 76, 76, 0.35);
+  background: rgba(227, 76, 76, 0.06);
+}
+.chat-attach-card[data-state="quarantined"].chat-attach-card--file {
+  border-color: rgba(240, 180, 0, 0.4);
+  background: rgba(240, 180, 0, 0.06);
+}
+
+.chat-attach-card__icon {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-attach-card__icon svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 1.75;
+}
+.chat-attach-card__ext {
+  position: absolute;
+  bottom: 3px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.92;
+  text-transform: uppercase;
+}
+
+.chat-attach-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-attach-card__name {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.chat-attach-card__meta {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.chat-attach-card__notice {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.3;
+}
+.chat-attach-card__error {
+  display: block;
+  color: var(--color-attach-failed);
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.chat-attach-card__actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .chat-attach-card__actions button,
 .chat-attach-thumb button {
   border: 0;
   background: transparent;
   color: var(--color-primary);
   cursor: pointer;
-  padding: 2px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
 }
-.chat-attach-card[data-type="image"] {
-  padding: 4px;
-  background: transparent;
-  border: none;
+.chat-attach-card__actions button:hover,
+.chat-attach-thumb button:hover {
+  background: rgba(0, 0, 0, 0.04);
 }
 
 /* Block-2 A1 + R6.4: chat avatar + name layout.

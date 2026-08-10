@@ -1,14 +1,37 @@
 "use strict";
 const { contextBridge, ipcRenderer } = require("electron");
 
+// 后端就绪等待：应用冷启动/重启后端时，渲染进程的请求会先于后端
+// 监听 7890 到达，主进程 http.request 立即返回 ECONNREFUSED，各面板
+// 会把该错误作为永久横幅展示（即使后端随后恢复也不消失）。这里在
+// IPC 层自动重试，等后端就绪后正常返回，从而根治启动窗口期的
+// "connect ECONNREFUSED 127.0.0.1:7890" 报错。超时后仍返回原始错误。
+const BACKEND_WAIT = Object.freeze({ maxMs: 15000, stepMs: 500 });
+
+function isBackendRefused(result) {
+  if (!result || result.status !== 0) return false;
+  const message = String((result.data && result.data.error) || "");
+  return /ECONNREFUSED|backend not ready/i.test(message);
+}
+
+async function withBackendWait(invoke, opts) {
+  const deadline = Date.now() + BACKEND_WAIT.maxMs;
+  for (;;) {
+    const result = await invoke(opts);
+    if (!isBackendRefused(result)) return result;
+    if (Date.now() >= deadline) return result;
+    await new Promise((resolve) => setTimeout(resolve, BACKEND_WAIT.stepMs));
+  }
+}
+
 contextBridge.exposeInMainWorld("aerie", {
   api: {
-    request: (opts) => ipcRenderer.invoke("api:request", opts),
+    request: (opts) => withBackendWait((o) => ipcRenderer.invoke("api:request", o), opts),
     // R7.0: multipart upload IPC. Renderer passes raw bytes (as Array)
     // + filename/contentType; the main process builds the multipart body
     // and forwards to the Python backend. This is the only path that
     // works under file:// (no CORS, no file:// fetch limitations).
-    upload: (opts) => ipcRenderer.invoke("api:upload", opts),
+    upload: (opts) => withBackendWait((o) => ipcRenderer.invoke("api:upload", o), opts),
     onMessage: (cb) => {
       ipcRenderer.on("chat:message", (_event, data) => cb(data));
     },

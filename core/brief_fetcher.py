@@ -701,6 +701,24 @@ async def fetch_github_trending(limit: int = 5, min_stars: int = 200) -> tuple[l
     return result, None
 
 
+async def fetch_astronomy() -> dict | None:
+    """Fetch today's astronomical ephemeris (sun/moon/solar term/events).
+
+    Local computation (moon phase/moonrise/solar term) + Open-Meteo sun times,
+    with local solar calc as 保底. Always returns a dict for the core data;
+    returns None only on an unexpected error.
+    """
+    try:
+        from core.ephemeris import get_daily_ephemeris, format_astronomy_line
+        e = get_daily_ephemeris()
+        e["summary"] = format_astronomy_line()
+        e["ts"] = int(time.time())
+        return e
+    except Exception as exc:
+        logger.warning("brief_fetcher: astronomy fetch failed: %s", exc)
+        return None
+
+
 async def fetch_weather(city: str = "") -> dict | None:
     from core.location_resolver import resolve_location_async
     from core.weather_service import fetch_weather_for_city, fetch_weather_for_current_location
@@ -774,12 +792,15 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
         # Never shrink a section below what feedback wants (e.g. DISLIKED=1).
         return max(feedback_cap, limit) if feedback_cap > 0 else limit
 
-    # 订阅配置：决定是否抓取可选的简报内容源（如 GitHub 高星新项目）。
+    # 订阅配置：决定是否抓取可选的简报内容源（如 GitHub 高星新项目、天象）。
     subs = _brief_subscriptions()
     gh_cfg = (subs.get("sources") or {}).get("github_trending") or {}
     gh_enabled = bool(subs.get("enabled", True)) and bool(gh_cfg.get("enabled", True))
     gh_min = int(gh_cfg.get("min_stars") or 200)
-    logger.debug("github_trending: subscription enabled=%s min_stars=%s", gh_enabled, gh_min)
+    astro_cfg = (subs.get("sources") or {}).get("astronomy") or {}
+    astro_enabled = bool(subs.get("enabled", True)) and bool(astro_cfg.get("enabled", True))
+    logger.debug("subscriptions: github_enabled=%s min_stars=%s astronomy_enabled=%s",
+                 gh_enabled, gh_min, astro_enabled)
 
     tasks = [
         fetch_ai_news(_cap("ai_news")),
@@ -788,6 +809,9 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
         fetch_cn_news(_cap("cn_news")),
         fetch_weather(city),
     ]
+    # 附加订阅源按固定顺序追加，便于下方按索引取回。
+    if astro_enabled:
+        tasks.append(fetch_astronomy())
     if gh_enabled:
         tasks.append(fetch_github_trending(5, gh_min))
     try:
@@ -800,7 +824,10 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
         return {"date": today, "errors": {"global": "total_timeout"}, "ts": int(time.time())}
 
     ai_news_r, it_news_r, intl_news_r, cn_news_r, weather = result[:5]
-    github_r = result[5] if len(result) > 5 else None
+    idx = 5
+    astronomy = result[idx] if astro_enabled else None
+    idx += 1
+    github_r = result[idx] if gh_enabled else None
     # Each of the four news returns is (items, err_str|None).
     def _unwrap_news(r):
         if isinstance(r, BaseException):
@@ -838,6 +865,7 @@ async def run_all(city: str | None = None, feedback: dict | None = None, limit: 
         "cn_news":   cn_news,
         "weather":   weather if isinstance(weather, dict) else None,
         "github_trending": github_items if gh_enabled else [],
+        "astronomy":       astronomy if astro_enabled else None,
         "todos":     get_today_todos(today),
         "todo_stats": get_todo_stats(today),
         "trends":    _generate_trends_accumulated(ai_news + it_news),

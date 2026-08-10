@@ -4,7 +4,7 @@
 从只能看到 CQ 码 / JSON 的原始状态，转成 AI 能理解 + 前端能好看呈现的内容：
 
 - 语音 (record)  : 调 NapCat ``get_record`` 下载并转 mp3 → ASR 转写文字。
-- 图片表情包(image): 调 NapCat ``get_image`` 拿到本地文件 → 视觉模型解析含义 → 落库缩略图。
+- 图片 (image)   : 调 NapCat ``get_image`` 拿到本地文件 → 视觉模型先分类（真实照片/表情包）再解析含义 → 落库缩略图。
 - QQ 自带表情(face): 内置 id → 文字含义映射（无需图像）。
 - 商城表情(mface): 直接用其 summary 字段。
 
@@ -187,18 +187,31 @@ class _SFClient:
             logger.warning("SiliconFlow ASR failed: %s", e)
             return ""
 
-    async def describe(self, image_path: str, question: str = "请用一句话描述这张表情包/图片的含义") -> str:
-        """图片视觉理解（Qwen3-VL），失败返回空串。"""
+    async def classify_and_describe(self, image_path: str) -> tuple[str, str]:
+        """图片分类 + 描述（Qwen3-VL），失败返回 ("unknown", "")。
+
+        先让视觉模型判定这张图是真实照片/截图，还是表情包/贴纸/梗图，
+        再给出含义描述。返回 (kind, desc)，kind ∈ {"photo", "sticker", "unknown"}。
+        """
         if not self.available or not Path(image_path).exists():
-            return ""
+            return "unknown", ""
         import mimetypes
         mime = mimetypes.guess_type(image_path)[0] or "image/png"
         try:
             b64 = base64.b64encode(Path(image_path).read_bytes()).decode("ascii")
         except Exception as e:
-            logger.warning("read image for vision failed: %s", e)
-            return ""
+            logger.warning("read image for vision classify failed: %s", e)
+            return "unknown", ""
         data_url = f"data:{mime};base64,{b64}"
+        question = (
+            "请先判断这张图片的类型，再一句话描述其内容/含义。\n"
+            "类型只能是以下两种之一：\n"
+            "- photo：真实照片、截图、生活照、风景、实物拍摄等纪实影像\n"
+            "- sticker：表情包、贴纸、梗图、Q版卡通表情、网络meme\n"
+            "输出格式（严格两行）：\n"
+            "type: photo 或 type: sticker\n"
+            "desc: <一句话描述>"
+        )
         try:
             resp = await self._client.chat.completions.create(
                 model=self.vision_model,
@@ -211,12 +224,38 @@ class _SFClient:
                         ],
                     }
                 ],
-                max_tokens=120,
+                max_tokens=160,
             )
-            return (resp.choices[0].message.content or "").strip()
+            raw = (resp.choices[0].message.content or "").strip()
         except Exception as e:
-            logger.warning("SiliconFlow vision failed: %s", e)
-            return ""
+            logger.warning("SiliconFlow vision classify failed: %s", e)
+            return "unknown", ""
+        return self._parse_classify(raw)
+
+    @staticmethod
+    def _parse_classify(raw: str) -> tuple[str, str]:
+        """解析视觉模型输出的 ``type/desc`` 两行结构，容错回退。"""
+        if not raw:
+            return "unknown", ""
+        kind = "unknown"
+        desc = ""
+        for line in raw.splitlines():
+            line = line.strip()
+            low = line.lower()
+            if low.startswith("type"):
+                if "sticker" in low:
+                    kind = "sticker"
+                elif "photo" in low:
+                    kind = "photo"
+            elif low.startswith("desc"):
+                desc = line.split(":", 1)[1].strip() if ":" in line else line[4:].strip()
+        if not desc:
+            # 兜底：模型没按格式走时，去掉 type 行，把剩余文本当描述
+            desc = "\n".join(
+                l.strip() for l in raw.splitlines()
+                if l.strip() and not l.strip().lower().startswith("type")
+            ).strip()
+        return kind, desc
 
 
 class QQMediaPreprocessor:
@@ -382,14 +421,14 @@ class QQMediaPreprocessor:
                 image_path = await self._download(seg_url, suffix=".png")
 
         # 落库到 uploads，拿到前端可展示的 url + thumbnail
-        attach = {"category": "image", "name": "表情包"}
+        attach = {"category": "image", "name": "图片"}
         if image_path and Path(image_path).exists():
             try:
                 from core.attachment_handler import process_image_upload
                 raw = Path(image_path).read_bytes()
                 content_type = "image/gif" if Path(image_path).suffix.lower() == ".gif" else "image/png"
                 saved = process_image_upload(
-                    filename=f"qq_sticker_{uuid.uuid4().hex[:8]}.png",
+                    filename=f"qq_image_{uuid.uuid4().hex[:8]}.png",
                     content=raw,
                     content_type=content_type,
                     upload_base=_PROJECT_ROOT / "uploads",
@@ -401,16 +440,20 @@ class QQMediaPreprocessor:
                     attach["size"] = saved.get("size", 0)
                     attach["saved_as"] = saved.get("saved_as", "")
             except Exception as e:
-                logger.warning("QQ sticker persistence failed: %s", e)
+                logger.warning("QQ image persistence failed: %s", e)
 
-        # 视觉解析含义
-        desc = ""
+        # 视觉分类 + 描述：区分真实照片 / 表情包，再决定标签与展示名
+        kind, desc = ("unknown", "")
         if image_path and Path(image_path).exists():
-            desc = await self.sf.describe(image_path)
+            kind, desc = await self.sf.classify_and_describe(image_path)
+
+        is_sticker = kind == "sticker"
         if desc:
-            text_parts.append(f"[表情包:{desc}]")
+            text_parts.append(f"[{'表情包' if is_sticker else '图片'}:{desc}]")
         else:
-            text_parts.append("[表情包]")
+            text_parts.append("[表情包]" if is_sticker else "[图片]")
+        if is_sticker:
+            attach["name"] = "表情包"
         attachments.append(attach)
 
     async def _download(self, url: str, suffix: str = ".bin") -> Optional[str]:

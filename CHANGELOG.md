@@ -162,6 +162,8 @@ All notable changes to this project will be documented in this file.
 
 - **分层混合爬虫**：`brief_fetcher.py` 按 `SECTIONS_PRIORITY` 逐层尝试（hn → crawl → aggregator → hot → bocha），Hacker News 与百度热搜无需 API Key
 - **GitHub Trending 订阅**：`brief_subscriptions.sources.github_trending` 可订阅热门仓库（`min_stars=200`）
+- **今日天象订阅**（`core/ephemeris.py`）：`brief_subscriptions.sources.astronomy` 可订阅每日天象——日出/日落、月出/月落、月相与亮度、节气、天文事件；数据源分层：Open-Meteo（成熟免费 API，日出日落+月出月落+月相做主源）→ 本地天文推算（太阳高度角/朔望月/黄道经度）兜底，网络不可用时降级为本地；`run_all` 返回 `astronomy` 字段，brief-drawer 新增天象分区，设置面板可开关
+- **生图细粒度时间/光线**（`companion._image_world_context`）：以精确太阳位置（海拔高度/方位角，NOAA 算法）为确定性基准，产出"太阳未出/刚出/已出/太阳高度约X度、鱼肚白、晨昏、日落余晖、深夜凌晨"等逐日差异描述，替代粗粒度按小时查表；夜晚/傍晚并进本地朔月相（瞬时无网络）；确定性细粒度描述作为 AI 接力的可靠基准，AI 在其上挑选画面综合天气判断，兜底路径同样使用该基准
 - **全屏天气预报**：brief-drawer 新增全屏天气展示与抽屉样式优化
 
 #### 办公与文档 / Office & Docs

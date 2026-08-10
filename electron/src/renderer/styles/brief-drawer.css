@@ -1631,3 +1631,71 @@
 }
 .brief-drawer__github-summary { font-size: 12px; color: var(--color-text-muted, #888); line-height: 1.4; }
 .brief-drawer__github-item .brief-drawer__news-link { align-self: flex-start; }
+
+/* ── Astronomy (今日天象) Section ────────────────── */
+.brief-drawer__section--astronomy {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--glass-border));
+}
+.brief-drawer__section--astronomy .brief-drawer__section-header {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 8%, transparent) 0%,
+    transparent 100%
+  );
+}
+.brief-drawer__astro-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+.brief-drawer__astro-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primary, #ffd1dc) 8%, transparent);
+}
+.brief-drawer__astro-cell-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary, #a13252);
+  font-size: 17px;
+}
+.brief-drawer__astro-cell-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.brief-drawer__astro-cell-label {
+  font-size: 10px;
+  color: var(--color-text-muted, #888);
+}
+.brief-drawer__astro-cell-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brief-drawer__astro-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 12px;
+}
+.brief-drawer__astro-event {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--color-primary, #a13252);
+}
+.brief-drawer__astro-note {
+  padding: 0 14px 12px;
+  font-size: 10.5px;
+  color: var(--color-text-muted, #888);
+}

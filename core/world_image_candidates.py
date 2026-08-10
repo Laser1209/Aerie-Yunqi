@@ -13,6 +13,7 @@ import copy
 import inspect
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -38,6 +39,82 @@ _IMAGE_CANDIDATE_TOPICS = {
     "world.image_candidates",
 }
 _MANUAL_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
+
+# 视觉场景判重的参考窗口：最近该时段内成功生成的图才作为"参考图"。用于跨路径
+# （主动发图 / 聊天要图）同画面判重——两条路径都汇聚到消费者，统一按"画面意思"
+# 去重，避免 text 判重因 reason_code 不同而互相看不见。
+_VISION_DEDUP_WINDOW_SEC = 14400  # 4h：覆盖开发期跨重启间隔，且 evening 主题一天只一次
+
+_VISION_SCENE_QUESTION = (
+    "下面是一段【即将生成的图片提示词】。请把它和上面这张【参考图片】做"
+    "'是否会让人感觉重复'的判定。\n\n"
+    "判定规则：\n"
+    "- 如果按这段提示词生成的图片，整体氛围、场景类型、时间段、主体动作与参考图属于"
+    "'同一类生活照'，让人一看就觉得'这跟刚才那张是同一个场景/重复了'，就判：同一场景。\n"
+    "- 如果明显是不同场景（不同地点/时间段/氛围/主体活动），就判：不同场景。\n"
+    "- 重要：忽略细微差异，不要因为城市名、具体家具摆设、房间细节不同就判不同。"
+    "只看整体是不是'同一类居家/生活氛围'。\n\n"
+    "【待生成提示词】: {prompt}\n\n"
+    "请只回答，不要多余内容，格式如下：\n"
+    "判定: 同一场景 或 不同场景\n"
+    "理由: 一句话说明依据"
+)
+
+
+def _vision_scene_same(image_path: str | Path, prompt: str) -> bool:
+    """用 SiliconFlow Qwen3-VL 判断新提示词与参考图是否同一场景（可重复感）。
+
+    复用项目既有视觉链路（qq_media / siliconflow-vision 同款 SiliconFlow + Qwen3-VL）。
+    失败/无 key/异常一律返回 False（视为"不同场景"，不误伤正常生图）——
+    视觉判重是增强层，只有高置信的"同一场景"才被采纳为跳过。
+    """
+    import base64
+    import mimetypes
+
+    api_key = os.getenv("SILICONFLOW_API_KEY")
+    if not api_key:
+        return False
+    path = Path(image_path)
+    if not path.exists() or not path.is_file():
+        return False
+    try:
+        from openai import OpenAI
+    except Exception:
+        return False
+    base_url = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.com/v1")
+    model = os.getenv("VISION_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
+    mime = mimetypes.guess_type(path.name)[0] or "image/png"
+    try:
+        b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    except Exception:
+        return False
+    data_url = f"data:{mime};base64,{b64}"
+    question = _VISION_SCENE_QUESTION.format(prompt=prompt)
+    try:
+        import httpx
+
+        client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            http_client=httpx.Client(trust_env=False, timeout=60),
+        )
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": question},
+                ],
+            }],
+            max_tokens=256,
+            temperature=0,
+        )
+        answer = str((resp.choices[0].message.content) or "").strip()
+    except Exception:
+        logger.debug("vision scene dedup provider call failed", exc_info=True)
+        return False
+    return "同一场景" in answer
 
 
 class JsonWorldImageCandidateStore:
@@ -335,6 +412,25 @@ class WorldImageCandidateConsumer:
                 side_effects=_public_side_effects(workflow_result),
                 workflow_result=workflow_result,
             )
+        if workflow_status == "dedup_skipped":
+            record = self._record(
+                "dedup_skipped",
+                candidate,
+                event,
+                reason="vision_same_scene",
+                workflow_result=workflow_result,
+            )
+            acked = await self._ack(_event_sequence(event))
+            return self._result(
+                status="dedup_skipped",
+                event=event,
+                candidate=candidate,
+                reason="vision_same_scene",
+                acked=acked,
+                side_effects=_public_side_effects(workflow_result),
+                record=record,
+                workflow_result=workflow_result,
+            )
         completed = workflow_status == "completed" and bool(workflow_result.get("delivery_plan"))
         status = "completed" if completed else "failed"
         record = self._record(
@@ -392,6 +488,60 @@ class WorldImageCandidateConsumer:
             if now_ts - done_ts <= window_sec:
                 return True
         return False
+
+    def _recent_completed_asset(self, window_sec: float) -> str:
+        """最近窗口内成功生成并落地资产的最晚一条 asset_url，用作画面判重参考图。"""
+        if window_sec <= 0:
+            return ""
+        now_ts = self.clock().timestamp()
+        data = self.store._load() if hasattr(self.store, "_load") else {}
+        best: tuple[float, str] | None = None
+        for record in (data.get("records_by_key") or {}).values():
+            if not isinstance(record, dict):
+                continue
+            if str(record.get("status") or "") != "completed":
+                continue
+            updated = str(record.get("updated_at") or "")
+            if not updated:
+                continue
+            try:
+                done_ts = datetime.fromisoformat(updated.replace("Z", "+00:00")).timestamp()
+            except Exception:
+                continue
+            if now_ts - done_ts > window_sec:
+                continue
+            asset = str(((record.get("workflow") or {}).get("asset_url")) or "")
+            if asset and (best is None or done_ts > best[0]):
+                best = (done_ts, asset)
+        return best[1] if best else ""
+
+    @staticmethod
+    def _resolve_asset_path(asset_url: str) -> Path | None:
+        name = str(asset_url or "").split("/")[-1]
+        if not name:
+            return None
+        return (Path.cwd() / "uploads" / name).resolve()
+
+    def _check_same_scene_sync(self, prompt: str) -> bool:
+        if not prompt:
+            return False
+        asset = self._recent_completed_asset(_VISION_DEDUP_WINDOW_SEC)
+        if not asset:
+            return False
+        path = self._resolve_asset_path(asset)
+        if path is None or not path.is_file():
+            return False
+        try:
+            return _vision_scene_same(path, prompt)
+        except Exception:
+            logger.debug("vision scene dedup judgement failed", exc_info=True)
+            return False
+
+    async def _check_same_scene_skip(self, prompt: str) -> bool:
+        try:
+            return await asyncio.to_thread(self._check_same_scene_sync, prompt)
+        except Exception:
+            return False
 
     def _flag_enabled(self) -> bool:
         try:
@@ -530,6 +680,26 @@ class WorldImageCandidateConsumer:
     async def _run_workflow(self, candidate: dict[str, Any]) -> dict[str, Any]:
         try:
             prompt = await self._resolve_prompt(candidate)
+        except Exception:
+            logger.debug("world image candidate prompt resolve failed", exc_info=True)
+            return {
+                "status": "failed",
+                "side_effects": dict(_NO_SIDE_EFFECTS),
+                "delivery_plan": None,
+            }
+        # 视觉场景判重（跨路径同画面去重）：主动发图与聊天要图都汇聚于此，
+        # 在花钱生成前，用最近一张已生成图 + 新提示词让视觉模型判是否同场景。
+        if await self._check_same_scene_skip(prompt):
+            logger.info(
+                "[WorldImage] skip same-scene image reason=%s prompt_key=%s",
+                candidate.get("reason_code"), candidate.get("prompt_key"),
+            )
+            return {
+                "status": "dedup_skipped",
+                "side_effects": dict(_NO_SIDE_EFFECTS),
+                "delivery_plan": None,
+            }
+        try:
             result = await asyncio.to_thread(
                 self._run_workflow_blocking, prompt, candidate
             )
@@ -684,6 +854,7 @@ class WorldImageCandidateConsumer:
                 "status": str(workflow.get("status") or ""),
                 "request_id": str(workflow.get("request_id") or ""),
                 "delivery_plan_id": str(delivery.get("delivery_plan_id") or ""),
+                "asset_url": str(delivery.get("asset_url") or ""),
             },
             "side_effects": _public_side_effects(workflow),
             "updated_at": self.clock().isoformat(),

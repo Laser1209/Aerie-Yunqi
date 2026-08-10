@@ -53,6 +53,8 @@ from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry
 from core.world_port import build_world_port
 from core.world_simulation import LOCAL_TZ
+from core import solar_time
+from core.ephemeris import moon_phase
 from config.persona_loader import load_settings, load_proactive_config
 from knowledge.kb import KnowledgeBase
 from core.knowledge_indexer import resolve_embedding_fn
@@ -137,7 +139,9 @@ _IMAGE_LIGHT_PROVIDER = "siliconflow-light"
 _IMAGE_LIGHT_RELAY_TIMEOUT = 8.0
 # 主动发图同主题去重窗口：即使后端重启清空进程内存，同一视觉主题在此窗口内
 # 也不会被重复发布（读持久化审计存储判断），避免"每次重启生成一张一模一样的图"。
-_IMAGE_TOPIC_DEDUP_SEC = 1800
+# 4h：覆盖开发期跨重启间隔；视觉主题随时间相变化（morning/afternoon/evening...），
+# 同一天内不会在窗口内重复出现，故较长窗口不会误伤正常的新场景。
+_IMAGE_TOPIC_DEDUP_SEC = 14400
 
 _TIME_OF_DAY_CN: dict[str, str] = {
     "night": "深夜",
@@ -527,6 +531,15 @@ class Companion:
                 self.chat_request_queue_error = "queue_worker_start_failed"
                 logger.exception("chat request worker start failed")
         self.qq.set_message_handler(self._on_qq_message)
+        # 断连探测：把 QQ 心跳存活日志接到状态页「运行日志」黑框（NapCat launcher 日志缓冲）
+        try:
+            from core.napcat_launcher import get_launcher
+            self.qq.set_heartbeat_log(
+                lambda text: get_launcher().add_log(f"[QQ] {text}")
+            )
+            logger.info("QQ heartbeat log sink wired to status-page running-log box")
+        except Exception:
+            logger.exception("QQ heartbeat log sink wiring failed")
         await self._start_push_event_engine()
 
         # Workstream 7: idempotently seed `dialogue` knowledge (发起腔 principles).
@@ -2360,12 +2373,33 @@ class Companion:
             elif weather_cn:
                 weather_desc = f"现在天气{weather_cn}"
 
+        # 细粒度时间/光线：以精确太阳位置（海拔高度、方位角）为确定性基准，
+        # 产出"太阳刚出/鱼肚白/太阳高度约X度/日落余晖"等逐日差异描述，
+        # 替代粗粒度的按小时查表。月相用本地朔望月计算（无网络、瞬时、缓存）。
+        prompt_key = str((candidate or {}).get("prompt_key") or "default")
+        fine = solar_time.fine_time_descriptor(clock_dt, prompt_key)
+        time_cn = str(fine.get("time_cn") or "").strip()
+        light_cn = str(fine.get("light_cn") or "").strip()
+        moon = moon_phase(clock_dt)
+        moon_desc = f"月相{moon['emoji']}{moon['phase_name']}，亮度{moon['illumination_pct']}%"
+        # 天黑了或傍晚，月亮才真正进得了画面，才并进时间光线描述。
+        if phase in ("night", "evening"):
+            combined_light = "，".join(p for p in (time_cn, light_cn, moon_desc) if p)
+        else:
+            combined_light = "，".join(p for p in (time_cn, light_cn) if p)
+
         context = {
-            "prompt_key": str((candidate or {}).get("prompt_key") or ""),
+            "prompt_key": prompt_key,
             "scene": str((candidate or {}).get("scene") or ""),
             "time_of_day": phase,
             "clock": clock_str,
-            "time_of_day_light": _TIME_OF_DAY_LIGHT_CN.get(phase, ""),
+            "time_of_day_light": combined_light,      # 确定性基准（细粒度），下游/兜底直接可用
+            "time_cn": time_cn,                       # 精细时段 + 太阳高度
+            "light_cn": light_cn,                     # 房间光线 + 窗外（结合公寓朝向）
+            "moon_desc": moon_desc,                   # 月相（夜/傍晚并入 combined）
+            "sun_altitude_deg": str(fine.get("sun_altitude_deg") or ""),
+            "sunrise": str(fine.get("sunrise") or ""),
+            "sunset": str(fine.get("sunset") or ""),
             "weather_desc": weather_desc,
             "city": city,
             "location": location,
@@ -2392,9 +2426,14 @@ class Companion:
         events = [str(e.get("title")) for e in (context.get("city_events") or []) if isinstance(e, dict) and e.get("title")]
 
         lines = []
-        if phase:
+        if time_cn or light_cn:
+            detail = "。".join(p for p in (time_cn, light_cn) if p)
+            lines.append(f"时间光线：{detail}")
+        elif phase:
             phase_cn = _TIME_OF_DAY_CN.get(phase, phase)
             lines.append(f"时间：{phase_cn}（{clock}）。{time_light}" if time_light else f"时间：{phase_cn}（{clock}）。")
+        if phase in ("night", "evening") and context.get("moon_desc"):
+            lines.append(f"天象：{context.get('moon_desc')}")
         if weather_desc:
             lines.append(f"天气：{weather_desc}")
         place_parts = []

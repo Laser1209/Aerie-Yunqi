@@ -468,6 +468,9 @@ class SettingsPanel {
       const ghMinEl = document.getElementById("setting-sub-github-min");
       if (ghEl) ghEl.checked = gh.enabled !== false;
       if (ghMinEl) ghMinEl.value = String(gh.min_stars != null ? gh.min_stars : 200);
+      const astroEl = document.getElementById("setting-sub-astronomy");
+      const astro = subSrcs.astronomy || {};
+      if (astroEl) astroEl.checked = astro.enabled !== false;
     } catch (e) {
       console.warn("settings load failed", e);
     }
@@ -501,6 +504,9 @@ class SettingsPanel {
           github_trending: {
             enabled: document.getElementById("setting-sub-github")?.checked === true,
             min_stars: Number(document.getElementById("setting-sub-github-min")?.value || 200),
+          },
+          astronomy: {
+            enabled: document.getElementById("setting-sub-astronomy")?.checked === true,
           },
         },
       },

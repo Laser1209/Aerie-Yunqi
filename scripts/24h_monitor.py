@@ -34,6 +34,9 @@ _START = time.monotonic()
 ROOT = Path(__file__).resolve().parent.parent
 LOG_ROOT = Path(os.getenv("AERIE_24H_LOG", r"D:\Aerie\24H-LOG"))
 PROBES_FILE = Path(os.getenv("AERIE_PROBES_FILE", ROOT / "config" / "monitor_probes.yaml"))
+# Persisted resume state (cognition watermark, etc.) so a restart continues
+# seamlessly instead of re-recording already-captured data.
+STATE_FILE = Path(os.getenv("AERIE_STATE_FILE", LOG_ROOT / "09_STATE" / "monitor_state.json"))
 
 # Collection intervals (seconds)
 SYS_INTERVAL = int(os.getenv("AERIE_SYS_INTERVAL", "30"))
@@ -465,6 +468,47 @@ def _extract_cognition(row: dict) -> dict:
     }
 
 
+def _load_state() -> dict:
+    """Load persisted resume state (cognition watermark, ...)."""
+    try:
+        if STATE_FILE.exists():
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        pass
+    return {}
+
+
+def _save_state(state: dict) -> None:
+    """Atomically persist resume state so a restart can resume seamlessly."""
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = STATE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(STATE_FILE)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _cognition_disk_watermark() -> int:
+    """Highest cognition_id already written to disk (for clean resume)."""
+    m = 0
+    cog_dir = LOG_ROOT / "10_COGNITION"
+    if not cog_dir.exists():
+        return 0
+    for f in cog_dir.glob("*.jsonl"):
+        try:
+            for line in f.read_text(encoding="utf-8").splitlines():
+                try:
+                    rid = json.loads(line).get("cognition_id")
+                    if isinstance(rid, int) and rid > m:
+                        m = rid
+                except Exception:  # noqa: BLE001
+                    continue
+        except Exception:  # noqa: BLE001
+            continue
+    return m
+
+
 async def _cognition_loop(backend: str, session: aiohttp.ClientSession,
                           sentinel: Sentinel) -> None:
     """Capture agent's internal dialogue flow via /api/cognition endpoints.
@@ -472,18 +516,32 @@ async def _cognition_loop(backend: str, session: aiohttp.ClientSession,
     Polls recent trace ids, fetches full detail for every newly-observed row,
     and condenses each into 10_COGNITION so the 9-stage pipeline, the ReAct
     thought chain (react_trace) and tool/skill calls are fully recorded.
+
+    Resume-aware: the highest processed cognition_id is persisted (and also
+    recovered from existing 10_COGNITION data), so a monitor restart continues
+    from the watermark instead of re-recording already-captured traces.
     """
+    state = _load_state()
     seen: set[int] = set()
+    watermark = int(state.get("cognition_max_id") or _cognition_disk_watermark() or 0)
+    if watermark:
+        log.info("cognition resumes from watermark=%s", watermark)
     while True:
         try:
             _, body, _ = await _request_json(
-                session, "GET", f"{backend}/api/cognition/recent",
+                session, "GET", f"{backend}/api/cognition/recent?limit=200",
                 timeout=10, json_body=None)
             traces = (body or {}).get("traces") or []
+            # Only ids strictly above the watermark are new; this prevents a
+            # restart from re-capturing already-recorded rows that still
+            # appear in the recent window.
             new_ids = [t["id"] for t in traces
-                       if t.get("id") not in seen and t.get("id") is not None]
+                       if isinstance(t.get("id"), int)
+                       and t["id"] > watermark and t["id"] not in seen]
+            max_new = 0
             for rid in new_ids[:COGNITION_BATCH]:
                 seen.add(rid)
+                max_new = max(max_new, rid)
                 try:
                     st, detail, _ = await _request_json(
                         session, "GET", f"{backend}/api/cognition/{rid}", timeout=10)
@@ -495,6 +553,10 @@ async def _cognition_loop(backend: str, session: aiohttp.ClientSession,
                 except Exception as exc:  # noqa: BLE001
                     _write_error("P2", "cognition", f"detail fetch failed: {exc}",
                                  {"cognition_id": rid})
+            if max_new > 0:
+                watermark = max(watermark, max_new)
+                state["cognition_max_id"] = watermark
+                _save_state(state)
         except Exception as exc:  # noqa: BLE001
             # Backend down is normal; log once per cycle at most.
             _write_error("P2", "cognition", f"recent fetch failed: {exc}")

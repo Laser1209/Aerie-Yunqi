@@ -103,15 +103,15 @@ async def test_voice_no_transcript_falls_back_to_label(tmp_path):
     assert atts[0]["transcript"] == ""
 
 
-# ── 表情包：视觉解析 + 缩略图落库 ──────────────────
+# ── 图片 / 表情包：视觉分类 + 描述 + 缩略图落库 ──────────
 @pytest.mark.asyncio
-async def test_image_sticker_described_and_persisted(tmp_path, monkeypatch):
+async def test_image_photo_described_and_persisted(tmp_path, monkeypatch):
     fake_img = base64.b64encode(b"image-bytes").decode("ascii")
     qq = MagicMock()
     qq.get_image = AsyncMock(return_value={"status": "ok", "data": {"file": fake_img}})
 
     sf = MagicMock()
-    sf.describe = AsyncMock(return_value="一个猫猫在笑")
+    sf.classify_and_describe = AsyncMock(return_value=("photo", "一张阳光下的猫猫照片"))
     sf.transcribe = AsyncMock(return_value="")
 
     saved = {
@@ -131,11 +131,79 @@ async def test_image_sticker_described_and_persisted(tmp_path, monkeypatch):
 
     content, atts = await pre.preprocess(msg)
 
+    assert "[图片:" in content
     assert "猫猫" in content
     assert atts[0]["category"] == "image"
+    assert atts[0]["name"] == "图片"
     assert atts[0]["url"] == "/uploads/q.png"
     assert atts[0]["thumbnail_url"]
     qq.get_image.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_image_sticker_labeled_as_sticker(tmp_path, monkeypatch):
+    fake_img = base64.b64encode(b"image-bytes").decode("ascii")
+    qq = MagicMock()
+    qq.get_image = AsyncMock(return_value={"status": "ok", "data": {"file": fake_img}})
+
+    sf = MagicMock()
+    sf.classify_and_describe = AsyncMock(return_value=("sticker", "一个搞笑的表情包"))
+    sf.transcribe = AsyncMock(return_value="")
+
+    saved = {
+        "status": "ok",
+        "url": "/uploads/q.png",
+        "thumbnail_url": "/uploads/.image_assets/thumbs/t.png",
+        "size": 10,
+        "saved_as": "q.png",
+    }
+    monkeypatch.setattr(
+        "core.attachment_handler.process_image_upload",
+        lambda **kw: dict(saved),
+    )
+
+    pre = QQMediaPreprocessor(qq_client=qq, sf_client=sf, media_dir=tmp_path)
+    msg = _msg_with_segments([{"type": "image", "data": {"file": "f.png"}}])
+
+    content, atts = await pre.preprocess(msg)
+
+    assert "[表情包:" in content
+    assert atts[0]["name"] == "表情包"
+
+
+@pytest.mark.asyncio
+async def test_image_vision_fail_falls_back_to_label(tmp_path):
+    qq = MagicMock()
+    qq.get_image = AsyncMock(return_value={"status": "ok", "data": {"file": "some-local-path"}})
+    sf = MagicMock()
+    sf.classify_and_describe = AsyncMock(return_value=("unknown", ""))
+    sf.transcribe = AsyncMock(return_value="")
+
+    pre = QQMediaPreprocessor(qq_client=qq, sf_client=sf, media_dir=tmp_path)
+    msg = _msg_with_segments([{"type": "image", "data": {"file": "f.png"}}])
+
+    content, atts = await pre.preprocess(msg)
+    assert "[图片]" in content
+    assert atts[0]["name"] == "图片"
+
+
+# ── 视觉分类解析（type/desc 两行结构）────────────────
+def test_parse_classify_photo():
+    assert qq_media._SFClient._parse_classify("type: photo\ndesc: 一张海边的照片") == ("photo", "一张海边的照片")
+
+
+def test_parse_classify_sticker():
+    assert qq_media._SFClient._parse_classify("type: sticker\ndesc: 一个搞笑表情包") == ("sticker", "一个搞笑表情包")
+
+
+def test_parse_classify_no_format_falls_back_to_desc():
+    kind, desc = qq_media._SFClient._parse_classify("type: sticker\n一个卡通猫猫")
+    assert kind == "sticker"
+    assert "卡通猫猫" in desc
+
+
+def test_parse_classify_empty():
+    assert qq_media._SFClient._parse_classify("") == ("unknown", "")
 
 
 # ── face 表情 + 文本混合 ──────────────────────────

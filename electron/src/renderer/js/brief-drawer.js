@@ -50,6 +50,7 @@ const _ICONS = {
   news:     _SVG("0 0 24 24", '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6z"/>', 14),
   external: _SVG("0 0 24 24", '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>', 10),
   sparkles: _SVG("0 0 24 24", '<path d="M12 3l1.9 5.8L20 10l-5.8 1.9L12 18l-1.9-5.8L4 10l5.8-1.9L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/>', 12),
+  moon:     _SVG("0 0 24 24", '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>', 13),
 };
 
 const SECTION_META = {
@@ -475,6 +476,11 @@ class BriefDrawer {
       fragment.appendChild(this._renderGithubSection(data.github_trending));
     }
 
+    /* 4c. 今日天象 (订阅源，需后端订阅开启) */
+    if (data.astronomy) {
+      fragment.appendChild(this._renderAstronomySection(data.astronomy));
+    }
+
     /* 5. Weather */
     if (data.weather) {
       fragment.appendChild(
@@ -895,6 +901,53 @@ class BriefDrawer {
       ` : ""}
     `;
     return a;
+  }
+
+  /* ── Section 4c: 今日天象 (订阅源) ───────────────── */
+  _renderAstronomySection(astro) {
+    const a = astro || {};
+    const section = _el("section", { class: "brief-drawer__section brief-drawer__section--astronomy" });
+    const header = _el("div", { class: "brief-drawer__section-header" });
+    header.innerHTML = `
+      <div class="brief-drawer__section-title">
+        ${_ICONS.moon} <span>今日天象</span>
+        ${a.solar_term ? `<span class="brief-drawer__section-badge">${_esc(a.solar_term)}</span>` : ""}
+      </div>
+    `;
+    section.appendChild(header);
+
+    const grid = _el("div", { class: "brief-drawer__astro-grid" });
+
+    const cell = (icon, label, value) => `
+      <div class="brief-drawer__astro-cell">
+        <span class="brief-drawer__astro-cell-icon">${icon}</span>
+        <div class="brief-drawer__astro-cell-body">
+          <span class="brief-drawer__astro-cell-label">${_esc(label)}</span>
+          <span class="brief-drawer__astro-cell-value">${_esc(value || "—")}</span>
+        </div>
+      </div>
+    `;
+
+    grid.innerHTML = [
+      cell(_ICONS.sun, "日出 / 日落", `${a.sunrise || "—"} / ${a.sunset || "—"}`),
+      cell(a.moon_phase_emoji || _ICONS.moon, `月相 · 亮度${a.moon_illumination_pct != null ? a.moon_illumination_pct + "%" : ""}`, `${a.moon_phase || "—"}`),
+      cell(_ICONS.clock, "月出 / 月落", `${a.moonrise || "—"} / ${a.moonset || "—"}`),
+    ].join("");
+
+    section.appendChild(grid);
+
+    if (a.events && a.events.length) {
+      const ev = _el("div", { class: "brief-drawer__astro-events" });
+      ev.innerHTML = a.events.map(e => `<span class="brief-drawer__astro-event">${_esc(e)}</span>`).join("");
+      section.appendChild(ev);
+    }
+
+    if (a.source && a.source === "local") {
+      const note = _el("div", { class: "brief-drawer__astro-note" });
+      note.textContent = "网络天象不可用，已用本地推算（保底）";
+      section.appendChild(note);
+    }
+    return section;
   }
 
   /* ── Section 5b: Weather (expanded full forecast) ─── */

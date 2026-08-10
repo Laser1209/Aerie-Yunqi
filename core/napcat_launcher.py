@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — NapCat launcher (manual control via API).
+"""Aerie · 云栖 v0.1.0-beta.1 — NapCat launcher (manual control via API).
 
 Exposes status query and start/stop for the Electron NapCat panel.
 Does NOT auto-start — user clicks "Start" in the UI.
@@ -10,6 +10,7 @@ import logging
 import socket
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,13 @@ class NapcatLauncher:
 
     def get_logs(self, limit: int = 50) -> list[str]:
         return self._logs[-limit:]
+
+    def add_log(self, text: str) -> None:
+        """Append a liveness line to the Status-page running-log box (e.g. QQ client heartbeat)."""
+        stamp = datetime.now().strftime("%H:%M:%S")
+        self._logs.append(f"[{stamp}] {text}")
+        if len(self._logs) > 1000:
+            del self._logs[: len(self._logs) - 1000]
 
     async def start(self) -> dict:
         """Launch NapCat via launcher-user.bat."""

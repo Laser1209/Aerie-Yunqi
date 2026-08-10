@@ -137,7 +137,7 @@ class MultiLayerDecision:
             "context_snapshot": {
                 k: v for k, v in context.items()
                 if k in ("emotion_label", "user_busy", "route_mode", "source",
-                          "active_eruption", "tools_offered")
+                          "active_eruption", "tools_offered", "recall_available")
             },
         }
 
@@ -181,9 +181,15 @@ class MultiLayerDecision:
     def _apply_context(self, candidates: list[Candidate], ctx: dict) -> dict[str, float]:
         out: dict[str, float] = {}
         tools = bool(ctx.get("tools_offered"))
+        recall_ok = bool(ctx.get("recall_available", True))
         for c in candidates:
             bias = self._CONTEXT_BIAS.get(c.intent, 0.5)
             if c.intent == "tool_call" and not tools:
+                bias = 0.10
+            # Recall is a heavy weapon: if RecallManager budget/window
+            # forbids it right now, suppress the recall candidate so the
+            # predicted race matches what the executor can actually do.
+            if c.intent == "recall" and not recall_ok:
                 bias = 0.10
             out[c.id] = bias
         return out
@@ -205,8 +211,14 @@ class MultiLayerDecision:
         user_busy: bool = False,
         tools_offered: bool = False,
         active_eruption: str | None = None,
+        recall_available: bool = True,
     ) -> dict:
-        """Build the candidate set + context, then run decide()."""
+        """Build the candidate set + context, then run decide().
+
+        ``recall_available`` mirrors RecallManager.can_recall so the race
+        suppresses the recall candidate when the real executor would refuse
+        (window / cooldown / session budget).
+        """
         cands = [
             Candidate("reply", "reply"),
             Candidate("tool_call", "tool_call", {"available": tools_offered}),
@@ -220,5 +232,6 @@ class MultiLayerDecision:
             "source": source,
             "tools_offered": tools_offered,
             "active_eruption": active_eruption,
+            "recall_available": recall_available,
         }
         return self.decide(cands, ctx)

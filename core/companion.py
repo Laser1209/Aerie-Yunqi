@@ -1336,6 +1336,7 @@ class Companion:
                 row["user_id"], reason="manual_api",
                 channel=channel, channel_account_id=account,
             )
+            from core.chat_events import emit as _emit
             if ok.get("status") == "ok":
                 self.db.update(
                     "chat_log",
@@ -1347,17 +1348,45 @@ class Companion:
                     "id = ?",
                     (msg_id,),
                 )
-                from core.chat_events import emit as _emit
                 _emit(
                     "recall",
                     id=msg_id,
                     user_id=row["user_id"],
                     role="assistant",
                 )
+                _emit(
+                    "decision_actual",
+                    user_id=row["user_id"],
+                    actual={
+                        "intent": "recall",
+                        "source": "manual",
+                        "triggered": True,
+                        "executed": True,
+                        "status": "ok",
+                        "reason": "manual_api",
+                        "budget_gate": "ok",
+                        "channel": channel,
+                    },
+                )
                 return {
                     "status": "ok", "msg_id": msg_id,
                     "qq_recalled": ok.get("qq_recalled", False), "channel": channel,
                 }
+            # 预算/窗口拒绝时也回写实际结果, 让决策赛马展示真实
+            _emit(
+                "decision_actual",
+                user_id=row["user_id"],
+                actual={
+                    "intent": "recall",
+                    "source": "manual",
+                    "triggered": True,
+                    "executed": False,
+                    "status": "skipped",
+                    "reason": "manual_api",
+                    "budget_gate": ok.get("reason", "unknown"),
+                    "channel": channel,
+                },
+            )
             return {"status": "error", "reason": ok.get("reason", "unknown")}
         except Exception as e:
             logger.exception("recall_message error")
@@ -1469,6 +1498,7 @@ class Companion:
                         channel_account_id=first.channel_account_id,
                         user_id=first.user_id,
                     )
+                    _recall_result: dict[str, Any] | None = None
                     if decision.recall:
                         logger.info(
                             "RecallJudge: recall previous reply (%s), user=%s",
@@ -1476,7 +1506,7 @@ class Companion:
                             first.user_id,
                         )
                         try:
-                            await self.recall_manager.try_recall(
+                            _recall_result = await self.recall_manager.try_recall(
                                 first.user_id,
                                 reason="recall_judge",
                                 channel=first.channel or "qq",
@@ -1484,6 +1514,39 @@ class Companion:
                             )
                         except Exception:
                             logger.exception("recall_judge try_recall failed")
+                    else:
+                        _recall_result = {"status": "skipped", "reason": decision.reason}
+                    # 回写决策赛马: 展示真实执行结果 (预测 vs 实际)
+                    try:
+                        from core.chat_events import emit as _emit_decision
+                        _emit_decision(
+                            "decision_actual",
+                            user_id=first.user_id,
+                            actual={
+                                "intent": "recall",
+                                "source": "recall_judge",
+                                "triggered": decision.recall,
+                                "executed": bool(
+                                    _recall_result
+                                    and _recall_result.get("status") == "ok"
+                                ),
+                                "status": (_recall_result or {}).get("status"),
+                                "reason": decision.reason,
+                                "budget_gate": (
+                                    "ok"
+                                    if _recall_result
+                                    and _recall_result.get("status") == "ok"
+                                    else (
+                                        (_recall_result or {}).get("reason")
+                                        or decision.reason
+                                    )
+                                ),
+                                "channel": first.channel or "qq",
+                                "batch_id": batch_id,
+                            },
+                        )
+                    except Exception:
+                        logger.exception("recall_judge decision_actual emit failed")
         if self.chat_request_queue_ready and self.chat_request_service is not None:
             try:
                 self.chat_request_service.submit_batch(messages, batch_id)

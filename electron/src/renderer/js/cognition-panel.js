@@ -231,6 +231,9 @@ class CognitionPanel {
       case "decision_made":
         this._handleDecisionEvent(payload);
         break;
+      case "decision_actual":
+        this._handleDecisionActual(payload);
+        break;
       case "cognition_committed":
         this._handleCommittedEvent(payload);
         break;
@@ -431,6 +434,20 @@ class CognitionPanel {
     this._renderDecisionRace(payload);
   }
 
+  _handleDecisionActual(payload) {
+    // Real executor outcome (recall actually fired / refused). Merge it into
+    // the currently displayed race so the panel shows "prediction vs reality"
+    // immediately, without waiting for the next decision_made.
+    const actual = (payload && payload.actual) || null;
+    if (!actual) return;
+    if (this._pendingDecision && this._pendingDecision.chosen) {
+      this._pendingDecision = { ...this._pendingDecision, actual };
+      this._renderDecisionRace(this._pendingDecision);
+    } else {
+      this._renderDecisionRace({ actual });
+    }
+  }
+
   _handleCommittedEvent(payload) {
     // When a trace is committed, remember it for the modal preview
     // and refresh the history list.
@@ -462,6 +479,13 @@ class CognitionPanel {
         detail = '<span class="cog-live-stage">stage=' + this._escape(p.stage) + "</span>";
       } else if (p.type === "decision_made") {
         detail = '<span class="cog-live-chosen">→ ' + this._escape(p.chosen || "?") + "</span>";
+      } else if (p.type === "decision_actual") {
+        const a = p.actual || {};
+        const zh = DECISION_LABELS_ZH[a.intent] || a.intent || "?";
+        detail = '<span class="cog-live-chosen">→ 实际 '
+          + this._escape(zh)
+          + (a.executed ? "" : "（未执行）")
+          + "</span>";
       } else if (p.type === "cognition_committed") {
         detail = '<span class="cog-live-id">#' + this._escape(String(p.id || "?")) + "</span>"
           + ' <span class="cog-live-dur">' + this._escape(String(p.duration_ms || 0)) + "ms</span>";
@@ -588,6 +612,11 @@ class CognitionPanel {
       );
       return;
     }
+    // D) actual-only (decision_actual landed before decision_made)
+    if (payload && payload.actual) {
+      root.innerHTML = this._buildDecisionRaceHtml({ actual: payload.actual });
+      return;
+    }
     // Try the last full trace from the modal preview, if any.
     if (this._lastFullTrace && this._lastFullTrace.decision_trace) {
       try {
@@ -613,6 +642,7 @@ class CognitionPanel {
     // Normalise: scores may live at top level or under decision_trace.
     const trace = decisionTrace.decision_trace || decisionTrace;
     const scores = trace.scores || {};
+    const actual = trace.actual || decisionTrace.actual || null;
     const layers = trace.layers || {};
     const cands = DECISION_CANDIDATES.filter((c) => scores[c] != null);
     // Add any unexpected candidate (e.g. self_evolve) at the end.
@@ -620,6 +650,13 @@ class CognitionPanel {
       if (!cands.includes(c)) cands.push(c);
     });
     if (!cands.length) {
+      // No race rows yet — still surface the real executor outcome.
+      if (actual) {
+        return '<div class="cog-race-header">'
+          + '<span class="cog-race-title">4-Layer Decision · 权重赛马</span>'
+          + this._buildActualBadge(actual, chosen)
+          + "</div>";
+      }
       return '<div class="cog-timeline-empty">无决策数据 / No decision data</div>';
     }
     // Sort by score desc.
@@ -668,7 +705,33 @@ class CognitionPanel {
       + '<span class="cog-race-title">4-Layer Decision · 权重赛马</span>'
       + headerMeta
       + "</div>"
+      + (actual ? this._buildActualBadge(actual, chosen) : "")
       + '<div class="cog-race-rows">' + rows.join("") + "</div>"
+    );
+  }
+
+  _buildActualBadge(actual, chosen) {
+    const intentZh = DECISION_LABELS_ZH[actual.intent] || actual.intent || "撤回";
+    const executed = Boolean(actual.executed);
+    const gate = actual.budget_gate || actual.status || "unknown";
+    const reason = actual.reason || "";
+    let label;
+    if (executed) {
+      label = "实际执行 · 已" + intentZh + (reason ? "（" + reason + "）" : "");
+    } else if (actual.triggered === false) {
+      label = "实际未触发 · " + intentZh + "（" + gate + "）";
+    } else {
+      label = "实际被拒 · 未" + intentZh + "（" + gate + "）";
+    }
+    const mismatch = Boolean(chosen && actual.intent && chosen !== actual.intent);
+    return (
+      '<div class="cog-race-actual'
+      + (executed ? " cog-race-actual--ok" : " cog-race-actual--blocked")
+      + (mismatch ? " cog-race-actual--mismatch" : "")
+      + '">'
+      + '<span class="cog-race-actual-label">' + this._escape(label) + "</span>"
+      + (mismatch ? '<span class="cog-race-actual-note">预测 ≠ 实际</span>' : "")
+      + "</div>"
     );
   }
 

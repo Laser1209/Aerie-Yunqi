@@ -219,13 +219,24 @@ class Pipeline:
 
         # ══════════════════════════════════════════════
         # Phase 9: Multi-layer decision (§10.2) — chosen intent
+        # Inputs come from the real world (mood / tools / recall budget)
+        # so the predicted race matches what the executor can actually do.
         # ══════════════════════════════════════════════
         if self.decision_engine:
             try:
+                dinputs = self._decision_inputs(
+                    user_id=msg.user_id,
+                    channel=getattr(msg, "channel", None)
+                    or getattr(msg, "source", None)
+                    or "qq",
+                    channel_account_id=getattr(msg, "channel_account_id", None),
+                    actor_id=msg.actor_id,
+                )
                 decision = self.decision_engine.decide_for_message(
                     user_id=msg.user_id,
                     route_mode=route_mode,
                     source=msg.source,
+                    **dinputs,
                 )
                 self.cognition.record_decision(trace, decision)
             except Exception:
@@ -467,7 +478,9 @@ class Pipeline:
         reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
 
         # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
-        reply_text_raw = await self._handle_recall_instruction(reply_text_raw, msg)
+        reply_text_raw, _recall_actual = await self._handle_recall_instruction(reply_text_raw, msg)
+        if _recall_actual:
+            self.cognition.record_decision_actual(trace, _recall_actual)
 
         self.cognition.record(trace, "brain", {
             "model": model_name,
@@ -1192,6 +1205,50 @@ class Pipeline:
             "channel": context.identity.channel,
         }
 
+    def _decision_inputs(
+        self,
+        *,
+        user_id: int,
+        channel: str,
+        channel_account_id: str | None,
+        actor_id: str | None,
+    ) -> dict[str, Any]:
+        """Real-world inputs for the decision engine race.
+
+        The engine used to predict from an empty snapshot (neutral mood, no
+        tools, recall always possible), which made the race diverge from the
+        real executors. Feed it the current mood, eruption, tool availability
+        and RecallManager budget so prediction ≈ what can actually execute.
+        """
+        inputs: dict[str, Any] = {
+            "emotion_label": "neutral",
+            "active_eruption": None,
+            "user_busy": False,
+            "tools_offered": False,
+            "recall_available": True,
+        }
+        try:
+            state = self.emotion.get_state(user_id, actor_id=actor_id)
+            inputs["emotion_label"] = state.get("label") or "neutral"
+            inputs["active_eruption"] = state.get("eruption")
+        except Exception:
+            logger.debug("decision inputs: emotion state unavailable", exc_info=True)
+        try:
+            inputs["tools_offered"] = bool(self.tool_registry)
+        except Exception:
+            pass
+        if self.recall_manager is not None:
+            try:
+                can, _why = self.recall_manager.can_recall(
+                    user_id,
+                    channel=channel,
+                    channel_account_id=channel_account_id,
+                )
+                inputs["recall_available"] = can
+            except Exception:
+                logger.debug("decision inputs: recall budget unavailable", exc_info=True)
+        return inputs
+
     # ══════════════════════════════════════════════
     # Gate 2: LLM 主动撤回指令 (recall_instruction)
     # ══════════════════════════════════════════════
@@ -1216,21 +1273,22 @@ class Pipeline:
         self,
         raw_text: str,
         msg: IncomingMessage,
-    ) -> str:
+    ) -> tuple[str, dict | None]:
         """从 LLM 原始输出中解析并执行 <recall> 指令.
 
-        返回剔除撤回指令标签后的正文 (标签绝不发送给用户)。无指令/禁用/
-        无 recall_manager 时原样返回。受 feature flag 与 RecallManager
-        预算 (window/cooldown/session) 双重约束, 不越权撤回。
+        返回 (剔除撤回指令标签后的正文, 撤回执行结果) —— 正文绝不发送
+        给用户; 结果 dict 用于回写决策赛马的"实际执行" (无指令/禁用时
+        为 None)。受 feature flag 与 RecallManager 预算
+        (window/cooldown/session) 双重约束, 不越权撤回。
         """
         if not self.recall_manager or not self._recall_instruction_enabled():
-            return raw_text
+            return raw_text, None
         if not raw_text:
-            return raw_text
+            return raw_text, None
         # 激活 persona.yaml 的 recall.triggers（不再死配置）:
         # 仅当配置允许「LLM 主动撤回」类触发器时才消费 <recall> 指令。
         if not self._llm_recall_trigger_enabled():
-            return raw_text
+            return raw_text, None
         from core.recall_instruction import (
             extract_recall_instruction,
             strip_recall_instruction,
@@ -1238,9 +1296,10 @@ class Pipeline:
         )
         inst = extract_recall_instruction(raw_text)
         if inst is None:
-            return raw_text
+            return raw_text, None
         channel = getattr(msg, "channel", None) or getattr(msg, "source", None) or "qq"
         account = getattr(msg, "channel_account_id", None)
+        result: dict[str, Any] | None = None
         try:
             result = await execute_recall_instruction(
                 self.recall_manager,
@@ -1257,7 +1316,22 @@ class Pipeline:
             )
         except Exception:
             logger.exception("LLM recall instruction execution failed")
-        return strip_recall_instruction(raw_text)
+        actual: dict[str, Any] | None = None
+        if result is not None:
+            actual = {
+                "intent": "recall",
+                "source": "llm_instruction",
+                "triggered": True,
+                "executed": result.get("status") == "ok",
+                "status": result.get("status"),
+                "reason": inst.reason or "llm_instruction",
+                "budget_gate": (
+                    "ok" if result.get("status") == "ok"
+                    else (result.get("reason") or "unknown")
+                ),
+                "channel": channel,
+            }
+        return strip_recall_instruction(raw_text), actual
 
     def _mark_recalled_message(self, result: dict, msg: IncomingMessage) -> None:
         """LLM <recall> 撤回成功后, 本地落库 + 发 recall 事件.
@@ -1407,7 +1481,9 @@ class Pipeline:
         reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
 
         # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
-        reply_text_raw = await self._handle_recall_instruction(reply_text_raw, msg)
+        reply_text_raw, _recall_actual = await self._handle_recall_instruction(reply_text_raw, msg)
+        if _recall_actual:
+            self.cognition.record_decision_actual(trace, _recall_actual)
 
         self.cognition.record(trace, "brain", {
             "model": model_name,
@@ -2220,10 +2296,17 @@ class Pipeline:
 
         if self.decision_engine:
             try:
+                dinputs = self._decision_inputs(
+                    user_id=user_id,
+                    channel=channel,
+                    channel_account_id=channel_account_id,
+                    actor_id=actor_id,
+                )
                 decision = self.decision_engine.decide_for_message(
                     user_id=user_id,
                     route_mode=route_mode,
                     source=source,
+                    **dinputs,
                 )
                 self.cognition.record_decision(trace, decision)
             except Exception:
@@ -2461,9 +2544,12 @@ class Pipeline:
         for seq_idx, (msg, reply_text_raw_single) in enumerate(zip(messages, parsed_replies)):
             try:
                 # Gate 2: 批内逐条解析 <recall>, 执行撤回 (按该条 msg 的 channel), 并从正文剔除
-                reply_text_raw_single = await self._handle_recall_instruction(
+                reply_text_raw_single, _recall_actual = await self._handle_recall_instruction(
                     reply_text_raw_single, msg
                 )
+                if _recall_actual:
+                    _recall_actual["sequence_index"] = seq_idx
+                    self.cognition.record_decision_actual(trace, _recall_actual)
                 reply_text = self.emotion.tune(reply_text_raw_single, actor_id=actor_id)
                 try:
                     from core.screen_action_sanitizer import sanitize as _sanitize_action

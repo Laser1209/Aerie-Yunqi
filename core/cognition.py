@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Cognition engine (Phase 9: brain center trace).
+"""Aerie · 云栖 v0.1.0-beta.1 — Cognition engine (Phase 9: brain center trace).
 
 Provides a structured 9-stage trace for every incoming message:
   1. route
@@ -94,6 +94,35 @@ class CognitionEngine:
                 "decision_made",
                 user_id=trace["user_id"],
                 chosen=(decision or {}).get("chosen"),
+            )
+        except Exception:
+            pass
+
+    def record_decision_actual(self, trace: dict, actual: Any) -> None:
+        """Attach the *actually executed* decision onto the trace.
+
+        The predicted race (``decision_trace.chosen``) is kept untouched so
+        the panel can show "prediction vs reality". ``actual`` carries the
+        real executor's outcome, e.g.::
+
+            {
+              "intent": "recall",
+              "source": "llm_instruction" | "recall_judge" | "manual",
+              "triggered": True,
+              "executed": True,
+              "status": "ok",
+              "reason": "regret_correction",
+              "budget_gate": "ok",          # or window_expired/cooldown/...
+              "channel": "qq",
+            }
+        """
+        current = trace.get("decision_trace") or {}
+        trace["decision_trace"] = {**current, "actual": actual}
+        try:
+            stderr_emit(
+                "decision_actual",
+                user_id=trace["user_id"],
+                actual=actual,
             )
         except Exception:
             pass

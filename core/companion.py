@@ -849,7 +849,33 @@ class Companion:
             base = _api_base_url()
             image_url = url if url.startswith("http") else base + (url if url.startswith("/") else "/" + url)
             target = str(plan.get("target") or "").strip() or "master"
-            message_id = generate_id("message")
+            content = f"![图片]({image_url})"
+            scene = str(plan.get("scene") or "world_image")
+            message_id: int | str = generate_id("message")
+            try:
+                db = getattr(self, "db", None)
+                if db is not None and hasattr(db, "insert"):
+                    user_id_raw = plan.get("target") or plan.get("owner_id") or 0
+                    try:
+                        user_id_int = int(str(user_id_raw)) if str(user_id_raw or "").isdigit() else 0
+                    except (TypeError, ValueError):
+                        user_id_int = 0
+                    message_id = db.insert(
+                        "chat_log",
+                        {
+                            "user_id": user_id_int,
+                            "role": "assistant",
+                            "content": content,
+                            "msg_type": scene if scene else "world_image",
+                            "route_mode": "PROACTIVE",
+                            "scene": scene if scene else "world_image",
+                        },
+                    ) or message_id
+            except Exception:
+                logger.warning(
+                    "[WorldImage] local chat image persistence failed (emit only)",
+                    exc_info=True,
+                )
             from core import chat_events
 
             chat_events.emit(
@@ -857,8 +883,10 @@ class Companion:
                 role="assistant",
                 id=message_id,
                 user_id=target,
-                content=f"![图片]({image_url})",
+                content=content,
                 source="local_chat",
+                scene=scene if scene else "world_image",
+                channel="desktop",
             )
             logger.info("[WorldImage] delivered generated image to local chat: %s", image_url)
             return True

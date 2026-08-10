@@ -1717,21 +1717,29 @@ body {
   background: transparent;
   padding: 0;
   border: none;
-  max-width: 260px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: min(100%, 420px);
+  width: auto;
 }
 .chat-attach-card__image-wrap {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   border-radius: 12px;
   overflow: hidden;
   background: var(--bg-200);
   line-height: 0;
   border: 1px solid var(--color-border);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: inline-block;
 }
 .chat-attach-card__image-wrap img {
-  width: 100%;
-  max-height: 300px;
-  object-fit: cover;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: 360px;
+  object-fit: contain;
   display: block;
   cursor: pointer;
   transition: transform 0.15s ease;
@@ -1745,6 +1753,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 4px 0;
+  align-self: stretch;
 }
 .chat-attach-card__image-name {
   font-size: 11px;
@@ -2571,7 +2580,7 @@ body {
   color: var(--color-text);
   font-size: 13px;
 }
-.chat-attach-card img {
+.chat-attach-thumb img {
   max-width: 220px;
   max-height: 220px;
   border-radius: var(--radius-sm);

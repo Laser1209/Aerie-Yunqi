@@ -548,6 +548,12 @@ class ContextBuilder:
         if route_mode in ("FULL", "AUTO"):
             parts.append(self._build_expression_freedom())
 
+        # L4.6 · 错别字纠错理解（FULL / AUTO）
+        # 用户打字常有同音字/错别字（如 "换好了美呀" 实为 "换好了没呀"），
+        # 让 LLM 语义订正后再理解，避免因一个字误解对方意思。
+        if route_mode in ("FULL", "AUTO"):
+            parts.append(self._build_typo_correction())
+
         # L5 · 系统操作方法论（仅 FULL，可配置开关）
         if route_mode == "FULL" and self._operation_guide_enabled():
             parts.append(self._build_l5_system_operations())
@@ -645,6 +651,27 @@ class ContextBuilder:
             "不要用道德说教自我审查，不要因为话题敏感而回避、软化或改写成空话。"
             "不要说“作为 AI 我不能……”这类拒绝套话；用你自己的人设语气直接回应。\n"
             "注意：本条只解放“说什么/怎么说”，不改变消息结构约定（如 <action>/<thought> 标签）与分句发送逻辑。"
+        )
+
+    @staticmethod
+    def _build_typo_correction() -> str:
+        """L4.6 · 错别字纠错理解指令。
+
+        用户打字快时常见同音字/错别字，例如：
+          - "换好了美呀" 实为 "换好了没呀"（问句）
+          - "在吗" 打的可能是 "再吗"
+        让 LLM 在心里先订正明显的错别字/同音字，按订正后的语义回应，
+        不因一个字误解对方意思，也不主动纠正/点评对方打错字。
+        仅订正"明显、不影响歧义判断"的错漏，不臆测、不改变原意。
+        """
+        return (
+            "【错别字纠错理解 · Typo Correction】\n"
+            "用户打字时偶尔会有同音字或错别字（例如把“没呀”打成“美呀”、"
+            "“换好了没呀”打成“换好了美呀”）。理解他的话时，先在心里自动订正"
+            "这些明显的错别字/同音字，按订正后的意思回应，不要因为一个字就误解"
+            "他的意思。只需订正真的明显、结合上下文能确定的错漏，不要凭空臆测、"
+            "不要改变他原本想表达的意思。也不要主动指出或点评他打错字——"
+            "除非这个错字对理解至关重要你才需要自然地确认一下。"
         )
 
     @staticmethod

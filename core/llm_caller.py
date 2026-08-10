@@ -1479,7 +1479,7 @@ def _openai_compatible_url(base_url: str, suffix: str) -> str:
 def _provider_timeout_seconds() -> float:
     raw = os.getenv("AERIE_IMAGE_PROVIDER_TIMEOUT_SECONDS", "").strip()
     if not raw:
-        raw = os.getenv("AERIE_VISION_PROVIDER_TIMEOUT_SECONDS", "60").strip()
+        raw = os.getenv("AERIE_VISION_PROVIDER_TIMEOUT_SECONDS", "180").strip()
     try:
         return max(1.0, min(float(raw), 300.0))
     except ValueError:

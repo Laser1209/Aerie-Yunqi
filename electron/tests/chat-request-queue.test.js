@@ -822,7 +822,7 @@ test("non-ready attachments block send while ready records use id-only contract"
   assert.equal("storage_relpath" in send.body.attachments[0], false);
 });
 
-test("renderer keeps at most 500 message elements", () => {
+test("renderer keeps at most 200 message elements", () => {
   const { manager, document } = createManager();
   for (let index = 0; index < 510; index += 1) {
     manager._ingestChatSignal({
@@ -832,8 +832,8 @@ test("renderer keeps at most 500 message elements", () => {
     }, "test");
   }
   const messages = document.getElementById("chat-messages").querySelectorAll(".chat-msg");
-  assert.equal(messages.length, 500);
-  assert.equal(messages[0].getAttribute("data-id"), "msg_10");
+  assert.equal(messages.length, 200);
+  assert.equal(messages[0].getAttribute("data-id"), "msg_310");
 });
 
 test("history loader consumes cursor page contract and exposes load-earlier control", async () => {

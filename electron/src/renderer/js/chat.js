@@ -34,8 +34,11 @@ class ChatManager {
       hasOlder: false,
       hasNewer: false,
       loading: false,
+      autoLoadCooldown: 0, // 顶部自动加载的冷却时间戳, 防止停在顶部时连发多批
     };
-    this._maxDomMessages = 500;
+    // 同时保留在 DOM 里的消息气泡上限。历史很多时靠向上翻页按批加载,
+    // 超出即裁剪最旧气泡, 避免开机渲染/滚动时 DOM 过大导致卡顿。
+    this._maxDomMessages = 200;
     // 单一数据源: 判重/排序/请求状态/稳定元素 id 映射全由 store 接管,
     // DOM 层只认 store 产出的渲染意图(Intent)。
     this._store = window.createChatStore({ maxMessages: this._maxDomMessages });
@@ -56,6 +59,7 @@ class ChatManager {
     if (cached) this._personaCache.avatar_dataurl = cached;
 
     this._bindEvents();
+    this._bindHistoryScroll();
     this._listenIPC();
     this._listenSSE();
     this._listenOpenTab();
@@ -447,6 +451,10 @@ class ChatManager {
       // History remains retryable through the controls.
     } finally {
       this._history.loading = false;
+      // 顶部自动加载后冷却片刻, 防止用户停在顶部时连续拉取多批更早消息。
+      if (direction === "older") {
+        this._history.autoLoadCooldown = Date.now() + 800;
+      }
       this._renderHistoryControls();
     }
   }
@@ -472,6 +480,32 @@ class ChatManager {
     if (this._history.hasNewer) {
       this._el.messages.appendChild(makeButton("newer", "加载更新消息"));
     }
+  }
+
+  // 滚动到列表顶部时自动按批拉取更早消息, 替代/兜底「加载更早」按钮。
+  // 用 rAF 节流 + 冷却时间戳, 避免停在顶部时一口气加载多批。
+  _bindHistoryScroll() {
+    if (!this._el.messages) return;
+    let pending = false;
+    this._el.messages.addEventListener("scroll", () => {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        pending = false;
+        const el = this._el.messages;
+        if (
+          !el
+          || this._history.loading
+          || !this._history.hasOlder
+          || Date.now() < this._history.autoLoadCooldown
+        ) {
+          return;
+        }
+        if (el.scrollTop < 60) {
+          this._loadHistoryPage("older");
+        }
+      });
+    });
   }
 
   _trimMessageWindow(removeSide) {
@@ -1488,13 +1522,28 @@ class ChatManager {
         // (these are all in DOMPurify's default allow-list, so no
         // ADD_TAGS override is needed).
       });
-      // Rewrite relative <img src="/..."> paths to absolute backend URL.
+      // Rewrite relative <img src="..."> paths to absolute backend URL.
       // Electron's file:// protocol cannot resolve /uploads/... correctly,
       // so prefix the API base so images survive reload/restart.
-      return safe.replace(
-        /(<img[^>]+src=["'])(\/(?:uploads|api)[^"']*["'])/gi,
-        (_m, prefix, path) => prefix + "http://127.0.0.1:7890" + path,
+      // Covers three cases: leading slash (/uploads/), no slash (uploads/),
+      // and api/ prefixes (/api/... or api/...). data: / http: / https: bypass.
+      let rewritten = safe.replace(
+        /(<img[^>]+src=["'])(\/?(?:uploads|api)[^"']*["'])/gi,
+        (_m, prefix, path) => {
+          const normalized = path.startsWith("/") ? path : "/" + path;
+          return prefix + "http://127.0.0.1:7890" + normalized;
+        },
       );
+      // Also rewrite pure Markdown ![alt](relative_url) in escaped HTML,
+      // in case DOMPurify ever treats images differently between runs.
+      rewritten = rewritten.replace(
+        /(<a[^>]+href=["'])(\/?(?:uploads|api)[^"']*["'])/gi,
+        (_m, prefix, path) => {
+          const normalized = path.startsWith("/") ? path : "/" + path;
+          return prefix + "http://127.0.0.1:7890" + normalized;
+        },
+      );
+      return rewritten;
     } catch (e) {
       console.warn("chat._renderMarkdown failed", e);
       return this._escapeHtml(body);
@@ -1525,9 +1574,10 @@ class ChatManager {
     const pad = (n) => String(n).padStart(2, "0");
     const hh = pad(d.getHours());
     const mm = pad(d.getMinutes());
+    const ss = pad(d.getSeconds());
     const sameDay = d.toDateString() === now.toDateString();
-    if (sameDay) return `${hh}:${mm}`;
-    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hh}:${mm}`;
+    if (sameDay) return `${hh}:${mm}:${ss}`;
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hh}:${mm}:${ss}`;
   }
 
   async _request(opts) {

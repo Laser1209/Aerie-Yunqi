@@ -197,6 +197,17 @@ class Pipeline:
             if request_context is not None
             else msg.content
         )
+
+        # 错别字订正：进入理解前，先用轻量模型（硅基流动 · 小米）订正明显
+        # 错别字/同音字，避免主模型因一个错字误解（如 "换好了美呀" → "换好了没呀"）。
+        # 订正只影响理解，不写回聊天记录（原文仍持久化）；任何失败都回退原文。
+        if model_content:
+            try:
+                from core.typo_corrector import correct_typos
+                model_content = await correct_typos(self.brain, model_content)
+            except Exception:
+                logger.exception("typo correction failed, fallback to original")
+
         (
             context_attachments,
             attachment_ids,

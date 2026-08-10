@@ -57,6 +57,120 @@
         "status": "failed"
       }
     },
+    "chat-photo:3489352115:turn_1e21415a7f48437584e89318336ccc5f": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786369761",
+        "channel": "local_chat",
+        "created_at": "2026-08-10T13:49:21.623353+00:00",
+        "event_id": "world_evt_01306cfdd7ae4ee082e1b9b6fd4929ba",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_selfie",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 69773,
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_01306cfdd7ae4ee082e1b9b6fd4929ba",
+        "event_type": "world.image_candidate.published",
+        "sequence": 69773,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:turn_1e21415a7f48437584e89318336ccc5f",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "failed",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": true
+      },
+      "status": "failed",
+      "updated_at": "2026-08-10T13:50:22.943709+00:00",
+      "workflow": {
+        "delivery_plan_id": "",
+        "request_id": "imggen_f51caa624c174bef99619d9c20ea3285",
+        "status": "failed"
+      }
+    },
+    "chat-photo:3489352115:turn_483f578b2bde420eadb77b9a8ae075de": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786369731",
+        "channel": "local_chat",
+        "created_at": "2026-08-10T13:48:51.387447+00:00",
+        "event_id": "world_evt_083cabcf43014e1f8bd1e2f2a040420c",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_in_scene",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 69743,
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_083cabcf43014e1f8bd1e2f2a040420c",
+        "event_type": "world.image_candidate.published",
+        "sequence": 69743,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:turn_483f578b2bde420eadb77b9a8ae075de",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "failed",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": true
+      },
+      "status": "failed",
+      "updated_at": "2026-08-10T13:49:52.672909+00:00",
+      "workflow": {
+        "delivery_plan_id": "",
+        "request_id": "imggen_0b05e846c5ca4a42ace882ba6769259c",
+        "status": "failed"
+      }
+    },
     "chat-photo:3489352115:turn_82976e7775004442be21e24666d72627": {
       "candidate": {
         "candidate_id": "chat-photo-3489352115-1786366268",

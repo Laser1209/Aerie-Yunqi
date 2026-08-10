@@ -1,0 +1,69 @@
+# Aerie 24h monitor — real business API probe endpoints
+# -------------------------------------------------------
+# Each enabled probe is exercised on its own interval; latency/status are
+# recorded to 03_API as JSON Lines.
+#
+# For a full chat roundtrip latency (user send -> AI reply), use method POST
+# with `poll: true`. The monitor submits a message to /api/chat/send and then
+# polls /api/chat/requests/{id} until the request reaches a terminal state.
+# NOTE: poll probes trigger a real LLM roundtrip and consume tokens — keep
+# `enabled: false` unless you explicitly accept that cost, and use a marker
+# text so probe messages can be filtered out of the final report.
+#
+# Supported fields:
+#   name            unique probe id
+#   method          GET | POST
+#   path            endpoint path (relative to backend base URL)
+#   enabled         bool
+#   interval_sec    how often to run this probe
+#   timeout_sec     per-request timeout
+#   body            (POST only) JSON body
+#   user_id         (chat send) identity id; 0 = use primary identity
+#   poll            (chat send) follow the request queue to completion
+#   poll_interval_sec  polling cadence while waiting
+#   poll_timeout_sec   max wait for a terminal state
+#   probe_marker    text marker used to tag probe messages for later filtering
+
+probes:
+  - name: chat_history
+    method: GET
+    path: /api/chat/history/page
+    enabled: true
+    interval_sec: 300
+    timeout_sec: 10
+
+  - name: chat_poll
+    method: GET
+    path: /api/chat/poll
+    enabled: true
+    interval_sec: 60
+    timeout_sec: 10
+
+  - name: emotion_state
+    method: GET
+    path: /api/emotion/state
+    enabled: true
+    interval_sec: 300
+    timeout_sec: 10
+
+  - name: world_snapshot
+    method: GET
+    path: /api/world/dashboard/snapshot
+    enabled: true
+    interval_sec: 300
+    timeout_sec: 10
+
+  # Real chat roundtrip latency. Disabled by default (consumes LLM tokens).
+  - name: chat_roundtrip
+    method: POST
+    path: /api/chat/send
+    enabled: false
+    interval_sec: 1800
+    timeout_sec: 30
+    user_id: 0
+    poll: true
+    poll_interval_sec: 5
+    poll_timeout_sec: 180
+    probe_marker: "[24h探针]"
+    body:
+      text: "[24h探针] 你好，这是一条自动运行检测消息，请简短回复"

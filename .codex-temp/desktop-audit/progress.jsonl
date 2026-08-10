@@ -270,3 +270,230 @@
 {"type":"phase","phaseId":"windows/dynamic-island","status":"failed","at":"2026-08-10T17:55:45.634Z"}
 {"type":"interaction","selector":"div.di-capsule","action":"safe-skip","status":"safe-skipped","module":"window:dynamic-island","at":"2026-08-10T17:55:45.699Z"}
 {"type":"interaction","selector":"div.di-capsule-left","action":"click","status":"passed","module":"window:dynamic-island","at":"2026-08-10T17:55:45.965Z"}
+{"type":"phase","phaseId":"states/loading-live","status":"failed","at":"2026-08-10T20:46:49.469Z"}
+{"type":"interaction","selector":"#btn-maximize","action":"toggle-maximize","status":"passed","module":"window-controls","at":"2026-08-10T20:47:02.882Z"}
+{"type":"interaction","selector":"#btn-minimize","action":"minimize-and-restore","status":"passed","module":"window-controls","at":"2026-08-10T20:47:03.382Z"}
+{"type":"phase","phaseId":"states/success","status":"failed","at":"2026-08-10T20:47:04.420Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T20:47:04.781Z"}
+{"type":"phase","phaseId":"states/empty","status":"failed","at":"2026-08-10T20:47:05.482Z"}
+{"type":"phase","phaseId":"states/filled","status":"failed","at":"2026-08-10T20:47:06.269Z"}
+{"type":"interaction","selector":"button[data-tab=\"data\"]","action":"activate-tab","status":"passed","module":"tab:data","at":"2026-08-10T20:47:06.675Z"}
+{"type":"phase","phaseId":"states/disabled","status":"failed","at":"2026-08-10T20:47:07.499Z"}
+{"type":"phase","phaseId":"states/stale","status":"failed","at":"2026-08-10T20:47:08.315Z"}
+{"type":"phase","phaseId":"states/loading","status":"failed","at":"2026-08-10T20:47:09.193Z"}
+{"type":"phase","phaseId":"states/error","status":"failed","at":"2026-08-10T20:47:10.064Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T20:47:10.429Z"}
+{"type":"phase","phaseId":"panels/01-chat/default","status":"failed","at":"2026-08-10T20:47:11.265Z"}
+{"type":"interaction","selector":"#btn-close","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T20:47:12.167Z"}
+{"type":"interaction","selector":"#chat-attach-btn","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T20:47:12.169Z"}
+{"type":"interaction","selector":"#chat-mic-btn","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T20:47:12.170Z"}
+{"type":"interaction","selector":"#chat-input","action":"fill-restore","status":"passed","module":"tab:chat","at":"2026-08-10T20:47:12.207Z"}
+{"type":"interaction","selector":"#chat-send-btn","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T20:47:12.209Z"}
+{"type":"interaction","selector":"div.brief-drawer-backdrop","action":"click","status":"passed","module":"tab:chat","at":"2026-08-10T20:47:12.420Z"}
+{"type":"interaction","selector":"#brief-drawer-loc","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:13.205Z"}
+{"type":"interaction","selector":"#brief-drawer-refresh","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:15.763Z"}
+{"type":"interaction","selector":"#brief-drawer-close","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:18.322Z"}
+{"type":"interaction","selector":"#brief-drawer-todo-add","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:20.893Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:20.931Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(2) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:20.969Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(3) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.007Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.047Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(5) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.085Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(6) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.117Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.151Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(2) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.182Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(3) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.221Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(4) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.252Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(5) > a","action":"fill-restore","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:21.283Z"}
+{"type":"interaction","selector":"section.brief-drawer__section.brief-drawer__section--weather","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:23.848Z"}
+{"type":"interaction","selector":"div.brief-drawer__weather-compact","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:26.409Z"}
+{"type":"interaction","selector":"div.brief-drawer__forecast","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T20:47:28.971Z"}
+{"type":"interaction","selector":"#brief-drawer-chat","action":"focus-link","status":"passed","module":"tab:chat","at":"2026-08-10T20:47:29.008Z"}
+{"type":"interaction","selector":"#brief-drawer-expand","action":"focus-link","status":"passed","module":"tab:chat","at":"2026-08-10T20:47:29.041Z"}
+{"type":"interaction","selector":"button[data-tab=\"emotion\"]","action":"activate-tab","status":"passed","module":"tab:emotion","at":"2026-08-10T20:47:29.503Z"}
+{"type":"phase","phaseId":"panels/02-emotion/default","status":"failed","at":"2026-08-10T20:47:30.426Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:30.451Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-1h","status":"failed","at":"2026-08-10T20:47:31.395Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:31.422Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-24h","status":"failed","at":"2026-08-10T20:47:32.452Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:32.474Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-7d","status":"failed","at":"2026-08-10T20:47:33.383Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:33.404Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-30d","status":"failed","at":"2026-08-10T20:47:34.256Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:35.318Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:35.334Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:35.351Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T20:47:35.365Z"}
+{"type":"interaction","selector":"#emh-refresh","action":"click","status":"passed","module":"tab:emotion","at":"2026-08-10T20:47:35.574Z"}
+{"type":"interaction","selector":"button[data-tab=\"cognition\"]","action":"activate-tab","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:35.966Z"}
+{"type":"phase","phaseId":"panels/03-cognition/default","status":"failed","at":"2026-08-10T20:47:36.834Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"brain\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:37.170Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-brain","status":"failed","at":"2026-08-10T20:47:38.074Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"self-evolve\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:38.407Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-self-evolve","status":"failed","at":"2026-08-10T20:47:39.389Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"computer\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:39.732Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-computer","status":"failed","at":"2026-08-10T20:47:40.796Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"qq-whitelist\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:41.132Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-qq-whitelist","status":"failed","at":"2026-08-10T20:47:42.163Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"files\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:42.500Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-files","status":"failed","at":"2026-08-10T20:47:43.443Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"docs\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:43.761Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-docs","status":"failed","at":"2026-08-10T20:47:44.727Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(1)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T20:47:45.522Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(2)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T20:47:45.539Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(3)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T20:47:45.556Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(4)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T20:47:45.573Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(5)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T20:47:45.591Z"}
+{"type":"interaction","selector":"#cog-dw-refresh","action":"click","status":"passed","module":"tab:cognition","at":"2026-08-10T20:47:45.805Z"}
+{"type":"interaction","selector":"button[data-tab=\"status\"]","action":"activate-tab","status":"passed","module":"tab:status","at":"2026-08-10T20:47:46.178Z"}
+{"type":"phase","phaseId":"panels/04-status/default","status":"failed","at":"2026-08-10T20:47:46.951Z"}
+{"type":"interaction","selector":"#status-qq-toggle","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T20:47:47.583Z"}
+{"type":"interaction","selector":"div.status-qq-title","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T20:47:47.584Z"}
+{"type":"interaction","selector":"#napcat-start-btn","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T20:47:47.589Z"}
+{"type":"interaction","selector":"#napcat-stop-btn","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T20:47:47.590Z"}
+{"type":"interaction","selector":"button[data-tab=\"world-dashboard\"]","action":"activate-tab","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:47.973Z"}
+{"type":"phase","phaseId":"panels/05-world-dashboard/default","status":"failed","at":"2026-08-10T20:47:48.878Z"}
+{"type":"interaction","selector":"#world-dashboard-refresh","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:49.849Z"}
+{"type":"interaction","selector":"#world-dashboard-show","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.132Z"}
+{"type":"interaction","selector":"#world-dashboard-hide","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.365Z"}
+{"type":"interaction","selector":"#world-dashboard-enable","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.367Z"}
+{"type":"interaction","selector":"#world-dashboard-disable","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.368Z"}
+{"type":"interaction","selector":"#world-dashboard-start","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.368Z"}
+{"type":"interaction","selector":"#world-dashboard-stop","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.369Z"}
+{"type":"interaction","selector":"#world-dashboard-pause","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.369Z"}
+{"type":"interaction","selector":"#world-dashboard-resume","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.370Z"}
+{"type":"interaction","selector":"#world-dashboard-restart","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.370Z"}
+{"type":"interaction","selector":"#world-candidate-id","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.411Z"}
+{"type":"interaction","selector":"#world-candidate-action","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.411Z"}
+{"type":"interaction","selector":"#world-candidate-reason","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.444Z"}
+{"type":"interaction","selector":"#world-candidate-idempotency","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.478Z"}
+{"type":"interaction","selector":"#world-candidate-approve","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.479Z"}
+{"type":"interaction","selector":"#world-creative-kind","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.516Z"}
+{"type":"interaction","selector":"#world-creative-title","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.551Z"}
+{"type":"interaction","selector":"#world-creative-payload","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.586Z"}
+{"type":"interaction","selector":"#world-creative-preview","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T20:47:50.805Z"}
+{"type":"interaction","selector":"button[data-tab=\"memorial\"]","action":"activate-tab","status":"passed","module":"tab:memorial","at":"2026-08-10T20:47:51.192Z"}
+{"type":"phase","phaseId":"panels/06-memorial/default","status":"failed","at":"2026-08-10T20:47:52.120Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:52.159Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-all","status":"failed","at":"2026-08-10T20:47:52.974Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:52.996Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-anniversary","status":"failed","at":"2026-08-10T20:47:53.831Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:53.851Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-schedule","status":"failed","at":"2026-08-10T20:47:54.661Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:54.683Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-todo","status":"failed","at":"2026-08-10T20:47:55.595Z"}
+{"type":"interaction","selector":"#cal-prev-month","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T20:47:56.440Z"}
+{"type":"interaction","selector":"#cal-next-month","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T20:47:56.643Z"}
+{"type":"interaction","selector":"#cal-today-btn","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T20:47:56.845Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(7)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.860Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(8)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.876Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(9)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.891Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(10)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.904Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(11)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.919Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(12)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.932Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(13)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.946Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(14)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.960Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(15)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.975Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(16)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:56.991Z"}
+{"type":"interaction","selector":"div.cal-day.cal-day--today.cal-day--selected","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T20:47:57.211Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(18)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.236Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(19)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.269Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(20)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.296Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(21)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.327Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(22)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.356Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(23)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.384Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(24)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.416Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(25)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.448Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(26)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.475Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(27)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.504Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(28)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.533Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(29)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.562Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(30)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.590Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(31)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.619Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(32)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.648Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(33)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.675Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(34)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.702Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(35)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.731Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(36)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.759Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(37)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.788Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.818Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.857Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.887Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T20:47:57.917Z"}
+{"type":"interaction","selector":"button[data-tab=\"data\"]","action":"activate-tab","status":"passed","module":"tab:data","at":"2026-08-10T20:47:58.299Z"}
+{"type":"phase","phaseId":"panels/07-data/default","status":"failed","at":"2026-08-10T20:47:59.161Z"}
+{"type":"interaction","selector":"button[data-sub=\"chat\"]","action":"activate-subtab","status":"passed","module":"tab:data","at":"2026-08-10T20:47:59.487Z"}
+{"type":"phase","phaseId":"panels/07-data/subtabs/data-subtab-chat","status":"failed","at":"2026-08-10T20:48:00.343Z"}
+{"type":"interaction","selector":"button[data-sub=\"knowledge\"]","action":"activate-subtab","status":"passed","module":"tab:data","at":"2026-08-10T20:48:00.657Z"}
+{"type":"phase","phaseId":"panels/07-data/subtabs/data-subtab-knowledge","status":"failed","at":"2026-08-10T20:48:01.450Z"}
+{"type":"interaction","selector":"button[data-sub=\"system\"]","action":"activate-subtab","status":"passed","module":"tab:data","at":"2026-08-10T20:48:01.781Z"}
+{"type":"phase","phaseId":"panels/07-data/subtabs/data-subtab-system","status":"failed","at":"2026-08-10T20:48:02.621Z"}
+{"type":"interaction","selector":"button[data-tab=\"persona-hub\"]","action":"activate-tab","status":"passed","module":"tab:persona-hub","at":"2026-08-10T20:48:03.620Z"}
+{"type":"phase","phaseId":"panels/08-persona-hub/default","status":"failed","at":"2026-08-10T20:48:04.506Z"}
+{"type":"interaction","selector":"#persona-hub-import-btn","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T20:48:05.266Z"}
+{"type":"interaction","selector":"div.persona-card.persona-card--active","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T20:48:05.267Z"}
+{"type":"interaction","selector":"div.persona-card__avatar","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T20:48:05.487Z"}
+{"type":"interaction","selector":"div.persona-card__badge","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T20:48:05.720Z"}
+{"type":"interaction","selector":"div.persona-card__info","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T20:48:05.940Z"}
+{"type":"interaction","selector":"h4.persona-card__name","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T20:48:06.159Z"}
+{"type":"interaction","selector":"p.persona-card__tagline","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T20:48:06.379Z"}
+{"type":"interaction","selector":"div.persona-card__actions","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T20:48:06.384Z"}
+{"type":"interaction","selector":"button.persona-card__btn.persona-card__btn--edit","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T20:48:06.591Z"}
+{"type":"interaction","selector":"button.persona-card__btn.persona-card__btn--export","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T20:48:06.594Z"}
+{"type":"interaction","selector":"button[data-tab=\"settings\"]","action":"activate-tab","status":"passed","module":"tab:settings","at":"2026-08-10T20:48:06.998Z"}
+{"type":"phase","phaseId":"panels/09-settings/default","status":"failed","at":"2026-08-10T20:48:08.099Z"}
+{"type":"interaction","selector":"#tab-settings-form","action":"activate-subtab","status":"passed","module":"tab:settings","at":"2026-08-10T20:48:08.417Z"}
+{"type":"phase","phaseId":"panels/09-settings/subtabs/settings-mode-form","status":"failed","at":"2026-08-10T20:48:09.692Z"}
+{"type":"interaction","selector":"#tab-settings-apikey","action":"activate-subtab","status":"passed","module":"tab:settings","at":"2026-08-10T20:48:10.013Z"}
+{"type":"phase","phaseId":"panels/09-settings/subtabs/settings-mode-apikey","status":"failed","at":"2026-08-10T20:48:11.331Z"}
+{"type":"interaction","selector":"#tab-settings-yaml","action":"activate-subtab","status":"passed","module":"tab:settings","at":"2026-08-10T20:48:11.651Z"}
+{"type":"phase","phaseId":"panels/09-settings/subtabs/settings-mode-yaml","status":"failed","at":"2026-08-10T20:48:12.782Z"}
+{"type":"interaction","selector":"#settings-yaml-view","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T20:48:13.666Z"}
+{"type":"interaction","selector":"#yaml-file-select","action":"select-restore","status":"passed","module":"tab:settings","at":"2026-08-10T20:48:13.789Z"}
+{"type":"interaction","selector":"#yaml-editor","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T20:48:13.790Z"}
+{"type":"interaction","selector":"#yaml-save-btn","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T20:48:13.790Z"}
+{"type":"interaction","selector":"#yaml-reload-btn","action":"click","status":"passed","module":"tab:settings","at":"2026-08-10T20:48:13.993Z"}
+{"type":"interaction","selector":"#yaml-backup-btn","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T20:48:13.996Z"}
+{"type":"interaction","selector":"button[data-tab=\"about\"]","action":"activate-tab","status":"passed","module":"tab:about","at":"2026-08-10T20:48:14.382Z"}
+{"type":"phase","phaseId":"panels/10-about/default","status":"failed","at":"2026-08-10T20:48:15.551Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T20:48:17.009Z"}
+{"type":"interaction","selector":"#chat-brief-btn","action":"open-brief","status":"passed","module":"runtime:brief","at":"2026-08-10T20:48:17.431Z"}
+{"type":"phase","phaseId":"runtime/brief/live","status":"failed","at":"2026-08-10T20:48:18.797Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T20:48:20.417Z"}
+{"type":"interaction","selector":"#chat-office-btn","action":"open-office-menu","status":"failed","module":"runtime:office","at":"2026-08-10T20:48:50.452Z"}
+{"type":"phase","phaseId":"runtime/office/menu-auto","status":"failed","at":"2026-08-10T20:48:52.073Z"}
+{"type":"interaction","selector":"#chat-office-btn","action":"open-office-menu","status":"passed","module":"runtime:office","at":"2026-08-10T20:49:22.260Z"}
+{"type":"phase","phaseId":"runtime/office/menu-chat","status":"failed","at":"2026-08-10T20:49:23.447Z"}
+{"type":"interaction","selector":"div[data-mode=\"chat\"]","action":"select-office-mode","status":"failed","module":"runtime:office","at":"2026-08-10T20:49:26.303Z"}
+{"type":"interaction","selector":"#chat-office-btn","action":"open-office-menu","status":"passed","module":"runtime:office","at":"2026-08-10T20:49:26.463Z"}
+{"type":"phase","phaseId":"runtime/office/menu-office","status":"failed","at":"2026-08-10T20:49:27.600Z"}
+{"type":"interaction","selector":"div[data-mode=\"office\"]","action":"select-office-mode","status":"passed","module":"runtime:office","at":"2026-08-10T20:49:27.817Z"}
+{"type":"interaction","selector":"button[data-tab=\"memorial\"]","action":"activate-tab","status":"passed","module":"tab:memorial","at":"2026-08-10T20:49:28.198Z"}
+{"type":"interaction","selector":"#cal-add-btn","action":"open-add-event","status":"passed","module":"runtime:calendar","at":"2026-08-10T20:49:28.449Z"}
+{"type":"phase","phaseId":"runtime/calendar/add-modal","status":"failed","at":"2026-08-10T20:49:29.853Z"}
+{"type":"interaction","selector":"div.cal-modal-backdrop","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.475Z"}
+{"type":"interaction","selector":"button.cal-modal-close","action":"click","status":"passed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.705Z"}
+{"type":"interaction","selector":"#cal-form-title","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.750Z"}
+{"type":"interaction","selector":"#cal-form-type","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.794Z"}
+{"type":"interaction","selector":"label.cal-switch","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.842Z"}
+{"type":"interaction","selector":"#cal-form-date","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.881Z"}
+{"type":"interaction","selector":"#cal-form-time","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.921Z"}
+{"type":"interaction","selector":"#cal-form-end-date","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:33.972Z"}
+{"type":"interaction","selector":"#cal-form-end-time","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.007Z"}
+{"type":"interaction","selector":"#cal-form-repeat","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.043Z"}
+{"type":"interaction","selector":"#cal-form-remind","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.084Z"}
+{"type":"interaction","selector":"#cal-form-desc","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.122Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(1)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.159Z"}
+{"type":"interaction","selector":"input[aria-label=\"柔粉\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.211Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(2)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.261Z"}
+{"type":"interaction","selector":"input[aria-label=\"淡紫\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.302Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(3)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.345Z"}
+{"type":"interaction","selector":"input[aria-label=\"蜜桃\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.386Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(4)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.423Z"}
+{"type":"interaction","selector":"input[aria-label=\"薄荷\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.464Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(5)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.500Z"}
+{"type":"interaction","selector":"input[aria-label=\"暖橙\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.538Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(6)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.574Z"}
+{"type":"interaction","selector":"input[aria-label=\"雾蓝\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.610Z"}
+{"type":"interaction","selector":"#cal-cancel-btn","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.646Z"}
+{"type":"interaction","selector":"#cal-save-btn","action":"safe-skip","status":"safe-skipped","module":"runtime:calendar-modal","at":"2026-08-10T20:49:34.648Z"}

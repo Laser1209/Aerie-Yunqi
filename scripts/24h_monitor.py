@@ -24,18 +24,24 @@ from pathlib import Path
 
 import psutil
 import aiohttp
+import yaml
+
+_START = time.monotonic()
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent
 LOG_ROOT = Path(os.getenv("AERIE_24H_LOG", r"D:\Aerie\24H-LOG"))
+PROBES_FILE = Path(os.getenv("AERIE_PROBES_FILE", ROOT / "config" / "monitor_probes.yaml"))
 
 # Collection intervals (seconds)
 SYS_INTERVAL = int(os.getenv("AERIE_SYS_INTERVAL", "30"))
 HEALTH_INTERVAL = int(os.getenv("AERIE_HEALTH_INTERVAL", "60"))
 DB_INTERVAL = int(os.getenv("AERIE_DB_INTERVAL", "7200"))     # every 2h
 STORAGE_CHECK_INTERVAL = int(os.getenv("AERIE_STORAGE_INTERVAL", "3600"))  # every 1h
+COGNITION_INTERVAL = int(os.getenv("AERIE_COGNITION_INTERVAL", "60"))     # every 1m
+COGNITION_BATCH = int(os.getenv("AERIE_COGNITION_BATCH", "50"))
 
 # Alerts
 ALERT_CPU_PCT = 85.0
@@ -45,9 +51,13 @@ ALERT_DISK_FREE_GB = 5.0
 # Ports that should stay bound by the backend
 BACKEND_PORTS = (7890, 7891)
 
+# Frontend (Electron) process names / markers for full-stack monitoring
+ELECTRON_MARKERS = ("electron",)
+
 SUBDIRS = (
     "00_STARTUP", "01_SYSTEM_METRICS", "02_HEALTH", "03_API",
     "04_LOGS", "05_ERRORS", "06_ANOMALY", "07_DB", "08_REPORT", "09_STATE",
+    "10_COGNITION",
 )
 
 logging.basicConfig(
@@ -105,8 +115,26 @@ def _write_error(level: str, module: str, message: str, detail: dict | None = No
 # ---------------------------------------------------------------------------
 # Collectors
 # ---------------------------------------------------------------------------
+def _electron_procs() -> list[dict]:
+    """Find Electron (frontend) processes for full-stack liveness tracking."""
+    found = []
+    for p in psutil.process_iter(["pid", "name", "memory_info", "cpu_percent"]):
+        try:
+            name = (p.info.get("name") or "").lower()
+            if any(m in name for m in ELECTRON_MARKERS):
+                found.append({
+                    "pid": p.info["pid"],
+                    "name": p.info.get("name"),
+                    "rss_mb": round((p.info.get("memory_info") or psutil.Process(p.info["pid"]).memory_info()).rss / 1024**2, 2),
+                    "cpu": p.info.get("cpu_percent") or 0.0,
+                })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return found
+
+
 async def collect_system_metrics() -> dict:
-    """CPU / memory / disk / network / per-process RSS / port state."""
+    """CPU / memory / disk / network / per-process RSS / port / frontend state."""
     vm = psutil.virtual_memory()
     disk = psutil.disk_usage(str(LOG_ROOT.anchor + os.sep) if os.name == "nt" else "/")
     net = psutil.net_io_counters()
@@ -115,6 +143,7 @@ async def collect_system_metrics() -> dict:
     for p in BACKEND_PORTS:
         ports[p] = _port_open(p)
 
+    frontend = _electron_procs()
     return {
         "ts": _now(),
         "cpu_percent": psutil.cpu_percent(interval=1),
@@ -128,6 +157,12 @@ async def collect_system_metrics() -> dict:
         "net_sent_mb": round(net.bytes_sent / 1024**2, 2),
         "net_recv_mb": round(net.bytes_recv / 1024**2, 2),
         "ports": ports,
+        "frontend": {
+            "running": bool(frontend),
+            "proc_count": len(frontend),
+            "total_rss_mb": round(sum(f["rss_mb"] for f in frontend), 2),
+            "procs": frontend,
+        },
     }
 
 
@@ -153,30 +188,6 @@ async def collect_health(backend: str, session: aiohttp.ClientSession) -> dict:
             "http_status": 0,
             "latency_ms": None,
             "overall": "unreachable",
-            "error": str(exc),
-        }
-
-
-async def collect_api_probe(backend: str, session: aiohttp.ClientSession) -> dict:
-    """Small GET probe for response-time stats; runs on a coarse cadence."""
-    started = time.monotonic()
-    try:
-        async with session.get(f"{backend}/api/health", timeout=aiohttp.ClientTimeout(total=8)) as resp:
-            latency_ms = (time.monotonic() - started) * 1000
-            return {
-                "ts": _now(),
-                "endpoint": "/api/health",
-                "status": resp.status,
-                "latency_ms": round(latency_ms, 1),
-                "ok": 200 <= resp.status < 300,
-            }
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "ts": _now(),
-            "endpoint": "/api/health",
-            "status": 0,
-            "latency_ms": None,
-            "ok": False,
             "error": str(exc),
         }
 
@@ -256,6 +267,7 @@ class Sentinel:
                 ("sys", SYS_INTERVAL * 3),
                 ("health", HEALTH_INTERVAL * 3),
                 ("db", DB_INTERVAL * 2),
+                ("cognition", COGNITION_INTERVAL * 3),
             ):
                 last = self.last.get(key)
                 if last is None or (now - last) > stale_after:
@@ -283,11 +295,211 @@ async def _health_loop(backend: str, session: aiohttp.ClientSession, sentinel: S
 
 
 async def _api_loop(backend: str, session: aiohttp.ClientSession) -> None:
-    # API response stats on a coarser cadence (every 5 min) to keep volume low.
+    """Config-driven real API probe runner (see config/monitor_probes.yaml).
+
+    Each enabled probe fires on its own interval; latency/status go to 03_API.
+    POST probes with `poll: true` follow the chat request queue to completion
+    to measure full end-to-end dialogue latency.
+    """
+    probes = _load_probes()
+    log.info("loaded %d enabled probe(s) from %s", len(probes), PROBES_FILE)
     while True:
-        rec = await collect_api_probe(backend, session)
-        _write_jsonl("03_API", rec)
-        await asyncio.sleep(300)
+        now = time.monotonic()
+        for probe in probes:
+            if now >= probe["next_run"]:
+                probe["next_run"] = now + float(probe.get("interval_sec", 300))
+                rec = await _run_probe(backend, session, probe)
+                _write_jsonl("03_API", rec)
+        await asyncio.sleep(5)
+
+
+def _load_probes() -> list[dict]:
+    if not PROBES_FILE.exists():
+        _write_error("P2", "probes", f"probes config missing: {PROBES_FILE}")
+        return []
+    try:
+        data = yaml.safe_load(PROBES_FILE.read_text(encoding="utf-8")) or {}
+    except Exception as exc:  # noqa: BLE001
+        _write_error("P2", "probes", f"failed to parse {PROBES_FILE}: {exc}")
+        return []
+    probes = []
+    for p in data.get("probes", []):
+        if not p.get("enabled", False):
+            continue
+        probes.append({**p, "next_run": time.monotonic()})
+    return probes
+
+
+async def _request_json(session: aiohttp.ClientSession, method: str, url: str,
+                        timeout: float, json_body: dict | None = None):
+    started = time.monotonic()
+    async with session.request(
+        method, url, json=json_body,
+        timeout=aiohttp.ClientTimeout(total=timeout),
+    ) as resp:
+        try:
+            body = await resp.json()
+        except Exception:  # noqa: BLE001
+            body = None
+        return resp.status, body, (time.monotonic() - started) * 1000
+
+
+async def _run_probe(backend: str, session: aiohttp.ClientSession, probe: dict) -> dict:
+    name, path = probe["name"], probe["path"]
+    method = str(probe.get("method", "GET")).upper()
+    timeout = float(probe.get("timeout_sec", 10))
+    try:
+        if method == "POST":
+            status, body, latency_ms = await _request_json(
+                session, "POST", f"{backend}{path}", timeout, json_body=probe.get("body"))
+        else:
+            status, body, latency_ms = await _request_json(session, "GET", f"{backend}{path}", timeout)
+        ok = 200 <= status < 300
+        rec = {"ts": _now(), "name": name, "method": method, "path": path,
+               "status": status, "latency_ms": round(latency_ms, 1), "ok": ok}
+        if ok and probe.get("poll"):
+            rec.update(await _poll_chat(backend, session, body, probe))
+        return rec
+    except Exception as exc:  # noqa: BLE001
+        return {"ts": _now(), "name": name, "method": method, "path": path,
+                "status": 0, "latency_ms": None, "ok": False, "error": str(exc)}
+
+
+async def _poll_chat(backend: str, session: aiohttp.ClientSession,
+                     submit_body: dict | None, probe: dict) -> dict:
+    """Poll the request queue until the chat request reaches a terminal state."""
+    request_id = (submit_body or {}).get("request_id")
+    if not request_id:
+        return {"error": "no request_id in submit response"}
+    started = time.monotonic()
+    final_status = "unknown"
+    while time.monotonic() - started < float(probe.get("poll_timeout_sec", 180)):
+        await asyncio.sleep(float(probe.get("poll_interval_sec", 5)))
+        try:
+            status, body, _ = await _request_json(
+                session, "GET", f"{backend}/api/chat/requests/{request_id}",
+                float(probe.get("timeout_sec", 10)))
+            final_status = str((body or {}).get("status", f"http{status}"))
+            if status == 404 or final_status.lower() in ("completed", "failed", "cancelled", "error"):
+                break
+        except Exception as exc:  # noqa: BLE001
+            final_status = f"poll_error:{exc}"
+            break
+    return {"request_id": request_id, "final_status": final_status,
+            "roundtrip_ms": round((time.monotonic() - started) * 1000, 1)}
+
+
+def _cog_json(value: Any) -> Any:
+    """Parse a JSON-string column (stage_*, react_trace, decision_trace)."""
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:  # noqa: BLE001
+        return str(value)
+
+
+def _scan_tools(obj: Any, out: list[dict], depth: int = 0) -> None:
+    """Recursively collect tool/skill call markers from stage_tools/react_trace.
+
+    Recognizes dicts carrying a tool/tool_name/name/skill key with a string
+    value, capturing the tool name and a truncated args snapshot.
+    """
+    if depth > 8 or out is None:
+        return
+    if isinstance(obj, dict):
+        tool = obj.get("tool") or obj.get("tool_name") or obj.get("skill") \
+            or obj.get("name")
+        if isinstance(tool, str) and tool:
+            args = obj.get("args") or obj.get("arguments") or obj.get("params")
+            out.append({
+                "tool": tool,
+                "args": json.dumps(args, ensure_ascii=False)[:500] if args else None,
+            })
+        for v in obj.values():
+            _scan_tools(v, out, depth + 1)
+    elif isinstance(obj, list):
+        for v in obj:
+            _scan_tools(v, out, depth + 1)
+
+
+def _truncate_text(value: Any, limit: int = 2000) -> Any:
+    """Truncate long JSON text to bound per-message volume on disk."""
+    if value is None:
+        return None
+    s = json.dumps(value, ensure_ascii=False)
+    if len(s) <= limit:
+        return value
+    return {"_truncated": True, "_len": len(s), "head": s[:limit]}
+
+
+def _extract_cognition(row: dict) -> dict:
+    """Condense a full cognition_log row into a traceable 10_COGNITION record."""
+    stages = {s: (_cog_json(row.get(f"stage_{s}")) is not None) for s in (
+        "route", "emotion", "threshold", "context", "brain",
+        "tools", "split", "postprocess", "output",
+    )}
+    present = [s for s, ok in stages.items() if ok]
+
+    # Tool / skill calls across the tools stage and the ReAct chain
+    tools: list[dict] = []
+    _scan_tools(_cog_json(row.get("stage_tools")), tools)
+    _scan_tools(_cog_json(row.get("react_trace")), tools)
+
+    react = _cog_json(row.get("react_trace"))
+    return {
+        "ts": _now(),
+        "cognition_id": row.get("id"),
+        "source": row.get("source"),
+        "user_id": row.get("user_id"),
+        "user_message": _truncate_text(row.get("user_message"), 500),
+        "route_mode": row.get("route_mode"),
+        "is_command": row.get("is_command"),
+        "duration_ms": row.get("duration_ms"),
+        "stages_present": present,
+        "tool_calls": tools,
+        "decision_trace": _truncate_text(_cog_json(row.get("decision_trace")), 800),
+        "react_trace": _truncate_text(react, 3000),
+    }
+
+
+async def _cognition_loop(backend: str, session: aiohttp.ClientSession,
+                          sentinel: Sentinel) -> None:
+    """Capture agent's internal dialogue flow via /api/cognition endpoints.
+
+    Polls recent trace ids, fetches full detail for every newly-observed row,
+    and condenses each into 10_COGNITION so the 9-stage pipeline, the ReAct
+    thought chain (react_trace) and tool/skill calls are fully recorded.
+    """
+    seen: set[int] = set()
+    while True:
+        try:
+            _, body, _ = await _request_json(
+                session, "GET", f"{backend}/api/cognition/recent",
+                timeout=10, json_body=None)
+            traces = (body or {}).get("traces") or []
+            new_ids = [t["id"] for t in traces
+                       if t.get("id") not in seen and t.get("id") is not None]
+            for rid in new_ids[:COGNITION_BATCH]:
+                seen.add(rid)
+                try:
+                    st, detail, _ = await _request_json(
+                        session, "GET", f"{backend}/api/cognition/{rid}", timeout=10)
+                    if st == 200 and detail:
+                        _write_jsonl("10_COGNITION", _extract_cognition(detail))
+                    elif st != 404:
+                        _write_error("P2", "cognition", f"detail fetch status {st}",
+                                     {"cognition_id": rid})
+                except Exception as exc:  # noqa: BLE001
+                    _write_error("P2", "cognition", f"detail fetch failed: {exc}",
+                                 {"cognition_id": rid})
+        except Exception as exc:  # noqa: BLE001
+            # Backend down is normal; log once per cycle at most.
+            _write_error("P2", "cognition", f"recent fetch failed: {exc}")
+        sentinel.touch("cognition")
+        await asyncio.sleep(COGNITION_INTERVAL)
 
 
 async def _db_loop(sentinel: Sentinel) -> None:
@@ -318,6 +530,9 @@ def _evaluate_alerts(rec: dict) -> None:
     for port, open_ in rec["ports"].items():
         if not open_:
             _write_error("P1", "resources", f"backend port {port} not listening")
+    fe = rec.get("frontend") or {}
+    if not fe.get("running"):
+        _write_error("P1", "frontend", "Electron frontend not running")
 
 
 def _setup_dirs() -> None:
@@ -358,6 +573,7 @@ async def main(backend: str, loop_hours: float) -> None:
             asyncio.create_task(_health_loop(backend, session, sentinel)),
             asyncio.create_task(_api_loop(backend, session)),
             asyncio.create_task(_db_loop(sentinel)),
+            asyncio.create_task(_cognition_loop(backend, session, sentinel)),
             asyncio.create_task(_storage_loop()),
             asyncio.create_task(sentinel.run()),
         ]
@@ -369,7 +585,8 @@ async def main(backend: str, loop_hours: float) -> None:
             for t in tasks:
                 t.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
-            log.info("monitor finished after %.1fh", loop_hours)
+            log.info("monitor finished after %.1fh (%.0fs)",
+                     loop_hours, (time.monotonic() - _START) % 100000)
 
 
 if __name__ == "__main__":

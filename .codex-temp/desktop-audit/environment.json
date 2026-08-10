@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "startedAt": "2026-08-10T17:52:46.411Z",
+  "startedAt": "2026-08-10T20:46:45.620Z",
   "browserPath": "playwright-core ElectronApplication",
   "browserPluginReason": "The in-app Browser cannot load Electron preload or IPC surfaces.",
   "backendPort": "7896",

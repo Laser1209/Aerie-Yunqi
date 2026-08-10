@@ -313,12 +313,12 @@ class WorldImageCandidateConsumer:
                 record=record,
             )
 
-        # Offload the blocking generation (sync httpx provider call) to a
-        # worker thread so the event loop is never frozen during image gen.
+        # 提示词解析可能在异步层选上下文（轻量 LLM 接力）；真正耗时的生图
+        # （sync httpx provider call）仍放到 worker 线程，事件循环不冻结。
         try:
-            workflow_result = await asyncio.to_thread(self._run_workflow, candidate)
+            workflow_result = await self._run_workflow(candidate)
         except Exception:
-            logger.debug("world image candidate workflow thread failed", exc_info=True)
+            logger.debug("world image candidate workflow failed", exc_info=True)
             workflow_result = {
                 "status": "failed",
                 "side_effects": dict(_NO_SIDE_EFFECTS),
@@ -360,6 +360,38 @@ class WorldImageCandidateConsumer:
             record=record,
             workflow_result=workflow_result,
         )
+
+    def has_recent_completed(self, reason_code: str, window_sec: float) -> bool:
+        """持久化同主题去重：最近窗口内是否已成功处理同一 reason_code。
+
+        主动发图循环在发布前调用它：即使后端重启把进程内 recent_intents 清空，
+        也能从审计存储判断"同一视觉主题刚成功发过"，避免每次重启都重新生成
+        一张一模一样的图。仅统计 status=completed（生成+派发成功的）记录。
+        """
+        if not reason_code or window_sec <= 0:
+            return False
+        now_ts = self.clock().timestamp()
+        data = self.store._load() if hasattr(self.store, "_load") else {}
+        for record in (data.get("records_by_key") or {}).values():
+            if not isinstance(record, dict):
+                continue
+            if str(record.get("status") or "") != "completed":
+                continue
+            cand = record.get("candidate")
+            if not isinstance(cand, dict):
+                continue
+            if str(cand.get("reason_code") or "") != reason_code:
+                continue
+            updated = str(record.get("updated_at") or "")
+            if not updated:
+                continue
+            try:
+                done_ts = datetime.fromisoformat(updated.replace("Z", "+00:00")).timestamp()
+            except Exception:
+                continue
+            if now_ts - done_ts <= window_sec:
+                return True
+        return False
 
     def _flag_enabled(self) -> bool:
         try:
@@ -495,9 +527,35 @@ class WorldImageCandidateConsumer:
             logger.debug("world image candidate proactive judge failed", exc_info=True)
             return type("RejectedJudge", (), {"suppress_reason": ""})()
 
-    def _run_workflow(self, candidate: dict[str, Any]) -> dict[str, Any]:
+    async def _run_workflow(self, candidate: dict[str, Any]) -> dict[str, Any]:
         try:
-            prompt = self.prompt_resolver(candidate["prompt_key"], candidate)
+            prompt = await self._resolve_prompt(candidate)
+            result = await asyncio.to_thread(
+                self._run_workflow_blocking, prompt, candidate
+            )
+            return result if isinstance(result, dict) else {"status": "failed"}
+        except Exception:
+            logger.debug("world image candidate workflow failed", exc_info=True)
+            return {
+                "status": "failed",
+                "side_effects": dict(_NO_SIDE_EFFECTS),
+                "delivery_plan": None,
+            }
+
+    async def _resolve_prompt(self, candidate: dict[str, Any]) -> str:
+        """解析生图提示词；resolver 可能是同步或异步（异步可做轻量 LLM 上下文挑选）。"""
+        try:
+            result = self.prompt_resolver(candidate["prompt_key"], candidate)
+            if inspect.isawaitable(result):
+                result = await result
+            return str(result or "")
+        except Exception:
+            logger.debug("world image candidate prompt resolve failed", exc_info=True)
+            return ""
+
+    def _run_workflow_blocking(self, prompt: str, candidate: dict[str, Any]) -> dict[str, Any]:
+        """同步执行生图（放入 worker 线程，避免阻塞事件循环）。"""
+        try:
             result = self.image_workflow.generate_image(
                 prompt=prompt,
                 idempotency_key=f"world-image:{candidate['idempotency_key']}",

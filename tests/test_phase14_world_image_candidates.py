@@ -501,3 +501,107 @@ async def test_user_requested_photo_bypasses_proactive_budget(tmp_path):
     assert workflow.calls
     assert port.acks == [7]
 
+
+@pytest.mark.asyncio
+async def test_has_recent_completed_tracks_successful_same_topic_across_restart(tmp_path):
+    """持久化同主题去重：completed 记录在窗口内可被新 consumer（模拟重启）识别。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    store_path = tmp_path / "dedup.json"
+    workflow = WorkflowStub()
+    port = WorldPortStub()
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=workflow,
+        world_port=port,
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(store_path),
+        clock=_clock,
+    )
+
+    result = await consumer.process_event(_candidate_event())
+
+    assert result["status"] == "completed"
+
+    # 模拟后端重启：全新 consumer 读同一持久化存储。
+    restarted = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(store_path),
+        clock=_clock,
+    )
+
+    assert restarted.has_recent_completed("evening_private_scene", window_sec=1800) is True
+    # 不同主题/不同 reason_code 不应被误伤。
+    assert restarted.has_recent_completed("world_visual:other_topic", window_sec=1800) is False
+    assert restarted.has_recent_completed("", window_sec=1800) is False
+
+
+@pytest.mark.asyncio
+async def test_has_recent_completed_ignores_failed_and_expired_window(tmp_path):
+    """failed 记录不计入去重；超出窗口的 completed 记录不再拦截。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    def _advance_clock(minutes: int):
+        return lambda: datetime(2026, 7, 20, 20, minutes, tzinfo=timezone.utc)
+
+    store_path = tmp_path / "dedup-window.json"
+    workflow = WorkflowStub()
+    port = WorldPortStub()
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=workflow,
+        world_port=port,
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(store_path),
+        clock=_clock,
+    )
+    await consumer.process_event(_candidate_event())
+
+    # 窗口外：completed 记录在 1800s 之前 → 不再拦截。
+    outside = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(store_path),
+        clock=_advance_clock(35),
+    )
+    assert outside.has_recent_completed("evening_private_scene", window_sec=1800) is False
+
+    # failed 记录（provider 调了但资产没落地）不参与去重。
+    store_path2 = tmp_path / "dedup-failed.json"
+    failed = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(status="failed"),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(store_path2),
+        clock=_clock,
+    )
+    await failed.process_event(_candidate_event())
+
+    fresh = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(store_path2),
+        clock=_clock,
+    )
+    assert fresh.has_recent_completed("evening_private_scene", window_sec=1800) is False
+

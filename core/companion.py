@@ -127,6 +127,72 @@ def _image_orientation_phrase(image_size: str) -> str:
     return "竖构图（手机竖拍 9:16 比例）"
 
 
+# ── 生图上下文：世界数据按场景选择性进画面 ──────────────────────
+# 时间光线决定室内/窗外的氛围光，天气决定窗外/城市画面里能看见的元素。
+# 提示词接力时只把真正能呈现在画面里的数据注入，不把世界快照全部堆叠。
+_IMAGE_LIGHT_PROVIDER = "siliconflow-light"
+_IMAGE_LIGHT_RELAY_TIMEOUT = 8.0
+# 主动发图同主题去重窗口：即使后端重启清空进程内存，同一视觉主题在此窗口内
+# 也不会被重复发布（读持久化审计存储判断），避免"每次重启生成一张一模一样的图"。
+_IMAGE_TOPIC_DEDUP_SEC = 1800
+
+_TIME_OF_DAY_CN: dict[str, str] = {
+    "night": "深夜",
+    "morning": "清晨",
+    "noon": "正午",
+    "afternoon": "下午",
+    "evening": "傍晚",
+}
+
+_TIME_OF_DAY_LIGHT_CN: dict[str, str] = {
+    "night": "深夜，室内一盏暖黄灯，窗外是安静的夜景",
+    "morning": "清晨，柔和的自然光，空气清透",
+    "noon": "正午，明亮的日光从窗户洒进来",
+    "afternoon": "下午，柔和的自然光，光影层次分明",
+    "evening": "傍晚，黄昏的暖色调光线",
+}
+
+_WEATHER_MOOD_CN: dict[str, str] = {
+    "clear": "晴朗",
+    "sunny": "晴朗",
+    "partly_cloudy": "多云",
+    "cloudy": "阴天",
+    "overcast": "阴天",
+    "rain": "下雨",
+    "drizzle": "细雨",
+    "shower": "阵雨",
+    "thunderstorm": "雷雨",
+    "snow": "下雪",
+    "windy": "有风",
+    "fog": "有雾",
+    "haze": "有霾",
+    "neutral": "",
+}
+
+# 生图场景 → 世界数据相关性（确定性兜底，与轻量 LLM 接力同语义）：
+# 天气/光线只在真正影响画面的场景注入，室内自拍不塞天气。
+_IMAGE_WORLD_FALLBACK_RULES: dict[str, set[str]] = {
+    "environment_object": {"weather", "light"},
+    "role_in_scene": {"light", "weather"},
+    "role_selfie": {"light"},
+    "couple_photo": {"light"},
+}
+
+
+def _time_of_day_phase(dt: datetime) -> str:
+    """把本地时刻映射到 5 段时段（与 DEFAULT_WORLD_PHASES 一致）。"""
+    hour = dt.hour
+    if hour >= 23 or hour < 6:
+        return "night"
+    if hour < 12:
+        return "morning"
+    if hour < 14:
+        return "noon"
+    if hour < 19:
+        return "afternoon"
+    return "evening"
+
+
 def _resolve_companion_data_path(settings: dict | None) -> Path:
     if (os.environ.get("AERIE_DATA_DIR") or "").strip():
         return data_dir()
@@ -2006,6 +2072,24 @@ class Companion:
                 if intent not in ("life_share", "attention_ack", "unfinished_topic"):
                     continue
 
+                # 持久化同主题去重：同一视觉主题最近已成功发布（含跨后端重启）→ 跳过。
+                # recent_intents 只活在进程内存里，重启即清零，防不住"重启→重复生成"；
+                # 这里读审计存储判断，窗口取配置的发图间隔与默认窗口的较大值。
+                topic_id = str(topics[0] or "").strip()
+                reason_code = f"world_visual:{topic_id}" if topic_id else ""
+                dedup_sec = max(min_gap_sec, _IMAGE_TOPIC_DEDUP_SEC)
+                dedup_check = getattr(consumer, "has_recent_completed", None)
+                if reason_code and callable(dedup_check):
+                    try:
+                        if dedup_check(reason_code, dedup_sec):
+                            logger.info(
+                                "[WorldImage] skip duplicate visual topic=%s published within %ss",
+                                topic_id, int(dedup_sec),
+                            )
+                            continue
+                    except Exception:
+                        logger.debug("proactive photo topic dedup check failed", exc_info=True)
+
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
                 channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
                 await self.publish_image_candidate({
@@ -2016,7 +2100,7 @@ class Companion:
                     "channel": channel,
                     "target": master_id,
                     "prompt_key": "environment_object",
-                    "reason_code": f"world_visual:{topics[0]}",
+                    "reason_code": reason_code,
                     "source": "generated",
                     "score": round(float(chosen.score), 2),
                     "size": _image_size_for_prompt_key("environment_object"),
@@ -2034,12 +2118,27 @@ class Companion:
             except Exception:
                 logger.debug("proactive photo loop tick failed", exc_info=True)
 
-    def _image_prompt_for(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
+    async def _image_prompt_for(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
         """把 ImageCandidate 的 prompt_key 解析成真实的中文生图提示词。
 
-        以 persona.yaml 的 appearance/profile 描述伊塔的外貌，再叠加不同场景，
-        确保中转站生成的是一张符合她形象设定、而非随机主体的生活照。
+        两步接力：
+        1. ``_compose_base_image_prompt`` 用 persona.yaml 外貌/身材 + 场景拼出基础提示词；
+        2. 世界数据接力：取当前 WorldSnapshot 的时间/天气/地点/物件，交给轻量 LLM
+           （siliconflow-light）判断这张画面真正需要哪些数据——只把能呈现在画面里的
+           写进提示词，而不是把世界快照全部揉在一起。轻量 LLM 不可用时退回确定性规则
+           （按场景选择性注入时间光线/天气）。
         """
+        base = self._compose_base_image_prompt(prompt_key, candidate)
+        context = self._image_world_context(candidate)
+        if not context:
+            return base
+        refined = await self._light_relay_refine_prompt(base, context, candidate)
+        if refined:
+            return refined
+        return self._inject_world_context_fallback(base, context, candidate)
+
+    def _compose_base_image_prompt(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
+        """基础提示词：persona 外貌/身材 + 场景构图（不含世界上下文）。"""
         try:
             from config.persona_loader import load_persona
             persona = load_persona() or {}
@@ -2113,6 +2212,171 @@ class Companion:
         else:
             scene = "她坐在重庆的家里，窗外是夜景，她神情放松地看着镜头。"
         return f"{base}{scene}{orientation}。"
+
+    def _image_world_context(self, candidate: dict[str, Any] | None = None) -> dict[str, Any]:
+        """提取生图可用的世界上下文，只保留真实存在的数据。
+
+        时间优先取 WorldSnapshot（world 的时间），world 关闭/快照不可用时退回
+        候选事件时间或本地当前时间；天气/地点/物件只在 world 有真实数据时才进入。
+        """
+        snapshot = self._world_snapshot_for_context()
+        if isinstance(snapshot, dict) and snapshot:
+            phase = str(snapshot.get("phase") or "")
+            iso_time = str(snapshot.get("iso_time") or snapshot.get("created_at") or "")
+            weather_mood = str(snapshot.get("weather_mood") or snapshot.get("weather") or "").strip()
+            weather_detail = str(snapshot.get("weather_detail") or "").strip()
+            city = str(snapshot.get("city") or "").strip()
+            location = str(snapshot.get("location") or "home")
+            activity = str(snapshot.get("activity") or "idle")
+            nearby_objects = [str(x) for x in (snapshot.get("nearby_objects") or []) if str(x)]
+            visual_topics = [str(x) for x in (snapshot.get("available_visual_topics") or []) if str(x)]
+            city_events = [e for e in (snapshot.get("city_events") or []) if isinstance(e, dict) and e.get("title")]
+        else:
+            phase = iso_time = weather_mood = weather_detail = city = location = activity = ""
+            nearby_objects = visual_topics = city_events = []
+
+        # 时间兜底：候选事件时间 → 本地当前时间；时段缺省时按小时映射。
+        clock_dt = None
+        for raw in (iso_time, (candidate or {}).get("created_at"), (candidate or {}).get("occurred_at")):
+            if not raw:
+                continue
+            try:
+                clock_dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                break
+            except Exception:
+                continue
+        if clock_dt is None:
+            clock_dt = datetime.now()
+        if not phase:
+            phase = _time_of_day_phase(clock_dt)
+        clock_str = clock_dt.strftime("%H:%M")
+
+        weather_cn = _WEATHER_MOOD_CN.get(weather_mood, "")
+        weather_desc = weather_detail
+        if not weather_desc:
+            if city and weather_cn:
+                weather_desc = f"现在{city}{weather_cn}"
+            elif weather_cn:
+                weather_desc = f"现在天气{weather_cn}"
+
+        context = {
+            "prompt_key": str((candidate or {}).get("prompt_key") or ""),
+            "scene": str((candidate or {}).get("scene") or ""),
+            "time_of_day": phase,
+            "clock": clock_str,
+            "time_of_day_light": _TIME_OF_DAY_LIGHT_CN.get(phase, ""),
+            "weather_desc": weather_desc,
+            "city": city,
+            "location": location,
+            "activity": activity,
+            "nearby_objects": nearby_objects[:6],
+            "visual_topics": visual_topics[:6],
+            "city_events": city_events[:3],
+        }
+        if not (context["time_of_day_light"] or context["weather_desc"] or city or nearby_objects or visual_topics or city_events):
+            return {}
+        return context
+
+    def _world_context_text(self, context: dict[str, Any]) -> str:
+        """把世界上下文转成可读文本，供轻量 LLM 接力判断。"""
+        phase = str(context.get("time_of_day") or "")
+        clock = str(context.get("clock") or "")
+        time_light = str(context.get("time_of_day_light") or "").strip()
+        weather_desc = str(context.get("weather_desc") or "").strip()
+        city = str(context.get("city") or "").strip()
+        location = str(context.get("location") or "").strip()
+        activity = str(context.get("activity") or "").strip()
+        nearby = [str(x) for x in (context.get("nearby_objects") or [])]
+        topics = [str(x) for x in (context.get("visual_topics") or [])]
+        events = [str(e.get("title")) for e in (context.get("city_events") or []) if isinstance(e, dict) and e.get("title")]
+
+        lines = []
+        if phase:
+            phase_cn = _TIME_OF_DAY_CN.get(phase, phase)
+            lines.append(f"时间：{phase_cn}（{clock}）。{time_light}" if time_light else f"时间：{phase_cn}（{clock}）。")
+        if weather_desc:
+            lines.append(f"天气：{weather_desc}")
+        place_parts = []
+        if location:
+            place_parts.append(f"她现在在{location}")
+        if city:
+            place_parts.append(city)
+        if place_parts:
+            lines.append("地点：" + "，".join(place_parts))
+        if activity and activity != "idle":
+            lines.append(f"她此刻在：{activity}")
+        if nearby:
+            lines.append("房间/周围可见物件：" + "、".join(nearby))
+        if topics:
+            lines.append("可拍的画面主题：" + "、".join(topics))
+        if events:
+            lines.append("城市动态：" + "；".join(events))
+        return "\n".join(lines) or "（暂无世界数据）"
+
+    async def _light_relay_refine_prompt(
+        self,
+        base_prompt: str,
+        context: dict[str, Any],
+        candidate: dict[str, Any] | None = None,
+    ) -> str | None:
+        """轻量 LLM 接力：判断这张画面需要哪些世界数据，只注入能呈现在画面里的。
+
+        轻量模型（siliconflow-light）只做提示词挑选/润色，不负责生图；失败、
+        超时或输出异常时返回 None，由调用方退回确定性规则，绝不阻塞生图管线。
+        """
+        brain = getattr(self, "brain", None)
+        chat = getattr(brain, "chat", None)
+        if not callable(chat):
+            return None
+        context_text = self._world_context_text(context)
+        if not context_text or context_text == "（暂无世界数据）":
+            return None
+        key = str(context.get("prompt_key") or (candidate or {}).get("prompt_key") or "default")
+        system_msg = (
+            "你是一名专业的图像提示词优化助手。用户提供一条基础生图提示词"
+            "（伊塔的生活照/场景照，人物外貌、身材与画面风格已确定），"
+            "以及一组可选的世界背景数据（时间、天气、地点、物件、城市动态）。\n"
+            "你的任务：\n"
+            "1. 判断哪些背景数据对这张照片的画面有实际影响，只把真正能呈现在画面里的写进提示词；\n"
+            "2. 无关的数据不要写（例如室内自拍通常不需要天气、白天照片不要深夜光线），不要堆叠所有数据；\n"
+            "3. 保留基础提示词里的人物外貌、身材、风格与构图信息，只做上下文增强；\n"
+            "4. 只用中文输出一条完整、自然、连贯的生图提示词本身，不要解释，不要JSON，不要加引号。"
+        )
+        user_msg = (
+            f"【基础提示词】\n{base_prompt}\n\n"
+            f"【可选世界背景数据】\n{context_text}\n\n"
+            f"请判断画面需要哪些数据，输出增强后的完整生图提示词。"
+        )
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ]
+        try:
+            call = chat(messages, preferred_provider=_IMAGE_LIGHT_PROVIDER, temperature=0.7)
+            resp = await asyncio.wait_for(call, timeout=_IMAGE_LIGHT_RELAY_TIMEOUT)
+            text = (resp.text or "").strip().strip('"').strip("'")
+            if 30 <= len(text) <= 4000 and ("写实" in text or "照片" in text):
+                logger.debug("world image prompt refined by light relay (key=%s)", key)
+                return text
+        except Exception:
+            logger.debug("world image prompt light relay failed; fallback to deterministic prompt", exc_info=True)
+        return None
+
+    def _inject_world_context_fallback(self, base_prompt: str, context: dict[str, Any], candidate: dict[str, Any] | None = None) -> str:
+        """确定性兜底：按场景规则只注入该画面相关的世界数据。"""
+        key = str((candidate or {}).get("prompt_key") or context.get("prompt_key") or "default")
+        need = _IMAGE_WORLD_FALLBACK_RULES.get(key, {"light", "weather"})
+        time_light = str(context.get("time_of_day_light") or "").strip()
+        weather_desc = str(context.get("weather_desc") or "").strip()
+        parts = []
+        if "light" in need and time_light:
+            parts.append(time_light)
+        if "weather" in need and weather_desc:
+            parts.append(weather_desc)
+        if not parts:
+            return base_prompt
+        detail = "，".join(parts)
+        return f"{base_prompt}画面氛围：{detail}。"
 
     async def _emotion_tick_loop(self) -> None:
         """R7.5+: background tick loop for emotion dashboard liveness.

@@ -372,6 +372,7 @@ npm run build:win:alt
 | 欢迎语快速生成返回模板文案（非 LLM 生成） | 轻量 LLM 调用 4s 超时过紧，端到端实测 3.8~4.3s 被 `asyncio.wait_for` 掐断 | 超时上调至 6s（`compose_quick_greeting` 默认值）；失败回退随机模板，每次仍不同（见深度排查 12） |
 | 后端代码改动不生效（新接口 404 / 行为不变） | `main.py` 以 `asyncio.run()` 启动，无热重载；配置热加载仅覆盖 `config/` YAML | 结束现有 `main.py` 进程 → 等 7890 端口释放 → 用 `.venv\Scripts\python.exe -X dev main.py` 以 detached 方式重启 |
 | PowerShell 显示中文乱码（如 `å®è´...`） | PowerShell 5 控制台默认代码页非 UTF-8；接口实际返回的 UTF-8 数据正确 | 用 `[Text.Encoding]::UTF8` 转换后输出，或用 Python 脚本并设 `PYTHONIOENCODING=utf-8` 校验，勿误判数据损坏 |
+| 深夜/凌晨发"白天照"，时段光线与真实时刻错位 8 小时 | 世界模拟时钟与生图时间注入均用 UTC 未转本地（+08:00），凌晨 02:02 被当 UTC 18:02 判成 `afternoon` | 已统一到 `LOCAL_TZ` 并 `astimezone` 归一（详见下方深度排查 14） |
 
 ---
 
@@ -783,6 +784,166 @@ npm run build:win:alt
 
 ---
 
+#### 14. 深夜/凌晨发"白天照"，生图时段光线与真实时刻错位 8 小时 / Photos generated at night look like daytime (timezone offset)
+
+**问题描述 / Symptom**
+
+- 在**凌晨**（如北京 02:02）主动推送的生活照/环境照，画面光线却是**下午/白天**（"下午，柔和的自然光，光影层次分明"），看起来像正午或下午拍的
+- `data/world_image_candidates.json` 中 `proactive-visual:*` 记录的 `created_at` 为 `2026-08-10T18:02:56+00:00`（UTC），换算成北京（+08:00）才是凌晨 `02:02`，但时段判定却落在 `afternoon`（下午）
+- 影响面不止生图：世界模拟的时段/作息/天气判断整体偏移，凌晨被判定为"下午工作/活动"而非"深夜睡觉"
+
+**可能原因 / Root cause**
+
+1. **世界模拟时钟用 UTC**：`WorldSimulation` 默认时钟 `datetime.now(timezone.utc)`（[world_simulation.py L207](file:///e:/Agent_reply/core/world_simulation.py#L207)），快照 `iso_time` 与时段 `phase_for(now)` 均按 **UTC 小时**判定，未转换到本地时区
+2. **生图时间注入未归一**：`companion._image_world_context` 解析 `iso_time` 后直接用 `.hour` / `strftime`，也未做 `astimezone` 到本地
+3. 本地（北京 +08:00）与 UTC 相差 8 小时：真实凌晨 02:02 被系统视为 UTC 18:02 → 落在 `afternoon`（14:00–19:00）区间，光线提示词写成"下午"
+4. 全程无任何 `astimezone`/本地时区转换（[world_simulation.py](file:///e:/Agent_reply/core/world_simulation.py) 仅有一处强制标 UTC 的兜底）
+
+**排查步骤 / Diagnosis**
+
+1. 定位最近一条主动发图：`data/world_image_candidates.json` 中 `reason_code=world_visual:*`、`source=generated` 的记录，换算 `created_at` 到北京时区，比对真实发送时刻
+2. 看该候选 `prompt_key=environment_object` 走 `_image_prompt_for` 时注入的 `time_of_day` / `time_of_day_light`：若为 `afternoon` / "下午…"而真实是凌晨，即中招
+3. 用固定时钟复现：构造 `WorldSimulation(clock=lambda: datetime(2026,8,11,2,2,tzinfo=LOCAL_TZ))` 调 `tick()`，看 `phase` 是否判成 `night`；或用 UTC `18:02Z` 调 `_time_of_day_phase(astimezone(+08))` 验证是否归一为 `night`
+
+**解决方案 / Fix**
+
+1. **世界模拟时钟本地化**：在 `world_simulation.py` 导出 `LOCAL_TZ = timezone(timedelta(hours=8))`，默认时钟改为 `datetime.now(LOCAL_TZ)`；naive 时间兜底补齐也用 `LOCAL_TZ`（[world_simulation.py L211/L401](file:///e:/Agent_reply/core/world_simulation.py#L211)）
+2. **生图时间注入归一**：`companion._image_world_context` 对解析出的 `clock_dt` 统一归一——aware 用 `clock_dt.astimezone(LOCAL_TZ)`，naive 用 `clock_dt.replace(tzinfo=LOCAL_TZ)`，兜底 `datetime.now(LOCAL_TZ)`（[companion.py L2249-L2256](file:///e:/Agent_reply/core/companion.py#L2249-L2256)）
+3. 世界模拟仅在 `world_port.py L287/L701` 构造且不传 clock，改默认值即全覆盖
+4. 验证：`pytest tests/test_p1_c1_world_simulation.py tests/test_p1_c1_world_snapshot.py tests/test_world_runtime_lifecycle.py tests/test_phase14_world_image_candidates.py`（39 passed）；另做固定时钟断言——本地 02:02→`night`、UTC 18:02Z 归一 02:02→`night`、12:30→`noon`
+
+**预防措施 / Prevention**
+
+- 所有"世界时钟/时段/生图时间"统一使用 `LOCAL_TZ` 常量，禁止直接 `datetime.now(timezone.utc)` 参与时段判定
+- 跨来源时间（快照 `iso_time`、候选 `created_at`、事件 `occurred_at`）混用时，必须先 `astimezone(LOCAL_TZ)` 归一再取 `.hour`，避免 UTC/本地混算
+- 新增任何"按当前时刻生成内容"的功能（早安/时段问候/光线提示词），用固定时钟单测覆盖凌晨与正午两个边界时段
+
+---
+
+#### 15. QQ 语音消息无法解析 / 无法转文字（入站） / QQ voice messages not transcribed
+
+**问题描述 / Symptom**
+
+- QQ 手机/PC 发来语音消息，本地聊天窗口只看到一段"语音通讯"之类的内容（CQ 码/JSON 原样显示），AI 也拿不到任何文字语义，无法理解这条语音
+- `chat_log.content` 中残留 `[CQ:record,file=...]` 之类的原始码，前端无语音条、无转写文字
+
+**可能原因 / Root cause**
+
+1. 消息以 CQ 码原样落库与渲染，从未解析消息段
+2. 缺 ASR（语音转文字）：即使拿到语音文件也未做转写
+3. 语音文件需经 NapCat `get_record` 下载（NapCat 默认返回 silk，需转通用格式），链路未接通
+
+**排查步骤 / Diagnosis**
+
+1. 查 `chat_log` 该条 `content` 是否含 `[CQ:record`；含则说明走了未解析路径
+2. 确认 NapCat `get_record` 可达：`curl`/日志看 RPC 是否返回 base64/路径
+3. 确认转写能力：`SILICONFLOW_API_KEY` 是否配置（云端 SenseVoice），或本地 whisper 是否可用
+4. 检查语音时长 `duration` 是否为 0（依赖 `ffprobe`，见 #18）
+
+**解决方案 / Fix**
+
+1. 新增 `core/qq_media.py::QQMediaPreprocessor`，在 `_on_qq_message` 提交前统一解析 CQ 段（`record`/`image`/`face`/`mface`/`text`）
+2. 语音：`qq.get_record(file, out_format="mp3")` 下载 → `_SFClient.transcribe`（SiliconFlow SenseVoice 云端优先）或本地 `AudioTranscriber`（whisper）回退 → 转写文字写入 `attachments[].transcript`
+3. 前端 `chat.js::_buildAttachmentCard` 对 `category="audio"` 渲染语音条（时长）+ 下方转写文字，无需点击播放
+
+**预防措施 / Prevention**
+
+- 入站多媒体一律走 `QQMediaPreprocessor`，禁止原始 CQ 码落库/进入 AI 上下文
+- `attachments` 统一通道（DB/API/前端一致），语音携带 `transcript` + `duration`
+- ASR 不可用或失败时降级为 `[语音]` 占位，前端仍渲染语音条，不阻塞主链路
+
+---
+
+#### 16. QQ 表情包仅解析关键词 / 呈现不佳，伊塔无法发收藏 GIF / QQ stickers not understood & cannot be sent
+
+**问题描述 / Symptom**
+
+- 表情包只把 CQ JSON/关键词发过去，AI 理解有限，前端呈现不好看
+- 账号「伊塔」在 QQ 收藏夹预配了一批 GIF 表情，但无法让伊塔在聊天中主动发送它们
+
+**可能原因 / Root cause**
+
+1. QQ 自带表情（`face`）仅存 ID，未映射文字含义；图片表情只传 JSON 未下载解析
+2. 无出站能力：没有任何接口拉取收藏表情，也没有"什么时候发、发哪张"的决策
+
+**排查步骤 / Diagnosis**
+
+1. 查入站消息段类型：`face`（自带）→ 需 ID 映射；`image`/`mface`（收藏/动图）→ 需下载后视觉解析
+2. 确认 NapCat 扩展接口 `fetch_custom_face` 可调用（获取收藏表情 URL 列表）
+3. 确认 `send_image` 支持 URL 直发（无需下载，省资源）
+
+**解决方案 / Fix**
+
+1. **入站**：`QQMediaPreprocessor` 内置 `FACE_TEXT`（QQ 常用 face ID→中文，0–200 可信子集，未收录走 `[QQ表情 <id>]` 诚实回退）；`image`/`mface` 经 `get_image` 下载后视觉解析（Qwen3-VL 风格）生成描述，并落缩略图
+2. **出站**：新增 `core/qq_sticker.py`
+   - `QQStickerLibrary`：`fetch_custom_face` 拉收藏 URL → 视觉打标（懒加载 + `data/qq_sticker_cache.json` 缓存）→ 按情绪挑图
+   - `QQStickerSender`：轻量 LLM 决策（`siliconflow-light`，5s 超时）→ 规则按情绪挑图 → `send_image(URL)` 直发
+3. `send_queue` 增加 `on_reply_sent` 回调，`companion._on_qq_reply_sent` 在回复发完后触发；LLM 决策失败回退 `_fallback_decide` 确定性规则
+
+**预防措施 / Prevention**
+
+- 收藏表情实时拉取 + 缓存，伊塔新加的表情立刻可用；跨重启复用标签
+- 出站每层独立降级（拉不到收藏→不发；无视觉打标→随机；LLM 失败→规则兜底），绝不影响文字回复
+- 每用户节流（`sticker.min_interval` 默认 90s）防刷屏；`sticker.enabled` 可整体关闭
+
+---
+
+#### 17. 本机 pytest 收集阶段卡住，测试无法运行 / pytest hangs during collection
+
+**问题描述 / Symptom**
+
+- 在本机运行 `pytest tests/xxx.py` 时，进程在收集（import）阶段长时间无输出、无退出，看不到任何测试结果
+- 与本次改动无关，其他测试同样触发
+
+**可能原因 / Root cause**
+
+- `tests/conftest.py` 在收集阶段导入 `core.api_server` 等重型模块，本机环境下该导入阻塞（网络/资源/端口预检测等），导致 pytest 卡住而非报错
+
+**排查步骤 / Diagnosis**
+
+1. 用 `python -m pytest <file> -p no:cacheprovider > out.log` 观察 `out.log` 是否始终为空（卡在 import）
+2. 用最小脚本 `python -c "import core.qq_sticker"` 单独验证被测模块可正常导入（快且不依赖 conftest）
+
+**解决方案 / Fix**
+
+- 业务逻辑用独立 `python -c` 脚本做等价运行时验证（mock 外部依赖），绕过 conftest
+- 测试文件（如 `tests/test_qq_media.py`、`tests/test_qq_sticker.py`）正常保留，待环境正常/CI 中运行
+
+**预防措施 / Prevention**
+
+- 判定"测试挂起"时先区分是**被测代码**还是**测试框架/环境**问题：被测模块能否独立 `import` 是首要判据
+- 优先提供不依赖重型 conftest 的可独立运行验证方式，减少环境阻塞误判
+
+---
+
+#### 18. ffmpeg/ffprobe 缺失，语音时长无法获取 / ffprobe missing, voice duration unavailable
+
+**问题描述 / Symptom**
+
+- 语音消息能转写文字，但附件的 `duration`（时长）为 `0`，语音条不显示时长
+- 前端仍正常显示语音条 + 转写文字（仅时长缺失）
+
+**可能原因 / Root cause**
+
+- 语音时长用 `ffprobe` 读取；打包/本机未内置 ffmpeg/ffprobe，导致时长解析失败
+
+**排查步骤 / Diagnosis**
+
+1. 确认 `ffprobe` 是否在 `PATH` 或项目内
+2. 查语音附件 `duration` 字段是否为 0
+
+**解决方案 / Fix**
+
+- 时长解析失败时降级返回 `0.0`，不阻塞转写与渲染
+- 需要真实时长：安装/内置 ffmpeg，或在打包时把 ffmpeg 一并分发
+
+**预防措施 / Prevention**
+
+- 时长是可选增强字段，不作为语音链路硬依赖；缺失时前端仍展示语音条 + 转写文字
+- 打包清单确认 ffmpeg 是否随包分发
+
+---
+
 ## 兼容性 / Compatibility
 
 | 项目 / Item        | 要求 / Requirement               |
@@ -815,6 +976,64 @@ npm run build:win:alt
 
 ## License
 
-本仓库源码公开可见，但当前标记为 **UNLICENSED / All rights reserved**，不因此自动授予复制、再分发或商业使用许可。
+本项目为**专有 / 闭源**软件（Proprietary / Closed-source），**保留所有权利**。非开源，且**未经书面授权不得用于任何商业用途**。
+
+- 完整许可条款见 [`LICENSE`](LICENSE)
+- 用户协议（草案）见 [`TERMS_OF_SERVICE.md`](TERMS_OF_SERVICE.md)
+- 允许：个人学习 / 研究 / 内部试用
+- **禁止**：未经书面授权复制、修改、再分发、反编译、出售、集成进商业产品或用于任何商业目的
+- 商业用途须先与作者签订**书面商业许可**，否则视为侵权
 
 **Aerie · 云栖** — 你的本地 AI 桌面伴侣。
+
+---
+
+## 商业合作 / Commercial Cooperation
+
+> 本项目为专有软件，**任何商业用途均须先取得书面授权**（见上方 [License](#license)）。以下为商业授权的联系与申请指引。
+
+### 授权流程 / Licensing Process
+
+1. **提交申请**：通过邮件发送商业授权申请表（模板见下），说明用途、场景、预期规模。
+2. **评估确认**：作者评估后回复授权范围与条件（含商业授权费用 / 期限 / 地域）。
+3. **签署协议**：双方签订书面商业许可协议。
+4. **取得授权**：协议生效后方可将本软件或其派生作品用于获批的商业用途。
+
+> 未获书面授权前的任何商业使用均视为侵权，作者保留追究责任的权利。
+
+### 联系方式 / Contact
+
+- **邮箱 / Email**：`etta120913@gmail.com`
+- **个人主页 / Portfolio**：<https://laser1209.github.io/Personal_Portfolio>
+
+申请邮件请以 **「商业授权申请 / Commercial License Request」** 为主题，并复制以下模板填写。
+
+### 商业授权申请表 / Commercial License Request Template
+
+```text
+主题 / Subject: 商业授权申请 / Commercial License Request
+
+1. 申请主体 / Applicant
+   名称 / Name:
+   组织 / Organization (如有):
+   联系方式 / Contact:
+   个人主页 / LinkedIn / 网站:
+
+2. 授权用途 / Intended Use
+   用途描述 / Description:
+   （如：集成进商业产品 / 提供订阅服务 / 企业内部生产 / 对外运营等）
+   使用场景 / Scenario:
+   预期用户规模 / Expected scale:
+
+3. 使用范围 / Scope
+   授权地域 / Region:
+   授权期限 / Duration (期望):
+   是否需要源码修改权限 / Source modification needed:
+
+4. 其他说明 / Additional Notes
+
+5. 期望回复时间 / Preferred response time (可选):
+```
+
+> 模板为建议格式，可自行增删；信息越完整，评估越快。
+> For licensing inquiries in English, please write to `etta120913@gmail.com` with the subject "Commercial License Request" and visit <https://laser1209.github.io/Personal_Portfolio>.

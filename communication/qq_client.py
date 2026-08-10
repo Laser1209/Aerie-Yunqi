@@ -511,6 +511,52 @@ class QQClient:
             return False
         return resp.get("status") == "ok"
 
+    async def get_record(self, file: str, out_format: str = "mp3", timeout: float = 25.0) -> dict | None:
+        """Fetch a voice message file via NapCat OneBot11 ``get_record``.
+
+        NapCat downloads the QQ silk voice and transcodes it (via its bundled
+        silk/ffmpeg) into ``out_format``. Returns the raw RPC response whose
+        ``data.file`` is a local path (or base64 when remote). ``file`` is the
+        ``data.file`` of an incoming ``[CQ:record]`` segment.
+        """
+        if not self.is_connected:
+            return None
+        return await self._rpc_call(
+            "get_record",
+            {"file": str(file), "out_format": out_format},
+            timeout=timeout,
+        )
+
+    async def get_image(self, file: str, timeout: float = 25.0) -> dict | None:
+        """Fetch an image/sticker local file via NapCat OneBot11 ``get_image``.
+
+        ``file`` is the ``data.file`` of an incoming ``[CQ:image]`` segment.
+        On success ``data.file`` is a local path (or base64 when remote) and
+        ``data.url`` is a downloadable URL.
+        """
+        if not self.is_connected:
+            return None
+        return await self._rpc_call("get_image", {"file": str(file)}, timeout=timeout)
+
+    async def fetch_custom_face(self, count: int = 48, timeout: float = 25.0) -> list[str]:
+        """Fetch the account's favorite/custom stickers via NapCat ``fetch_custom_face``.
+
+        Returns a list of sticker URLs. ``count`` caps how many are returned
+        (NapCat default 48). On failure returns an empty list so callers can
+        degrade gracefully.
+        """
+        if not self.is_connected:
+            return []
+        resp = await self._rpc_call(
+            "fetch_custom_face", {"count": int(count)}, timeout=timeout
+        )
+        if not resp or resp.get("status") != "ok":
+            return []
+        data = resp.get("data") or []
+        if not isinstance(data, list):
+            return []
+        return [str(x).strip() for x in data if str(x).strip()]
+
     async def send_message_with_segments(
         self,
         user_id: int,

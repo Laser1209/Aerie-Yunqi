@@ -1,0 +1,95 @@
+# Aerie · 云栖 — 专有软件许可协议
+# Proprietary Software License
+
+Copyright © 2026 Aerie · 云栖. All rights reserved.
+
+---
+
+## 1. 许可性质 / Nature of License
+
+本项目（含全部源代码、资源文件、文档、配置、构建产物与衍生作品，下称"本软件"）
+为**专有 / 闭源**软件，**保留所有权利**。本协议不构成开源许可证，不授予任何形式的
+开源使用权。
+
+This Project (including all source code, assets, documentation, configuration,
+build artifacts and derivative works, hereinafter "the Software") is
+**proprietary / closed-source** and **all rights are reserved**. This license is
+NOT an open-source license and grants no open-source usage rights whatsoever.
+
+## 2. 授予的有限许可 / Granted Limited License
+
+在遵守本协议全部条款的前提下，版权方授予非商业用户一项**有限、不可转让、不可再许可、
+可随时撤销**的许可，仅允许：
+
+- 为**个人学习、研究或内部试用**之目的，在本机安装、运行本软件；
+- 阅读本软件源码以了解其原理（不构成修改或再分发的授权）。
+
+Subject to full compliance with this Agreement, the copyright holder grants
+non-commercial users a **limited, non-transferable, non-sublicensable,
+revocable** license solely to:
+
+- install and run the Software locally for **personal learning, research or
+  internal evaluation**;
+- read the source code to understand its principles (this does not authorize
+  modification or redistribution).
+
+## 3. 明确禁止 / Prohibited Acts
+
+未经版权方**事先书面授权**，任何人不得：
+
+1. 复制、修改、反编译、逆向工程或提取本软件的任何部分；
+2. 以任何形式（含转售、出租、出借、分发、上传至公开/私有仓库、打包再发布）再分发本软件或其副本；
+3. 将本软件或其派生作品用于**任何商业目的**，包括但不限于销售、提供订阅服务、集成进商业产品、用于企业内部生产或对外运营；
+4. 移除或篡改本软件内的版权声明与商标标识；
+5. 将本软件作为基础开发、外包或交付给第三方的产品/服务。
+
+Without the copyright holder's **prior written authorization**, no one may:
+
+1. copy, modify, decompile, reverse engineer, or extract any part of the Software;
+2. redistribute the Software or its copies in any form (including resale, rental,
+   lending, distribution, upload to public/private repositories, repackaging);
+3. use the Software or its derivatives for **any commercial purpose**, including but
+   not limited to selling, providing subscription services, integrating into
+   commercial products, or using it for internal production or external operations;
+4. remove or alter any copyright notices and trademarks within the Software;
+5. develop, outsource or deliver products/services to third parties based on the Software.
+
+## 4. 商业授权 / Commercial Licensing
+
+任何商业用途（含内部生产使用）均须先取得版权方**书面商业许可**。商业授权范围、
+费用与期限由双方另行签署协议约定。未获书面授权前的商业使用一律视为侵权。
+
+Any commercial use (including internal production use) requires a **written
+commercial license** from the copyright holder first. The scope, fees and term of a
+commercial license are to be agreed in a separate written agreement. Any commercial
+use without written authorization constitutes infringement.
+
+## 5. 免责声明 / Disclaimer
+
+本软件按"现状"提供，不附带任何明示或默示的担保，包括但不限于适销性、特定用途适用性
+及不侵权的担保。版权方不对因使用或无法使用本软件所产生的任何直接、间接、偶然或后果性
+损害承担责任。
+
+The Software is provided "AS IS", without warranty of any kind, express or implied,
+including but not limited to the warranties of merchantability, fitness for a
+particular purpose and non-infringement. In no event shall the copyright holder be
+liable for any direct, indirect, incidental or consequential damages arising from
+the use or inability to use the Software.
+
+## 6. 协议终止 / Termination
+
+违反本协议任何条款将自动终止上述许可，且版权方保留追究法律责任（含民事赔偿与停止侵权）
+的权利。终止后，使用者须立即删除本软件全部副本。
+
+Any violation of this Agreement automatically terminates the license granted above,
+and the copyright holder reserves the right to pursue legal liability (including
+civil damages and injunctive relief). Upon termination, the user must immediately
+delete all copies of the Software.
+
+---
+
+如需授权 / For licensing inquiries:
+
+- 作者 / Author: Aerie · 云栖
+- 邮箱 / Email: `etta120913@gmail.com`（主题请注明「商业授权申请 / Commercial License Request」）
+- 个人主页 / Portfolio: https://laser1209.github.io/Personal_Portfolio

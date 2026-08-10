@@ -17,6 +17,8 @@ from communication.send_queue import SendQueue
 from communication.splitter import SemanticMessageSplitter
 from config.persona_loader import load_behavior_config
 from core.llm_caller import LLMCaller
+from core.qq_media import QQMediaPreprocessor
+from core.qq_sticker import QQStickerSender
 from core.cognition import CognitionEngine
 from core.decision import MultiLayerDecision
 from core.computer_control import ComputerController, PermissionLevel
@@ -382,6 +384,7 @@ class Companion:
             # the pipeline uses, so the worker can append its observed
             # pacing_decisions back to the originating trace.
             cognition=self.cognition,
+            on_reply_sent=self._on_qq_reply_sent,
         )
 
         # Pipeline
@@ -1567,7 +1570,98 @@ class Companion:
             logger.exception("recall_message error")
             return {"status": "error", "reason": str(e)}
 
+    def _on_qq_reply_sent(self, reply: OutgoingReply) -> Any:
+        """Post-delivery hook：伊塔回复发完后，尝试配一张收藏表情。"""
+        try:
+            sender = self._sticker_sender()
+            if sender is None:
+                return None
+            user_id = int(getattr(reply, "user_id", 0) or 0)
+            if not user_id:
+                return None
+            reply_text = getattr(reply, "content", "") or ""
+            emotion_label = self._primary_emotion_label()
+            return sender.maybe_send(user_id, reply_text, emotion_label)
+        except Exception:
+            logger.debug("sticker on_reply_sent failed", exc_info=True)
+            return None
+
+    def _sticker_sender(self) -> QQStickerSender | None:
+        """懒加载出站表情发送器；未开启/无收藏时返回 None。"""
+        if getattr(self, "_sticker_sender_obj", None) is not None:
+            return self._sticker_sender_obj
+        try:
+            cfg = self.settings.get("sticker", {}) if isinstance(self.settings, dict) else {}
+            if not bool(cfg.get("enabled", True)):
+                logger.debug("QQ sticker sender disabled by settings")
+                return None
+            from core.qq_media import _SFClient
+            sender = QQStickerSender(
+                qq_client=self.qq,
+                decide=self._sticker_decide,
+                min_interval=float(cfg.get("min_interval", 90.0)),
+            )
+            sender.library.vision = _SFClient()
+            self._sticker_sender_obj = sender
+            return sender
+        except Exception:
+            logger.debug("sticker sender init failed", exc_info=True)
+            return None
+
+    def _primary_emotion_label(self) -> str:
+        try:
+            state = self.get_primary_emotion_state() or {}
+            return str(state.get("label") or "neutral")
+        except Exception:
+            return "neutral"
+
+    async def _sticker_decide(self, reply_text: str, emotion_label: str) -> tuple[bool, str]:
+        """轻量 LLM 判断这条回复要不要配表情；失败回退确定性规则。"""
+        brain = getattr(self, "brain", None)
+        chat = getattr(brain, "chat", None)
+        if callable(chat):
+            try:
+                system = (
+                    "你是伊塔的微表情决策器。用户给你伊塔即将发送给恋人的一句回复，"
+                    "以及检测到的情绪。判断这条回复是否适合追加一张收藏表情包（GIF）"
+                    "来增强情绪表达。\n"
+                    "规则：日常/温暖/撒娇/开心/安慰/想念等情绪通常适合配表情；"
+                    "严肃讨论、指令、汇报、长文、道歉解释等不适合。\n"
+                    "只输出一行，格式二选一：\n"
+                    "NO\n"
+                    "YES:<emotion>\n"
+                    "其中 <emotion> 取自以下之一：joy love encourage console greeting "
+                    "farewell cute cool shy angry sad surprised sleepy thanks。"
+                )
+                messages = [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": f"回复：{reply_text[:200]}\n情绪：{emotion_label}"},
+                ]
+                call = chat(messages, preferred_provider=_IMAGE_LIGHT_PROVIDER, temperature=0.2)
+                resp = await asyncio.wait_for(call, timeout=5.0)
+                text = (resp.text or "").strip()
+                if text.upper().startswith("YES"):
+                    emotion = ""
+                    if ":" in text:
+                        emotion = text.split(":", 1)[1].strip().lower()
+                    if not emotion:
+                        emotion = (emotion_label or "").strip().lower()
+                    return True, emotion
+                return False, (emotion_label or "").strip().lower()
+            except Exception:
+                logger.debug("sticker light decide failed; fallback", exc_info=True)
+        return QQStickerSender._fallback_decide(reply_text, emotion_label)
+
     async def _on_qq_message(self, msg: IncomingMessage) -> None:
+        # 语音 / 表情包多模态预处理：CQ 码 → AI 可读文本 + 前端附件
+        try:
+            pre = QQMediaPreprocessor(qq_client=self.qq)
+            content, attachments = await pre.preprocess(msg)
+            msg.content = content
+            msg.attachments = attachments
+        except Exception:
+            logger.exception("QQ media preprocess failed, falling back to raw")
+
         relationship_observer = getattr(
             getattr(self, "world_port", None),
             "relationship",

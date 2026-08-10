@@ -855,6 +855,27 @@ class ChatManager {
       }
     }
 
+    // ── AUDIO / VOICE: voice bar with duration + transcript below ──
+    if (String(category).toLowerCase() === "audio") {
+      const dur = Number(att.duration || 0);
+      const durText = dur > 0 ? dur.toFixed(0) + "s" : "";
+      const transcript = this._escapeHtml(att.transcript || "");
+      // Bar width scales mildly with duration (clamped 140–260px), no playback.
+      const barW = Math.min(260, Math.max(140, 120 + dur * 6));
+      return `<div class="chat-attach-card chat-attach-card--audio"
+                   data-type="audio" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">
+        <div class="chat-audio-bar" style="width:${barW}px">
+          <span class="chat-audio-bar__icon">
+            <svg class="icon icon--20" aria-hidden="true"><use href="#icon-ui-mic"/></svg>
+          </span>
+          ${durText ? `<span class="chat-audio-bar__dur">${durText}</span>` : ""}
+        </div>
+        ${transcript ? `<div class="chat-audio-transcript">${transcript}</div>` : ""}
+        ${notice ? `<div class="chat-attach-card__notice-row">${notice}</div>` : ""}
+        ${error ? `<div class="chat-attach-card__error-row" title="${error}">${error}</div>` : ""}
+      </div>`;
+    }
+
     // ── NON-IMAGE: horizontal file bubble card (large icon + name/size) ──
     return `<div class="chat-attach-card chat-attach-card--file"
                  data-type="${this._escapeHtml(category)}" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">

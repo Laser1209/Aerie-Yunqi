@@ -57,6 +57,7 @@ class SendQueue:
         qq_with_segments: Any = None,
         pacing: PacingFn | None = None,
         cognition: Any = None,  # Phase 9 Batch 7 (B7.2): used to persist pacing_decisions
+        on_reply_sent: Any = None,  # async/sync callback fired after a reply is delivered
     ) -> None:
         self._sender = sender
         self._splitter = splitter or SemanticMessageSplitter()
@@ -66,6 +67,7 @@ class SendQueue:
         self._qq_segments = qq_with_segments
         self._pacing = pacing or compute_persona_interval
         self._cognition = cognition  # optional CognitionEngine — when set, pacing is persisted
+        self._on_reply_sent = on_reply_sent  # post-delivery hook (e.g. sticker sender)
         self._queue: deque[OutgoingReply] = deque()
         self._task: asyncio.Task | None = None
         self._running = False
@@ -248,6 +250,17 @@ class SendQueue:
             else:
                 await self._send_legacy_reply(reply)
 
+    def _fire_on_reply_sent(self, reply: OutgoingReply) -> None:
+        """Fire the post-delivery hook (e.g. sticker sender) without blocking."""
+        if not self._on_reply_sent:
+            return
+        try:
+            result = self._on_reply_sent(reply)
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
+        except Exception:
+            logger.exception("on_reply_sent hook error for user %s", reply.user_id)
+
     async def _send_legacy_reply(self, reply: OutgoingReply) -> None:
         """Legacy single-reply path with semantic segment splitting."""
         segments = self._splitter.split(reply.content)
@@ -323,6 +336,8 @@ class SendQueue:
                         "send_queue pacing persist error cognition_id=%s",
                         cognition_id,
                     )
+
+        self._fire_on_reply_sent(reply)
 
     async def _send_batch_reply(self, reply: OutgoingReply, batch_id: str) -> None:
         """Send a single reply that is part of a batch (Task 6).
@@ -421,6 +436,8 @@ class SendQueue:
                     "send_queue batch pacing persist error cognition_id=%s batch=%s",
                     cognition_id, batch_id,
                 )
+
+        self._fire_on_reply_sent(reply)
 
     async def stop(self) -> None:
         self._running = False

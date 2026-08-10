@@ -1,12 +1,12 @@
 {
-  "daily_count": 5,
+  "daily_count": 10,
   "enabled": true,
   "feedback": {},
-  "last_push_at": "2026-08-10T12:49:55.063570",
+  "last_push_at": "2026-08-10T15:37:56.402200",
   "mute_until": null,
   "scene_blocks": {},
   "scene_last_sent": {
-    "idle_care": "2026-08-10T12:49:55.063570",
+    "idle_care": "2026-08-10T15:37:56.402200",
     "lunch_remind": "2026-08-10T12:30:04.971378"
   },
   "today": "2026-08-10"

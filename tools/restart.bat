@@ -46,10 +46,14 @@ start "aerie-backend" /B python -X dev "%ROOT%\main.py"
 timeout /t 2 /nobreak >nul
 
 echo [restart] relaunching Electron ...
-if exist "%ROOT%\electron\node_modules\.bin\electron.cmd" (
-  start "aerie-electron" /B "%ROOT%\electron\node_modules\.bin\electron.cmd" "%ROOT%\electron"
+REM Use the Electron binary directly: `start` cannot launch the
+REM .cmd shim (electron.cmd) and would print a spurious
+REM "filename, directory name, or volume label syntax is incorrect".
+set "ELECTRON_EXE=%ROOT%\electron\node_modules\electron\dist\electron.exe"
+if exist "%ELECTRON_EXE%" (
+  start "aerie-electron" /B "%ELECTRON_EXE%" "%ROOT%\electron"
 ) else (
-  echo [restart] WARN: electron.cmd not found, please relaunch manually.
+  echo [restart] WARN: electron.exe not found, please relaunch manually.
 )
 
 echo [restart] done.

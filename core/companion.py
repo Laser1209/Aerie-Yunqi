@@ -405,6 +405,13 @@ class Companion:
         self.qq.set_message_handler(self._on_qq_message)
         await self._start_push_event_engine()
 
+        # Workstream 7: idempotently seed `dialogue` knowledge (发起腔 principles).
+        try:
+            from tools.seed_social_knowledge import seed_dialogue
+            seed_dialogue(self.knowledge)
+        except Exception:
+            logger.exception("dialogue knowledge seed failed; continuing")
+
         # ── Phase 1: 基础设施启动 ──
 
         # R9.0+: subscribe to QQ state changes BEFORE connecting
@@ -1760,11 +1767,34 @@ class Companion:
                 state = self.get_primary_emotion_state()
                 mood = state.get("label", "neutral")
 
+            # Workstream 6: retrieve `dialogue` knowledge as generation
+            # principles (how to talk) and inject into the push prompt.
+            # These are NEVER recited into the message itself.
+            knowledge_fragment = ""
+            try:
+                query = f"{scene_name} {scene_cfg.get('template', '')} 发起"
+                hits = self.knowledge.search(query, limit=3, category="dialogue")
+                if hits:
+                    principles = [
+                        str(row.get("content", "")).strip()
+                        for row in hits
+                        if str(row.get("content", "")).strip()
+                    ]
+                    if principles:
+                        knowledge_fragment = (
+                            "发起话术原则（吸收为你的说法风格，不要说教/复述）：\n"
+                            + "\n".join(f"- {p}" for p in principles)
+                            + "\n"
+                        )
+            except Exception as e:
+                logger.debug("[Push] dialogue knowledge retrieval failed: %s", e)
+
             content = await self.brain.generate_push(
                 template=scene_cfg.get("template", ""),
                 mood=mood,
                 tone_hint=scene_cfg.get("tone_hint"),
                 judge_context=scene_cfg.get("judge_context"),
+                knowledge_fragment=knowledge_fragment,
                 date=datetime.now().strftime("%Y年%m月%d日"),
             )
             if not content:

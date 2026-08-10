@@ -24,7 +24,7 @@ Dedicated-Vector-Knowledge 是专用向量知识库的技术实现视图，关�
 ## 当前事实
 
 - 现有长期记忆层提到 ChromaDB 向量与 SQLite 元数据组合，但是否可用于当前 Vault 摘要索引仍需 Task 3.6 探测。
-- [brain.py](file:///e:/Agent_reply/core/brain.py) 中存在 openai-compatible embedding 适配逻辑，但真实 provider 调用受 ADR-TC-005 与 ADR-TC-007 约束。
+- [llm_caller.py](file:///e:/Agent_reply/core/llm_caller.py) 中存在 openai-compatible embedding 适配逻辑（原 `core/brain.py`），但真实 provider 调用受 ADR-TC-005 与 ADR-TC-007 约束。
 
 ## 目标状态
 
@@ -35,7 +35,7 @@ Dedicated-Vector-Knowledge 是专用向量知识库的技术实现视图，关�
 
 - 模块入口：[[../modules/KnowledgeBase]]
 - 计划任务：[tasks.md Task 3.6](../../.trae/specs/execute-third-correction-p0-fusion/tasks.md#L93-L97)
-- 代码入口：[long_permanent.py](file:///e:/Agent_reply/memory/layers/long_permanent.py)、[brain.py](file:///e:/Agent_reply/core/brain.py)、[kb.py](file:///e:/Agent_reply/knowledge/kb.py)
+- 代码入口：[long_permanent.py](file:///e:/Agent_reply/memory/layers/long_permanent.py)、[llm_caller.py](file:///e:/Agent_reply/core/llm_caller.py)、[kb.py](file:///e:/Agent_reply/knowledge/kb.py)
 
 ## 依赖关系
 

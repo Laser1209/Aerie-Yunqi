@@ -25,7 +25,7 @@ ImageObservation 是图片理解后的结构化观察对象，承载 scene、obj
 
 - 规格要求图片识别结果必须转为 ImageObservation，并且未经确认或记忆准入不得写入长期记忆。
 - Echo 调研建议采用“两级路由”：托管 VLM 作为联调基线，本地 VLM/OCR 作为隐私或网络降级路径。
-- 当前可参考入口包括 [image_service.py](file:///e:/Agent_reply/core/image_service.py)、[multimodal_input.py](file:///e:/Agent_reply/core/multimodal_input.py)、[brain.py](file:///e:/Agent_reply/core/brain.py) 与 [memory_store.py](file:///e:/Agent_reply/memory/memory_store.py)。
+- 当前可参考入口包括 [image_service.py](file:///e:/Agent_reply/core/image_service.py)、[multimodal_input.py](file:///e:/Agent_reply/core/multimodal_input.py)、[llm_caller.py](file:///e:/Agent_reply/core/llm_caller.py) 与 [memory_store.py](file:///e:/Agent_reply/memory/memory_store.py)。
 
 ## 目标状态
 
@@ -37,7 +37,7 @@ ImageObservation 是图片理解后的结构化观察对象，承载 scene、obj
 
 - 计划任务：[tasks.md Task 3.3](../../.trae/specs/execute-third-correction-p0-fusion/tasks.md#L73-L78)
 - 需求入口：[spec.md Structured image observation](../../.trae/specs/execute-third-correction-p0-fusion/spec.md#L162-L170)
-- 代码入口：[image_service.py](file:///e:/Agent_reply/core/image_service.py)、[multimodal_input.py](file:///e:/Agent_reply/core/multimodal_input.py)、[brain.py](file:///e:/Agent_reply/core/brain.py)
+- 代码入口：[image_service.py](file:///e:/Agent_reply/core/image_service.py)、[multimodal_input.py](file:///e:/Agent_reply/core/multimodal_input.py)、[llm_caller.py](file:///e:/Agent_reply/core/llm_caller.py)
 
 ## 依赖关系
 

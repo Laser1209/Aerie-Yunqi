@@ -33,7 +33,7 @@ related_validations:
 | --- | --- | --- | --- | --- | --- | --- |
 | 图片理解后自然回应 | [[../modules/ImageObservation]] | VLM/OCR 输出结构化观察 | [image_service.py](file:///e:/Agent_reply/core/image_service.py)、[multimodal_input.py](file:///e:/Agent_reply/core/multimodal_input.py) | [[../technology/VLM-OCR-Provider]] | [[../risks/Unresolved-Risks#R-TC-008：图片观察污染长期记忆]]、ADR-TC-005 | C3.6、C3.7 |
 | 主动生成角色或环境图片 | [[../modules/VisualIntentRouter]] | 意图路由控制 reference assets | [world_image_candidates.py](file:///e:/Agent_reply/core/world_image_candidates.py) | [[../modules/ImageObservation]]、WorldSnapshot | [[../risks/Unresolved-Risks#R-TC-003：真实模型调用泄露隐私或产生成本]]、ADR-TC-005 | C3.8、C3.9、C3.10 |
-| 陪伴知识可语义召回 | [[../modules/KnowledgeBase]] | 专用向量知识库连接尝试 | [long_permanent.py](file:///e:/Agent_reply/memory/layers/long_permanent.py)、[brain.py](file:///e:/Agent_reply/core/brain.py) | [[../technology/Dedicated-Vector-Knowledge]] | [[../risks/Unresolved-Risks#R-TC-005：外部向量库引入不可控依赖]]、ADR-TC-003 | C3.13 |
+| 陪伴知识可语义召回 | [[../modules/KnowledgeBase]] | 专用向量知识库连接尝试 | [long_permanent.py](file:///e:/Agent_reply/memory/layers/long_permanent.py)、[llm_caller.py](file:///e:/Agent_reply/core/llm_caller.py) | [[../technology/Dedicated-Vector-Knowledge]] | [[../risks/Unresolved-Risks#R-TC-005：外部向量库引入不可控依赖]]、ADR-TC-003 | C3.13 |
 
 ## Pyisland/eIsland 桌面触达映射
 

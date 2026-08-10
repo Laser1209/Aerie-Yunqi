@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "states/success",
+  "state": "success",
+  "provenance": "live-backend",
+  "status": "failed",
+  "failures": [
+    "unnamed_visible_controls:1",
+    "non_unique_locators:93"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 1783,
+    "semanticElements": 572,
+    "interactiveElements": 267,
+    "visibleInteractiveElements": 19,
+    "hiddenInteractiveElements": 248,
+    "listenerBackedElements": 88,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 0,
+    "occludedVisibleElements": 0,
+    "unnamedVisibleControls": 1,
+    "nonUniqueLocators": 93,
+    "fallbackLocators": 93,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 0,
+    "textOverlaps": 0,
+    "expected": {
+      "expectedSelector": "#status-dot.status-dot--ok",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true,
+      "expectedText": "后端已连接",
+      "expectedTextFound": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:53:04.719Z"
+}

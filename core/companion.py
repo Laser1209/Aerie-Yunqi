@@ -50,6 +50,7 @@ from core.qq_whitelist import QQWhitelistManager
 from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry
 from core.world_port import build_world_port
+from core.world_simulation import LOCAL_TZ
 from config.persona_loader import load_settings, load_proactive_config
 from knowledge.kb import KnowledgeBase
 from core.knowledge_indexer import resolve_embedding_fn
@@ -2245,8 +2246,14 @@ class Companion:
                 break
             except Exception:
                 continue
+        # 统一归一为本地时区：iso_time 已是 +08:00，而 candidate.created_at 是 UTC(+00:00)，
+        # 混用会让时段/光线提示词错位。aware 用 astimezone 换算，naive 直接标注本地时区。
         if clock_dt is None:
-            clock_dt = datetime.now()
+            clock_dt = datetime.now(LOCAL_TZ)
+        elif clock_dt.tzinfo is not None:
+            clock_dt = clock_dt.astimezone(LOCAL_TZ)
+        else:
+            clock_dt = clock_dt.replace(tzinfo=LOCAL_TZ)
         if not phase:
             phase = _time_of_day_phase(clock_dt)
         clock_str = clock_dt.strftime("%H:%M")

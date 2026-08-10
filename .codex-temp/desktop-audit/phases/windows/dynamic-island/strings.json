@@ -1,0 +1,138 @@
+[
+  {
+    "id": "string-1",
+    "source": "text",
+    "selector": "span.di-status-text",
+    "value": " 未播放",
+    "lengthUtf16": 4,
+    "lengthCodePoints": 4,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  },
+  {
+    "id": "string-2",
+    "source": "title",
+    "selector": "div.di-avatar",
+    "value": "云栖",
+    "lengthUtf16": 2,
+    "lengthCodePoints": 2,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  },
+  {
+    "id": "string-3",
+    "source": "alt",
+    "selector": "img.di-avatar-logo",
+    "value": "云栖",
+    "lengthUtf16": 2,
+    "lengthCodePoints": 2,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  },
+  {
+    "id": "string-4",
+    "source": "aria-label",
+    "selector": "#di-close",
+    "value": "关闭",
+    "lengthUtf16": 2,
+    "lengthCodePoints": 2,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  },
+  {
+    "id": "string-5",
+    "source": "aria-label",
+    "selector": "button[aria-label=\"上一首\"]",
+    "value": "上一首",
+    "lengthUtf16": 3,
+    "lengthCodePoints": 3,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  },
+  {
+    "id": "string-6",
+    "source": "aria-label",
+    "selector": "button[aria-label=\"播放/暂停\"]",
+    "value": "播放/暂停",
+    "lengthUtf16": 5,
+    "lengthCodePoints": 5,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  },
+  {
+    "id": "string-7",
+    "source": "aria-label",
+    "selector": "button[aria-label=\"下一首\"]",
+    "value": "下一首",
+    "lengthUtf16": 3,
+    "lengthCodePoints": 3,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  },
+  {
+    "id": "string-8",
+    "source": "alt",
+    "selector": "img.di-companion-logo",
+    "value": "云栖",
+    "lengthUtf16": 2,
+    "lengthCodePoints": 2,
+    "problems": {
+      "replacementCharacter": false,
+      "controlCharacter": false,
+      "suspiciousZeroWidth": false,
+      "bidiControl": false,
+      "mojibake": false,
+      "brokenEntity": false
+    },
+    "invalid": false
+  }
+]

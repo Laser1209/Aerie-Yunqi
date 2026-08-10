@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "windows/dynamic-island",
+  "state": "default",
+  "provenance": "live-electron-window",
+  "status": "failed",
+  "failures": [
+    "unnamed_visible_controls:1",
+    "clipped_visible_controls:1",
+    "overlapping_controls:4"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/dynamic-island.html",
+  "title": "Aerie Dynamic Island",
+  "viewport": {
+    "width": 202,
+    "height": 38,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 200,
+    "semanticElements": 57,
+    "interactiveElements": 17,
+    "visibleInteractiveElements": 6,
+    "hiddenInteractiveElements": 11,
+    "listenerBackedElements": 0,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 1,
+    "occludedVisibleElements": 0,
+    "unnamedVisibleControls": 1,
+    "nonUniqueLocators": 0,
+    "fallbackLocators": 5,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 4,
+    "textOverlaps": 0,
+    "expected": {},
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:55:45.621Z"
+}

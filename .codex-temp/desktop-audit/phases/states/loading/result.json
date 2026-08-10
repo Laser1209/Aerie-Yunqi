@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "states/loading",
+  "state": "loading",
+  "provenance": "controlled-production-renderer-path",
+  "status": "failed",
+  "failures": [
+    "unnamed_visible_controls:1",
+    "non_unique_locators:95",
+    "occluded_visible_controls:16",
+    "overlapping_controls:16"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 1784,
+    "semanticElements": 573,
+    "interactiveElements": 270,
+    "visibleInteractiveElements": 25,
+    "hiddenInteractiveElements": 245,
+    "listenerBackedElements": 107,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 0,
+    "occludedVisibleElements": 16,
+    "unnamedVisibleControls": 1,
+    "nonUniqueLocators": 95,
+    "fallbackLocators": 95,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 16,
+    "textOverlaps": 0,
+    "expected": {
+      "expectedSelector": ".brief-drawer__skeleton",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:53:09.746Z"
+}

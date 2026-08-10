@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "panels/09-settings/subtabs/settings-mode-apikey",
+  "state": "default",
+  "provenance": "live-electron-subtab",
+  "status": "failed",
+  "failures": [
+    "non_unique_locators:200",
+    "clipped_visible_controls:45",
+    "overlapping_controls:9"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 2551,
+    "semanticElements": 776,
+    "interactiveElements": 423,
+    "visibleInteractiveElements": 69,
+    "hiddenInteractiveElements": 354,
+    "listenerBackedElements": 268,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 45,
+    "occludedVisibleElements": 0,
+    "unnamedVisibleControls": 0,
+    "nonUniqueLocators": 200,
+    "fallbackLocators": 200,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 9,
+    "textOverlaps": 0,
+    "expected": {
+      "expectedSelector": ".settings-mode-tab[data-mode=\"apikey\"]",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:54:04.898Z"
+}

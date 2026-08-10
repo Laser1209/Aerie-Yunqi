@@ -1,0 +1,4502 @@
+[
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.188Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.979Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:45.985Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.094Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.096Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.602Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "napcat-phase-dot",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.602Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "status-qq-badge",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.602Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "napcat-qr-zone",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.602Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.602Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "title",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.953Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:46.960Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.070Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.071Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.072Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.902Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.903Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:47.910Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.015Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.016Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.780Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-month-title",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:48.780Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-grid",
+    "attribute": "",
+    "added": 74,
+    "removed": 74
+  },
+  {
+    "at": "2026-08-10T17:53:48.780Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.815Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-grid",
+    "attribute": "",
+    "added": 74,
+    "removed": 74
+  },
+  {
+    "at": "2026-08-10T17:53:48.815Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-events-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:48.985Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-month-title",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:48.985Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-grid",
+    "attribute": "",
+    "added": 74,
+    "removed": 74
+  },
+  {
+    "at": "2026-08-10T17:53:48.985Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:48.992Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-grid",
+    "attribute": "",
+    "added": 74,
+    "removed": 74
+  },
+  {
+    "at": "2026-08-10T17:53:48.992Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-events-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:49.197Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-grid",
+    "attribute": "",
+    "added": 74,
+    "removed": 74
+  },
+  {
+    "at": "2026-08-10T17:53:49.198Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:49.542Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "napcat-phase-dot",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:49.542Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "status-qq-badge",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:49.542Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "napcat-qr-zone",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:49.542Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:49.542Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "title",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:49.570Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-grid",
+    "attribute": "",
+    "added": 74,
+    "removed": 74
+  },
+  {
+    "at": "2026-08-10T17:53:49.570Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-events-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:49.570Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:49.588Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-grid",
+    "attribute": "",
+    "added": 74,
+    "removed": 74
+  },
+  {
+    "at": "2026-08-10T17:53:49.588Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "cal-events-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-chat",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-emotion",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-status",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-world-dashboard",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-about",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-memorial",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-persona-hub",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-settings",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-data",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-cognition",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-data",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.536Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.543Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "chat-log-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:50.543Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "data-prev-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:50.543Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "data-next-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.572Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.579Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.680Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.681Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.790Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.790Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.790Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.790Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.790Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "data-chat-view",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.790Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "data-chat-view",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.791Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.797Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "chat-log-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:51.797Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "data-prev-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:51.797Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "data-next-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  }
+]

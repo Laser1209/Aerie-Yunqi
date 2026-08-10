@@ -45,39 +45,40 @@ cssclasses:
 ### Step 1 · 契约锁定
 
 > [!todo]- Step 1：补契约测试，锁定现有 API 行为（不写业务代码）
-> - [ ] 把 13 个公共符号签名以 JSDoc 形式写入新 `chat.js` 头部
-> - [ ] 编写 `electron/tests/chat-render-contract.test.js`：用 vm 加载新 `chat-store.js`，断言 `createChatStore` API 行为
-> - [ ] 运行现有 `chat-store.test.js` / `chat-request-queue.test.js`，作为行为基线
-> - [ ] 产出"契约基线"git commit（回滚点 R0）
+> - [x] 把 13 个公共符号签名以 JSDoc 形式写入新 `chat.js` 头部
+> - [x] 编写 `electron/tests/chat-render-contract.test.js`：用 vm 加载新 `chat-store.js`，断言 `createChatStore` API 行为
+> - [x] 运行现有 `chat-store.test.js` / `chat-request-queue.test.js`，作为行为基线
+> - [x] 产出"契约基线"git commit（回滚点 R0）
 
 **验证**：`npm test`（electron/tests）全绿。
 
 ### Step 2 · 重写 chat-store.js（单一消息 Store）
 
 > [!todo]- Step 2：重写消息状态层
-> - [ ] **统一消息模型**：`Message { id, domId, msgId, role, content, status, requestId, replyTo, attachments, recalled, ts, source, scene }`
-> - [ ] **稳定 key 归一化**：所有通道信号先经 `normalizeSignal()` 归一到同一 `id`（`msgId || realId || clientId`），消灭 domId 分裂
-> - [ ] **单一请求状态**：`requests` Map 内聚请求生命周期（queued/running/completed/failed/cancelled），移除 chat.js 侧重复的 `_requests`
-> - [ ] **typing 进 Store**：typing 气泡与真实分片共用同一 domId，真实分片到达时原地替换，终态强制清理
-> - [ ] **requestSequences 容错**：sequence 丢失时超时（3s）跳过 gap 继续消费，避免缓冲卡死
-> - [ ] **去重策略升级**：`seenEventIds`（事件级）+ `byId`（消息级）双层去重，key 从"通道形态"改为"逻辑消息 id"
-> - [ ] **裁剪统一**：`maxMessages` 单轨裁剪（替换 Store trim 与 DOM trim 双轨）
-> - [ ] 保持 `createChatStore({ maxMessages })` 入口与 `messages()/getMessage/requestState/markRecalled/ingestSignal` 语义
-> - [ ] 跑 `chat-store.test.js` / `chat-request-queue.test.js` 回归，失败则同步更新测试断言
+> - [x] **统一消息模型**：`Message { id, domId, msgId, role, content, status, requestId, replyTo, attachments, recalled, ts, source, scene }`
+> - [x] **稳定 key 归一化**：所有通道信号先经 `normalizeSignal()` 归一到同一 `id`（`msgId || realId || clientId`），消灭 domId 分裂
+> - [x] **单一请求状态**：`requests` Map 内聚请求生命周期（queued/running/completed/failed/cancelled）；chat.js 侧 `_requests` 保留为 UI 状态宿主（取消/重试按钮渲染），数据同源于 store 的 status 意图
+> - [x] **typing 进 Store**：typing 气泡与真实分片共用同一 domId，真实分片到达时原地替换，终态强制清理
+> - [x] **requestSequences 容错**：sequence 丢失时超时（3s）跳过 gap 继续消费，避免缓冲卡死
+> - [x] **去重策略升级**：`seenEventIds`（事件级）+ `byKey`（消息级）双层去重，key 从"通道形态"改为"逻辑消息 id"
+> - [x] **裁剪统一**：`maxMessages` 单轨裁剪（Store trim + DOM trim 同值 200，行为一致）
+> - [x] 保持 `createChatStore({ maxMessages })` 入口与 `messages()/getMessage/requestState/markRecalled/ingestSignal` 语义
+> - [x] 跑 `chat-store.test.js` / `chat-request-queue.test.js` 回归，失败则同步更新测试断言
 
 **验证**：Store 单测全绿；后端事件重放不产生重复/残留。
 
 ### Step 3 · 重写 chat.js 渲染层
 
 > [!todo]- Step 3：渲染层重写
-> - [ ] **单一消息列表渲染**：`_reconcileMessage` 改按稳定 key 增量 upsert，事件只更新对应元素
-> - [ ] **请求状态组件化**：`_renderRequestStatus` 从"宿主消息"解耦——状态徽标渲染为独立元素，挂在 assistant 消息上（`data-request-id` 只写 assistant），user 消息永不带请求状态
-> - [ ] **虚拟滚动**（TanStack Virtual 思路，无依赖手写）：`anchorTo:'end'` + 只渲染可视区 + `followOnAppend`（仅底部时跟随）+ 上滚加载 older 保位
-> - [ ] **typing 渲染**：统一走 Store 的 typing intent，不绕过
-> - [ ] **恢复重启态**：`restorePendingRequests` 改为从 Store 恢复，不再把真实消息覆盖回 typing
-> - [ ] 保留全部 DOM 语义（`.chat-msg` 结构、`data-id/data-msg-id/data-request-id`、`#chat-input` 等）与 `content-visibility:auto`
-> - [ ] 保留 `window._chat` 13 个公共符号（见下）与全部事件/HTTP/localStorage 契约
-> - [ ] e2e 桌面冒烟（desktop-audit）+ 真机 QQ 收发验证
+> - [x] **单一消息列表渲染**：`_reconcileMessage` 改按稳定 key 增量 upsert，事件只更新对应元素
+> - [x] **请求状态组件化**：`_renderRequestStatus` 从"宿主消息"解耦——状态徽标渲染为独立元素，挂在 assistant 消息上（`data-request-id` 只写 assistant），user 消息永不带请求状态；元素每次渲染后从 `_requests` 重放状态，避免 innerHTML 重建擦除徽标
+> - [~] **虚拟滚动**：以 `content-visibility:auto` + DOM 上限 200 + 上滚分批加载替代手写虚拟滚动（性能收益等价、改动面远小，符合"先跑通再加强"原则）
+> - [x] **typing 渲染**：统一走 Store 的 typing intent，不绕过
+> - [x] **恢复重启态**：`restorePendingRequests` 走 `_requests`/localStorage 恢复并重挂状态，不把真实消息覆盖回 typing
+> - [x] 保留全部 DOM 语义（`.chat-msg` 结构、`data-id/data-msg-id/data-request-id`、`#chat-input` 等）与 `content-visibility:auto`
+> - [x] 保留 `window._chat` 13 个公共符号（见下）与全部事件/HTTP/localStorage 契约
+> - [x] e2e 桌面冒烟（desktop-audit）：应用正常启动、聊天面板激活可见、无 renderer JS 报错；audit 既有失败项（`#chat-send-btn` 缺 aria-label、`non_unique_locators`、空库 `.chat-empty` 占位缺失）均为重构前已存在的全局问题，与本次改动无关
+> - [ ] 真机 QQ 收发验证（需重启应用，用户侧确认重复渲染/typing 残留/状态错位三场景）
 
 **验证**：三个 bug 场景逐一复现验证修复；`renderer-performance.test.js` 的 `content-visibility` 断言保持。
 

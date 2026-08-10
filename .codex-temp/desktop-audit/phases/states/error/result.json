@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "states/error",
+  "state": "error",
+  "provenance": "controlled-production-renderer-path",
+  "status": "failed",
+  "failures": [
+    "unnamed_visible_controls:1",
+    "non_unique_locators:95",
+    "occluded_visible_controls:19",
+    "overlapping_controls:20"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 1784,
+    "semanticElements": 575,
+    "interactiveElements": 271,
+    "visibleInteractiveElements": 26,
+    "hiddenInteractiveElements": 245,
+    "listenerBackedElements": 108,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 0,
+    "occludedVisibleElements": 19,
+    "unnamedVisibleControls": 1,
+    "nonUniqueLocators": 95,
+    "fallbackLocators": 95,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 20,
+    "textOverlaps": 0,
+    "expected": {
+      "expectedSelector": ".brief-drawer__error",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true,
+      "expectedText": "QA synthetic unavailable state",
+      "expectedTextFound": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:53:10.779Z"
+}

@@ -1,0 +1,578 @@
+{
+  "controlOverlaps": [
+    {
+      "first": "#btn-minimize",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1173.33,
+        "top": 7.33,
+        "right": 1203.33,
+        "bottom": 37.33,
+        "width": 30,
+        "height": 30,
+        "area": 900
+      }
+    },
+    {
+      "first": "#btn-maximize",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1205.33,
+        "top": 7.33,
+        "right": 1235.33,
+        "bottom": 37.33,
+        "width": 30,
+        "height": 30,
+        "area": 900
+      }
+    },
+    {
+      "first": "#btn-close",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1237.33,
+        "top": 7.33,
+        "right": 1267.33,
+        "bottom": 37.33,
+        "width": 30,
+        "height": 30,
+        "area": 900
+      }
+    },
+    {
+      "first": "button[data-tab=\"chat\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 56.67,
+        "right": 64,
+        "bottom": 112.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"emotion\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 116.67,
+        "right": 64,
+        "bottom": 172.67,
+        "width": 55.33,
+        "height": 55.999999999999986,
+        "area": 3098.479999999999
+      }
+    },
+    {
+      "first": "button[data-tab=\"cognition\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 176.67,
+        "right": 64,
+        "bottom": 232.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"status\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 236.67,
+        "right": 64,
+        "bottom": 292.67,
+        "width": 55.33,
+        "height": 56.00000000000003,
+        "area": 3098.4800000000014
+      }
+    },
+    {
+      "first": "button[data-tab=\"world-dashboard\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 296.67,
+        "right": 64,
+        "bottom": 352.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"memorial\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 356.67,
+        "right": 64,
+        "bottom": 412.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"data\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 416.67,
+        "right": 64,
+        "bottom": 472.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"persona-hub\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 476.67,
+        "right": 64,
+        "bottom": 532.67,
+        "width": 55.33,
+        "height": 55.99999999999994,
+        "area": 3098.479999999997
+      }
+    },
+    {
+      "first": "button[data-tab=\"settings\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 536.67,
+        "right": 64,
+        "bottom": 592.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"about\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 596.67,
+        "right": 64,
+        "bottom": 652.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-sub=\"chat\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 96.67,
+        "top": 114,
+        "right": 176.67,
+        "bottom": 144.67,
+        "width": 79.99999999999999,
+        "height": 30.669999999999987,
+        "area": 2453.5999999999985
+      }
+    },
+    {
+      "first": "button[data-sub=\"knowledge\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 180.67,
+        "top": 114,
+        "right": 247.67,
+        "bottom": 144.67,
+        "width": 67,
+        "height": 30.669999999999987,
+        "area": 2054.889999999999
+      }
+    },
+    {
+      "first": "button[data-sub=\"system\"]",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 251.67,
+        "top": 114,
+        "right": 331.67,
+        "bottom": 144.67,
+        "width": 80.00000000000003,
+        "height": 30.669999999999987,
+        "area": 2453.6
+      }
+    },
+    {
+      "first": "#knowledge-search",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 96.67,
+        "top": 170,
+        "right": 627,
+        "bottom": 202,
+        "width": 530.33,
+        "height": 32,
+        "area": 16970.56
+      }
+    },
+    {
+      "first": "#knowledge-search",
+      "second": "#knowledge-form-category",
+      "ratio": 0.342,
+      "intersection": {
+        "left": 379.67,
+        "top": 178.56,
+        "right": 627,
+        "bottom": 202,
+        "width": 247.32999999999998,
+        "height": 23.439999999999998,
+        "area": 5797.4151999999995
+      }
+    },
+    {
+      "first": "#knowledge-category-filter",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 635,
+        "top": 169.33,
+        "right": 1165.33,
+        "bottom": 202.67,
+        "width": 530.3299999999999,
+        "height": 33.339999999999975,
+        "area": 17681.202199999985
+      }
+    },
+    {
+      "first": "#knowledge-category-filter",
+      "second": "#knowledge-form-category",
+      "ratio": 0.365,
+      "intersection": {
+        "left": 635,
+        "top": 178.56,
+        "right": 902.33,
+        "bottom": 202.67,
+        "width": 267.33000000000004,
+        "height": 24.109999999999985,
+        "area": 6445.326299999997
+      }
+    },
+    {
+      "first": "#knowledge-add-btn",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1173.33,
+        "top": 171.6,
+        "right": 1249.33,
+        "bottom": 200.4,
+        "width": 76,
+        "height": 28.80000000000001,
+        "area": 2188.800000000001
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1122,
+        "top": 272.6,
+        "right": 1175.33,
+        "bottom": 302.73,
+        "width": 53.32999999999993,
+        "height": 30.129999999999995,
+        "area": 1606.8328999999976
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1181.33,
+        "top": 272.6,
+        "right": 1234.67,
+        "bottom": 302.73,
+        "width": 53.340000000000146,
+        "height": 30.129999999999995,
+        "area": 1607.134200000004
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(2) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1122,
+        "top": 386.6,
+        "right": 1175.33,
+        "bottom": 416.73,
+        "width": 53.32999999999993,
+        "height": 30.129999999999995,
+        "area": 1606.8328999999976
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(2) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1181.33,
+        "top": 386.6,
+        "right": 1234.67,
+        "bottom": 416.73,
+        "width": 53.340000000000146,
+        "height": 30.129999999999995,
+        "area": 1607.134200000004
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(3) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1122,
+        "top": 500.6,
+        "right": 1175.33,
+        "bottom": 530.73,
+        "width": 53.32999999999993,
+        "height": 30.129999999999995,
+        "area": 1606.8328999999976
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(3) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1181.33,
+        "top": 500.6,
+        "right": 1234.67,
+        "bottom": 530.73,
+        "width": 53.340000000000146,
+        "height": 30.129999999999995,
+        "area": 1607.134200000004
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1122,
+        "top": 614.6,
+        "right": 1175.33,
+        "bottom": 644.73,
+        "width": 53.32999999999993,
+        "height": 30.129999999999995,
+        "area": 1606.8328999999976
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1181.33,
+        "top": 614.6,
+        "right": 1234.67,
+        "bottom": 644.73,
+        "width": 53.340000000000146,
+        "height": 30.129999999999995,
+        "area": 1607.134200000004
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1122,
+        "top": 728.6,
+        "right": 1175.33,
+        "bottom": 758.73,
+        "width": 53.32999999999993,
+        "height": 30.129999999999995,
+        "area": 1606.8328999999976
+      }
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "second": "body > #knowledge-modal > div:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1181.33,
+        "top": 728.6,
+        "right": 1234.67,
+        "bottom": 758.73,
+        "width": 53.340000000000146,
+        "height": 30.129999999999995,
+        "area": 1607.134200000004
+      }
+    },
+    {
+      "first": "body > #knowledge-modal > div:nth-of-type(1)",
+      "second": "body > #knowledge-modal > div:nth-of-type(2) > div:nth-of-type(1) > button",
+      "ratio": 0.999,
+      "intersection": {
+        "left": 890.65,
+        "top": 98.56,
+        "right": 902.33,
+        "bottom": 121.23,
+        "width": 11.680000000000064,
+        "height": 22.67,
+        "area": 264.78560000000147
+      }
+    },
+    {
+      "first": "body > #knowledge-modal > div:nth-of-type(1)",
+      "second": "#knowledge-form-category",
+      "ratio": 1,
+      "intersection": {
+        "left": 379.67,
+        "top": 178.56,
+        "right": 902.33,
+        "bottom": 212.56,
+        "width": 522.6600000000001,
+        "height": 34,
+        "area": 17770.440000000002
+      }
+    },
+    {
+      "first": "body > #knowledge-modal > div:nth-of-type(1)",
+      "second": "#knowledge-form-title",
+      "ratio": 1,
+      "intersection": {
+        "left": 379.67,
+        "top": 253.23,
+        "right": 902.33,
+        "bottom": 287.23,
+        "width": 522.6600000000001,
+        "height": 34.00000000000003,
+        "area": 17770.440000000017
+      }
+    },
+    {
+      "first": "body > #knowledge-modal > div:nth-of-type(1)",
+      "second": "#knowledge-form-content",
+      "ratio": 1,
+      "intersection": {
+        "left": 379.67,
+        "top": 327.9,
+        "right": 902.33,
+        "bottom": 511.9,
+        "width": 522.6600000000001,
+        "height": 184,
+        "area": 96169.44000000002
+      }
+    },
+    {
+      "first": "body > #knowledge-modal > div:nth-of-type(1)",
+      "second": "#knowledge-form-tags",
+      "ratio": 1,
+      "intersection": {
+        "left": 379.67,
+        "top": 557.23,
+        "right": 902.33,
+        "bottom": 591.23,
+        "width": 522.6600000000001,
+        "height": 34,
+        "area": 17770.440000000002
+      }
+    },
+    {
+      "first": "body > #knowledge-modal > div:nth-of-type(1)",
+      "second": "body > #knowledge-modal > div:nth-of-type(2) > div:nth-of-type(3) > button:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 761,
+        "top": 665.9,
+        "right": 828.33,
+        "bottom": 701.43,
+        "width": 67.33000000000004,
+        "height": 35.52999999999997,
+        "area": 2392.2348999999995
+      }
+    },
+    {
+      "first": "body > #knowledge-modal > div:nth-of-type(1)",
+      "second": "#knowledge-save-btn",
+      "ratio": 1,
+      "intersection": {
+        "left": 836.33,
+        "top": 666.56,
+        "right": 902.33,
+        "bottom": 700.76,
+        "width": 66,
+        "height": 34.200000000000045,
+        "area": 2257.200000000003
+      }
+    }
+  ],
+  "textOverlaps": [
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "ratio": 0.309
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "ratio": 0.309
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "ratio": 0.309
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "ratio": 0.309
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "ratio": 0.309
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "ratio": 0.309
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(6) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(6) > div:nth-of-type(2) > button:nth-of-type(1)",
+      "ratio": 0.309
+    },
+    {
+      "first": "body > #knowledge-list > article:nth-of-type(6) > div:nth-of-type(1) > p",
+      "second": "body > #knowledge-list > article:nth-of-type(6) > div:nth-of-type(2) > button:nth-of-type(2)",
+      "ratio": 0.309
+    }
+  ]
+}

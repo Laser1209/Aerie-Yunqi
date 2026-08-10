@@ -1,0 +1,422 @@
+{
+  "controlOverlaps": [
+    {
+      "first": "#btn-minimize",
+      "second": "#brief-drawer-loc",
+      "ratio": 0.703,
+      "intersection": {
+        "left": 1173.33,
+        "top": 8.33,
+        "right": 1193,
+        "bottom": 36.33,
+        "width": 19.670000000000073,
+        "height": 28,
+        "area": 550.760000000002
+      }
+    },
+    {
+      "first": "#btn-minimize",
+      "second": "#brief-drawer-refresh",
+      "ratio": 0.226,
+      "intersection": {
+        "left": 1197,
+        "top": 8.33,
+        "right": 1203.33,
+        "bottom": 36.33,
+        "width": 6.329999999999927,
+        "height": 28,
+        "area": 177.23999999999796
+      }
+    },
+    {
+      "first": "#btn-maximize",
+      "second": "#brief-drawer-refresh",
+      "ratio": 0.703,
+      "intersection": {
+        "left": 1205.33,
+        "top": 8.33,
+        "right": 1225,
+        "bottom": 36.33,
+        "width": 19.670000000000073,
+        "height": 28,
+        "area": 550.760000000002
+      }
+    },
+    {
+      "first": "#btn-maximize",
+      "second": "#brief-drawer-close",
+      "ratio": 0.226,
+      "intersection": {
+        "left": 1229,
+        "top": 8.33,
+        "right": 1235.33,
+        "bottom": 36.33,
+        "width": 6.329999999999927,
+        "height": 28,
+        "area": 177.23999999999796
+      }
+    },
+    {
+      "first": "#btn-close",
+      "second": "#brief-drawer-close",
+      "ratio": 0.703,
+      "intersection": {
+        "left": 1237.33,
+        "top": 8.33,
+        "right": 1257,
+        "bottom": 36.33,
+        "width": 19.670000000000073,
+        "height": 28,
+        "area": 550.760000000002
+      }
+    },
+    {
+      "first": "button[data-tab=\"chat\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 56.67,
+        "right": 64,
+        "bottom": 112.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"emotion\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 116.67,
+        "right": 64,
+        "bottom": 172.67,
+        "width": 55.33,
+        "height": 55.999999999999986,
+        "area": 3098.479999999999
+      }
+    },
+    {
+      "first": "button[data-tab=\"cognition\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 176.67,
+        "right": 64,
+        "bottom": 232.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"status\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 236.67,
+        "right": 64,
+        "bottom": 292.67,
+        "width": 55.33,
+        "height": 56.00000000000003,
+        "area": 3098.4800000000014
+      }
+    },
+    {
+      "first": "button[data-tab=\"world-dashboard\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 296.67,
+        "right": 64,
+        "bottom": 352.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"memorial\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 356.67,
+        "right": 64,
+        "bottom": 412.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"data\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 416.67,
+        "right": 64,
+        "bottom": 472.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"persona-hub\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 476.67,
+        "right": 64,
+        "bottom": 532.67,
+        "width": 55.33,
+        "height": 55.99999999999994,
+        "area": 3098.479999999997
+      }
+    },
+    {
+      "first": "button[data-tab=\"settings\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 536.67,
+        "right": 64,
+        "bottom": 592.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"about\"]",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 596.67,
+        "right": 64,
+        "bottom": 652.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "#chat-brief-btn",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 106.67,
+        "top": 706.48,
+        "right": 140.67,
+        "bottom": 734,
+        "width": 33.999999999999986,
+        "height": 27.519999999999982,
+        "area": 935.679999999999
+      }
+    },
+    {
+      "first": "#chat-attach-btn",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 146.67,
+        "top": 706.48,
+        "right": 180.67,
+        "bottom": 734,
+        "width": 34,
+        "height": 27.519999999999982,
+        "area": 935.6799999999994
+      }
+    },
+    {
+      "first": "#chat-mic-btn",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 186.67,
+        "top": 706.48,
+        "right": 220.67,
+        "bottom": 734,
+        "width": 34,
+        "height": 27.519999999999982,
+        "area": 935.6799999999994
+      }
+    },
+    {
+      "first": "#chat-office-btn",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 226.67,
+        "top": 706.48,
+        "right": 260.67,
+        "bottom": 734,
+        "width": 34.00000000000003,
+        "height": 27.519999999999982,
+        "area": 935.6800000000002
+      }
+    },
+    {
+      "first": "#chat-input",
+      "second": "div.brief-drawer-backdrop",
+      "ratio": 0.69,
+      "intersection": {
+        "left": 109.33,
+        "top": 751.33,
+        "right": 862,
+        "bottom": 770,
+        "width": 752.67,
+        "height": 18.66999999999996,
+        "area": 14052.348899999968
+      }
+    },
+    {
+      "first": "#chat-input",
+      "second": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(2) > a",
+      "ratio": 0.631,
+      "intersection": {
+        "left": 889,
+        "top": 751.33,
+        "right": 944,
+        "bottom": 760.58,
+        "width": 55,
+        "height": 9.25,
+        "area": 508.75
+      }
+    },
+    {
+      "first": "#chat-input",
+      "second": "#brief-drawer-chat",
+      "ratio": 0.452,
+      "intersection": {
+        "left": 1070.34,
+        "top": 757.33,
+        "right": 1155.67,
+        "bottom": 770,
+        "width": 85.33000000000015,
+        "height": 12.669999999999959,
+        "area": 1081.1310999999985
+      }
+    },
+    {
+      "first": "#chat-input",
+      "second": "#brief-drawer-expand",
+      "ratio": 0.175,
+      "intersection": {
+        "left": 1167.67,
+        "top": 757.33,
+        "right": 1200.67,
+        "bottom": 770,
+        "width": 33,
+        "height": 12.669999999999959,
+        "area": 418.10999999999865
+      }
+    },
+    {
+      "first": "#chat-send-btn",
+      "second": "#brief-drawer-expand",
+      "ratio": 0.593,
+      "intersection": {
+        "left": 1208.67,
+        "top": 757.33,
+        "right": 1244.67,
+        "bottom": 778.67,
+        "width": 36,
+        "height": 21.339999999999918,
+        "area": 768.239999999997
+      }
+    }
+  ],
+  "textOverlaps": [
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(3) > a",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(1) > div",
+      "ratio": 0.415
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(3) > a",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(1) > div > span:nth-of-type(1)",
+      "ratio": 0.666
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > span",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(1)",
+      "ratio": 0.809
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(1)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > span",
+      "ratio": 0.47
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(1)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+      "ratio": 0.273
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(2)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+      "ratio": 0.429
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(2)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+      "ratio": 0.514
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > a",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+      "ratio": 0.887
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(5) > span",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > span:nth-of-type(1)",
+      "ratio": 0.509
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(5) > div:nth-of-type(1)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(2) > span",
+      "ratio": 0.643
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(5) > div:nth-of-type(2)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2)",
+      "ratio": 0.827
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(5) > a",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(2) > a",
+      "ratio": 0.495
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(6) > span",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(3) > span",
+      "ratio": 0.547
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(6) > div:nth-of-type(1)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(2)",
+      "ratio": 0.797
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(6) > div:nth-of-type(2)",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(2)",
+      "ratio": 0.844
+    },
+    {
+      "first": "body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(6) > a",
+      "second": "body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(3) > a",
+      "ratio": 0.279
+    }
+  ]
+}

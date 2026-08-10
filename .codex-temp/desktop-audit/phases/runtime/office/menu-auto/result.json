@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "runtime/office/menu-auto",
+  "state": "default",
+  "provenance": "live-electron-runtime",
+  "status": "failed",
+  "failures": [
+    "unnamed_visible_controls:1",
+    "non_unique_locators:200",
+    "overlapping_controls:4"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 2574,
+    "semanticElements": 785,
+    "interactiveElements": 427,
+    "visibleInteractiveElements": 23,
+    "hiddenInteractiveElements": 404,
+    "listenerBackedElements": 269,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 0,
+    "occludedVisibleElements": 0,
+    "unnamedVisibleControls": 1,
+    "nonUniqueLocators": 200,
+    "fallbackLocators": 200,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 4,
+    "textOverlaps": 0,
+    "expected": {
+      "expectedSelector": ".office-menu.office-menu--visible",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:54:52.564Z"
+}

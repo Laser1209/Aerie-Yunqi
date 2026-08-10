@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "runtime/calendar/add-modal",
+  "state": "default",
+  "provenance": "live-electron-runtime",
+  "status": "failed",
+  "failures": [
+    "unnamed_visible_controls:1",
+    "non_unique_locators:200",
+    "clipped_visible_controls:14",
+    "occluded_visible_controls:54",
+    "overlapping_controls:82",
+    "overlapping_text:3"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 2582,
+    "semanticElements": 785,
+    "interactiveElements": 427,
+    "visibleInteractiveElements": 78,
+    "hiddenInteractiveElements": 349,
+    "listenerBackedElements": 269,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 14,
+    "occludedVisibleElements": 54,
+    "unnamedVisibleControls": 1,
+    "nonUniqueLocators": 200,
+    "fallbackLocators": 200,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 82,
+    "textOverlaps": 3,
+    "expected": {
+      "expectedSelector": "#cal-event-modal:not(.hidden)",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:54:58.704Z"
+}

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "panels/03-cognition/default",
+  "state": "default",
+  "provenance": "live-electron-panel",
+  "status": "failed",
+  "failures": [
+    "non_unique_locators:107"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 1786,
+    "semanticElements": 588,
+    "interactiveElements": 283,
+    "visibleInteractiveElements": 24,
+    "hiddenInteractiveElements": 259,
+    "listenerBackedElements": 147,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 0,
+    "occludedVisibleElements": 0,
+    "unnamedVisibleControls": 0,
+    "nonUniqueLocators": 107,
+    "fallbackLocators": 107,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 0,
+    "textOverlaps": 0,
+    "expected": {
+      "expectedSelector": "#panel-cognition.active",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:53:26.239Z"
+}

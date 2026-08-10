@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "startedAt": "2026-08-10T17:52:46.411Z",
+  "browserPath": "playwright-core ElectronApplication",
+  "browserPluginReason": "The in-app Browser cannot load Electron preload or IPC surfaces.",
+  "backendPort": "7896",
+  "python": "python.exe",
+  "electron": "electron.exe",
+  "isolation": {
+    "userData": "runtime/electron-user-data",
+    "database": "runtime/data/aerie.db",
+    "logs": "runtime/logs",
+    "env": "runtime/qa.env",
+    "qqDisabled": true,
+    "proactiveDisabled": true,
+    "mobileGatewayDisabled": true
+  },
+  "realModelCallsAuthorizedByThisScript": 0
+}

@@ -1,0 +1,10 @@
+{
+  "controlOverlaps": [],
+  "textOverlaps": [
+    {
+      "first": "span.chat-attach-thumb__name",
+      "second": "body > #chat-attach-preview > div > button",
+      "ratio": 0.975
+    }
+  ]
+}

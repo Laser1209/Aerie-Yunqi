@@ -1,0 +1,1240 @@
+[
+  {
+    "id": "request-1",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/calendar-panel.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.259Z"
+  },
+  {
+    "id": "request-2",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/emotion-history.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.260Z"
+  },
+  {
+    "id": "request-3",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/brief-drawer.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.261Z"
+  },
+  {
+    "id": "request-4",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/brief-drawer.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.261Z"
+  },
+  {
+    "id": "request-5",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/app.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.261Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/Aerie%20%C2%B7%20%E4%BA%91%E6%A0%96.svg",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.262Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/avatar_default.svg",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.263Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/logo.png",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.264Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/main.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.320Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/icons.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.321Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/approval-modal.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.321Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/persona-hub.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.322Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/themes/yita-pink.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.323Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/world-dashboard.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.323Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/office-mode.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.324Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-store.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.325Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/purify.min.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.326Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/github.min.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.326Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/marked.min.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.327Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/highlight.min.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.327Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.331Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-voice.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.332Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/cognition-panel.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.333Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-uploader.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.333Z"
+  },
+  {
+    "id": "request-1",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/calendar-panel.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.334Z"
+  },
+  {
+    "id": "request-2",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/emotion-history.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.335Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/napcat-panel.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.336Z"
+  },
+  {
+    "id": "request-3",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/brief-drawer.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.336Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/cognition-panel.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.337Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/emotion-dashboard.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.337Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/theme-switcher.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.338Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/settings.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.338Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/calendar-panel.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.339Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/emotion-history.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.339Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/data-viewer.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.340Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/office-mode.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.340Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/world-dashboard.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.340Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/approval-modal.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.341Z"
+  },
+  {
+    "id": "unknown",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/persona-hub.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.341Z"
+  },
+  {
+    "id": "request-4",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/brief-drawer.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.342Z"
+  },
+  {
+    "id": "request-5",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/app.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.342Z"
+  },
+  {
+    "id": "request-6",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "image",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/logo.png",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/dynamic-island.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.513Z"
+  },
+  {
+    "id": "request-6",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/logo.png",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.516Z"
+  },
+  {
+    "id": "request-7",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "document",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.532Z"
+  },
+  {
+    "id": "request-7",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.534Z"
+  },
+  {
+    "id": "unknown",
+    "event": "requestfailed",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+    "errorText": "net::ERR_ABORTED",
+    "at": "2026-08-10T17:52:48.540Z"
+  },
+  {
+    "id": "request-8",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/main.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.562Z"
+  },
+  {
+    "id": "request-9",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/icons.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.562Z"
+  },
+  {
+    "id": "request-10",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/approval-modal.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.562Z"
+  },
+  {
+    "id": "request-11",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/persona-hub.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.563Z"
+  },
+  {
+    "id": "request-12",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/office-mode.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.563Z"
+  },
+  {
+    "id": "request-13",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/world-dashboard.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.563Z"
+  },
+  {
+    "id": "request-14",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/themes/yita-pink.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.564Z"
+  },
+  {
+    "id": "request-15",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.564Z"
+  },
+  {
+    "id": "request-16",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "image",
+    "url": "file:///E:/Agent_reply/Aerie%20%C2%B7%20%E4%BA%91%E6%A0%96.svg",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.564Z"
+  },
+  {
+    "id": "request-17",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "image",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/logo.png",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.565Z"
+  },
+  {
+    "id": "request-18",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "image",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/avatar_default.svg",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.565Z"
+  },
+  {
+    "id": "request-19",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/github.min.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.565Z"
+  },
+  {
+    "id": "request-20",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/marked.min.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.565Z"
+  },
+  {
+    "id": "request-21",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/purify.min.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.566Z"
+  },
+  {
+    "id": "request-22",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/highlight.min.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.566Z"
+  },
+  {
+    "id": "request-23",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-store.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.566Z"
+  },
+  {
+    "id": "request-24",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.567Z"
+  },
+  {
+    "id": "request-25",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-voice.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.567Z"
+  },
+  {
+    "id": "request-26",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-uploader.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.568Z"
+  },
+  {
+    "id": "request-27",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/napcat-panel.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.568Z"
+  },
+  {
+    "id": "request-28",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/emotion-dashboard.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.568Z"
+  },
+  {
+    "id": "request-29",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/emotion-history.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.568Z"
+  },
+  {
+    "id": "request-30",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/theme-switcher.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.569Z"
+  },
+  {
+    "id": "request-31",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/cognition-panel.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.569Z"
+  },
+  {
+    "id": "request-32",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/settings.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.569Z"
+  },
+  {
+    "id": "request-33",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/data-viewer.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.570Z"
+  },
+  {
+    "id": "request-34",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/calendar-panel.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.570Z"
+  },
+  {
+    "id": "request-35",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/approval-modal.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.570Z"
+  },
+  {
+    "id": "request-36",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/persona-hub.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.570Z"
+  },
+  {
+    "id": "request-37",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/office-mode.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.570Z"
+  },
+  {
+    "id": "request-38",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/world-dashboard.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.571Z"
+  },
+  {
+    "id": "request-39",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/cognition-panel.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.571Z"
+  },
+  {
+    "id": "request-40",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/calendar-panel.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.571Z"
+  },
+  {
+    "id": "request-41",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/emotion-history.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.571Z"
+  },
+  {
+    "id": "request-42",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "stylesheet",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/brief-drawer.css",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.571Z"
+  },
+  {
+    "id": "request-43",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/brief-drawer.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.572Z"
+  },
+  {
+    "id": "request-44",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "script",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/app.js",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.572Z"
+  },
+  {
+    "id": "request-16",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/Aerie%20%C2%B7%20%E4%BA%91%E6%A0%96.svg",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.572Z"
+  },
+  {
+    "id": "request-17",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/logo.png",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.572Z"
+  },
+  {
+    "id": "request-18",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/assets/avatar_default.svg",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.573Z"
+  },
+  {
+    "id": "request-10",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/approval-modal.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.626Z"
+  },
+  {
+    "id": "request-9",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/icons.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.626Z"
+  },
+  {
+    "id": "request-8",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/main.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.627Z"
+  },
+  {
+    "id": "request-11",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/persona-hub.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.627Z"
+  },
+  {
+    "id": "request-12",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/office-mode.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.628Z"
+  },
+  {
+    "id": "request-13",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/world-dashboard.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.628Z"
+  },
+  {
+    "id": "request-14",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/themes/yita-pink.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.629Z"
+  },
+  {
+    "id": "request-20",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/marked.min.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.629Z"
+  },
+  {
+    "id": "request-19",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/github.min.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.629Z"
+  },
+  {
+    "id": "request-21",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/purify.min.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.630Z"
+  },
+  {
+    "id": "request-22",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/vendor/highlight.min.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.631Z"
+  },
+  {
+    "id": "request-23",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-store.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.631Z"
+  },
+  {
+    "id": "request-24",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.631Z"
+  },
+  {
+    "id": "request-25",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-voice.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.632Z"
+  },
+  {
+    "id": "request-27",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/napcat-panel.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.639Z"
+  },
+  {
+    "id": "request-26",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/chat-uploader.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.640Z"
+  },
+  {
+    "id": "request-39",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/cognition-panel.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.641Z"
+  },
+  {
+    "id": "request-28",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/emotion-dashboard.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.641Z"
+  },
+  {
+    "id": "request-29",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/emotion-history.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.641Z"
+  },
+  {
+    "id": "request-40",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/calendar-panel.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.642Z"
+  },
+  {
+    "id": "request-30",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/theme-switcher.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.643Z"
+  },
+  {
+    "id": "request-41",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/emotion-history.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.643Z"
+  },
+  {
+    "id": "request-42",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/styles/brief-drawer.css",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.644Z"
+  },
+  {
+    "id": "request-31",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/cognition-panel.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.644Z"
+  },
+  {
+    "id": "request-32",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/settings.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.644Z"
+  },
+  {
+    "id": "request-35",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/approval-modal.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.645Z"
+  },
+  {
+    "id": "request-33",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/data-viewer.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.645Z"
+  },
+  {
+    "id": "request-36",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/persona-hub.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.645Z"
+  },
+  {
+    "id": "request-34",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/calendar-panel.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.645Z"
+  },
+  {
+    "id": "request-37",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/office-mode.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.646Z"
+  },
+  {
+    "id": "request-38",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/world-dashboard.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.646Z"
+  },
+  {
+    "id": "request-44",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/app.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.646Z"
+  },
+  {
+    "id": "request-43",
+    "event": "response",
+    "status": 200,
+    "statusText": "OK",
+    "url": "file:///E:/Agent_reply/electron/src/renderer/js/brief-drawer.js",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.647Z"
+  },
+  {
+    "id": "request-15",
+    "event": "response",
+    "status": 200,
+    "statusText": "",
+    "url": "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:48.814Z"
+  },
+  {
+    "id": "request-45",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "font",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAopxRSW3w.woff",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.865Z"
+  },
+  {
+    "id": "request-46",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "font",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAfJtRSW3w.woff",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.865Z"
+  },
+  {
+    "id": "request-47",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "font",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwARZtRSW3w.woff",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:48.866Z"
+  },
+  {
+    "id": "request-45",
+    "event": "response",
+    "status": 200,
+    "statusText": "",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAopxRSW3w.woff",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:49.813Z"
+  },
+  {
+    "id": "request-47",
+    "event": "response",
+    "status": 200,
+    "statusText": "",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwARZtRSW3w.woff",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:49.815Z"
+  },
+  {
+    "id": "request-46",
+    "event": "response",
+    "status": 200,
+    "statusText": "",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAfJtRSW3w.woff",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:49.815Z"
+  },
+  {
+    "id": "request-48",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "font",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAkJxRSW3w.woff",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:52:50.011Z"
+  },
+  {
+    "id": "request-48",
+    "event": "response",
+    "status": 200,
+    "statusText": "",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAkJxRSW3w.woff",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:52:50.137Z"
+  },
+  {
+    "id": "request-49",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "font",
+    "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8-qxTOlOT.woff",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:53:16.355Z"
+  },
+  {
+    "id": "request-50",
+    "event": "request",
+    "method": "GET",
+    "resourceType": "font",
+    "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxTOlOT.woff",
+    "frameUrl": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+    "bodyRecorded": false,
+    "at": "2026-08-10T17:53:16.355Z"
+  },
+  {
+    "id": "request-49",
+    "event": "response",
+    "status": 200,
+    "statusText": "",
+    "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8-qxTOlOT.woff",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:53:16.486Z"
+  },
+  {
+    "id": "request-50",
+    "event": "response",
+    "status": 200,
+    "statusText": "",
+    "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxTOlOT.woff",
+    "fromServiceWorker": false,
+    "at": "2026-08-10T17:53:16.600Z"
+  }
+]

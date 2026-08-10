@@ -1,0 +1,272 @@
+{"type":"phase","phaseId":"states/loading-live","status":"failed","at":"2026-08-10T17:52:50.214Z"}
+{"type":"interaction","selector":"#btn-maximize","action":"toggle-maximize","status":"passed","module":"window-controls","at":"2026-08-10T17:53:03.123Z"}
+{"type":"interaction","selector":"#btn-minimize","action":"minimize-and-restore","status":"passed","module":"window-controls","at":"2026-08-10T17:53:03.622Z"}
+{"type":"phase","phaseId":"states/success","status":"failed","at":"2026-08-10T17:53:04.766Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T17:53:05.129Z"}
+{"type":"phase","phaseId":"states/empty","status":"failed","at":"2026-08-10T17:53:05.853Z"}
+{"type":"phase","phaseId":"states/filled","status":"failed","at":"2026-08-10T17:53:06.677Z"}
+{"type":"interaction","selector":"button[data-tab=\"data\"]","action":"activate-tab","status":"passed","module":"tab:data","at":"2026-08-10T17:53:07.070Z"}
+{"type":"phase","phaseId":"states/disabled","status":"failed","at":"2026-08-10T17:53:07.872Z"}
+{"type":"phase","phaseId":"states/stale","status":"failed","at":"2026-08-10T17:53:08.737Z"}
+{"type":"phase","phaseId":"states/loading","status":"failed","at":"2026-08-10T17:53:09.801Z"}
+{"type":"phase","phaseId":"states/error","status":"failed","at":"2026-08-10T17:53:10.821Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T17:53:11.195Z"}
+{"type":"phase","phaseId":"panels/01-chat/default","status":"failed","at":"2026-08-10T17:53:11.991Z"}
+{"type":"interaction","selector":"#btn-close","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T17:53:12.625Z"}
+{"type":"interaction","selector":"#chat-attach-btn","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T17:53:12.626Z"}
+{"type":"interaction","selector":"#chat-mic-btn","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T17:53:12.626Z"}
+{"type":"interaction","selector":"#chat-input","action":"fill-restore","status":"passed","module":"tab:chat","at":"2026-08-10T17:53:12.658Z"}
+{"type":"interaction","selector":"#chat-send-btn","action":"safe-skip","status":"safe-skipped","module":"tab:chat","at":"2026-08-10T17:53:12.659Z"}
+{"type":"interaction","selector":"div.brief-drawer-backdrop","action":"click","status":"passed","module":"tab:chat","at":"2026-08-10T17:53:12.871Z"}
+{"type":"interaction","selector":"#brief-drawer-loc","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T17:53:13.666Z"}
+{"type":"interaction","selector":"#brief-drawer-close","action":"click","status":"failed","module":"tab:chat","at":"2026-08-10T17:53:16.218Z"}
+{"type":"interaction","selector":"#brief-drawer-chat","action":"focus-link","status":"passed","module":"tab:chat","at":"2026-08-10T17:53:16.251Z"}
+{"type":"interaction","selector":"#brief-drawer-expand","action":"focus-link","status":"passed","module":"tab:chat","at":"2026-08-10T17:53:16.271Z"}
+{"type":"interaction","selector":"button[data-tab=\"emotion\"]","action":"activate-tab","status":"passed","module":"tab:emotion","at":"2026-08-10T17:53:16.677Z"}
+{"type":"phase","phaseId":"panels/02-emotion/default","status":"failed","at":"2026-08-10T17:53:17.559Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:17.580Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-1h","status":"failed","at":"2026-08-10T17:53:21.261Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:21.279Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-24h","status":"failed","at":"2026-08-10T17:53:22.116Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:22.135Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-7d","status":"failed","at":"2026-08-10T17:53:23.002Z"}
+{"type":"interaction","selector":"body > div > div > section:nth-of-type(2) > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"activate-subtab","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:23.021Z"}
+{"type":"phase","phaseId":"panels/02-emotion/subtabs/emotion-window-30d","status":"failed","at":"2026-08-10T17:53:23.927Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:24.607Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:24.625Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:24.638Z"}
+{"type":"interaction","selector":"body > #panel-emotion > div > div:nth-of-type(6) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"click","status":"failed","module":"tab:emotion","at":"2026-08-10T17:53:24.651Z"}
+{"type":"interaction","selector":"#emh-refresh","action":"click","status":"passed","module":"tab:emotion","at":"2026-08-10T17:53:24.871Z"}
+{"type":"interaction","selector":"button[data-tab=\"cognition\"]","action":"activate-tab","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:25.275Z"}
+{"type":"phase","phaseId":"panels/03-cognition/default","status":"failed","at":"2026-08-10T17:53:26.287Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"brain\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:26.614Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-brain","status":"failed","at":"2026-08-10T17:53:29.380Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"self-evolve\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:29.721Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-self-evolve","status":"failed","at":"2026-08-10T17:53:30.713Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"computer\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:31.044Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-computer","status":"failed","at":"2026-08-10T17:53:32.375Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"qq-whitelist\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:32.692Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-qq-whitelist","status":"failed","at":"2026-08-10T17:53:33.620Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"files\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:33.951Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-files","status":"failed","at":"2026-08-10T17:53:35.016Z"}
+{"type":"interaction","selector":"button[data-cog-tab=\"docs\"]","action":"activate-subtab","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:35.348Z"}
+{"type":"phase","phaseId":"panels/03-cognition/subtabs/cognition-tab-docs","status":"failed","at":"2026-08-10T17:53:36.359Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(1)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T17:53:37.100Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(2)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T17:53:37.121Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(3)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T17:53:37.139Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(4)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T17:53:37.156Z"}
+{"type":"interaction","selector":"body > #cog-pane-docs > div:nth-of-type(2) > div > div:nth-of-type(5)","action":"click","status":"failed","module":"tab:cognition","at":"2026-08-10T17:53:37.177Z"}
+{"type":"interaction","selector":"#cog-dw-refresh","action":"click","status":"passed","module":"tab:cognition","at":"2026-08-10T17:53:37.401Z"}
+{"type":"interaction","selector":"button[data-tab=\"status\"]","action":"activate-tab","status":"passed","module":"tab:status","at":"2026-08-10T17:53:37.774Z"}
+{"type":"phase","phaseId":"panels/04-status/default","status":"failed","at":"2026-08-10T17:53:38.679Z"}
+{"type":"interaction","selector":"#status-qq-toggle","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T17:53:39.611Z"}
+{"type":"interaction","selector":"div.status-qq-title","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T17:53:39.612Z"}
+{"type":"interaction","selector":"#napcat-start-btn","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T17:53:39.612Z"}
+{"type":"interaction","selector":"#napcat-stop-btn","action":"safe-skip","status":"safe-skipped","module":"tab:status","at":"2026-08-10T17:53:39.613Z"}
+{"type":"interaction","selector":"button[data-tab=\"world-dashboard\"]","action":"activate-tab","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:39.997Z"}
+{"type":"phase","phaseId":"panels/05-world-dashboard/default","status":"failed","at":"2026-08-10T17:53:41.024Z"}
+{"type":"interaction","selector":"#world-dashboard-refresh","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:41.975Z"}
+{"type":"interaction","selector":"#world-dashboard-show","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.271Z"}
+{"type":"interaction","selector":"#world-dashboard-hide","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.518Z"}
+{"type":"interaction","selector":"#world-dashboard-enable","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.523Z"}
+{"type":"interaction","selector":"#world-dashboard-disable","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.524Z"}
+{"type":"interaction","selector":"#world-dashboard-start","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.525Z"}
+{"type":"interaction","selector":"#world-dashboard-stop","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.527Z"}
+{"type":"interaction","selector":"#world-dashboard-pause","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.528Z"}
+{"type":"interaction","selector":"#world-dashboard-resume","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.528Z"}
+{"type":"interaction","selector":"#world-dashboard-restart","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.529Z"}
+{"type":"interaction","selector":"#world-candidate-id","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.579Z"}
+{"type":"interaction","selector":"#world-candidate-action","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.580Z"}
+{"type":"interaction","selector":"#world-candidate-reason","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.621Z"}
+{"type":"interaction","selector":"#world-candidate-idempotency","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.660Z"}
+{"type":"interaction","selector":"#world-candidate-approve","action":"safe-skip","status":"safe-skipped","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.661Z"}
+{"type":"interaction","selector":"#world-creative-kind","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.703Z"}
+{"type":"interaction","selector":"#world-creative-title","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.751Z"}
+{"type":"interaction","selector":"#world-creative-payload","action":"fill-restore","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:42.805Z"}
+{"type":"interaction","selector":"#world-creative-preview","action":"click","status":"passed","module":"tab:world-dashboard","at":"2026-08-10T17:53:43.030Z"}
+{"type":"interaction","selector":"button[data-tab=\"memorial\"]","action":"activate-tab","status":"passed","module":"tab:memorial","at":"2026-08-10T17:53:43.424Z"}
+{"type":"phase","phaseId":"panels/06-memorial/default","status":"failed","at":"2026-08-10T17:53:44.333Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:44.369Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-all","status":"failed","at":"2026-08-10T17:53:45.246Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:45.267Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-anniversary","status":"failed","at":"2026-08-10T17:53:46.147Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:46.171Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-schedule","status":"failed","at":"2026-08-10T17:53:47.124Z"}
+{"type":"interaction","selector":"body > div > section:nth-of-type(6) > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"activate-subtab","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:47.149Z"}
+{"type":"phase","phaseId":"panels/06-memorial/subtabs/calendar-filter-todo","status":"failed","at":"2026-08-10T17:53:48.061Z"}
+{"type":"interaction","selector":"#cal-prev-month","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T17:53:48.942Z"}
+{"type":"interaction","selector":"#cal-next-month","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T17:53:49.158Z"}
+{"type":"interaction","selector":"#cal-today-btn","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T17:53:49.362Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(7)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.381Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(8)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.396Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(9)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.413Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(10)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.428Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(11)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.445Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(12)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.462Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(13)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.477Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(14)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.497Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(15)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.511Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(16)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.526Z"}
+{"type":"interaction","selector":"div.cal-day.cal-day--today.cal-day--selected","action":"click","status":"passed","module":"tab:memorial","at":"2026-08-10T17:53:49.757Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(18)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.791Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(19)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.823Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(20)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.849Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(21)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.883Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(22)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.918Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(23)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.953Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(24)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:49.983Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(25)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.011Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(26)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.045Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(27)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.073Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(28)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.103Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(29)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.134Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(30)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.163Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(31)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.192Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(32)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.224Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(33)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.256Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(34)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.285Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(35)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.314Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(36)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.340Z"}
+{"type":"interaction","selector":"body > #cal-grid > div:nth-of-type(37)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.365Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(1)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.395Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(2)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.429Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(3)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.457Z"}
+{"type":"interaction","selector":"body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(4)","action":"click","status":"failed","module":"tab:memorial","at":"2026-08-10T17:53:50.484Z"}
+{"type":"interaction","selector":"button[data-tab=\"data\"]","action":"activate-tab","status":"passed","module":"tab:data","at":"2026-08-10T17:53:50.853Z"}
+{"type":"phase","phaseId":"panels/07-data/default","status":"failed","at":"2026-08-10T17:53:51.730Z"}
+{"type":"interaction","selector":"button[data-sub=\"chat\"]","action":"activate-subtab","status":"passed","module":"tab:data","at":"2026-08-10T17:53:52.053Z"}
+{"type":"phase","phaseId":"panels/07-data/subtabs/data-subtab-chat","status":"failed","at":"2026-08-10T17:53:52.879Z"}
+{"type":"interaction","selector":"button[data-sub=\"knowledge\"]","action":"activate-subtab","status":"passed","module":"tab:data","at":"2026-08-10T17:53:53.204Z"}
+{"type":"phase","phaseId":"panels/07-data/subtabs/data-subtab-knowledge","status":"failed","at":"2026-08-10T17:53:54.401Z"}
+{"type":"interaction","selector":"button[data-sub=\"system\"]","action":"activate-subtab","status":"passed","module":"tab:data","at":"2026-08-10T17:53:54.721Z"}
+{"type":"phase","phaseId":"panels/07-data/subtabs/data-subtab-system","status":"failed","at":"2026-08-10T17:53:55.565Z"}
+{"type":"interaction","selector":"button[data-tab=\"persona-hub\"]","action":"activate-tab","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:53:56.830Z"}
+{"type":"phase","phaseId":"panels/08-persona-hub/default","status":"failed","at":"2026-08-10T17:53:57.835Z"}
+{"type":"interaction","selector":"#persona-hub-import-btn","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T17:53:58.617Z"}
+{"type":"interaction","selector":"div.persona-card.persona-card--active","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T17:53:58.625Z"}
+{"type":"interaction","selector":"div.persona-card__avatar","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:53:58.844Z"}
+{"type":"interaction","selector":"div.persona-card__badge","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:53:59.077Z"}
+{"type":"interaction","selector":"div.persona-card__info","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:53:59.313Z"}
+{"type":"interaction","selector":"h4.persona-card__name","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:53:59.542Z"}
+{"type":"interaction","selector":"p.persona-card__tagline","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:53:59.773Z"}
+{"type":"interaction","selector":"div.persona-card__actions","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T17:53:59.777Z"}
+{"type":"interaction","selector":"button.persona-card__btn.persona-card__btn--edit","action":"click","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:54:00.005Z"}
+{"type":"interaction","selector":"button.persona-card__btn.persona-card__btn--export","action":"safe-skip","status":"safe-skipped","module":"tab:persona-hub","at":"2026-08-10T17:54:00.008Z"}
+{"type":"interaction","selector":"button[data-tab=\"settings\"]","action":"activate-tab","status":"passed","module":"tab:settings","at":"2026-08-10T17:54:00.419Z"}
+{"type":"phase","phaseId":"panels/09-settings/default","status":"failed","at":"2026-08-10T17:54:01.671Z"}
+{"type":"interaction","selector":"#tab-settings-form","action":"activate-subtab","status":"passed","module":"tab:settings","at":"2026-08-10T17:54:02.002Z"}
+{"type":"phase","phaseId":"panels/09-settings/subtabs/settings-mode-form","status":"failed","at":"2026-08-10T17:54:03.224Z"}
+{"type":"interaction","selector":"#tab-settings-apikey","action":"activate-subtab","status":"passed","module":"tab:settings","at":"2026-08-10T17:54:03.559Z"}
+{"type":"phase","phaseId":"panels/09-settings/subtabs/settings-mode-apikey","status":"failed","at":"2026-08-10T17:54:04.975Z"}
+{"type":"interaction","selector":"#tab-settings-yaml","action":"activate-subtab","status":"passed","module":"tab:settings","at":"2026-08-10T17:54:05.306Z"}
+{"type":"phase","phaseId":"panels/09-settings/subtabs/settings-mode-yaml","status":"failed","at":"2026-08-10T17:54:06.545Z"}
+{"type":"interaction","selector":"#settings-yaml-view","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T17:54:07.456Z"}
+{"type":"interaction","selector":"#yaml-file-select","action":"select-restore","status":"passed","module":"tab:settings","at":"2026-08-10T17:54:07.498Z"}
+{"type":"interaction","selector":"#yaml-editor","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T17:54:07.499Z"}
+{"type":"interaction","selector":"#yaml-save-btn","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T17:54:07.499Z"}
+{"type":"interaction","selector":"#yaml-reload-btn","action":"click","status":"passed","module":"tab:settings","at":"2026-08-10T17:54:07.696Z"}
+{"type":"interaction","selector":"#yaml-backup-btn","action":"safe-skip","status":"safe-skipped","module":"tab:settings","at":"2026-08-10T17:54:07.700Z"}
+{"type":"interaction","selector":"button[data-tab=\"about\"]","action":"activate-tab","status":"passed","module":"tab:about","at":"2026-08-10T17:54:08.090Z"}
+{"type":"phase","phaseId":"panels/10-about/default","status":"failed","at":"2026-08-10T17:54:09.360Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T17:54:10.838Z"}
+{"type":"interaction","selector":"#chat-brief-btn","action":"open-brief","status":"passed","module":"runtime:brief","at":"2026-08-10T17:54:11.259Z"}
+{"type":"phase","phaseId":"runtime/brief/live","status":"failed","at":"2026-08-10T17:54:12.718Z"}
+{"type":"interaction","selector":"#brief-drawer-todo-add","action":"click","status":"passed","module":"runtime:brief","at":"2026-08-10T17:54:14.183Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.208Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(2) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.226Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(3) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.244Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(4) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.261Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(5) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.280Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(6) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.297Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.311Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(2) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.332Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(3) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.349Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(4) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.364Z"}
+{"type":"interaction","selector":"body > #brief-drawer-body > section:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(5) > a","action":"fill-restore","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:14.378Z"}
+{"type":"interaction","selector":"section.brief-drawer__section.brief-drawer__section--weather","action":"click","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:15.151Z"}
+{"type":"interaction","selector":"div.brief-drawer__weather-compact","action":"click","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:17.688Z"}
+{"type":"interaction","selector":"div.brief-drawer__forecast","action":"click","status":"failed","module":"runtime:brief","at":"2026-08-10T17:54:20.232Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T17:54:20.590Z"}
+{"type":"interaction","selector":"#chat-office-btn","action":"open-office-menu","status":"passed","module":"runtime:office","at":"2026-08-10T17:54:50.801Z"}
+{"type":"phase","phaseId":"runtime/office/menu-auto","status":"failed","at":"2026-08-10T17:54:52.676Z"}
+{"type":"interaction","selector":"div[data-mode=\"auto\"]","action":"select-office-mode","status":"passed","module":"runtime:office","at":"2026-08-10T17:54:52.932Z"}
+{"type":"interaction","selector":"#chat-office-btn","action":"open-office-menu","status":"passed","module":"runtime:office","at":"2026-08-10T17:54:53.134Z"}
+{"type":"phase","phaseId":"runtime/office/menu-chat","status":"failed","at":"2026-08-10T17:54:54.571Z"}
+{"type":"interaction","selector":"div[data-mode=\"chat\"]","action":"select-office-mode","status":"passed","module":"runtime:office","at":"2026-08-10T17:54:54.807Z"}
+{"type":"interaction","selector":"#chat-office-btn","action":"open-office-menu","status":"passed","module":"runtime:office","at":"2026-08-10T17:54:55.014Z"}
+{"type":"phase","phaseId":"runtime/office/menu-office","status":"failed","at":"2026-08-10T17:54:56.363Z"}
+{"type":"interaction","selector":"div[data-mode=\"office\"]","action":"select-office-mode","status":"passed","module":"runtime:office","at":"2026-08-10T17:54:56.616Z"}
+{"type":"interaction","selector":"button[data-tab=\"memorial\"]","action":"activate-tab","status":"passed","module":"tab:memorial","at":"2026-08-10T17:54:56.990Z"}
+{"type":"interaction","selector":"#cal-add-btn","action":"open-add-event","status":"passed","module":"runtime:calendar","at":"2026-08-10T17:54:57.237Z"}
+{"type":"phase","phaseId":"runtime/calendar/add-modal","status":"failed","at":"2026-08-10T17:54:58.785Z"}
+{"type":"interaction","selector":"div.cal-modal-backdrop","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.432Z"}
+{"type":"interaction","selector":"button.cal-modal-close","action":"click","status":"passed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.662Z"}
+{"type":"interaction","selector":"#cal-form-title","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.714Z"}
+{"type":"interaction","selector":"#cal-form-type","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.759Z"}
+{"type":"interaction","selector":"label.cal-switch","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.799Z"}
+{"type":"interaction","selector":"#cal-form-date","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.842Z"}
+{"type":"interaction","selector":"#cal-form-time","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.883Z"}
+{"type":"interaction","selector":"#cal-form-end-date","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.926Z"}
+{"type":"interaction","selector":"#cal-form-end-time","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:02.971Z"}
+{"type":"interaction","selector":"#cal-form-repeat","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.011Z"}
+{"type":"interaction","selector":"#cal-form-remind","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.047Z"}
+{"type":"interaction","selector":"#cal-form-desc","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.085Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(1)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.123Z"}
+{"type":"interaction","selector":"input[aria-label=\"柔粉\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.163Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(2)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.202Z"}
+{"type":"interaction","selector":"input[aria-label=\"淡紫\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.242Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(3)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.283Z"}
+{"type":"interaction","selector":"input[aria-label=\"蜜桃\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.324Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(4)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.368Z"}
+{"type":"interaction","selector":"input[aria-label=\"薄荷\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.415Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(5)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.451Z"}
+{"type":"interaction","selector":"input[aria-label=\"暖橙\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.494Z"}
+{"type":"interaction","selector":"body > #cal-color-picker > label:nth-of-type(6)","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.534Z"}
+{"type":"interaction","selector":"input[aria-label=\"雾蓝\"]","action":"fill-restore","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.576Z"}
+{"type":"interaction","selector":"#cal-cancel-btn","action":"click","status":"failed","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.619Z"}
+{"type":"interaction","selector":"#cal-save-btn","action":"safe-skip","status":"safe-skipped","module":"runtime:calendar-modal","at":"2026-08-10T17:55:03.622Z"}
+{"type":"interaction","selector":"button[data-tab=\"data\"]","action":"activate-tab","status":"passed","module":"tab:data","at":"2026-08-10T17:55:34.002Z"}
+{"type":"interaction","selector":"button[data-sub=\"knowledge\"]","action":"activate-knowledge","status":"passed","module":"runtime:knowledge","at":"2026-08-10T17:55:34.266Z"}
+{"type":"interaction","selector":"#knowledge-add-btn","action":"open-add-knowledge","status":"passed","module":"runtime:knowledge","at":"2026-08-10T17:55:34.483Z"}
+{"type":"phase","phaseId":"runtime/knowledge/add-modal","status":"failed","at":"2026-08-10T17:55:35.943Z"}
+{"type":"interaction","selector":"#knowledge-search","action":"fill-restore","status":"passed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.255Z"}
+{"type":"interaction","selector":"#knowledge-category-filter","action":"select-restore","status":"passed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.289Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.303Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.305Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(2) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.319Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(2) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.322Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(3) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.335Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(3) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.338Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.351Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(4) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.354Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.368Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(5) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.370Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(6) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.386Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(6) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.389Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(7) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.407Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(7) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.410Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(8) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.424Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(8) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.428Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(9) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.446Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(9) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.449Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(10) > div:nth-of-type(2) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.465Z"}
+{"type":"interaction","selector":"body > #knowledge-list > article:nth-of-type(10) > div:nth-of-type(2) > button:nth-of-type(2)","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:37.467Z"}
+{"type":"interaction","selector":"#knowledge-next-btn","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.013Z"}
+{"type":"interaction","selector":"body > #knowledge-modal > div:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.033Z"}
+{"type":"interaction","selector":"body > #knowledge-modal > div:nth-of-type(2) > div:nth-of-type(1) > button","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.053Z"}
+{"type":"interaction","selector":"#knowledge-form-category","action":"fill-restore","status":"passed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.096Z"}
+{"type":"interaction","selector":"#knowledge-form-title","action":"fill-restore","status":"passed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.128Z"}
+{"type":"interaction","selector":"#knowledge-form-content","action":"fill-restore","status":"passed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.163Z"}
+{"type":"interaction","selector":"#knowledge-form-tags","action":"fill-restore","status":"passed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.203Z"}
+{"type":"interaction","selector":"body > #knowledge-modal > div:nth-of-type(2) > div:nth-of-type(3) > button:nth-of-type(1)","action":"click","status":"failed","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.217Z"}
+{"type":"interaction","selector":"#knowledge-save-btn","action":"safe-skip","status":"safe-skipped","module":"runtime:knowledge-modal","at":"2026-08-10T17:55:40.220Z"}
+{"type":"interaction","selector":"button[data-tab=\"persona-hub\"]","action":"activate-tab","status":"passed","module":"tab:persona-hub","at":"2026-08-10T17:55:40.635Z"}
+{"type":"interaction","selector":"#persona-hub-create-btn","action":"open-persona-editor","status":"failed","module":"runtime:persona","at":"2026-08-10T17:55:40.911Z"}
+{"type":"phase","phaseId":"runtime/approval/synthetic","status":"failed","at":"2026-08-10T17:55:42.107Z"}
+{"type":"interaction","selector":"#approval-reject-btn","action":"reject-synthetic-approval","status":"passed","module":"runtime:approval","at":"2026-08-10T17:55:42.332Z"}
+{"type":"interaction","selector":"button[data-tab=\"chat\"]","action":"activate-tab","status":"passed","module":"tab:chat","at":"2026-08-10T17:55:42.704Z"}
+{"type":"phase","phaseId":"runtime/attachment/queued","status":"failed","at":"2026-08-10T17:55:44.216Z"}
+{"type":"phase","phaseId":"runtime/attachment/ready","status":"failed","at":"2026-08-10T17:55:45.507Z"}
+{"type":"phase","phaseId":"windows/dynamic-island","status":"failed","at":"2026-08-10T17:55:45.634Z"}
+{"type":"interaction","selector":"div.di-capsule","action":"safe-skip","status":"safe-skipped","module":"window:dynamic-island","at":"2026-08-10T17:55:45.699Z"}
+{"type":"interaction","selector":"div.di-capsule-left","action":"click","status":"passed","module":"window:dynamic-island","at":"2026-08-10T17:55:45.965Z"}

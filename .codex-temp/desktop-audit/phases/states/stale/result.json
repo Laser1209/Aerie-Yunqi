@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 2,
+  "phaseId": "states/stale",
+  "state": "stale",
+  "provenance": "controlled-renderer-state",
+  "status": "failed",
+  "failures": [
+    "non_unique_locators:95",
+    "occluded_visible_controls:3",
+    "overlapping_controls:3",
+    "overlapping_text:4"
+  ],
+  "url": "file:///E:/Agent_reply/electron/src/renderer/index.html",
+  "title": "Aerie · 云栖",
+  "viewport": {
+    "width": 1282,
+    "height": 800,
+    "devicePixelRatio": 1.5
+  },
+  "assertions": {
+    "allElements": 1801,
+    "semanticElements": 578,
+    "interactiveElements": 272,
+    "visibleInteractiveElements": 21,
+    "hiddenInteractiveElements": 251,
+    "listenerBackedElements": 109,
+    "invalidStrings": 0,
+    "invalidCharacters": 0,
+    "clippedVisibleElements": 0,
+    "occludedVisibleElements": 3,
+    "unnamedVisibleControls": 0,
+    "nonUniqueLocators": 95,
+    "fallbackLocators": 95,
+    "keyboardUnreachable": "<redacted>",
+    "controlOverlaps": 3,
+    "textOverlaps": 4,
+    "expected": {
+      "expectedSelector": ".stale-banner",
+      "expectedSelectorCount": 1,
+      "expectedSelectorVisible": true,
+      "expectedText": "qa_synthetic_module.py",
+      "expectedTextFound": true
+    },
+    "screenshotCaptured": true,
+    "screenshotError": ""
+  },
+  "evidenceFiles": [
+    "result.json",
+    "elements.json",
+    "characters.json",
+    "strings.json",
+    "overlaps.json",
+    "mutations.json",
+    "network.json",
+    "console.json",
+    "screenshot.png"
+  ],
+  "capturedAt": "2026-08-10T17:53:08.686Z"
+}

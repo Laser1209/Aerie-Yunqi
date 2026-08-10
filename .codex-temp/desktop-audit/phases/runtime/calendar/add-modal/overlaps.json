@@ -1,0 +1,1169 @@
+{
+  "controlOverlaps": [
+    {
+      "first": "#btn-minimize",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 1173.33,
+        "top": 7.33,
+        "right": 1203.33,
+        "bottom": 37.33,
+        "width": 30,
+        "height": 30,
+        "area": 900
+      }
+    },
+    {
+      "first": "#btn-maximize",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 1205.33,
+        "top": 7.33,
+        "right": 1235.33,
+        "bottom": 37.33,
+        "width": 30,
+        "height": 30,
+        "area": 900
+      }
+    },
+    {
+      "first": "#btn-close",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 1237.33,
+        "top": 7.33,
+        "right": 1267.33,
+        "bottom": 37.33,
+        "width": 30,
+        "height": 30,
+        "area": 900
+      }
+    },
+    {
+      "first": "button[data-tab=\"chat\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 56.67,
+        "right": 64,
+        "bottom": 112.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"emotion\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 116.67,
+        "right": 64,
+        "bottom": 172.67,
+        "width": 55.33,
+        "height": 55.999999999999986,
+        "area": 3098.479999999999
+      }
+    },
+    {
+      "first": "button[data-tab=\"cognition\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 176.67,
+        "right": 64,
+        "bottom": 232.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"status\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 236.67,
+        "right": 64,
+        "bottom": 292.67,
+        "width": 55.33,
+        "height": 56.00000000000003,
+        "area": 3098.4800000000014
+      }
+    },
+    {
+      "first": "button[data-tab=\"world-dashboard\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 296.67,
+        "right": 64,
+        "bottom": 352.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"memorial\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 356.67,
+        "right": 64,
+        "bottom": 412.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"data\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 416.67,
+        "right": 64,
+        "bottom": 472.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"persona-hub\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 476.67,
+        "right": 64,
+        "bottom": 532.67,
+        "width": 55.33,
+        "height": 55.99999999999994,
+        "area": 3098.479999999997
+      }
+    },
+    {
+      "first": "button[data-tab=\"settings\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 536.67,
+        "right": 64,
+        "bottom": 592.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "button[data-tab=\"about\"]",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 8.67,
+        "top": 596.67,
+        "right": 64,
+        "bottom": 652.67,
+        "width": 55.33,
+        "height": 56,
+        "area": 3098.48
+      }
+    },
+    {
+      "first": "#cal-add-btn",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 1156.73,
+        "top": 69.9,
+        "right": 1259.33,
+        "bottom": 104.09,
+        "width": 102.59999999999991,
+        "height": 34.19,
+        "area": 3507.8939999999966
+      }
+    },
+    {
+      "first": "#cal-prev-month",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 109.33,
+        "top": 223.67,
+        "right": 141.33,
+        "bottom": 255.67,
+        "width": 32.000000000000014,
+        "height": 32,
+        "area": 1024.0000000000005
+      }
+    },
+    {
+      "first": "#cal-next-month",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 825.33,
+        "top": 223.67,
+        "right": 857.33,
+        "bottom": 255.67,
+        "width": 32,
+        "height": 32,
+        "area": 1024
+      }
+    },
+    {
+      "first": "#cal-next-month",
+      "second": "#cal-form-title",
+      "ratio": 0.254,
+      "intersection": {
+        "left": 825.33,
+        "top": 223.67,
+        "right": 857.33,
+        "bottom": 231.8,
+        "width": 32,
+        "height": 8.130000000000024,
+        "area": 260.16000000000076
+      }
+    },
+    {
+      "first": "#cal-today-btn",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 867.33,
+        "top": 224.6,
+        "right": 920.67,
+        "bottom": 254.73,
+        "width": 53.33999999999992,
+        "height": 30.129999999999995,
+        "area": 1607.1341999999972
+      }
+    },
+    {
+      "first": "#cal-today-btn",
+      "second": "#cal-form-title",
+      "ratio": 0.17,
+      "intersection": {
+        "left": 867.33,
+        "top": 224.6,
+        "right": 905.33,
+        "bottom": 231.8,
+        "width": 38,
+        "height": 7.200000000000017,
+        "area": 273.60000000000065
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(7)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 807.33,
+        "top": 291,
+        "right": 920.67,
+        "bottom": 367.77,
+        "width": 113.33999999999992,
+        "height": 76.76999999999998,
+        "area": 8701.111799999991
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(8)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 109.33,
+        "top": 370.77,
+        "right": 222.67,
+        "bottom": 447.55,
+        "width": 113.33999999999999,
+        "height": 76.78000000000003,
+        "area": 8702.245200000003
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(9)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 225.67,
+        "top": 370.77,
+        "right": 339,
+        "bottom": 447.55,
+        "width": 113.33000000000001,
+        "height": 76.78000000000003,
+        "area": 8701.477400000005
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(10)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 342,
+        "top": 370.77,
+        "right": 455.33,
+        "bottom": 447.55,
+        "width": 113.32999999999998,
+        "height": 76.78000000000003,
+        "area": 8701.477400000002
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(11)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 458.33,
+        "top": 370.77,
+        "right": 571.67,
+        "bottom": 447.55,
+        "width": 113.33999999999997,
+        "height": 76.78000000000003,
+        "area": 8702.245200000001
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(12)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 574.67,
+        "top": 370.77,
+        "right": 688,
+        "bottom": 447.55,
+        "width": 113.33000000000004,
+        "height": 76.78000000000003,
+        "area": 8701.477400000007
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(12)",
+      "second": "label.cal-switch",
+      "ratio": 0.251,
+      "intersection": {
+        "left": 657.67,
+        "top": 370.77,
+        "right": 688,
+        "bottom": 387.9,
+        "width": 30.33000000000004,
+        "height": 17.129999999999995,
+        "area": 519.5529000000006
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(13)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 691,
+        "top": 370.77,
+        "right": 804.33,
+        "bottom": 447.55,
+        "width": 113.33000000000004,
+        "height": 76.78000000000003,
+        "area": 8701.477400000007
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(13)",
+      "second": "label.cal-switch",
+      "ratio": 0.383,
+      "intersection": {
+        "left": 691,
+        "top": 370.77,
+        "right": 737.16,
+        "bottom": 387.9,
+        "width": 46.15999999999997,
+        "height": 17.129999999999995,
+        "area": 790.7207999999993
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(14)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 807.33,
+        "top": 370.77,
+        "right": 920.67,
+        "bottom": 447.55,
+        "width": 113.33999999999992,
+        "height": 76.78000000000003,
+        "area": 8702.245199999998
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(15)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 109.33,
+        "top": 450.55,
+        "right": 222.67,
+        "bottom": 527.33,
+        "width": 113.33999999999999,
+        "height": 76.78000000000003,
+        "area": 8702.245200000003
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(16)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 225.67,
+        "top": 450.55,
+        "right": 339,
+        "bottom": 527.33,
+        "width": 113.33000000000001,
+        "height": 76.78000000000003,
+        "area": 8701.477400000005
+      }
+    },
+    {
+      "first": "div.cal-day.cal-day--today.cal-day--selected",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 342,
+        "top": 450.55,
+        "right": 455.33,
+        "bottom": 527.33,
+        "width": 113.32999999999998,
+        "height": 76.78000000000003,
+        "area": 8701.477400000002
+      }
+    },
+    {
+      "first": "div.cal-day.cal-day--today.cal-day--selected",
+      "second": "#cal-form-date",
+      "ratio": 0.428,
+      "intersection": {
+        "left": 368.67,
+        "top": 476.9,
+        "right": 455.33,
+        "bottom": 519.9,
+        "width": 86.65999999999997,
+        "height": 43,
+        "area": 3726.3799999999987
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(18)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 458.33,
+        "top": 450.55,
+        "right": 571.67,
+        "bottom": 527.33,
+        "width": 113.33999999999997,
+        "height": 76.78000000000003,
+        "area": 8702.245200000001
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(18)",
+      "second": "#cal-form-date",
+      "ratio": 0.56,
+      "intersection": {
+        "left": 458.33,
+        "top": 476.9,
+        "right": 571.67,
+        "bottom": 519.9,
+        "width": 113.33999999999997,
+        "height": 43,
+        "area": 4873.619999999999
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(19)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 574.67,
+        "top": 450.55,
+        "right": 688,
+        "bottom": 527.33,
+        "width": 113.33000000000004,
+        "height": 76.78000000000003,
+        "area": 8701.477400000007
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(19)",
+      "second": "#cal-form-date",
+      "ratio": 0.268,
+      "intersection": {
+        "left": 574.67,
+        "top": 476.9,
+        "right": 629,
+        "bottom": 519.9,
+        "width": 54.33000000000004,
+        "height": 43,
+        "area": 2336.190000000002
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(19)",
+      "second": "#cal-form-time",
+      "ratio": 0.212,
+      "intersection": {
+        "left": 645,
+        "top": 476.9,
+        "right": 688,
+        "bottom": 519.9,
+        "width": 43,
+        "height": 43,
+        "area": 1849
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(20)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 691,
+        "top": 450.55,
+        "right": 804.33,
+        "bottom": 527.33,
+        "width": 113.33000000000004,
+        "height": 76.78000000000003,
+        "area": 8701.477400000007
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(20)",
+      "second": "#cal-form-time",
+      "ratio": 0.56,
+      "intersection": {
+        "left": 691,
+        "top": 476.9,
+        "right": 804.33,
+        "bottom": 519.9,
+        "width": 113.33000000000004,
+        "height": 43,
+        "area": 4873.190000000001
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(21)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 807.33,
+        "top": 450.55,
+        "right": 920.67,
+        "bottom": 527.33,
+        "width": 113.33999999999992,
+        "height": 76.78000000000003,
+        "area": 8702.245199999998
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(21)",
+      "second": "#cal-form-time",
+      "ratio": 0.484,
+      "intersection": {
+        "left": 807.33,
+        "top": 476.9,
+        "right": 905.33,
+        "bottom": 519.9,
+        "width": 98,
+        "height": 43,
+        "area": 4214
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(22)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 109.33,
+        "top": 530.33,
+        "right": 222.67,
+        "bottom": 607.1,
+        "width": 113.33999999999999,
+        "height": 76.76999999999998,
+        "area": 8701.111799999997
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(23)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 225.67,
+        "top": 530.33,
+        "right": 339,
+        "bottom": 607.1,
+        "width": 113.33000000000001,
+        "height": 76.76999999999998,
+        "area": 8700.344099999998
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(24)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 342,
+        "top": 530.33,
+        "right": 455.33,
+        "bottom": 607.1,
+        "width": 113.32999999999998,
+        "height": 76.76999999999998,
+        "area": 8700.344099999997
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(24)",
+      "second": "#cal-form-end-date",
+      "ratio": 0.428,
+      "intersection": {
+        "left": 368.67,
+        "top": 557.56,
+        "right": 455.33,
+        "bottom": 600.56,
+        "width": 86.65999999999997,
+        "height": 43,
+        "area": 3726.3799999999987
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(25)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 458.33,
+        "top": 530.33,
+        "right": 571.67,
+        "bottom": 607.1,
+        "width": 113.33999999999997,
+        "height": 76.76999999999998,
+        "area": 8701.111799999995
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(25)",
+      "second": "#cal-form-end-date",
+      "ratio": 0.56,
+      "intersection": {
+        "left": 458.33,
+        "top": 557.56,
+        "right": 571.67,
+        "bottom": 600.56,
+        "width": 113.33999999999997,
+        "height": 43,
+        "area": 4873.619999999999
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(26)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 574.67,
+        "top": 530.33,
+        "right": 688,
+        "bottom": 607.1,
+        "width": 113.33000000000004,
+        "height": 76.76999999999998,
+        "area": 8700.3441
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(26)",
+      "second": "#cal-form-end-date",
+      "ratio": 0.269,
+      "intersection": {
+        "left": 574.67,
+        "top": 557.56,
+        "right": 629,
+        "bottom": 600.56,
+        "width": 54.33000000000004,
+        "height": 43,
+        "area": 2336.190000000002
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(26)",
+      "second": "#cal-form-end-time",
+      "ratio": 0.213,
+      "intersection": {
+        "left": 645,
+        "top": 557.56,
+        "right": 688,
+        "bottom": 600.56,
+        "width": 43,
+        "height": 43,
+        "area": 1849
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(27)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 691,
+        "top": 530.33,
+        "right": 804.33,
+        "bottom": 607.1,
+        "width": 113.33000000000004,
+        "height": 76.76999999999998,
+        "area": 8700.3441
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(27)",
+      "second": "#cal-form-end-time",
+      "ratio": 0.56,
+      "intersection": {
+        "left": 691,
+        "top": 557.56,
+        "right": 804.33,
+        "bottom": 600.56,
+        "width": 113.33000000000004,
+        "height": 43,
+        "area": 4873.190000000001
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(28)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 807.33,
+        "top": 530.33,
+        "right": 920.67,
+        "bottom": 607.1,
+        "width": 113.33999999999992,
+        "height": 76.76999999999998,
+        "area": 8701.111799999991
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(28)",
+      "second": "#cal-form-end-time",
+      "ratio": 0.484,
+      "intersection": {
+        "left": 807.33,
+        "top": 557.56,
+        "right": 905.33,
+        "bottom": 600.56,
+        "width": 98,
+        "height": 43,
+        "area": 4214
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(29)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 109.33,
+        "top": 610.1,
+        "right": 222.67,
+        "bottom": 686.89,
+        "width": 113.33999999999999,
+        "height": 76.78999999999996,
+        "area": 8703.378599999995
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(30)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 225.67,
+        "top": 610.1,
+        "right": 339,
+        "bottom": 686.89,
+        "width": 113.33000000000001,
+        "height": 76.78999999999996,
+        "area": 8702.610699999997
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(31)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 342,
+        "top": 610.1,
+        "right": 455.33,
+        "bottom": 686.89,
+        "width": 113.32999999999998,
+        "height": 76.78999999999996,
+        "area": 8702.610699999994
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(32)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 458.33,
+        "top": 610.1,
+        "right": 571.67,
+        "bottom": 686.89,
+        "width": 113.33999999999997,
+        "height": 76.78999999999996,
+        "area": 8703.378599999995
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(33)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 574.67,
+        "top": 610.1,
+        "right": 688,
+        "bottom": 686.89,
+        "width": 113.33000000000004,
+        "height": 76.78999999999996,
+        "area": 8702.6107
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(34)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 691,
+        "top": 610.1,
+        "right": 804.33,
+        "bottom": 686.89,
+        "width": 113.33000000000004,
+        "height": 76.78999999999996,
+        "area": 8702.6107
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(35)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 807.33,
+        "top": 610.1,
+        "right": 920.67,
+        "bottom": 686.89,
+        "width": 113.33999999999992,
+        "height": 76.78999999999996,
+        "area": 8703.37859999999
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(36)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 109.33,
+        "top": 689.89,
+        "right": 222.67,
+        "bottom": 766.67,
+        "width": 113.33999999999999,
+        "height": 76.77999999999997,
+        "area": 8702.245199999996
+      }
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(37)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 225.67,
+        "top": 689.89,
+        "right": 339,
+        "bottom": 766.67,
+        "width": 113.33000000000001,
+        "height": 76.77999999999997,
+        "area": 8701.477399999998
+      }
+    },
+    {
+      "first": "body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(1)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 964,
+        "top": 252,
+        "right": 1005.33,
+        "bottom": 275.33,
+        "width": 41.33000000000004,
+        "height": 23.329999999999984,
+        "area": 964.2289000000003
+      }
+    },
+    {
+      "first": "body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(2)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 1010.33,
+        "top": 252,
+        "right": 1051.67,
+        "bottom": 275.33,
+        "width": 41.34000000000003,
+        "height": 23.329999999999984,
+        "area": 964.4622
+      }
+    },
+    {
+      "first": "body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(3)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 1056.67,
+        "top": 252,
+        "right": 1098,
+        "bottom": 275.33,
+        "width": 41.32999999999993,
+        "height": 23.329999999999984,
+        "area": 964.2288999999977
+      }
+    },
+    {
+      "first": "body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div > button:nth-of-type(4)",
+      "second": "div.cal-modal-backdrop",
+      "ratio": 1,
+      "intersection": {
+        "left": 1103,
+        "top": 252,
+        "right": 1144.33,
+        "bottom": 275.33,
+        "width": 41.32999999999993,
+        "height": 23.329999999999984,
+        "area": 964.2288999999977
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "button.cal-modal-close",
+      "ratio": 1,
+      "intersection": {
+        "left": 869.33,
+        "top": 72.56,
+        "right": 905.33,
+        "bottom": 108.56,
+        "width": 36,
+        "height": 36,
+        "area": 1296
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-title",
+      "ratio": 1,
+      "intersection": {
+        "left": 368.67,
+        "top": 183.8,
+        "right": 905.33,
+        "bottom": 231.8,
+        "width": 536.6600000000001,
+        "height": 48,
+        "area": 25759.680000000004
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-type",
+      "ratio": 1,
+      "intersection": {
+        "left": 368.67,
+        "top": 333.34,
+        "right": 629,
+        "bottom": 376.34,
+        "width": 260.33,
+        "height": 43,
+        "area": 11194.189999999999
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "label.cal-switch",
+      "ratio": 1,
+      "intersection": {
+        "left": 657.67,
+        "top": 361.9,
+        "right": 737.16,
+        "bottom": 387.9,
+        "width": 79.49000000000001,
+        "height": 26,
+        "area": 2066.7400000000002
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-date",
+      "ratio": 1,
+      "intersection": {
+        "left": 368.67,
+        "top": 476.9,
+        "right": 629,
+        "bottom": 519.9,
+        "width": 260.33,
+        "height": 43,
+        "area": 11194.189999999999
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-time",
+      "ratio": 1,
+      "intersection": {
+        "left": 645,
+        "top": 476.9,
+        "right": 905.33,
+        "bottom": 519.9,
+        "width": 260.33000000000004,
+        "height": 43,
+        "area": 11194.190000000002
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-end-date",
+      "ratio": 1,
+      "intersection": {
+        "left": 368.67,
+        "top": 557.56,
+        "right": 629,
+        "bottom": 600.56,
+        "width": 260.33,
+        "height": 43,
+        "area": 11194.189999999999
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-end-time",
+      "ratio": 1,
+      "intersection": {
+        "left": 645,
+        "top": 557.56,
+        "right": 905.33,
+        "bottom": 600.56,
+        "width": 260.33000000000004,
+        "height": 43,
+        "area": 11194.190000000002
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-repeat",
+      "ratio": 1,
+      "intersection": {
+        "left": 368.67,
+        "top": 678.9,
+        "right": 629,
+        "bottom": 721.9,
+        "width": 260.33,
+        "height": 43,
+        "area": 11194.189999999999
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-form-remind",
+      "ratio": 1,
+      "intersection": {
+        "left": 645,
+        "top": 678.9,
+        "right": 905.33,
+        "bottom": 721.9,
+        "width": 260.33000000000004,
+        "height": 43,
+        "area": 11194.190000000002
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-cancel-btn",
+      "ratio": 1,
+      "intersection": {
+        "left": 729.33,
+        "top": 706.8,
+        "right": 811.33,
+        "bottom": 742.33,
+        "width": 82,
+        "height": 35.530000000000086,
+        "area": 2913.4600000000073
+      }
+    },
+    {
+      "first": "div.cal-modal-backdrop",
+      "second": "#cal-save-btn",
+      "ratio": 1,
+      "intersection": {
+        "left": 823.33,
+        "top": 707.47,
+        "right": 905.33,
+        "bottom": 741.67,
+        "width": 82,
+        "height": 34.19999999999993,
+        "area": 2804.399999999994
+      }
+    },
+    {
+      "first": "#cal-form-remind",
+      "second": "#cal-cancel-btn",
+      "ratio": 0.425,
+      "intersection": {
+        "left": 729.33,
+        "top": 706.8,
+        "right": 811.33,
+        "bottom": 721.9,
+        "width": 82,
+        "height": 15.100000000000023,
+        "area": 1238.2000000000019
+      }
+    },
+    {
+      "first": "#cal-form-remind",
+      "second": "#cal-save-btn",
+      "ratio": 0.422,
+      "intersection": {
+        "left": 823.33,
+        "top": 707.47,
+        "right": 905.33,
+        "bottom": 721.9,
+        "width": 82,
+        "height": 14.42999999999995,
+        "area": 1183.259999999996
+      }
+    }
+  ],
+  "textOverlaps": [
+    {
+      "first": "#cal-month-title",
+      "second": "body > #cal-event-modal > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1) > span",
+      "ratio": 0.494
+    },
+    {
+      "first": "body > #panel-memorial > div > div:nth-of-type(3) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(3)",
+      "second": "body > #cal-event-modal > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(2) > div",
+      "ratio": 0.571
+    },
+    {
+      "first": "body > #cal-grid > div:nth-of-type(11) > span",
+      "second": "body > #cal-event-modal > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(3) > span",
+      "ratio": 0.819
+    }
+  ]
+}

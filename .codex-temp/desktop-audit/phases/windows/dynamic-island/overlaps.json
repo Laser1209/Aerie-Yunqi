@@ -1,0 +1,61 @@
+{
+  "controlOverlaps": [
+    {
+      "first": "div.di-capsule",
+      "second": "div.di-avatar",
+      "ratio": 1,
+      "intersection": {
+        "left": 12.67,
+        "top": 7,
+        "right": 36.67,
+        "bottom": 31,
+        "width": 24,
+        "height": 24,
+        "area": 576
+      }
+    },
+    {
+      "first": "div.di-capsule",
+      "second": "img.di-avatar-logo",
+      "ratio": 1,
+      "intersection": {
+        "left": 12.67,
+        "top": 7,
+        "right": 36.67,
+        "bottom": 31,
+        "width": 24,
+        "height": 24,
+        "area": 576
+      }
+    },
+    {
+      "first": "div.di-capsule",
+      "second": "div.di-status",
+      "ratio": 1,
+      "intersection": {
+        "left": 74.54,
+        "top": 11,
+        "right": 127.45,
+        "bottom": 27,
+        "width": 52.91,
+        "height": 16,
+        "area": 846.56
+      }
+    },
+    {
+      "first": "div.di-capsule-left",
+      "second": "img.di-avatar-logo",
+      "ratio": 1,
+      "intersection": {
+        "left": 12.67,
+        "top": 7,
+        "right": 36.67,
+        "bottom": 31,
+        "width": 24,
+        "height": 24,
+        "area": 576
+      }
+    }
+  ],
+  "textOverlaps": []
+}

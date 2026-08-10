@@ -1,0 +1,4502 @@
+[
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.383Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.390Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.492Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-start-minimized",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-proactive",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "di-master-enabled",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "office-dir-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-ak",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "baidu-map-sk",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "yaml-editor",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:55.493Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "knowledge-search",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.017Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "napcat-phase-dot",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.017Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "status-qq-badge",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.017Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "napcat-qr-zone",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.017Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.017Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "title",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-chat",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-emotion",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-status",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-world-dashboard",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-about",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-memorial",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-persona-hub",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-settings",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-data",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-cognition",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-persona-hub",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "childList",
+    "tag": "section",
+    "id": "panel-persona-hub",
+    "attribute": "",
+    "added": 3,
+    "removed": 3
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "persona-hub-grid",
+    "attribute": "",
+    "added": 1,
+    "removed": 3
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "persona-hub-grid",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:56.500Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:56.518Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "persona-hub-grid",
+    "attribute": "",
+    "added": 3,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:56.518Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "persona-hub-grid",
+    "attribute": "",
+    "added": 3,
+    "removed": 3
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-hub-import-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-editor-avatar-upload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-english_name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-tagline",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-age",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-core_traits",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-speech_style",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-extraversion",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-agreeableness",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-neuroticism",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-background_story",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-occupation",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-hobbies",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-user_address",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-catchphrases",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-behavior_guidelines",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-system_prompt",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-raw_json",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.658Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.666Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.773Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-hub-import-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-editor-avatar-upload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-english_name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-tagline",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-age",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-core_traits",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-speech_style",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-extraversion",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-agreeableness",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-neuroticism",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-background_story",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-occupation",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-hobbies",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-user_address",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-catchphrases",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-behavior_guidelines",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-system_prompt",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-raw_json",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:57.774Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:58.676Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:58.784Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "napcat-phase-dot",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:58.784Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "status-qq-badge",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:58.784Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "napcat-qr-zone",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:58.784Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:58.784Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "title",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:58.905Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:59.136Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:59.371Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:59.602Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:59.836Z",
+    "type": "childList",
+    "tag": "span",
+    "id": "persona-editor-avatar-text",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:53:59.836Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "persona-hub-list-view",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:59.836Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "persona-hub-editor-view",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:53:59.838Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 3
+  },
+  {
+    "at": "2026-08-10T17:53:59.838Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 3
+  },
+  {
+    "at": "2026-08-10T17:53:59.838Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 3
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-chat",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-emotion",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-status",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-world-dashboard",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-about",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-memorial",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-persona-hub",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-settings",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-data",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-cognition",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "section",
+    "id": "panel-settings",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "settings-restart-btn",
+    "attribute": "data-original-title",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.070Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.088Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.088Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.097Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "di-preview",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.097Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "di-preview",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.099Z",
+    "type": "childList",
+    "tag": "span",
+    "id": "setting-proactive-image-usage",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.099Z",
+    "type": "childList",
+    "tag": "p",
+    "id": "setting-weather-hint",
+    "attribute": "",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:54:00.100Z",
+    "type": "attributes",
+    "tag": "img",
+    "id": "persona-avatar-preview",
+    "attribute": "src",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:00.109Z",
+    "type": "attributes",
+    "tag": "img",
+    "id": "persona-avatar-preview",
+    "attribute": "src",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.450Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-hub-import-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-editor-avatar-upload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-english_name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-tagline",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-age",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-core_traits",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-speech_style",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-extraversion",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-agreeableness",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-neuroticism",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-background_story",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-occupation",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-hobbies",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-user_address",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-catchphrases",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-behavior_guidelines",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-system_prompt",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-raw_json",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.451Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.459Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.584Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "napcat-phase-dot",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.584Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "status-qq-badge",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.584Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "napcat-qr-zone",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.584Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "disabled",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.584Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "napcat-stop-btn",
+    "attribute": "title",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.593Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-hub-import-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-editor-avatar-upload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-english_name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-tagline",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-age",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-core_traits",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-speech_style",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-extraversion",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-agreeableness",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-neuroticism",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-background_story",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-occupation",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-hobbies",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-user_address",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-catchphrases",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-behavior_guidelines",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-system_prompt",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-raw_json",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.595Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.737Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-form",
+    "attribute": "aria-selected",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.737Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-apikey",
+    "attribute": "aria-selected",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.737Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-yaml",
+    "attribute": "aria-selected",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:01.737Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-hub-import-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-editor-avatar-upload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-english_name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-tagline",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-age",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-core_traits",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-speech_style",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-extraversion",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-agreeableness",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-neuroticism",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-background_story",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-occupation",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-hobbies",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-user_address",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-catchphrases",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-behavior_guidelines",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-system_prompt",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-raw_json",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.002Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.012Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.146Z",
+    "type": "childList",
+    "tag": "html",
+    "id": "",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "chat-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-id",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-reason",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-candidate-idempotency",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-kind",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "world-creative-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "world-creative-payload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-title",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-all-day",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-date",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "cal-form-end-time",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "cal-form-desc",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-hub-import-input",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-editor-avatar-upload",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-english_name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-tagline",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-age",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-core_traits",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-speech_style",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-extraversion",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-agreeableness",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-neuroticism",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-background_story",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-occupation",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-hobbies",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-field-user_address",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-catchphrases",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-behavior_guidelines",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-system_prompt",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "textarea",
+    "id": "persona-field-raw_json",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "persona-english-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-avatar-file",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "user-name",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-weather-city",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-sub-github",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.147Z",
+    "type": "attributes",
+    "tag": "input",
+    "id": "setting-auto-start",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-form",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-form",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-form",
+    "attribute": "aria-selected",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-apikey",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-apikey",
+    "attribute": "class",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-apikey",
+    "attribute": "aria-selected",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "tab-settings-yaml",
+    "attribute": "aria-selected",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "settings-form-view",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "settings-apikey-view",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-status",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "div",
+    "id": "apikey-status",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.277Z",
+    "type": "attributes",
+    "tag": "button",
+    "id": "chat-office-btn",
+    "attribute": "aria-expanded",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.282Z",
+    "type": "attributes",
+    "tag": "span",
+    "id": "baidu-map-dot",
+    "attribute": "style",
+    "added": 0,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 0,
+    "removed": 3
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-provider-list",
+    "attribute": "",
+    "added": 1,
+    "removed": 0
+  },
+  {
+    "at": "2026-08-10T17:54:03.283Z",
+    "type": "childList",
+    "tag": "div",
+    "id": "apikey-status",
+    "attribute": "",
+    "added": 0,
+    "removed": 1
+  }
+]

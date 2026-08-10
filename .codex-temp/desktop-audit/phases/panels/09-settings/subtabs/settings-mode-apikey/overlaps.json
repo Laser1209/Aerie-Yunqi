@@ -1,0 +1,131 @@
+{
+  "controlOverlaps": [
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(1) > div:nth-of-type(2) > label:nth-of-type(1) > div > input",
+      "ratio": 1,
+      "intersection": {
+        "left": 115.33,
+        "top": 416,
+        "right": 1187.33,
+        "bottom": 448.67,
+        "width": 1072,
+        "height": 32.670000000000016,
+        "area": 35022.24000000002
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(1) > div:nth-of-type(2) > label:nth-of-type(1) > div > button",
+      "ratio": 1,
+      "intersection": {
+        "left": 1195.33,
+        "top": 416.98,
+        "right": 1230.67,
+        "bottom": 447.69,
+        "width": 35.340000000000146,
+        "height": 30.70999999999998,
+        "area": 1085.2914000000037
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(1) > div:nth-of-type(2) > label:nth-of-type(2) > input",
+      "ratio": 1,
+      "intersection": {
+        "left": 115.33,
+        "top": 477.67,
+        "right": 1230.67,
+        "bottom": 510.33,
+        "width": 1115.3400000000001,
+        "height": 32.65999999999997,
+        "area": 36427.00439999997
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(1) > div:nth-of-type(2) > label:nth-of-type(3) > input",
+      "ratio": 1,
+      "intersection": {
+        "left": 115.33,
+        "top": 540.67,
+        "right": 1230.67,
+        "bottom": 573.33,
+        "width": 1115.3400000000001,
+        "height": 32.66000000000008,
+        "area": 36427.00440000009
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(1) > div:nth-of-type(3) > button:nth-of-type(1)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1004.36,
+        "top": 587.33,
+        "right": 1091.73,
+        "bottom": 617.46,
+        "width": 87.37,
+        "height": 30.129999999999995,
+        "area": 2632.4581
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(1) > div:nth-of-type(3) > button:nth-of-type(2)",
+      "ratio": 1,
+      "intersection": {
+        "left": 1099.73,
+        "top": 587.33,
+        "right": 1230.67,
+        "bottom": 617.46,
+        "width": 130.94000000000005,
+        "height": 30.129999999999995,
+        "area": 3945.222200000001
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(2) > div:nth-of-type(2) > label:nth-of-type(1) > div > input",
+      "ratio": 1,
+      "intersection": {
+        "left": 115.33,
+        "top": 733.79,
+        "right": 1187.33,
+        "bottom": 766.46,
+        "width": 1072,
+        "height": 32.67000000000007,
+        "area": 35022.24000000008
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(2) > div:nth-of-type(2) > label:nth-of-type(1) > div > button",
+      "ratio": 1,
+      "intersection": {
+        "left": 1195.33,
+        "top": 734.77,
+        "right": 1230.67,
+        "bottom": 765.48,
+        "width": 35.340000000000146,
+        "height": 30.710000000000036,
+        "area": 1085.2914000000058
+      }
+    },
+    {
+      "first": "#settings-apikey-view",
+      "second": "body > #apikey-provider-list > div:nth-of-type(2) > div:nth-of-type(2) > label:nth-of-type(2) > input",
+      "ratio": 1,
+      "intersection": {
+        "left": 115.33,
+        "top": 795.46,
+        "right": 1230.67,
+        "bottom": 828.13,
+        "width": 1115.3400000000001,
+        "height": 32.66999999999996,
+        "area": 36438.15779999996
+      }
+    }
+  ],
+  "textOverlaps": []
+}

@@ -1,0 +1,61 @@
+{
+  "controlOverlaps": [
+    {
+      "first": "button[data-tab=\"persona-hub\"]",
+      "second": "div.office-menu.office-menu--visible",
+      "ratio": 0.404,
+      "intersection": {
+        "left": 40.8,
+        "top": 478.7,
+        "right": 64,
+        "bottom": 532.67,
+        "width": 23.200000000000003,
+        "height": 53.96999999999997,
+        "area": 1252.1039999999994
+      }
+    },
+    {
+      "first": "button[data-tab=\"settings\"]",
+      "second": "div.office-menu.office-menu--visible",
+      "ratio": 0.419,
+      "intersection": {
+        "left": 40.8,
+        "top": 536.67,
+        "right": 64,
+        "bottom": 592.67,
+        "width": 23.200000000000003,
+        "height": 56,
+        "area": 1299.2000000000003
+      }
+    },
+    {
+      "first": "button[data-tab=\"settings\"]",
+      "second": "div[data-mode=\"chat\"]",
+      "ratio": 0.18,
+      "intersection": {
+        "left": 48.82,
+        "top": 552.65,
+        "right": 64,
+        "bottom": 589.3,
+        "width": 15.18,
+        "height": 36.64999999999998,
+        "area": 556.3469999999996
+      }
+    },
+    {
+      "first": "button[data-tab=\"about\"]",
+      "second": "div.office-menu.office-menu--visible",
+      "ratio": 0.419,
+      "intersection": {
+        "left": 40.8,
+        "top": 596.67,
+        "right": 64,
+        "bottom": 652.67,
+        "width": 23.200000000000003,
+        "height": 56,
+        "area": 1299.2000000000003
+      }
+    }
+  ],
+  "textOverlaps": []
+}

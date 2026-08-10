@@ -15,10 +15,14 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, ItemsView, Iterable
 
 from core.action_registry import ActionRegistry, WorldAction
+
+# 世界模拟统一使用本地时区（北京时间 UTC+08:00）。
+# 此前误用 UTC 导致时段/光线提示词整体错位 8 小时（凌晨被判定成下午）。
+LOCAL_TZ: timezone = timezone(timedelta(hours=8))
 
 
 # ── Phase definitions ────────────────────────────────────────────
@@ -204,7 +208,7 @@ class WorldSimulation:
         action_registry: ActionRegistry | None = None,
     ) -> None:
         self.config = config or {}
-        self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.clock = clock or (lambda: datetime.now(LOCAL_TZ))
         self.action_registry = action_registry or ActionRegistry()
         self.seed = str(self.config.get("seed") or "aerie-world")
         self._ticks = 0
@@ -394,7 +398,7 @@ class WorldSimulation:
     def tick(self, action: WorldAction | None = None) -> WorldSnapshot:
         now = self.clock()
         if now.tzinfo is None:
-            now = now.replace(tzinfo=timezone.utc)
+            now = now.replace(tzinfo=LOCAL_TZ)
         ts = int(now.timestamp())
 
         # 秒级幂等: 同一秒内再次 tick 直接返回缓存

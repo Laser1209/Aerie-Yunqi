@@ -938,7 +938,9 @@ class Pipeline:
 
         # Phase 14: 用户明确要照片 → 后台触发生成（文本已发完，图片随后注入）。
         try:
-            await self._trigger_chat_photo(msg, route_mode, request_context)
+            await self._trigger_chat_photo(
+                msg, route_mode, request_context, reply_text=reply_text
+            )
         except Exception:
             logger.debug("chat photo trigger failed", exc_info=True)
 
@@ -950,6 +952,8 @@ class Pipeline:
         msg: IncomingMessage,
         route_mode: str,
         request_context: RequestContext | None,
+        *,
+        reply_text: str = "",
     ) -> None:
         """用户明确要照片 → fire-and-forget 触发一次真实生图。
 
@@ -959,9 +963,12 @@ class Pipeline:
         到达，事件循环不被阻塞。用户主动要求（scene=local_send）不占用主动发图
         每日额度。
 
-        意图判断分两层：先走 ``VisualIntentRouter`` 关键词快速路径；未命中但消息
-        疑似涉及图片时，降级到 LLM 语义判断，避免"拍照/拍一张照片"这类自然表达
-        因关键词覆盖不全而漏触发。
+        意图判断三层：
+        1. ``VisualIntentRouter`` 关键词快速路径（用户消息）；
+        2. 关键词未命中但用户消息疑似涉及图片 → LLM 语义判断；
+        3. 用户消息无信号、但 AI 回复本身在描述"发照片/点了发送"（如
+           "找到了吗？"→"这张是随手对着镜子拍的，点了发送"）→ 对回复做语义判断。
+        第 3 层解决"上下文驱动"：用户不重复提拍照词，但 AI 已经承诺发图。
         """
         try:
             if route_mode not in ("FULL", "AUTO"):
@@ -974,11 +981,19 @@ class Pipeline:
             routed = VisualIntentRouter().route(prompt=prompt_text)
             intent = str(routed.get("visual_intent") or "")
             if routed.get("status") != "ok" or intent not in _PHOTO_INTENTS:
-                # 关键词没命中 → 语义兜底：疑似图片相关时让 LLM 判断真实意图
-                intent = ""
-                if self._has_fuzzy_image_signal(prompt_text):
+                # 关键词没命中 → 语义兜底：不设关键词闸门，任何消息都交给 LLM
+                # 判断，避免"瞅瞅你家/我要看你/发你张图"这类没有拍照词、也没有
+                # 模糊信号字的表达漏触发。准确性优先于 token 成本。
+                intent = await asyncio.wait_for(
+                    self._judge_photo_intent(prompt_text), timeout=10
+                )
+                # 用户消息无信号，但 AI 回复在叙述"发图/发你/点了发送"：
+                # 用回复做语义判断，让"找到了吗？"这类上下文延续也能触发。
+                # 回复判断保留模糊信号门，避免对每条回复都发起一次额外调用。
+                reply = str(reply_text or "")
+                if intent not in _PHOTO_INTENTS and self._has_fuzzy_image_signal(reply):
                     intent = await asyncio.wait_for(
-                        self._judge_photo_intent(prompt_text), timeout=10
+                        self._judge_reply_photo_intent(reply), timeout=10
                     )
                 if intent not in _PHOTO_INTENTS:
                     logger.debug(
@@ -1106,6 +1121,47 @@ class Pipeline:
             return intent
         except Exception:
             logger.debug("[ChatPhoto] semantic judge failed", exc_info=True)
+            return ""
+
+    async def _judge_reply_photo_intent(self, text: str) -> str:
+        """回复语义兜底：判断 AI 回复是否在"叙述并执行发送一张图片"。
+
+        Returns one of: role_selfie / role_in_scene / couple_photo /
+        environment_object / ""（不是发图）。
+        """
+        brain = getattr(self, "brain", None)
+        if brain is None:
+            return ""
+        try:
+            prompt = (
+                "你是视觉意图判断器。判断这段 AI 回复是否在「描述并执行发送一张图片」——"
+                "即她正在把一张自拍/场景照/合照/环境照发给用户"
+                "（如“随手对着镜子拍的”“点了发送”“发给你”“这张照片给你看”“我刚拍了张发你”）。\n"
+                "只输出一个 JSON 对象，不要输出任何其他内容：\n"
+                '{"visual_intent": "role_selfie" | "role_in_scene" | "couple_photo" | "environment_object" | "none"}\n'
+                "含义：role_selfie=在发自己的自拍/照片；role_in_scene=在发某个场景里的自己；"
+                "couple_photo=在发合照；environment_object=在发某个环境/物体。\n"
+                "判定要点：只有回复明确在叙述“正在/即将把一张图发出去”才返回对应意图；"
+                "回忆过去、描述别人的照片、或只是口头说说（如“你上次拍的照片真好看”）判 none。"
+            )
+            resp = await brain.chat(
+                [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": str(text or "")},
+                ],
+                temperature=0.1,
+            )
+            raw = str(getattr(resp, "text", "") or "")
+            raw = self._strip_think(raw)
+            m = re.search(r'"visual_intent"\s*:\s*"([^"]+)"', raw)
+            if not m:
+                logger.debug("[ChatPhoto] reply judge unparseable: %r", raw[:120])
+                return ""
+            intent = m.group(1).strip()
+            logger.info("[ChatPhoto] reply judge intent=%s reply=%r", intent, str(text or "")[:40])
+            return intent
+        except Exception:
+            logger.debug("[ChatPhoto] reply judge failed", exc_info=True)
             return ""
 
     # ── Helpers ────────────────────────────────────────

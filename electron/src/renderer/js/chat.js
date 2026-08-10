@@ -1540,13 +1540,21 @@ class ChatManager {
 
   async _recallMessage(msg) {
     if (!confirm("确定撤回这条消息吗？")) return;
+    // 撤回接口按 chat_log 真实 id 寻址：本地乐观气泡(client_xxx)或输入中
+    // (req_xxx) 尚无服务器 id，直接拦截提示，避免 422。
+    const realId =
+      msg.msgId || (/^\d+$/.test(String(msg.id || "")) ? msg.id : null);
+    if (realId == null) {
+      alert("撤回失败: 消息尚未同步到服务器，无法撤回");
+      return;
+    }
     try {
       const resp = await this._request({
         method: "POST",
-        path: "/api/chat/recall/" + msg.id,
+        path: "/api/chat/recall/" + realId,
       });
       if (resp.data && resp.data.status === "ok") {
-        this._markRecalled(msg.id);
+        this._markRecalled(realId);
       } else if (resp.data && resp.data.error) {
         alert("撤回失败: " + resp.data.error);
       }

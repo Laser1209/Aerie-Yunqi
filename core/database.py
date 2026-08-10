@@ -396,6 +396,7 @@ class Database:
             ("channel", "TEXT DEFAULT NULL"),
             ("channel_account_id", "TEXT DEFAULT NULL"),
             ("batch_id", "TEXT DEFAULT NULL"),
+            ("qq_message_id", "INTEGER DEFAULT NULL"),
         ]
         for col, decl in migrations:
             if col not in existing:

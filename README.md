@@ -11,39 +11,39 @@
 
 | 项目 / Item                        | 状态 / Status                                                                                                                               |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **版本 / Version**           | `0.2.0-beta.1` 内测基线                                                                                                              |
-| **桌面端 / Desktop**         | Electron 28 + 渲染层多面板 UI + 灵动岛                                                                                              |
-| **后端 / Backend**           | Python 3.10+ aiohttp + asyncio · LLMCaller 统一调用层                                                                               |
-| **QQ 接入 / QQ Bridge**      | NapCat OneBot11 WebSocket · 三端撤回 (QQ/本地/微信预留)                                                                            |
+| **版本 / Version**           | `0.2.0-beta.1` 内测基线                                                                                                                   |
+| **桌面端 / Desktop**         | Electron 28 + 渲染层多面板 UI + 灵动岛                                                                                                      |
+| **后端 / Backend**           | Python 3.10+ aiohttp + asyncio · LLMCaller 统一调用层                                                                                      |
+| **QQ 接入 / QQ Bridge**      | NapCat OneBot11 WebSocket · 三端撤回 (QQ/本地/微信预留)                                                                                    |
 | **官网 / Spotlight**         | [https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/) · React 18 + Vite 6 + Tailwind + Framer Motion |
-| **世界模拟 / World Service** | 独立 Python sidecar + SQLite storage · 世界仪表盘与天气同步                                                                          |
-| **向量知识库 / Vector KB**   | ChromaDB 语义检索 · 本地 ONNX 离线 embedding · 生产记忆已切 LayeredMemory · 附件专用向量库                                        |
-| **多模态生图 / Image**       | 三视图生图辅助 · 图片候选人生成推送 (QQ/本地聊天) · 主动发图预算 · 图生图 · SiliconFlow 视觉技能                                  |
-| **移动端 / Mobile**          | Android 移动网关 · 多端会话与文件能力 · 账号鉴权                                                                                  |
-| **验证 / Tests**             | 107 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、v13.9、E2E) + 16 个 Electron 测试文件                                              |
-| **交付 / Release**           | 线上官网下载页指向 `v0.1.0-beta.1` 便携版与安装包，`0.2.0-beta.1` 构建待发布                                                        |
+| **世界模拟 / World Service** | 独立 Python sidecar + SQLite storage · 世界仪表盘与天气同步                                                                                |
+| **向量知识库 / Vector KB**   | ChromaDB 语义检索 · 本地 ONNX 离线 embedding · 生产记忆已切 LayeredMemory · 附件专用向量库                                               |
+| **多模态生图 / Image**       | 三视图生图辅助 · 图片候选人生成推送 (QQ/本地聊天) · 主动发图预算 · 图生图 · SiliconFlow 视觉技能                                        |
+| **移动端 / Mobile**          | Android 移动网关 · 多端会话与文件能力 · 账号鉴权                                                                                          |
+| **验证 / Tests**             | 107 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、v13.9、E2E) + 16 个 Electron 测试文件                                                      |
+| **交付 / Release**           | 线上官网下载页指向`v0.1.0-beta.1` 便携版与安装包，`0.2.0-beta.1` 构建待发布                                                             |
 
 ---
 
 ## 核心能力 / Key Capabilities
 
-| 模块 / Module                                     | 说明 / Description                                        |
-| ------------------------------------------------- | --------------------------------------------------------- |
-| **Electron 桌面壳 / Electron Shell**        | 主窗口、灵动岛、侧边栏、托盘、CSP 安全渲染层              |
-| **Python 智能内核 / Python Brain**          | LLMCaller 统一调用层、多 Provider 调度、预算跟踪、上下文构建、消息流水线 |
-| **Persona Hub / 人设基础设施**              | Persona 模板、校验、投影、配置热加载、三视图生图参考图     |
-| **情感与关系引擎 / Emotion & Relationship** | PAD 情绪、累积阈值、欲望引擎、关系建模、同理心策略、拟人化节奏 |
-| **主动推送 / Proactive Messenger**          | cron、事件、情绪触发，频控、静默时段、主动发图预算与反馈闭环 |
-| **三端撤回 / Recall**                       | QQ/本地/微信预留 三端撤回适配器、LLM 主动撤回指令、消息合并编排 |
-| **办公模式 / Office Mode**                  | 办公任务识别、文档写作工具链、文件整理去重、任务规划与异步执行 |
-| **电脑操控 / Computer Control**             | 权限分级、键鼠、截图、UIA、受限 Shell、审计日志           |
-| **文件与文档 / File & Docs**                | 文件整理、文档写作、上传处理、附件向量索引、图片工作流      |
-| **多模态 / Multimodal**                     | 三视图生图、图生图、图片候选人生成推送、TTS、SiliconFlow 视觉技能 |
-| **世界模拟 / World Simulation** | world port、domain、sidecar、仪表盘 API、天气同步、图片候选人管线 |
-| **向量知识库 / Vector KB**     | ChromaDB 语义检索、本地 ONNX 离线 embedding、LayeredMemory 多层记忆、附件专用向量库 |
-| **多端 / Mobile & Multi-client** | Android 移动网关、移动会话/文件/身份鉴权、多端消息通道 |
-| **自进化 / Self Evolution**    | L1-L4 演进、Skill 创建、安全沙箱、代码修改闸门            |
-| **Spotlight 官网 / Web Spotlight**          | 6 页面产品站、发布下载页、Remotion 视频素材工程           |
+| 模块 / Module                                     | 说明 / Description                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Electron 桌面壳 / Electron Shell**        | 主窗口、灵动岛、侧边栏、托盘、CSP 安全渲染层                                                                 |
+| **Python 智能内核 / Python Brain**          | LLMCaller 统一调用层、多 Provider 调度、预算跟踪、上下文构建、消息流水线                                     |
+| **Persona Hub / 人设基础设施**              | Persona 模板、校验、投影、配置热加载、三视图生图参考图                                                       |
+| **情感与关系引擎 / Emotion & Relationship** | PAD 情绪、累积阈值、欲望引擎、关系建模、同理心策略、拟人化节奏                                               |
+| **主动推送 / Proactive Messenger**          | cron、事件、情绪触发，频控、静默时段、主动发图预算与反馈闭环                                                 |
+| **三端撤回 / Recall**                       | QQ/本地/微信预留 三端撤回适配器、LLM 主动撤回指令、消息合并编排                                              |
+| **办公模式 / Office Mode**                  | 办公任务识别、文档写作工具链、文件整理去重、任务规划与异步执行                                               |
+| **电脑操控 / Computer Control**             | 权限分级、键鼠、截图、UIA、受限 Shell、审计日志                                                              |
+| **文件与文档 / File & Docs**                | 文件整理、文档写作、上传处理、附件向量索引、图片工作流                                                       |
+| **多模态 / Multimodal**                     | 三视图生图、图生图、图片候选人生成推送、TTS、SiliconFlow 视觉技能                                            |
+| **世界模拟 / World Simulation**             | world port、domain、sidecar、仪表盘 API、天气同步、图片候选人管线、默认重庆、百度地图 REST、主动发图节奏循环 |
+| **向量知识库 / Vector KB**                  | ChromaDB 语义检索、本地 ONNX 离线 embedding、LayeredMemory 多层记忆、附件专用向量库                          |
+| **多端 / Mobile & Multi-client**            | Android 移动网关、移动会话/文件/身份鉴权、多端消息通道                                                       |
+| **自进化 / Self Evolution**                 | L1-L4 演进、Skill 创建、安全沙箱、代码修改闸门                                                               |
+| **Spotlight 官网 / Web Spotlight**          | 6 页面产品站、发布下载页、Remotion 视频素材工程                                                              |
 
 ---
 
@@ -174,19 +174,19 @@ npm run build
 
 ## 配置与数据 / Config & Data
 
-| 路径 / Path                      | 用途 / Purpose                       |
-| -------------------------------- | ------------------------------------ |
+| 路径 / Path                      | 用途 / Purpose                                           |
+| -------------------------------- | -------------------------------------------------------- |
 | `config/settings.yaml`         | 主配置、HTTP、主题、窗口、办公目录、世界模拟、简报订阅等 |
-| `config/persona.yaml`          | 伊塔核心人设配置（含撤回触发词）     |
-| `config/persona_behavior.yaml` | 行为与表达节奏配置                   |
-| `config/proactive.yaml`        | 主动推送场景、频控、静默时段         |
-| `data/personas/`               | Persona Hub 运行态数据（含三视图参考图） |
-| `data/persona/avatar.*`        | 伊塔头像图片（前端视觉呈现）         |
-| `data/chroma/`                 | 向量知识库 ChromaDB 本地存储          |
-| `data/chroma_attachments/`     | 桌面附件专用向量库                   |
-| `data/briefs/`                 | 每日简报缓存                         |
-| `data/audit/`                  | 权限与电脑操控审计日志               |
-| `logs/`                        | 后端与诊断日志                       |
+| `config/persona.yaml`          | 伊塔核心人设配置（含撤回触发词）                         |
+| `config/persona_behavior.yaml` | 行为与表达节奏配置                                       |
+| `config/proactive.yaml`        | 主动推送场景、频控、静默时段                             |
+| `data/personas/`               | Persona Hub 运行态数据（含三视图参考图）                 |
+| `data/persona/avatar.*`        | 伊塔头像图片（前端视觉呈现）                             |
+| `data/chroma/`                 | 向量知识库 ChromaDB 本地存储                             |
+| `data/chroma_attachments/`     | 桌面附件专用向量库                                       |
+| `data/briefs/`                 | 每日简报缓存                                             |
+| `data/audit/`                  | 权限与电脑操控审计日志                                   |
+| `logs/`                        | 后端与诊断日志                                           |
 
 `main.py` 已接入配置热加载，会监听 `settings.yaml`、`persona_behavior.yaml` 与 `proactive.yaml` 的变更。
 
@@ -194,16 +194,16 @@ npm run build
 
 ## 注意与开关 / Notes & Feature Flags
 
-| 开关 / Flag                            | 说明 / Description                                        | 默认 |
-| -------------------------------------- | --------------------------------------------------------- | ---- |
-| `world_inprocess_v1`                   | 世界模拟进程内模式，需开启其一才能使用世界模拟            | 开   |
-| `world_sidecar_v1`                     | 世界模拟 sidecar 独立进程模式                             | 关   |
-| `world_image_candidates_v1`            | 自动生图工作流（世界图片候选人生成推送）                  | 开   |
-| `mobile_gateway_v1`                    | Android 移动端网关                                        | 关   |
-| `persona_hub_source_v1`                | Persona Hub 作为人设源                                   | 关   |
-| `recall_llm_instruction_v1`            | LLM 主动撤回指令 `<recall>`                                | 开   |
-| `chat_request_queue_v1`                | 聊天请求队列                                              | 开   |
-| `context_budget_v1`                    | 上下文预算                                                | 开   |
+| 开关 / Flag                   | 说明 / Description                             | 默认 |
+| ----------------------------- | ---------------------------------------------- | ---- |
+| `world_inprocess_v1`        | 世界模拟进程内模式，需开启其一才能使用世界模拟 | 开   |
+| `world_sidecar_v1`          | 世界模拟 sidecar 独立进程模式                  | 关   |
+| `world_image_candidates_v1` | 自动生图工作流（世界图片候选人生成推送）       | 开   |
+| `mobile_gateway_v1`         | Android 移动端网关                             | 关   |
+| `persona_hub_source_v1`     | Persona Hub 作为人设源                         | 关   |
+| `recall_llm_instruction_v1` | LLM 主动撤回指令`<recall>`                   | 开   |
+| `chat_request_queue_v1`     | 聊天请求队列                                   | 开   |
+| `context_budget_v1`         | 上下文预算                                     | 开   |
 
 > **注意**：向量附件索引（`data/chroma_attachments`）依赖 `chromadb`，生产环境需手动安装并配置 embedding API Key；否则附件分块仅作分段存储与上下文注入，不进行语义检索。
 
@@ -225,7 +225,13 @@ Auto-Wake 是 Aerie 的核心能力之一：伊塔会在固定时间、情绪事
 | `idle_care` 失联关怀       | 用户长时间无活动     | event       |
 | `emotion_comfort` 情绪安抚 | 情感槽阈值突破       | emotion     |
 
-默认频控：每日上限 10 次（`proactive.max_per_day`）、间隔不少于 15 分钟（`min_interval_min`）、静默时段 23:30-07:00，早安/晚安/纪念日等场景可按配置豁免。主动发图另有每日预算 `image_max_per_day`（默认 20 张）。
+默认频控：每日上限 10 次（`proactive.max_per_day`）、间隔不少于 15 分钟（`min_interval_min`）、静默时段 23:30-07:00，早安/晚安/纪念日等场景可按配置豁免。
+
+主动发图默认为**纯约束型调度**（由伊塔自主决策节奏，不再受推送频控抑制）：
+
+- `image_max_per_day`：每日发图上限，默认 `0`（不限制）
+- `photo_min_interval_sec`：两次主动发图最小间隔（秒），默认 `0`（无间隔）
+- 以上两项可在设置界面动态调整，即时生效；`local_send` 手动请求的图片不受任何约束
 
 ---
 
@@ -259,18 +265,18 @@ npm run build:win:alt
 
 ## 故障排查 / Troubleshooting
 
-| 现象 / Symptom | 原因 / Cause                 | 处理 / Fix                                         |
-| -------------- | ---------------------------- | -------------------------------------------------- |
-| 后端启动失败   | 依赖未安装或 Python 版本不符 | 重新执行`pip install -r requirements.txt`        |
-| API 无响应     | 7890 端口被占用或后端未启动  | 检查`logs/main.log` 与端口占用                   |
-| 伊塔不回复     | 未配置可用模型 Key           | 检查`.env` 至少一个 `*_API_KEY`                |
-| 附件无语义检索 | `chromadb` 未安装或缺少 embedding Key | 手动安装 `chromadb` 并配置 embedding API Key |
-| 世界模拟不生效 | 未开启世界模拟开关           | 设置 `world_inprocess_v1` 或 `world_sidecar_v1` 为 true |
-| 自动发图不触发 | `world_image_candidates_v1` 关闭 | 在 `settings.yaml` 设 `world_image_candidates_v1: true` |
-| 回复带时间戳   | LLM 模仿历史格式             | 后端会自动剥离，确保使用最新代码并重启后端    |
-| QQ 收不到消息  | NapCat 未启动或未登录        | 启动`NapCat\NapCat.Shell\launcher-user.bat`      |
-| 桌面端白屏     | Electron 渲染资源或 CSP 问题 | 查看 Electron DevTools 与`electron/python-*.log` |
-| 官网构建失败   | Node 依赖未安装              | 在`Spotlight/` 执行 `npm install` 后重试       |
+| 现象 / Symptom | 原因 / Cause                            | 处理 / Fix                                                 |
+| -------------- | --------------------------------------- | ---------------------------------------------------------- |
+| 后端启动失败   | 依赖未安装或 Python 版本不符            | 重新执行`pip install -r requirements.txt`                |
+| API 无响应     | 7890 端口被占用或后端未启动             | 检查`logs/main.log` 与端口占用                           |
+| 伊塔不回复     | 未配置可用模型 Key                      | 检查`.env` 至少一个 `*_API_KEY`                        |
+| 附件无语义检索 | `chromadb` 未安装或缺少 embedding Key | 手动安装`chromadb` 并配置 embedding API Key              |
+| 世界模拟不生效 | 未开启世界模拟开关                      | 设置`world_inprocess_v1` 或 `world_sidecar_v1` 为 true |
+| 自动发图不触发 | `world_image_candidates_v1` 关闭      | 在`settings.yaml` 设 `world_image_candidates_v1: true` |
+| 回复带时间戳   | LLM 模仿历史格式                        | 后端会自动剥离，确保使用最新代码并重启后端                 |
+| QQ 收不到消息  | NapCat 未启动或未登录                   | 启动`NapCat\NapCat.Shell\launcher-user.bat`              |
+| 桌面端白屏     | Electron 渲染资源或 CSP 问题            | 查看 Electron DevTools 与`electron/python-*.log`         |
+| 官网构建失败   | Node 依赖未安装                         | 在`Spotlight/` 执行 `npm install` 后重试               |
 
 ---
 

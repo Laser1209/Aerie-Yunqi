@@ -1,11 +1,11 @@
 {
-  "score": 47.68,
-  "ts": 1786382554.5830996,
+  "score": 47.85,
+  "ts": 1786383154.632799,
   "cooldown_until_ts": 0.0,
   "reject_count": 0,
   "last_trigger": "idle_care",
   "last_variables": {
-    "user_absence_hours": 0.5840513698922263,
+    "user_absence_hours": 0.7507301912705103,
     "emotion_overdraft": 6.0,
     "patience_loss": 42.3,
     "weather_impact": 0.0,
@@ -13,30 +13,6 @@
     "anniversary_boost": 0.0
   },
   "history": [
-    {
-      "ts": 1786360036.1719458,
-      "score": 60.81,
-      "variables": {
-        "user_absence_hours": 0.16702310197883183,
-        "emotion_overdraft": 5.934859921627742,
-        "patience_loss": 48.3,
-        "weather_impact": 4.0,
-        "time_of_day_boost": 8.0,
-        "anniversary_boost": 0.0
-      }
-    },
-    {
-      "ts": 1786360336.198479,
-      "score": 60.84,
-      "variables": {
-        "user_absence_hours": 0.25036465459399754,
-        "emotion_overdraft": 5.99118484870951,
-        "patience_loss": 48.2,
-        "weather_impact": 4.0,
-        "time_of_day_boost": 8.0,
-        "anniversary_boost": 0.0
-      }
-    },
     {
       "ts": 1786360889.435692,
       "score": 60.68,
@@ -606,6 +582,30 @@
       "score": 47.68,
       "variables": {
         "user_absence_hours": 0.5840513698922263,
+        "emotion_overdraft": 6.0,
+        "patience_loss": 42.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786382854.6005406,
+      "score": 47.77,
+      "variables": {
+        "user_absence_hours": 0.6673896574311786,
+        "emotion_overdraft": 6.0,
+        "patience_loss": 42.3,
+        "weather_impact": 0.0,
+        "time_of_day_boost": 0.0,
+        "anniversary_boost": 0.0
+      }
+    },
+    {
+      "ts": 1786383154.6328027,
+      "score": 47.85,
+      "variables": {
+        "user_absence_hours": 0.7507301912705103,
         "emotion_overdraft": 6.0,
         "patience_loss": 42.3,
         "weather_impact": 0.0,

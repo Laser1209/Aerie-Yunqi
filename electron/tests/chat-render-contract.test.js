@@ -165,3 +165,17 @@ test("v2: 真实分片到达后终态不再误删真实消息", () => {
   assert.equal(msg.msgId, "88");
   assert.equal(msg.typing, false);
 });
+
+test("v2: poll 先渲染真实 id 后 IPC 分片到达, 清理遗留 typing 不重复", () => {
+  const s = createChatStore();
+  // typing 出现
+  s.ingestSignal({ request_id: "r11", role: "assistant", status: "running", typing: true, content: "" });
+  // poll 先渲染真实分片(普通分支, domId=真实 id)
+  s.ingestSignal({ id: "99", role: "assistant", content: "poll内容" });
+  // IPC 分片后到(带 request_id), seenRealIds 拦截 → 清理遗留 typing, 不新建
+  const out = s.ingestSignal({ request_id: "r11", role: "assistant", id: "99", content: "ipc内容", status: "running" });
+  assert.ok(out.some((i) => i.action === "remove"), "expected typing cleanup");
+  assert.equal(out.filter((i) => i.action === "upsert").length, 0);
+  assert.equal(s.messages().length, 1, "只剩 poll 渲染的元素");
+  assert.equal(s.messages()[0].content, "poll内容");
+});

@@ -19,6 +19,7 @@ class ChatManager {
     };
     this._requests = new Map();          // request_id -> RequestViewState
     this._clientToRequest = new Map();   // client_id -> request_id
+    this._pendingUserBubbles = new Map(); // client_id -> 内容(待后端回显确认的乐观气泡)
     this._clientCounter = 0;
     this._reducedMotion = this._prefersReducedMotion();
     this._masterQQ = opts.masterQQ || null;
@@ -972,11 +973,25 @@ class ChatManager {
   _ingestChatSignal(signal, transport = "unknown") {
     let normalized = this._normalizeChatSignal(signal);
     if (!normalized) return;
-    // 用户乐观气泡升级: 真实回显带 request_id 但无 client_id, 用
-    // _clientToRequest 把它关联回乐观气泡的稳定 domId, 让 store 原地
-    // 更新而非新建重复元素(取代旧 _updateUserBubble 的 id 偷换)。
-    if (normalized.role === "user" && normalized.request_id) {
-      const clientId = this._clientIdForRequest(normalized.request_id);
+    // 关联乐观气泡(修复重复渲染)：
+    //  1) 带 request_id 的回显 → 用 _clientToRequest 反查 client_id(queue 路径)；
+    //  2) 无 request_id 的 user 回显(local 同步路径) → 按内容匹配未确认的
+    //     乐观气泡，把 IPC 事件归一到 client_xxx domId，杜绝"真实 id 元素与
+    //     乐观气泡并存"导致的同一条消息渲染两次。
+    if (normalized.role === "user") {
+      let clientId = "";
+      if (normalized.request_id) {
+        clientId = this._clientIdForRequest(normalized.request_id);
+      } else if (!normalized.client_id && normalized.id && this._pendingUserBubbles.size) {
+        const content = String(normalized.content || "");
+        for (const [cid, pendingContent] of this._pendingUserBubbles.entries()) {
+          if (pendingContent === content && this._store.clientIdToDomId.has(cid)) {
+            clientId = cid;
+            this._pendingUserBubbles.delete(cid);
+            break;
+          }
+        }
+      }
       if (clientId && this._store.clientIdToDomId.has(clientId)) {
         normalized = {
           ...normalized,
@@ -985,7 +1000,7 @@ class ChatManager {
         };
       }
     }
-    // 判重(seenEventIds/seenRealIds)、分片排序(requestSequences)、
+    // 判重(seenEventIds/byKey)、分片排序(requestSequences)、
     // 稳定 domId 映射全由 store 接管; 这里只把意图翻译成 DOM 操作。
     for (const intent of this._store.ingestSignal(normalized, transport)) {
       this._applyIntent(intent);
@@ -1078,6 +1093,14 @@ class ChatManager {
           this._onNewAssistantMessage(msg.content);
         }
       }
+    }
+
+    // 每次元素渲染后重新挂接请求状态：innerHTML 重建会清掉状态徽标,
+    // 从 _requests 取回状态重放, 保证"生成中/取消/重试"始终挂在 assistant 上,
+    // 且不会被后续分片/终态渲染擦除(配合 _renderRequestStatus 的宿主规则)。
+    if (msg.request_id) {
+      const state = this._requests.get(msg.request_id);
+      if (state) this._renderRequestStatus(state);
     }
 
     this._updateScrollButton();
@@ -1209,11 +1232,15 @@ class ChatManager {
   _renderRequestStatus(state) {
     if (!this._el.messages || !state || !state.request_id) return;
     const requestId = state.request_id;
-    const clientId = state.client_id || "";
     const selector = `[data-request-id="${requestId}"]`;
     let messageEl = this._el.messages.querySelector(selector);
-    if (!messageEl && clientId) {
-      messageEl = this._el.messages.querySelector(`[data-id="${clientId}"]`);
+    if (!messageEl) {
+      // 状态宿主 = 该 request 的 assistant 消息(typing/真实分片)，通过 store 的
+      // requestIdToDomId 定位；绝不回落到用户乐观气泡(修复"生成中/取消"挂错位置)。
+      const assocDomId = this._store.requestIdToDomId.get(requestId);
+      if (assocDomId) {
+        messageEl = this._el.messages.querySelector(`[data-id="${assocDomId}"]`);
+      }
     }
     if (!messageEl) return;
     messageEl.setAttribute("data-request-id", requestId);
@@ -1364,6 +1391,9 @@ class ChatManager {
     this._cancelQuote();
     this._pendingAttachments = [];
     this._renderAttachmentPreviews();
+    // 登记待确认的乐观气泡：local 同步路径的后端 user 回显无 request_id，
+    // 靠内容匹配把它归一到 client_xxx domId（见 _ingestChatSignal）。
+    this._pendingUserBubbles.set(clientId, text);
 
     try {
       const resp = await this._request({
@@ -1377,6 +1407,7 @@ class ChatManager {
         },
       });
       if (resp.status === 202 || (resp.data && resp.data.request_id)) {
+        this._pendingUserBubbles.delete(clientId);
         this._bindClientRequest(clientId, resp.data);
         return;
       }
@@ -1395,7 +1426,9 @@ class ChatManager {
       if (resp.data && resp.data.reply) {
         // Server reply already pushed via IPC; this is a fallback
       }
+      this._pendingUserBubbles.delete(clientId);
     } catch (err) {
+      this._pendingUserBubbles.delete(clientId);
       for (const intent of this._store.ingestSignal({
         id: clientId + "_err",
         role: "assistant",

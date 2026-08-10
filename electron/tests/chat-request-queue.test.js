@@ -663,6 +663,95 @@ test("request-scoped user bubbles are rebound in place instead of duplicating", 
   assert.equal(users[0].getAttribute("data-msg-id"), "901");
 });
 
+test("bug1 regression: local-sync user echo without request_id upgrades optimistic bubble in place", async () => {
+  const { manager, document } = createManager({
+    request(options) {
+      if (options.path === "/api/chat/send") return { data: {} };
+      return { data: {} };
+    },
+  });
+
+  document.getElementById("chat-input").value = "这句话要确认一下";
+  const sendPromise = manager.send();
+  // 后端 local 同步路径：user 回显无 request_id, 只带 id + content。
+  // 修复前会按真实 id 另建一个元素, 与乐观气泡并存 → 同一条消息渲染两次。
+  manager._ingestChatSignal({ id: 900, role: "user", content: "这句话要确认一下" }, "ipc");
+  await sendPromise;
+
+  const users = manager._el.messages.children.filter((node) =>
+    node.className.includes("chat-msg--user"),
+  );
+  assert.equal(users.length, 1);
+  assert.ok(users[0].getAttribute("data-id").startsWith("client_"));
+  assert.equal(users[0].getAttribute("data-msg-id"), "900");
+});
+
+test("bug3 regression: request status host is the assistant message, never the user bubble", async () => {
+  const { manager, document, ipcHandlers } = createManager({
+    request(options) {
+      if (options.path === "/api/chat/send") {
+        return {
+          status: 202,
+          data: {
+            request_id: "req_bug3",
+            conversation_id: "conv_bug3",
+            turn_id: "turn_bug3",
+            status: "queued",
+          },
+        };
+      }
+      return { data: {} };
+    },
+  });
+
+  document.getElementById("chat-input").value = "帮我看看";
+  await manager.send(); // 202 → _bindClientRequest → queued
+
+  const userBubble = manager._el.messages.children.find((node) =>
+    node.className.includes("chat-msg--user"),
+  );
+  assert.ok(userBubble);
+  // 修复前 _renderRequestStatus 会用 _clientIdForRequest 回落到用户乐观气泡,
+  // 导致"排队中/生成中/取消"挂到用户消息上。修复后状态宿主只能是 assistant。
+  assert.equal(userBubble.getAttribute("data-request-id"), null);
+  assert.equal(userBubble.querySelector(".chat-request-status"), null);
+
+  manager._ingestChatSignal({
+    event_id: "evt_bug3_run",
+    type: "chat_request_running",
+    request_id: "req_bug3",
+    sequence: 0,
+    status: "running",
+  }, "sse");
+
+  const assistantBubble = manager._el.messages.children.find((node) =>
+    node.className.includes("chat-msg--assistant") &&
+    node.className.includes("chat-msg--typing"),
+  );
+  assert.ok(assistantBubble);
+  assert.equal(assistantBubble.getAttribute("data-request-id"), "req_bug3");
+  assert.equal(userBubble.getAttribute("data-request-id"), null);
+
+  // 真实分片到达: innerHTML 重建后状态徽标仍挂在 assistant 上, 不被擦除。
+  manager._ingestChatSignal({
+    event_id: "evt_bug3_seg",
+    request_id: "req_bug3",
+    sequence: 1,
+    id: 700,
+    role: "assistant",
+    content: "在看",
+    status: "running",
+  }, "sse");
+
+  const assistantReal = manager._el.messages.children.find((node) =>
+    node.className.includes("chat-msg--assistant") &&
+    node.className.includes("chat-msg--typing") === false,
+  );
+  assert.ok(assistantReal);
+  assert.equal(assistantReal.querySelector(".chat-request-status").getAttribute("data-status"), "running");
+  assert.equal(userBubble.querySelector(".chat-request-status"), null);
+});
+
 test("running request shows typing bubble then first assistant segment replaces it", () => {
   const { manager } = createManager();
 

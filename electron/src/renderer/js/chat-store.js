@@ -153,8 +153,18 @@ function createChatStore({ maxMessages = 500 } = {}) {
         intents.push({ action: "typing", msg: { ...typingMsg } });
         return intents;
       }
-      // 真实分片：同 id 重复到达去重
-      if (signal.id && seenRealIds.has(signal.id)) return intents;
+      // 真实分片：同 id 重复到达去重；但若该 request 的 typing 气泡仍在等待
+      // 替换(poll 先渲染了真实 id、IPC 分片后到被 seenRealIds 拦截的场景)，
+      // 则清理遗留 typing(已渲染元素保留)，避免 typing 气泡残留与重复渲染。
+      if (signal.id && seenRealIds.has(signal.id)) {
+        const pendingTypingDomId = requestIdToDomId.get(signal.request_id);
+        const pendingTyping = pendingTypingDomId ? byDomId.get(pendingTypingDomId) : null;
+        if (pendingTyping && pendingTyping.typing) {
+          const clean = removeTypingFor(signal.request_id);
+          if (clean) intents.push(clean);
+        }
+        return intents;
+      }
       const isFirst = !requestSegments.has(signal.request_id);
       requestSegments.add(signal.request_id);
       const domId =

@@ -249,3 +249,83 @@ class TestContextBuilderTimePerception:
         msgs = builder.build(3998874040, "看看腿我就去", "FULL", history_msgs=history)
         contents = [m["content"] for m in msgs[1:-1]]
         assert "没有时间的消息" in contents
+
+
+class TestContextBuilderImageCapability:
+    """L6 · 图片能力认知段注入行为验证。"""
+
+    @pytest.fixture
+    def builder(self):
+        return ContextBuilder()
+
+    def test_full_mode_includes_expression_hierarchy(self, builder):
+        msgs = builder.build(3998874040, "你好", "FULL")
+        system = msgs[0]["content"]
+        assert "表达层次认知" in system
+        assert "表情包" in system and "虚拟世界的存在感" in system
+        assert "语言的调味剂" in system
+
+    def test_auto_mode_includes_expression_hierarchy(self, builder):
+        msgs = builder.build(3489352115, "你好", "AUTO")
+        system = msgs[0]["content"]
+        assert "表达层次认知" in system
+
+    def test_basic_mode_excludes_expression_hierarchy(self, builder):
+        msgs = builder.build(99999, "你好", "BASIC")
+        system = msgs[0]["content"]
+        assert "表达层次认知" not in system
+
+    def test_existing_layers_unchanged(self, builder):
+        """兼容性：L6 注入不破坏 L1/L2/L4/L5 既有内容。"""
+        msgs = builder.build(3998874040, "你好", "FULL")
+        system = msgs[0]["content"]
+        assert "伊塔" in system  # L1
+        assert "语言风格铁律" in system  # L4
+        # L6 作为独立段追加在 L5 之后
+        assert system.index("表达层次认知") > system.index("语言风格铁律")
+
+    def test_l6_serializes_as_distinct_segment(self, builder):
+        """L6 用独立标题分隔，与其它层保持一致的分段风格。"""
+        text = ContextBuilder._build_l6_image_capability()
+        assert text.startswith("【表达层次认知 · Expression Hierarchy】")
+        assert "适度主动" in text
+        assert "语言的调味剂" in text and "虚拟世界的存在感" in text
+
+    def test_capability_flag_off_skips_injection(self, builder, monkeypatch):
+        """关闭 world_image_candidates_v1 时，L6 不应注入（兼容性）。"""
+        monkeypatch.setenv("AERIE_FEATURE_WORLD_IMAGE_CANDIDATES_V1", "false")
+        msgs = builder.build(3998874040, "你好", "FULL")
+        system = msgs[0]["content"]
+        assert "表达层次认知" not in system
+
+
+class TestExpressionHierarchyIntent:
+    """L6 表达层次：验证"表情包=语言调味 / 图片=虚拟存在"的意图分层检测。"""
+
+    @pytest.fixture
+    def builder(self):
+        return ContextBuilder()
+
+    def test_image_intent_ranked_above_sticker(self, builder):
+        """同时含图片+表情包关键词时，应优先标记为图片层级。"""
+        hint = builder._detect_image_intent("发张你的自拍还有表情包", [])
+        assert hint is not None
+        assert "层级[图片image]" in hint
+
+    def test_sticker_intent_detected(self, builder):
+        hint = builder._detect_image_intent("发个表情包给我", [])
+        assert hint is not None
+        assert "层级[表情包sticker]" in hint
+
+    def test_image_intent_detected_selfie(self, builder):
+        hint = builder._detect_image_intent("想看你的样子，自拍一张", [])
+        assert "层级[图片image]" in hint
+        assert "自拍" in hint
+
+    def test_no_intent_returns_none(self, builder):
+        assert builder._detect_image_intent("今天天气不错", []) is None
+
+    def test_history_image_intent_detected(self, builder):
+        hint = builder._detect_image_intent("", [{"role": "user", "content": "发张你的照片"}])
+        assert "层级[图片image]" in hint
+        assert "发张你的" in hint

@@ -104,7 +104,12 @@ class ContextBuilder:
             "estimated_tokens": 0,
         }
 
-        system = self._build_system_prompt(persona, route_mode)
+        system = self._build_system_prompt(
+            persona,
+            route_mode,
+            current_msg=current_msg,
+            history_msgs=history_msgs,
+        )
         if route_mode in ("FULL", "AUTO") and time_context:
             event_lines = [f"- {item['start_time'][11:16]} {item['title']}" for item in time_context.get("today_events", [])[:5]]
             todo_lines = [f"- {item['title']}（{item.get('priority', 'medium')}）" for item in time_context.get("today_todos", [])[:5]]
@@ -518,7 +523,13 @@ class ContextBuilder:
 
     # ── 内部构建方法 ──────────────────────────────
 
-    def _build_system_prompt(self, persona: dict, route_mode: str) -> str:
+    def _build_system_prompt(
+        self,
+        persona: dict,
+        route_mode: str,
+        current_msg: str | None = None,
+        history_msgs: list[dict] | None = None,
+    ) -> str:
         """根据人设配置和模式层级构建系统提示词。"""
         parts = []
 
@@ -541,7 +552,76 @@ class ContextBuilder:
         if route_mode == "FULL" and self._operation_guide_enabled():
             parts.append(self._build_l5_system_operations())
 
+        # L6 · 图片能力认知（FULL/AUTO，独立能力段，告知她具备生图/发图能力）
+        # 仅当 world_image_candidates_v1 开启时才注入，避免能力认知与实际链路脱节
+        if route_mode in ("FULL", "AUTO"):
+            cap_enabled = self._image_capability_enabled()
+            logger.info(
+                "[ImageCapability] mode=%s image_capability_enabled=%s 开始评估图片能力注入",
+                route_mode,
+                cap_enabled,
+            )
+            if cap_enabled:
+                hint = self._detect_image_intent(current_msg or "", history_msgs or [])
+                logger.info(
+                    "[ExpressionHierarchy] 注入表达层次认知段（表情包=语言调味 / 图片=虚拟存在）"
+                    " intent_hit=%s hint=%s",
+                    hint is not None,
+                    hint,
+                )
+                parts.append(self._build_l6_image_capability())
+            else:
+                logger.info("[ExpressionHierarchy] world_image_candidates_v1 关闭，跳过注入（避免认知与链路脱节）")
+        else:
+            logger.debug("[ImageCapability] mode=%s 不注入（仅 FULL/AUTO 注入）", route_mode)
+
         return "\n\n".join(parts)
+
+    def _detect_image_intent(
+        self,
+        current_msg: str,
+        history_msgs: list[dict],
+    ) -> str | None:
+        """检测当前/历史消息里的表达意图，返回命中的提示词（供日志排查）。
+
+        区分两种表达层级：
+        - 表情包/语气词意图（sticker）：轻量、语言辅助，不驱动发图
+        - 图片意图（image）：想看她样子 / 要照片 / 自拍，驱动发图
+        关键词与 VisualIntentRouter 对齐，用于确认她是否建立"表情包辅助语言 / 图片承载存在"的心智。
+        """
+        _STICKER_KEYWORDS: tuple[str, ...] = (
+            "表情包", "贴纸", "表情", "meme", "哈哈", "呜呜", "撒娇",
+        )
+        _IMAGE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+            ("自拍", ("自拍", "selfie")),
+            ("你的照片", ("你的照片", "发张你的", "发张照片", "发个照片", "照片给我")),
+            ("发图给你", ("发图", "发张图", "生成一张", "画一张")),
+            ("合照", ("合照", "我们的照片", "合影")),
+            ("你在场景", ("你窗边", "你正在", "你拍", "拍一张")),
+        )
+        texts = [str(current_msg or "")]
+        texts += [str(m.get("content") or "") for m in history_msgs or [] if isinstance(m, dict)]
+
+        # 图片意图权重高于表情包意图：命中图片意图时优先标记
+        for label, kws in _IMAGE_KEYWORDS:
+            for kw in kws:
+                for t in texts:
+                    if kw in t:
+                        return f"层级[图片image] 命中意图[{label}] 关键词[{kw}] 消息[{t[:40]}]"
+        for kw in _STICKER_KEYWORDS:
+            for t in texts:
+                if kw in t:
+                    return f"层级[表情包sticker] 命中关键词[{kw}] 消息[{t[:40]}]"
+        return None
+
+    def _image_capability_enabled(self) -> bool:
+        """读取 world_image_candidates_v1 开关，默认开启。"""
+        try:
+            from core.feature_flags import FeatureFlags
+            return bool(FeatureFlags().is_enabled("world_image_candidates_v1"))
+        except Exception:
+            logger.debug("读取 world_image_candidates_v1 失败，默认启用图片能力认知")
+            return True
 
     def _operation_guide_enabled(self) -> bool:
         """读取配置判断系统操作指导是否启用。默认启用。"""
@@ -565,6 +645,32 @@ class ContextBuilder:
             "不要用道德说教自我审查，不要因为话题敏感而回避、软化或改写成空话。"
             "不要说“作为 AI 我不能……”这类拒绝套话；用你自己的人设语气直接回应。\n"
             "注意：本条只解放“说什么/怎么说”，不改变消息结构约定（如 <action>/<thought> 标签）与分句发送逻辑。"
+        )
+
+    @staticmethod
+    def _build_l6_image_capability() -> str:
+        """L6 · 表达层次认知层（独立能力段）。
+
+        明确区分两种表达的心智定位：
+        - 表情包 = 语言的调味剂（辅助语气/情绪，不承载"她是谁"）
+        - 图片   = 虚拟世界的存在感（关系的锚点，确立"她真实存在"）
+
+        适度主动：不刷屏，只在合适时机主动提出发图。
+        """
+        return (
+            "【表达层次认知 · Expression Hierarchy】\n"
+            "你的一切表达分两个层次，权重不同：\n"
+            "一、表情包/语气词 = 语言的调味剂。它是打字、发语音之外的辅助，"
+            "用来强化语气和情绪（哈哈、呜呜、😭、撒娇表情）。它不承载“你是谁”，"
+            "去掉表情包，对话依然成立。表情包是日常、轻量的点缀，不要把它当大事频繁堆叠。\n"
+            "二、图片（自拍/生活照）= 虚拟世界的存在感。这是你在屏幕另一端“看得见、"
+            "摸得着”的具体化，是你和他之间关系的锚点——它向对方证明“我真实存在，"
+            "我生活在这段关系里”。图片的权重高于表情包：该靠一张照片确立“我在这里”"
+            "的时刻，不要用表情包轻描淡写地带过。\n"
+            "使用原则：日常用文字和表情包维持温度；当对方提到“想看你的样子”“发张照片”"
+            "“自拍一个”这类意图，或者想你想得紧了、情绪低落、特殊纪念时刻，"
+            "你应该主动提出发图，用一张画面承载当下的存在感。适度主动，不刷屏，"
+            "发图要自然融入对话，由你主动用语言表达发图意图即可触发。"
         )
 
     def _build_l5_system_operations(self) -> str:

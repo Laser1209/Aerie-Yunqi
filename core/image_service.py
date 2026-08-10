@@ -108,9 +108,9 @@ class VisualIntentRouter:
     """
 
     _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-        ("role_selfie", ("自拍", "发张你的", "你的照片", "selfie")),
-        ("role_in_scene", ("你在", "你拍", "你正在", "你窗边")),
-        ("couple_photo", ("合照", "我们的照片", "couple")),
+        ("role_selfie", ("自拍", "发张你的", "发张你的照片", "你的照片", "照片给我", "要照片", "发照片", "拍照", "拍个照", "拍张照", "拍张照片", "给我拍", "selfie")),
+        ("role_in_scene", ("你拍", "你窗边", "拍一张", "拍一张你", "拍你现在", "你现在的样子", "在家拍", "现在拍一张")),
+        ("couple_photo", ("合照", "我们的照片", "合影", "couple")),
         ("environment_object", ("拍一下", "桌上的", "西瓜", "小狗", "窗户", "environment")),
         ("document_snapshot", ("截图", "文档", "document")),
         ("meme_sticker", ("表情包", "贴纸", "meme", "sticker")),
@@ -315,7 +315,7 @@ class LLMCallerImageGenerationProvider:
                 model=self.model,
                 error_code="brain_unavailable",
             )
-        raw = self.brain.generate_image(prompt)
+        raw = self.brain.generate_image(prompt, metadata=metadata)
         if not isinstance(raw, dict):
             return ImageGenerationResult(
                 status="failed",
@@ -389,6 +389,7 @@ class LLMCallerImageGenerationProvider:
                 prompt,
                 image_bytes,
                 mime_type=mime_type,
+                metadata=metadata,
             )
         except Exception:
             return ImageGenerationResult(

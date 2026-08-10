@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
+import hashlib
 import json
 import logging
+import os
 import time
 import urllib.parse
 import urllib.request
@@ -11,7 +12,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# 当百度地图 MCP 不可用时，使用 Open-Meteo 拉取真实天气（免费、无需 key）。
+# 当百度地图不可用（无 AK / IP 白名单未放行）时，使用 Open-Meteo 拉取真实天气（免费、无需 key）。
 _OPEN_METEO_GEOCODE = "https://geocoding-api.open-meteo.com/v1/search"
 _OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 _HTTP_TIMEOUT_SEC = 8.0
@@ -59,6 +60,109 @@ def _http_get_json(url: str) -> dict[str, Any] | None:
     except Exception as e:
         logger.debug("weather_service: http get failed %s: %s", url, e)
         return None
+
+
+def baidu_ak() -> str:
+    """读取百度地图 Web 服务 AK；未配置返回空串（调用方据此回退）。"""
+    return os.environ.get("BAIDU_MAP_AK", "").strip()
+
+
+def baidu_sk() -> str:
+    """读取百度地图 Web 服务 SK（SN 校验密钥）；未配置则退回 IP 白名单模式。"""
+    return os.environ.get("BAIDU_MAP_SK", "").strip()
+
+
+def _baidu_sn(params: dict[str, Any], path: str, sk: str) -> str:
+    """百度 SN 签名（官方附录算法）：参数按 key 字典序拼接 → 整串 URL 编码
+    （保留分隔符）→ 末尾拼接 SK → 普通 MD5 → 32 位小写 hex。
+
+    启用 SN 校验后百度只验签、不校验来源 IP，任意用户（任意 IP）都可用同一
+    AK/SK 调用，无需维护 IP 白名单。
+    """
+    query = "&".join(f"{key}={params[key]}" for key in sorted(params))
+    path_query = f"{path}?{query}"
+    encoded = urllib.parse.quote(path_query, safe="/:=&?#+!$,;'@()*[]")
+    return hashlib.md5((encoded + sk).encode("utf-8")).hexdigest()
+
+
+def _baidu_signed_url(path: str, params: dict[str, Any]) -> str:
+    """构造百度 Web 服务请求 URL。
+
+    - 配置了 SK → SN 校验模式：参数加 timestamp，签名后附加 &sn=
+    - 仅 AK → IP 白名单模式：直接带 ak（需在控制台登记本机出口 IP）
+    - 无 AK → 返回空串（调用方回退）
+    """
+    ak = baidu_ak()
+    if not ak:
+        return ""
+    base = f"https://api.map.baidu.com{path}"
+    sk = baidu_sk()
+    if sk:
+        payload = {**params, "ak": ak, "timestamp": str(int(time.time()))}
+        sn = _baidu_sn(payload, path, sk)
+        query = "&".join(
+            f"{key}={urllib.parse.quote(str(val), safe='')}"
+            for key, val in sorted(payload.items())
+        )
+        return f"{base}?{query}&sn={sn}"
+    query = urllib.parse.urlencode({**params, "ak": ak})
+    return f"{base}?{query}"
+
+
+def _baidu_adcode(city: str) -> str | None:
+    """通过 place 检索拿城市行政区划代码（adcode），作为天气接口的 district_id。"""
+    if not city:
+        return None
+    url = _baidu_signed_url(
+        "/place/v2/search",
+        {"query": city, "region": city, "output": "json", "extensions_adcode": 1, "page_size": 1},
+    )
+    if not url:
+        return None
+    data = _http_get_json(url)
+    if not data or int(data.get("status", -1)) != 0:
+        return None
+    results = data.get("results")
+    if not isinstance(results, list) or not results:
+        return None
+    adcode = str((results[0] or {}).get("adcode") or "").strip()
+    return adcode or None
+
+
+def _baidu_weather(city: str) -> dict[str, Any] | None:
+    """通过百度天气 v1 REST 拉取实时天气 + 5 天预报，返回可直接喂给 normalize_weather 的 dict。"""
+    district_id = _baidu_adcode(city)
+    if not district_id:
+        return None
+    url = _baidu_signed_url("/weather/v1/", {"district_id": district_id, "data_type": "all"})
+    if not url:
+        return None
+    data = _http_get_json(url)
+    if not data or int(data.get("status", -1)) != 0:
+        return None
+    result = data.get("result") or {}
+    now = result.get("now") or {}
+    forecasts = result.get("forecasts") or []
+    forecast: list[dict[str, str]] = []
+    for item in forecasts if isinstance(forecasts, list) else []:
+        if not isinstance(item, dict):
+            continue
+        forecast.append({
+            "date": str(item.get("date") or ""),
+            "day": str(item.get("date") or ""),
+            "weather": str(item.get("text_day") or item.get("text_night") or ""),
+            "temp_max": str(item.get("high") or "—"),
+            "temp_min": str(item.get("low") or "—"),
+        })
+    wind_parts = [str(now.get("wind_dir") or "").strip(), str(now.get("wind_power") or "").strip()]
+    return {
+        "temperature": str(now.get("temp") or "—"),
+        "weather": str(now.get("text") or ""),
+        "humidity": str(now.get("humidity") or ""),
+        "wind": " ".join(p for p in wind_parts if p),
+        "forecast": forecast,
+        "suggestion": str(result.get("suggestion") or "") if isinstance(result.get("suggestion"), str) else "",
+    }
 
 
 def _open_meteo_geocode(city: str) -> tuple[float, float] | None:
@@ -177,27 +281,20 @@ def fallback_weather(city: str, location: dict | None = None, error: str = "") -
 async def fetch_weather_for_city(city: str, location: dict | None = None) -> dict:
     city = (city or "").strip() or "上海"
     location = location or {"city": city, "source": "manual", "manual": True, "fallback": False}
-    try:
-        from mcp_Bai_Du_Di_Tu import map_weather  # type: ignore
-    except Exception:
-        # 百度地图 MCP 不可导入 → 退而使用 Open-Meteo 真实天气；仍失败才用 stub。
-        real = await asyncio.to_thread(_open_meteo_weather, city)
-        if real is not None:
-            return normalize_weather(city, real, {**location, "source": "open_meteo", "manual": True})
-        logger.debug("weather_service: open_meteo unavailable; using stub")
-        return fallback_weather(city, location)
-    try:
-        result = map_weather(city=city)
-        if inspect.iscoroutine(result):
-            result = await result
-        else:
-            result = await asyncio.to_thread(lambda: result)
-        if not isinstance(result, dict):
-            return fallback_weather(city, location, "天气数据格式异常")
-        return normalize_weather(city, result, location)
-    except Exception as e:
-        logger.warning("weather_service: map_weather error: %s", e)
-        return fallback_weather(city, location, str(e))
+    # 百度天气 REST（需 BAIDU_MAP_AK 且 AK 的 IP 白名单放行本机）→ Open-Meteo → stub。
+    if baidu_ak():
+        try:
+            real = await asyncio.to_thread(_baidu_weather, city)
+            if real is not None:
+                return normalize_weather(city, real, {**location, "source": "baidu", "manual": True})
+            logger.debug("weather_service: baidu weather unavailable; falling back to open_meteo")
+        except Exception as e:
+            logger.warning("weather_service: baidu weather error: %s", e)
+    real = await asyncio.to_thread(_open_meteo_weather, city)
+    if real is not None:
+        return normalize_weather(city, real, {**location, "source": "open_meteo", "manual": True})
+    logger.debug("weather_service: open_meteo unavailable; using stub")
+    return fallback_weather(city, location)
 
 
 async def fetch_weather_for_current_location(force_location: bool = False) -> dict:

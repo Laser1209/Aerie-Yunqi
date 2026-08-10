@@ -290,7 +290,7 @@ def test_generation_low_confidence_visual_intent_does_not_call_provider(tmp_path
 
 def test_brain_generation_provider_accepts_base64_image_bytes(tmp_path):
     class BrainWithImageBytes:
-        def generate_image(self, prompt: str):
+        def generate_image(self, prompt: str, metadata: dict | None = None):
             return {
                 "status": "ok",
                 "provider": "openai_compatible_image",

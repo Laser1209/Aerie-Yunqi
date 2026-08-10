@@ -1024,8 +1024,24 @@ async def health(request: Request) -> dict:
                 "paused": push_paused,
                 "paused_reason": push_paused_reason,
             },
+            "providers": _provider_health_payload(comp),
         },
     }
+
+
+def _provider_health_payload(comp) -> dict:
+    """LLM provider 健康/余额摘要（欠费账户会自动被踢出轮询）。"""
+    try:
+        brain = getattr(comp, "brain", None)
+        if brain is None:
+            return {"available": False}
+        health = getattr(brain, "health_summary", None)
+        if not callable(health):
+            return {"available": False}
+        return {"available": True, **health()}
+    except Exception:
+        logger.debug("provider health payload failed", exc_info=True)
+        return {"available": False}
 
 
 def _check_stale_code() -> dict:
@@ -4696,6 +4712,43 @@ async def env_save(request: Request) -> dict:
 
         _write_env_file(env)
         return {"status": "ok", "provider": provider_key}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/env/baidu-map")
+async def env_baidu_map_get() -> dict:
+    """返回百度地图 AK/SK 配置状态（密钥脱敏）。
+
+    SK 用于 SN 校验（官方无 IP 依赖的鉴权方式）：只要在控制台把校验方式配成
+    SN 校验并填好 AK+SK，任意用户的任意 IP 都能调用，无需维护 IP 白名单。
+    未配置时系统自动回退内置城市数据 / Open-Meteo，仍可开箱即用。
+    """
+    env = _read_env_file()
+    ak = env.get("BAIDU_MAP_AK", "")
+    sk = env.get("BAIDU_MAP_SK", "")
+    return {
+        "ak_configured": bool(ak),
+        "sk_configured": bool(sk),
+        "ak_masked": (ak[:4] + "••••" + ak[-4:]) if len(ak) > 8 else ("•" * len(ak) if ak else ""),
+        "sk_masked": (sk[:4] + "••••" + sk[-4:]) if len(sk) > 8 else ("•" * len(sk) if sk else ""),
+    }
+
+
+@app.post("/api/env/baidu-map")
+async def env_baidu_map_save(request: Request) -> dict:
+    """保存百度地图 AK/SK 到 .env。Body: {"ak": "...", "sk": "..."}"""
+    try:
+        body = await request.json()
+        env = _read_env_file()
+        ak = body.get("ak")
+        if ak is not None:
+            env["BAIDU_MAP_AK"] = str(ak).strip()
+        sk = body.get("sk")
+        if sk is not None:
+            env["BAIDU_MAP_SK"] = str(sk).strip()
+        _write_env_file(env)
+        return {"status": "ok"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

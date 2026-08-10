@@ -54,7 +54,7 @@ brief_subscriptions:
       enabled: true
       min_stars: 200
 world:
-  location: 济南
+  location: 重庆
   random_events_per_day: 3
   reality_refresh_sec: 1800
   tick_interval_sec: 300

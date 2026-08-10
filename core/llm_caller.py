@@ -8,12 +8,14 @@ import mimetypes
 import os
 import re
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
 
+from core.provider_health import ProviderHealthManager
 from core.token_tracker import get_token_tracker
 
 logger = logging.getLogger(__name__)
@@ -119,6 +121,7 @@ class LLMCaller:
         self._temperature = float(os.getenv("LLM_TEMPERATURE", "0.85"))
         self._max_tokens = int(os.getenv("LLM_MAX_TOKENS", "2048"))
         self._providers = self._load_providers()
+        self._health = ProviderHealthManager()
 
     def _load_providers(self) -> list[dict]:
         """Load provider configs from env vars."""
@@ -395,6 +398,9 @@ class LLMCaller:
 
         # 调整 provider 顺序：优先 provider 移到最前面
         providers = list(self._providers)
+        # 排除被健康管理拉黑的账户（余额耗尽/限流冷却/手动禁用），
+        # 避免每条消息都先对欠费账户发一次注定失败的请求。
+        providers = self._health.filter_providers(providers)
         if preferred_provider:
             pref_idx = None
             for i, p in enumerate(providers):
@@ -460,6 +466,7 @@ class LLMCaller:
                                 final_resp.tokens_prompt, final_resp.tokens_completion,
                                 final_resp.duration_ms, len(provider_tool_results),
                             )
+                            self._health.mark_ok(provider["name"])
                             return final_resp
                         else:
                             last_error = resp.text
@@ -528,6 +535,7 @@ class LLMCaller:
 
             except Exception as e:
                 last_error = str(e)
+                self._health.record_failure(provider["name"], last_error)
                 logger.warning(
                     "Provider %s failed (%d/%d): %s",
                     provider["name"], idx + 1, len(self._providers), last_error[:80],
@@ -547,6 +555,7 @@ class LLMCaller:
                 tried_names.add(n)
 
         extra_providers = self._discover_env_providers(exclude_names=tried_names)
+        extra_providers = self._health.filter_providers(extra_providers)
         if extra_providers:
             logger.warning(
                 "Entering last-resort sweep: trying %d env-discovered provider(s)",
@@ -583,6 +592,7 @@ class LLMCaller:
                             final_resp.tokens_prompt, final_resp.tokens_completion,
                             final_resp.duration_ms,
                         )
+                        self._health.mark_ok(provider["name"])
                         return final_resp
                     else:
                         last_error = resp.text
@@ -592,6 +602,7 @@ class LLMCaller:
                         )
                 except Exception as e:
                     last_error = str(e)
+                    self._health.record_failure(provider["name"], last_error)
                     logger.warning(
                         "Last-resort provider %s failed (%d/%d): %s",
                         provider["name"], idx + 1, len(extra_providers), last_error[:80],
@@ -602,6 +613,22 @@ class LLMCaller:
             text="(伊塔暂时无法连接大脑，稍后再试...)",
             tool_results=all_tool_results if all_tool_results else None,
         )
+
+    async def probe_balances(self) -> dict:
+        """Probe known balance endpoints and update the health manager.
+
+        Exhausted accounts are banned and leave the rotation before their
+        first failed call. Best-effort: probe failures never raise.
+        """
+        try:
+            return await self._health.probe_balances(self._providers)
+        except Exception:
+            logger.debug("provider balance probe failed", exc_info=True)
+            return {}
+
+    def health_summary(self) -> dict:
+        """Public view of provider health for dashboards / API."""
+        return self._health.summary()
 
     def _extract_tool_calls(self, text: str) -> list[dict] | None:
         """Extract tool_calls from response text if it's a JSON-encoded list.
@@ -1542,33 +1569,41 @@ def _brain_bge_embed(self, texts: list, **kwargs) -> dict:
     }
 
 
-def _brain_generate_image(self, prompt: str) -> dict:
+def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
     """Generate an image via the ``image_sdxl`` provider.
 
     Uses an explicit OpenAI-compatible image provider only when
-    ``AERIE_IMAGE_API_KEY`` or ``OPENAI_IMAGE_API_KEY`` is configured.
-    Otherwise it keeps the historical structured stub so existing chat and
-    smoke-test paths never start making surprise external calls.
+    ``AERIE_IMAGE_API_KEY``, ``OPENAI_IMAGE_API_KEY`` or ``IMAGE_GEN_API_KEY``
+    is configured (the .env relay exposes gpt-image-2 via ``IMAGE_GEN_*``).
+    The workflow's idempotency key is forwarded as ``Idempotency-Key`` so the
+    relay can dedupe network retries and avoid double charging.  Without a key
+    it keeps the historical structured stub so existing chat and smoke-test
+    paths never start making surprise external calls.
     """
     opts = self._load_ai_options()
     provider = next(
         (o for o in opts if o.get("id") == "image_sdxl"),
         {"id": "image_sdxl", "label": "图像生成", "model": "sdxl"},
     )
-    api_key = _first_env("AERIE_IMAGE_API_KEY", "OPENAI_IMAGE_API_KEY")
+    metadata = dict(kwargs.get("metadata") or {})
+    api_key = _first_env("AERIE_IMAGE_API_KEY", "OPENAI_IMAGE_API_KEY", "IMAGE_GEN_API_KEY")
     if api_key:
         base_url = (
-            _first_env("AERIE_IMAGE_BASE_URL", "OPENAI_IMAGE_BASE_URL")
+            _first_env("AERIE_IMAGE_BASE_URL", "OPENAI_IMAGE_BASE_URL", "IMAGE_GEN_BASE_URL")
             or "https://api.openai.com/v1"
         )
-        model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL") or "gpt-image-1"
+        model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL", "IMAGE_GEN_MODEL") or "gpt-image-1"
         size = _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+        idempotency_key = str(metadata.get("idempotency_key") or "").strip()
+        if not (8 <= len(idempotency_key) <= 128):
+            idempotency_key = f"aerie-{uuid.uuid4().hex}"
         try:
             response = httpx.post(
                 _openai_compatible_url(base_url, "images/generations"),
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
+                    "Idempotency-Key": idempotency_key,
                 },
                 json={
                     "model": model,
@@ -1628,6 +1663,7 @@ def _brain_generate_image_edit(
     *,
     mime_type: str = "image/png",
     size: str | None = None,
+    metadata: dict | None = None,
 ) -> dict:
     """Edit / image-to-image via the ``/images/edits`` endpoint.
 
@@ -1636,7 +1672,7 @@ def _brain_generate_image_edit(
     times out, or returns no image, we degrade to ``unavailable`` so the
     calling workflow never hard-fails.
     """
-    api_key = _first_env("AERIE_IMAGE_API_KEY", "OPENAI_IMAGE_API_KEY")
+    api_key = _first_env("AERIE_IMAGE_API_KEY", "OPENAI_IMAGE_API_KEY", "IMAGE_GEN_API_KEY")
     if not api_key:
         return {
             "status": "stub",
@@ -1646,15 +1682,21 @@ def _brain_generate_image_edit(
             "note": "image_edit requires an image API key",
         }
     base_url = (
-        _first_env("AERIE_IMAGE_BASE_URL", "OPENAI_IMAGE_BASE_URL")
+        _first_env("AERIE_IMAGE_BASE_URL", "OPENAI_IMAGE_BASE_URL", "IMAGE_GEN_BASE_URL")
         or "https://api.openai.com/v1"
     )
-    model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL") or "gpt-image-1"
+    model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL", "IMAGE_GEN_MODEL") or "gpt-image-1"
     size = size or _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+    idempotency_key = str((metadata or {}).get("idempotency_key") or "").strip()
+    if not (8 <= len(idempotency_key) <= 128):
+        idempotency_key = f"aerie-{uuid.uuid4().hex}"
     try:
         response = httpx.post(
             _openai_compatible_url(base_url, "images/edits"),
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Idempotency-Key": idempotency_key,
+            },
             data={
                 "model": model,
                 "prompt": prompt or "",

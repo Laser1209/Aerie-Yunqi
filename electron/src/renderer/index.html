@@ -1382,6 +1382,31 @@
             <div id="apikey-provider-list" class="apikey-provider-list">
               <!-- JS 动态渲染 -->
             </div>
+            <div id="baidu-map-block" class="apikey-provider-card" style="margin-top:14px;">
+              <div class="apikey-provider-header">
+                <div class="apikey-provider-name">
+                  <span id="baidu-map-dot" class="apikey-provider-dot" style="background: var(--text-muted, #999)"></span>
+                  百度地图 · Baidu Maps <span style="font-weight:400;color:var(--text-muted, #999);font-size:12px;">(可选 / Optional)</span>
+                </div>
+                <div id="baidu-map-status" class="apikey-provider-status">未配置</div>
+              </div>
+              <div class="apikey-provider-fields">
+                <label class="apikey-field">
+                  <span>AK · Access Key</span>
+                  <input type="text" id="baidu-map-ak" class="apikey-input" placeholder="lbsyun.baidu.com 创建应用后获取">
+                </label>
+                <label class="apikey-field">
+                  <span>SK · Security Key（SN 校验，无需 IP 白名单）</span>
+                  <input type="text" id="baidu-map-sk" class="apikey-input" placeholder="控制台选择 SN 校验并复制 SK">
+                </label>
+              </div>
+              <div class="apikey-provider-actions">
+                <button type="button" id="baidu-map-save-btn" class="btn btn-primary btn-sm">保存 · Save</button>
+                <span style="font-size:11px;color:var(--text-muted, #999);line-height:1.5;">
+                  不填也能用：自动回退内置城市数据 + Open-Meteo 天气，开箱即用。
+                </span>
+              </div>
+            </div>
             <div id="apikey-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
             <div class="settings-actions" style="margin-top:16px;">
               <button id="apikey-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>

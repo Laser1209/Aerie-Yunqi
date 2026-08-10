@@ -628,6 +628,23 @@ class ChatRequestRepository:
             ).rowcount
         return changed == 1
 
+    def is_terminated(self, *, request_id: str) -> bool:
+        """True if the request already reached a terminal state.
+
+        The pipeline marks a request ``completed`` right after emitting its
+        first reply segment, while the tail (pacing + photo trigger) is still
+        running.  A late heartbeat renewal then finds the row no longer
+        ``running`` and must NOT be treated as a lost lease.
+        """
+        with self.database.connection() as conn:
+            row = conn.execute(
+                "SELECT status FROM requests WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
+        if row is None:
+            return True
+        return str(row["status"]) in ("completed", "failed", "cancelled")
+
     def request_cancel(
         self,
         *,

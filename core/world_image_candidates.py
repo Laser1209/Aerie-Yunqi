@@ -8,6 +8,7 @@ the image workflow itself.
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import inspect
 import json
@@ -256,15 +257,17 @@ class WorldImageCandidateConsumer:
                 logger.debug("delivery_online callback failed", exc_info=True)
                 online = False
             if not online:
-                return self._result(
-                    status="offline",
-                    event=event,
-                    candidate=candidate,
-                    reason="delivery_offline",
-                    acked=False,
-                )
+                # 用户主动要求的图不因推送暂停/离线而被挡：那是直接命令。
+                if not self._is_manual_trigger(candidate):
+                    return self._result(
+                        status="offline",
+                        event=event,
+                        candidate=candidate,
+                        reason="delivery_offline",
+                        acked=False,
+                    )
 
-        allowed, policy_reason = self._can_push(candidate["scene"])
+        allowed, policy_reason = self._can_push(candidate["scene"], candidate)
         if not allowed:
             record = self._record("suppressed", candidate, event, reason=policy_reason)
             acked = await self._ack(_event_sequence(event))
@@ -277,7 +280,7 @@ class WorldImageCandidateConsumer:
                 record=record,
             )
 
-        budget_allowed, budget_reason = self._budget_can_record()
+        budget_allowed, budget_reason = self._budget_can_record(candidate)
         if not budget_allowed:
             record = self._record("suppressed", candidate, event, reason=budget_reason)
             acked = await self._ack(_event_sequence(event))
@@ -310,7 +313,17 @@ class WorldImageCandidateConsumer:
                 record=record,
             )
 
-        workflow_result = self._run_workflow(candidate)
+        # Offload the blocking generation (sync httpx provider call) to a
+        # worker thread so the event loop is never frozen during image gen.
+        try:
+            workflow_result = await asyncio.to_thread(self._run_workflow, candidate)
+        except Exception:
+            logger.debug("world image candidate workflow thread failed", exc_info=True)
+            workflow_result = {
+                "status": "failed",
+                "side_effects": dict(_NO_SIDE_EFFECTS),
+                "delivery_plan": None,
+            }
         workflow_status = str(workflow_result.get("status") or "failed")
         if workflow_status == "disabled":
             return self._result(
@@ -335,7 +348,7 @@ class WorldImageCandidateConsumer:
         if completed:
             await self._deliver(workflow_result)
             self._record_push(candidate["scene"])
-            self._record_budget("proactive")
+            self._record_budget("proactive", candidate)
         acked = await self._ack(_event_sequence(event))
         return self._result(
             status=status,
@@ -402,7 +415,15 @@ class WorldImageCandidateConsumer:
             return False
         return _ensure_aware(self.clock()) > expires_at
 
-    def _can_push(self, scene: str) -> tuple[bool, str]:
+    def _can_push(
+        self,
+        scene: str,
+        candidate: dict[str, Any] | None = None,
+    ) -> tuple[bool, str]:
+        # 用户主动要求的图（scene=local_send）是直接命令，不受主动推送的
+        # 频率/静默/每日上限约束，否则"拍一张照片"会因最近有推送而被静默掐掉。
+        if self._is_manual_trigger(candidate):
+            return True, "manual_trigger"
         if self.push_policy is None or not hasattr(self.push_policy, "can_push"):
             return True, "ok"
         try:
@@ -412,7 +433,10 @@ class WorldImageCandidateConsumer:
             logger.debug("world image candidate push policy failed", exc_info=True)
             return False, "policy_error"
 
-    def _budget_can_record(self) -> tuple[bool, str]:
+    def _budget_can_record(self, candidate: dict[str, Any] | None = None) -> tuple[bool, str]:
+        # 用户主动要求的图片（scene=local_send）不占用主动/自动发图额度。
+        if candidate is not None and self._is_manual_trigger(candidate):
+            return True, "manual_trigger"
         if self.image_budget is None or not hasattr(self.image_budget, "can_record"):
             return True, "ok"
         try:
@@ -422,13 +446,19 @@ class WorldImageCandidateConsumer:
             logger.debug("world image candidate budget check failed", exc_info=True)
             return False, "daily_image_limit"
 
-    def _record_budget(self, kind: str) -> None:
+    def _record_budget(self, kind: str, candidate: dict[str, Any] | None = None) -> None:
+        if candidate is not None and self._is_manual_trigger(candidate):
+            return
         if self.image_budget is None or not hasattr(self.image_budget, "record"):
             return
         try:
             self.image_budget.record(kind)
         except Exception:
             logger.debug("world image candidate budget record failed", exc_info=True)
+
+    @staticmethod
+    def _is_manual_trigger(candidate: dict[str, Any] | None) -> bool:
+        return bool(candidate) and str(candidate.get("scene") or "") == "local_send"
 
     def _judge(self, candidate: dict[str, Any]) -> Any:
         if self.proactive_judge is None or not hasattr(self.proactive_judge, "evaluate"):

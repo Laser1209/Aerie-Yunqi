@@ -455,3 +455,40 @@ async def test_completed_proactive_image_records_budget(tmp_path):
     assert budget.recorded == ["proactive"]
     assert workflow.calls
 
+
+@pytest.mark.asyncio
+async def test_user_requested_photo_bypasses_proactive_budget(tmp_path):
+    """scene=local_send（用户主动要求）不占用主动发图每日额度，也不被额度拒绝。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    workflow = WorkflowStub()
+    port = WorldPortStub()
+    budget = BudgetStub(False, "daily_image_limit")
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=workflow,
+        world_port=port,
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        image_budget=budget,
+        store=JsonWorldImageCandidateStore(tmp_path / "local-send-budget.json"),
+        clock=_clock,
+    )
+
+    result = await consumer.process_event(
+        _candidate_event(
+            candidate_id="cand-user-1",
+            scene="local_send",
+            source="manual",
+            idempotency_key="chat-photo:3489352115:turn_abc",
+        )
+    )
+
+    assert result["status"] == "completed"
+    assert budget.recorded == []
+    assert workflow.calls
+    assert port.acks == [7]
+

@@ -75,6 +75,29 @@ def _api_base_url() -> str:
     return f"http://127.0.0.1:{port}"
 
 
+# 伊塔重庆复式公寓的物件 ID → 中文描述（与 world_simulation._ENVIRONMENT_OBJECTS
+# 对齐）。环境照 prompt 用它把代码级物件 ID 翻译成自然的画面描述。
+_HER_HOME_OBJECTS_ZH: dict[str, str] = {
+    "king_bed": "主卧那张2米的大床",
+    "night_lamp": "床头那盏小夜灯",
+    "window": "朝南的江景窗",
+    "your_coat": "叠在床另一侧的那件外套",
+    "password_lock": "入户门上的密码锁",
+    "shoe_cabinet": "玄关的鞋柜",
+    "gray_sofa": "客厅的灰模块沙发",
+    "bookshelf": "客厅那面满墙书柜",
+    "pendant": "书架第二层你送的挂件",
+    "double_door_fridge": "双开门冰箱",
+    "round_table": "圆形小餐桌",
+    "kitchen_island": "开放式中岛",
+    "floor_lamp": "落地钓鱼灯",
+    "design_desk": "工作室那张2.4米的设计桌",
+    "imac": "iMac",
+    "drawing_tablet": "数位板",
+    "corkboard": "钉着你纸条的软木板",
+}
+
+
 def _resolve_companion_data_path(settings: dict | None) -> Path:
     if (os.environ.get("AERIE_DATA_DIR") or "").strip():
         return data_dir()
@@ -385,6 +408,8 @@ class Companion:
         self._boot_brief_task: asyncio.Task | None = None
         # R7.5: 10s background tick for emotion dashboard liveness.
         self._emotion_tick_task: asyncio.Task | None = None
+        # Phase 14: proactive photo cadence loop (publishes ImageCandidates).
+        self._photo_loop_task: asyncio.Task | None = None
         # Block-4B R2.2: 24h desire engine (lazy-created on first start()).
         self.desire: Any = None
         # Block-4C R3.4: skill loader (lazy-created on first start()).
@@ -431,6 +456,12 @@ class Companion:
 
         # 世界真实时间推进 + 真实数据刷新（inprocess 模式下主动 tick）。
         self._world_loop_task = asyncio.create_task(self._run_world_loop())
+
+        # Phase 14: 主动发图节奏循环（世界模拟不产图片候选，由 Core 侧补发布源）。
+        self._photo_loop_task = asyncio.create_task(self._run_proactive_photo_loop())
+
+        # Provider 余额/健康周期探测：欠费账户自动踢出轮询，恢复后自动回归。
+        self._provider_health_task = asyncio.create_task(self._run_provider_health_loop())
 
         # Block-4B R2.2: start 24h desire engine (24h polling, not cron)
         try:
@@ -832,6 +863,7 @@ class Companion:
             store=JsonWorldImageCandidateStore(data_dir() / "world_image_candidates.json"),
             delivery_online=delivery_online,
             sender=_deliver_world_image,
+            prompt_resolver=self._image_prompt_for,
         )
         return self.world_image_candidate_consumer
 
@@ -1060,6 +1092,12 @@ class Companion:
             self._world_loop_task.cancel()
             try:
                 await self._world_loop_task
+            except asyncio.CancelledError:
+                pass
+        if getattr(self, "_photo_loop_task", None):
+            self._photo_loop_task.cancel()
+            try:
+                await self._photo_loop_task
             except asyncio.CancelledError:
                 pass
         if self.desire:
@@ -1748,6 +1786,169 @@ class Companion:
             except Exception:
                 logger.debug("world loop tick failed", exc_info=True)
             await asyncio.sleep(tick_sec)
+
+    async def _run_provider_health_loop(self) -> None:
+        """周期探测 LLM provider 余额/健康度。
+
+        欠费账户（如 doubao 的 AccountOverdueError）会被自动踢出轮询，
+        充值恢复后探测到余额 > 0 会自动回归。间隔 10 分钟。
+        """
+        while True:
+            try:
+                probe = getattr(self.brain, "probe_balances", None)
+                if callable(probe):
+                    await probe()
+                summary = getattr(self.brain, "health_summary", None)
+                if callable(summary):
+                    data = summary()
+                    if data.get("banned"):
+                        logger.info(
+                            "[ProviderHealth] banned=%s disabled=%s",
+                            data.get("banned"),
+                            data.get("disabled_providers"),
+                        )
+            except Exception:
+                logger.debug("provider health loop iteration failed", exc_info=True)
+            await asyncio.sleep(600)
+
+    async def _run_proactive_photo_loop(self) -> None:
+        """主动发图节奏循环：世界感知 → 候选决策 → 图片行动（Agent 闭环）。
+
+        世界模拟天然产出 ``available_visual_topics``（窗边/房间/物件等发图素材），
+        但 P1-C 的 ProactiveCandidateScorer 从未接入生产（感知→决策断裂）。这里把
+        "感知(WorldSnapshot) → 决策(candidate scorer) → 行动(发布 ImageCandidate)"
+        接起来：命中 life_share / attention_ack / unfinished_topic 且世界有视觉素材
+        时才发布候选，再由 WorldImageCandidateConsumer 的完整审批链（每日预算 /
+        PushPolicy 频控 / proactive_judge 打分）把关，不会绕过任何一层门控。
+        """
+        cfg = (self.settings or {}).get("proactive", {}) or {}
+        try:
+            interval_sec = max(300, int(cfg.get("photo_min_interval_sec") or 7200))
+        except (TypeError, ValueError):
+            interval_sec = 7200
+        while True:
+            await asyncio.sleep(interval_sec)
+            try:
+                if not self.feature_flags.is_enabled("world_image_candidates_v1"):
+                    continue
+                if not callable(getattr(self.world_port, "publish_image_candidate", None)):
+                    continue
+                scheduler = getattr(self, "push_scheduler", None)
+                if scheduler is not None and getattr(scheduler, "is_paused", False):
+                    continue
+                consumer = self._get_world_image_candidate_consumer()
+                budget = getattr(consumer, "image_budget", None)
+                if budget is not None and hasattr(budget, "can_record"):
+                    allowed, _reason = budget.can_record("proactive")
+                    if not allowed:
+                        continue
+                primary = self.get_primary_user_selection()
+                if primary is None:
+                    continue
+                master_id = str(getattr(primary, "user_id", "") or "")
+
+                # ── 感知：取世界快照（含 available_visual_topics）──
+                raw_snapshot = self._world_snapshot_for_context()
+                if not raw_snapshot:
+                    continue
+                from core.world_simulation import WorldSnapshot
+
+                snapshot = WorldSnapshot(**dict(raw_snapshot))
+                topics = getattr(snapshot, "available_visual_topics", None) or []
+                if not topics:
+                    continue
+
+                # ── 决策：世界驱动的主动候选（P1-C 候选打分器）──
+                from core.companion_state import CompanionState
+                from core.proactive_candidates import ProactiveCandidateScorer
+
+                state = CompanionState.load()
+                candidates = ProactiveCandidateScorer(now=time.time()).generate(snapshot, state)
+                if not candidates:
+                    continue
+                chosen = candidates[0]
+                intent = chosen.intent.value
+                if intent not in ("life_share", "attention_ack", "unfinished_topic"):
+                    continue
+
+                # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
+                channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
+                await self.publish_image_candidate({
+                    "candidate_id": f"proactive-visual-{int(time.time())}",
+                    "idempotency_key": f"proactive-visual:{int(time.time())}",
+                    "scene": intent,
+                    "owner_id": master_id,
+                    "channel": channel,
+                    "target": master_id,
+                    "prompt_key": "environment_object",
+                    "reason_code": f"world_visual:{topics[0]}",
+                    "source": "generated",
+                    "score": round(float(chosen.score), 2),
+                })
+                logger.info(
+                    "[WorldImage] proactive visual candidate published intent=%s topic=%s score=%s",
+                    intent, topics[0], chosen.score,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.debug("proactive photo loop tick failed", exc_info=True)
+
+    def _image_prompt_for(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
+        """把 ImageCandidate 的 prompt_key 解析成真实的中文生图提示词。
+
+        以 persona.yaml 的 appearance/profile 描述伊塔的外貌，再叠加不同场景，
+        确保中转站生成的是一张符合她形象设定、而非随机主体的生活照。
+        """
+        try:
+            from config.persona_loader import load_persona
+            persona = load_persona() or {}
+            wrapped = persona.get("persona") if isinstance(persona, dict) else None
+            root = wrapped if isinstance(wrapped, dict) else persona
+            appearance = root.get("appearance") or {}
+            profile = root.get("profile") or {}
+        except Exception:
+            appearance, profile = {}, {}
+        height = profile.get("height_cm", 184)
+        body = str(profile.get("body_type", "身材修长") or "身材修长")
+        hair = str(appearance.get("hair", "银灰色长发") or "银灰色长发")
+        eyes = str(appearance.get("eyes", "深灰蓝色眼睛") or "深灰蓝色眼睛")
+        skin = str(appearance.get("skin", "健康肤色") or "健康肤色")
+        base = (
+            "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
+            f"身高{height}cm，{body}，{skin}。{hair}，{eyes}。"
+            "五官清冷精致，气质温柔的大姐姐。画面风格自然、生活化、暖色调、真实摄影质感，"
+            "不要动漫风，不要文字水印。"
+        )
+        key = str(prompt_key or "default")
+        if key == "environment_object":
+            # 环境/物件照：第一人称"她拍下的视角"，不强制带人物形象。
+            # topic 可能来自世界模拟的公寓物件 ID 或重庆 POI（reason_code: world_visual:<topic>）。
+            topic = str((candidate or {}).get("reason_code") or "")
+            if topic.startswith("world_visual:"):
+                topic = topic.split("world_visual:", 1)[1].replace("object_", "").strip()
+            else:
+                topic = ""
+            if topic:
+                translated = _HER_HOME_OBJECTS_ZH.get(topic, topic)
+                return (
+                    f"一张写实照片，第一人称视角，她在重庆的家/窗边随手拍下眼前的一角：{translated}。"
+                    "画面自然、生活化、暖色调、真实摄影质感，微微的随手感，"
+                    "不要动漫风，不要文字水印。"
+                )
+            return (
+                "一张写实照片，第一人称视角，她在重庆的复式公寓里，窗前/工作室一角。"
+                "画面自然、生活化、暖色调、真实摄影质感，不要动漫风，不要文字水印。"
+            )
+        if key == "role_selfie":
+            scene = "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑直视镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
+        elif key == "role_in_scene":
+            scene = "她站在重庆高层复式公寓落地窗前，身后是黄昏江景，银灰色长发被晚风轻轻吹起，她侧身望向镜头，笑容温柔。"
+        elif key == "couple_photo":
+            scene = "她与恋人的温馨合影，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
+        else:
+            scene = "她坐在重庆的家里，窗外是夜景，她神情放松地看着镜头。"
+        return f"{base}{scene}"
 
     async def _emotion_tick_loop(self) -> None:
         """R7.5+: background tick loop for emotion dashboard liveness.

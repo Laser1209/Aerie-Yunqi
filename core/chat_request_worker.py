@@ -447,6 +447,14 @@ class ChatRequestWorker:
                 self._cancel_for_lost_lease(request_id, execution)
                 return
             if not lease_active:
+                # 请求可能在发出第一段回复时就被标记 completed，此时心跳续租
+                # 失败是误报（行状态不再是 running），不应当作掉租去取消仍在
+                # 运行的流水线尾部（节奏发段 + 出图触发）。
+                try:
+                    if self.repository.is_terminated(request_id=request_id):
+                        return
+                except Exception:
+                    logger.debug("chat request termination check failed", exc_info=True)
                 logger.warning(
                     "chat request heartbeat lost lease: request_id=%s "
                     "worker_id=%s",

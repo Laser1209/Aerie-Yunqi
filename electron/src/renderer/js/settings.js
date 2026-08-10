@@ -91,7 +91,9 @@ class SettingsPanel {
 
     // API Key view controls
     const reloadApiBtn = document.getElementById("apikey-reload-btn");
-    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => this.loadApiKeys());
+    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => { this.loadApiKeys(); this.loadBaiduMap(); });
+    const baiduSaveBtn = document.getElementById("baidu-map-save-btn");
+    if (baiduSaveBtn) baiduSaveBtn.addEventListener("click", () => this.saveBaiduMap());
   }
 
   _syncModePill() {
@@ -128,6 +130,7 @@ class SettingsPanel {
       this.loadYaml();
     } else if (mode === "apikey") {
       this.loadApiKeys();
+      this.loadBaiduMap();
     }
   }
 
@@ -346,6 +349,46 @@ class SettingsPanel {
     const modelInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="model"]`);
     if (baseUrlInput) baseUrlInput.value = p.default_url;
     if (modelInput) modelInput.value = p.default_model;
+  }
+
+  async loadBaiduMap() {
+    const dot = document.getElementById("baidu-map-dot");
+    const statusEl = document.getElementById("baidu-map-status");
+    const akInput = document.getElementById("baidu-map-ak");
+    const skInput = document.getElementById("baidu-map-sk");
+    try {
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/baidu-map" });
+      const d = (r && r.data) || {};
+      const configured = !!(d.ak_configured || d.sk_configured);
+      if (dot) dot.style.background = configured ? "var(--success, #2ecc71)" : "var(--text-muted, #999)";
+      if (statusEl) statusEl.textContent = configured ? "已配置" : "未配置";
+      if (akInput) akInput.value = d.ak_masked || "";
+      if (skInput) skInput.value = d.sk_masked || "";
+    } catch (e) {
+      if (statusEl) { statusEl.textContent = "读取失败"; statusEl.style.color = "var(--danger, #e74c3c)"; }
+    }
+  }
+
+  async saveBaiduMap() {
+    const st = document.getElementById("apikey-status");
+    const btn = document.getElementById("baidu-map-save-btn");
+    const akInput = document.getElementById("baidu-map-ak");
+    const skInput = document.getElementById("baidu-map-sk");
+    const body = {};
+    if (akInput && akInput.value.trim()) body.ak = akInput.value.trim();
+    if (skInput && skInput.value.trim()) body.sk = skInput.value.trim();
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "保存中…"; st.style.color = "var(--text-muted, #999)"; }
+    try {
+      const r = await window.aerie.api.request({ method: "POST", path: "/api/env/baidu-map", body });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      if (st) { st.textContent = "保存成功，重启后端后生效"; st.style.color = "var(--success, #2ecc71)"; }
+      await this.loadBaiduMap();
+    } catch (e) {
+      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   async load() {

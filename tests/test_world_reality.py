@@ -8,23 +8,33 @@
 
 from __future__ import annotations
 
-import sys
-import types
 from datetime import datetime, timezone
 
 from core.world_simulation import WorldSimulation
 
 
 def _stub_baidu_maps(monkeypatch, places):
-    """mcp_Bai_Du_Di_Tu 是 MCP 工具而非项目内模块，测试环境无法导入。
+    """百度 Web 服务 REST：mock core.world_reality._http_get_json 的 place 检索响应。
 
-    先在 sys.modules 注入一个 stub 模块，再 monkeypatch 其 map_search_places。
+    替换前代码依赖 MCP 模块 mcp_Bai_Du_Di_Tu（测试环境无法导入）；替换后走
+    weather_service.baidu_ak + _http_get_json，这里给 AK 并 stub HTTP 响应。
     """
-    mod = types.ModuleType("mcp_Bai_Du_Di_Tu")
-    mod.map_search_places = lambda query, region: places
-    sys.modules["mcp_Bai_Du_Di_Tu"] = mod
-    monkeypatch.setattr("mcp_Bai_Du_Di_Tu.map_search_places", mod.map_search_places)
-    return mod
+    monkeypatch.setenv("BAIDU_MAP_AK", "test-ak")
+
+    def _fake_http_get_json(url: str):
+        results = [
+            {
+                "name": p.get("name", "") if isinstance(p, dict) else str(p),
+                "address": p.get("addr", "") if isinstance(p, dict) else "",
+                "area": p.get("area", "") if isinstance(p, dict) else "",
+                "detail_info": {"tag": p.get("tag", "") if isinstance(p, dict) else ""},
+            }
+            for p in places
+        ]
+        return {"status": 0, "results": results}
+
+    monkeypatch.setattr("core.world_reality._http_get_json", _fake_http_get_json)
+    return _fake_http_get_json
 
 
 def _sim(config=None, *, ts=datetime(2026, 7, 28, 9, 0, tzinfo=timezone.utc)):
@@ -46,13 +56,37 @@ def test_fetch_reality_never_raises_and_has_stable_shape(monkeypatch):
 
     import asyncio
 
-    reality = asyncio.run(wr.fetch_reality("上海"))
-    assert reality["city"] == "上海"
+    # 用未知城市：百度不可用、内置数据也无此城市 → 全部保持空、结构稳定、不抛。
+    reality = asyncio.run(wr.fetch_reality("不存在的城市"))
+    assert reality["city"] == "不存在的城市"
     assert reality["weather"] == {}
     assert reality["nearby_places"] == []
     assert reality["city_events"] == []
     assert reality["error"]  # 记录了失败原因
     assert reality["stub"] is True
+
+
+def test_fetch_reality_falls_back_to_builtin_places_without_ak(monkeypatch):
+    """未配置百度 AK 时，已知城市（重庆）回退内置地点/本地活动，开箱即用。"""
+    import core.world_reality as wr
+
+    async def _weather(city, location=None):
+        return {"city": "重庆", "temp": "32", "desc": "毛毛雨"}
+
+    async def _news(limit=4):
+        return [], None
+
+    monkeypatch.setenv("BAIDU_MAP_AK", "")
+    monkeypatch.setattr("core.weather_service.fetch_weather_for_city", _weather)
+    monkeypatch.setattr("core.brief_fetcher.fetch_cn_news", _news)
+
+    import asyncio
+
+    reality = asyncio.run(wr.fetch_reality("重庆"))
+    names = [p["name"] for p in reality["nearby_places"]]
+    assert "洪崖洞" in names and "磁器口古镇" in names
+    titles = [e["title"] for e in reality["city_events"]]
+    assert "洪崖洞夜景灯光秀" in titles
 
 
 def test_fetch_reality_normalizes_places_and_events(monkeypatch):
@@ -91,7 +125,12 @@ def test_world_snapshot_injects_real_weather_nearby_and_events():
     assert snap.weather_mood == "rain"  # 中雨 → rain
     assert snap.weather_detail == "上海 21 中雨"
     assert snap.city == "上海"
-    assert snap.nearby_objects == ["人民公园", "静安寺"]
+    # 附近地点与"她的房间物件"合并：既有窗外/附近城市地点，也有公寓物件。
+    assert {"人民公园", "静安寺"} <= set(snap.nearby_objects)
+    assert any(
+        o in snap.nearby_objects
+        for o in ("gray_sofa", "design_desk", "bookshelf", "window")
+    )
     assert snap.city_events and snap.city_events[0]["title"] == "某城市今日热点"
 
 

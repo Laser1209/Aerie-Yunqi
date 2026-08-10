@@ -9,9 +9,11 @@ Phase 9: every step also writes to a 9-stage cognition trace
 
 from __future__ import annotations
 import asyncio
+import hashlib
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -35,6 +37,15 @@ from core.response_validator import ResponseValidator
 from core.content_validator import ContentValidator
 
 logger = logging.getLogger(__name__)
+
+# Phase 14: 聊天触发生图的有效意图集合 + 关键词未命中时语义兜底的模糊信号。
+# 触发信号不限于"拍照/照片"：用户"想看某物/看你"（分享欲+可视化载体）同样是出图意图，
+# 死盯拍照词会导致漏判（"我看看你的床什么样子"）与误判。
+_PHOTO_INTENTS = frozenset({"role_selfie", "role_in_scene", "couple_photo", "environment_object"})
+_FUZZY_IMAGE_HINTS = (
+    "拍", "照", "图", "相片", "自拍", "样子", "形象", "看看", "想看", "什么样",
+    "photo", "pic", "picture", "image", "selfie",
+)
 
 
 @dataclass
@@ -96,6 +107,8 @@ class Pipeline:
         self.memory_store = memory_store or getattr(context_builder, "memory", None)
         self._summary_tasks: set[asyncio.Task[Any]] = set()
         self._summary_inflight: set[str] = set()
+        # 用户明确要求照片时触发的后台生图任务（fire-and-forget，文本先发、图后到）。
+        self._photo_tasks: set[asyncio.Task[Any]] = set()
         self._splitter = SemanticMessageSplitter()
         # v13.9: 回复校验器（准确性 Guard + 质量 Judge）
         self.validator = ResponseValidator()
@@ -922,8 +935,178 @@ class Pipeline:
                 result["event_sequence"] = request_state.sequence
                 return result
             self.send_queue.enqueue(reply)
+
+        # Phase 14: 用户明确要照片 → 后台触发生成（文本已发完，图片随后注入）。
+        try:
+            await self._trigger_chat_photo(msg, route_mode, request_context)
+        except Exception:
+            logger.debug("chat photo trigger failed", exc_info=True)
+
         result["event_sequence"] = request_state.sequence
         return result
+
+    async def _trigger_chat_photo(
+        self,
+        msg: IncomingMessage,
+        route_mode: str,
+        request_context: RequestContext | None,
+    ) -> None:
+        """用户明确要照片 → fire-and-forget 触发一次真实生图。
+
+        复用 Phase 14 的 ``Companion.publish_image_candidate`` 完整链路
+        （幂等 / 安全检查 / 资产落盘 / 派发到 local_chat 或 QQ）。生图是耗时的
+        同步 HTTP 调用，这里放到被追踪的后台任务里，文本气泡先发、图片气泡稍后
+        到达，事件循环不被阻塞。用户主动要求（scene=local_send）不占用主动发图
+        每日额度。
+
+        意图判断分两层：先走 ``VisualIntentRouter`` 关键词快速路径；未命中但消息
+        疑似涉及图片时，降级到 LLM 语义判断，避免"拍照/拍一张照片"这类自然表达
+        因关键词覆盖不全而漏触发。
+        """
+        try:
+            if route_mode not in ("FULL", "AUTO"):
+                return
+            if not FeatureFlags().is_enabled("world_image_candidates_v1"):
+                return
+            from core.image_service import VisualIntentRouter
+
+            prompt_text = str(msg.content or "")
+            routed = VisualIntentRouter().route(prompt=prompt_text)
+            intent = str(routed.get("visual_intent") or "")
+            if routed.get("status") != "ok" or intent not in _PHOTO_INTENTS:
+                # 关键词没命中 → 语义兜底：疑似图片相关时让 LLM 判断真实意图
+                intent = ""
+                if self._has_fuzzy_image_signal(prompt_text):
+                    intent = await asyncio.wait_for(
+                        self._judge_photo_intent(prompt_text), timeout=10
+                    )
+                if intent not in _PHOTO_INTENTS:
+                    logger.debug(
+                        "[ChatPhoto] no photo intent route=%s judge=%s",
+                        routed.get("visual_intent"),
+                        intent,
+                    )
+                    return
+
+            from core.companion import get_companion
+
+            comp = get_companion()
+            publisher = getattr(comp, "publish_image_candidate", None)
+            if not callable(publisher):
+                return
+            world_port = getattr(comp, "world_port", None)
+            if world_port is None or not callable(
+                getattr(world_port, "publish_image_candidate", None)
+            ):
+                return
+
+            user_id = str(msg.user_id or "")
+            turn_key = ""
+            if request_context is not None:
+                turn_key = str(getattr(request_context, "turn_id", "") or "")
+            if not turn_key:
+                turn_key = hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
+            idempotency_key = f"chat-photo:{user_id}:{turn_key}"
+            channel = "qq" if str(msg.channel or "") == "qq" else "local_chat"
+            candidate = {
+                "candidate_id": f"chat-photo-{user_id}-{int(time.time())}",
+                "idempotency_key": idempotency_key,
+                "scene": "local_send",
+                "owner_id": user_id,
+                "channel": channel,
+                "target": user_id,
+                "prompt_key": intent,
+                "reason_code": "user_requested",
+                "source": "manual",
+                "score": 1.0,
+            }
+            task = asyncio.create_task(publisher(candidate))
+
+            def _log_photo_task(t: asyncio.Task) -> None:
+                self._photo_tasks.discard(t)
+                try:
+                    result = t.result()
+                except Exception:
+                    logger.warning(
+                        "[ChatPhoto] publisher task failed idem=%s", idempotency_key,
+                        exc_info=True,
+                    )
+                    return
+                if isinstance(result, dict):
+                    logger.info(
+                        "[ChatPhoto] publisher result status=%s reason=%s channel=%s "
+                        "consumed=%s idem=%s",
+                        result.get("status"), result.get("reason"), result.get("channel"),
+                        bool(result.get("consumed")), idempotency_key,
+                    )
+                else:
+                    logger.info("[ChatPhoto] publisher result=%r idem=%s", result, idempotency_key)
+
+            task.add_done_callback(_log_photo_task)
+            logger.info(
+                "[ChatPhoto] triggered prompt_key=%s channel=%s idem=%s",
+                intent,
+                channel,
+                idempotency_key,
+            )
+        except Exception:
+            logger.debug("chat photo trigger failed", exc_info=True)
+
+    @staticmethod
+    def _has_fuzzy_image_signal(text: str) -> bool:
+        """消息是否疑似涉及图片（含拍/照/图/photo 等弱信号）。
+
+        仅在有弱信号时才值得花一次 LLM 语义判断，避免对每条消息都发起额外调用。
+        """
+        t = str(text or "").lower()
+        return any(h in t for h in _FUZZY_IMAGE_HINTS)
+
+    async def _judge_photo_intent(self, text: str) -> str:
+        """关键词未命中时的语义兜底：让 LLM 判断消息是否要求生成/发送图片。
+
+        Returns one of: role_selfie / role_in_scene / couple_photo /
+        environment_object / ""（不是图片请求）。
+        """
+        brain = getattr(self, "brain", None)
+        if brain is None:
+            return ""
+        try:
+            prompt = (
+                "你是视觉意图判断器。判断用户这句话是否隐含「想看到你（AI 恋人）世界里的某个具体视觉载体」"
+                "的意图——即希望用一张图片来满足这份分享欲。不要只盯“拍照/照片”字眼，"
+                "关键看有没有一个具体的“想看”对象（你本人/你的穿着/你的家/某个物体）。"
+                "只输出一个 JSON 对象，不要输出任何其他内容：\n"
+                '{"visual_intent": "role_selfie" | "role_in_scene" | "couple_photo" | "environment_object" | "none"}\n'
+                "含义：\n"
+                "role_selfie=想看你的样子/自拍/穿着形象，如“看看你”“你长什么样”“你衣服是什么样子”“拍拍照我看看”；\n"
+                "role_in_scene=想看你在某个场景/地点里，如“看看你在家的样子”“你窗边什么样子”；\n"
+                "couple_photo=想看你和用户的合照/合影；\n"
+                "environment_object=想看你的生活空间或某个具体物体/环境，如“让我看看你家里什么样子”"
+                "“我看看你的床什么样子”“看看你厨房”；\n"
+                "none=只是问候/抽象询问/没有具体视觉载体，如“看看你最近怎么样”“照顾好自己”“看一下这个文件”；"
+                "用户想看他自己家的东西（我家/我的床）也判 none，因为你没有他世界的画面。\n"
+                "判定要点：有「想看/看看/让我看/给我看 + 具体载体（你的/家里/床/房间/衣服/现在/某物）」"
+                "就有出图意图；只有“看”但没有具体想看的对象，或纯抽象关心，判 none。"
+            )
+            resp = await brain.chat(
+                [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": str(text or "")},
+                ],
+                temperature=0.1,
+            )
+            raw = str(getattr(resp, "text", "") or "")
+            raw = self._strip_think(raw)
+            m = re.search(r'"visual_intent"\s*:\s*"([^"]+)"', raw)
+            if not m:
+                logger.debug("[ChatPhoto] semantic judge unparseable: %r", raw[:120])
+                return ""
+            intent = m.group(1).strip()
+            logger.info("[ChatPhoto] semantic judge intent=%s msg=%r", intent, str(text or "")[:40])
+            return intent
+        except Exception:
+            logger.debug("[ChatPhoto] semantic judge failed", exc_info=True)
+            return ""
 
     # ── Helpers ────────────────────────────────────────
     def _call_optional_context_provider(self, name: str, *args) -> Any:
@@ -1871,7 +2054,7 @@ class Pipeline:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def shutdown_background_tasks(self) -> None:
-        tasks = list(self._summary_tasks)
+        tasks = list(self._summary_tasks) + list(self._photo_tasks)
         for task in tasks:
             if not task.done():
                 task.cancel()
@@ -1879,6 +2062,7 @@ class Pipeline:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._summary_tasks.clear()
         self._summary_inflight.clear()
+        self._photo_tasks.clear()
 
     @staticmethod
     def _default_rolling_summary(

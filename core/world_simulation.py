@@ -74,16 +74,18 @@ DEFAULT_WORLD_PHASES: dict[str, dict[str, Any]] = {
 
 
 # ── Environment objects per (location, activity) ─────────────────
+# 物件 = 伊塔重庆复式公寓的空间素材（与 persona 复式公寓设定对齐），
+# 而非通用占位物；真实附近地点（重庆 POI）在 tick() 中与之合并为"她的家 + 她窗外的城市"。
 _ENVIRONMENT_OBJECTS: dict[tuple[str, str], list[str]] = {
-    ("home", "sleeping"): ["bed", "night_lamp", "window", "alarm_clock"],
-    ("home", "planning"): ["desk", "notebook", "coffee_mug", "window", "calendar"],
-    ("home", "dining"): ["dining_table", "plate", "tea_cup", "kitchen_counter"],
-    ("home", "relaxing"): ["sofa", "tv_remote", "blanket", "bookshelf", "mug"],
-    ("study", "working"): ["laptop", "monitor", "keyboard", "notebook", "pen_holder"],
+    ("home", "sleeping"): ["king_bed", "night_lamp", "window", "your_coat"],
+    ("home", "planning"): ["password_lock", "shoe_cabinet", "gray_sofa", "bookshelf"],
+    ("home", "dining"): ["double_door_fridge", "round_table", "kitchen_island"],
+    ("home", "relaxing"): ["gray_sofa", "floor_lamp", "bookshelf", "pendant"],
+    ("study", "working"): ["design_desk", "imac", "drawing_tablet", "corkboard"],
 }
 
-_DEFAULT_HOME_OBJECTS = ["sofa", "desk", "window", "bookshelf"]
-_DEFAULT_STUDY_OBJECTS = ["laptop", "notebook", "desk"]
+_DEFAULT_HOME_OBJECTS = ["gray_sofa", "floor_lamp", "bookshelf", "your_coat"]
+_DEFAULT_STUDY_OBJECTS = ["design_desk", "imac", "drawing_tablet"]
 
 # ── Visual topic derivation rules ────────────────────────────────
 # 每个 activity 可选的视觉话题前缀; 与 nearby_objects 组合后去重
@@ -287,8 +289,8 @@ class WorldSimulation:
         topics: list[str] = []
         for p in prefixes:
             topics.append(p)
-        # 把环境物件衍生为 "object_<name>" 话题, 让主动消息有可发图片素材
-        for obj in nearby_objects[:3]:
+        # 把环境物件（含重庆 POI）衍生为 "object_<name>" 话题, 让主动消息有可发图片素材。
+        for obj in nearby_objects[:6]:
             topic = f"object_{obj}"
             if topic not in topics:
                 topics.append(topic)
@@ -425,14 +427,12 @@ class WorldSimulation:
         weather_mood = real_mood if real_mood != _DEFAULT_WEATHER_MOOD else self._compute_weather(phase_name, ts)
         weather_detail = self._real_weather_detail()
 
-        # 真实附近地点优先；无则用模板。
+        # 房间物件（她的重庆公寓）在前，窗外/附近的真实城市地点（重庆 POI）在后，
+        # 合并去重：视觉素材既有"她的家"，也有"她窗外的重庆"，与 location 语义一致。
+        room_objects = self._compute_nearby_objects(location, activity)
         real_nearby = self._reality_nearby_objects()
-        if real_nearby:
-            nearby_objects = real_nearby[:6]
-            visual_topics = self._derive_visual_topics(activity, nearby_objects)
-        else:
-            nearby_objects = self._compute_nearby_objects(location, activity)
-            visual_topics = self._derive_visual_topics(activity, nearby_objects)
+        nearby_objects = list(dict.fromkeys(room_objects + real_nearby))[:6]
+        visual_topics = self._derive_visual_topics(activity, nearby_objects)
 
         instance_id = _sha256(
             json.dumps(

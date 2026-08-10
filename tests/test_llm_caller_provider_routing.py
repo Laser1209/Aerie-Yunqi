@@ -130,6 +130,9 @@ def test_generate_image_uses_explicit_openai_compatible_provider(monkeypatch):
 def test_generate_image_without_explicit_provider_keeps_stub(monkeypatch):
     monkeypatch.delenv("AERIE_IMAGE_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_IMAGE_API_KEY", raising=False)
+    monkeypatch.delenv("IMAGE_GEN_API_KEY", raising=False)
+    monkeypatch.delenv("IMAGE_GEN_BASE_URL", raising=False)
+    monkeypatch.delenv("IMAGE_GEN_MODEL", raising=False)
     brain = LLMCaller()
 
     def fail_post(*args, **kwargs):
@@ -141,6 +144,43 @@ def test_generate_image_without_explicit_provider_keeps_stub(monkeypatch):
 
     assert result["status"] == "stub"
     assert result["output_path"] is None
+
+
+def test_generate_image_uses_image_gen_env_fallback(monkeypatch):
+    monkeypatch.delenv("AERIE_IMAGE_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_IMAGE_API_KEY", raising=False)
+    monkeypatch.setenv("IMAGE_GEN_API_KEY", "relay-key")
+    monkeypatch.setenv("IMAGE_GEN_BASE_URL", "https://image2.inian.one/v1")
+    monkeypatch.setenv("IMAGE_GEN_MODEL", "gpt-image-2")
+    brain = LLMCaller()
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"b64_json": _png_b64()}]}
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("core.llm_caller.httpx.post", fake_post)
+
+    result = brain.generate_image(
+        "draw a calm lake",
+        metadata={"idempotency_key": "chat-photo:123:turn_abc"},
+    )
+
+    assert result["status"] == "ok"
+    assert result["provider"] == "openai_compatible_image"
+    assert result["model"] == "gpt-image-2"
+    assert calls[0]["url"] == "https://image2.inian.one/v1/images/generations"
+    assert calls[0]["headers"]["Authorization"] == "Bearer relay-key"
+    assert calls[0]["headers"]["Idempotency-Key"] == "chat-photo:123:turn_abc"
+    assert calls[0]["json"]["model"] == "gpt-image-2"
+    assert calls[0]["json"]["response_format"] == "b64_json"
 
 
 def test_speak_text_uses_explicit_openai_compatible_tts_provider(monkeypatch):

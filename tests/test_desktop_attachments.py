@@ -77,9 +77,9 @@ def test_capabilities_are_server_owned_and_dangerous_types_are_metadata_only():
     assert by_extension["exe"]["analysisMode"] == "metadata"
     assert by_extension["apk"]["analysisMode"] == "metadata"
     for extension in ("png", "wav", "mp4"):
-        assert by_extension[extension]["semanticStatus"] == "unavailable"
+        assert by_extension[extension]["semanticStatus"] == "not_required"
         assert by_extension[extension]["contentExtractionAvailable"] is False
-        assert by_extension[extension]["readyRequiresContentExtracted"] is True
+        assert by_extension[extension]["readyRequiresContentExtracted"] is False
     assert payload["states"] == [
         "queued", "processing", "ready", "failed", "quarantined", "unsupported"
     ]
@@ -367,6 +367,62 @@ def test_media_extract_mode_never_calls_markitdown_or_online_speech(
     assert error.value.metadata["contentKind"] == "unavailable"
     assert error.value.metadata["semanticStatus"] == "unavailable"
     assert calls == {"markitdown": 0, "speech": 0}
+
+
+def test_media_metadata_mode_reaches_ready_and_can_send(tmp_path):
+    """Media attachments run in metadata mode (no semantic extraction) and reach ready."""
+    from core.desktop_attachments import CAPABILITY_BY_EXTENSION, DesktopAttachmentService
+
+    assert CAPABILITY_BY_EXTENSION["png"].analysis_mode == "metadata"
+    source = tmp_path / "photo.png"
+    source.write_bytes(b"\x89PNG\r\n\x1a\nsynthetic")
+    worker = RecordingWorker()
+    service = DesktopAttachmentService(
+        _connection(),
+        storage_root=tmp_path / "desktop-only",
+        scanner=CleanScanner(),
+        worker=worker,
+    )
+    queued = service.ingest(source, original_name="photo.png", mime_type="image/png")
+    assert queued["state"] == "queued"
+
+    ready = service.process(queued["attachment_id"])
+    assert worker.requests[0]["analysisMode"] == "metadata"
+    assert ready["state"] == "ready"
+    assert ready["metadata"]["contentExtracted"] is False
+    assert ready["metadata"]["semanticStatus"] == "not_required"
+
+    # metadata-mode attachments must be sendable without verified extracted content
+    resolved = service.resolve_ready_for_send([queued["attachment_id"]])
+    assert resolved[0]["attachmentId"] == queued["attachment_id"]
+    public = service.public_record(queued["attachment_id"])
+    assert public["semanticStatus"] == "not_required"
+    assert public["contentExtracted"] is False
+
+
+def test_fake_rar_fails_closed(tmp_path):
+    """A RAR carrying only the file signature (garbage body) must not reach ready."""
+    from core.attachment_worker_runtime import (
+        AttachmentExtractionError,
+        process_worker_request,
+    )
+
+    source = tmp_path / "fake.rar"
+    source.write_bytes(b"Rar!\x1a\x07\x00" + b"garbage")
+    with pytest.raises(AttachmentExtractionError) as error:
+        process_worker_request(
+            {
+                "version": 1,
+                "attachmentId": "att_fake_rar",
+                "path": str(source),
+                "allowedRoot": str(tmp_path),
+                "category": "archive",
+                "analysisMode": "metadata",
+            }
+        )
+    # invalid_rar when rarfile parses (worker env); archive_parser_unavailable
+    # when rarfile is missing (main env) — either way the file never becomes ready.
+    assert error.value.code in {"invalid_rar", "archive_parser_unavailable"}
 
 
 def test_extract_worker_without_verified_content_cannot_become_ready_or_send(tmp_path):

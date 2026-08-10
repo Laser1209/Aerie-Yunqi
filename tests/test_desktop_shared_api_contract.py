@@ -436,8 +436,8 @@ def test_desktop_attachment_http_lifecycle_has_no_public_paths(
         for item in capability_payload["capabilities"]
         for extension in item["extensions"]
     }
-    assert by_extension["png"]["semanticStatus"] == "unavailable"
-    assert by_extension["png"]["readyRequiresContentExtracted"] is True
+    assert by_extension["png"]["semanticStatus"] == "not_required"
+    assert by_extension["png"]["readyRequiresContentExtracted"] is False
     _assert_no_private_paths(capability_payload, storage_root)
 
     upload = client.post(

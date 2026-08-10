@@ -115,20 +115,20 @@ CAPABILITIES: tuple[AttachmentCapability, ...] = (
     AttachmentCapability(
         "image",
         ("jpg", "jpeg", "png", "gif", "webp"),
-        "extract",
-        "Image metadata; semantic extraction fails closed when unavailable",
+        "metadata",
+        "Image metadata only; no offline semantic extraction",
     ),
     AttachmentCapability(
         "audio",
         ("mp3", "wav", "m4a", "opus", "ogg", "flac"),
-        "extract",
-        "Audio metadata; transcription fails closed when unavailable",
+        "metadata",
+        "Audio metadata only; no offline transcription",
     ),
     AttachmentCapability(
         "video",
         ("mp4", "mov", "avi", "mkv", "webm"),
-        "extract",
-        "Video metadata; transcription fails closed when unavailable",
+        "metadata",
+        "Video metadata only; no offline transcription",
     ),
     AttachmentCapability(
         "zip",
@@ -180,9 +180,7 @@ def attachment_capabilities_payload() -> dict[str, Any]:
                 "readyRequiresContentExtracted": capability.analysis_mode == "extract",
                 "contentExtractionAvailable": capability.category
                 not in {"image", "audio", "video", "archive", "executable", "apk"},
-                "semanticStatus": "unavailable"
-                if capability.category in {"image", "audio", "video"}
-                else (
+                "semanticStatus": (
                     "available"
                     if capability.analysis_mode == "extract"
                     else "not_required"

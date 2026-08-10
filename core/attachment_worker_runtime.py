@@ -376,6 +376,13 @@ def validate_rar_archive(
             "invalid_rar",
             "archive is not a valid readable RAR file",
         ) from None
+    if not raw_entries:
+        # rarfile is lenient on garbage that only carries the RAR signature;
+        # unlike a real (even empty) archive it yields no readable members.
+        raise ArchiveSafetyError(
+            "invalid_rar",
+            "archive contains no readable members",
+        )
     return _validate_archive_entries(raw_entries, limits=limits)
 
 

@@ -629,7 +629,17 @@ class Companion:
             }
 
         result = result if isinstance(result, dict) else {}
-        if str(result.get("status") or "") != "accepted":
+        # 兼容两种 world_port 的发布返回约定：
+        # - 进程内 InProcess：{"status": "accepted", "sequence": N, "event_id": ...}
+        # - sidecar：          {"seq": N, "event_id": ..., "payload": {...}}（无 status 字段）
+        # 之前只认 status == accepted，导致 sidecar 模式下发布永远被判 rejected。
+        accepted = (
+            str(result.get("status") or "") == "accepted"
+            or result.get("accepted") is True
+            or "seq" in result
+            or "event_id" in result
+        )
+        if not accepted:
             return {
                 "status": str(result.get("status") or "rejected"),
                 "reason": str(result.get("reason") or "") or "publish_rejected",
@@ -639,7 +649,7 @@ class Companion:
 
         # Consume from the event we just published so the generated image
         # auto-injects into the local chat (or QQ) on this same call.
-        seq = max(0, int(result.get("sequence") or 0) - 1)
+        seq = max(0, int(result.get("sequence") or result.get("seq") or 0) - 1)
         try:
             consumed = await self.process_world_image_candidates_once(last_seq=seq)
         except Exception:

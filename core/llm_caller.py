@@ -1,6 +1,7 @@
 """Aerie · 云栖 v0.1.0-beta.1 — LLMCaller: multi-provider LLM call layer with fallback chain."""
 
 from __future__ import annotations
+import asyncio
 import base64
 import json
 import logging
@@ -204,6 +205,20 @@ class LLMCaller:
                 "key": doubao_key,
                 "model": doubao_model,
                 "supports_tools": doubao_supports_tools,
+            })
+
+        # Light/cheap provider for fast lightweight tasks (e.g. brief greeting
+        # refresh on every drawer open). Uses the same SiliconFlow key with a
+        # separate model so expensive primary models are never touched here.
+        sf_light_model = os.getenv("SILICONFLOW_LIGHT_MODEL", "").strip()
+        sf_key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+        if sf_light_model and sf_key:
+            providers.append({
+                "name": "siliconflow-light",
+                "url": os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.com/v1"),
+                "key": sf_key,
+                "model": sf_light_model,
+                "supports_tools": False,
             })
 
         if not providers:
@@ -876,6 +891,8 @@ class LLMCaller:
         weather: dict | None = None,
         todo_count: int = 0,
         top_task: str | None = None,
+        preferred_provider: str = "openai",
+        timeout: float | None = None,
     ) -> str:
         """Generate a persona-aligned greeting for the daily brief.
 
@@ -885,6 +902,8 @@ class LLMCaller:
             weather: optional weather dict {city, temp, desc}
             todo_count: number of pending todos
             top_task: title of the highest-priority incomplete task
+            preferred_provider: provider name to promote first (default "openai")
+            timeout: optional hard deadline for the whole call; None = no cap
 
         Returns:
             Greeting text string (20-50 chars, persona voice).
@@ -935,7 +954,8 @@ class LLMCaller:
             {"role": "user", "content": user_msg},
         ]
         try:
-            resp = await self.chat(messages)
+            call = self.chat(messages, preferred_provider=preferred_provider)
+            resp = await call if timeout is None else await asyncio.wait_for(call, timeout=timeout)
             if resp.text and resp.text.strip():
                 text = resp.text.strip().strip('"').strip("'")
                 if 10 <= len(text) <= 100:
@@ -944,6 +964,31 @@ class LLMCaller:
             logger.warning("compose_brief_greeting: LLM call failed: %s", e)
 
         return _fallback_greeting(time_of_day, todo_count, weather)
+
+    async def compose_quick_greeting(
+        self,
+        time_of_day: str,
+        date_str: str,
+        weather: dict | None = None,
+        todo_count: int = 0,
+        top_task: str | None = None,
+        timeout: float = 6.0,
+    ) -> str:
+        """Fast persona greeting via the light/cheap provider.
+
+        Used to refresh the brief greeting on every drawer open without
+        touching expensive primary models. Always respects ``timeout`` so the
+        UI never waits long; on failure it degrades to the template fallback.
+        """
+        return await self.compose_brief_greeting(
+            time_of_day=time_of_day,
+            date_str=date_str,
+            weather=weather,
+            todo_count=todo_count,
+            top_task=top_task,
+            preferred_provider="siliconflow-light",
+            timeout=timeout,
+        )
 
     # ── Daily Brief: news summarization (v12.2.0) ─────────────
     async def summarize_news_batch(self, items: list[dict]) -> list[dict]:

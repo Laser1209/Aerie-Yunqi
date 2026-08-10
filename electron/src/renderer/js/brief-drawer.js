@@ -227,6 +227,7 @@ class BriefDrawer {
     this._ensureDisplayName();
     if (this._cached && (Date.now() - this._cached._ts) < 60_000) {
       this._renderData(this._cached);
+      this._refreshGreeting();
     } else {
       this.refresh();
     }
@@ -258,12 +259,34 @@ class BriefDrawer {
       this._cached = Object.assign({}, data, { _ts: Date.now() });
       this._cached._limit = 3;
       this._renderData(this._cached);
+      this._refreshGreeting();
     } catch (e) {
       console.warn("brief-drawer: refresh failed", e);
       this._renderError(e.message || String(e));
     } finally {
       this._loading = false;
       this._spinRefresh(false);
+    }
+  }
+
+  /* Refresh only the hero greeting in place (light model, fast, non-blocking).
+     Falls back to the cached greeting silently on any failure. */
+  async _refreshGreeting() {
+    const api = this._api();
+    if (!api || !this._cached) return;
+    try {
+      const r = await api({ method: "POST", path: "/api/brief/greeting" });
+      const g = (r && r.data && r.data.greeting) ? String(r.data.greeting).trim() : "";
+      if (!g || !this._cached) return;
+      this._cached.greeting = g;
+      const hero = this._drawer.querySelector(".brief-drawer__hero-greet .brief-drawer__hero-text");
+      if (hero) {
+        hero.textContent = g;
+      } else {
+        this._renderData(this._cached);
+      }
+    } catch (e) {
+      console.warn("brief-drawer: greeting refresh failed", e);
     }
   }
 

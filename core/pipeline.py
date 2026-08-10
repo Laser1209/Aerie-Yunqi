@@ -38,13 +38,29 @@ from core.content_validator import ContentValidator
 
 logger = logging.getLogger(__name__)
 
-# Phase 14: 聊天触发生图的有效意图集合 + 关键词未命中时语义兜底的模糊信号。
-# 触发信号不限于"拍照/照片"：用户"想看某物/看你"（分享欲+可视化载体）同样是出图意图，
-# 死盯拍照词会导致漏判（"我看看你的床什么样子"）与误判。
+# Phase 14: 聊天触发生图的有效意图集合 + 语义兜底的触发信号。
+# 触发信号不是"判定"，只是"是否值得花一次 LLM 语义判断"的成本闸门：
+# 用户消息带视觉兴趣（看/拍/图/样子/发你…）就交给 LLM 语义判断真实意图，
+# 纯寒暄（在吗/晚安）直接跳过，避免每条消息都多一次 LLM 调用拖慢回复。
 _PHOTO_INTENTS = frozenset({"role_selfie", "role_in_scene", "couple_photo", "environment_object"})
 _FUZZY_IMAGE_HINTS = (
-    "拍", "照", "图", "相片", "自拍", "样子", "形象", "看看", "想看", "什么样",
+    # 拍照/照片/图族
+    "拍", "照", "图", "相片", "自拍", "照片", "美照", "靓照",
+    # 看族（视觉确认）
+    "看", "瞅", "瞧", "瞄", "看看", "想看", "给我看", "给你看",
+    # 样子/形象
+    "样子", "形象", "长什么样", "什么样", "啥样",
+    # 发/传图动作
+    "发你", "发张", "发照片", "发图", "传你", "发过来", "发过去", "给你发",
+    # 生活空间载体
+    "家里", "房间", "床", "厨房", "窗边", "窗外", "阳台", "衣柜",
+    # 英文
     "photo", "pic", "picture", "image", "selfie",
+)
+# 回复判断的触发信号（更窄）：只有回复在叙述"发图/发送"这类动作才值得判断。
+_REPLY_PHOTO_HINTS = (
+    "拍", "照片", "自拍", "发送", "发你", "发过去", "发给你", "发过来",
+    "传你", "给你看", "点了发送", "对着镜子", "发张",
 )
 
 
@@ -821,49 +837,78 @@ class Pipeline:
             except Exception:
                 pass
 
-        for idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
-            if self._checkpoint_cancel(request_state, "before_event"):
-                result["event_sequence"] = request_state.sequence
-                return result
-            try:
-                emit_kwargs = {
-                    "role": "assistant",
-                    "id": rid,
-                    "user_id": msg.user_id,
-                    "content": seg,
-                    "source": msg.source,
-                    **self._event_contract(
-                        request_state,
-                        message_id=rid,
-                        response_group_id=request_state.response_group_id,
-                    ),
-                }
-                if idx == 0:
-                    if emotion_info:
-                        emit_kwargs["emotion"] = emotion_info["label"]
-                    if eruption_info:
-                        emit_kwargs["eruption"] = eruption_info["mode"]
-                emit("assistant", **emit_kwargs)
-            except Exception:
-                pass
+        # ══════════════════════════════════════════════
+        # 12.5 用户要图 → 引导句先发 → 出图并等送达 → 剩余文本再发
+        # 命中出图意图时，把回复第一段作为"引导句"先发（如"你稍微等一下"、
+        # "我摄像头好像坏了"这类人设式托词），让等待出图的空档有人情味；
+        # 剩余段落等图片真正落到页面后再发。生图失败/超时不阻塞文本放行。
+        # ══════════════════════════════════════════════
+        photo_intent = ""
+        try:
+            photo_intent = await self._resolve_chat_photo_intent(msg, reply_text, route_mode)
+        except Exception:
+            logger.debug("chat photo intent resolve failed", exc_info=True)
+        lead_in_count = 1 if (photo_intent and len(segments) > 1) else 0
 
-            # Decide pacing for the NEXT gap (only if there is a next segment)
-            if idx < len(segments) - 1:
-                interval_sec, style = compute_persona_interval(
-                    segment_index=idx,
-                    emotion_label=emotion_label_local,
-                    threshold=threshold_summary_local,
-                    is_eruption=is_eruption_local,
-                    segment_content=seg,
-                )
-                pacing_log.append({
-                    "seg_idx": idx,
-                    "next_style": style,
-                    "next_interval_ms": int(interval_sec * 1000),
-                    "source": "local",
-                })
-                if msg.source == "local" and interval_sec > 0:
-                    await asyncio.sleep(interval_sec)
+        async def _emit_segments(start: int, end: int) -> bool:
+            """emit segments[start:end]（含首段情绪/爆发标记与段间节奏）。"""
+            for i in range(start, end):
+                if self._checkpoint_cancel(request_state, "before_event"):
+                    result["event_sequence"] = request_state.sequence
+                    return False
+                try:
+                    emit_kwargs = {
+                        "role": "assistant",
+                        "id": ai_row_ids[i],
+                        "user_id": msg.user_id,
+                        "content": segments[i],
+                        "source": msg.source,
+                        **self._event_contract(
+                            request_state,
+                            message_id=ai_row_ids[i],
+                            response_group_id=request_state.response_group_id,
+                        ),
+                    }
+                    if i == 0:
+                        if emotion_info:
+                            emit_kwargs["emotion"] = emotion_info["label"]
+                        if eruption_info:
+                            emit_kwargs["eruption"] = eruption_info["mode"]
+                    emit("assistant", **emit_kwargs)
+                except Exception:
+                    pass
+                # 段间节奏（组内相邻段；引导句与剩余段之间的空档由出图时间填充）
+                if i < end - 1:
+                    interval_sec, style = compute_persona_interval(
+                        segment_index=i,
+                        emotion_label=emotion_label_local,
+                        threshold=threshold_summary_local,
+                        is_eruption=is_eruption_local,
+                        segment_content=segments[i],
+                    )
+                    pacing_log.append({
+                        "seg_idx": i,
+                        "next_style": style,
+                        "next_interval_ms": int(interval_sec * 1000),
+                        "source": "local",
+                    })
+                    if msg.source == "local" and interval_sec > 0:
+                        await asyncio.sleep(interval_sec)
+            return True
+
+        # 1) 先发引导句（若有）
+        if lead_in_count:
+            if not await _emit_segments(0, lead_in_count):
+                return result
+        # 2) 出图并等送达（失败/超时不阻塞后续文本）
+        if photo_intent:
+            try:
+                await self._deliver_chat_photo(msg, request_context, photo_intent)
+            except Exception:
+                logger.debug("chat photo deliver failed", exc_info=True)
+        # 3) 再发剩余文本
+        if not await _emit_segments(lead_in_count, len(segments)):
+            return result
 
         # Record pacing decisions into the cognition trace for analysis
         # B7.2: the pipeline may not yet know what pacing the SendQueue
@@ -936,145 +981,127 @@ class Pipeline:
                 return result
             self.send_queue.enqueue(reply)
 
-        # Phase 14: 用户明确要照片 → 后台触发生成（文本已发完，图片随后注入）。
-        try:
-            await self._trigger_chat_photo(
-                msg, route_mode, request_context, reply_text=reply_text
-            )
-        except Exception:
-            logger.debug("chat photo trigger failed", exc_info=True)
-
         result["event_sequence"] = request_state.sequence
         return result
 
-    async def _trigger_chat_photo(
+    async def _resolve_chat_photo_intent(
         self,
         msg: IncomingMessage,
+        reply_text: str,
         route_mode: str,
-        request_context: RequestContext | None,
-        *,
-        reply_text: str = "",
-    ) -> None:
-        """用户明确要照片 → fire-and-forget 触发一次真实生图。
+    ) -> str:
+        """解析本轮对话的出图意图（三层）。
 
-        复用 Phase 14 的 ``Companion.publish_image_candidate`` 完整链路
-        （幂等 / 安全检查 / 资产落盘 / 派发到 local_chat 或 QQ）。生图是耗时的
-        同步 HTTP 调用，这里放到被追踪的后台任务里，文本气泡先发、图片气泡稍后
-        到达，事件循环不被阻塞。用户主动要求（scene=local_send）不占用主动发图
-        每日额度。
-
-        意图判断三层：
         1. ``VisualIntentRouter`` 关键词快速路径（用户消息）；
-        2. 关键词未命中但用户消息疑似涉及图片 → LLM 语义判断；
-        3. 用户消息无信号、但 AI 回复本身在描述"发照片/点了发送"（如
-           "找到了吗？"→"这张是随手对着镜子拍的，点了发送"）→ 对回复做语义判断。
-        第 3 层解决"上下文驱动"：用户不重复提拍照词，但 AI 已经承诺发图。
+        2. 关键词未命中 → 用户消息语义判断（不设关键词闸门）；
+        3. 用户消息无信号但 AI 回复在叙述"发图/发你/点了发送" → 回复语义判断。
+
+        Returns one of role_selfie/role_in_scene/couple_photo/environment_object，无则返回 ""。
         """
-        try:
-            if route_mode not in ("FULL", "AUTO"):
-                return
-            if not FeatureFlags().is_enabled("world_image_candidates_v1"):
-                return
-            from core.image_service import VisualIntentRouter
+        if route_mode not in ("FULL", "AUTO"):
+            return ""
+        if not FeatureFlags().is_enabled("world_image_candidates_v1"):
+            return ""
+        from core.image_service import VisualIntentRouter
 
-            prompt_text = str(msg.content or "")
-            routed = VisualIntentRouter().route(prompt=prompt_text)
-            intent = str(routed.get("visual_intent") or "")
-            if routed.get("status") != "ok" or intent not in _PHOTO_INTENTS:
-                # 关键词没命中 → 语义兜底：不设关键词闸门，任何消息都交给 LLM
-                # 判断，避免"瞅瞅你家/我要看你/发你张图"这类没有拍照词、也没有
-                # 模糊信号字的表达漏触发。准确性优先于 token 成本。
-                intent = await asyncio.wait_for(
-                    self._judge_photo_intent(prompt_text), timeout=10
-                )
-                # 用户消息无信号，但 AI 回复在叙述"发图/发你/点了发送"：
-                # 用回复做语义判断，让"找到了吗？"这类上下文延续也能触发。
-                # 回复判断保留模糊信号门，避免对每条回复都发起一次额外调用。
-                reply = str(reply_text or "")
-                if intent not in _PHOTO_INTENTS and self._has_fuzzy_image_signal(reply):
-                    intent = await asyncio.wait_for(
-                        self._judge_reply_photo_intent(reply), timeout=10
-                    )
-                if intent not in _PHOTO_INTENTS:
-                    logger.debug(
-                        "[ChatPhoto] no photo intent route=%s judge=%s",
-                        routed.get("visual_intent"),
-                        intent,
-                    )
-                    return
-
-            from core.companion import get_companion
-
-            comp = get_companion()
-            publisher = getattr(comp, "publish_image_candidate", None)
-            if not callable(publisher):
-                return
-            world_port = getattr(comp, "world_port", None)
-            if world_port is None or not callable(
-                getattr(world_port, "publish_image_candidate", None)
-            ):
-                return
-
-            user_id = str(msg.user_id or "")
-            turn_key = ""
-            if request_context is not None:
-                turn_key = str(getattr(request_context, "turn_id", "") or "")
-            if not turn_key:
-                turn_key = hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
-            idempotency_key = f"chat-photo:{user_id}:{turn_key}"
-            channel = "qq" if str(msg.channel or "") == "qq" else "local_chat"
-            candidate = {
-                "candidate_id": f"chat-photo-{user_id}-{int(time.time())}",
-                "idempotency_key": idempotency_key,
-                "scene": "local_send",
-                "owner_id": user_id,
-                "channel": channel,
-                "target": user_id,
-                "prompt_key": intent,
-                "reason_code": "user_requested",
-                "source": "manual",
-                "score": 1.0,
-            }
-            task = asyncio.create_task(publisher(candidate))
-
-            def _log_photo_task(t: asyncio.Task) -> None:
-                self._photo_tasks.discard(t)
+        prompt_text = str(msg.content or "")
+        routed = VisualIntentRouter().route(prompt=prompt_text)
+        intent = str(routed.get("visual_intent") or "")
+        if routed.get("status") != "ok" or intent not in _PHOTO_INTENTS:
+            # 关键词没命中 → 语义兜底：消息带视觉兴趣信号（看/拍/图/样子/发你…）
+            # 才值得花一次 LLM 判断真实意图；纯寒暄直接跳过，避免拖慢每条回复。
+            # 语义判断本身不依赖关键词，信号只是成本闸门。
+            intent = ""
+            if self._has_fuzzy_image_signal(prompt_text):
                 try:
-                    result = t.result()
+                    intent = await asyncio.wait_for(
+                        self._judge_photo_intent(prompt_text), timeout=8
+                    )
                 except Exception:
-                    logger.warning(
-                        "[ChatPhoto] publisher task failed idem=%s", idempotency_key,
-                        exc_info=True,
+                    logger.debug("chat photo intent judge timeout/failed", exc_info=True)
+                    intent = ""
+            # 用户消息无信号，但 AI 回复在叙述"发图/发你/点了发送"。
+            reply = str(reply_text or "")
+            if intent not in _PHOTO_INTENTS and self._has_reply_photo_signal(reply):
+                try:
+                    intent = await asyncio.wait_for(
+                        self._judge_reply_photo_intent(reply), timeout=8
                     )
-                    return
-                if isinstance(result, dict):
-                    logger.info(
-                        "[ChatPhoto] publisher result status=%s reason=%s channel=%s "
-                        "consumed=%s idem=%s",
-                        result.get("status"), result.get("reason"), result.get("channel"),
-                        bool(result.get("consumed")), idempotency_key,
-                    )
-                else:
-                    logger.info("[ChatPhoto] publisher result=%r idem=%s", result, idempotency_key)
+                except Exception:
+                    logger.debug("chat photo reply judge timeout/failed", exc_info=True)
+                    intent = ""
+        return intent if intent in _PHOTO_INTENTS else ""
 
-            task.add_done_callback(_log_photo_task)
-            logger.info(
-                "[ChatPhoto] triggered prompt_key=%s channel=%s idem=%s",
-                intent,
-                channel,
-                idempotency_key,
-            )
+    async def _deliver_chat_photo(
+        self,
+        msg: IncomingMessage,
+        request_context: RequestContext | None,
+        intent: str,
+    ) -> dict:
+        """触发一次真实生图并等待送达（文本等图：图先落地，再放行后续文本）。
+
+        复用 Phase 14 的 ``Companion.publish_image_candidate`` 完整链路（幂等 /
+        安全检查 / 资产落盘 / 派发到 local_chat 或 QQ）。生图是耗时的同步 HTTP
+        调用，已在线程池执行，不阻塞事件循环。用户主动要求（scene=local_send）
+        不占用主动发图每日额度。失败/超时不会抛异常，由调用方决定放行文本。
+        """
+        from core.companion import get_companion
+
+        comp = get_companion()
+        publisher = getattr(comp, "publish_image_candidate", None)
+        if not callable(publisher):
+            return {"status": "unavailable", "reason": "no_publisher"}
+
+        user_id = str(msg.user_id or "")
+        turn_key = ""
+        if request_context is not None:
+            turn_key = str(getattr(request_context, "turn_id", "") or "")
+        if not turn_key:
+            turn_key = hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
+        idempotency_key = f"chat-photo:{user_id}:{turn_key}"
+        channel = "qq" if str(msg.channel or "") == "qq" else "local_chat"
+        candidate = {
+            "candidate_id": f"chat-photo-{user_id}-{int(time.time())}",
+            "idempotency_key": idempotency_key,
+            "scene": "local_send",
+            "owner_id": user_id,
+            "channel": channel,
+            "target": user_id,
+            "prompt_key": intent,
+            "reason_code": "user_requested",
+            "source": "manual",
+            "score": 1.0,
+        }
+        try:
+            result = await asyncio.wait_for(publisher(candidate), timeout=120)
         except Exception:
-            logger.debug("chat photo trigger failed", exc_info=True)
+            logger.warning(
+                "[ChatPhoto] deliver failed/timed out idem=%s", idempotency_key,
+                exc_info=True,
+            )
+            return {"status": "failed", "reason": "deliver_error"}
+        result = result if isinstance(result, dict) else {}
+        logger.info(
+            "[ChatPhoto] delivered status=%s reason=%s channel=%s consumed=%s idem=%s",
+            result.get("status"), result.get("reason"), result.get("channel"),
+            bool(result.get("consumed")), idempotency_key,
+        )
+        return result
 
     @staticmethod
     def _has_fuzzy_image_signal(text: str) -> bool:
-        """消息是否疑似涉及图片（含拍/照/图/photo 等弱信号）。
+        """消息是否带视觉兴趣信号（看/拍/图/样子/发你…）。
 
-        仅在有弱信号时才值得花一次 LLM 语义判断，避免对每条消息都发起额外调用。
+        只是"是否值得花一次 LLM 语义判断"的成本闸门，不是判定本身。
         """
         t = str(text or "").lower()
         return any(h in t for h in _FUZZY_IMAGE_HINTS)
+
+    @staticmethod
+    def _has_reply_photo_signal(text: str) -> bool:
+        """AI 回复是否在叙述"发图/发送"动作（更窄的信号，用于回复语义判断）。"""
+        t = str(text or "").lower()
+        return any(h in t for h in _REPLY_PHOTO_HINTS)
 
     async def _judge_photo_intent(self, text: str) -> str:
         """关键词未命中时的语义兜底：让 LLM 判断消息是否要求生成/发送图片。

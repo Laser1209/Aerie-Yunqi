@@ -5551,6 +5551,46 @@ async def brief_today() -> dict:
     return {"date": today, "brief": sections, "markdown": md}
 
 
+@app.post("/api/brief/greeting")
+async def brief_greeting_fresh() -> dict:
+    """Regenerate today's brief greeting via the light/cheap provider.
+
+    Called by the drawer on every open so the welcome line feels alive while
+    the rest of the brief stays cached. Never blocks long (4s hard cap); on
+    failure falls back to the cached greeting (or empty string).
+    """
+    from datetime import datetime
+    from core import brief_fetcher
+    from core.llm_caller import LLMCaller
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    cached = brief_fetcher.load_brief(today) or {}
+    todo_stats = cached.get("todo_stats") or {}
+    todos = cached.get("todos") or []
+    # Highest-priority incomplete task title, if any.
+    priority_rank = {"high": 0, "medium": 1, "low": 2}
+    top_task: str | None = None
+    for t in sorted(todos, key=lambda it: priority_rank.get(it.get("priority"), 1)):
+        if not t.get("completed") and (t.get("title") or "").strip():
+            top_task = t["title"].strip()
+            break
+    greeting = ""
+    try:
+        brain = LLMCaller()
+        greeting = await brain.compose_quick_greeting(
+            time_of_day=cached.get("time_of_day") or brief_fetcher.get_time_of_day(),
+            date_str=today,
+            todo_count=todo_stats.get("remaining", 0),
+            weather=cached.get("weather"),
+            top_task=top_task,
+        )
+    except Exception as e:
+        logger.warning("brief_greeting: quick greeting failed: %s", e)
+    if not greeting:
+        greeting = cached.get("greeting") or ""
+    return {"date": today, "greeting": greeting}
+
+
 @app.post("/api/brief/feedback")
 async def brief_feedback(request: Request) -> dict:
     """Save user feedback for today's brief."""

@@ -774,6 +774,7 @@ def redact_image_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "reason_code": str(payload.get("reason_code") or ""),
         "source": str(payload.get("source") or "generated"),
         "score": _safe_float(payload.get("score"), 0.0),
+        "size": str(payload.get("size") or ""),
         "expires_at": str(payload.get("expires_at") or ""),
         "created_at": str(payload.get("created_at") or ""),
     }

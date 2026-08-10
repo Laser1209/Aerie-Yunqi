@@ -36,6 +36,14 @@ class ChatManager {
       loading: false,
       autoLoadCooldown: 0, // 顶部自动加载的冷却时间戳, 防止停在顶部时连发多批
     };
+    // 滚动/未读状态: 用户是否在底部、未读消息数、窗口是否聚焦
+    this._atBottom = true;
+    this._unreadCount = 0;
+    this._windowFocused = true;
+    this._scrollSettleRaf = null;
+    // 浮动的"回到底部/有新消息"按钮
+    this._scrollBtn = null;
+    this._notifiedRequestIds = new Set(); // 已发过通知的 request_id, 避免重复
     // 同时保留在 DOM 里的消息气泡上限。历史很多时靠向上翻页按批加载,
     // 超出即裁剪最旧气泡, 避免开机渲染/滚动时 DOM 过大导致卡顿。
     this._maxDomMessages = 200;
@@ -102,6 +110,107 @@ class ChatManager {
         }
       } catch (_) {}
     });
+
+    // 初始化浮动回到底部按钮 + 窗口焦点跟踪
+    this._initScrollButton();
+    this._initWindowFocus();
+  }
+
+  _initScrollButton() {
+    if (!this._el.messages) return;
+    const container = this._el.messages.parentElement;
+    if (!container) return;
+    container.style.position = "relative";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chat-scroll-bottom-btn";
+    btn.setAttribute("aria-label", "回到底部");
+    btn.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+      <span class="chat-scroll-bottom-btn__badge" hidden>0</span>
+    `;
+    btn.addEventListener("click", () => this._scrollToBottom({ loadNewer: true }));
+    container.appendChild(btn);
+    this._scrollBtn = btn;
+    this._updateScrollButton();
+  }
+
+  _initWindowFocus() {
+    this._windowFocused = !document.hidden && document.hasFocus();
+    const onFocus = () => { this._windowFocused = true; };
+    const onBlur = () => { this._windowFocused = false; };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", () => {
+      this._windowFocused = !document.hidden && document.hasFocus();
+      if (this._windowFocused && this._atBottom) {
+        this._unreadCount = 0;
+        this._updateScrollButton();
+      }
+    });
+  }
+
+  _isUserAtBottom() {
+    const el = this._el.messages;
+    if (!el) return true;
+    const threshold = 80;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+  }
+
+  _updateScrollButton() {
+    if (!this._scrollBtn) return;
+    const visible = !this._atBottom || this._unreadCount > 0;
+    this._scrollBtn.hidden = !visible;
+    const badge = this._scrollBtn.querySelector(".chat-scroll-bottom-btn__badge");
+    if (badge) {
+      if (this._unreadCount > 0) {
+        badge.hidden = false;
+        badge.textContent = this._unreadCount > 99 ? "99+" : String(this._unreadCount);
+      } else {
+        badge.hidden = true;
+      }
+    }
+  }
+
+  _scrollToBottom({ loadNewer = false, smooth = true } = {}) {
+    const el = this._el.messages;
+    if (!el) return;
+    // 如果有被裁剪掉的更新消息，先加载回来
+    if (loadNewer && this._history.hasNewer && this._history.newerCursor && !this._history.loading) {
+      this._loadHistoryPage("newer").then(() => {
+        el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+      });
+    } else {
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    }
+    this._unreadCount = 0;
+    this._atBottom = true;
+    this._updateScrollButton();
+  }
+
+  _notifySystem(title, body) {
+    try {
+      const api = window.aerie && window.aerie.dynamicIsland;
+      if (api && typeof api.systemNotify === "function") {
+        api.systemNotify({ title, body, silent: false }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  _onNewAssistantMessage(msgContent) {
+    // 不在底部时累加未读数
+    if (!this._atBottom) {
+      this._unreadCount++;
+      this._updateScrollButton();
+    }
+    // 窗口未聚焦时发系统通知
+    if (!this._windowFocused) {
+      const name = (this._personaCache && this._personaCache.name) || "伊塔";
+      const preview = (msgContent || "").replace(/<[^>]*>/g, "").slice(0, 80);
+      this._notifySystem(name, preview || "发来一条新消息");
+    }
   }
 
   async _bootstrapRuntimeIdentity() {
@@ -441,10 +550,14 @@ class ChatManager {
       this._trimMessageWindow(direction === "older" ? "newest" : "oldest");
       if (this._el.messages) {
         if (direction === "older") {
+          // 向上加载更早消息: 保持用户当前查看位置不跳
           this._el.messages.scrollTop = previousTop
             + (this._el.messages.scrollHeight - previousHeight);
-        } else if (direction === "initial") {
+        } else {
+          // initial 或 newer: 滚到底部
           this._el.messages.scrollTop = this._el.messages.scrollHeight;
+          this._atBottom = true;
+          this._unreadCount = 0;
         }
       }
     } catch (_) {
@@ -456,6 +569,7 @@ class ChatManager {
         this._history.autoLoadCooldown = Date.now() + 800;
       }
       this._renderHistoryControls();
+      this._updateScrollButton();
     }
   }
 
@@ -473,29 +587,40 @@ class ChatManager {
       button.addEventListener("click", () => this._loadHistoryPage(kind));
       return button;
     };
+    // 只在顶部保留"加载更早消息"按钮。回到底部用浮动按钮，不再内联。
     if (this._history.hasOlder) {
       const first = this._el.messages.querySelector(".chat-msg");
       this._el.messages.insertBefore(makeButton("older", "加载更早消息"), first);
     }
-    if (this._history.hasNewer) {
-      this._el.messages.appendChild(makeButton("newer", "加载更新消息"));
-    }
   }
 
-  // 滚动到列表顶部时自动按批拉取更早消息, 替代/兜底「加载更早」按钮。
-  // 用 rAF 节流 + 冷却时间戳, 避免停在顶部时一口气加载多批。
+  // 滚动监听: 顶部自动加载更早消息 + 跟踪用户是否在底部(控制自动滚底和浮动按钮)
   _bindHistoryScroll() {
     if (!this._el.messages) return;
     let pending = false;
-    this._el.messages.addEventListener("scroll", () => {
+    const onScroll = () => {
       if (pending) return;
       pending = true;
       requestAnimationFrame(() => {
         pending = false;
         const el = this._el.messages;
+        if (!el) return;
+
+        // 跟踪是否在底部
+        const wasAtBottom = this._atBottom;
+        this._atBottom = this._isUserAtBottom();
+
+        // 回到了底部 → 清除未读计数
+        if (this._atBottom && !wasAtBottom) {
+          this._unreadCount = 0;
+        }
+
+        // 更新浮动按钮显示
+        this._updateScrollButton();
+
+        // 顶部自动加载更早消息
         if (
-          !el
-          || this._history.loading
+          this._history.loading
           || !this._history.hasOlder
           || Date.now() < this._history.autoLoadCooldown
         ) {
@@ -505,7 +630,8 @@ class ChatManager {
           this._loadHistoryPage("older");
         }
       });
-    });
+    };
+    this._el.messages.addEventListener("scroll", onScroll, { passive: true });
   }
 
   _trimMessageWindow(removeSide) {
@@ -897,6 +1023,7 @@ class ChatManager {
     const domId = msg.id;
     let el = this._el.messages.querySelector(`[data-id="${domId}"]`);
     const create = !el;
+    const wasTyping = el && el.classList.contains("chat-msg--typing");
     if (create) {
       el = document.createElement("div");
       if (before) this._el.messages.insertBefore(el, before);
@@ -919,7 +1046,41 @@ class ChatManager {
       if (Number.isFinite(numericId) && numericId > this._sinceId) this._sinceId = numericId;
     }
     this._trimMessageWindow("oldest");
-    if (create && autoScroll) this._el.messages.scrollTop = this._el.messages.scrollHeight;
+
+    // 智能自动滚动: 只有用户在底部时才自动滚(不打断用户看历史消息)
+    const isAssistant = msg.role === "assistant";
+    const isUser = msg.role === "user";
+    const isComplete = !msg.typing;
+    if (autoScroll) {
+      if (create && isUser) {
+        // 用户刚发消息 → 强制滚到底部
+        this._atBottom = true;
+        this._unreadCount = 0;
+        this._el.messages.scrollTop = this._el.messages.scrollHeight;
+      } else if (this._atBottom) {
+        // 用户在底部 → 跟随新消息自动滚动
+        this._el.messages.scrollTop = this._el.messages.scrollHeight;
+      }
+    }
+
+    // 助理消息完成时触发通知/未读计数 (仅实时消息, 非历史加载; 每请求最多一次)
+    if (isAssistant && isComplete && autoScroll) {
+      const justCompleted = create || wasTyping;
+      if (justCompleted) {
+        const reqId = msg.request_id || msg.id;
+        if (!this._notifiedRequestIds.has(reqId)) {
+          this._notifiedRequestIds.add(reqId);
+          // 防止Set无限增长
+          if (this._notifiedRequestIds.size > 200) {
+            const first = this._notifiedRequestIds.values().next().value;
+            this._notifiedRequestIds.delete(first);
+          }
+          this._onNewAssistantMessage(msg.content);
+        }
+      }
+    }
+
+    this._updateScrollButton();
     return el;
   }
 

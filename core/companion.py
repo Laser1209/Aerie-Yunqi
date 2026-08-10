@@ -98,6 +98,35 @@ _HER_HOME_OBJECTS_ZH: dict[str, str] = {
 }
 
 
+# ── 生图构图：手机拍摄比例（横 16:9 / 竖 9:16），横竖由伊塔按场景自决 ──
+# 自拍/人像/合影 → 竖屏 9:16；环境/物件/风景 → 横屏 16:9。
+# 尺寸满足中转站规则（边长 512~4096 且为 64 的倍数），1344x768 ≈ 16:9、768x1344 ≈ 9:16。
+_IMAGE_SIZE_LANDSCAPE = "1344x768"
+_IMAGE_SIZE_PORTRAIT = "768x1344"
+_IMAGE_SIZE_BY_PROMPT_KEY: dict[str, str] = {
+    "role_selfie": _IMAGE_SIZE_PORTRAIT,
+    "role_in_scene": _IMAGE_SIZE_PORTRAIT,
+    "couple_photo": _IMAGE_SIZE_PORTRAIT,
+    "environment_object": _IMAGE_SIZE_LANDSCAPE,
+}
+
+
+def _image_size_for_prompt_key(prompt_key: str) -> str:
+    """按发图场景决断手机拍摄的横竖比例（16:9 / 9:16），即伊塔的构图自决。"""
+    return _IMAGE_SIZE_BY_PROMPT_KEY.get(str(prompt_key or ""), _IMAGE_SIZE_PORTRAIT)
+
+
+def _image_orientation_phrase(image_size: str) -> str:
+    """把尺寸转成写进生图 prompt 的构图方向提示（让生成模型配合构图）。"""
+    try:
+        width, height = (int(part.strip()) for part in str(image_size).lower().split("x"))
+    except (ValueError, AttributeError):
+        return "竖构图（手机竖拍 9:16 比例）"
+    if width >= height:
+        return "横构图（手机横拍 16:9 比例）"
+    return "竖构图（手机竖拍 9:16 比例）"
+
+
 def _resolve_companion_data_path(settings: dict | None) -> Path:
     if (os.environ.get("AERIE_DATA_DIR") or "").strip():
         return data_dir()
@@ -1856,16 +1885,23 @@ class Companion:
         但 P1-C 的 ProactiveCandidateScorer 从未接入生产（感知→决策断裂）。这里把
         "感知(WorldSnapshot) → 决策(candidate scorer) → 行动(发布 ImageCandidate)"
         接起来：命中 life_share / attention_ack / unfinished_topic 且世界有视觉素材
-        时才发布候选，再由 WorldImageCandidateConsumer 的完整审批链（每日预算 /
-        PushPolicy 频控 / proactive_judge 打分）把关，不会绕过任何一层门控。
+        时才发布候选。
+
+        节奏策略（纯约束型）：
+        * 世界感知按固定 60s 决策周期轮询（非发图间隔）；
+        * ``proactive.photo_min_interval_sec`` 是唯一的时间约束，默认 0 = 无间隔，
+          由用户在设置界面自行配置，>0 时两次主动发图之间强制等待；
+        * 是否发、何时发由 Agent 自决：最近发过的意图会降低候选分
+          （_recent_repeat_penalty），世界素材足够新鲜才值得再发一次。
         """
-        cfg = (self.settings or {}).get("proactive", {}) or {}
-        try:
-            interval_sec = max(300, int(cfg.get("photo_min_interval_sec") or 7200))
-        except (TypeError, ValueError):
-            interval_sec = 7200
+        # 轮询周期：世界感知/决策频率，不是发图间隔。
+        poll_sec = 60
+        # 最近发布过的意图（Agent 自决节奏：避免机械式重复刷图）。
+        recent_intents: list[str] = []
+        # 上次主动发图时间戳（仅当配置了 photo_min_interval_sec > 0 时生效）。
+        last_publish_ts = 0.0
         while True:
-            await asyncio.sleep(interval_sec)
+            await asyncio.sleep(poll_sec)
             try:
                 if not self.feature_flags.is_enabled("world_image_candidates_v1"):
                     continue
@@ -1873,6 +1909,15 @@ class Companion:
                     continue
                 scheduler = getattr(self, "push_scheduler", None)
                 if scheduler is not None and getattr(scheduler, "is_paused", False):
+                    continue
+                # 发图最小间隔：每次轮询热读取，设置界面改动无需重启即可生效。
+                try:
+                    _cfg = ((self.settings or {}).get("proactive", {}) or {})
+                    min_gap_sec = max(0, int(_cfg.get("photo_min_interval_sec") or 0))
+                except (TypeError, ValueError):
+                    min_gap_sec = 0
+                now_ts = time.time()
+                if min_gap_sec > 0 and now_ts - last_publish_ts < min_gap_sec:
                     continue
                 consumer = self._get_world_image_candidate_consumer()
                 budget = getattr(consumer, "image_budget", None)
@@ -1897,11 +1942,16 @@ class Companion:
                     continue
 
                 # ── 决策：世界驱动的主动候选（P1-C 候选打分器）──
+                # 传入近期已发布意图：同类意图重复出现会触发惩罚降分，
+                # 让 Agent 按自己的节奏决定"这次值不值得再发一张"。
                 from core.companion_state import CompanionState
                 from core.proactive_candidates import ProactiveCandidateScorer
 
                 state = CompanionState.load()
-                candidates = ProactiveCandidateScorer(now=time.time()).generate(snapshot, state)
+                candidates = ProactiveCandidateScorer(
+                    now=now_ts,
+                    recent_intents=recent_intents,
+                ).generate(snapshot, state)
                 if not candidates:
                     continue
                 chosen = candidates[0]
@@ -1912,8 +1962,8 @@ class Companion:
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
                 channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
                 await self.publish_image_candidate({
-                    "candidate_id": f"proactive-visual-{int(time.time())}",
-                    "idempotency_key": f"proactive-visual:{int(time.time())}",
+                    "candidate_id": f"proactive-visual-{int(now_ts)}",
+                    "idempotency_key": f"proactive-visual:{int(now_ts)}",
                     "scene": intent,
                     "owner_id": master_id,
                     "channel": channel,
@@ -1922,7 +1972,12 @@ class Companion:
                     "reason_code": f"world_visual:{topics[0]}",
                     "source": "generated",
                     "score": round(float(chosen.score), 2),
+                    "size": _image_size_for_prompt_key("environment_object"),
                 })
+                # 发布动作即记录节奏（无论结果，避免失败后立刻重试刷屏）。
+                last_publish_ts = now_ts
+                recent_intents.append(intent)
+                recent_intents = recent_intents[-4:]
                 logger.info(
                     "[WorldImage] proactive visual candidate published intent=%s topic=%s score=%s",
                     intent, topics[0], chosen.score,
@@ -1952,13 +2007,37 @@ class Companion:
         hair = str(appearance.get("hair", "银灰色长发") or "银灰色长发")
         eyes = str(appearance.get("eyes", "深灰蓝色眼睛") or "深灰蓝色眼睛")
         skin = str(appearance.get("skin", "健康肤色") or "健康肤色")
+        # 三维数据：与 persona.yaml profile.measurements / weight_kg /
+        # body_fat_pct / cup_size 保持一致，随每次生图一并传给中转站，
+        # 避免"身材数据对不上"的失真问题。
+        measurements = str(profile.get("measurements", "") or "").strip()
+        weight_kg = str(profile.get("weight_kg", "") or "").strip()
+        body_fat_pct = str(profile.get("body_fat_pct", "") or "").strip()
+        cup_size = str(profile.get("cup_size", "") or "").strip()
         base = (
             "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
             f"身高{height}cm，{body}，{skin}。{hair}，{eyes}。"
+        )
+        body_data_parts = []
+        if measurements:
+            body_data_parts.append(f"三围{measurements}")
+        if cup_size:
+            body_data_parts.append(f"{cup_size}杯")
+        if weight_kg:
+            body_data_parts.append(f"体重{weight_kg}kg")
+        if body_fat_pct:
+            body_data_parts.append(f"体脂率{body_fat_pct}%")
+        if body_data_parts:
+            base += "身体数据：" + "，".join(body_data_parts) + "。"
+        base += (
             "五官清冷精致，气质温柔的大姐姐。画面风格自然、生活化、暖色调、真实摄影质感，"
             "不要动漫风，不要文字水印。"
         )
         key = str(prompt_key or "default")
+        # 构图方向：优先用候选自带 size（发布时已由伊塔按场景决断），
+        # 否则按 prompt_key 场景映射 16:9 / 9:16。横竖屏由伊塔自决。
+        image_size = str((candidate or {}).get("size") or "").strip() or _image_size_for_prompt_key(key)
+        orientation = _image_orientation_phrase(image_size)
         if key == "environment_object":
             # 环境/物件照：第一人称"她拍下的视角"，不强制带人物形象。
             # topic 可能来自世界模拟的公寓物件 ID 或重庆 POI（reason_code: world_visual:<topic>）。
@@ -1970,12 +2049,12 @@ class Companion:
             if topic:
                 translated = _HER_HOME_OBJECTS_ZH.get(topic, topic)
                 return (
-                    f"一张写实照片，第一人称视角，她在重庆的家/窗边随手拍下眼前的一角：{translated}。"
+                    f"一张写实照片，第一人称视角，{orientation}，她在重庆的家/窗边随手拍下眼前的一角：{translated}。"
                     "画面自然、生活化、暖色调、真实摄影质感，微微的随手感，"
                     "不要动漫风，不要文字水印。"
                 )
             return (
-                "一张写实照片，第一人称视角，她在重庆的复式公寓里，窗前/工作室一角。"
+                f"一张写实照片，第一人称视角，{orientation}，她在重庆的复式公寓里，窗前/工作室一角。"
                 "画面自然、生活化、暖色调、真实摄影质感，不要动漫风，不要文字水印。"
             )
         if key == "role_selfie":
@@ -1986,7 +2065,7 @@ class Companion:
             scene = "她与恋人的温馨合影，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
         else:
             scene = "她坐在重庆的家里，窗外是夜景，她神情放松地看着镜头。"
-        return f"{base}{scene}"
+        return f"{base}{scene}{orientation}。"
 
     async def _emotion_tick_loop(self) -> None:
         """R7.5+: background tick loop for emotion dashboard liveness.

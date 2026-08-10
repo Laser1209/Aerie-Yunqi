@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 import secrets
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -668,11 +669,12 @@ class MobileGatewayRunner:
         self._server.should_exit = True
         try:
             await asyncio.wait_for(self._task, timeout=5)
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, BaseException):
+            # Timeout or any escape (SystemExit etc.) — force-cancel.
             self._task.cancel()
             try:
                 await self._task
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, BaseException):
                 pass
 
 
@@ -682,6 +684,24 @@ async def start_mobile_gateway(
     """Start the isolated gateway and fail explicitly if it does not bind."""
 
     bind_config = config or get_mobile_gateway_config()
+
+    # Pre-flight port check: uvicorn calls sys.exit(STARTUP_FAILURE) on bind
+    # failure, which raises SystemExit (a BaseException, NOT an Exception).
+    # SystemExit bypasses normal except-Exception handling and in some
+    # asyncio code paths can kill the entire event loop. Probe the port
+    # with a TCP connect first so we fail with a clean RuntimeError.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        try:
+            probe.connect((bind_config.host, bind_config.port))
+            # Connect succeeded — something is already listening.
+            raise RuntimeError(
+                f"mobile gateway port {bind_config.port} is already in use"
+            )
+        except (ConnectionRefusedError, socket.timeout):
+            # Port is free (connection refused) or filtered (timeout)
+            pass
+
     uvicorn_config = uvicorn.Config(
         mobile_app,
         host=bind_config.host,
@@ -693,6 +713,18 @@ async def start_mobile_gateway(
         server.serve(),
         name="aerie-mobile-gateway",
     )
+    # Safety net: if uvicorn somehow still manages to raise a BaseException
+    # (e.g. SystemExit from a different code path), swallow it here so it
+    # can never kill the event loop. The for-loop below (or cleanup) will
+    # still detect the failure via task.done()/task.result().
+    def _swallow_escape(_task: asyncio.Task[Any]) -> None:
+        if not _task.done():
+            return
+        try:
+            _task.result()
+        except BaseException:
+            pass
+    task.add_done_callback(_swallow_escape)
     runner = MobileGatewayRunner(server, task)
 
     for _ in range(20):
@@ -711,5 +743,8 @@ async def start_mobile_gateway(
                 raise RuntimeError("mobile gateway failed to start") from exc
             raise RuntimeError("mobile gateway stopped before it started")
 
-    await runner.cleanup()
+    try:
+        await runner.cleanup()
+    except BaseException as exc:
+        raise RuntimeError("mobile gateway failed during startup cleanup") from exc
     raise RuntimeError("mobile gateway did not bind within one second")

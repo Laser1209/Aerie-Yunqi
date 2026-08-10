@@ -1170,12 +1170,23 @@
             <div class="settings-group">
               <label>每日主动发图上限 / Daily proactive image limit</label>
               <select id="setting-proactive-image-limit">
+                <option value="0" selected>不限制 / Unlimited</option>
                 <option value="6">6 次</option>
-                <option value="10" selected>10 次</option>
+                <option value="10">10 次</option>
                 <option value="20">20 次</option>
-                <option value="0">不限制 / Unlimited</option>
               </select>
               <span id="setting-proactive-image-usage" class="settings-hint"></span>
+            </div>
+            <div class="settings-group">
+              <label>主动发图最小间隔（分钟）/ Proactive image min interval (min)</label>
+              <select id="setting-proactive-photo-interval">
+                <option value="0" selected>不限制 / Unlimited</option>
+                <option value="10">10 分钟</option>
+                <option value="30">30 分钟</option>
+                <option value="60">60 分钟</option>
+                <option value="120">120 分钟</option>
+              </select>
+              <span class="settings-hint">不限制时，伊塔会自主决定发图节奏 / Unlimited lets Ita decide on her own</span>
             </div>
 
             <div class="settings-group settings-group--dynamic-island">

@@ -75,9 +75,15 @@ class WorldPortStub:
 
 
 class PolicyStub:
-    def __init__(self, allowed: bool = True, reason: str = "ok") -> None:
+    def __init__(
+        self,
+        allowed: bool = True,
+        reason: str = "ok",
+        mute_until: datetime | None = None,
+    ) -> None:
         self.allowed = allowed
         self.reason = reason
+        self.mute_until = mute_until
         self.recorded: list[str] = []
 
     def can_push(self, scene: str):
@@ -210,20 +216,20 @@ async def test_approved_candidate_calls_image_workflow_acks_and_survives_replay(
 
 
 @pytest.mark.asyncio
-async def test_muted_expired_and_judge_rejected_candidates_ack_without_workflow(tmp_path):
+async def test_muted_expired_and_judge_no_suppress_ack_without_workflow(tmp_path):
     from core.world_image_candidates import (
         JsonWorldImageCandidateStore,
         WorldImageCandidateConsumer,
     )
 
+    # 全局静音（mute_until 在未来）：主动图片被抑制，不调用 workflow。
     muted_port = WorldPortStub()
     muted_workflow = WorkflowStub()
     muted = WorldImageCandidateConsumer(
         feature_flags=FlagStub(True),
         image_workflow=muted_workflow,
         world_port=muted_port,
-        push_policy=PolicyStub(False, "muted"),
-        proactive_judge=JudgeStub(),
+        push_policy=PolicyStub(mute_until=datetime(2099, 1, 1, tzinfo=timezone.utc)),
         store=JsonWorldImageCandidateStore(tmp_path / "muted.json"),
         clock=_clock,
     )
@@ -245,19 +251,21 @@ async def test_muted_expired_and_judge_rejected_candidates_ack_without_workflow(
         )
     )
 
-    rejected_port = WorldPortStub()
-    rejected_workflow = WorkflowStub()
-    rejected = WorldImageCandidateConsumer(
+    # 主动发图不限制调用：proactive_judge 的抑制被清空（Agent 决策即执行），
+    # 即使打分低于阈值也会继续生图，只保留分数/语气供审计。
+    judge_port = WorldPortStub()
+    judge_workflow = WorkflowStub()
+    judge_ok = WorldImageCandidateConsumer(
         feature_flags=FlagStub(True),
-        image_workflow=rejected_workflow,
-        world_port=rejected_port,
+        image_workflow=judge_workflow,
+        world_port=judge_port,
         push_policy=PolicyStub(),
         proactive_judge=JudgeStub("score_below_threshold(20<45)"),
-        store=JsonWorldImageCandidateStore(tmp_path / "rejected.json"),
+        store=JsonWorldImageCandidateStore(tmp_path / "judge.json"),
         clock=_clock,
     )
-    rejected_result = await rejected.process_event(
-        _candidate_event(candidate_id="cand-rejected", idempotency_key="world-cand-rejected")
+    judge_result = await judge_ok.process_event(
+        _candidate_event(candidate_id="cand-judge", idempotency_key="world-cand-judge")
     )
 
     assert muted_result["status"] == "suppressed"
@@ -266,9 +274,10 @@ async def test_muted_expired_and_judge_rejected_candidates_ack_without_workflow(
     assert muted_workflow.calls == []
     assert expired_result["status"] == "expired"
     assert expired_port.acks == [7]
-    assert rejected_result["status"] == "rejected"
-    assert rejected_port.acks == [7]
-    assert rejected_workflow.calls == []
+    assert judge_result["status"] == "completed"
+    assert judge_port.acks == [7]
+    assert len(judge_workflow.calls) == 1
+    assert judge_result["recorded"] is True
 
 
 @pytest.mark.asyncio

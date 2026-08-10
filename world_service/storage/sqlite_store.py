@@ -337,6 +337,7 @@ def _image_candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
         "reason_code": _safe_text(payload.get("reason_code") or ""),
         "source": _safe_text(payload.get("source") or "generated"),
         "score": _safe_float(payload.get("score"), 0.0),
+        "size": _safe_text(payload.get("size") or ""),
         "expires_at": _safe_text(payload.get("expires_at") or ""),
         "created_at": _safe_text(payload.get("created_at") or ""),
     }

@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Python backend entry point.
+"""Aerie · 云栖 v0.1.0-beta.1 — Python backend entry point.
 
 Launched by Electron via `python main.py`.
 Starts logging → config → Companion → API server → event loop.
@@ -70,9 +70,12 @@ async def _start_optional_mobile_gateway(logger: logging.Logger):
         runner = await start_mobile_gateway()
         logger.info("[MOBILE_GATEWAY_READY] Aerie mobile gateway is ready")
         return runner
-    except Exception:
+    except (Exception, SystemExit):
         # The desktop backend remains local and usable if the optional mobile
         # boundary cannot bind.  The failure is explicit in the local logs.
+        # SystemExit is raised by uvicorn.sys.exit(STARTUP_FAILURE) on bind
+        # failure — it inherits from BaseException, not Exception, so a plain
+        # `except Exception` would let it kill the whole backend.
         logger.exception("[MOBILE_GATEWAY_UNAVAILABLE] mobile gateway did not start")
         return None
 

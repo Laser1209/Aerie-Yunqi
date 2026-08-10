@@ -1056,7 +1056,7 @@ class Pipeline:
         调用，已在线程池执行，不阻塞事件循环。用户主动要求（scene=local_send）
         不占用主动发图每日额度。失败/超时不会抛异常，由调用方决定放行文本。
         """
-        from core.companion import get_companion
+        from core.companion import get_companion, _image_size_for_prompt_key
 
         comp = get_companion()
         publisher = getattr(comp, "publish_image_candidate", None)
@@ -1082,6 +1082,7 @@ class Pipeline:
             "reason_code": "user_requested",
             "source": "manual",
             "score": 1.0,
+            "size": _image_size_for_prompt_key(intent),
         }
         try:
             result = await asyncio.wait_for(publisher(candidate), timeout=120)

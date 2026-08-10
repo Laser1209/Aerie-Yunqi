@@ -28,7 +28,10 @@ office:
   dir: F:\文件\Aerie
 proactive:
   enabled: true
-  image_max_per_day: 20
+  # 每日主动发图上限：0 = 不限制（纯约束型，由 Agent 自决，用户可在设置界面调整）
+  image_max_per_day: 0
+  # 主动发图最小间隔（秒）：0 = 无间隔，Agent 自行选择发图节奏；>0 时强制等待
+  photo_min_interval_sec: 0
   max_per_day: 10
   min_interval_min: 15
   system_notifications: true

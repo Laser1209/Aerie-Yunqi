@@ -402,6 +402,7 @@ class WorldImageCandidateConsumer:
             "reason_code": _safe_value(payload.get("reason_code") or ""),
             "source": _safe_value(payload.get("source") or "generated"),
             "score": _safe_float(payload.get("score"), 0.0),
+            "size": _safe_value(payload.get("size") or ""),
             "expires_at": _safe_value(payload.get("expires_at") or ""),
             "created_at": _safe_value(payload.get("created_at") or getattr(event, "occurred_at", "") or ""),
             "event_id": _safe_value(getattr(event, "event_id", "") or ""),
@@ -420,18 +421,29 @@ class WorldImageCandidateConsumer:
         scene: str,
         candidate: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
-        # 用户主动要求的图（scene=local_send）是直接命令，不受主动推送的
-        # 频率/静默/每日上限约束，否则"拍一张照片"会因最近有推送而被静默掐掉。
+        # 用户主动要求的图（scene=local_send）是直接命令，不受任何约束，
+        # 否则"拍一张照片"会因最近有推送而被静默掐掉。
         if self._is_manual_trigger(candidate):
             return True, "manual_trigger"
-        if self.push_policy is None or not hasattr(self.push_policy, "can_push"):
-            return True, "ok"
-        try:
-            allowed, reason = self.push_policy.can_push(scene)
-            return bool(allowed), str(reason or "ok")
-        except Exception:
-            logger.debug("world image candidate push policy failed", exc_info=True)
-            return False, "policy_error"
+        # 主动发图（Agent 自行决策）不限制调用：PushPolicy 的频控
+        # （min_interval / daily_limit / quiet_period / scene_interval）只约束
+        # 文字主动推送。图片有自己的节奏约束——proactive.photo_min_interval_sec
+        # （最小发图间隔）与 proactive.image_max_per_day（每日上限）——均由
+        # 用户在设置界面配置。这里仍尊重全局静音（用户手动 mute 推送时图片
+        # 也不应打扰）；全局暂停由 delivery_online（scheduler.is_paused）在
+        # 流程更早处拦截，无需在此重复。
+        policy = self.push_policy
+        if policy is not None:
+            try:
+                mute_until = getattr(policy, "mute_until", None)
+                if mute_until is not None:
+                    if isinstance(mute_until, datetime) and mute_until.tzinfo is not None:
+                        mute_until = mute_until.replace(tzinfo=None)
+                    if datetime.now() < mute_until:
+                        return False, "muted"
+            except Exception:
+                logger.debug("world image candidate push policy mute check failed", exc_info=True)
+        return True, "image_agent_decided"
 
     def _budget_can_record(self, candidate: dict[str, Any] | None = None) -> tuple[bool, str]:
         # 用户主动要求的图片（scene=local_send）不占用主动/自动发图额度。
@@ -464,7 +476,7 @@ class WorldImageCandidateConsumer:
         if self.proactive_judge is None or not hasattr(self.proactive_judge, "evaluate"):
             return None
         try:
-            return self.proactive_judge.evaluate(
+            decision = self.proactive_judge.evaluate(
                 candidate["scene"],
                 context_override={
                     "desire_score": min(100.0, candidate["score"] * 100.0),
@@ -473,9 +485,15 @@ class WorldImageCandidateConsumer:
                     "user_minutes_since_last": 999.0,
                 },
             )
+            # 主动发图不限制调用（Agent 决策即执行）：proactive_judge 是文字
+            # 主动推送的情绪闸门，对图片候选只保留分数/语气供审计，不再抑制——
+            # 抑制会把 Agent 已经决定发布的图片静默吞掉。
+            if decision is not None:
+                decision.suppress_reason = ""
+            return decision
         except Exception:
             logger.debug("world image candidate proactive judge failed", exc_info=True)
-            return type("RejectedJudge", (), {"suppress_reason": "judge_error"})()
+            return type("RejectedJudge", (), {"suppress_reason": ""})()
 
     def _run_workflow(self, candidate: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -493,6 +511,7 @@ class WorldImageCandidateConsumer:
                     "world_event_id": candidate["event_id"],
                     "prompt_key": candidate["prompt_key"],
                     "reason_code": candidate["reason_code"],
+                    "size": candidate.get("size") or "",
                 },
             )
             return result if isinstance(result, dict) else {"status": "failed"}
@@ -662,6 +681,7 @@ def _public_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "reason_code",
         "source",
         "score",
+        "size",
         "expires_at",
         "created_at",
         "event_id",

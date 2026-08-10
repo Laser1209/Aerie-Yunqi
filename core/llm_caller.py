@@ -1638,7 +1638,11 @@ def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
             or "https://api.openai.com/v1"
         )
         model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL", "IMAGE_GEN_MODEL") or "gpt-image-1"
-        size = _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+        # 尺寸优先由调用方动态传入（伊塔按场景决断横 16:9 / 竖 9:16），
+        # 其次读 env，最后才回落 1:1 默认值。
+        size = str(kwargs.get("size") or (metadata or {}).get("size") or "").strip()
+        if not size:
+            size = _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
         idempotency_key = str(metadata.get("idempotency_key") or "").strip()
         if not (8 <= len(idempotency_key) <= 128):
             idempotency_key = f"aerie-{uuid.uuid4().hex}"

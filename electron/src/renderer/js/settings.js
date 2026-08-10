@@ -438,6 +438,14 @@ class SettingsPanel {
           : `今日已用 ${used} · Used ${used} today (不限制 / Unlimited)`;
       }
 
+      // Proactive image min interval (seconds in settings, minutes in UI).
+      const photoIntervalEl = document.getElementById("setting-proactive-photo-interval");
+      if (photoIntervalEl) {
+        const sec = Number(proactive.photo_min_interval_sec != null ? proactive.photo_min_interval_sec : 0);
+        const min = Math.round(sec / 60);
+        photoIntervalEl.value = String([0, 10, 30, 60, 120].includes(min) ? min : 0);
+      }
+
       // R7.1: my-location picker.
       const cityInput = document.getElementById("setting-weather-city");
       const hint = document.getElementById("setting-weather-hint");
@@ -480,6 +488,7 @@ class SettingsPanel {
         max_per_day: Number(document.getElementById("setting-proactive-max-per-day")?.value || 5),
         min_interval_min: Number(document.getElementById("setting-proactive-min-interval")?.value || 30),
         image_max_per_day: Number(document.getElementById("setting-proactive-image-limit")?.value || 0),
+        photo_min_interval_sec: Number(document.getElementById("setting-proactive-photo-interval")?.value || 0) * 60,
       },
       // R7.1: empty string ⇒ resolver falls back to IP auto-detect.
       weather: {

@@ -36,6 +36,11 @@ for (const stream of [process.stdout, process.stderr]) {
 // ── Config ──────────────────────────────────────────
 const PY_PORT = Number.parseInt(process.env.AERIE_BACKEND_PORT || "7890", 10);
 const PY_BACKEND = "http://127.0.0.1:" + PY_PORT;
+// All ports that the Python backend may bind during startup. Orphaned
+// processes from a previous crash on any of these ports must be killed
+// before we spawn a fresh child, otherwise bind() fails with EADDRINUSE
+// and (for optional sub-services) can SystemExit the whole process.
+const PY_BACKEND_PORTS = [PY_PORT, 7891];
 
 let PROJECT_ROOT;
 let PYTHON_ROOT;
@@ -353,7 +358,7 @@ function startPythonBackend() {
 //       kill it BEFORE spawn so our new child can bind cleanly.
 async function _evictOrphanBackendIfNeeded() {
   if (process.platform !== "win32") return;
-  // Step 1: Check if it's a VALID Aerie backend via healthCheck(); if so,
+  // Step 1: Check if the main backend port has a VALID Aerie backend; if so,
   //         it's not an orphan — leave it alone so startPythonBackend can
   //         attach to it (this is the "attach if port alive" path).
   let healthy = false;
@@ -363,26 +368,30 @@ async function _evictOrphanBackendIfNeeded() {
   ])); } catch (_) { healthy = false; }
   if (healthy) return;
 
-  // Step 2: Port is NOT a valid Aerie. Find PIDs LISTENING on 127.0.0.1:PY_PORT.
-  let pidList = [];
-  try {
-    const { execSync } = require("child_process");
-    const output = execSync(
-      "netstat -ano | findstr /R /C:\"" + PY_PORT + "\\s*\"",
-      { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }
-    );
-    for (const line of String(output || "").split(/\r?\n/)) {
-      const m = line.match(/LISTENING\s+(\d+)\s*$/);
-      if (!m) continue;
-      const p = Number(m[1]);
-      if (Number.isFinite(p) && p > 4 && p !== process.pid && !pidList.includes(p)) pidList.push(p);
-    }
-  } catch (_netstatErr) { return; }
-  if (!pidList.length) return;
+  // Step 2: Collect PIDs listening on any port we own (main + optional
+  //         sub-services like the mobile gateway on 7891). An orphan from a
+  //         previous crash on any of these blocks the corresponding bind().
+  const pidSet = new Set();
+  for (const port of PY_BACKEND_PORTS) {
+    try {
+      const { execSync } = require("child_process");
+      const output = execSync(
+        "netstat -ano | findstr /R /C:\"" + port + "\\s*\"",
+        { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }
+      );
+      for (const line of String(output || "").split(/\r?\n/)) {
+        const m = line.match(/LISTENING\s+(\d+)\s*$/);
+        if (!m) continue;
+        const p = Number(m[1]);
+        if (Number.isFinite(p) && p > 4 && p !== process.pid) pidSet.add(p);
+      }
+    } catch (_netstatErr) { /* port free — that's fine */ }
+  }
+  if (!pidSet.size) return;
 
   // Step 3: Only kill processes whose image name starts with "python".
   //         We never kill non-python processes (they're unrelated services).
-  for (const pid of pidList) {
+  for (const pid of pidSet) {
     try {
       const proc = require("child_process").execSync(
         "wmic process where ProcessId=" + pid + " get Name,ExecutablePath /format:list",
@@ -394,14 +403,14 @@ async function _evictOrphanBackendIfNeeded() {
         console.log("[main] evict-orphan: skip PID=" + pid + " (Name=" + name + ")");
         continue;
       }
-      console.log("[main] evict-orphan: KILLING orphan python PID=" + pid + " on port " + PY_PORT);
+      console.log("[main] evict-orphan: KILLING orphan python PID=" + pid);
       try { process.kill(pid, "SIGKILL"); } catch (_killErr) {
         try { require("child_process").execSync("taskkill /F /PID " + pid, { timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }); } catch (_) {}
       }
     } catch (_wmixErr) { /* PID vanished */ }
   }
   // Small wait so the OS fully releases the socket (avoids TIME_WAIT false reject).
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
 }
 
 function _spawnNewPython() {

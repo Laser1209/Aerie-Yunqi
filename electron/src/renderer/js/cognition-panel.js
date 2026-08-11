@@ -570,11 +570,18 @@ class CognitionPanel {
         case "brain":
           s = (payload.summary || payload.note || "").slice(0, 40);
           break;
-        case "tools":
-          s = (payload.tools_called && payload.tools_called.length)
-            ? payload.tools_called.join(",")
-            : "none";
+        case "tools": {
+          // tools 阶段可能是对象数组 [{name, success, duration_ms, ...}]（后端真实结构）
+          // 也可能是旧的字符串数组 tools_called。统一归一成名字列表。
+          const arr = Array.isArray(payload)
+            ? payload
+            : (Array.isArray(payload && payload.tools_called) ? payload.tools_called : []);
+          const names = arr
+            .map((t) => (typeof t === "string" ? t : (t && t.name) || "tool"))
+            .filter(Boolean);
+          s = names.length ? names.join(",") : "none";
           break;
+        }
         case "split":
           s = (payload.segments != null) ? (payload.segments + " 段") : "";
           break;
@@ -875,6 +882,28 @@ class CognitionPanel {
         return this._buildDecisionRaceHtml(JSON.parse(row.decision_trace));
       } catch (_) { return ""; }
     })();
+
+    // 图片工具高亮（generate_image / proactive_photo）—— 不再裸 JSON，友好展示
+    let toolsHighlight = "";
+    try {
+      const toolsRaw = row.stage_tools;
+      if (toolsRaw) {
+        let toolsArr = null;
+        try { toolsArr = JSON.parse(toolsRaw); } catch (_) { toolsArr = null; }
+        if (Array.isArray(toolsArr)) {
+          const imgTools = toolsArr.filter((t) => t && (
+            t.name === "generate_image" || t.name === "proactive_photo"
+          ));
+          if (imgTools.length) {
+            toolsHighlight = '<h4>图片工具调用 · Image Tools</h4>'
+              + '<div class="cog-modal-tools">'
+              + imgTools.map((t) => this._renderImageToolCard(t)).join("")
+              + "</div>";
+          }
+        }
+      }
+    } catch (_) { toolsHighlight = ""; }
+
     const react = (() => {
       try {
         if (!row.react_trace) return "";
@@ -908,10 +937,39 @@ class CognitionPanel {
       meta + userMsg
       + '<h4>9 阶段原始数据 · 9 stages</h4>'
       + '<div class="cog-modal-stages">' + stages + "</div>"
+      + toolsHighlight
       + (decision
           ? '<h4>决策权重 · Decision</h4><div class="cog-modal-decision">' + decision + '</div>'
           : "")
       + react
+    );
+  }
+
+  _renderImageToolCard(t) {
+    const ok = t.success;
+    const nameZh = t.name === "proactive_photo" ? "主动发图" : "聊天要图";
+    const icon = '<svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-image"/></svg>';
+    const dur = t.duration_ms != null ? Math.round(t.duration_ms) + "ms" : "—";
+    const statusText = ok ? "成功 · success" : "失败 · failed";
+    const cls = ok ? "cog-modal-tool--ok" : "cog-modal-tool--failed";
+    const args = t.arguments || {};
+    const result = t.result || {};
+    const bits = [];
+    if (args.prompt_key) bits.push("prompt_key: " + this._escape(args.prompt_key));
+    if (args.intent) bits.push("intent: " + this._escape(args.intent));
+    if (args.channel) bits.push("channel: " + this._escape(args.channel));
+    if (args.size) bits.push("size: " + this._escape(args.size));
+    if (result.status) bits.push("status: " + this._escape(result.status));
+    if (result.image_path) bits.push("path: " + this._truncate(this._escape(result.image_path), 60));
+    return (
+      '<div class="cog-modal-tool ' + cls + '">'
+      + '<span class="cog-modal-tool-icon">' + icon + "</span>"
+      + '<div class="cog-modal-tool-body">'
+      + '<div class="cog-modal-tool-title">' + nameZh + " · " + this._escape(t.name)
+      + '<span class="cog-modal-tool-status">' + statusText + "</span></div>"
+      + '<div class="cog-modal-tool-meta">' + dur + (bits.length ? " · " + bits.join(" · ") : "") + "</div>"
+      + "</div>"
+      + "</div>"
     );
   }
 

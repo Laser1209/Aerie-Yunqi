@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import asyncio
+import json
 import logging
 import os
 import time
@@ -2210,7 +2211,7 @@ class Companion:
 
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
                 channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
-                await self.publish_image_candidate({
+                publish_result = await self.publish_image_candidate({
                     "candidate_id": f"proactive-visual-{int(now_ts)}",
                     "idempotency_key": f"proactive-visual:{int(now_ts)}",
                     "scene": intent,
@@ -2223,6 +2224,7 @@ class Companion:
                     "score": round(float(chosen.score), 2),
                     "size": _image_size_for_prompt_key("environment_object"),
                 })
+                publish_result = publish_result if isinstance(publish_result, dict) else {}
                 # 发布动作即记录节奏（无论结果，避免失败后立刻重试刷屏）。
                 last_publish_ts = now_ts
                 recent_intents.append(intent)
@@ -2231,10 +2233,77 @@ class Companion:
                     "[WorldImage] proactive visual candidate published intent=%s topic=%s score=%s",
                     intent, topics[0], chosen.score,
                 )
+                # 记录成一条图片工具调用（tool_call_log + 关联最近一条 trace 补写 tools），
+                # 让大脑中枢能看到"主动发图也调用了图片工具"。
+                self._record_proactive_photo_tool(
+                    master_id, intent, topic_id, channel, publish_result,
+                )
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.debug("proactive photo loop tick failed", exc_info=True)
+
+    def _record_proactive_photo_tool(
+        self,
+        master_id: str,
+        intent: str,
+        topic_id: str,
+        channel: str,
+        publish_result: dict,
+    ) -> None:
+        """把一次主动发图建模成图片工具记录：写 tool_call_log + 关联最近 trace 补写。
+
+        主动发图没有对应的用户消息上下文（无 trace 直接可用），按决策点 (a)
+        关联最近一条该用户的活跃 trace 补写 tools 阶段，让大脑中枢能看到
+        "主动发图也调用了图片工具（proactive_photo）"。
+        """
+        success = publish_result.get("status") in (
+            "ok", "success", "sent", "delivered", "published", "dispatched",
+        ) or bool(publish_result.get("consumed"))
+        image_path = (
+            publish_result.get("image_path") or publish_result.get("file_path")
+            or publish_result.get("url") or publish_result.get("path") or ""
+        )
+        tool_entry = {
+            "name": "proactive_photo",
+            "success": bool(success),
+            "duration_ms": int(publish_result.get("duration_ms") or 0),
+            "arguments": {
+                "intent": intent,
+                "topic": topic_id,
+                "channel": channel,
+                "target": master_id,
+            },
+            "result": {
+                "status": publish_result.get("status"),
+                "image_path": str(image_path),
+                "reason_code": f"world_visual:{topic_id}" if topic_id else "",
+            },
+        }
+        # 1) tool_call_log（owner 归到 master_id 名下）
+        try:
+            self.db.insert("tool_call_log", {
+                "ts": int(time.time() * 1000),
+                "user_id": master_id,
+                "tool_name": tool_entry["name"],
+                "arguments": json.dumps(tool_entry["arguments"], ensure_ascii=False),
+                "result": json.dumps(tool_entry["result"], ensure_ascii=False)[:2000],
+                "success": 1 if success else 0,
+                "duration_ms": tool_entry["duration_ms"],
+                "cognition_id": 0,
+            })
+        except Exception:
+            logger.exception("proactive photo tool_call_log insert error")
+        # 2) 关联最近一条活跃 trace 补写 tools 阶段
+        try:
+            recent = self.cognition.recent(user_id=master_id, limit=1)
+            if not recent:
+                return
+            latest_id = recent[0].get("id")
+            if latest_id:
+                self.cognition.patch_tools(latest_id, [tool_entry])
+        except Exception:
+            logger.debug("proactive photo trace patch failed", exc_info=True)
 
     async def _image_prompt_for(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
         """把 ImageCandidate 的 prompt_key 解析成真实的中文生图提示词。

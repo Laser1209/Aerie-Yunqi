@@ -914,7 +914,7 @@ class Pipeline:
         # 2) 出图并等送达（失败/超时不阻塞后续文本）
         if photo_intent:
             try:
-                await self._deliver_chat_photo(msg, request_context, photo_intent)
+                await self._deliver_chat_photo(msg, request_context, photo_intent, trace)
             except Exception:
                 logger.debug("chat photo deliver failed", exc_info=True)
         # 3) 再发剩余文本
@@ -1048,6 +1048,7 @@ class Pipeline:
         msg: IncomingMessage,
         request_context: RequestContext | None,
         intent: str,
+        trace: dict | None = None,
     ) -> dict:
         """触发一次真实生图并等待送达（文本等图：图先落地，再放行后续文本）。
 
@@ -1098,7 +1099,71 @@ class Pipeline:
             result.get("status"), result.get("reason"), result.get("channel"),
             bool(result.get("consumed")), idempotency_key,
         )
+        self._record_chat_photo_tool(msg, candidate, result, trace)
         return result
+
+    def _record_chat_photo_tool(
+        self,
+        msg: IncomingMessage,
+        candidate: dict,
+        result: dict,
+        trace: dict | None,
+    ) -> None:
+        """把一次聊天要图建模成一条图片工具记录：写 tool_call_log + 追写 trace tools 阶段。
+
+        生图不经过 LLM 的 ``tool_results``，需独立记录，供大脑中枢 trace 展示
+        "本次调用了图片工具"。失败也记录（success=False），便于追踪。
+        """
+        success = result.get("status") in (
+            "ok", "success", "sent", "delivered", "published", "dispatched",
+        ) or bool(result.get("consumed"))
+        image_path = (
+            result.get("image_path") or result.get("file_path")
+            or result.get("url") or result.get("path") or ""
+        )
+        tool_entry = {
+            "name": "generate_image",
+            "success": bool(success),
+            "duration_ms": int(result.get("duration_ms") or 0),
+            "arguments": {
+                "prompt_key": candidate.get("prompt_key"),
+                "size": candidate.get("size"),
+                "channel": candidate.get("channel"),
+                "target": candidate.get("target"),
+                "idempotency_key": candidate.get("idempotency_key"),
+            },
+            "result": {
+                "status": result.get("status"),
+                "image_path": str(image_path),
+                "reason_code": candidate.get("reason_code"),
+            },
+        }
+        # 1) tool_call_log
+        try:
+            self.db.insert("tool_call_log", {
+                "ts": int(__import__("time").time() * 1000),
+                "user_id": msg.user_id,
+                "tool_name": tool_entry["name"],
+                "arguments": json.dumps(tool_entry["arguments"], ensure_ascii=False),
+                "result": json.dumps(tool_entry["result"], ensure_ascii=False)[:2000],
+                "success": 1 if success else 0,
+                "duration_ms": tool_entry["duration_ms"],
+                "cognition_id": (trace or {}).get("id") or 0,
+            })
+        except Exception:
+            logger.exception("chat photo tool_call_log insert error")
+        # 2) trace tools 阶段（在 handle 尚未 commit 时直接合并到内存 trace）
+        if trace is not None and self.cognition is not None:
+            try:
+                existing = trace.get("stages", {}).get("tools") or []
+                if not isinstance(existing, list):
+                    existing = []
+                existing = [t for t in existing
+                            if not (isinstance(t, dict) and t.get("name") == "generate_image")]
+                existing.append(tool_entry)
+                self.cognition.record(trace, "tools", existing)
+            except Exception:
+                logger.debug("chat photo trace tools record failed", exc_info=True)
 
     @staticmethod
     def _has_fuzzy_image_signal(text: str) -> bool:

@@ -92,5 +92,46 @@ async def correct_typos(
     if not corrected or corrected == original:
         return original
 
+    # ── 刀1：输出净化 —— 防止小模型吐出"助手口吻解释"污染主链 ──
+    # 轻量模型偶发会把 system prompt / 对自己的定位说明当成回复，例如
+    # "作为中文错别字订正助手，我检查到…"。这类内容绝不能当成订正后的
+    # 用户文本塞给主模型，否则主模型会真的收到一段"纠错助手台词"并误以为
+    # 用户在玩角色扮演。命中任何一条都回退原文（宁可漏订正也不污染）。
+    _LEAK_BLACKLIST = (
+        "作为中文错别字订正助手",
+        "我是中文错别字订正助手",
+        "中文错别字订正助手",
+        "错别字订正助手",
+        "我检查到",
+        "我检查了一下",
+        "没有明显错别字",
+        "未检测到错别字",
+        "订正如下",
+        "订正后的文本",
+    )
+    for leak_kw in _LEAK_BLACKLIST:
+        if leak_kw in corrected:
+            logger.warning(
+                "[TypoCorrector] 检测到助手口吻泄漏(%r)，回退原文", leak_kw
+            )
+            return original
+
+    # 弱格式校验：订正只改几个字，不应比原文长 30 字以上、不应突然多出
+    # 2 句以上的话（多写 = 在发议论而非订正）、也不应以"作为…"开头。
+    len_delta = len(corrected) - len(original)
+    extra_periods = corrected.count("。") - original.count("。")
+    if (
+        len_delta > 30
+        or extra_periods > 2
+        or corrected.startswith("作为")
+        or corrected.startswith("我是")
+    ):
+        logger.debug(
+            "[TypoCorrector] 格式异常(len_delta=%d,extra_periods=%d,开头=%r)，回退原文",
+            len_delta, extra_periods, corrected[:10],
+        )
+        return original
+    # ── 刀1 结束 ──
+
     logger.info("[TypoCorrector] 订正 %r -> %r", original, corrected)
     return corrected

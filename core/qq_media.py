@@ -106,7 +106,14 @@ def _resolve_local_file(data: dict) -> Optional[str]:
     # 可能带路径前缀的相对路径
     if p.exists():
         return str(p)
-    # 剩下的视为 base64 字节
+    # 路径特征防护：NapCat 某些版本返回"存在但此处未能 stat"的长 Windows 路径
+    # （含盘符冒号/反斜杠/正斜杠），这类字符串绝不可能是 base64，直接判为路径
+    # 解析失败返回 None，避免被下方宽松的 base64 解码误判成字节导致后续读不到文件。
+    if "\\" in raw or "/" in raw or re.match(r"^[A-Za-z]:", raw):
+        return None
+    # 剩下的视为 base64 字节（长度 + 字符集双重校验，进一步防长路径/脏数据误判）
+    if len(raw) < 16 or not re.fullmatch(r"[A-Za-z0-9+/=\s]*", raw):
+        return None
     try:
         payload = base64.b64decode(raw, validate=False)
     except Exception:
@@ -145,6 +152,15 @@ def _audio_duration(path: str) -> float:
     except Exception:
         return 0.0
     return 0.0
+
+
+def _local_asr_available() -> bool:
+    """本地 AudioTranscriber 是否可用（仅探测，不实例化完整链路）。"""
+    try:
+        from core.multimodal_input import AudioTranscriber
+        return bool(AudioTranscriber().is_available)
+    except Exception:
+        return False
 
 
 # ── SiliconFlow ASR / Vision 客户端 ───────────────
@@ -378,7 +394,10 @@ class QQMediaPreprocessor:
         if transcript:
             text_parts.append(f"{label} 转写：{transcript}")
         else:
-            text_parts.append(label)
+            # 转写失败：不再只给一个光秃秃的 [语音]，附上失败原因占位，
+            # 让主模型感知"这是一条语音但文字没转出来"，而非以为用户只发了两个字。
+            reason = "下载失败" if audio_path is None else "转写失败"
+            text_parts.append(f"{label}（{reason}，请重发或改用文字）")
 
         attachments.append({
             "category": "audio",
@@ -389,10 +408,27 @@ class QQMediaPreprocessor:
         })
 
     async def _transcribe(self, audio_path: str) -> str:
-        # 优先云端 SenseVoice；不可用/失败则回退本地 AudioTranscriber
+        """语音转文字：云端 SenseVoice → 本地 AudioTranscriber，失败返回空串。
+
+        若首次云端失败且音频不是常见解码格式（silk/amr/ogg），先用内置 ffmpeg
+        转码成 mp3 再重试一次云端，减少"格式不被 SenseVoice 支持"导致的假失败。
+        全程失败时记录 INFO（可追踪根因），不再只留不可见的 debug。
+        """
+        # 尝试 1：云端直接转写
         text = await self.sf.transcribe(audio_path, language="zh")
         if text:
             return text
+
+        # 尝试 2：格式非 mp3/wav 时，ffmpeg 转码后重试云端
+        ext = Path(audio_path).suffix.lower()
+        if ext not in (".mp3", ".wav", ".flac", ".ogg", ".m4a"):
+            mp3_path = await self._audio_transcode_to_mp3(audio_path)
+            if mp3_path:
+                text = await self.sf.transcribe(mp3_path, language="zh")
+                if text:
+                    return text
+
+        # 尝试 3：本地 AudioTranscriber
         try:
             from core.multimodal_input import AudioTranscriber
             local = AudioTranscriber()
@@ -400,7 +436,31 @@ class QQMediaPreprocessor:
                 return await local.transcribe(audio_path, language="zh")
         except Exception as e:
             logger.debug("local ASR fallback failed: %s", e)
+        logger.info(
+            "[QQMedia] ASR 全部失败 audio=%s 云端可用=%s 本地可用=%s",
+            audio_path, self.sf.available, _local_asr_available(),
+        )
         return ""
+
+    async def _audio_transcode_to_mp3(self, audio_path: str) -> Optional[str]:
+        """用内置 ffmpeg 把任意音频转成 mp3，成功返回新路径，失败返回 None。"""
+        ffmpeg = _FFMPEG_DIR / "ffmpeg.exe" if os.name == "nt" else _FFMPEG_DIR / "ffmpeg"
+        if not ffmpeg.exists():
+            ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            return None
+        import subprocess
+        dest = self.media_dir / f"qq_trans_{uuid.uuid4().hex}.mp3"
+        try:
+            subprocess.run(
+                [str(ffmpeg), "-y", "-i", str(audio_path), "-ar", "16000",
+                 "-ac", "1", "-b:a", "32k", str(dest)],
+                capture_output=True, text=True, timeout=60,
+            )
+            return str(dest) if dest.exists() and dest.stat().st_size > 0 else None
+        except Exception as e:
+            logger.debug("ffmpeg transcode failed: %s", e)
+            return None
 
     # ── 图片 / 表情包 ─────────────────────────────
     async def _handle_image(self, data: dict, text_parts: list[str], attachments: list[dict]) -> None:

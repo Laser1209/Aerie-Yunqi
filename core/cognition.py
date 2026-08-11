@@ -248,6 +248,72 @@ class CognitionEngine:
             logger.exception("cognition patch_decision error id=%s", trace_id)
             return False
 
+    def patch_tools(self, trace_id: int, tool_summary: list[dict]) -> bool:
+        """Append image/other async tool calls onto an already-committed row.
+
+        Image generation (chat photo / proactive photo) runs on a separate
+        fire-and-forget chain that never goes through LLM ``tool_results``,
+        so by the time the image lands the trace may already be committed.
+        This merges the new tool entries into the existing ``stage_tools``
+        list (de-duplicated by ``name``), preserving any LLM tool calls that
+        were recorded earlier.
+
+        Idempotent: re-adding the same tool name is a no-op.
+
+        Returns True on success, False on any failure (logged).
+        """
+        if not trace_id or not tool_summary:
+            return False
+        try:
+            row = self._db.query_one(
+                "SELECT stage_tools FROM cognition_log WHERE id = ?",
+                (int(trace_id),),
+            )
+            if not row:
+                logger.warning("patch_tools: no row id=%s", trace_id)
+                return False
+
+            raw = row.get("stage_tools")
+            current: list[dict] = []
+            if raw and isinstance(raw, str) and raw.strip():
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        current = parsed
+                except Exception:
+                    current = []
+            elif isinstance(raw, list):
+                current = raw
+
+            existing_names: set[str] = {
+                str(x.get("name", "")) for x in current if isinstance(x, dict)
+            }
+            added = 0
+            for item in tool_summary:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name", "") or "")
+                if name and name in existing_names:
+                    continue
+                current.append(item)
+                if name:
+                    existing_names.add(name)
+                added += 1
+
+            if added == 0:
+                return True
+
+            self._db.update(
+                "cognition_log",
+                {"stage_tools": json.dumps(current, ensure_ascii=False)},
+                "id = ?",
+                (int(trace_id),),
+            )
+            return True
+        except Exception:
+            logger.exception("cognition patch_tools error id=%s", trace_id)
+            return False
+
     def append_pacing_decisions(
         self, trace_id: int, additional: list[dict]
     ) -> bool:

@@ -17,12 +17,15 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+# 世界模拟统一使用本地时区（北京时间 UTC+08:00）。
+LOCAL = timezone(timedelta(hours=8))
+
 
 # ── WorldSnapshot 字段齐全 ──────────────────────────
 def test_world_snapshot_has_all_fields():
     from core.world_simulation import WorldSimulation, WorldSnapshot
 
-    sim = WorldSimulation(clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=timezone.utc))
+    sim = WorldSimulation(clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=LOCAL))
     snap = sim.tick()
     assert isinstance(snap, WorldSnapshot)
     for attr in (
@@ -46,7 +49,7 @@ def test_world_snapshot_has_all_fields():
 def test_tick_generates_unique_instance_ids_across_seconds():
     from core.world_simulation import WorldSimulation
 
-    t = datetime(2026, 7, 28, 9, 0, 0, tzinfo=timezone.utc)
+    t = datetime(2026, 7, 28, 9, 0, 0, tzinfo=LOCAL)
     sim = WorldSimulation(clock=lambda: t)
     s1 = sim.tick()
 
@@ -61,7 +64,7 @@ def test_tick_generates_unique_instance_ids_across_seconds():
 def test_tick_idempotent_within_same_second():
     from core.world_simulation import WorldSimulation
 
-    fixed = datetime(2026, 7, 28, 9, 0, 0, tzinfo=timezone.utc)
+    fixed = datetime(2026, 7, 28, 9, 0, 0, tzinfo=LOCAL)
     sim = WorldSimulation(clock=lambda: fixed)
     s1 = sim.tick()
     s2 = sim.tick()
@@ -91,7 +94,7 @@ def test_phase_mapping_by_hour(hour, expected):
     from core.world_simulation import WorldSimulation
 
     sim = WorldSimulation(
-        clock=lambda: datetime(2026, 7, 28, hour, 0, tzinfo=timezone.utc)
+        clock=lambda: datetime(2026, 7, 28, hour, 0, tzinfo=LOCAL)
     )
     snap = sim.tick()
     assert snap.phase == expected, f"hour={hour} -> {snap.phase}, want {expected}"
@@ -104,7 +107,7 @@ def test_energy_decays_and_recovers():
 
     def sim_at(hour: int):
         s = WorldSimulation(
-            clock=lambda h=hour: datetime(2026, 7, 28, h, 0, tzinfo=timezone.utc)
+            clock=lambda h=hour: datetime(2026, 7, 28, h, 0, tzinfo=LOCAL)
         )
         return s.tick()
 
@@ -125,7 +128,7 @@ def test_nearby_objects_reflects_environment():
 
     # 上午在家 planning -> 家里物件
     home = WorldSimulation(
-        clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=timezone.utc)
+        clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=LOCAL)
     ).tick()
     assert home.location == "home"
     assert len(home.nearby_objects) > 0
@@ -133,7 +136,7 @@ def test_nearby_objects_reflects_environment():
 
     # 下午在 study working -> 书房物件
     study = WorldSimulation(
-        clock=lambda: datetime(2026, 7, 28, 15, 0, tzinfo=timezone.utc)
+        clock=lambda: datetime(2026, 7, 28, 15, 0, tzinfo=LOCAL)
     ).tick()
     assert study.location == "study"
     assert len(study.nearby_objects) > 0
@@ -146,7 +149,7 @@ def test_visual_topics_derive_from_activity_and_objects():
     from core.world_simulation import WorldSimulation
 
     snap = WorldSimulation(
-        clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=timezone.utc)
+        clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=LOCAL)
     ).tick()
     # planning 活动应产生可发送的视觉话题
     assert isinstance(snap.available_visual_topics, list)
@@ -160,10 +163,39 @@ def test_visual_topics_differ_by_activity():
     from core.world_simulation import WorldSimulation
 
     morning = WorldSimulation(
-        clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=timezone.utc)
+        clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=LOCAL)
     ).tick()
     evening = WorldSimulation(
-        clock=lambda: datetime(2026, 7, 28, 21, 0, tzinfo=timezone.utc)
+        clock=lambda: datetime(2026, 7, 28, 21, 0, tzinfo=LOCAL)
     ).tick()
     # planning vs relaxing 话题应有差异
     assert set(morning.available_visual_topics) != set(evening.available_visual_topics)
+
+
+# ── 根因审计回归测试 ────────────────────────────────
+def test_16_48_local_should_be_afternoon():
+    """本地 16:48 应判 afternoon(14-19)，绝不能是 morning。"""
+    from core.world_simulation import WorldSimulation
+
+    sim = WorldSimulation(clock=lambda: datetime(2026, 8, 11, 16, 48, tzinfo=LOCAL))
+    assert sim.tick().phase == "afternoon"
+
+
+def test_get_snapshot_refreshes_when_stale():
+    """缓存超过 max_age_sec 未更新时, get_snapshot 强制随真实时钟重算时段。"""
+    from datetime import datetime, timedelta, timezone
+    from core.world_simulation import WorldSimulation
+
+    LOCAL = timezone(timedelta(hours=8))
+
+    def later_clock():
+        return datetime(2026, 7, 28, 15, 0, tzinfo=LOCAL)
+
+    sim = WorldSimulation(clock=lambda: datetime(2026, 7, 28, 9, 0, tzinfo=LOCAL))
+    sim.tick()  # 本地 9 点 → morning 缓存
+    cached = sim.get_snapshot()
+    assert cached.phase == "morning"
+
+    sim.clock = later_clock  # 推进到本地 15 点，但缓存未刷新
+    assert sim.get_snapshot().phase == "morning"          # 默认 None 仍返回旧缓存
+    assert sim.get_snapshot(max_age_sec=300).phase == "afternoon"  # 过期 → 强制刷新

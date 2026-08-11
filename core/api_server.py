@@ -4606,6 +4606,12 @@ async def settings_put(request: Request) -> dict:
                         _pol.max_per_day = int(_p["max_per_day"])
                     if _p.get("min_interval_min") is not None:
                         _pol.min_interval_min = int(_p["min_interval_min"])
+                # 热更新：发图每日上限 → 运行中的 ImageBudget（0=不限制），即时生效。
+                if _p.get("image_max_per_day") is not None:
+                    _consumer = getattr(_comp, "world_image_candidate_consumer", None)
+                    _budget = getattr(_consumer, "image_budget", None)
+                    if _budget is not None and hasattr(_budget, "set_limit"):
+                        _budget.set_limit("proactive", int(_p["image_max_per_day"]))
             except Exception:
                 logger.warning("settings_put: hot-apply proactive frequency failed", exc_info=True)
         return {"status": "ok", "saved": list(body.keys())}

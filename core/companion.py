@@ -578,7 +578,8 @@ class Companion:
         self._emotion_tick_task = asyncio.create_task(self._emotion_tick_loop())
 
         # 世界真实时间推进 + 真实数据刷新（inprocess 模式下主动 tick）。
-        self._world_loop_task = asyncio.create_task(self._run_world_loop())
+        # 由看门狗包裹：任务异常结束后自动重建，避免静默停摆。
+        self._world_loop_task = asyncio.create_task(self._supervise_world_loop())
 
         # Phase 14: 主动发图节奏循环（世界模拟不产图片候选，由 Core 侧补发布源）。
         self._photo_loop_task = asyncio.create_task(self._run_proactive_photo_loop())
@@ -1031,12 +1032,17 @@ class Companion:
         )
         return self.world_image_candidate_consumer
 
-    def _world_snapshot_for_context(self) -> dict | None:
+    def _world_snapshot_for_context(self, *, max_age_sec: float | None = None) -> dict | None:
         provider = getattr(self.world_port, "get_world_snapshot", None)
         if not callable(provider):
             return None
         try:
-            return provider()
+            if max_age_sec is None:
+                return provider()
+            try:
+                return provider(max_age_sec=max_age_sec)
+            except TypeError:  # 旧/无参适配器(如 Null/remote)不支持新鲜度参数
+                return provider()
         except Exception:
             logger.debug("world snapshot unavailable", exc_info=True)
             return None
@@ -2007,7 +2013,14 @@ class Companion:
         while True:
             try:
                 # 真实时间推进：即使没有消息，世界也随时钟演进。
-                wp.tick()
+                try:
+                    snap = wp.tick()
+                    phase = str((snap or {}).get("phase") or "")
+                    if phase and phase != getattr(self, "_last_world_phase", None):
+                        logger.info("[WorldLoop] phase=%s", phase)
+                        self._last_world_phase = phase
+                except Exception:
+                    logger.warning("[WorldLoop] tick failed", exc_info=True)
                 if not city:
                     # 未配置世界位置 → 用自动定位解析一次。
                     try:
@@ -2041,6 +2054,18 @@ class Companion:
             except Exception:
                 logger.debug("world loop tick failed", exc_info=True)
             await asyncio.sleep(tick_sec)
+
+    async def _supervise_world_loop(self) -> None:
+        """看门狗：世界推进任务异常结束后自动重建，避免静默停摆。"""
+        while True:
+            task = asyncio.create_task(self._run_world_loop())
+            try:
+                await task
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.error("[WorldLoop] task died, restarting", exc_info=True)
+            await asyncio.sleep(5)
 
     async def _run_provider_health_loop(self) -> None:
         """周期探测 LLM provider 余额/健康度。
@@ -2163,7 +2188,8 @@ class Companion:
                 master_id = str(getattr(primary, "user_id", "") or "")
 
                 # ── 感知：取世界快照（含 available_visual_topics）──
-                raw_snapshot = self._world_snapshot_for_context()
+                # 强制新鲜(60s 兜底)：即使世界循环停摆，也基于当前时段做发图决策
+                raw_snapshot = self._world_snapshot_for_context(max_age_sec=60)
                 if not raw_snapshot:
                     continue
                 from core.world_simulation import WorldSnapshot

@@ -491,8 +491,22 @@ class WorldSimulation:
         self._cached_second = ts
         return snap
 
-    def get_snapshot(self) -> WorldSnapshot:
+    def get_snapshot(self, *, max_age_sec: float | None = None) -> WorldSnapshot:
+        """返回当前世界快照。
+
+        传 ``max_age_sec`` 时，若缓存快照超过该秒数未刷新，则强制调用
+        ``tick()`` 随真实时钟重算时段/话题——保证世界循环停摆时，
+        主动发图等读快照方仍能拿到"当前时段"，杜绝旧时段/旧话题导致的去重空转。
+        """
         if self._snapshot is None:
+            return self.tick()
+        if max_age_sec is None:
+            return self._snapshot
+        try:
+            current = int(self.clock().timestamp())
+        except Exception:
+            return self._snapshot
+        if self._cached_second is not None and (current - self._cached_second) > max_age_sec:
             return self.tick()
         return self._snapshot
 

@@ -59,6 +59,15 @@ class ImageBudget:
         """Return the configured daily limit for ``kind`` (0 == unlimited)."""
         return int(self.limits.get(kind, 0) or 0)
 
+    def set_limit(self, kind: str, limit: int) -> None:
+        """Hot-update the daily limit for ``kind`` (0 == unlimited).
+
+        Callers may invoke this when the user edits the proactive image limit
+        in settings, so the running budget picks it up without a restart.
+        """
+        with self._lock:
+            self.limits[kind] = int(limit) if int(limit) > 0 else 0
+
     def used(self, kind: str) -> int:
         """Return how many generations of ``kind`` happened today."""
         self._ensure_today()

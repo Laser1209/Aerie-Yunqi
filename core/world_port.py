@@ -526,8 +526,8 @@ class InProcessWorldAdapter:
         if callable(setter):
             setter(reality)
 
-    def get_world_snapshot(self) -> dict[str, Any] | None:
-        return dict(self.world.get_snapshot())
+    def get_world_snapshot(self, *, max_age_sec: float | None = None) -> dict[str, Any] | None:
+        return dict(self.world.get_snapshot(max_age_sec=max_age_sec))
 
     def get_relationship_snapshot(
         self,

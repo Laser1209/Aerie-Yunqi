@@ -214,7 +214,15 @@ class WorldImageCandidateConsumer:
             return []
         results: list[dict[str, Any]] = []
         for event in events or []:
-            results.append(await self.process_event(event))
+            try:
+                results.append(await self.process_event(event))
+            except Exception:
+                logger.warning(
+                    "[ImageConsumer] process_event failed for event seq=%s event_id=%s; continuing batch",
+                    _event_sequence(event),
+                    str(getattr(event, "event_id", "") or ""),
+                    exc_info=True,
+                )
         return results
 
     async def approve_candidate(self, approval_payload: dict[str, Any]) -> dict[str, Any]:
@@ -287,6 +295,11 @@ class WorldImageCandidateConsumer:
 
     async def process_event(self, event: Any) -> dict[str, Any]:
         if not self._flag_enabled():
+            logger.info(
+                "[ImageConsumer] disabled reason=%s key=%s",
+                "feature_flag_off",
+                self._log_key(event),
+            )
             return self._result(
                 status="disabled",
                 event=event,
@@ -296,6 +309,11 @@ class WorldImageCandidateConsumer:
 
         candidate = self._candidate_from_event(event)
         if candidate is None:
+            logger.info(
+                "[ImageConsumer] ignored reason=%s key=%s",
+                "not_image_candidate",
+                self._log_key(event),
+            )
             return self._result(
                 status="ignored",
                 event=event,
@@ -336,6 +354,10 @@ class WorldImageCandidateConsumer:
             if not online:
                 # 用户主动要求的图不因推送暂停/离线而被挡：那是直接命令。
                 if not self._is_manual_trigger(candidate):
+                    logger.info(
+                        "[ImageConsumer] offline pending key=%s",
+                        candidate["idempotency_key"],
+                    )
                     return self._result(
                         status="offline",
                         event=event,
@@ -403,6 +425,11 @@ class WorldImageCandidateConsumer:
             }
         workflow_status = str(workflow_result.get("status") or "failed")
         if workflow_status == "disabled":
+            logger.info(
+                "[ImageConsumer] workflow_disabled reason=%s key=%s",
+                "image_workflow_disabled",
+                candidate["idempotency_key"],
+            )
             return self._result(
                 status="workflow_disabled",
                 event=event,
@@ -649,6 +676,15 @@ class WorldImageCandidateConsumer:
             self.image_budget.record(kind)
         except Exception:
             logger.debug("world image candidate budget record failed", exc_info=True)
+
+    @staticmethod
+    def _log_key(event: Any, candidate: dict[str, Any] | None = None) -> str:
+        if candidate:
+            return str(candidate.get("idempotency_key") or "")
+        payload = getattr(event, "payload", None)
+        if isinstance(payload, dict):
+            return _safe_value(payload.get("idempotency_key") or "")
+        return ""
 
     @staticmethod
     def _is_manual_trigger(candidate: dict[str, Any] | None) -> bool:

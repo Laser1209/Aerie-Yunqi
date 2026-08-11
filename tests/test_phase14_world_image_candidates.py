@@ -753,3 +753,100 @@ async def test_image_prompt_for_world_context_empty_returns_base(tmp_path):
     assert prompt.strip() != ""
     assert "一张写实生活照" in prompt
 
+
+# ── 可观测性兜底（Task 5）：被消费但未落盘的分支有迹可循 ──────────────────
+# 背景：主动发图发布了候选，但 store 无落盘、也无任何生成/交付/失败日志。
+# 根因是 process_event 里 disabled/ignored/offline/workflow_disabled 分支既不
+# 打日志也不落盘。以下用例钉住这些分支的语义（返回明确 status、不抛异常、
+# 不向 store 写记录），并保证 consume_replay 单条失败不中断整批。
+
+
+@pytest.mark.asyncio
+async def test_disabled_and_offline_do_not_write_store_or_raise(tmp_path):
+    """disabled / offline 返回明确 status、不抛异常，且不向 store 写记录。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    # disabled：feature flag 关闭 → status=disabled，不落盘、不 ACK。
+    disabled_store = JsonWorldImageCandidateStore(tmp_path / "disabled-norecord.json")
+    disabled = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(False),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        store=disabled_store,
+        clock=_clock,
+    )
+    disabled_result = await disabled.process_event(_candidate_event())
+    assert disabled_result["status"] == "disabled"
+    assert disabled_result["reason"] == "feature_flag_off"
+    assert disabled_result["acked"] is False
+    assert disabled_store.get("world-cand-1") is None
+
+    # offline：推送离线（非 manual）→ status=offline，不落盘、不 ACK。
+    offline_store = JsonWorldImageCandidateStore(tmp_path / "offline-norecord.json")
+    offline = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=offline_store,
+        clock=_clock,
+        delivery_online=lambda: False,
+    )
+    offline_result = await offline.process_event(_candidate_event())
+    assert offline_result["status"] == "offline"
+    assert offline_result["reason"] == "delivery_offline"
+    assert offline_result["acked"] is False
+    assert offline_store.get("world-cand-1") is None
+
+
+@pytest.mark.asyncio
+async def test_consume_replay_survives_process_event_exception(tmp_path):
+    """process_event 抛异常时，consume_replay 不中断整批，正常事件仍被处理。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    def _evt(seq: int, key: str) -> WorldEvent:
+        return WorldEvent(
+            event_id=f"evt_{seq}",
+            topic="image_candidates",
+            event_type="world.image_candidate.published",
+            sequence=seq,
+            occurred_at="2026-07-20T20:00:00+00:00",
+            payload=_candidate_payload(
+                candidate_id=f"cand-{seq}",
+                idempotency_key=key,
+            ),
+        )
+
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "replay-exc.json"),
+        clock=_clock,
+    )
+
+    async def _flaky_process(event):
+        if int(getattr(event, "sequence", 0)) == 1:
+            raise RuntimeError("boom on first event")
+        return {"status": "ok", "sequence": int(getattr(event, "sequence", 0))}
+
+    consumer.process_event = _flaky_process  # type: ignore[method-assign]
+    consumer.world_port = WorldPortStub(
+        [_evt(1, "key-a"), _evt(2, "key-b")]
+    )
+
+    results = await consumer.consume_replay(last_seq=0)
+
+    # 第一条抛异常被跳过并记 warning，第二条正常处理 → 批不中断。
+    assert len(results) == 1
+    assert results[0]["sequence"] == 2
+

@@ -203,3 +203,20 @@ async def test_companion_initializes_world_port_without_starting_world_loop(phas
     assert state.status == "disabled"
     assert state.source == "null"
     assert companion.pipeline is not None
+
+
+def test_get_world_snapshot_passes_max_age():
+    """InProcessWorldAdapter.get_world_snapshot 应透传 max_age_sec 到 world.get_snapshot。"""
+    from core.world_port import InProcessWorldAdapter
+    from core.world_simulation import WorldSimulation
+
+    calls = []
+
+    class SpyWorld(WorldSimulation):
+        def get_snapshot(self, *, max_age_sec=None):
+            calls.append(max_age_sec)
+            return super().get_snapshot(max_age_sec=max_age_sec)
+
+    adapter = InProcessWorldAdapter(world=SpyWorld())
+    adapter.get_world_snapshot(max_age_sec=60)
+    assert calls == [60]

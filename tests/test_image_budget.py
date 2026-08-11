@@ -76,3 +76,18 @@ def test_snapshot_shape(tmp_path):
     assert snap["proactive"]["limit"] == 10
     assert snap["proactive"]["remaining"] == 9
     assert snap["enabled"] is True
+
+
+def test_set_limit_hot_updates(tmp_path):
+    """set_limit 热更新后 can_record 立即按新上限判断（0=不限制）。"""
+    budget = ImageBudget(state_path=tmp_path / "budget.json", clock=_clock(1), limits={"proactive": 2})
+    budget.record("proactive")
+    budget.record("proactive")
+    assert budget.can_record("proactive") == (False, REASON_LIMIT_REACHED)
+    # 调高到 5：立即放行
+    budget.set_limit("proactive", 5)
+    assert budget.limit("proactive") == 5
+    assert budget.can_record("proactive") == (True, REASON_OK)
+    # 调回 0（不限制）：立即无限
+    budget.set_limit("proactive", 0)
+    assert budget.can_record("proactive") == (True, REASON_UNLIMITED)

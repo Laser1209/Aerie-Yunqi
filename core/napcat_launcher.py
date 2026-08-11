@@ -1,7 +1,10 @@
-"""Aerie · 云栖 v0.1.0-beta.1 — NapCat launcher (manual control via API).
+"""Aerie · 云栖 v0.1.0-beta.1 — NapCat launcher (manual control via API + watchdog).
 
 Exposes status query and start/stop for the Electron NapCat panel.
-Does NOT auto-start — user clicks "Start" in the UI.
+A watchdog task auto-respawns the NapCat process when it exits or when the
+WS port stays closed too long, so QQ messages are not silently lost while
+the process is down. The watchdog only acts on processes launched by this
+instance (``_owns_process``), never on externally-managed NapCat.
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ import logging
 import socket
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +23,13 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _NAPCAT_DIR = _PROJECT_ROOT / "NapCat" / "NapCat.Shell"
 _LAUNCHER_BAT = _NAPCAT_DIR / "launcher-user.bat"
 _QRCODE_PATH = _NAPCAT_DIR / "cache" / "qrcode.png"
+
+# Watchdog tunables: grace period before a started process is judged dead,
+# poll interval, and how long the WS port may stay closed before force-restart.
+_WATCHDOG_GRACE_SECONDS = 60.0
+_WATCHDOG_POLL_SECONDS = 5.0
+_WATCHDOG_PORT_STALL_SECONDS = 60.0
+_WATCHDOG_MAX_BACKOFF_SECONDS = 120.0
 
 
 def _port_is_open(host: str = "127.0.0.1", port: int = 3001) -> bool:
@@ -61,6 +72,10 @@ class NapcatLauncher:
         self._logs: list[str] = []
         self._phase = "idle"  # idle | starting | qr_pending | connected
         self._error_code = ""
+        self._watchdog_task: asyncio.Task | None = None
+        self._watchdog_stopped = False
+        self._consecutive_failures = 0
+        self._port_stall_since: float | None = None
 
     def get_status(self) -> dict:
         """Return current NapCat status for API."""
@@ -131,26 +146,7 @@ class NapcatLauncher:
         self._logs.append("[系统] 正在启动 NapCat...")
 
         try:
-            if sys.platform == "win32":
-                self._proc = subprocess.Popen(
-                    [str(_LAUNCHER_BAT)],
-                    cwd=str(_NAPCAT_DIR),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=(
-                        subprocess.CREATE_NO_WINDOW
-                        | subprocess.CREATE_NEW_PROCESS_GROUP
-                    ),
-                )
-            else:
-                self._proc = subprocess.Popen(
-                    [str(_LAUNCHER_BAT)],
-                    cwd=str(_NAPCAT_DIR),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-            self._owns_process = True
-
+            self._spawn()
             self._logs.append("[系统] NapCat 进程已启动，等待端口...")
 
             # Poll for port open
@@ -198,8 +194,130 @@ class NapcatLauncher:
                 "error_code": self._error_code,
             }
 
+    def _spawn(self) -> None:
+        """Launch the NapCat process via launcher-user.bat (sync)."""
+        if sys.platform == "win32":
+            self._proc = subprocess.Popen(
+                [str(_LAUNCHER_BAT)],
+                cwd=str(_NAPCAT_DIR),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=(
+                    subprocess.CREATE_NO_WINDOW
+                    | subprocess.CREATE_NEW_PROCESS_GROUP
+                ),
+            )
+        else:
+            self._proc = subprocess.Popen(
+                [str(_LAUNCHER_BAT)],
+                cwd=str(_NAPCAT_DIR),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        self._owns_process = True
+        self._port_stall_since = None
+        self._start_watchdog()
+
+    # ── watchdog ──────────────────────────────────────────────
+
+    def _start_watchdog(self) -> None:
+        """Start the background respawn watcher (no-op if already running)."""
+        if self._watchdog_task is not None and not self._watchdog_task.done():
+            return
+        self._watchdog_stopped = False
+        self._watchdog_task = asyncio.create_task(self._watchdog_loop())
+
+    def _stop_watchdog(self) -> None:
+        """Stop the background respawn watcher."""
+        self._watchdog_stopped = True
+        if self._watchdog_task is not None:
+            task = self._watchdog_task
+            self._watchdog_task = None
+            if not task.done():
+                task.cancel()
+
+    async def _watchdog_loop(self) -> None:
+        """Auto-respawn NapCat when it dies or the WS port stalls.
+
+        Only acts on processes launched by this instance (``_owns_process``).
+        A grace period right after spawn gives the process time to boot, and
+        exponential backoff prevents a respawn storm on repeated crashes.
+        """
+        try:
+            while not self._watchdog_stopped:
+                await asyncio.sleep(_WATCHDOG_POLL_SECONDS)
+                if self._watchdog_stopped:
+                    break
+                if not self._owns_process or self._proc is None:
+                    continue
+
+                proc_alive = self._proc.poll() is None
+                port_open = _port_is_open(port=self.ws_port)
+                now = time.monotonic()
+
+                if proc_alive and port_open:
+                    self._consecutive_failures = 0
+                    self._port_stall_since = None
+                    continue
+
+                if proc_alive and not port_open:
+                    # Process alive but WS port closed → track stall duration;
+                    # only act after the grace window to allow slow boots.
+                    if self._port_stall_since is None:
+                        self._port_stall_since = now
+                    if now - self._port_stall_since < _WATCHDOG_GRACE_SECONDS:
+                        continue
+                    # Grace elapsed and port still closed → force-restart.
+                    self._logs.append(
+                        "[watchdog] WebSocket 端口持续未就绪，强制重启 NapCat"
+                    )
+                    _terminate_process_tree(self._proc)
+                    self._proc = None
+                    self._owns_process = False
+
+                if not self._owns_process:
+                    continue
+
+                # Process has exited (or was force-killed above) → respawn.
+                await self._respawn()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("NapCat watchdog loop error")
+            self._watchdog_task = None
+
+    async def _respawn(self) -> None:
+        """Respawn NapCat with exponential backoff to avoid crash storms."""
+        self._consecutive_failures += 1
+        delay = min(
+            _WATCHDOG_PORT_STALL_SECONDS / 2 * (2 ** min(self._consecutive_failures - 1, 4)),
+            _WATCHDOG_MAX_BACKOFF_SECONDS,
+        )
+        self._logs.append(
+            f"[watchdog] NapCat 进程已退出，{int(delay)}s 后自动重启 "
+            f"(连续失败 {self._consecutive_failures} 次)"
+        )
+        logger.warning(
+            "NapCat process exited; respawning in %.0fs (failure #%d)",
+            delay, self._consecutive_failures,
+        )
+        try:
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            raise
+        if self._watchdog_stopped:
+            return
+        try:
+            self._spawn()
+        except Exception:
+            logger.exception("NapCat respawn failed")
+
     async def stop(self) -> dict:
         """Stop NapCat process."""
+        # Stop the watchdog first so it never respawns a process the user
+        # explicitly stopped.
+        self._stop_watchdog()
+        self._consecutive_failures = 0
         if not self._owns_process and _port_is_open(port=self.ws_port):
             self._phase = "connected"
             return {

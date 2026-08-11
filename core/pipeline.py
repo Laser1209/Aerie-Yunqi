@@ -600,7 +600,12 @@ class Pipeline:
             last_user_msg_for_ctx = model_content
             reply_text, content_remedied = await self.content_validator.validate_and_fix(
                 reply_text,
-                context={"last_user_message": last_user_msg_for_ctx},
+                context={
+                    "last_user_message": last_user_msg_for_ctx,
+                    # 重生成需要完整历史：传 ctx_messages（首条为 system prompt，
+                    # 后续为对话历史），防止重生成丢失上下文而"失忆"。
+                    "history": ctx_messages,
+                },
             )
             if content_remedied:
                 self.cognition.record(trace, "content_validation", {
@@ -687,6 +692,7 @@ class Pipeline:
                     user_id=msg.user_id,
                     content=msg.content,
                     source=msg.source,
+                    attachments=msg.attachments if msg.attachments else None,
                 )
             except Exception:
                 pass
@@ -826,6 +832,7 @@ class Pipeline:
                     user_id=msg.user_id,
                     content=msg.content,
                     source=msg.source,
+                    attachments=msg.attachments if msg.attachments else None,
                     **self._event_contract(
                         request_state,
                         message_id=user_row_id,
@@ -1859,7 +1866,10 @@ class Pipeline:
             last_user_msg_for_ctx = model_content
             reply_text, content_remedied = await self.content_validator.validate_and_fix(
                 reply_text,
-                context={"last_user_message": last_user_msg_for_ctx},
+                context={
+                    "last_user_message": last_user_msg_for_ctx,
+                    "history": ctx_messages,
+                },
             )
             if content_remedied:
                 self.cognition.record(trace, "content_validation", {
@@ -2032,6 +2042,7 @@ class Pipeline:
                 user_id=msg.user_id,
                 content=msg.content,
                 source=msg.source,
+                attachments=msg.attachments if msg.attachments else None,
                 **self._event_contract(
                     request_state,
                     message_id=user_row_id,
@@ -2922,7 +2933,10 @@ class Pipeline:
                 try:
                     reply_text, content_remedied = await self.content_validator.validate_and_fix(
                         reply_text,
-                        context={"last_user_message": msg.content},
+                        context={
+                            "last_user_message": msg.content,
+                            "history": ctx_messages,
+                        },
                         batch_id=batch_id,
                         sequence_index=seq_idx,
                     )
@@ -3033,6 +3047,7 @@ class Pipeline:
                             "user_id": msg.user_id,
                             "content": msg.content,
                             "source": source,
+                            "attachments": msg.attachments if msg.attachments else None,
                         }
                     }
                     local_emit_items.append({

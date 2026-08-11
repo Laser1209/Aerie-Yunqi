@@ -2314,15 +2314,28 @@ class Companion:
            （siliconflow-light）判断这张画面真正需要哪些数据——只把能呈现在画面里的
            写进提示词，而不是把世界快照全部揉在一起。轻量 LLM 不可用时退回确定性规则
            （按场景选择性注入时间光线/天气）。
+
+        健壮性：世界数据/轻量 LLM 接力是"锦上添花"，任何异常都必须退回基础提示词，
+        绝不把异常冒泡成空串——否则 generate_image 会因 empty_prompt 拒绝，生图直接放弃。
         """
         base = self._compose_base_image_prompt(prompt_key, candidate)
-        context = self._image_world_context(candidate)
-        if not context:
+        try:
+            context = self._image_world_context(candidate)
+            if not context:
+                return base
+            refined = await self._light_relay_refine_prompt(base, context, candidate)
+            if refined:
+                return refined
+            return self._inject_world_context_fallback(base, context, candidate)
+        except Exception:
+            # 世界数据接力失败不影响生图：退回基础提示词（base 恒非空）。
+            # warning 而非 debug：历史空提示词问题曾因 debug 级吞错无法事后复盘，
+            # 这里必须让异常体落盘，便于下次出现时直接定位。
+            logger.warning(
+                "world image context relay failed; falling back to base prompt (key=%s)",
+                prompt_key, exc_info=True,
+            )
             return base
-        refined = await self._light_relay_refine_prompt(base, context, candidate)
-        if refined:
-            return refined
-        return self._inject_world_context_fallback(base, context, candidate)
 
     def _compose_base_image_prompt(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
         """基础提示词：persona 外貌/身材 + 场景构图（不含世界上下文）。"""

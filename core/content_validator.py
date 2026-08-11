@@ -21,6 +21,9 @@ from communication.qq_client import strip_thought_action_tags
 
 logger = logging.getLogger(__name__)
 
+# 重生成时携带的最近历史条数上限：够保证上下文连贯，又不至于拉爆 token。
+_RECENT_HISTORY_LIMIT = 12
+
 
 FALLBACK_REPLIES: tuple[str, ...] = (
     "嗯？",
@@ -98,6 +101,7 @@ class ContentValidator:
         self._metrics["total"] += 1
         ctx = context or {}
         last_user_message = ctx.get("last_user_message", "")
+        history = ctx.get("history") or []
 
         batch_prefix = ""
         if batch_id is not None:
@@ -113,7 +117,9 @@ class ContentValidator:
             batch_prefix,
         )
 
-        regenerated = await self._try_regenerate(last_user_message, batch_prefix)
+        regenerated = await self._try_regenerate(
+            last_user_message, batch_prefix, history,
+        )
         if regenerated is not None and has_meaningful_content(regenerated):
             self._metrics["regenerated"] += 1
             logger.warning(
@@ -135,15 +141,16 @@ class ContentValidator:
         self,
         last_user_message: str,
         batch_prefix: str,
+        history: list[dict] | None = None,
     ) -> str | None:
         """Attempt a single lightweight regeneration via brain.chat().
 
         Args:
             last_user_message: The last message from the user for context.
             batch_prefix: Log prefix for batch identification.
-
-        Returns:
-            Regenerated text or None on failure.
+            history: Full conversation history (role/content dicts, usually
+                the pipeline's ctx_messages including the system prompt) so
+                the regenerated reply stays grounded in what was said before.
         """
         if not self.brain:
             logger.warning("%sNo brain instance available; skipping regeneration", batch_prefix)
@@ -157,10 +164,33 @@ class ContentValidator:
         )
         user_msg = last_user_message if last_user_message else "（用户刚才没有说话，请简短回应）"
 
-        messages = [
+        messages: list[dict[str, str]] = [
             {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
         ]
+
+        # 带上完整对话历史，避免重生成时丢失上下文而"失忆"。
+        # history 通常为 pipeline 的 ctx_messages（首条为 system prompt），
+        # 追加除 system 外的最近 N 条，让重生成回复与前文保持连贯。
+        if history:
+            recent = [m for m in history if m.get("role") in ("user", "assistant")]
+            for m in recent[-_RECENT_HISTORY_LIMIT:]:
+                messages.append({
+                    "role": str(m.get("role", "user")),
+                    "content": str(m.get("content", "")),
+                })
+            if len(recent) > _RECENT_HISTORY_LIMIT:
+                logger.info(
+                    "%sRegeneration context: using last %d of %d history messages",
+                    batch_prefix, _RECENT_HISTORY_LIMIT, len(recent),
+                )
+
+        messages.append({"role": "user", "content": user_msg})
+
+        # 避免 user_msg 与 history 末尾重复：last_user_message 通常就是历史最后一条，
+        # 重复追加会稀释上下文。若末尾已是相同内容则移除重复。
+        if len(messages) >= 2 and messages[-2]["role"] == "user":
+            if messages[-2]["content"].strip() == messages[-1]["content"].strip():
+                messages.pop()
 
         try:
             from communication.qq_client import strip_thought_action_tags as _strip

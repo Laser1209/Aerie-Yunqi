@@ -605,3 +605,151 @@ async def test_has_recent_completed_ignores_failed_and_expired_window(tmp_path):
     )
     assert fresh.has_recent_completed("evening_private_scene", window_sec=1800) is False
 
+
+# ── 世界数据异常兜底（修复 empty_prompt 根因后的健壮性契约） ──────────────
+# 历史问题：prompt resolver（_image_prompt_for）在世界数据接力（world snapshot /
+# fine_time_descriptor / moon_phase / light relay）抛异常时，异常被 _resolve_prompt
+# 的 except 分支静默吞掉并返回空串 ""，导致 generate_image 以 empty_prompt 拒绝、
+# provider_called=False。修复后两层兜底保证任何异常都退回非空提示词。
+
+
+def _booming_resolver(prompt_key: str, candidate: dict[str, Any]) -> str:
+    """模拟世界数据接力抛异常：resolver 内部崩溃。"""
+    raise RuntimeError("world data relay crashed")
+
+
+async def _empty_resolver(prompt_key: str, candidate: dict[str, Any]) -> str:
+    """模拟 resolver 返回空串（修复前等于放弃生图）。"""
+    return ""
+
+
+@pytest.mark.asyncio
+async def test_resolver_exception_returns_non_empty_placeholder(tmp_path):
+    """resolver 抛异常 → _resolve_prompt 兜底返回非空占位，绝不返回空串。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "resolver-exc.json"),
+        clock=_clock,
+        prompt_resolver=_booming_resolver,
+    )
+
+    prompt = await consumer._resolve_prompt(_candidate_payload())
+
+    assert prompt.strip() != ""
+    assert prompt == "world_prompt:evening_home"
+
+
+@pytest.mark.asyncio
+async def test_resolver_empty_result_returns_non_empty_placeholder(tmp_path):
+    """resolver 返回空串 → _resolve_prompt 兜底返回非空占位。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "resolver-empty.json"),
+        clock=_clock,
+        prompt_resolver=_empty_resolver,
+    )
+
+    prompt = await consumer._resolve_prompt(_candidate_payload())
+
+    assert prompt.strip() != ""
+    assert prompt == "world_prompt:evening_home"
+
+
+@pytest.mark.asyncio
+async def test_workflow_survives_world_data_exception(tmp_path):
+    """完整链路：世界数据异常被吞后，生图仍 completed、provider 被调用。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    workflow = WorkflowStub()
+    port = WorldPortStub()
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=workflow,
+        world_port=port,
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "workflow-exc.json"),
+        clock=_clock,
+        prompt_resolver=_booming_resolver,
+    )
+
+    result = await consumer.process_event(_candidate_event())
+
+    assert result["status"] == "completed"
+    assert result["acked"] is True
+    assert workflow.calls
+    assert workflow.calls[0]["prompt"].strip() != ""
+    assert workflow.calls[0]["prompt"] == "world_prompt:evening_home"
+    assert result["side_effects"]["provider_called"] is True
+
+
+@pytest.mark.asyncio
+async def test_image_prompt_for_world_context_exception_returns_base(tmp_path):
+    """_image_world_context 抛异常 → _image_prompt_for 退回基础提示词（恒非空）。
+
+    这正是 16:03 空提示词的根因层：修复前 world 接力无 try 兜底，异常冒泡到
+    _resolve_prompt 被吞成空串；修复后任何世界数据异常都退回 base 基础提示词。
+    """
+    from core.companion import Companion
+
+    companion = Companion.__new__(Companion)
+    companion._compose_base_image_prompt = (
+        lambda key, cand: "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
+    )
+
+    def _boom_context(candidate):
+        raise RuntimeError("world snapshot / fine_time / moon_phase relay crashed")
+
+    companion._image_world_context = _boom_context
+    companion._light_relay_refine_prompt = None  # 不应被调用（_image_world_context 先抛）
+    companion._inject_world_context_fallback = None
+
+    prompt = await companion._image_prompt_for(
+        "role_selfie", {"prompt_key": "role_selfie"}
+    )
+
+    assert prompt.strip() != ""
+    assert "一张写实生活照" in prompt
+
+
+@pytest.mark.asyncio
+async def test_image_prompt_for_world_context_empty_returns_base(tmp_path):
+    """_image_world_context 返回空 context → 直接退回基础提示词。"""
+    from core.companion import Companion
+
+    companion = Companion.__new__(Companion)
+    companion._compose_base_image_prompt = (
+        lambda key, cand: "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
+    )
+    companion._image_world_context = lambda cand: {}
+    companion._light_relay_refine_prompt = None
+    companion._inject_world_context_fallback = None
+
+    prompt = await companion._image_prompt_for(
+        "role_selfie", {"prompt_key": "role_selfie"}
+    )
+
+    assert prompt.strip() != ""
+    assert "一张写实生活照" in prompt
+

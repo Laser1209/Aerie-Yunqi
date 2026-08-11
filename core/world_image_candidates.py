@@ -713,15 +713,23 @@ class WorldImageCandidateConsumer:
             }
 
     async def _resolve_prompt(self, candidate: dict[str, Any]) -> str:
-        """解析生图提示词；resolver 可能是同步或异步（异步可做轻量 LLM 上下文挑选）。"""
+        """解析生图提示词；resolver 可能是同步或异步（异步可做轻量 LLM 上下文挑选）。
+
+        健壮性：resolver 异常时兜底返回非空占位提示词（_default_prompt_for_candidate），
+        绝不返回空串——否则 generate_image 会因 empty_prompt 拒绝，生图直接放弃。
+        """
         try:
             result = self.prompt_resolver(candidate["prompt_key"], candidate)
             if inspect.isawaitable(result):
                 result = await result
-            return str(result or "")
+            text = str(result or "")
+            if text.strip():
+                return text
         except Exception:
-            logger.debug("world image candidate prompt resolve failed", exc_info=True)
-            return ""
+            # warning 而非 debug：异常体必须落盘，否则空提示词问题无法复盘定位。
+            logger.warning("world image candidate prompt resolve failed", exc_info=True)
+        # 兜底：非空占位提示词，保证安全校验通过、provider 能被调用。
+        return self._default_prompt_for_candidate(candidate["prompt_key"], candidate)
 
     def _run_workflow_blocking(self, prompt: str, candidate: dict[str, Any]) -> dict[str, Any]:
         """同步执行生图（放入 worker 线程，避免阻塞事件循环）。"""

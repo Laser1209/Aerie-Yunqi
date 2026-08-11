@@ -38,6 +38,7 @@ updated: 2026-08-11
 | [[#十二、业务逻辑与功能异常]] | 输入规范化、统一格式常量、能力认知与开关联动 | [[#十二、业务逻辑与功能异常]] |
 | [[#十三、工具链与脚本]] | PowerShell 长内联脚本改 `.py`；`import core` 需项目根 | [[#十三、工具链与脚本]] |
 | [[#十四、可迁移最佳实践]] | 跨项目通用的八条工程铁律 | [[#十四、可迁移最佳实践]] |
+| [[#十五、错误可观测与吞错]] | 吞错必须 `logger.warning` 落盘；辅助链路 fail-safe | [[#十五、错误可观测与吞错]] |
 
 ---
 
@@ -227,6 +228,19 @@ updated: 2026-08-11
 8. **降级优先**：外部依赖（模型/API/ffmpeg）调用带超时与确定性兜底，核心链路永不因辅助能力失败而中断。
 9. **独立可验证**：判定测试/环境问题时，先验"被测对象可独立 import/运行"，把环境阻塞与代码缺陷分开。
 10. **写后自检**：写组件专用 CSS/代码后 grep 同名全局规则与覆盖关系；先持久化再 emit。
+11. **吞错必须可观测**：任何"异常 → 返回空/默认值"的兜底必须 `logger.warning` 记录异常体；辅助链路（世界数据接力、LLM 优化）一律 fail-safe，只降级不中断核心链路。
+
+---
+
+## 十五、错误可观测与吞错
+
+> 标签：`trouble/observability` `trouble/error-swallowing`
+
+| 问题 | 根因 | 方案 |
+| --- | --- | --- |
+| 生图提示词为空（empty_prompt）秒拒、无图片产出（19） | `_image_prompt_for` 世界数据接力异常无 try 兜底，冒泡到 `_resolve_prompt` 的 `except: logger.debug + return ""`；空提示词被 safety 拒绝，异常体从未落盘 | 两层 fail-safe：`_image_prompt_for` 异常退回基础提示词（恒非空）；`_resolve_prompt` 异常/空返回非空占位 `world_prompt:<key>`；吞错日志 `logger.debug → logger.warning` 落盘 traceback；契约测试覆盖 resolver/context 双异常（`test_phase14_world_image_candidates.py` 17/17 通过） |
+
+**可迁移**：任何"异常 → 返回空/默认值"的 `except` 分支都不得用 `logger.debug`——异常体必须落盘，否则问题不可复盘，等于让 bug 蒸发；辅助链路必须 fail-safe，只降级不中断核心链路。
 
 ---
 

@@ -48,6 +48,21 @@ function createChatStore({ maxMessages = 500 } = {}) {
     return "";
   }
 
+  // 附件补齐：同一条真实消息若已渲染但无附件（实时事件漏附件/先无图后有图），
+  // 后续带附件的同 id 消息到达时允许放行一次 upsert 补上图片卡片。
+  // 仅当"旧无附件、新有附件"时放行，避免无谓重复渲染。
+  function backfillAttachmentDomId(signal) {
+    if (!signal.id) return null;
+    const atts = signal.attachments;
+    if (!Array.isArray(atts) || atts.length === 0) return null;
+    const domId = realIdToDomId.get(signal.id) || byKey.get("m:" + signal.id);
+    if (!domId) return null;
+    const existing = byDomId.get(domId);
+    if (!existing) return null;
+    if (Array.isArray(existing.attachments) && existing.attachments.length > 0) return null;
+    return domId;
+  }
+
   // 更新已存在元素或创建新元素, 返回 upsert 意图
   function upsert(domId, patch) {
     let msg = byDomId.get(domId);
@@ -195,6 +210,15 @@ function createChatStore({ maxMessages = 500 } = {}) {
         signal.id;
       if (signal.client_id) clientIdToDomId.set(signal.client_id, domId);
       if (signal.id) {
+        // 附件补齐：同 id 已渲染但旧无附件、新有附件 → 放行补图，不丢卡片
+        const backfillDomId = backfillAttachmentDomId(signal);
+        if (backfillDomId) {
+          intents.push(upsert(backfillDomId, {
+            ...signal, id: backfillDomId, domId: backfillDomId,
+            msgId: signal.id, typing: false,
+          }));
+          return intents;
+        }
         if (seenRealIds.has(signal.id)) return intents;
         seenRealIds.add(signal.id);
         realIdToDomId.set(signal.id, domId);
@@ -210,8 +234,16 @@ function createChatStore({ maxMessages = 500 } = {}) {
     // 普通历史消息(无 request): domId = 真实 id, 消息级去重
     if (signal.id && (signal.role === "user" || signal.role === "assistant")) {
       const key = "m:" + signal.id;
-      if (byKey.has(key)) return intents;   // 已渲染过, 不重复
-      if (seenRealIds.has(signal.id)) return intents;
+      if (byKey.has(key) || seenRealIds.has(signal.id)) {
+        // 附件补齐：同 id 已渲染但旧无附件、新有附件 → 放行补图，不丢卡片
+        const backfillDomId = backfillAttachmentDomId(signal);
+        if (backfillDomId) {
+          intents.push(upsert(backfillDomId, {
+            ...signal, id: backfillDomId, domId: backfillDomId, msgId: signal.id,
+          }));
+        }
+        return intents;
+      }
       seenRealIds.add(signal.id);
       byKey.set(key, signal.id);
       intents.push(upsert(signal.id, { ...signal, id: signal.id, domId: signal.id, msgId: signal.id }));

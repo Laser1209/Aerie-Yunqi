@@ -373,6 +373,7 @@ npm run build:win:alt
 | 后端代码改动不生效（新接口 404 / 行为不变） | `main.py` 以 `asyncio.run()` 启动，无热重载；配置热加载仅覆盖 `config/` YAML | 结束现有 `main.py` 进程 → 等 7890 端口释放 → 用 `.venv\Scripts\python.exe -X dev main.py` 以 detached 方式重启 |
 | PowerShell 显示中文乱码（如 `å®è´...`） | PowerShell 5 控制台默认代码页非 UTF-8；接口实际返回的 UTF-8 数据正确 | 用 `[Text.Encoding]::UTF8` 转换后输出，或用 Python 脚本并设 `PYTHONIOENCODING=utf-8` 校验，勿误判数据损坏 |
 | 深夜/凌晨发"白天照"，时段光线与真实时刻错位 8 小时 | 世界模拟时钟与生图时间注入均用 UTC 未转本地（+08:00），凌晨 02:02 被当 UTC 18:02 判成 `afternoon` | 已统一到 `LOCAL_TZ` 并 `astimezone` 归一（详见下方深度排查 14） |
+| 生图提示词为空（empty_prompt）秒拒、无图片产出 | `_image_prompt_for` 世界数据接力异常被 `_resolve_prompt` 的 `except: return ""` 静默吞成空串，generate_image 以 empty_prompt 拒绝 | 已实现两层兜底：`_image_prompt_for` 异常退回基础提示词；`_resolve_prompt` 异常/空返回非空占位；吞错日志升 `warning`（详见下方深度排查 19） |
 
 ---
 
@@ -941,6 +942,41 @@ npm run build:win:alt
 
 - 时长是可选增强字段，不作为语音链路硬依赖；缺失时前端仍展示语音条 + 转写文字
 - 打包清单确认 ffmpeg 是否随包分发
+
+---
+
+#### 19. 生图提示词为空（empty_prompt）导致生图秒拒 / Image prompt empty, generation rejected
+
+**问题描述 / Symptom**
+
+- 生图任务 `status: rejected`，`safety.reason_code: empty_prompt`，`provider_called: false`
+- 审计存储中 `prompt_sha256` 等于空字符串哈希 `e3b0c44298fc1c149afbf4c8996fb924…`，说明提示词是**空串**而非任何内容
+- 表现：用户要照片 / AI 主动发图时流程"秒拒"，没有任何图片产出（历史 16:03 / 16:19 / 16:21 三次失败均如此）
+
+**可能原因 / Root cause**
+
+- 空提示词的**唯一出口**是 `WorldImageCandidateConsumer._resolve_prompt` 的 `except` 分支（修复前 `return ""`）；而 `_image_prompt_for` 正常路径恒返回非空（基础提示词由 persona 外貌拼出），所以空串必然来自"世界数据接力抛异常被吞掉"
+- 触发点在 `Companion._image_prompt_for` 中无 try 包裹的 `_image_world_context(candidate)`（world 快照取值 + `fine_time_descriptor` 太阳光线 + `moon_phase` 月相拼接）；任何运行时瞬态异常（world 快照结构异常、特定时刻数据边界等）都会一路冒泡
+- **深层根因：静默吞错**——两处 `except` 均用 `logger.debug`（默认关闭）并返回空/默认值，异常体从未落盘，事后无法复盘定位，这正是问题"看起来神秘"的原因
+
+**排查步骤 / Diagnosis**
+
+1. 查 `data/world_image_candidates.json` 与 `uploads/.image_assets/image_workflows.json`：`safety.reason_code == "empty_prompt"` 且 `side_effects.provider_called == false`
+2. 校验 `workflow.prompt_sha256` 是否等于空串哈希 `e3b0c44298fc1c149afbf4c8996fb924…`
+3. 修复后若日志出现 `world image candidate prompt resolve failed` 或 `world image context relay failed`（已升为 warning 级并落盘），按 traceback 直接定位具体异常源
+
+**解决方案 / Fix**
+
+- `core/companion.py` `_image_prompt_for`：世界数据接力整体套 try，任何异常退回基础提示词 `base`（恒非空）
+- `core/world_image_candidates.py` `_resolve_prompt`：resolver 抛异常或返回空结果时，兜底返回非空占位提示词 `world_prompt:<prompt_key>`，保证 safety 校验通过、provider 必被调用
+- 两处吞错日志由 `logger.debug` 升为 `logger.warning`，异常体强制落盘
+- 契约测试（`tests/test_phase14_world_image_candidates.py`，17/17 通过）：resolver 抛异常/返回空 → 兜底非空；`_image_world_context` 抛异常/空 context → 退回基础提示词；完整链路世界数据异常 → 仍 `completed` + `provider_called: true`
+
+**预防措施 / Prevention**
+
+- 锦上添花的辅助链路（世界数据接力、轻量 LLM 优化）必须 fail-safe：异常只降级不中断核心链路，任何异常都不得冒泡成空串
+- 吞错位置禁止用 `logger.debug` 返回默认值；凡是"异常 → 返回空/默认值"的分支必须 `logger.warning` 落盘异常体，否则问题不可复盘
+- 新增生图场景时，先验证 `_image_prompt_for` 在 resolver / context 双异常下的非空契约
 
 ---
 

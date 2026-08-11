@@ -16,6 +16,7 @@ import os
 import re
 import secrets
 import socket
+import time
 import uuid
 from typing import Any, Callable, Optional
 
@@ -111,6 +112,12 @@ class QQClient:
         self._probe_event = asyncio.Event()
         self._heartbeat_log: Optional[Callable[[str], None]] = None
         self._force_reconnect: bool = False
+        # 主动拉起 NapCat：等待端口超过阈值仍未就绪时，尝试经 launcher 拉起，
+        # 用 backoff 防重复 spawn（launcher.start 自身也有 already-running 守卫）。
+        self._port_wait_started: float | None = None
+        self._launch_backoff_until: float = 0.0
+        self._port_wait_threshold = float(config.get("proactive_launch_wait", 15))
+        self._launch_backoff_sec = float(config.get("proactive_launch_backoff", 60))
 
     @property
     def connectivity_test(self) -> bool:
@@ -224,7 +231,8 @@ class QQClient:
         self._handler = handler
 
     async def connect(self) -> None:
-        """Connect to NapCat WS. Does NOT start NapCat — just waits for port."""
+        """Connect to NapCat WS. Waits for the port, proactively launching NapCat
+        via the launcher if the port stays closed too long."""
         if self._disabled:
             logger.info("QQ client disabled by AERIE_DISABLE_QQ")
             self._running = False
@@ -235,9 +243,11 @@ class QQClient:
 
         while self._running:
             if not _port_is_open(self.host, self.port):
+                await self._maybe_launch_napcat()
                 await asyncio.sleep(3)
                 continue
 
+            self._port_wait_started = None  # port is up, stop waiting
             try:
                 async with websockets.connect(
                     url,
@@ -268,6 +278,38 @@ class QQClient:
                 self._login_event.clear()
                 self._emit_state(STATE_DISCONNECTED)
                 await asyncio.sleep(5)
+
+    async def _maybe_launch_napcat(self) -> None:
+        """Proactively launch NapCat if the WS port has been closed too long.
+
+        Tracks how long we have been waiting for the port; after
+        ``_port_wait_threshold`` seconds it asks the launcher to start
+        NapCat (only if not already running), then backs off for
+        ``_launch_backoff_sec`` to avoid a respawn storm. This covers the
+        case where NapCat died and nobody restarted it — the backend
+        triggers the recovery itself instead of waiting forever.
+        """
+        now = time.monotonic()
+        if self._port_wait_started is None:
+            self._port_wait_started = now
+            return
+        if now - self._port_wait_started < self._port_wait_threshold:
+            return
+        if now < self._launch_backoff_until:
+            return
+        self._launch_backoff_until = now + self._launch_backoff_sec
+        # Reset so the next cycle re-triggers only after another threshold window.
+        self._port_wait_started = None
+        logger.info(
+            "QQ WS port %s closed for > %.0fs, proactively launching NapCat",
+            self.port, self._port_wait_threshold,
+        )
+        try:
+            from core.napcat_launcher import get_launcher
+            result = await get_launcher().start()
+            logger.info("QQ proactive NapCat launch result: %s", result.get("ok"))
+        except Exception:
+            logger.exception("QQ proactive NapCat launch failed")
 
     async def _listen(self, ws: ClientConnection) -> None:
         """Receive and dispatch OneBot11 events.

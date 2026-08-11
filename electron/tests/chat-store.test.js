@@ -78,3 +78,37 @@ test("messages(): 全量重绘数据源, 超 maxMessages 裁剪最旧", () => {
   const ids = s.messages().map((m) => m.id);
   assert.deepEqual(ids, ["3", "4", "5"]);
 });
+
+test("附件补齐: 历史消息先无附件后有附件 → 放行一次补图 upsert", () => {
+  const s = createChatStore();
+  const first = s.ingestSignal({ id: "200", role: "user", content: "[图片:方向盘]" });
+  assert.equal(first.filter((i) => i.action === "upsert").length, 1);
+  // 同 id 再次到达(轮询/历史补齐)带 attachments → 应放行补图
+  const att = [{ category: "image", url: "/uploads/x.png", thumbnailUrl: "/uploads/.image_assets/thumbs/y.png" }];
+  const second = s.ingestSignal({ id: "200", role: "user", content: "[图片:方向盘]", attachments: att });
+  const ups = second.filter((i) => i.action === "upsert");
+  assert.equal(ups.length, 1, "旧无附件、新有附件应放行补图");
+  assert.deepEqual(ups[0].msg.attachments, att);
+  assert.equal(ups[0].msg.domId, "200");
+  // 再次带附件到达 → 已有附件, 不再放行(避免重复渲染)
+  assert.equal(s.ingestSignal({ id: "200", role: "user", content: "[图片:方向盘]", attachments: att }).length, 0);
+});
+
+test("附件补齐: 已有附件的消息再次到达不重复渲染", () => {
+  const s = createChatStore();
+  const att = [{ category: "image", url: "/uploads/x.png", thumbnailUrl: "/uploads/.image_assets/thumbs/y.png" }];
+  s.ingestSignal({ id: "201", role: "user", content: "[图片:方向盘]", attachments: att });
+  const second = s.ingestSignal({ id: "201", role: "user", content: "[图片:方向盘]", attachments: att });
+  assert.equal(second.length, 0);
+});
+
+test("附件补齐: 用户乐观气泡(client_id) 升级后带附件 → 在 client_ 稳定键上补图", () => {
+  const s = createChatStore();
+  s.ingestSignal({ client_id: "c9", role: "user", content: "你好" });
+  const att = [{ category: "image", url: "/uploads/a.png", thumbnailUrl: "/uploads/.image_assets/thumbs/b.png" }];
+  const up = s.ingestSignal({ id: "99", role: "user", content: "你好", client_id: "c9", attachments: att });
+  const ups = up.filter((i) => i.action === "upsert");
+  assert.equal(ups.length, 1);
+  assert.equal(ups[0].msg.domId, "client_c9");
+  assert.deepEqual(ups[0].msg.attachments, att);
+});

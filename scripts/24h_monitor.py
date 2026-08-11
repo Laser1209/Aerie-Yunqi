@@ -180,7 +180,7 @@ async def collect_health(backend: str, session: aiohttp.ClientSession) -> dict:
                 "ts": _now(),
                 "http_status": resp.status,
                 "latency_ms": round(latency_ms, 1),
-                "overall": body.get("overall", "unknown"),
+                "overall": body.get("status") or body.get("overall", "unknown"),
                 "uptime_seconds": body.get("uptime_seconds"),
                 "backend_instance_id": body.get("backend_instance_id", ""),
                 "components": body.get("components", {}),

@@ -1998,6 +1998,66 @@
         "request_id": "imggen_d7d9cb7ae1ac4c25a0842a117e5b4280",
         "status": "rejected"
       }
+    },
+    "proactive-visual:1786437807": {
+      "candidate": {
+        "candidate_id": "proactive-visual-1786437807",
+        "channel": "qq",
+        "created_at": "2026-08-11T08:43:27.785767+00:00",
+        "event_id": "world_evt_364651da175145c48949553d38ac1069",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "environment_object",
+        "reason_code": "world_visual:morning_plan",
+        "scene": "life_share",
+        "score": 0.42,
+        "sequence": 86643,
+        "size": "1344x768",
+        "source": "generated",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_364651da175145c48949553d38ac1069",
+        "event_type": "world.image_candidate.published",
+        "sequence": 86643,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "proactive-visual:1786437807",
+      "judge": {
+        "scene": "life_share",
+        "score": 43,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-11T08:44:08.255193+00:00",
+      "workflow": {
+        "asset_url": "/uploads/e625bbaea44f48c3a31ca3ff4cc69148.png",
+        "delivery_plan_id": "imgdelivery_216b838643aa4a2690a8d70026484d1c",
+        "request_id": "imggen_7084dbf9071a48f8b46897f0be9aafc3",
+        "status": "completed"
+      }
     }
   },
   "version": 1

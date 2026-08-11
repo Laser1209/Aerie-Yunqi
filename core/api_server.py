@@ -1195,6 +1195,11 @@ async def system_reload_config() -> dict:
                 new_proactive = load_proactive_config()
                 results["reloaded"].append("proactive.yaml")
                 await _call_reload(comp.push_scheduler, "reload_config", new_proactive, label="push_scheduler")
+                # 重载 proactive.yaml 会用文件默认值重建 PushPolicy，
+                # 需重应用 settings.yaml 的覆盖，避免把设置页的选择丢掉。
+                reapply = getattr(comp, "_apply_proactive_overlay", None)
+                if callable(reapply):
+                    reapply()
 
             if hasattr(comp, "qq") and comp.qq:
                 qq_cfg = new_settings.get("qq", {}) if isinstance(new_settings, dict) else {}
@@ -4586,6 +4591,23 @@ async def settings_put(request: Request) -> dict:
                 clear_city_cache()
             except Exception as e:
                 logger.warning("settings_put: location cache clear failed: %s", e)
+        # 热更新：proactive 频控设置立即作用于运行中的 PushPolicy，
+        # 无需重启（仅当 running policy 存在且本次提交携带相关字段）。
+        if isinstance(body, dict) and isinstance(body.get("proactive"), dict):
+            try:
+                from core.companion import get_companion
+                _comp = get_companion()
+                _pol = getattr(_comp, "push_scheduler", None)
+                if _pol is not None:
+                    _pol = getattr(_pol, "policy", None)
+                _p = body.get("proactive", {})
+                if _pol is not None:
+                    if _p.get("max_per_day") is not None:
+                        _pol.max_per_day = int(_p["max_per_day"])
+                    if _p.get("min_interval_min") is not None:
+                        _pol.min_interval_min = int(_p["min_interval_min"])
+            except Exception:
+                logger.warning("settings_put: hot-apply proactive frequency failed", exc_info=True)
         return {"status": "ok", "saved": list(body.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

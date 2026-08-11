@@ -415,7 +415,7 @@ class SettingsPanel {
       const maxPerDayEl = document.getElementById("setting-proactive-max-per-day");
       if (maxPerDayEl) {
         const v = Number(proactive.max_per_day != null ? proactive.max_per_day : 0);
-        maxPerDayEl.value = String([3, 5, 8, 10].includes(v) ? v : 5);
+        maxPerDayEl.value = String([3, 5, 8, 10, 15, 20, 30, 0].includes(v) ? v : 5);
       }
       const minIntervalEl = document.getElementById("setting-proactive-min-interval");
       if (minIntervalEl) {

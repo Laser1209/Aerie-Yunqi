@@ -328,7 +328,7 @@ class PushPolicy:
             self.today = today
             self.scene_last_sent.clear()
             self._persist()
-        if self.daily_count >= self.max_per_day:
+        if self.max_per_day > 0 and self.daily_count >= self.max_per_day:
             return False, "daily_limit"
         now_time = now_dt.time()
         in_quiet = False

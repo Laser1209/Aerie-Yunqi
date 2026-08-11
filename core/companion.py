@@ -476,16 +476,7 @@ class Companion:
         self.push_scheduler = PushScheduler(proactive_cfg)
         # UI overlay: settings.yaml proactive.max_per_day / min_interval_min
         # override the proactive.yaml defaults (consistent with image budget).
-        try:
-            _pset = (self.settings or {}).get("proactive", {})
-            _pol = self.push_scheduler.policy
-            if isinstance(_pset, dict):
-                if _pset.get("max_per_day") is not None:
-                    _pol.max_per_day = int(_pset["max_per_day"])
-                if _pset.get("min_interval_min") is not None:
-                    _pol.min_interval_min = int(_pset["min_interval_min"])
-        except Exception:
-            logger.debug("apply proactive frequency overlay failed", exc_info=True)
+        self._apply_proactive_overlay()
         self.push_scheduler.set_dispatcher(self._dispatch_push)
         self.push_event_engine = get_event_engine()
         self.push_event_engine.bind_scheduler(self.push_scheduler)
@@ -518,6 +509,25 @@ class Companion:
         # Block-4C R3.4: skill loader (lazy-created on first start()).
         self.skill_loader: Any = None
         _COMPANION = self
+
+    def _apply_proactive_overlay(self) -> None:
+        """Apply settings.yaml proactive.max_per_day / min_interval_min on top
+        of proactive.yaml defaults.
+
+        Called at boot (right after PushScheduler init) and re-invoked after
+        any hot reload of proactive.yaml so the running PushPolicy never loses
+        the user's settings-page choice.
+        """
+        try:
+            _pol = self.push_scheduler.policy
+            _pset = (self.settings or {}).get("proactive", {})
+            if isinstance(_pset, dict):
+                if _pset.get("max_per_day") is not None:
+                    _pol.max_per_day = int(_pset["max_per_day"])
+                if _pset.get("min_interval_min") is not None:
+                    _pol.min_interval_min = int(_pset["min_interval_min"])
+        except Exception:
+            logger.debug("apply proactive frequency overlay failed", exc_info=True)
 
     async def start(self) -> None:
         if self._started:

@@ -110,6 +110,7 @@ class QQClient:
         self._probe_echo: str | None = None
         self._probe_event = asyncio.Event()
         self._heartbeat_log: Optional[Callable[[str], None]] = None
+        self._force_reconnect: bool = False
 
     @property
     def connectivity_test(self) -> bool:
@@ -238,7 +239,12 @@ class QQClient:
                 continue
 
             try:
-                async with websockets.connect(url, ping_interval=20, ping_timeout=10) as ws:
+                async with websockets.connect(
+                    url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    close_timeout=3,
+                ) as ws:
                     self._connected = True
                     # R8.1+: every (re)connect must re-confirm QQ login.
                     # The WS link being up says nothing about whether the
@@ -264,28 +270,45 @@ class QQClient:
                 await asyncio.sleep(5)
 
     async def _listen(self, ws: ClientConnection) -> None:
-        """Receive and dispatch OneBot11 events."""
+        """Receive and dispatch OneBot11 events.
+
+        使用 recv 带 1s 超时的轮询循环，确保本协程永不卡死在半开连接上：
+        - 心跳判定连接死亡时会置 _force_reconnect，本循环 1s 内可见并退出，
+          从而触发 connect() 外层循环重连（不依赖 WS close 握手完成）。
+        - 心跳探活的 echo 回包在此匹配确认存活，不派发。
+        """
         self._probe_echo = None
         self._probe_event = asyncio.Event()
         heartbeat = asyncio.create_task(self._heartbeat(ws))
         try:
-            async for raw in ws:
-                if not self._running:
+            while self._running:
+                if self._force_reconnect:
+                    logger.info("QQ WS dead detected; tearing down to reconnect")
+                    break
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+                except websockets.ConnectionClosed:
+                    logger.info("QQ WS connection closed")
+                    break
+                except Exception:
+                    logger.exception("QQ WS recv error")
                     break
                 try:
                     event = json.loads(raw)
-                    # 心跳探活回包：与 _heartbeat 的 echo 匹配即确认存活，不派发
-                    if self._probe_echo is not None and event.get("echo") == self._probe_echo:
-                        self._probe_echo = None
-                        self._probe_event.set()
-                        continue
-                    await self._dispatch(event)
                 except json.JSONDecodeError:
                     logger.debug("Non-JSON WS frame: %.80s", raw)
+                    continue
+                # 心跳探活回包：与 _heartbeat 的 echo 匹配即确认存活，不派发
+                if self._probe_echo is not None and event.get("echo") == self._probe_echo:
+                    self._probe_echo = None
+                    self._probe_event.set()
+                    continue
+                try:
+                    await self._dispatch(event)
                 except Exception:
                     logger.exception("dispatch error")
-        except websockets.ConnectionClosed:
-            logger.info("QQ WS connection closed")
         finally:
             heartbeat.cancel()
             try:
@@ -294,6 +317,7 @@ class QQClient:
                 pass
             except Exception:
                 pass
+            self._force_reconnect = False
             self._connected = False
             self._logged_in = False
             self._login_event.clear()
@@ -303,12 +327,13 @@ class QQClient:
         """独立存活心跳：周期性向 NapCat 发 get_login_info 探活。
 
         若在超时内未收到对应 echo 回包，判定 WS 半开/静默断开，
-        主动关闭连接，让 _listen 的 ``async for`` 退出并触发 connect() 重连。
+        仅置 _force_reconnect 标志（不在此处 close 连接），由 _listen
+        的轮询循环 1s 内感知并收尾退出，从而触发 connect() 重连。
         心跳结果（正常/超时）会同步到状态页「运行日志」黑框。
         """
         while self._running:
             await asyncio.sleep(self._heartbeat_interval)
-            if not self._connected:
+            if not self._connected or self._force_reconnect:
                 continue
             echo = f"hb_{secrets.token_hex(8)}"
             self._probe_echo = echo
@@ -318,7 +343,7 @@ class QQClient:
             except Exception as exc:
                 logger.warning("QQ heartbeat send failed (%s), forcing reconnect", exc)
                 self._emit_heartbeat("QQ 心跳发送失败，强制重连")
-                await self._close_ws(ws)
+                self._force_reconnect = True
                 return
             try:
                 await asyncio.wait_for(self._probe_event.wait(), timeout=self._heartbeat_timeout)
@@ -331,17 +356,10 @@ class QQClient:
                 self._emit_heartbeat(
                     f"QQ 心跳超时（{int(self._heartbeat_timeout)}s 无响应），WS 疑似断开，强制重连"
                 )
-                await self._close_ws(ws)
+                self._force_reconnect = True
                 return
             logger.info("QQ heartbeat OK: get_login_info replied")
             self._emit_heartbeat("QQ 心跳正常")
-
-    async def _close_ws(self, ws: ClientConnection) -> None:
-        """Force-close the WS so the blocked ``async for`` in _listen unblocks and reconnect runs."""
-        try:
-            await asyncio.wait_for(ws.close(), timeout=5)
-        except Exception:
-            pass
 
     async def _dispatch(self, event: dict) -> None:
         """Route OneBot11 events to handler."""

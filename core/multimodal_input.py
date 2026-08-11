@@ -18,6 +18,14 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
+def _asr_keys_from_env(env_name: str) -> list[str]:
+    """从环境变量读取 ASR Key 列表：逗号分隔多 Key，或单 Key。"""
+    raw = os.getenv(env_name, "").strip()
+    if not raw:
+        return []
+    return [k.strip() for k in raw.split(",") if k.strip()]
+
+
 class AttachmentType(str, Enum):
     IMAGE = "image"
     AUDIO = "audio"
@@ -303,13 +311,18 @@ class AudioTranscriber:
             })
 
         provider_specs = [
+            # DashScope 语音识别：qwen3-asr-flash 走 compatible-mode chat/completions + input_audio。
+            # 注意不能用 qwen-long（文本模型，不支持转写）；也走不了 /audio/transcriptions（DashScope 不提供）。
             ("DASHSCOPE_API_KEY", "DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1",
-             "DASHSCOPE_WHISPER_MODEL", "qwen-long", "qwen"),
+             "DASHSCOPE_WHISPER_MODEL", "qwen3-asr-flash", "qwen"),
+            # Aerie WS（阿里云百炼业务空间专属域名，多 Key 轮询池）：同 DashScope 兼容路径。
+            ("AERIE_WS_KEYS", "AERIE_WS_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1",
+             "AERIE_WS_ASR_MODEL", "qwen3-asr-flash", "ws"),
         ]
 
         for key_env, url_env, default_url, model_env, default_model, name in provider_specs:
-            key = os.getenv(key_env, "")
-            if not key:
+            keys = _asr_keys_from_env(key_env)
+            if not keys:
                 continue
             if any(p["name"] == name for p in self._providers):
                 continue
@@ -317,7 +330,7 @@ class AudioTranscriber:
             model_name = os.getenv(model_env, "") or default_model
             self._providers.append({
                 "name": name,
-                "key": key,
+                "keys": keys,
                 "base_url": base_url,
                 "model": model_name,
             })
@@ -458,25 +471,48 @@ class AudioTranscriber:
                 logger.warning("AudioTranscriber: local fallback failed: %s", e)
 
         for provider in self._providers:
-            try:
-                from openai import AsyncOpenAI
-                client = AsyncOpenAI(
-                    api_key=provider["key"],
-                    base_url=provider["base_url"],
-                )
-                with open(audio_path, "rb") as f:
-                    resp = await client.audio.transcriptions.create(
-                        model=provider["model"],
-                        file=f,
-                        language=language if language and language != "auto" else "",
-                    )
-                text = resp.text.strip()
-                if text:
-                    logger.debug("AudioTranscriber: %s succeeded", provider["name"])
-                    return text
-            except Exception as e:
-                logger.warning("AudioTranscriber: %s failed: %s", provider["name"], e)
+            keys = provider.get("keys") or [provider.get("key", "")]
+            keys = [k for k in keys if k]
+            if not keys:
                 continue
+            for key in keys:
+                try:
+                    from openai import AsyncOpenAI
+                    client = AsyncOpenAI(
+                        api_key=key,
+                        base_url=provider["base_url"],
+                    )
+                    # DashScope/WS 兼容 ASR：走 compatible-mode chat/completions + input_audio(base64)，
+                    # 它不提供 /audio/transcriptions 接口（会 404）。
+                    if provider["name"] in ("qwen", "ws"):
+                        b64_data = base64.b64encode(Path(audio_path).read_bytes()).decode("ascii")
+                        _mime = {
+                            ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
+                            ".ogg": "audio/ogg", ".flac": "audio/flac",
+                        }.get(Path(audio_path).suffix.lower(), "audio/wav")
+                        data_url = f"data:{_mime};base64,{b64_data}"
+                        resp = await client.chat.completions.create(
+                            model=provider["model"],
+                            messages=[
+                                {"role": "user", "content": [{"type": "input_audio", "input_audio": data_url}]}
+                            ],
+                        )
+                        text = (resp.choices[0].message.content or "").strip()
+                    else:
+                        with open(audio_path, "rb") as f:
+                            resp = await client.audio.transcriptions.create(
+                                model=provider["model"],
+                                file=f,
+                                language=language if language and language != "auto" else "",
+                            )
+                        text = resp.text.strip()
+                    if text:
+                        logger.debug("AudioTranscriber: %s/%s succeeded", provider["name"], key[-6:])
+                        return text
+                except Exception as e:
+                    logger.warning("AudioTranscriber: %s key ...%s failed: %s",
+                                   provider["name"], key[-6:], e)
+                    continue
 
         return ""
 

@@ -51,6 +51,20 @@ def strip_thought_action_tags(text: str) -> str:
     return text
 
 
+# 输出端兜底：剥离 LLM 回显的对话历史时间戳标记（开头/中间、带空格/不带、
+# 带年份/带秒），仅保留正文。与 core.pipeline._HIST_LABEL_RE 保持一致，确保
+# 任何来源（含主动消息/陪伴通道）发往 QQ 的内容都不漏 `[MM-DD HH:MM]`。
+_TIMESTAMP_MARKER_RE = re.compile(
+    r"\[\d{2,4}-\d{2}(?:-\d{2})? ?\d{2}:\d{2}(?::\d{2})?\]\s*"
+)
+
+
+def strip_timestamp_markers(text: str) -> str:
+    if not text:
+        return text
+    return _TIMESTAMP_MARKER_RE.sub("", text).strip()
+
+
 def _port_is_open(host: str, port: int, timeout: float = 1.0) -> bool:
     """Check if a TCP port is accepting connections."""
     try:
@@ -475,6 +489,8 @@ class QQClient:
 
         # v13.9: 过滤 thought/action 标签，QQ 只输出纯对话文本
         content = strip_thought_action_tags(content)
+        # 输出端兜底：剥离 LLM 回显的时间戳标记
+        content = strip_timestamp_markers(content)
         if not content:
             logger.warning("QQ send: content empty after stripping tags, skip")
             return False
@@ -721,6 +737,7 @@ class QQClient:
         for seg in segments:
             if seg.get("type") == "text" and "text" in (seg.get("data") or {}):
                 cleaned = strip_thought_action_tags(seg["data"]["text"])
+                cleaned = strip_timestamp_markers(cleaned)
                 cleaned_segments.append({**seg, "data": {**seg["data"], "text": cleaned}})
                 if cleaned:
                     has_usable_content = True

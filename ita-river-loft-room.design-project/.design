@@ -1,0 +1,300 @@
+{
+  "data": [
+    {
+      "type": "page",
+      "id": "page-ita-river-loft-room",
+      "title": "伊塔 132㎡江景复式（侧边贴墙楼梯版）",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 48,
+        "y": -384,
+        "group": 0,
+        "deviceType": "desktop",
+        "layoutSnapshot": {
+          "version": 2,
+          "contentHeight": 6800,
+          "viewportWidth": 1440,
+          "sourceHash": "fnv1a-ita-132-side-stair-v3",
+          "measuredAt": 1786471200000
+        }
+      },
+      "htmlSrc": "pages/ita-river-loft-room.html",
+      "devMetadata": {
+        "htmlSrc": "pages/ita-river-loft-room.html"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-001",
+      "title": "一层平面图 SVG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 516,
+        "y": -48,
+        "naturalSize": {
+          "width": 1400,
+          "height": 980
+        }
+      },
+      "imageSrc": "assets/floor_plan_level1.svg",
+      "devMetadata": {
+        "imageSrc": "assets/floor_plan_level1.svg"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-002",
+      "title": "二层平面图 SVG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 528,
+        "y": 312,
+        "naturalSize": {
+          "width": 1400,
+          "height": 980
+        }
+      },
+      "imageSrc": "assets/floor_plan_level2.svg",
+      "devMetadata": {
+        "imageSrc": "assets/floor_plan_level2.svg"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-003",
+      "title": "一层平面图 PNG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 528,
+        "y": 672,
+        "naturalSize": {
+          "width": 1400,
+          "height": 980
+        }
+      },
+      "imageSrc": "assets/floor_plan_level1.png",
+      "devMetadata": {
+        "imageSrc": "assets/floor_plan_level1.png"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-004",
+      "title": "二层平面图 PNG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 540,
+        "y": 1020,
+        "naturalSize": {
+          "width": 1400,
+          "height": 980
+        }
+      },
+      "imageSrc": "assets/floor_plan_level2.png",
+      "devMetadata": {
+        "imageSrc": "assets/floor_plan_level2.png"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-005",
+      "title": "整体江景复式透视 SVG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 516,
+        "y": -384,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_overall_river_view.svg",
+      "devMetadata": {
+        "imageSrc": "assets/render_overall_river_view.svg"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-006",
+      "title": "玄关与侧边楼梯特写 SVG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 984,
+        "y": -384,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_entry_stair_closeup.svg",
+      "devMetadata": {
+        "imageSrc": "assets/render_entry_stair_closeup.svg"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-007",
+      "title": "北侧厨房+客卫家政特写 SVG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 984,
+        "y": -48,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_kitchen_bath_closeup.svg",
+      "devMetadata": {
+        "imageSrc": "assets/render_kitchen_bath_closeup.svg"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-008",
+      "title": "通高江景客厅+挑空特写 SVG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 984,
+        "y": 288,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_living_void_closeup.svg",
+      "devMetadata": {
+        "imageSrc": "assets/render_living_void_closeup.svg"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-009",
+      "title": "二层工作室+主卧特写 SVG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 984,
+        "y": 624,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_studio_bedroom_closeup.svg",
+      "devMetadata": {
+        "imageSrc": "assets/render_studio_bedroom_closeup.svg"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-010",
+      "title": "整体江景复式透视 PNG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 2960,
+        "y": 48,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_overall_river_view.png",
+      "devMetadata": {
+        "imageSrc": "assets/render_overall_river_view.png"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-011",
+      "title": "玄关与侧边楼梯特写 PNG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 2960,
+        "y": 1000,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_entry_stair_closeup.png",
+      "devMetadata": {
+        "imageSrc": "assets/render_entry_stair_closeup.png"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-012",
+      "title": "北侧厨房+客卫家政特写 PNG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 2960,
+        "y": 1960,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_kitchen_bath_closeup.png",
+      "devMetadata": {
+        "imageSrc": "assets/render_kitchen_bath_closeup.png"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-013",
+      "title": "通高江景客厅+挑空特写 PNG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 2960,
+        "y": 2920,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_living_void_closeup.png",
+      "devMetadata": {
+        "imageSrc": "assets/render_living_void_closeup.png"
+      }
+    },
+    {
+      "type": "image",
+      "id": "image-014",
+      "title": "二层工作室+主卧特写 PNG",
+      "version": 3,
+      "createdAt": 1786471200000,
+      "canvasData": {
+        "x": 1956,
+        "y": 3564,
+        "naturalSize": {
+          "width": 1400,
+          "height": 900
+        }
+      },
+      "imageSrc": "assets/render_studio_bedroom_closeup.png",
+      "devMetadata": {
+        "imageSrc": "assets/render_studio_bedroom_closeup.png"
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": false,
+    "deviceType": "desktop",
+    "visualEditorEnabled": false,
+    "showEdge": false
+  }
+}

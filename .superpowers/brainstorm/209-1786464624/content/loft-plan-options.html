@@ -1,0 +1,93 @@
+<h2>伊塔江景 LOFT 平面图重做方向</h2>
+<p class="subtitle">重点修正：一二层楼梯必须连通、夹层与下层上下对位、平面图符号符合住宅制图表达，避免模块堆叠。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <svg viewBox="0 0 360 260" width="100%" height="230">
+        <rect x="22" y="20" width="316" height="210" fill="#fff" stroke="#273244" stroke-width="5"/>
+        <rect x="34" y="36" width="92" height="54" fill="#eef6ff" stroke="#7aaed6"/>
+        <text x="48" y="68" font-size="13">玄关</text>
+        <rect x="190" y="36" width="132" height="64" fill="#fff5f2" stroke="#df9c92"/>
+        <text x="220" y="72" font-size="13">厨房</text>
+        <rect x="34" y="104" width="166" height="104" fill="#f7f8fb" stroke="#9aa3b2"/>
+        <text x="88" y="160" font-size="13">客厅</text>
+        <rect x="216" y="118" width="88" height="78" fill="#f7f8fb" stroke="#9aa3b2"/>
+        <text x="238" y="160" font-size="13">客卫</text>
+        <rect x="58" y="172" width="78" height="36" fill="#ddd" stroke="#555"/>
+        <text x="64" y="195" font-size="12">楼梯原位</text>
+        <path d="M58 172 L136 208" stroke="#d64545" stroke-width="4"/>
+        <text x="44" y="238" font-size="12" fill="#d64545">只修标注，布局仍偏弱</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>A · 保守修正</h3>
+      <p>保留当前大布局，只补楼梯上/下行符号、二层开洞、尺寸线和门窗编号。改动最快，但户型合理性提升有限。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <svg viewBox="0 0 360 260" width="100%" height="230">
+        <defs><pattern id="dash" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0 L8 8" stroke="#cbd5e1"/></pattern></defs>
+        <rect x="22" y="20" width="316" height="210" fill="#fff" stroke="#273244" stroke-width="5"/>
+        <line x1="22" y1="210" x2="338" y2="210" stroke="#67b7e8" stroke-width="8"/>
+        <text x="132" y="226" font-size="12" fill="#0f749b">南向江景落地窗</text>
+        <rect x="34" y="36" width="110" height="58" fill="#eef6ff" stroke="#7aaed6"/>
+        <text x="70" y="68" font-size="13">玄关</text>
+        <rect x="174" y="36" width="138" height="70" fill="#fff5f2" stroke="#df9c92"/>
+        <text x="222" y="74" font-size="13">厨房</text>
+        <rect x="170" y="118" width="80" height="62" fill="#fffaf0" stroke="#d7a45c"/>
+        <text x="196" y="152" font-size="13">餐区</text>
+        <rect x="42" y="114" width="112" height="84" fill="#f7f8fb" stroke="#9aa3b2"/>
+        <text x="82" y="160" font-size="13">客厅</text>
+        <rect x="260" y="124" width="52" height="70" fill="#f7f8fb" stroke="#9aa3b2"/>
+        <text x="270" y="162" font-size="13">客卫</text>
+        <rect x="34" y="76" width="52" height="122" fill="url(#dash)" stroke="#334155" stroke-width="2"/>
+        <path d="M58 184 L58 94" stroke="#111827" stroke-width="3" marker-end="url(#arrow)"/>
+        <text x="42" y="74" font-size="12">上</text>
+        <rect x="34" y="76" width="52" height="122" fill="none" stroke="#111827" stroke-dasharray="6 4"/>
+        <path d="M92 88 H250 V118" stroke="#ff8a80" stroke-width="4" fill="none"/>
+        <text x="112" y="102" font-size="12" fill="#be5b53">上层桥廊对位</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>B · 推荐重排</h3>
+      <p>楼梯靠入户侧起步，上口直接接二层桥廊；客厅保留南向挑空，二层只覆盖北侧和东侧，平面关系最像真实 LOFT。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <svg viewBox="0 0 360 260" width="100%" height="230">
+        <rect x="22" y="20" width="316" height="210" fill="#fff" stroke="#273244" stroke-width="5"/>
+        <line x1="22" y1="210" x2="338" y2="210" stroke="#67b7e8" stroke-width="8"/>
+        <rect x="42" y="40" width="80" height="170" fill="#eef6ff" stroke="#7aaed6"/>
+        <text x="58" y="130" font-size="13">服务核</text>
+        <path d="M82 190 C82 142 110 110 150 82" stroke="#111827" stroke-width="4" fill="none"/>
+        <text x="88" y="84" font-size="12">弧形/折线楼梯</text>
+        <rect x="150" y="42" width="158" height="82" fill="#fff5f2" stroke="#df9c92"/>
+        <text x="208" y="86" font-size="13">上层私区</text>
+        <rect x="150" y="138" width="158" height="68" fill="#f7f8fb" stroke="#9aa3b2"/>
+        <text x="208" y="176" font-size="13">挑空客厅</text>
+        <text x="72" y="238" font-size="12" fill="#9a3412">效果强，但会大改原始物件坐标</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>C · 激进重构</h3>
+      <p>重新设服务核、楼梯和夹层结构，空间更像样板间，但会大幅改动现有坐标、物件表和效果图。</p>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">推荐修订原则</div>
+  <div class="mockup-body">
+    <ul>
+      <li>一层画“楼梯下口 + 上行箭头 + 踏步线 + 楼梯编号”，二层画“楼梯上口 + 下行箭头 + 桥廊”。</li>
+      <li>二层必须标注“挑空至客厅 / open to below”，不能把二层房间满铺成模块。</li>
+      <li>上下层使用同一外轮廓、同一轴网、同一坐标系，楼梯投影位置完全一致。</li>
+      <li>增加外三道尺寸线、门窗编号、指北针、标高、剖切线和图例，改成标准住宅平面图表达。</li>
+    </ul>
+  </div>
+</div>

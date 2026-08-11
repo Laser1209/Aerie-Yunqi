@@ -24,6 +24,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+from core.key_rotator import KeyRotator
+
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -170,7 +172,16 @@ class _SFClient:
     def __init__(self) -> None:
         self.api_key = os.getenv("SILICONFLOW_API_KEY", "").strip()
         self.base_url = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.com/v1").strip()
-        self.asr_model = "FunAudioLLM/SenseVoiceSmall"
+        # ASR 走 Aerie WS（阿里云百炼业务空间，多 Key 轮询池）；视觉仍走 SiliconFlow。
+        # 可分别用 AERIE_WS_ASR_MODEL / DASHSCOPE_ASR_MODEL 覆盖模型。
+        self.asr_model = os.getenv("AERIE_WS_ASR_MODEL", "qwen3-asr-flash").strip()
+        # ASR Key 池：优先 ws 多 Key；无 ws 时退回单 DashScope Key。
+        self._asr_rotator = KeyRotator.from_env("AERIE_WS_KEYS", "DASHSCOPE_API_KEY")
+        self._asr_base_url = os.getenv(
+            "AERIE_WS_BASE_URL",
+            os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        ).strip()
+
         self.vision_model = (
             os.getenv("VISION_MODEL", "Qwen/Qwen3-VL-8B-Instruct").strip()
             or "Qwen/Qwen3-VL-8B-Instruct"
@@ -188,20 +199,46 @@ class _SFClient:
         return self._client is not None
 
     async def transcribe(self, audio_path: str, language: str = "zh") -> str:
-        """语音转文字（SenseVoiceSmall），失败返回空串。"""
-        if not self.available or not Path(audio_path).exists():
+        """语音转文字（Aerie WS qwen3-asr-flash，多 Key 轮询），失败返回空串。
+
+        ws 为 DashScope 兼容模式，不走 /audio/transcriptions，改走
+        compatible-mode chat/completions + input_audio(base64)。
+        """
+        if not Path(audio_path).exists():
             return ""
-        try:
-            with open(audio_path, "rb") as f:
-                resp = await self._client.audio.transcriptions.create(
+        import base64 as _b64
+        b64_data = _b64.b64encode(Path(audio_path).read_bytes()).decode("ascii")
+        _mime = {
+            ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
+            ".ogg": "audio/ogg", ".flac": "audio/flac",
+        }.get(Path(audio_path).suffix.lower(), "audio/wav")
+        last_err = ""
+        for _ in range(max(1, self._asr_rotator.size)):
+            key = self._asr_rotator.next()
+            if not key:
+                continue
+            try:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=key, base_url=self._asr_base_url)
+                resp = await client.chat.completions.create(
                     model=self.asr_model,
-                    file=f,
-                    language=language if language and language != "auto" else "auto",
+                    messages=[
+                        {"role": "user", "content": [
+                            {"type": "input_audio", "input_audio": f"data:{_mime};base64,{b64_data}"}
+                        ]}
+                    ],
                 )
-            return (getattr(resp, "text", "") or "").strip()
-        except Exception as e:
-            logger.warning("SiliconFlow ASR failed: %s", e)
-            return ""
+                text = (resp.choices[0].message.content or "").strip()
+                if text:
+                    logger.debug("ASR succeeded with key ...%s", key[-6:])
+                    return text
+            except Exception as e:
+                last_err = str(e)
+                logger.warning("ASR key ...%s failed: %s", key[-6:], e)
+                continue
+        if last_err:
+            logger.warning("ASR all keys failed: %s", last_err)
+        return ""
 
     async def classify_and_describe(self, image_path: str) -> tuple[str, str]:
         """图片分类 + 描述（Qwen3-VL），失败返回 ("unknown", "")。
@@ -408,10 +445,10 @@ class QQMediaPreprocessor:
         })
 
     async def _transcribe(self, audio_path: str) -> str:
-        """语音转文字：云端 SenseVoice → 本地 AudioTranscriber，失败返回空串。
+        """语音转文字：云端 SiliconFlow ASR → 本地 AudioTranscriber，失败返回空串。
 
         若首次云端失败且音频不是常见解码格式（silk/amr/ogg），先用内置 ffmpeg
-        转码成 mp3 再重试一次云端，减少"格式不被 SenseVoice 支持"导致的假失败。
+        转码成 mp3 再重试一次云端，减少"格式不被云端 ASR 支持"导致的假失败。
         全程失败时记录 INFO（可追踪根因），不再只留不可见的 debug。
         """
         # 尝试 1：云端直接转写

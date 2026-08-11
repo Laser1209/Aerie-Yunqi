@@ -40,6 +40,13 @@ _IMAGE_CANDIDATE_TOPICS = {
 }
 _MANUAL_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
 
+# 方向3：人物类走图生图。仅对角色/合影 prompt_key 尝试 generate_image_edit（用
+# three_view:front 参考图锁定人物外貌），由 image_edit_v1 flag 门控；edit 未产出
+# completed 时优雅降级回文生图（generate_image），绝不中断主链路。
+_ROLE_EDIT_PROMPT_KEYS = frozenset({"role_selfie", "role_in_scene", "couple_photo"})
+_DEFAULT_EDIT_REFERENCE = ("three_view:front",)
+_IMAGE_EDIT_FLAG = "image_edit_v1"
+
 # 视觉场景判重的参考窗口：最近该时段内成功生成的图才作为"参考图"。用于跨路径
 # （主动发图 / 聊天要图）同画面判重——两条路径都汇聚到消费者，统一按"画面意思"
 # 去重，避免 text 判重因 reason_code 不同而互相看不见。
@@ -775,22 +782,7 @@ class WorldImageCandidateConsumer:
     def _run_workflow_blocking(self, prompt: str, candidate: dict[str, Any]) -> dict[str, Any]:
         """同步执行生图（放入 worker 线程，避免阻塞事件循环）。"""
         try:
-            result = self.image_workflow.generate_image(
-                prompt=prompt,
-                idempotency_key=f"world-image:{candidate['idempotency_key']}",
-                owner_id=candidate["owner_id"],
-                delivery={
-                    "channel": candidate["channel"],
-                    "target": candidate["target"],
-                },
-                metadata={
-                    "candidate_id": candidate["candidate_id"],
-                    "world_event_id": candidate["event_id"],
-                    "prompt_key": candidate["prompt_key"],
-                    "reason_code": candidate["reason_code"],
-                    "size": candidate.get("size") or "",
-                },
-            )
+            result = self._generate_workflow_result(prompt, candidate)
             return result if isinstance(result, dict) else {"status": "failed"}
         except Exception:
             logger.debug("world image candidate workflow failed", exc_info=True)
@@ -799,6 +791,74 @@ class WorldImageCandidateConsumer:
                 "side_effects": dict(_NO_SIDE_EFFECTS),
                 "delivery_plan": None,
             }
+
+    def _generate_workflow_result(
+        self, prompt: str, candidate: dict[str, Any]
+    ) -> dict[str, Any]:
+        """按候选类型选择生图路径：角色类（flag 开启时）尝试图生图，否则文生图。
+
+        角色/合影 prompt_key 且 image_edit_v1 开启 → 先试 generate_image_edit（用
+        three_view:front 等参考图锁定人物外貌）；edit 未产出 completed 时优雅降级
+        回 generate_image，绝不让用户要图因 edit 失败而落空（能力探测 + 降级护栏）。
+        """
+        prompt_key = str(candidate.get("prompt_key") or "")
+        use_edit = self._image_edit_enabled() and prompt_key in _ROLE_EDIT_PROMPT_KEYS
+        if not use_edit:
+            return self._call_generate_image(prompt, candidate)
+        reference_assets = candidate.get("reference_assets") or list(_DEFAULT_EDIT_REFERENCE)
+        edit = self._call_generate_image_edit(prompt, candidate, reference_assets)
+        if edit.get("status") != "completed":
+            logger.info(
+                "[WorldImage] role edit fell back to txt2img prompt_key=%s code=%s",
+                prompt_key, edit.get("error_code") or edit.get("status"),
+            )
+            return self._call_generate_image(prompt, candidate)
+        return edit
+
+    def _image_edit_enabled(self) -> bool:
+        try:
+            return bool(self.feature_flags and self.feature_flags.is_enabled(_IMAGE_EDIT_FLAG))
+        except Exception:
+            return False
+
+    def _call_generate_image(self, prompt: str, candidate: dict[str, Any]) -> dict[str, Any]:
+        return self.image_workflow.generate_image(
+            prompt=prompt,
+            idempotency_key=f"world-image:{candidate['idempotency_key']}",
+            owner_id=candidate["owner_id"],
+            delivery={
+                "channel": candidate["channel"],
+                "target": candidate["target"],
+            },
+            metadata={
+                "candidate_id": candidate["candidate_id"],
+                "world_event_id": candidate["event_id"],
+                "prompt_key": candidate["prompt_key"],
+                "reason_code": candidate["reason_code"],
+                "size": candidate.get("size") or "",
+            },
+        )
+
+    def _call_generate_image_edit(
+        self, prompt: str, candidate: dict[str, Any], reference_assets: list[str]
+    ) -> dict[str, Any]:
+        return self.image_workflow.generate_image_edit(
+            prompt=prompt,
+            reference_assets=reference_assets,
+            idempotency_key=f"world-image:{candidate['idempotency_key']}",
+            owner_id=candidate["owner_id"],
+            delivery={
+                "channel": candidate["channel"],
+                "target": candidate["target"],
+            },
+            metadata={
+                "candidate_id": candidate["candidate_id"],
+                "world_event_id": candidate["event_id"],
+                "prompt_key": candidate["prompt_key"],
+                "reason_code": candidate["reason_code"],
+                "size": candidate.get("size") or "",
+            },
+        )
 
     async def _deliver(self, workflow_result: dict[str, Any]) -> bool:
         """Deliver a completed image to an external channel via the injected sender.

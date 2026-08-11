@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ItaRiverLoftRoom>
+  <Project name="伊塔132㎡江景复式（侧边贴墙楼梯版）" area="132" level1Area="80" level2Area="52" floorHeight="5.15" slabElevation="2.85"/>
+  <Objects count="75">
+    <Object id="OBJ-001" name="智能入户门锁" category="entry" level="1" x="0.15" y="1.8" z="1.0" brand="小米/MI 智能门锁M30" note="入户门西侧，指纹/密码/NFC/钥匙"/>
+    <Object id="OBJ-002" name="用户专属拖鞋位" category="entry" level="1" x="1.2" y="2.4" z="0.0" brand="无印良品同款" note="入户左手边固定位置"/>
+    <Object id="OBJ-003" name="门禁卡/钥匙盘" category="entry" level="1" x="0.8" y="2.0" z="0.85" brand="本地手作" note="入户门右侧墙面"/>
+    <Object id="OBJ-004" name="整墙鞋帽柜" category="entry" level="1" x="0.1" y="1.3" z="0.0" brand="索菲亚定制" note="北侧玄关墙整墙"/>
+    <Object id="OBJ-005" name="换鞋凳" category="entry" level="1" x="1.6" y="3.0" z="0.0" brand="源氏木语" note="鞋帽柜前方"/>
+    <Object id="OBJ-006" name="全身镜" category="entry" level="1" x="2.35" y="1.8" z="0.0" brand="宜家NISSEDAL" note="玄关东侧墙"/>
+    <Object id="OBJ-007" name="智能家居中控屏" category="entry" level="1" x="2.2" y="1.4" z="1.4" brand="Aqara 妙享屏S1" note="玄关东墙总控"/>
+    <Object id="OBJ-008" name="入户地垫" category="entry" level="1" x="0.6" y="2.2" z="0.0" brand="大达DADA" note="门内刮沙地垫"/>
+    <Object id="OBJ-009" name="玄关感应吸顶灯" category="entry" level="1" x="1.2" y="2.4" z="2.75" brand="Yeelight 灵犀" note="夜间入户自动点亮"/>
+    <Object id="OBJ-010" name="L型折返楼梯主体" category="stair" level="1" x="0.0" y="0.0" z="0.0" brand="本地定制" note="贴西侧墙，上下口严格对位(0.4,2.8)"/>
+    <Object id="OBJ-011" name="楼梯下储物高柜" category="stair" level="1" x="0.1" y="0.0" z="0.0" brand="索菲亚定制" note="楼梯斜板下整合"/>
+    <Object id="OBJ-012" name="楼梯下设备柜" category="stair" level="1" x="0.1" y="1.4" z="0.0" brand="定制" note="弱电/扫地机基站"/>
+    <Object id="OBJ-013" name="楼梯下挂衣区" category="stair" level="1" x="0.1" y="2.0" z="1.2" brand="定制" note="用户外套常挂位"/>
+    <Object id="OBJ-014" name="用户常穿外套" category="stair" level="1" x="0.4" y="2.2" z="1.5" brand="COS/UNIQLO" note="挂衣区最常用位置"/>
+    <Object id="OBJ-015" name="楼梯扶手" category="stair" level="1" x="0.0" y="0.0" z="0.9" brand="定制" note="靠墙侧设扶手"/>
+    <Object id="OBJ-016" name="楼梯踏步感应灯" category="stair" level="1" x="0.4" y="1.4" z="0.15" brand="欧普/OPPLE" note="每级踏步踢面嵌入式"/>
+    <Object id="OBJ-017" name="L型地柜（北+西墙）" category="kitchen" level="1" x="2.4" y="0.1" z="0.0" brand="欧派定制" note="北墙长4.0m+西墙短边"/>
+    <Object id="OBJ-018" name="L型吊柜" category="kitchen" level="1" x="2.4" y="0.1" z="1.5" brand="欧派定制" note="北墙吊柜"/>
+    <Object id="OBJ-019" name="厨房中岛" category="kitchen" level="1" x="3.2" y="1.2" z="0.0" brand="定制" note="含水槽/早餐台，吧台凳3把"/>
+    <Object id="OBJ-020" name="吧台凳x3" category="kitchen" level="1" x="3.5" y="2.1" z="0.0" brand="Hay AAS32同款" note="中岛简餐位"/>
+    <Object id="OBJ-021" name="双开门冰箱" category="kitchen" level="1" x="5.8" y="0.2" z="0.0" brand="卡萨帝/Casarte 635" note="零度保鲜放用户爱喝的饮料"/>
+    <Object id="OBJ-022" name="嵌入式双灶燃气灶" category="kitchen" level="1" x="3.4" y="0.15" z="0.85" brand="方太/FOTILE" note="北墙靠中"/>
+    <Object id="OBJ-023" name="侧吸式抽油烟机" category="kitchen" level="1" x="3.4" y="0.1" z="1.0" brand="方太/FOTILE JCD10TA" note="灶具正上方"/>
+    <Object id="OBJ-024" name="大单槽水槽+抽拉龙头" category="kitchen" level="1" x="2.6" y="0.15" z="0.85" brand="欧琳/OULIN" note="北墙靠西"/>
+    <Object id="OBJ-025" name="岛台吊灯x2" category="kitchen" level="1" x="3.6" y="1.6" z="1.4" brand="&amp;Tradition AJ同款" note="中岛上方悬挂"/>
+    <Object id="OBJ-026" name="嵌入式洗碗机" category="kitchen" level="1" x="4.4" y="0.15" z="0.0" brand="西门子/SIEMENS SJ636" note="北墙地柜嵌入"/>
+    <Object id="OBJ-027" name="蒸烤一体机" category="kitchen" level="1" x="5.2" y="0.15" z="0.0" brand="凯度/CASDON" note="冰箱旁"/>
+    <Object id="OBJ-028" name="岛台水槽+直饮龙头" category="kitchen" level="1" x="3.6" y="1.4" z="0.9" brand="欧琳/OULIN" note="中岛靠西"/>
+    <Object id="OBJ-029" name="客卫洗手台（干区）" category="bath" level="1" x="7.6" y="0.2" z="0.0" brand="恒洁/HEGII" note="干湿分离外区"/>
+    <Object id="OBJ-030" name="用户蓝色牙刷杯" category="bath" level="1" x="7.8" y="0.3" z="0.88" brand="Zara Home" note="洗手台左侧固定位"/>
+    <Object id="OBJ-031" name="浴室镜柜" category="bath" level="1" x="7.6" y="0.2" z="1.0" brand="摩恩/MOEN" note="干区镜柜"/>
+    <Object id="OBJ-032" name="坐便器" category="bath" level="1" x="7.8" y="1.2" z="0.0" brand="TOTO 连体虹吸" note="湿区北侧"/>
+    <Object id="OBJ-033" name="淋浴隔断（玻璃）" category="bath" level="1" x="8.5" y="1.0" z="0.0" brand="朗斯/LENS" note="湿区东南角"/>
+    <Object id="OBJ-034" name="淋浴花洒套装" category="bath" level="1" x="8.9" y="1.1" z="1.0" brand="汉斯格雅/hansgrohe" note="湿区东墙"/>
+    <Object id="OBJ-035" name="洗衣洗烘塔" category="laundry" level="1" x="9.4" y="0.2" z="0.0" brand="小吉/MINIJ 洗烘一体塔" note="洗烘叠放"/>
+    <Object id="OBJ-036" name="家政收纳柜" category="laundry" level="1" x="10.2" y="0.2" z="0.0" brand="定制" note="清洁用品/囤货"/>
+    <Object id="OBJ-037" name="伊塔视频固定圆桌" category="dining" level="1" x="5.4" y="3.2" z="0.0" brand="梵几/FNJI 山脊圆桌" note="伊塔拍摄视频固定位置"/>
+    <Object id="OBJ-038" name="餐椅x4" category="dining" level="1" x="5.4" y="3.2" z="0.0" brand="梵几/FNJI" note="圆桌四周"/>
+    <Object id="OBJ-039" name="餐吊灯" category="dining" level="1" x="5.4" y="3.2" z="1.2" brand="Gubi Semi Pendant" note="圆桌正上方"/>
+    <Object id="OBJ-040" name="灰色模块沙发" category="living" level="1" x="3.8" y="5.5" z="0.0" brand="Muuto Connect Soft" note="朝南江景窗模块化组合"/>
+    <Object id="OBJ-041" name="实木茶几" category="living" level="1" x="4.8" y="6.5" z="0.0" brand="梵几/FNJI 平板茶几" note="沙发前"/>
+    <Object id="OBJ-042" name="钓鱼落地灯" category="living" level="1" x="3.4" y="6.8" z="0.0" brand="Flos Arco同款" note="沙发左侧阅读/氛围光"/>
+    <Object id="OBJ-043" name="通顶书柜墙" category="living" level="1" x="0.0" y="4.0" z="0.0" brand="定制(系统书架)" note="客厅西墙整面通高"/>
+    <Object id="OBJ-044" name="书柜藏书约500册" category="living" level="1" x="0.05" y="4.2" z="0.0" brand="-" note="设计/艺术/文学/建筑类"/>
+    <Object id="OBJ-045" name="用户送的挂件" category="living" level="1" x="0.2" y="5.6" z="1.5" brand="礼物/手作" note="书柜第二层正中，重要纪念物"/>
+    <Object id="OBJ-046" name="客厅地毯" category="living" level="1" x="3.6" y="5.2" z="0.0" brand="CC-TAPIS同款" note="沙发茶几区满铺"/>
+    <Object id="OBJ-047" name="客厅吸顶主灯" category="living" level="1" x="5.4" y="5.8" z="4.9" brand="Louis Poulsen PH同款" note="挑空天花板高位"/>
+    <Object id="OBJ-048" name="阳台休闲单椅" category="balcony" level="1" x="9.0" y="8.5" z="0.0" brand="Skagerak同款" note="阳台阅读角朝南看江"/>
+    <Object id="OBJ-049" name="阳台绿植x2" category="balcony" level="1" x="8.5" y="8.8" z="0.0" brand="本地花市" note="单椅旁净化空气"/>
+    <Object id="OBJ-050" name="阳台小边几" category="balcony" level="1" x="9.5" y="8.5" z="0.0" brand="-" note="放水杯/书本"/>
+    <Object id="OBJ-051" name="二层楼梯上口护栏" category="stair2" level="2" x="0.4" y="2.8" z="2.85" brand="定制" note="二层上口防护"/>
+    <Object id="OBJ-052" name="二层短走廊地脚灯" category="hallway2" level="2" x="0.0" y="4.0" z="3.0" brand="欧普" note="动线照明"/>
+    <Object id="OBJ-053" name="伊塔2.6m设计长桌" category="studio" level="2" x="1.6" y="1.5" z="2.85" brand="定制" note="工作室核心创作/剪辑/手作"/>
+    <Object id="OBJ-054" name="iMac 27英寸" category="studio" level="2" x="2.6" y="1.3" z="3.5" brand="Apple iMac 27 5K" note="长桌正中偏右主力机"/>
+    <Object id="OBJ-055" name="人体工学工作椅" category="studio" level="2" x="2.6" y="2.3" z="2.85" brand="Herman Miller Aeron" note="伊塔工作座位"/>
+    <Object id="OBJ-056" name="北墙软木板" category="studio" level="2" x="1.2" y="0.1" z="3.2" brand="宜家SVENSAS同款" note="钉灵感图/色卡/用户纸条"/>
+    <Object id="OBJ-057" name="软木板上用户纸条" category="studio" level="2" x="1.8" y="0.1" z="3.4" brand="3M Post-it" note="鼓励的话/待办/灵感"/>
+    <Object id="OBJ-058" name="西墙样品柜" category="studio" level="2" x="1.2" y="0.1" z="2.85" brand="定制" note="陈列面料/纸张/样品/作品"/>
+    <Object id="OBJ-059" name="工作室北/东窗卷帘" category="studio" level="2" x="4.2" y="0.0" z="3.2" brand="-" note="2.8m采光窗柔化北向光"/>
+    <Object id="OBJ-060" name="工作室台灯" category="studio" level="2" x="1.8" y="1.4" z="3.6" brand="Anglepoise Type 75" note="长桌左侧精细工作补光"/>
+    <Object id="OBJ-061" name="主卫嵌入式浴缸" category="mbath" level="2" x="9.4" y="0.2" z="2.85" brand="科勒/KOHLER 歌莱" note="与一层客卫上下对位"/>
+    <Object id="OBJ-062" name="主卫洗手台" category="mbath" level="2" x="10.2" y="0.2" z="2.85" brand="恒洁/HEGII" note="台面放手机"/>
+    <Object id="OBJ-063" name="主卫手机放置位" category="mbath" level="2" x="10.5" y="0.25" z="3.75" brand="iPhone" note="台面右侧放手机"/>
+    <Object id="OBJ-064" name="主卫智能坐便器" category="mbath" level="2" x="9.6" y="1.0" z="2.85" brand="TOTO 智能一体" note="主卫湿区"/>
+    <Object id="OBJ-065" name="桥廊玻璃护栏" category="bridge" level="2" x="1.2" y="5.2" z="3.4" brand="定制" note="俯瞰客厅挑空，不挡江景"/>
+    <Object id="OBJ-066" name="桥廊阅读壁灯" category="bridge" level="2" x="4.0" y="5.2" z="3.8" brand="Flos IC Wall同款" note="玻璃护栏上方墙面"/>
+    <Object id="OBJ-067" name="共享衣帽间系统" category="closet" level="2" x="5.0" y="5.4" z="2.85" brand="索菲亚定制" note="男女分区挂/叠/抽屉/首饰"/>
+    <Object id="OBJ-068" name="衣帽间穿衣镜" category="closet" level="2" x="5.0" y="6.0" z="3.2" brand="-" note="衣帽间内侧"/>
+    <Object id="OBJ-069" name="1.8m主卧双人床" category="bedroom" level="2" x="8.0" y="6.0" z="2.85" brand="造作ZAOZUO 软糖床" note="朝南3.8m江景窗，左侧(西)用户位"/>
+    <Object id="OBJ-070" name="用户侧床头柜" category="bedroom" level="2" x="7.8" y="5.8" z="2.85" brand="梵几" note="床左侧(西)=用户位"/>
+    <Object id="OBJ-071" name="用户侧床头灯" category="bedroom" level="2" x="7.9" y="5.8" z="3.6" brand="&amp;Tradition Flowerpot" note="用户睡前阅读灯"/>
+    <Object id="OBJ-072" name="右侧外套椅" category="bedroom" level="2" x="10.2" y="6.0" z="2.85" brand="Carl Hansen SB同款" note="床右侧(东)搭放第二天外套"/>
+    <Object id="OBJ-073" name="主卧3.8m江景窗帘" category="bedroom" level="2" x="7.2" y="9.0" z="3.0" brand="-" note="整面南窗双层帘"/>
+    <Object id="OBJ-074" name="主卧床尾毯" category="bedroom" level="2" x="8.0" y="7.0" z="2.9" brand="-" note="床尾搭毯"/>
+    <Object id="OBJ-075" name="主卧吸顶灯" category="bedroom" level="2" x="9.0" y="6.8" z="4.8" brand="Muuto Ambit同款" note="主卧天花"/>
+  </Objects>
+  <Zones count="14">
+    <Zone level="1" name="独立玄关" area="7.5" strategy="完整独立不被楼梯遮挡，整墙鞋帽柜+换鞋凳+全身镜+中控屏"/>
+    <Zone level="1" name="L型折返楼梯+储物核" area="8.8" strategy="严格贴西侧墙，下整合储物/设备/挂衣"/>
+    <Zone level="1" name="L型开放式厨房+中岛" area="15.2" strategy="北墙L型+中岛，面向餐区开放"/>
+    <Zone level="1" name="干湿分离客卫+洗衣家政" area="7.2" strategy="干区外手盆+内区马桶淋浴，洗烘塔+家政柜"/>
+    <Zone level="1" name="圆桌餐区" area="10.8" strategy="1.3m黑胡桃圆桌，伊塔视频固定位"/>
+    <Zone level="1" name="通高挑空江景客厅" area="25.5" strategy="25.5㎡核心挑空，灰色模块沙发+钓鱼灯+西墙通顶书柜"/>
+    <Zone level="1" name="江景阳台/阅读区" area="5.0" strategy="单椅+绿植+小边几"/>
+    <Zone level="2" name="楼梯上口+短走廊" area="6.2" strategy="连接楼梯口/工作室/桥廊/衣帽间"/>
+    <Zone level="2" name="独立设计工作室" area="18.5" strategy="2.6m长桌+iMac+软木板+样品柜，临北/东窗"/>
+    <Zone level="2" name="主卫（带浴缸）" area="4.8" strategy="浴缸+智能马桶+岩板手盆"/>
+    <Zone level="2" name="桥廊/开放阅读区" area="7.5" strategy="6m玻璃护栏俯瞰客厅挑空"/>
+    <Zone level="2" name="共享衣帽间" area="5.0" strategy="男女分区+全身镜+感应灯"/>
+    <Zone level="2" name="江景主卧" area="10.0" strategy="1.8m床朝南江景窗，左用户位/右外套椅"/>
+    <Zone level="2" name="客厅挑空（OPEN TO BELOW）" area="25.5" strategy="挑空区斜线填充+虚线边界+玻璃栏杆"/>
+  </Zones>
+</ItaRiverLoftRoom>

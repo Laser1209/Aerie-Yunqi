@@ -94,6 +94,9 @@ app.add_middleware(
 )
 
 _db = Database()
+# 将数据库注入 TokenTracker 单例，否则 llm_caller 的 record() 因 _db 为空而从不落库，
+# /api/stats/tokens 的 Token 消耗与 API 调用次数将恒为 0。
+get_token_tracker(_db)
 _knowledge = KnowledgeBase(_db)
 _START_TIME = time.time()
 
@@ -4510,18 +4513,9 @@ async def calendar_companion() -> dict:
 @app.get("/api/stats/tokens")
 async def stats_tokens(user_id: int | None = Query(default=None)) -> dict:
     if user_id is None:
-        companion = get_companion()
-        selection = (
-            companion.get_primary_user_selection()
-            if companion is not None
-            else None
-        )
-        if selection is None:
-            return JSONResponse(
-                {"error": "primary_identity_unconfigured"},
-                status_code=409,
-            )
-        user_id = selection.user_id
+        # 所有 LLM 调用统一记录在 user_id=0（全局），见 llm_caller.chat()。
+        # 不能再按 primary user_id 查询，否则与写入的 user_id=0 不匹配，导致统计恒为 0。
+        user_id = 0
     tracker = get_token_tracker()
     try:
         today = tracker.get_today(user_id)

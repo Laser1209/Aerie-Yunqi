@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" style="background:#F8F6F3;">
+<defs>
+  <linearGradient id="wallSB" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FAFAFA"/><stop offset="100%" stop-color="#F0EDE8"/></linearGradient>
+  <linearGradient id="floorSB" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#D4B896"/><stop offset="100%" stop-color="#B8986A"/></linearGradient>
+  <linearGradient id="deskWood" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C4A882"/><stop offset="100%" stop-color="#8B7355"/></linearGradient>
+  <filter id="shSB"><feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="2" dy="3" result="b"/><feComponentTransfer><feFuncA type="linear" slope="0.25"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+
+<!-- Split view: left = Studio, right = Bedroom, divided line -->
+<line x1="700" y1="0" x2="700" y2="900" stroke="#DDD" stroke-width="2" stroke-dasharray="8,4"/>
+
+<!-- === LEFT HALF: DESIGN STUDIO === -->
+<rect x="0" y="0" width="700" height="560" fill="url(#wallSB)"/>
+<polygon points="0,560 700,560 700,900 0,900" fill="url(#floorSB)"/>
+<g stroke="#A08060" stroke-width="0.6" opacity="0.35">
+  <line x1="0" y1="620" x2="700" y2="620"/><line x1="0" y1="680" x2="700" y2="680"/>
+  <line x1="0" y1="740" x2="700" y2="740"/><line x1="0" y1="800" x2="700" y2="800"/><line x1="0" y1="860" x2="700" y2="860"/>
+</g>
+
+<!-- Studio title -->
+<text x="350" y="45" font-size="24" fill="#1A1A1E" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">二层独立设计工作室</text>
+<text x="350" y="68" font-size="11" fill="#6D717D" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">18.5㎡ · 2.6m伊塔设计长桌 · iMac · 软木板 · 样品柜 · 临北/东窗采光</text>
+
+<!-- North/East windows (upper right of studio area) -->
+<rect x="500" y="100" width="180" height="100" fill="#D0E8FF" stroke="#2A2A2E" stroke-width="4" rx="1"/>
+<line x1="560" y1="100" x2="560" y2="200" stroke="#2A2A2E" stroke-width="2"/>
+<line x1="620" y1="100" x2="620" y2="200" stroke="#2A2A2E" stroke-width="2"/>
+<line x1="500" y1="150" x2="680" y2="150" stroke="#2A2A2E" stroke-width="2"/>
+<text x="590" y="90" font-size="9" fill="#4A90D9" text-anchor="middle" font-family="'PingFang SC',sans-serif">北/东窗 2.8m宽</text>
+
+<!-- Cork board on wall -->
+<rect x="80" y="120" width="200" height="140" fill="#D4A76A" stroke="#8B5E3C" stroke-width="3" rx="2"/>
+<rect x="85" y="125" width="190" height="130" fill="none" stroke="#B8956A" stroke-width="1"/>
+<!-- Notes/papers on cork -->
+<g>
+  <rect x="95" y="135" width="40" height="45" fill="#FFF8E0" stroke="#D4A76A" stroke-width="0.5" transform="rotate(-3,115,157)"/>
+  <rect x="150" y="130" width="35" height="40" fill="#FF8A80" opacity="0.3" stroke="#8B5E3C" stroke-width="0.5" transform="rotate(2,167,150)"/>
+  <rect x="200" y="145" width="45" height="40" fill="#4A90D9" opacity="0.3" stroke="#8B5E3C" stroke-width="0.5"/>
+  <!-- User's note -->
+  <rect x="110" y="185" width="60" height="50" fill="#FFD166" opacity="0.5" stroke="#8B5E3C" stroke-width="0.5" transform="rotate(-2,140,210)"/>
+  <line x1="115" y1="195" x2="165" y2="195" stroke="#8B5E3C" stroke-width="0.5"/>
+  <line x1="115" y1="205" x2="160" y2="205" stroke="#8B5E3C" stroke-width="0.5"/>
+  <line x1="115" y1="215" x2="165" y2="215" stroke="#8B5E3C" stroke-width="0.5"/>
+</g>
+<text x="180" y="280" font-size="9" fill="#8B5E3C" text-anchor="middle" font-family="'PingFang SC',sans-serif">软木板（用户纸条）</text>
+
+<!-- 2.6m long design desk -->
+<g filter="url(#shSB)">
+  <rect x="60" y="400" width="560" height="80" fill="url(#deskWood)" stroke="#5A4A3A" stroke-width="2" rx="3"/>
+  <rect x="55" y="395" width="570" height="10" fill="#D4B896"/>
+  <!-- Legs -->
+  <rect x="80" y="480" width="8" height="70" fill="#5A4A3A"/>
+  <rect x="600" y="480" width="8" height="70" fill="#5A4A3A"/>
+  <rect x="300" y="480" width="8" height="70" fill="#5A4A3A"/>
+</g>
+<text x="340" y="570" font-size="11" fill="#5A4A3A" text-anchor="middle" font-weight="600" font-family="'PingFang SC',sans-serif">2.6m 伊塔设计长桌</text>
+
+<!-- iMac on desk -->
+<g filter="url(#shSB)">
+  <rect x="280" y="310" width="130" height="85" fill="#C0C0C0" stroke="#888" stroke-width="2" rx="6"/>
+  <rect x="288" y="318" width="114" height="68" fill="#1A1A1E" rx="2"/>
+  <rect x="293" y="323" width="104" height="58" fill="url(#skySB)" rx="1"/>
+  <!-- Stand -->
+  <path d="M330,395 L320,415 L370,415 L360,395 Z" fill="#C0C0C0" stroke="#888"/>
+  <rect x="310" y="415" width="70" height="5" fill="#A0A0A0" rx="1"/>
+</g>
+<defs><linearGradient id="skySB" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#5B9BD5"/><stop offset="100%" stop-color="#9DC3E6"/></linearGradient></defs>
+<text x="345" y="300" font-size="9" fill="#333" text-anchor="middle" font-family="'PingFang SC',sans-serif">iMac 27"</text>
+
+<!-- Desk accessories -->
+<rect x="100" y="380" width="50" height="15" fill="#E8E5E0" stroke="#888" stroke-width="1" rx="2"/>
+<circle cx="125" cy="375" r="8" fill="#FFD166" opacity="0.6"/>
+<rect x="450" y="385" width="80" height="12" fill="#8B7355" stroke="#5A4A3A" stroke-width="1" rx="2"/>
+<g fill="#555"><rect x="455" y="380" width="8" height="8" rx="1"/><rect x="470" y="380" width="40" height="3" rx="0.5"/><rect x="470" y="386" width="30" height="2" rx="0.5"/></g>
+<text x="130" y="370" font-size="8" fill="#666" font-family="'PingFang SC',sans-serif">设计文具</text>
+
+<!-- Ergonomic work chair -->
+<g filter="url(#shSB)">
+  <rect x="305" y="510" width="70" height="15" fill="#2A2A2E" rx="3"/>
+  <rect x="315" y="460" width="50" height="55" fill="#1A1A1E" rx="8"/>
+  <!-- Backrest mesh -->
+  <rect x="320" y="440" width="40" height="30" fill="#333" rx="6" stroke="#555" stroke-width="1"/>
+  <!-- Wheels base -->
+  <g stroke="#444" stroke-width="2"><line x1="340" y1="525" x2="310" y2="545"/><line x1="340" y1="525" x2="370" y2="545"/><line x1="340" y1="525" x2="340" y2="550"/></g>
+  <circle cx="310" cy="547" r="4" fill="#333"/><circle cx="370" cy="547" r="4" fill="#333"/><circle cx="340" cy="552" r="4" fill="#333"/>
+</g>
+<text x="340" y="575" font-size="8" fill="#333" text-anchor="middle" font-family="'PingFang SC',sans-serif">人体工学工作椅</text>
+
+<!-- Sample cabinet (west wall, left) -->
+<rect x="40" y="120" width="35" height="280" fill="#E8E5E0" stroke="#888" stroke-width="1.5"/>
+<g stroke="#AAA" stroke-width="1">
+  <line x1="40" y1="170" x2="75" y2="170"/><line x1="40" y1="220" x2="75" y2="220"/>
+  <line x1="40" y1="270" x2="75" y2="270"/><line x1="40" y1="320" x2="75" y2="320"/>
+  <line x1="40" y1="370" x2="75" y2="370"/>
+</g>
+<g>
+  <rect x="45" y="140" width="10" height="25" fill="#B8BCC4"/><rect x="58" y="145" width="8" height="20" fill="#D4B896"/>
+  <rect x="45" y="190" width="12" height="25" fill="#7AB87A"/><rect x="60" y="195" width="8" height="20" fill="#FF8A80"/>
+  <rect x="45" y="240" width="10" height="25" fill="#4A90D9"/><rect x="58" y="245" width="10" height="20" fill="#FFD166"/>
+  <rect x="45" y="290" width="12" height="25" fill="#8B7355"/><rect x="60" y="295" width="8" height="20" fill="#C0C0C0"/>
+</g>
+<text x="25" y="280" font-size="9" fill="#555" text-anchor="end" font-family="'PingFang SC',sans-serif">样品柜</text>
+
+<!-- === RIGHT HALF: MASTER BEDROOM === -->
+<rect x="700" y="0" width="700" height="560" fill="#FFF5F4"/>
+<polygon points="700,560 1400,560 1400,900 700,900" fill="url(#floorSB)"/>
+<g stroke="#A08060" stroke-width="0.6" opacity="0.35">
+  <line x1="700" y1="620" x2="1400" y2="620"/><line x1="700" y1="680" x2="1400" y2="680"/>
+  <line x1="700" y1="740" x2="1400" y2="740"/><line x1="700" y1="800" x2="1400" y2="800"/><line x1="700" y1="860" x2="1400" y2="860"/>
+</g>
+
+<!-- Bedroom title -->
+<text x="1050" y="45" font-size="24" fill="#1A1A1E" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">江景主卧</text>
+<text x="1050" y="68" font-size="11" fill="#6D717D" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">10.0㎡ · 1.8m床朝南江景窗 · 左用户位/右外套椅 · 共享衣帽间连通</text>
+
+<!-- South-facing river view window (3.8m) -->
+<rect x="810" y="100" width="380" height="160" fill="#D0E8FF" stroke="#2A2A2E" stroke-width="5" rx="1"/>
+<line x1="905" y1="100" x2="905" y2="260" stroke="#2A2A2E" stroke-width="2"/>
+<line x1="1000" y1="100" x2="1000" y2="260" stroke="#2A2A2E" stroke-width="2"/>
+<line x1="1095" y1="100" x2="1095" y2="260" stroke="#2A2A2E" stroke-width="2"/>
+<line x1="810" y1="180" x2="1190" y2="180" stroke="#2A2A2E" stroke-width="2"/>
+<!-- River view visible -->
+<rect x="815" y="105" width="370" height="70" fill="#9DC3E6" opacity="0.4"/>
+<rect x="815" y="185" width="370" height="70" fill="#4A90D9" opacity="0.3"/>
+<text x="1000" y="90" font-size="9" fill="#4A90D9" text-anchor="middle" font-family="'PingFang SC',sans-serif">南侧江景窗 3.8m×2.0m</text>
+
+<!-- 1.8m bed (facing window/river, south-facing) -->
+<g filter="url(#shSB)">
+  <!-- Bed frame -->
+  <rect x="870" y="340" width="260" height="200" fill="#E8E0D8" stroke="#8B7355" stroke-width="2" rx="4"/>
+  <!-- Headboard (north side, against north wall or free standing facing south) -->
+  <rect x="870" y="340" width="260" height="30" fill="#8B7355" stroke="#5A4A3A" stroke-width="1" rx="3"/>
+  <!-- Mattress -->
+  <rect x="880" y="375" width="240" height="155" fill="#FFF" stroke="#DDD" stroke-width="1" rx="3"/>
+  <!-- Duvet -->
+  <rect x="885" y="400" width="230" height="125" fill="#D4C8BC" stroke="#B8A898" stroke-width="1" rx="3"/>
+  <!-- Pillows -->
+  <rect x="895" y="380" width="70" height="35" fill="#FFF5F4" stroke="#DDD" rx="6"/>
+  <rect x="1035" y="380" width="70" height="35" fill="#FFF5F4" stroke="#DDD" rx="6"/>
+</g>
+<!-- User side marker (left = west side of bed) -->
+<text x="920" y="480" font-size="9" fill="#FF8A80" text-anchor="middle" font-family="'PingFang SC',sans-serif">用户位（左侧）</text>
+<circle cx="920" cy="460" r="10" fill="none" stroke="#FF8A80" stroke-width="1" stroke-dasharray="2,2"/>
+
+<!-- Jacket/coat chair (right side) -->
+<g filter="url(#shSB)">
+  <rect x="1150" y="430" width="55" height="55" fill="#C8B8A8" stroke="#8B7355" stroke-width="2" rx="6"/>
+  <rect x="1155" y="410" width="45" height="25" fill="#D4C8BC" stroke="#8B7355" stroke-width="1" rx="4"/>
+  <!-- Jacket draped -->
+  <path d="M1155,420 Q1145,440 1160,470 Q1170,460 1180,470 Q1195,440 1185,420" fill="#FF8A80" opacity="0.4" stroke="#FF8A80" stroke-width="1"/>
+</g>
+<text x="1177" y="505" font-size="9" fill="#FF8A80" text-anchor="middle" font-family="'PingFang SC',sans-serif">外套椅（右侧）</text>
+
+<!-- Nightstands -->
+<rect x="830" y="400" width="35" height="45" fill="#8B7355" stroke="#5A4A3A" stroke-width="1" rx="2" filter="url(#shSB)"/>
+<rect x="1135" y="400" width="35" height="45" fill="#8B7355" stroke="#5A4A3A" stroke-width="1" rx="2" filter="url(#shSB)"/>
+<!-- Lamp on nightstand -->
+<circle cx="847" cy="385" r="12" fill="#FFD166" opacity="0.5"/>
+<rect x="843" y="395" width="8" height="8" fill="#8B7355"/>
+
+<!-- Shared closet/wardrobe connection (opening toward left, to cloakroom) -->
+<rect x="720" y="200" width="80" height="200" fill="none" stroke="#888" stroke-width="1.5" stroke-dasharray="4,2" rx="2"/>
+<text x="760" y="310" font-size="9" fill="#888" text-anchor="middle" font-family="'PingFang SC',sans-serif">共享衣帽间</text>
+<!-- Hanging clothes hint -->
+<line x1="730" y1="220" x2="730" y2="260" stroke="#4A90D9" stroke-width="2"/>
+<line x1="750" y1="220" x2="750" y2="260" stroke="#FF8A80" stroke-width="2"/>
+<line x1="770" y1="220" x2="770" y2="260" stroke="#8B7355" stroke-width="2"/>
+
+<!-- Ensuite bathroom door (top right) -->
+<rect x="1230" y="140" width="100" height="140" fill="#E8F0F8" stroke="#888" stroke-width="1.5" rx="2"/>
+<!-- Bathtub visible -->
+<ellipse cx="1280" cy="230" rx="35" ry="20" fill="#FFF" stroke="#888" stroke-width="1.5"/>
+<text x="1280" y="275" font-size="9" fill="#4A90D9" text-anchor="middle" font-family="'PingFang SC',sans-serif">主卫·浴缸</text>
+<!-- Vanity with phone -->
+<rect x="1240" y="155" width="60" height="30" fill="#F0E8DF" stroke="#888" stroke-width="1" rx="2"/>
+<rect x="1260" y="150" width="20" height="8" fill="#1A1A1E" rx="1"/>
+<text x="1270" y="145" font-size="7" fill="#333" text-anchor="middle" font-family="'PingFang SC',sans-serif">手机</text>
+
+<!-- Soft rug -->
+<ellipse cx="1000" cy="620" rx="200" ry="50" fill="#E8D8CC" opacity="0.6"/>
+
+</svg>

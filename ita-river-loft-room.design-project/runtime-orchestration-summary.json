@@ -1,0 +1,64 @@
+{
+  "skillProvenance": {
+    "skillName": "solo-design",
+    "resolvedLane": "complex_html_page"
+  },
+  "project": {
+    "name": "ita-river-loft-room.design-project",
+    "version": "v3.0-side-stair",
+    "description": "伊塔132㎡江景复式·侧边贴墙楼梯版彻底重做",
+    "deliverableCompletenessChecklist": {
+      "markdownDocument": true,
+      "floorPlansVectorAndImage": true,
+      "multiAngleRenders": true,
+      "objectDataTables": true,
+      "machineReadableRoomData": true,
+      "coordinateSystem": true,
+      "designRegistrationDotDesign": true,
+      "deliveryManifest": true
+    },
+    "expectedDispatches": [
+      {
+        "nodeId": "page-ita-river-loft-room",
+        "packetType": "ComplexPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/ita-river-loft-room.html",
+          "assets/ITA_River_Loft_Room_Design.md",
+          "assets/ita_river_loft_room_data.json",
+          "assets/ita_river_loft_room_data.xml",
+          "assets/ita_room_objects.csv",
+          "assets/ita_room_objects.xlsx",
+          "assets/floor_plan_level1.svg",
+          "assets/floor_plan_level2.svg",
+          "assets/floor_plan_level1.png",
+          "assets/floor_plan_level2.png",
+          "assets/render_overall_river_view.svg",
+          "assets/render_entry_stair_closeup.svg",
+          "assets/render_kitchen_bath_closeup.svg",
+          "assets/render_living_void_closeup.svg",
+          "assets/render_studio_bedroom_closeup.svg",
+          "assets/render_overall_river_view.png",
+          "assets/render_entry_stair_closeup.png",
+          "assets/render_kitchen_bath_closeup.png",
+          "assets/render_living_void_closeup.png",
+          "assets/render_studio_bedroom_closeup.png",
+          "FINAL_DELIVERY_MANIFEST.md",
+          ".design"
+        ],
+        "toolCallLedger": {
+          "source": "sub-agent-runtime-trace",
+          "traceDigest": "ita-river-loft-room-132sqm-side-stair-v3",
+          "objectCount": 75,
+          "totalArea_m2": 132,
+          "stairPosition": "贴西侧墙L型折返(0.4,2.8对位)",
+          "voidArea_m2": 25.5
+        }
+      }
+    ],
+    "terminalState": "ready-for-validation",
+    "validationHistory": [],
+    "validationRepairLedger": [],
+    "repairEntryEvidence": []
+  }
+}

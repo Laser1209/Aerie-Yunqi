@@ -140,7 +140,7 @@ def _image_orientation_phrase(image_size: str) -> str:
 #   focus（主体特写） / pose（姿态） / angle（机位） / scene（环境）
 # 未命中的维度返回空串，由组合器兜底为默认，绝不让缺值中断生图（缺值即停防护）。
 _PHOTO_FOCUS_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("双腿", ("看看腿", "你的腿", "腿", "腿部", "美腿", "长腿", "腿照")),
+    ("双腿", ("看看腿", "你的腿", "大腿", "腿", "腿部", "美腿", "长腿", "腿照")),
     ("双脚", ("看看脚", "你的脚", "脚", "美脚", "脚丫")),
     ("手", ("看看手", "你的手", "手部", "玉手")),
     ("腰", ("看看腰", "你的腰", "腰", "细腰")),
@@ -188,6 +188,56 @@ _PHOTO_STYLE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("氛围感", ("氛围", "意境", "情绪")),
 )
 
+# 姿态标签 → 自然措辞（组合器输出"她{phrase}"，避免"她坐/她躺"这类生硬表述）。
+_PHOTO_POSE_PHRASE: dict[str, str] = {
+    "侧躺": "侧躺在床上",
+    "平躺": "平躺着",
+    "坐": "坐着",
+    "倚靠": "倚靠着",
+    "跪坐": "跪坐着",
+    "站立": "站立着",
+    "蹲下": "蹲着",
+    "盘腿": "盘着腿",
+    "跷腿": "跷着腿",
+}
+
+# focus → 构图协同覆盖规则（方向2）。focus 作为构图主轴，反向约束姿态/机位：
+#   - default_pose: 用户只给了 focus（未给姿态）时自动补的默认姿态，避免落回 base 的
+#     固定场景（如 role_selfie 的"坐在书桌前托腮"）而与特写主体冲突。
+#   - default_angle: 用户未给机位时自动补的默认机位（如背影→从后面）。
+# 注意：用户显式给了姿态/机位时一律尊重用户（user wins），绝不覆盖。
+_PHOTO_FOCUS_RULES: dict[str, dict[str, str]] = {
+    "双腿": {"default_pose": "坐"},
+    "双脚": {"default_pose": "坐"},
+    "手": {"default_pose": "坐"},
+    "腰": {"default_pose": "站立"},
+    "肩颈锁骨": {"default_pose": "坐"},
+    "背影": {"default_pose": "站立", "default_angle": "从后面"},
+    "头发": {"default_pose": "坐"},
+    "脸庞": {"default_pose": "坐"},
+    "眼睛": {"default_pose": "坐", "default_angle": "特写"},
+    "全身": {"default_pose": "站立", "default_angle": "全身入镜"},
+}
+
+
+def _apply_focus_coverage(spec: dict[str, str]) -> dict[str, str]:
+    """按 focus 协同覆盖：仅在用户未给姿态/机位时自动补齐缺省值。
+
+    返回新 dict（不改入参）；focus 无规则或已给显式值时保持原样。
+    """
+    focus = str(spec.get("focus") or "").strip()
+    rule = _PHOTO_FOCUS_RULES.get(focus)
+    if not rule:
+        return dict(spec)
+    out = dict(spec)
+    pose = str(spec.get("pose") or "").strip()
+    if not pose and rule.get("default_pose"):
+        out["pose"] = rule["default_pose"]
+    angle = str(spec.get("angle") or "").strip()
+    if not angle and rule.get("default_angle"):
+        out["angle"] = rule["default_angle"]
+    return out
+
 
 def _match_photo_spec(text: str, table: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
     """在用户指令里按优先级返回第一个命中的维度标签；无命中返回空串。"""
@@ -205,6 +255,7 @@ def _extract_photo_spec(user_raw: str) -> dict[str, str]:
 
     每个维度最多命中一个（按表顺序取第一个），未命中的为空串。确定性、零成本、
     可测，无需调用 LLM；仅用于"用户主动要图"路径的增强，缺值全部由组合器兜底。
+    这是关键词保底：语义自补（_semantic_photo_spec）优先，失败时才回落到这里。
     """
     return {
         "focus": _match_photo_spec(user_raw, _PHOTO_FOCUS_TABLE),
@@ -215,12 +266,53 @@ def _extract_photo_spec(user_raw: str) -> dict[str, str]:
     }
 
 
-def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
-    """把模块化规格组合进基础提示词：只附加命中的维度，未命中的用 base 默认。
+def _normalize_spec_value(raw: str, table: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
+    """把 LLM 返回的自由文本归一化到已知标签：完全一致或关键词命中返回标签，否则空串。
 
+    语义自补的输出必须落回合法标签，未知标签会污染提示词；归一化失败返回空串，
+    交给组合器兜底（缺值即停防护），绝不让脏值进生图。
+    """
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    for label, keywords in table:
+        if text == label or text in keywords:
+            return label
+    return _match_photo_spec(text, table)
+
+
+def _extract_llm_json(text: str) -> dict | None:
+    """从 LLM 输出稳健提取 JSON 对象（容忍 markdown 代码围栏与前后杂文）。
+
+    找不到平衡的花括号或解析失败返回 None，由调用方决定兜底。
+    """
+    s = str(text or "").strip()
+    if not s:
+        return None
+    if s.startswith("```"):
+        s = s.strip("`").strip()
+        if "\n" in s:
+            s = s.split("\n", 1)[1]
+    start, end = s.find("{"), s.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        obj = json.loads(s[start : end + 1])
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
+def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
+    """把模块化规格组合进基础提示词：focus 为主轴协同覆盖 scene/pose/angle。
+
+    覆盖规则（_PHOTO_FOCUS_RULES）：用户只给 focus（未给姿态/机位）时，自动补一个
+    与 focus 相适配的默认姿态/机位，避免落回 base 的固定场景（如"坐在书桌前托腮"）
+    而与特写主体冲突；用户显式给了姿态/机位时一律尊重（user wins），绝不覆盖。
     顺序：主体特写(focus) → 场景(scene) → 姿态(pose) → 机位(angle) → 风格(style)。
     全部缺省时原样返回 base，绝不返回空串。
     """
+    spec = _apply_focus_coverage(spec)
     parts: list[str] = []
     focus = str(spec.get("focus") or "").strip()
     if focus:
@@ -230,7 +322,7 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
         parts.append(f"场景是{scene}")
     pose = str(spec.get("pose") or "").strip()
     if pose:
-        parts.append(f"她{pose}")
+        parts.append(f"她{_PHOTO_POSE_PHRASE.get(pose, pose)}")
     angle = str(spec.get("angle") or "").strip()
     if angle:
         parts.append(f"拍摄机位：{angle}")
@@ -290,9 +382,9 @@ _WEATHER_MOOD_CN: dict[str, str] = {
 # 天气/光线只在真正影响画面的场景注入，室内自拍不塞天气。
 _IMAGE_WORLD_FALLBACK_RULES: dict[str, set[str]] = {
     "environment_object": {"weather", "light"},
-    "role_in_scene": {"light", "weather"},
-    "role_selfie": {"light"},
-    "couple_photo": {"light"},
+    "role_in_scene": {"light", "weather", "room"},
+    "role_selfie": {"light", "room"},
+    "couple_photo": {"light", "room"},
 }
 
 
@@ -2451,11 +2543,68 @@ class Companion:
         except Exception:
             logger.debug("proactive photo trace patch failed", exc_info=True)
 
+    async def _semantic_photo_spec(self, user_raw: str) -> dict[str, str] | None:
+        """轻量 LLM 语义自补：从用户指令推断画面维度 focus/pose/angle/scene/style。
+
+        关键词表只能命中显式词语（"看看腿"能命中 focus=双腿，但推断不出"坐着/腿部
+        特写"这类隐含语义）。这里用 siliconflow-light 做语义分析，返回与
+        _extract_photo_spec 同构的 dict；任意失败（无 brain / 超时 / 输出不可解析 /
+        全空）都返回 None，由调用方回退到关键词保底——语义自补是锦上添花，绝不因它中断生图。
+        """
+        raw = str(user_raw or "").strip()
+        if not raw:
+            return None
+        brain = getattr(self, "brain", None)
+        chat = getattr(brain, "chat", None)
+        if not callable(chat):
+            return None
+        system = (
+            "你是伊塔的摄影构图分析器。用户给了一句给恋人的指令（例如'看看腿''在床上躺着拍一张'），"
+            "你要理解其隐含语义，把它拆成一张写实生活照的画面规格。\n"
+            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style，值用中文或空字符串：\n"
+            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒"}\n'
+            "各键含义与合法取值：\n"
+            "- focus（画面主体特写）：双腿/双脚/手/腰/肩颈锁骨/背影/头发/脸庞/眼睛/全身\n"
+            "- pose（人物姿态）：侧躺/平躺/坐/倚靠/跪坐/站立/蹲下/盘腿/跷腿\n"
+            "- angle（拍摄机位）：仰视低角度/俯视高角度/平视/第一人称/特写/全身入镜\n"
+            "- scene（环境场景）：床上/沙发/浴室/厨房/窗前/阳台/工作室/玄关\n"
+            "- style（整体氛围）：诱惑感/慵懒/清新/居家感/氛围感\n"
+            "推断规则：\n"
+            "1. 指令提到身体部位，focus 填对应部位（腿/脚/手/腰/脸/眼睛/背影/头发/全身）。\n"
+            "2. 若语义暗示了姿态/机位但未明说，自行补全最合理的（如'看看腿'→pose=坐，angle=特写）。\n"
+            "3. 提到环境填 scene，提到氛围/情绪填 style。\n"
+            "4. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字。"
+        )
+        try:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"指令：{raw[:120]}"},
+            ]
+            call = chat(messages, preferred_provider=_IMAGE_LIGHT_PROVIDER, temperature=0.2)
+            resp = await asyncio.wait_for(call, timeout=_IMAGE_LIGHT_RELAY_TIMEOUT)
+            obj = _extract_llm_json(getattr(resp, "text", "") or "")
+            if not obj:
+                return None
+            spec = {
+                "focus": _normalize_spec_value(obj.get("focus"), _PHOTO_FOCUS_TABLE),
+                "pose": _normalize_spec_value(obj.get("pose"), _PHOTO_POSE_TABLE),
+                "angle": _normalize_spec_value(obj.get("angle"), _PHOTO_ANGLE_TABLE),
+                "scene": _normalize_spec_value(obj.get("scene"), _PHOTO_SCENE_TABLE),
+                "style": _normalize_spec_value(obj.get("style"), _PHOTO_STYLE_TABLE),
+            }
+            if not any(spec.values()):
+                return None
+            return spec
+        except Exception:
+            logger.debug("semantic photo spec failed; fallback to keyword", exc_info=True)
+            return None
+
     async def _image_prompt_for(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
         """把 ImageCandidate 的 prompt_key 解析成真实的中文生图提示词。
 
         两步接力：
         1. ``_compose_base_image_prompt`` 用 persona.yaml 外貌/身材 + 场景拼出基础提示词；
+           用户主动要图时，语义自补（siliconflow-light）优先解析指令，失败回退关键词；
         2. 世界数据接力：取当前 WorldSnapshot 的时间/天气/地点/物件，交给轻量 LLM
            （siliconflow-light）判断这张画面真正需要哪些数据——只把能呈现在画面里的
            写进提示词，而不是把世界快照全部揉在一起。轻量 LLM 不可用时退回确定性规则
@@ -2464,7 +2613,12 @@ class Companion:
         健壮性：世界数据/轻量 LLM 接力是"锦上添花"，任何异常都必须退回基础提示词，
         绝不把异常冒泡成空串——否则 generate_image 会因 empty_prompt 拒绝，生图直接放弃。
         """
-        base = self._compose_base_image_prompt(prompt_key, candidate)
+        spec = None
+        if (candidate or {}).get("scene") == "local_send":
+            user_raw = str((candidate or {}).get("user_raw") or "").strip()
+            if user_raw:
+                spec = await self._semantic_photo_spec(user_raw)
+        base = self._compose_base_image_prompt(prompt_key, candidate, spec=spec)
         try:
             context = self._image_world_context(candidate)
             if not context:
@@ -2483,7 +2637,7 @@ class Companion:
             )
             return base
 
-    def _compose_base_image_prompt(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
+    def _compose_base_image_prompt(self, prompt_key: str, candidate: dict[str, Any] | None = None, spec: dict[str, str] | None = None) -> str:
         """基础提示词：persona 外貌/身材 + 场景构图（不含世界上下文）。"""
         try:
             from config.persona_loader import load_persona
@@ -2559,12 +2713,15 @@ class Companion:
             scene = "她坐在重庆的家里，窗外是夜景，她神情放松地看着镜头。"
         full = f"{base}{scene}{orientation}。"
         # 用户主动要图（scene=local_send）时，candidate 带 user_raw 原始指令，
-        # 用模块化组合器把主体/姿态/机位/场景/风格叠加上去。未命中任何维度时
-        # _compose_modular_prompt 原样返回 full，绝不产生空串（缺值即停防护）。
+        # 用模块化组合器把主体/姿态/机位/场景/风格叠加上去。spec 来源：
+        #   1) 语义自补优先（_semantic_photo_spec 已解析，命中任一维度）；
+        #   2) 未命中/失败时回落 _extract_photo_spec 关键词保底。
+        # 全部未命中时 _compose_modular_prompt 原样返回 full，绝不产生空串（缺值即停防护）。
         if (candidate or {}).get("scene") == "local_send":
             user_raw = str((candidate or {}).get("user_raw") or "").strip()
             if user_raw:
-                spec = _extract_photo_spec(user_raw)
+                if not spec:
+                    spec = _extract_photo_spec(user_raw)
                 full = _compose_modular_prompt(full, spec)
         return full
 
@@ -2750,14 +2907,23 @@ class Companion:
         return None
 
     def _inject_world_context_fallback(self, base_prompt: str, context: dict[str, Any], candidate: dict[str, Any] | None = None) -> str:
-        """确定性兜底：按场景规则只注入该画面相关的世界数据。"""
+        """确定性兜底：按场景规则只注入该画面相关的世界数据。
+
+        光线（时间/相/月相）恒注入；房间物件（room）条件注入——仅当存在 nearby_objects
+        时，把物件翻译成自然描述拼进画面，空则跳过（缺值即停防护，绝不断生图）。
+        """
         key = str((candidate or {}).get("prompt_key") or context.get("prompt_key") or "default")
         need = _IMAGE_WORLD_FALLBACK_RULES.get(key, {"light", "weather"})
         time_light = str(context.get("time_of_day_light") or "").strip()
         weather_desc = str(context.get("weather_desc") or "").strip()
+        room_objs = [str(x) for x in (context.get("nearby_objects") or []) if str(x)]
         parts = []
         if "light" in need and time_light:
             parts.append(time_light)
+        if "room" in need and room_objs:
+            cn = "、".join(_HER_HOME_OBJECTS_ZH.get(o, o) for o in room_objs)
+            if cn:
+                parts.append(f"所在的房间里有：{cn}")
         if "weather" in need and weather_desc:
             parts.append(weather_desc)
         if not parts:

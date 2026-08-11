@@ -1091,6 +1091,13 @@ class Pipeline:
             "source": "manual",
             "score": 1.0,
             "size": _image_size_for_prompt_key(intent),
+            # 方向3：角色/合影类走图生图时的参考资产（three_view:front 锁定人物外貌）。
+            # 仅在角色类意图附带；非角色类（environment_object 等）不附带，保持文生图。
+            "reference_assets": (
+                ["three_view:front"]
+                if intent in {"role_selfie", "role_in_scene", "couple_photo"}
+                else []
+            ),
             # 原始用户指令（如"看看腿""在床上躺着拍一张"）传给生图提示词组合器，
             # 让模块化解析器能从真实意图中提取主体/姿态/机位/场景，而不是只用死板的
             # intent 关键字。缺省给空串，避免下游因 None 中断（缺值即停防护）。

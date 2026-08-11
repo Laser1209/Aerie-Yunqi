@@ -1,0 +1,126 @@
+{
+  "success": true,
+  "outcome": "passed",
+  "repairable": true,
+  "terminalViolations": [],
+  "terminalBlockingSummary": null,
+  "skillProvenance": {
+    "name": null,
+    "version": null,
+    "version_source": "unknown",
+    "runtime_skill_dir": null,
+    "recorded_at": null,
+    "expected_version": "2026.07.22.00.00.00",
+    "status": "observed_unknown",
+    "read_status": "unknown"
+  },
+  "operatingMode": "free-explore",
+  "renderBlockingErrorCount": 0,
+  "softWarningCount": 3,
+  "renderBlockingErrors": [],
+  "errorSignatures": [],
+  "softWarnings": [
+    "[orchestration-summary] runtime-orchestration-summary.json is missing skillProvenance.name/version/version_source. Version provenance will be reported as observed_unknown by external evaluators.",
+    "[html-quality] ita-river-loft-room.html: hardcoded colors are forbidden outside <style id=\"theme-vars\">. Use brand CSS variables from the token reference.",
+    "[html-quality] ita-river-loft-room.html: free-explore pages must not use secondary/accent brand variables. Use the single primary hue, neutral tints, or --state-success/warning/error/info for real semantic states."
+  ],
+  "repairPlanHints": [
+    {
+      "errorClass": "hardcoded-color-in-body",
+      "owner": "sub-agent",
+      "repairScope": "targeted-token-replace",
+      "strategy": "targeted_token_replace_once",
+      "affectedFiles": [
+        "ita-river-loft-room.html"
+      ],
+      "repairReportPath": null,
+      "repairAlreadyAttempted": false,
+      "allowSourceRead": "no-full-html-read",
+      "maxValidationRuns": 2
+    }
+  ],
+  "repairActionTable": [],
+  "errorCount": 0,
+  "warningCount": 3,
+  "errors": [],
+  "warnings": [
+    "[orchestration-summary] runtime-orchestration-summary.json is missing skillProvenance.name/version/version_source. Version provenance will be reported as observed_unknown by external evaluators.",
+    "[html-quality] ita-river-loft-room.html: hardcoded colors are forbidden outside <style id=\"theme-vars\">. Use brand CSS variables from the token reference.",
+    "[html-quality] ita-river-loft-room.html: free-explore pages must not use secondary/accent brand variables. Use the single primary hue, neutral tints, or --state-success/warning/error/info for real semantic states."
+  ],
+  "validationRunDisciplineStatus": {
+    "declared": false,
+    "restoreMode": false,
+    "maxFullValidationRuns": null,
+    "validationHistoryCount": 0,
+    "repairLedgerCount": 0,
+    "softWarningsTriggerRepair": null,
+    "terminalState": null,
+    "nextAction": null,
+    "violations": [],
+    "success": true
+  },
+  "terminalState": null,
+  "nextCheck": {
+    "type": "finish-readiness",
+    "command": "node \"c:\\Users\\Administrator\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs\" \"e:\\Agent_reply\\ita-river-loft-room.design-project\" --check=all",
+    "fullValidationAllowed": false,
+    "reason": "workspace validation passed; run complete finish readiness before final delivery"
+  },
+  "repairBatch": [],
+  "repairContextPacket": {
+    "schema_version": "1.0",
+    "purpose": "small-context repair packet; read this before full validation-report.json",
+    "success": true,
+    "terminalState": null,
+    "skillProvenance": {
+      "name": null,
+      "version": null,
+      "version_source": "unknown",
+      "runtime_skill_dir": null,
+      "recorded_at": null,
+      "expected_version": "2026.07.22.00.00.00",
+      "status": "observed_unknown",
+      "read_status": "unknown"
+    },
+    "renderBlockingErrorCount": 0,
+    "softWarningCount": 3,
+    "renderBlockingErrors": [],
+    "repairActionTable": [],
+    "nextCheck": {
+      "type": "finish-readiness",
+      "command": "node \"c:\\Users\\Administrator\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs\" \"e:\\Agent_reply\\ita-river-loft-room.design-project\" --check=all",
+      "fullValidationAllowed": false,
+      "reason": "workspace validation passed; run complete finish readiness before final delivery"
+    },
+    "forbidden": [
+      "do not read validator source",
+      "do not rerun full validation when nextCheck.fullValidationAllowed=false",
+      "do not start preview/browser unless user explicitly asks",
+      "do not hand-edit repair ledger fields"
+    ]
+  },
+  "projectFileHashes": {
+    ".design": "8786638bc54c50720326b957ebcd282ecd9d570367c35267585d439cdeb531f7",
+    "runtime-orchestration-summary.json": "0a26bea5685e1dae09a7605d89c5ccf84f1c22745656e03838043ec7149bc5c0",
+    "pages/ita-river-loft-room.html": "e67aa05e3a5885e789feb6aeabbb565254f21e5cd8d667f3ad8cd6a354155e48",
+    "assets/floor_plan_level1.png": "59df22936c82adac26b3661e496972bff0dad7c395ca203d66ed03a0ce58cb40",
+    "assets/floor_plan_level1.svg": "7269065e2d28f1490bd36922be52261df3b70cb469d0694eec496d625c892e93",
+    "assets/floor_plan_level2.png": "3ba62e5718a5275082c6072e97baa8b629c76fd472416d4480393a1cf856dc79",
+    "assets/floor_plan_level2.svg": "4c3d1a985602a5a5fa42db547800b77ed7539b4c4afe0d3676e39c0cfb6b0d72",
+    "assets/render_entry_stair_closeup.png": "ba800e1839c467177707b6e3df7fa27f4b282dba1a4c6b713dd7e2c82c972dc6",
+    "assets/render_entry_stair_closeup.svg": "b500f6ba16f2cc0a85fb1509719ca3c02974270b24d21a20cd8de65971a4e8b8",
+    "assets/render_kitchen_bath_closeup.png": "01f8d3e43d68d93dd62c9eba6ce658cd8875114dfe98a344fd93bb59149afa5b",
+    "assets/render_kitchen_bath_closeup.svg": "f3877a1eca731cc74c93584135ad110a17bd73c6cb60e353cd109f45051b470d",
+    "assets/render_living_void_closeup.png": "22125611ce9b0c1be1dc6f77bfa15f2c45a5258dbe76770f20e5641fe9195378",
+    "assets/render_living_void_closeup.svg": "987b2d398da69af435f13efeb3eedc5bb9e9324e4d30e62cfc91934ce9a29ec7",
+    "assets/render_overall_river_view.png": "98a815a3b2256a13347bb5865b93f503ae64d41be5ff783091ddb35c26688b1a",
+    "assets/render_overall_river_view.svg": "6636f7c483fe9da5b5bd7db91affccbf749b88d6f0e922d3f80e23310d872976",
+    "assets/render_studio_bedroom_closeup.png": "0a944103258edc9fb9d6339c4f64b033cee266deb98a9b4a31c680572406ed5a",
+    "assets/render_studio_bedroom_closeup.svg": "0d644808745f7c6daddf92fb6a7f7d01732ad5eec34112f13165108ab112b772"
+  },
+  "designDir": "e:\\Agent_reply\\ita-river-loft-room.design-project",
+  "expectedPages": 1,
+  "requireInteractions": null,
+  "checkedAt": "2026-08-11T19:11:06.842Z"
+}

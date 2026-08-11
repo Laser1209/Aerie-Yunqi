@@ -1,0 +1,2017 @@
+{
+  "project": {
+    "name": "伊塔132㎡江景复式（侧边贴墙楼梯版）",
+    "client": "伊塔",
+    "type": "复式LOFT精装修",
+    "totalArea_m2": 132,
+    "level1Area_m2": 80,
+    "level2Area_m2": 52,
+    "floorHeight_m": 5.15,
+    "slabElevation_m": 2.85,
+    "location": "江景LOFT（南向江面）",
+    "version": "v3.0-side-stair",
+    "designStyle": "现代简约+原木+江景通透",
+    "date": "2026-08-12"
+  },
+  "coordinateSystem": {
+    "origin": "一层西北角内墙点",
+    "units": "meters",
+    "precision": 2,
+    "axes": {
+      "x": "east（东向/面宽方向）",
+      "y": "south（南向/进深方向，朝江面）",
+      "z": "up（层高方向）"
+    },
+    "level1Footprint": [
+      [
+        0,
+        0
+      ],
+      [
+        4.2,
+        0
+      ],
+      [
+        4.2,
+        -0.6
+      ],
+      [
+        11.2,
+        -0.6
+      ],
+      [
+        11.2,
+        1.2
+      ],
+      [
+        12.8,
+        1.2
+      ],
+      [
+        12.8,
+        10.0
+      ],
+      [
+        1.6,
+        10.0
+      ],
+      [
+        1.6,
+        9.0
+      ],
+      [
+        0,
+        9.0
+      ]
+    ],
+    "level2Slab": [
+      [
+        0,
+        0
+      ],
+      [
+        4.2,
+        0
+      ],
+      [
+        4.2,
+        -0.6
+      ],
+      [
+        11.2,
+        -0.6
+      ],
+      [
+        11.2,
+        5.2
+      ],
+      [
+        9.8,
+        5.2
+      ],
+      [
+        9.8,
+        6.8
+      ],
+      [
+        7.2,
+        6.8
+      ],
+      [
+        7.2,
+        5.2
+      ],
+      [
+        1.2,
+        5.2
+      ],
+      [
+        1.2,
+        9.0
+      ],
+      [
+        0,
+        9.0
+      ]
+    ],
+    "voidArea": {
+      "description": "Y>5.2、X>1.2、X<9.8 区域挑空至一层客厅",
+      "area_m2": 25.5
+    }
+  },
+  "designReferences": [
+    "楼梯靠边、服务带集中、挑空对准客厅",
+    "江景面最大化：南侧通高落地窗",
+    "动静分层：一层公共生活、二层私密工作休息",
+    "管线集中：客卫上下对位",
+    "伊塔记忆锚点全部保留"
+  ],
+  "levels": [
+    {
+      "name": "一层 · 公共生活层",
+      "elevation_m": 0.0,
+      "area_m2": 80,
+      "ceilingHeight_m": {
+        "living": 4.3,
+        "other": 2.85
+      },
+      "floorFinish": "三层实木复合（橡木色）"
+    },
+    {
+      "name": "二层 · 私密工作层",
+      "elevation_m": 2.85,
+      "area_m2": 52,
+      "ceilingHeight_m": 2.3,
+      "floorFinish": "三层实木复合（橡木色）"
+    }
+  ],
+  "zones": [
+    {
+      "level": 1,
+      "name": "独立玄关",
+      "area_m2": 7.5,
+      "bounds": {
+        "x": [
+          0,
+          2.4
+        ],
+        "y": [
+          1.2,
+          3.6
+        ]
+      },
+      "finish": "橡木地板+奶白墙面",
+      "strategy": "完整独立不被楼梯遮挡，整墙鞋帽柜+换鞋凳+全身镜+中控屏"
+    },
+    {
+      "level": 1,
+      "name": "L型折返楼梯+储物核",
+      "area_m2": 8.8,
+      "bounds": {
+        "x": [
+          0,
+          1.2
+        ],
+        "y": [
+          0,
+          2.85
+        ]
+      },
+      "finish": "原木踏步+白色钢骨+暖白收纳柜",
+      "strategy": "严格贴西侧墙，下整合储物/设备/挂衣"
+    },
+    {
+      "level": 1,
+      "name": "L型开放式厨房+中岛",
+      "area_m2": 15.2,
+      "bounds": {
+        "x": [
+          2.4,
+          6.8
+        ],
+        "y": [
+          0,
+          2.2
+        ]
+      },
+      "finish": "奶白橱柜+中灰石英石",
+      "strategy": "北墙L型+中岛，面向餐区开放"
+    },
+    {
+      "level": 1,
+      "name": "干湿分离客卫+洗衣家政",
+      "area_m2": 7.2,
+      "bounds": {
+        "x": [
+          7.2,
+          11.0
+        ],
+        "y": [
+          0,
+          2.2
+        ]
+      },
+      "finish": "干区瓷砖+湿区防滑砖",
+      "strategy": "干区外手盆+内区马桶淋浴，洗烘塔+家政柜"
+    },
+    {
+      "level": 1,
+      "name": "圆桌餐区",
+      "area_m2": 10.8,
+      "bounds": {
+        "x": [
+          4.2,
+          6.8
+        ],
+        "y": [
+          2.4,
+          4.4
+        ]
+      },
+      "finish": "橡木地板+主灯吊灯",
+      "strategy": "1.3m黑胡桃圆桌，伊塔视频固定位"
+    },
+    {
+      "level": 1,
+      "name": "通高挑空江景客厅",
+      "area_m2": 25.5,
+      "bounds": {
+        "x": [
+          1.2,
+          10.0
+        ],
+        "y": [
+          4.4,
+          9.0
+        ]
+      },
+      "finish": "橡木地板+白色墙面+4.3m落地窗",
+      "strategy": "25.5㎡核心挑空，灰色模块沙发+钓鱼灯+西墙通顶书柜"
+    },
+    {
+      "level": 1,
+      "name": "江景阳台/阅读区",
+      "area_m2": 5.0,
+      "bounds": {
+        "x": [
+          7.8,
+          10.8
+        ],
+        "y": [
+          9.0,
+          10.0
+        ]
+      },
+      "finish": "防腐木+户外地砖",
+      "strategy": "单椅+绿植+小边几"
+    },
+    {
+      "level": 2,
+      "name": "楼梯上口+短走廊",
+      "area_m2": 6.2,
+      "bounds": {
+        "x": [
+          0,
+          1.2
+        ],
+        "y": [
+          2.8,
+          9.0
+        ]
+      },
+      "finish": "橡木地板+白墙",
+      "strategy": "连接楼梯口/工作室/桥廊/衣帽间"
+    },
+    {
+      "level": 2,
+      "name": "独立设计工作室",
+      "area_m2": 18.5,
+      "bounds": {
+        "x": [
+          1.2,
+          7.2
+        ],
+        "y": [
+          0,
+          5.2
+        ]
+      },
+      "finish": "橡木地板+白墙+亚麻卷帘",
+      "strategy": "2.6m长桌+iMac+软木板+样品柜，临北/东窗"
+    },
+    {
+      "level": 2,
+      "name": "主卫（带浴缸）",
+      "area_m2": 4.8,
+      "bounds": {
+        "x": [
+          9.2,
+          11.2
+        ],
+        "y": [
+          0,
+          2.2
+        ]
+      },
+      "finish": "暖灰瓷砖+铝扣板",
+      "strategy": "浴缸+智能马桶+岩板手盆"
+    },
+    {
+      "level": 2,
+      "name": "桥廊/开放阅读区",
+      "area_m2": 7.5,
+      "bounds": {
+        "x": [
+          1.2,
+          7.2
+        ],
+        "y": [
+          5.2,
+          6.8
+        ]
+      },
+      "finish": "橡木地板+玻璃护栏",
+      "strategy": "6m玻璃护栏俯瞰客厅挑空"
+    },
+    {
+      "level": 2,
+      "name": "共享衣帽间",
+      "area_m2": 5.0,
+      "bounds": {
+        "x": [
+          4.8,
+          7.2
+        ],
+        "y": [
+          5.2,
+          7.2
+        ]
+      },
+      "finish": "定制衣柜系统",
+      "strategy": "男女分区+全身镜+感应灯"
+    },
+    {
+      "level": 2,
+      "name": "江景主卧",
+      "area_m2": 10.0,
+      "bounds": {
+        "x": [
+          7.2,
+          11.2
+        ],
+        "y": [
+          6.8,
+          9.0
+        ]
+      },
+      "finish": "橡木地板+奶咖墙+全遮光窗帘",
+      "strategy": "1.8m床朝南江景窗，左用户位/右外套椅"
+    },
+    {
+      "level": 2,
+      "name": "客厅挑空（OPEN TO BELOW）",
+      "area_m2": 25.5,
+      "bounds": {
+        "x": [
+          1.2,
+          9.8
+        ],
+        "y": [
+          5.2,
+          9.0
+        ]
+      },
+      "finish": "-",
+      "strategy": "挑空区斜线填充+虚线边界+玻璃栏杆"
+    }
+  ],
+  "openings": [
+    {
+      "id": "D01",
+      "type": "hinged",
+      "name": "入户门",
+      "level": 1,
+      "position": {
+        "x": 0,
+        "y": 1.8,
+        "z": 0
+      },
+      "swing": "inward",
+      "width_m": 1.0,
+      "height_m": 2.2,
+      "material": "实木复合+智能锁",
+      "note": "西墙偏北内开"
+    },
+    {
+      "id": "D02",
+      "type": "open",
+      "name": "厨房开放口",
+      "level": 1,
+      "position": {
+        "x": 2.4,
+        "y": 2.2
+      },
+      "swing": "open",
+      "width_m": 1.8,
+      "height_m": 2.4,
+      "material": "无门(开放式)",
+      "note": "L型厨房面向餐区开放"
+    },
+    {
+      "id": "D03",
+      "type": "sliding",
+      "name": "客卫干湿区推拉门",
+      "level": 1,
+      "position": {
+        "x": 7.2,
+        "y": 0.6
+      },
+      "swing": "sliding",
+      "width_m": 0.8,
+      "height_m": 2.1,
+      "material": "超白长虹玻璃+黑框",
+      "note": "干湿区之间"
+    },
+    {
+      "id": "D04",
+      "type": "hinged",
+      "name": "客卫湿区平开门",
+      "level": 1,
+      "position": {
+        "x": 7.2,
+        "y": 1.6
+      },
+      "swing": "inward",
+      "width_m": 0.75,
+      "height_m": 2.1,
+      "material": "铝合金玻璃门",
+      "note": "向内开不撞马桶"
+    },
+    {
+      "id": "D05",
+      "type": "sliding",
+      "name": "阳台落地推拉门",
+      "level": 1,
+      "position": {
+        "x": 8.0,
+        "y": 9.0
+      },
+      "swing": "sliding",
+      "width_m": 2.4,
+      "height_m": 2.4,
+      "material": "铝合金三轨推拉",
+      "note": "客厅通阳台"
+    },
+    {
+      "id": "D06",
+      "type": "hinged",
+      "name": "工作室门",
+      "level": 2,
+      "position": {
+        "x": 1.2,
+        "y": 4.0
+      },
+      "swing": "inward",
+      "width_m": 0.9,
+      "height_m": 2.1,
+      "material": "实木复合",
+      "note": "走廊向工作室内开"
+    },
+    {
+      "id": "D07",
+      "type": "hinged",
+      "name": "主卫门",
+      "level": 2,
+      "position": {
+        "x": 9.2,
+        "y": 2.0
+      },
+      "swing": "inward",
+      "width_m": 0.75,
+      "height_m": 2.1,
+      "material": "铝合金玻璃门",
+      "note": "向主卫内开"
+    },
+    {
+      "id": "D08",
+      "type": "hinged",
+      "name": "主卧门",
+      "level": 2,
+      "position": {
+        "x": 7.2,
+        "y": 7.0
+      },
+      "swing": "inward",
+      "width_m": 0.9,
+      "height_m": 2.1,
+      "material": "实木复合",
+      "note": "衣帽间向主卧内开"
+    },
+    {
+      "id": "D09",
+      "type": "sliding",
+      "name": "衣帽间推拉门",
+      "level": 2,
+      "position": {
+        "x": 4.8,
+        "y": 6.0
+      },
+      "swing": "sliding",
+      "width_m": 1.4,
+      "height_m": 2.2,
+      "material": "黑框玻璃推拉",
+      "note": "桥廊到衣帽间"
+    },
+    {
+      "id": "W01",
+      "type": "window",
+      "name": "一层客厅+餐厅江景落地窗",
+      "level": 1,
+      "position": {
+        "x": 1.6,
+        "y": 10.0
+      },
+      "width_m": 8.6,
+      "height_m": 4.3,
+      "material": "断桥铝+双层中空Low-E",
+      "note": "Y最大方向连续大窗，通高至挑空"
+    },
+    {
+      "id": "W02",
+      "type": "window",
+      "name": "厨房北窗",
+      "level": 1,
+      "position": {
+        "x": 4.2,
+        "y": -0.6
+      },
+      "width_m": 3.0,
+      "height_m": 1.4,
+      "material": "断桥铝",
+      "note": "北墙厨房采光"
+    },
+    {
+      "id": "W03",
+      "type": "window",
+      "name": "客卫高窗",
+      "level": 1,
+      "position": {
+        "x": 9.0,
+        "y": -0.6
+      },
+      "width_m": 0.9,
+      "height_m": 0.9,
+      "material": "断桥铝磨砂",
+      "note": "北墙卫生间通风"
+    },
+    {
+      "id": "W04",
+      "type": "window",
+      "name": "二层主卧江景窗",
+      "level": 2,
+      "position": {
+        "x": 7.2,
+        "y": 9.0
+      },
+      "width_m": 3.8,
+      "height_m": 2.0,
+      "material": "断桥铝+双层中空Low-E",
+      "note": "主卧南向整面"
+    },
+    {
+      "id": "W05",
+      "type": "window",
+      "name": "二层工作室北/东窗",
+      "level": 2,
+      "position": {
+        "x": 4.2,
+        "y": -0.6
+      },
+      "width_m": 2.8,
+      "height_m": 1.5,
+      "material": "断桥铝",
+      "note": "工作室北+东转角采光"
+    }
+  ],
+  "objects": [
+    {
+      "id": "OBJ-001",
+      "name": "智能入户门锁",
+      "category": "entry",
+      "level": 1,
+      "x": 0.15,
+      "y": 1.8,
+      "z": 1.0,
+      "w": 0.08,
+      "d": 0.3,
+      "h": 0.3,
+      "material": "锌合金+钢化玻璃",
+      "color": "深空灰",
+      "brand": "小米/MI 智能门锁M30",
+      "power": "4节AA电池/Type-C应急",
+      "note": "入户门西侧，指纹/密码/NFC/钥匙"
+    },
+    {
+      "id": "OBJ-002",
+      "name": "用户专属拖鞋位",
+      "category": "entry",
+      "level": 1,
+      "x": 1.2,
+      "y": 2.4,
+      "z": 0.0,
+      "w": 0.4,
+      "d": 0.35,
+      "h": 0.08,
+      "material": "棉麻拖鞋+实木鞋盘",
+      "color": "米白+原木",
+      "brand": "无印良品同款",
+      "power": "无",
+      "note": "入户左手边固定位置"
+    },
+    {
+      "id": "OBJ-003",
+      "name": "门禁卡/钥匙盘",
+      "category": "entry",
+      "level": 1,
+      "x": 0.8,
+      "y": 2.0,
+      "z": 0.85,
+      "w": 0.25,
+      "d": 0.12,
+      "h": 0.04,
+      "material": "陶瓷托盘+黄铜挂勾",
+      "color": "奶白+金色",
+      "brand": "本地手作",
+      "power": "无",
+      "note": "入户门右侧墙面"
+    },
+    {
+      "id": "OBJ-004",
+      "name": "整墙鞋帽柜",
+      "category": "entry",
+      "level": 1,
+      "x": 0.1,
+      "y": 1.3,
+      "z": 0.0,
+      "w": 2.2,
+      "d": 0.4,
+      "h": 2.4,
+      "material": "E0级多层实木贴皮",
+      "color": "暖白+原木色开放格",
+      "brand": "索菲亚定制",
+      "power": "柜内感应灯条(12V)",
+      "note": "北侧玄关墙整墙"
+    },
+    {
+      "id": "OBJ-005",
+      "name": "换鞋凳",
+      "category": "entry",
+      "level": 1,
+      "x": 1.6,
+      "y": 3.0,
+      "z": 0.0,
+      "w": 0.7,
+      "d": 0.35,
+      "h": 0.45,
+      "material": "北美白蜡木+布艺坐垫",
+      "color": "原木色+米色棉麻",
+      "brand": "源氏木语",
+      "power": "无",
+      "note": "鞋帽柜前方"
+    },
+    {
+      "id": "OBJ-006",
+      "name": "全身镜",
+      "category": "entry",
+      "level": 1,
+      "x": 2.35,
+      "y": 1.8,
+      "z": 0.0,
+      "w": 0.04,
+      "d": 0.6,
+      "h": 1.8,
+      "material": "超白银镜+铝合金边框",
+      "color": "香槟金",
+      "brand": "宜家NISSEDAL",
+      "power": "镜前LED灯带(暖光3000K)",
+      "note": "玄关东侧墙"
+    },
+    {
+      "id": "OBJ-007",
+      "name": "智能家居中控屏",
+      "category": "entry",
+      "level": 1,
+      "x": 2.2,
+      "y": 1.4,
+      "z": 1.4,
+      "w": 0.2,
+      "d": 0.03,
+      "h": 0.28,
+      "material": "玻璃+铝合金",
+      "color": "黑色面板",
+      "brand": "Aqara 妙享屏S1",
+      "power": "86底盒供电(零火线)",
+      "note": "玄关东墙总控"
+    },
+    {
+      "id": "OBJ-008",
+      "name": "入户地垫",
+      "category": "entry",
+      "level": 1,
+      "x": 0.6,
+      "y": 2.2,
+      "z": 0.0,
+      "w": 0.9,
+      "d": 0.6,
+      "h": 0.02,
+      "material": "丙纶纤维+防滑底",
+      "color": "几何灰",
+      "brand": "大达DADA",
+      "power": "无",
+      "note": "门内刮沙地垫"
+    },
+    {
+      "id": "OBJ-009",
+      "name": "玄关感应吸顶灯",
+      "category": "entry",
+      "level": 1,
+      "x": 1.2,
+      "y": 2.4,
+      "z": 2.75,
+      "w": 0.4,
+      "d": 0.4,
+      "h": 0.08,
+      "material": "亚克力+铝材",
+      "color": "白色",
+      "brand": "Yeelight 灵犀",
+      "power": "24W 人体感应+光感",
+      "note": "夜间入户自动点亮"
+    },
+    {
+      "id": "OBJ-010",
+      "name": "L型折返楼梯主体",
+      "category": "stair",
+      "level": 1,
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "w": 1.2,
+      "d": 2.85,
+      "h": 2.85,
+      "material": "钢木楼梯（钢龙骨+橡木踏步）",
+      "color": "白色钢骨+原木踏步",
+      "brand": "本地定制",
+      "power": "踏步感应灯(12V低压)",
+      "note": "贴西侧墙，上下口严格对位(0.4,2.8)"
+    },
+    {
+      "id": "OBJ-011",
+      "name": "楼梯下储物高柜",
+      "category": "stair",
+      "level": 1,
+      "x": 0.1,
+      "y": 0.0,
+      "z": 0.0,
+      "w": 1.0,
+      "d": 1.4,
+      "h": 2.4,
+      "material": "E0多层板+按压反弹门",
+      "color": "暖白色",
+      "brand": "索菲亚定制",
+      "power": "柜内感应灯",
+      "note": "楼梯斜板下整合"
+    },
+    {
+      "id": "OBJ-012",
+      "name": "楼梯下设备柜",
+      "category": "stair",
+      "level": 1,
+      "x": 0.1,
+      "y": 1.4,
+      "z": 0.0,
+      "w": 1.0,
+      "d": 0.6,
+      "h": 1.8,
+      "material": "金属网门+E0板材",
+      "color": "灰色金属框+白色门板",
+      "brand": "定制",
+      "power": "预留路由器/交换机电源",
+      "note": "弱电/扫地机基站"
+    },
+    {
+      "id": "OBJ-013",
+      "name": "楼梯下挂衣区",
+      "category": "stair",
+      "level": 1,
+      "x": 0.1,
+      "y": 2.0,
+      "z": 1.2,
+      "w": 0.9,
+      "d": 0.15,
+      "h": 1.0,
+      "material": "黄铜挂杆+实木挂钩",
+      "color": "金色+原木",
+      "brand": "定制",
+      "power": "无",
+      "note": "用户外套常挂位"
+    },
+    {
+      "id": "OBJ-014",
+      "name": "用户常穿外套",
+      "category": "stair",
+      "level": 1,
+      "x": 0.4,
+      "y": 2.2,
+      "z": 1.5,
+      "w": 0.3,
+      "d": 0.15,
+      "h": 0.85,
+      "material": "羊毛混纺",
+      "color": "深灰/焦糖色",
+      "brand": "COS/UNIQLO",
+      "power": "无",
+      "note": "挂衣区最常用位置"
+    },
+    {
+      "id": "OBJ-015",
+      "name": "楼梯扶手",
+      "category": "stair",
+      "level": 1,
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.9,
+      "w": 1.2,
+      "d": 2.85,
+      "h": 0.05,
+      "material": "黑碳钢拉丝+实木扶手面",
+      "color": "黑色钢+胡桃木扶手",
+      "brand": "定制",
+      "power": "无",
+      "note": "靠墙侧设扶手"
+    },
+    {
+      "id": "OBJ-016",
+      "name": "楼梯踏步感应灯",
+      "category": "stair",
+      "level": 1,
+      "x": 0.4,
+      "y": 1.4,
+      "z": 0.15,
+      "w": 0.05,
+      "d": 2.8,
+      "h": 0.02,
+      "material": "嵌入式LED灯条",
+      "color": "暖光3000K",
+      "brand": "欧普/OPPLE",
+      "power": "DC12V 人体感应",
+      "note": "每级踏步踢面嵌入式"
+    },
+    {
+      "id": "OBJ-017",
+      "name": "L型地柜（北+西墙）",
+      "category": "kitchen",
+      "level": 1,
+      "x": 2.4,
+      "y": 0.1,
+      "z": 0.0,
+      "w": 4.4,
+      "d": 0.65,
+      "h": 0.85,
+      "material": "E0多层板+石英石台面",
+      "color": "奶白柜门+中灰石英石",
+      "brand": "欧派定制",
+      "power": "台下预留洗碗机/垃圾处理器",
+      "note": "北墙长4.0m+西墙短边"
+    },
+    {
+      "id": "OBJ-018",
+      "name": "L型吊柜",
+      "category": "kitchen",
+      "level": 1,
+      "x": 2.4,
+      "y": 0.1,
+      "z": 1.5,
+      "w": 4.0,
+      "d": 0.35,
+      "h": 0.85,
+      "material": "E0多层板",
+      "color": "奶白色",
+      "brand": "欧派定制",
+      "power": "柜下感应灯条",
+      "note": "北墙吊柜"
+    },
+    {
+      "id": "OBJ-019",
+      "name": "厨房中岛",
+      "category": "kitchen",
+      "level": 1,
+      "x": 3.2,
+      "y": 1.2,
+      "z": 0.0,
+      "w": 1.8,
+      "d": 0.8,
+      "h": 0.9,
+      "material": "北美白蜡木台面+柜体",
+      "color": "原木色+奶白柜体",
+      "brand": "定制",
+      "power": "岛台预留插座x2",
+      "note": "含水槽/早餐台，吧台凳3把"
+    },
+    {
+      "id": "OBJ-020",
+      "name": "吧台凳x3",
+      "category": "kitchen",
+      "level": 1,
+      "x": 3.5,
+      "y": 2.1,
+      "z": 0.0,
+      "w": 0.38,
+      "d": 0.38,
+      "h": 0.75,
+      "material": "铁艺+实木座面",
+      "color": "黑色+原木",
+      "brand": "Hay AAS32同款",
+      "power": "无",
+      "note": "中岛简餐位"
+    },
+    {
+      "id": "OBJ-021",
+      "name": "双开门冰箱",
+      "category": "kitchen",
+      "level": 1,
+      "x": 5.8,
+      "y": 0.2,
+      "z": 0.0,
+      "w": 0.9,
+      "d": 0.7,
+      "h": 1.9,
+      "material": "钢化玻璃面板",
+      "color": "云母灰",
+      "brand": "卡萨帝/Casarte 635",
+      "power": "220V/10A独立回路",
+      "note": "零度保鲜放用户爱喝的饮料"
+    },
+    {
+      "id": "OBJ-022",
+      "name": "嵌入式双灶燃气灶",
+      "category": "kitchen",
+      "level": 1,
+      "x": 3.4,
+      "y": 0.15,
+      "z": 0.85,
+      "w": 0.75,
+      "d": 0.45,
+      "h": 0.05,
+      "material": "钢化玻璃+铜炉头",
+      "color": "黑色",
+      "brand": "方太/FOTILE",
+      "power": "燃气(天然气)",
+      "note": "北墙靠中"
+    },
+    {
+      "id": "OBJ-023",
+      "name": "侧吸式抽油烟机",
+      "category": "kitchen",
+      "level": 1,
+      "x": 3.4,
+      "y": 0.1,
+      "z": 1.0,
+      "w": 0.9,
+      "d": 0.4,
+      "h": 0.8,
+      "material": "钢化玻璃+不锈钢",
+      "color": "黑色",
+      "brand": "方太/FOTILE JCD10TA",
+      "power": "220V/10A",
+      "note": "灶具正上方"
+    },
+    {
+      "id": "OBJ-024",
+      "name": "大单槽水槽+抽拉龙头",
+      "category": "kitchen",
+      "level": 1,
+      "x": 2.6,
+      "y": 0.15,
+      "z": 0.85,
+      "w": 0.75,
+      "d": 0.45,
+      "h": 0.22,
+      "material": "304不锈钢纳米涂层",
+      "color": "枪灰色",
+      "brand": "欧琳/OULIN",
+      "power": "预留净水器/垃圾处理器",
+      "note": "北墙靠西"
+    },
+    {
+      "id": "OBJ-025",
+      "name": "岛台吊灯x2",
+      "category": "kitchen",
+      "level": 1,
+      "x": 3.6,
+      "y": 1.6,
+      "z": 1.4,
+      "w": 0.2,
+      "d": 0.2,
+      "h": 1.2,
+      "material": "黄铜+奶白玻璃",
+      "color": "金色+磨砂白",
+      "brand": "&Tradition AJ同款",
+      "power": "E27x2 暖光",
+      "note": "中岛上方悬挂"
+    },
+    {
+      "id": "OBJ-026",
+      "name": "嵌入式洗碗机",
+      "category": "kitchen",
+      "level": 1,
+      "x": 4.4,
+      "y": 0.15,
+      "z": 0.0,
+      "w": 0.6,
+      "d": 0.6,
+      "h": 0.82,
+      "material": "不锈钢内胆",
+      "color": "黑色面板",
+      "brand": "西门子/SIEMENS SJ636",
+      "power": "220V/10A+冷水+排水",
+      "note": "北墙地柜嵌入"
+    },
+    {
+      "id": "OBJ-027",
+      "name": "蒸烤一体机",
+      "category": "kitchen",
+      "level": 1,
+      "x": 5.2,
+      "y": 0.15,
+      "z": 0.0,
+      "w": 0.6,
+      "d": 0.6,
+      "h": 0.45,
+      "material": "搪瓷内胆+钢化玻璃",
+      "color": "黑色",
+      "brand": "凯度/CASDON",
+      "power": "220V/16A",
+      "note": "冰箱旁"
+    },
+    {
+      "id": "OBJ-028",
+      "name": "岛台水槽+直饮龙头",
+      "category": "kitchen",
+      "level": 1,
+      "x": 3.6,
+      "y": 1.4,
+      "z": 0.9,
+      "w": 0.5,
+      "d": 0.4,
+      "h": 0.2,
+      "material": "304不锈钢",
+      "color": "枪灰色",
+      "brand": "欧琳/OULIN",
+      "power": "预留小厨宝电源",
+      "note": "中岛靠西"
+    },
+    {
+      "id": "OBJ-029",
+      "name": "客卫洗手台（干区）",
+      "category": "bath",
+      "level": 1,
+      "x": 7.6,
+      "y": 0.2,
+      "z": 0.0,
+      "w": 1.0,
+      "d": 0.55,
+      "h": 0.85,
+      "material": "岩板台面+浴室柜",
+      "color": "鱼肚白岩板+奶白柜",
+      "brand": "恒洁/HEGII",
+      "power": "镜柜电源+吹风机插座",
+      "note": "干湿分离外区"
+    },
+    {
+      "id": "OBJ-030",
+      "name": "用户蓝色牙刷杯",
+      "category": "bath",
+      "level": 1,
+      "x": 7.8,
+      "y": 0.3,
+      "z": 0.88,
+      "w": 0.1,
+      "d": 0.1,
+      "h": 0.12,
+      "material": "陶瓷",
+      "color": "雾霾蓝",
+      "brand": "Zara Home",
+      "power": "无",
+      "note": "洗手台左侧固定位"
+    },
+    {
+      "id": "OBJ-031",
+      "name": "浴室镜柜",
+      "category": "bath",
+      "level": 1,
+      "x": 7.6,
+      "y": 0.2,
+      "z": 1.0,
+      "w": 1.0,
+      "d": 0.12,
+      "h": 0.8,
+      "material": "铝合金+防雾镜",
+      "color": "黑色边框",
+      "brand": "摩恩/MOEN",
+      "power": "除雾膜+LED灯带",
+      "note": "干区镜柜"
+    },
+    {
+      "id": "OBJ-032",
+      "name": "坐便器",
+      "category": "bath",
+      "level": 1,
+      "x": 7.8,
+      "y": 1.2,
+      "z": 0.0,
+      "w": 0.4,
+      "d": 0.7,
+      "h": 0.45,
+      "material": "陶瓷",
+      "color": "白色",
+      "brand": "TOTO 连体虹吸",
+      "power": "预留智能盖电源",
+      "note": "湿区北侧"
+    },
+    {
+      "id": "OBJ-033",
+      "name": "淋浴隔断（玻璃）",
+      "category": "bath",
+      "level": 1,
+      "x": 8.5,
+      "y": 1.0,
+      "z": 0.0,
+      "w": 0.9,
+      "d": 1.0,
+      "h": 2.2,
+      "material": "钢化超白玻璃+枪灰五金",
+      "color": "透明+枪灰",
+      "brand": "朗斯/LENS",
+      "power": "无",
+      "note": "湿区东南角"
+    },
+    {
+      "id": "OBJ-034",
+      "name": "淋浴花洒套装",
+      "category": "bath",
+      "level": 1,
+      "x": 8.9,
+      "y": 1.1,
+      "z": 1.0,
+      "w": 0.4,
+      "d": 0.2,
+      "h": 1.2,
+      "material": "全铜",
+      "color": "枪灰色",
+      "brand": "汉斯格雅/hansgrohe",
+      "power": "无",
+      "note": "湿区东墙"
+    },
+    {
+      "id": "OBJ-035",
+      "name": "洗衣洗烘塔",
+      "category": "laundry",
+      "level": 1,
+      "x": 9.4,
+      "y": 0.2,
+      "z": 0.0,
+      "w": 0.6,
+      "d": 0.65,
+      "h": 1.85,
+      "material": "钢板",
+      "color": "玉石白",
+      "brand": "小吉/MINIJ 洗烘一体塔",
+      "power": "220V/16A+冷热水+排水",
+      "note": "洗烘叠放"
+    },
+    {
+      "id": "OBJ-036",
+      "name": "家政收纳柜",
+      "category": "laundry",
+      "level": 1,
+      "x": 10.2,
+      "y": 0.2,
+      "z": 0.0,
+      "w": 0.7,
+      "d": 0.45,
+      "h": 2.4,
+      "material": "E0板+金属网门",
+      "color": "奶白",
+      "brand": "定制",
+      "power": "吸尘器充电位预留",
+      "note": "清洁用品/囤货"
+    },
+    {
+      "id": "OBJ-037",
+      "name": "伊塔视频固定圆桌",
+      "category": "dining",
+      "level": 1,
+      "x": 5.4,
+      "y": 3.2,
+      "z": 0.0,
+      "w": 1.3,
+      "d": 1.3,
+      "h": 0.75,
+      "material": "北美黑胡桃实木",
+      "color": "深胡桃色",
+      "brand": "梵几/FNJI 山脊圆桌",
+      "power": "桌底预留火锅插座",
+      "note": "伊塔拍摄视频固定位置"
+    },
+    {
+      "id": "OBJ-038",
+      "name": "餐椅x4",
+      "category": "dining",
+      "level": 1,
+      "x": 5.4,
+      "y": 3.2,
+      "z": 0.0,
+      "w": 0.5,
+      "d": 0.5,
+      "h": 0.85,
+      "material": "黑胡桃+藤编座面",
+      "color": "胡桃色+藤本色",
+      "brand": "梵几/FNJI",
+      "power": "无",
+      "note": "圆桌四周"
+    },
+    {
+      "id": "OBJ-039",
+      "name": "餐吊灯",
+      "category": "dining",
+      "level": 1,
+      "x": 5.4,
+      "y": 3.2,
+      "z": 1.2,
+      "w": 0.6,
+      "d": 0.6,
+      "h": 1.5,
+      "material": "黄铜+布艺灯罩",
+      "color": "金色+米白",
+      "brand": "Gubi Semi Pendant",
+      "power": "E27x1 暖光3000K",
+      "note": "圆桌正上方"
+    },
+    {
+      "id": "OBJ-040",
+      "name": "灰色模块沙发",
+      "category": "living",
+      "level": 1,
+      "x": 3.8,
+      "y": 5.5,
+      "z": 0.0,
+      "w": 3.2,
+      "d": 1.05,
+      "h": 0.75,
+      "material": "高密度海绵+科技布",
+      "color": "高级灰",
+      "brand": "Muuto Connect Soft",
+      "power": "沙发旁USB充电位",
+      "note": "朝南江景窗模块化组合"
+    },
+    {
+      "id": "OBJ-041",
+      "name": "实木茶几",
+      "category": "living",
+      "level": 1,
+      "x": 4.8,
+      "y": 6.5,
+      "z": 0.0,
+      "w": 1.2,
+      "d": 0.7,
+      "h": 0.38,
+      "material": "北美黑胡桃整板",
+      "color": "深胡桃色",
+      "brand": "梵几/FNJI 平板茶几",
+      "power": "无",
+      "note": "沙发前"
+    },
+    {
+      "id": "OBJ-042",
+      "name": "钓鱼落地灯",
+      "category": "living",
+      "level": 1,
+      "x": 3.4,
+      "y": 6.8,
+      "z": 0.0,
+      "w": 0.8,
+      "d": 1.2,
+      "h": 1.9,
+      "material": "黄铜灯杆+亚麻灯罩",
+      "color": "金色+米白",
+      "brand": "Flos Arco同款",
+      "power": "E27x1 暖光脚踏开关",
+      "note": "沙发左侧阅读/氛围光"
+    },
+    {
+      "id": "OBJ-043",
+      "name": "通顶书柜墙",
+      "category": "living",
+      "level": 1,
+      "x": 0.0,
+      "y": 4.0,
+      "z": 0.0,
+      "w": 0.4,
+      "d": 3.6,
+      "h": 4.3,
+      "material": "黑胡桃实木+金属支架",
+      "color": "深胡桃色+黑色金属",
+      "brand": "定制(系统书架)",
+      "power": "层板灯带(12V)",
+      "note": "客厅西墙整面通高"
+    },
+    {
+      "id": "OBJ-044",
+      "name": "书柜藏书约500册",
+      "category": "living",
+      "level": 1,
+      "x": 0.05,
+      "y": 4.2,
+      "z": 0.0,
+      "w": 0.3,
+      "d": 3.2,
+      "h": 4.0,
+      "material": "纸本",
+      "color": "书脊多色",
+      "brand": "-",
+      "power": "无",
+      "note": "设计/艺术/文学/建筑类"
+    },
+    {
+      "id": "OBJ-045",
+      "name": "用户送的挂件",
+      "category": "living",
+      "level": 1,
+      "x": 0.2,
+      "y": 5.6,
+      "z": 1.5,
+      "w": 0.15,
+      "d": 0.05,
+      "h": 0.15,
+      "material": "手工编织/陶瓷",
+      "color": "红色/暖色",
+      "brand": "礼物/手作",
+      "power": "无",
+      "note": "书柜第二层正中，重要纪念物"
+    },
+    {
+      "id": "OBJ-046",
+      "name": "客厅地毯",
+      "category": "living",
+      "level": 1,
+      "x": 3.6,
+      "y": 5.2,
+      "z": 0.0,
+      "w": 3.6,
+      "d": 2.6,
+      "h": 0.02,
+      "material": "新西兰羊毛",
+      "color": "米灰几何",
+      "brand": "CC-TAPIS同款",
+      "power": "无",
+      "note": "沙发茶几区满铺"
+    },
+    {
+      "id": "OBJ-047",
+      "name": "客厅吸顶主灯",
+      "category": "living",
+      "level": 1,
+      "x": 5.4,
+      "y": 5.8,
+      "z": 4.9,
+      "w": 1.2,
+      "d": 1.2,
+      "h": 0.1,
+      "material": "亚克力+铝材",
+      "color": "白色",
+      "brand": "Louis Poulsen PH同款",
+      "power": "40W LED 无极调光",
+      "note": "挑空天花板高位"
+    },
+    {
+      "id": "OBJ-048",
+      "name": "阳台休闲单椅",
+      "category": "balcony",
+      "level": 1,
+      "x": 9.0,
+      "y": 8.5,
+      "z": 0.0,
+      "w": 0.75,
+      "d": 0.8,
+      "h": 0.85,
+      "material": "柚木+防水布艺",
+      "color": "原木色+橄榄绿",
+      "brand": "Skagerak同款",
+      "power": "无",
+      "note": "阳台阅读角朝南看江"
+    },
+    {
+      "id": "OBJ-049",
+      "name": "阳台绿植x2",
+      "category": "balcony",
+      "level": 1,
+      "x": 8.5,
+      "y": 8.8,
+      "z": 0.0,
+      "w": 0.5,
+      "d": 0.5,
+      "h": 1.2,
+      "material": "龟背竹+琴叶榕+水泥盆",
+      "color": "深绿+灰盆",
+      "brand": "本地花市",
+      "power": "无",
+      "note": "单椅旁净化空气"
+    },
+    {
+      "id": "OBJ-050",
+      "name": "阳台小边几",
+      "category": "balcony",
+      "level": 1,
+      "x": 9.5,
+      "y": 8.5,
+      "z": 0.0,
+      "w": 0.4,
+      "d": 0.4,
+      "h": 0.5,
+      "material": "柚木",
+      "color": "原木色",
+      "brand": "-",
+      "power": "无",
+      "note": "放水杯/书本"
+    },
+    {
+      "id": "OBJ-051",
+      "name": "二层楼梯上口护栏",
+      "category": "stair2",
+      "level": 2,
+      "x": 0.4,
+      "y": 2.8,
+      "z": 2.85,
+      "w": 1.2,
+      "d": 0.1,
+      "h": 1.1,
+      "material": "超白钢化玻璃+不锈钢扶手",
+      "color": "透明+银色",
+      "brand": "定制",
+      "power": "无",
+      "note": "二层上口防护"
+    },
+    {
+      "id": "OBJ-052",
+      "name": "二层短走廊地脚灯",
+      "category": "hallway2",
+      "level": 2,
+      "x": 0.0,
+      "y": 4.0,
+      "z": 3.0,
+      "w": 1.2,
+      "d": 2.4,
+      "h": 0.1,
+      "material": "嵌入式LED",
+      "color": "暖光",
+      "brand": "欧普",
+      "power": "DC12V 人体感应",
+      "note": "动线照明"
+    },
+    {
+      "id": "OBJ-053",
+      "name": "伊塔2.6m设计长桌",
+      "category": "studio",
+      "level": 2,
+      "x": 1.6,
+      "y": 1.5,
+      "z": 2.85,
+      "w": 2.6,
+      "d": 0.9,
+      "h": 0.75,
+      "material": "北美白蜡木实木+黑色方钢腿",
+      "color": "原木色+黑色钢",
+      "brand": "定制",
+      "power": "桌面嵌入3个USB-C+2个五孔",
+      "note": "工作室核心创作/剪辑/手作"
+    },
+    {
+      "id": "OBJ-054",
+      "name": "iMac 27英寸",
+      "category": "studio",
+      "level": 2,
+      "x": 2.6,
+      "y": 1.3,
+      "z": 3.5,
+      "w": 0.65,
+      "d": 0.2,
+      "h": 0.52,
+      "material": "铝合金一体机身",
+      "color": "银色",
+      "brand": "Apple iMac 27 5K",
+      "power": "220V/接地插座",
+      "note": "长桌正中偏右主力机"
+    },
+    {
+      "id": "OBJ-055",
+      "name": "人体工学工作椅",
+      "category": "studio",
+      "level": 2,
+      "x": 2.6,
+      "y": 2.3,
+      "z": 2.85,
+      "w": 0.65,
+      "d": 0.65,
+      "h": 1.1,
+      "material": "全网布+铝合金五星脚",
+      "color": "黑色",
+      "brand": "Herman Miller Aeron",
+      "power": "无",
+      "note": "伊塔工作座位"
+    },
+    {
+      "id": "OBJ-056",
+      "name": "北墙软木板",
+      "category": "studio",
+      "level": 2,
+      "x": 1.2,
+      "y": 0.1,
+      "z": 3.2,
+      "w": 1.8,
+      "d": 0.05,
+      "h": 1.2,
+      "material": "软木+原木框",
+      "color": "软木原色",
+      "brand": "宜家SVENSAS同款",
+      "power": "无",
+      "note": "钉灵感图/色卡/用户纸条"
+    },
+    {
+      "id": "OBJ-057",
+      "name": "软木板上用户纸条",
+      "category": "studio",
+      "level": 2,
+      "x": 1.8,
+      "y": 0.1,
+      "z": 3.4,
+      "w": 0.15,
+      "d": 0.01,
+      "h": 0.2,
+      "material": "便签纸",
+      "color": "黄色/粉色",
+      "brand": "3M Post-it",
+      "power": "无",
+      "note": "鼓励的话/待办/灵感"
+    },
+    {
+      "id": "OBJ-058",
+      "name": "西墙样品柜",
+      "category": "studio",
+      "level": 2,
+      "x": 1.2,
+      "y": 0.1,
+      "z": 2.85,
+      "w": 0.4,
+      "d": 2.6,
+      "h": 2.2,
+      "material": "黑胡桃+超白玻璃门",
+      "color": "胡桃色",
+      "brand": "定制",
+      "power": "柜内射灯",
+      "note": "陈列面料/纸张/样品/作品"
+    },
+    {
+      "id": "OBJ-059",
+      "name": "工作室北/东窗卷帘",
+      "category": "studio",
+      "level": 2,
+      "x": 4.2,
+      "y": 0.0,
+      "z": 3.2,
+      "w": 2.8,
+      "d": 0.05,
+      "h": 1.5,
+      "material": "亚麻半遮光卷帘",
+      "color": "米灰色",
+      "brand": "-",
+      "power": "无",
+      "note": "2.8m采光窗柔化北向光"
+    },
+    {
+      "id": "OBJ-060",
+      "name": "工作室台灯",
+      "category": "studio",
+      "level": 2,
+      "x": 1.8,
+      "y": 1.4,
+      "z": 3.6,
+      "w": 0.4,
+      "d": 0.4,
+      "h": 0.45,
+      "material": "黄铜+玻璃",
+      "color": "金色",
+      "brand": "Anglepoise Type 75",
+      "power": "E27 暖光",
+      "note": "长桌左侧精细工作补光"
+    },
+    {
+      "id": "OBJ-061",
+      "name": "主卫嵌入式浴缸",
+      "category": "mbath",
+      "level": 2,
+      "x": 9.4,
+      "y": 0.2,
+      "z": 2.85,
+      "w": 1.5,
+      "d": 0.75,
+      "h": 0.6,
+      "material": "亚克力+铸铁",
+      "color": "白色",
+      "brand": "科勒/KOHLER 歌莱",
+      "power": "热水/冷水",
+      "note": "与一层客卫上下对位"
+    },
+    {
+      "id": "OBJ-062",
+      "name": "主卫洗手台",
+      "category": "mbath",
+      "level": 2,
+      "x": 10.2,
+      "y": 0.2,
+      "z": 2.85,
+      "w": 0.8,
+      "d": 0.55,
+      "h": 0.85,
+      "material": "岩板+实木柜",
+      "color": "鱼肚白+原木",
+      "brand": "恒洁/HEGII",
+      "power": "吹风机/电动牙刷充电",
+      "note": "台面放手机"
+    },
+    {
+      "id": "OBJ-063",
+      "name": "主卫手机放置位",
+      "category": "mbath",
+      "level": 2,
+      "x": 10.5,
+      "y": 0.25,
+      "z": 3.75,
+      "w": 0.08,
+      "d": 0.15,
+      "h": 0.02,
+      "material": "硅胶防滑垫+手机",
+      "color": "黑色/深空灰",
+      "brand": "iPhone",
+      "power": "无",
+      "note": "台面右侧放手机"
+    },
+    {
+      "id": "OBJ-064",
+      "name": "主卫智能坐便器",
+      "category": "mbath",
+      "level": 2,
+      "x": 9.6,
+      "y": 1.0,
+      "z": 2.85,
+      "w": 0.4,
+      "d": 0.65,
+      "h": 0.45,
+      "material": "陶瓷智能马桶",
+      "color": "白色",
+      "brand": "TOTO 智能一体",
+      "power": "220V接地+进水",
+      "note": "主卫湿区"
+    },
+    {
+      "id": "OBJ-065",
+      "name": "桥廊玻璃护栏",
+      "category": "bridge",
+      "level": 2,
+      "x": 1.2,
+      "y": 5.2,
+      "z": 3.4,
+      "w": 6.0,
+      "d": 0.05,
+      "h": 1.1,
+      "material": "超白钢化玻璃+不锈钢扶手",
+      "color": "透明+拉丝钢",
+      "brand": "定制",
+      "power": "无",
+      "note": "俯瞰客厅挑空，不挡江景"
+    },
+    {
+      "id": "OBJ-066",
+      "name": "桥廊阅读壁灯",
+      "category": "bridge",
+      "level": 2,
+      "x": 4.0,
+      "y": 5.2,
+      "z": 3.8,
+      "w": 0.2,
+      "d": 0.15,
+      "h": 0.4,
+      "material": "黄铜壁灯",
+      "color": "金色+暖光",
+      "brand": "Flos IC Wall同款",
+      "power": "G9 暖光",
+      "note": "玻璃护栏上方墙面"
+    },
+    {
+      "id": "OBJ-067",
+      "name": "共享衣帽间系统",
+      "category": "closet",
+      "level": 2,
+      "x": 5.0,
+      "y": 5.4,
+      "z": 2.85,
+      "w": 2.0,
+      "d": 2.2,
+      "h": 2.2,
+      "material": "E0板+金属挂杆+玻璃门",
+      "color": "奶白+金色五金",
+      "brand": "索菲亚定制",
+      "power": "柜内感应灯带",
+      "note": "男女分区挂/叠/抽屉/首饰"
+    },
+    {
+      "id": "OBJ-068",
+      "name": "衣帽间穿衣镜",
+      "category": "closet",
+      "level": 2,
+      "x": 5.0,
+      "y": 6.0,
+      "z": 3.2,
+      "w": 0.03,
+      "d": 0.6,
+      "h": 1.7,
+      "material": "超白镜+金色边框",
+      "color": "金色",
+      "brand": "-",
+      "power": "无",
+      "note": "衣帽间内侧"
+    },
+    {
+      "id": "OBJ-069",
+      "name": "1.8m主卧双人床",
+      "category": "bedroom",
+      "level": 2,
+      "x": 8.0,
+      "y": 6.0,
+      "z": 2.85,
+      "w": 2.0,
+      "d": 1.8,
+      "h": 0.45,
+      "material": "真皮软包+实木排骨架",
+      "color": "奶茶色",
+      "brand": "造作ZAOZUO 软糖床",
+      "power": "床头两侧USB-C+五孔",
+      "note": "朝南3.8m江景窗，左侧(西)用户位"
+    },
+    {
+      "id": "OBJ-070",
+      "name": "用户侧床头柜",
+      "category": "bedroom",
+      "level": 2,
+      "x": 7.8,
+      "y": 5.8,
+      "z": 2.85,
+      "w": 0.5,
+      "d": 0.45,
+      "h": 0.5,
+      "material": "黑胡桃",
+      "color": "深胡桃色",
+      "brand": "梵几",
+      "power": "台灯+手机无线充电",
+      "note": "床左侧(西)=用户位"
+    },
+    {
+      "id": "OBJ-071",
+      "name": "用户侧床头灯",
+      "category": "bedroom",
+      "level": 2,
+      "x": 7.9,
+      "y": 5.8,
+      "z": 3.6,
+      "w": 0.25,
+      "d": 0.25,
+      "h": 0.4,
+      "material": "陶瓷+黄铜",
+      "color": "奶白+金",
+      "brand": "&Tradition Flowerpot",
+      "power": "E27 暖光",
+      "note": "用户睡前阅读灯"
+    },
+    {
+      "id": "OBJ-072",
+      "name": "右侧外套椅",
+      "category": "bedroom",
+      "level": 2,
+      "x": 10.2,
+      "y": 6.0,
+      "z": 2.85,
+      "w": 0.65,
+      "d": 0.65,
+      "h": 0.8,
+      "material": "绒布+黑胡桃腿",
+      "color": "焦糖色",
+      "brand": "Carl Hansen SB同款",
+      "power": "无",
+      "note": "床右侧(东)搭放第二天外套"
+    },
+    {
+      "id": "OBJ-073",
+      "name": "主卧3.8m江景窗帘",
+      "category": "bedroom",
+      "level": 2,
+      "x": 7.2,
+      "y": 9.0,
+      "z": 3.0,
+      "w": 3.8,
+      "d": 0.05,
+      "h": 2.0,
+      "material": "99%全遮光棉麻+白纱",
+      "color": "奶咖色+白纱",
+      "brand": "-",
+      "power": "电动窗帘电机(杜亚)",
+      "note": "整面南窗双层帘"
+    },
+    {
+      "id": "OBJ-074",
+      "name": "主卧床尾毯",
+      "category": "bedroom",
+      "level": 2,
+      "x": 8.0,
+      "y": 7.0,
+      "z": 2.9,
+      "w": 2.0,
+      "d": 0.6,
+      "h": 0.02,
+      "material": "羊毛针织",
+      "color": "米杏色",
+      "brand": "-",
+      "power": "无",
+      "note": "床尾搭毯"
+    },
+    {
+      "id": "OBJ-075",
+      "name": "主卧吸顶灯",
+      "category": "bedroom",
+      "level": 2,
+      "x": 9.0,
+      "y": 6.8,
+      "z": 4.8,
+      "w": 0.6,
+      "d": 0.6,
+      "h": 0.1,
+      "material": "亚克力+铝材",
+      "color": "白色",
+      "brand": "Muuto Ambit同款",
+      "power": "24W 暖光智能调光",
+      "note": "主卧天花"
+    }
+  ],
+  "lighting": {
+    "strategy": "分层照明（环境+任务+氛围），智能调光3000-4000K",
+    "primarySources": [
+      {
+        "name": "客厅主灯",
+        "type": "大尺寸吸顶/吊灯",
+        "z_m": 4.9,
+        "colorTemp": "3000K"
+      },
+      {
+        "name": "餐厅吊灯",
+        "type": "单头黄铜餐吊",
+        "colorTemp": "3000K"
+      },
+      {
+        "name": "中岛吊灯x2",
+        "type": "双头玻璃小吊",
+        "colorTemp": "3000K"
+      },
+      {
+        "name": "钓鱼落地灯",
+        "type": "弧形落地灯",
+        "colorTemp": "2700K"
+      },
+      {
+        "name": "书柜层板灯",
+        "type": "嵌入式LED灯带",
+        "colorTemp": "3500K"
+      },
+      {
+        "name": "踏步感应灯",
+        "type": "嵌入式踢面灯",
+        "colorTemp": "3000K",
+        "note": "人体感应"
+      },
+      {
+        "name": "玄关感应灯",
+        "type": "吸顶感应灯",
+        "colorTemp": "3000K"
+      },
+      {
+        "name": "工作室台灯",
+        "type": "工作台灯",
+        "colorTemp": "4000K"
+      },
+      {
+        "name": "床头灯x2",
+        "type": "壁灯/台灯",
+        "colorTemp": "2700K"
+      },
+      {
+        "name": "桥廊壁灯",
+        "type": "黄铜壁灯",
+        "colorTemp": "3000K"
+      }
+    ]
+  },
+  "power": {
+    "circuits": [
+      "普通插座",
+      "厨房",
+      "空调x2",
+      "照明",
+      "卫生间等电位",
+      "弱电"
+    ],
+    "keyOutlets": [
+      {
+        "location": "玄关",
+        "note": "中控屏+烘鞋器"
+      },
+      {
+        "location": "厨房中岛",
+        "note": "台面孔x2"
+      },
+      {
+        "location": "厨房台面",
+        "note": "插座x4+冰箱独立回路"
+      },
+      {
+        "location": "客厅沙发",
+        "note": "USB-C+五孔x2"
+      },
+      {
+        "location": "餐厅",
+        "note": "地插x1"
+      },
+      {
+        "location": "阳台",
+        "note": "插座x1"
+      },
+      {
+        "location": "2.6m长桌",
+        "note": "嵌入式USB-Cx3+五孔x2"
+      },
+      {
+        "location": "主卫",
+        "note": "智能马桶+吹风机+手机充电"
+      },
+      {
+        "location": "床头两侧",
+        "note": "USB-C+无线充电"
+      },
+      {
+        "location": "楼梯下设备柜",
+        "note": "路由器+扫地机基站"
+      }
+    ]
+  },
+  "views": {
+    "primary": "南向江景",
+    "secondary": "北向城市/绿化",
+    "keyVistas": [
+      {
+        "from": "入户玄关",
+        "to": "客厅落地窗",
+        "description": "进门直视通高落地窗江景"
+      },
+      {
+        "from": "二层桥廊",
+        "to": "客厅挑空",
+        "description": "玻璃护栏俯瞰客厅+江景"
+      },
+      {
+        "from": "主卧卧床",
+        "to": "南窗江景",
+        "description": "躺床正面江景"
+      },
+      {
+        "from": "2.6m工作桌",
+        "to": "北窗柔光",
+        "description": "工作面对北窗柔光不反光"
+      }
+    ]
+  },
+  "designRationale": [
+    "楼梯贴西侧墙L型折返：释放中央空间，上下口对位，不挡玄关",
+    "玄关独立完整(7.5㎡)：入户有完整过渡",
+    "服务带集中北侧：厨房+客卫+洗衣背靠北墙，管井集中",
+    "江景面最大化：南侧8.6m通高落地窗+主卧3.8m窗",
+    "挑空精准对位客厅25.5㎡",
+    "动静分层：一层公共、二层私密",
+    "伊塔个人锚点全部精准落位"
+  ]
+}

@@ -16,6 +16,7 @@ feature_flags:
   conversation_model_v1: true
   identity_contract_v1: false
   image_assets_v1: true
+  image_edit_v1: false
   migration_framework_v1: true
   mobile_gateway_v1: false
   persona_hub_source_v1: false

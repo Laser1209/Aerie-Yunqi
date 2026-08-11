@@ -765,7 +765,7 @@ async def test_image_prompt_for_world_context_exception_returns_base(tmp_path):
 
     companion = Companion.__new__(Companion)
     companion._compose_base_image_prompt = (
-        lambda key, cand: "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
+        lambda key, cand, spec=None: "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
     )
 
     def _boom_context(candidate):
@@ -790,7 +790,7 @@ async def test_image_prompt_for_world_context_empty_returns_base(tmp_path):
 
     companion = Companion.__new__(Companion)
     companion._compose_base_image_prompt = (
-        lambda key, cand: "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
+        lambda key, cand, spec=None: "一张写实生活照，人物是一位28岁的中国女性独立设计师（伊塔/Ita）。"
     )
     companion._image_world_context = lambda cand: {}
     companion._light_relay_refine_prompt = None
@@ -899,4 +899,180 @@ async def test_consume_replay_survives_process_event_exception(tmp_path):
     # 第一条抛异常被跳过并记 warning，第二条正常处理 → 批不中断。
     assert len(results) == 1
     assert results[0]["sequence"] == 2
+
+
+# ── 方向3：人物类走图生图（image_edit_v1 flag 门控 + 优雅降级） ──────────
+class EditFlagStub:
+    def __init__(self, edit_enabled: bool = True) -> None:
+        self.edit_enabled = edit_enabled
+
+    def is_enabled(self, name: str) -> bool:
+        if name == "world_image_candidates_v1":
+            return True
+        if name == "image_edit_v1":
+            return self.edit_enabled
+        return False
+
+
+class EditWorkflowStub:
+    """同时具备 generate_image 与 generate_image_edit 的工作流桩。"""
+
+    def __init__(self, edit_status: str = "completed") -> None:
+        self.edit_status = edit_status
+        self.generate_calls: list[dict] = []
+        self.edit_calls: list[dict] = []
+
+    def generate_image(self, **kwargs) -> dict:
+        self.generate_calls.append(kwargs)
+        return {
+            "status": "completed",
+            "request_id": "txt2img",
+            "side_effects": {
+                "provider_called": True,
+                "asset_created": True,
+                "delivery_created": True,
+            },
+            "delivery_plan": {"delivery_plan_id": "txt-delivery", "status": "planned"},
+        }
+
+    def generate_image_edit(self, **kwargs) -> dict:
+        self.edit_calls.append(kwargs)
+        if self.edit_status == "completed":
+            return {
+                "status": "completed",
+                "request_id": "img2img",
+                "side_effects": {
+                    "provider_called": True,
+                    "asset_created": True,
+                    "delivery_created": True,
+                },
+                "delivery_plan": {"delivery_plan_id": "edit-delivery", "status": "planned"},
+            }
+        return {
+            "status": "failed",
+            "request_id": "img2img",
+            "error_code": self.edit_status,
+            "side_effects": {
+                "provider_called": False,
+                "asset_created": False,
+                "delivery_created": False,
+            },
+            "delivery_plan": None,
+        }
+
+
+def _role_edit_consumer(tmp_path, workflow, flags):
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    return WorldImageCandidateConsumer(
+        feature_flags=flags,
+        image_workflow=workflow,
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "edit.json"),
+        clock=_clock,
+    )
+
+
+@pytest.mark.asyncio
+async def test_edit_flag_off_uses_txt2img_for_role(tmp_path):
+    """image_edit_v1 关闭时，角色类也走文生图（generate_image），不调用 edit。"""
+    workflow = EditWorkflowStub("completed")
+    consumer = _role_edit_consumer(tmp_path, workflow, FlagStub(True))
+    result = await consumer.process_event(
+        _candidate_event(prompt_key="role_selfie", reason_code="user_requested")
+    )
+    assert result["status"] == "completed"
+    assert workflow.generate_calls
+    assert workflow.edit_calls == []
+
+
+@pytest.mark.asyncio
+async def test_edit_flag_on_role_uses_img2img_with_reference(tmp_path):
+    """image_edit_v1 开启 + 角色类 → 走 generate_image_edit，并带 three_view:front 参考资产。"""
+    workflow = EditWorkflowStub("completed")
+    consumer = _role_edit_consumer(tmp_path, workflow, EditFlagStub(True))
+    result = await consumer.process_event(
+        _candidate_event(prompt_key="role_selfie", reason_code="user_requested")
+    )
+    assert result["status"] == "completed"
+    assert workflow.edit_calls
+    assert workflow.edit_calls[0]["reference_assets"] == ["three_view:front"]
+    assert workflow.generate_calls == []
+
+
+@pytest.mark.asyncio
+async def test_edit_failure_falls_back_to_txt2img(tmp_path):
+    """edit 未产出 completed（缺参考资产/不支持）→ 优雅降级回文生图，用户要图不落空。"""
+    workflow = EditWorkflowStub("missing_reference_asset")
+    consumer = _role_edit_consumer(tmp_path, workflow, EditFlagStub(True))
+    result = await consumer.process_event(
+        _candidate_event(prompt_key="role_selfie", reason_code="user_requested")
+    )
+    assert result["status"] == "completed"
+    assert workflow.edit_calls
+    assert workflow.generate_calls  # 已降级
+    assert workflow.edit_calls[0]["reference_assets"] == ["three_view:front"]
+
+
+# ── 方向4：时间光线 + 房间物件恒注入（room 键） ─────────────────
+def _fallback_injector():
+    from core.companion import Companion
+
+    return Companion.__new__(Companion)._inject_world_context_fallback
+
+
+def test_room_inject_in_role_selfie_with_objects():
+    """role_selfie：光线恒注入 + 房间物件翻译后注入。"""
+    out = _fallback_injector()(
+        "base。",
+        {
+            "prompt_key": "role_selfie",
+            "time_of_day_light": "深夜，室内一盏暖黄灯",
+            "nearby_objects": ["gray_sofa", "bookshelf", "pendant"],
+        },
+        {"prompt_key": "role_selfie"},
+    )
+    assert "深夜，室内一盏暖黄灯" in out
+    assert "灰模块沙发" in out
+    assert "满墙书柜" in out
+    assert "你送的挂件" in out
+    assert "房间里有" in out
+
+
+def test_room_inject_skips_when_no_objects():
+    """role_selfie 无房间物件 → 只注入光线，不出现"房间里有"，且不返空。"""
+    out = _fallback_injector()(
+        "base。",
+        {"prompt_key": "role_selfie", "time_of_day_light": "深夜暖灯", "nearby_objects": []},
+        {"prompt_key": "role_selfie"},
+    )
+    assert "深夜暖灯" in out
+    assert "房间里有" not in out
+
+
+def test_room_not_injected_for_environment_object():
+    """environment_object 兜底规则不含 room → 即使有物件也不重复注入（物件即主体）。"""
+    out = _fallback_injector()(
+        "base。",
+        {
+            "prompt_key": "environment_object",
+            "time_of_day_light": "白天，窗外阴天",
+            "weather_desc": "重庆多云",
+            "nearby_objects": ["gray_sofa", "bookshelf"],
+        },
+        {"prompt_key": "environment_object"},
+    )
+    assert "重庆多云" in out
+    assert "房间里有" not in out
+
+
+def test_room_fallback_empty_returns_base():
+    """全部缺省 → 原样返回 base，绝不返空串。"""
+    out = _fallback_injector()("base。", {"prompt_key": "role_selfie"}, {"prompt_key": "role_selfie"})
+    assert out == "base。"
 

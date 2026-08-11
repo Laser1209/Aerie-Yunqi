@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" style="background:#F8FBFF;">
+<defs>
+  <linearGradient id="wallW" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FAFAFA"/><stop offset="100%" stop-color="#EFEFEF"/></linearGradient>
+  <linearGradient id="floorW" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#D4B896"/><stop offset="100%" stop-color="#B8986A"/></linearGradient>
+  <linearGradient id="cabinet" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8B7355"/><stop offset="100%" stop-color="#6B5340"/></linearGradient>
+  <filter id="shW"><feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="2" dy="3" result="b"/><feComponentTransfer><feFuncA type="linear" slope="0.25"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+
+<!-- Background walls -->
+<rect x="0" y="0" width="1400" height="600" fill="url(#wallW)"/>
+<!-- Floor -->
+<polygon points="0,600 1400,600 1400,900 0,900" fill="url(#floorW)"/>
+<g stroke="#A08060" stroke-width="0.6" opacity="0.3">
+  <line x1="0" y1="660" x2="1400" y2="660"/><line x1="0" y1="720" x2="1400" y2="720"/><line x1="0" y1="780" x2="1400" y2="780"/><line x1="0" y1="840" x2="1400" y2="840"/>
+</g>
+
+<!-- Title -->
+<text x="700" y="50" font-size="26" fill="#1A1A1E" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">玄关 + 侧边楼梯特写</text>
+<text x="700" y="78" font-size="12" fill="#6D717D" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">独立玄关完整不被楼梯遮挡 · 楼梯下整合储物/设备/挂衣 · 整墙鞋帽柜</text>
+
+<!-- North wall shoe cabinet (whole wall) -->
+<rect x="200" y="120" width="600" height="50" fill="url(#cabinet)" filter="url(#shW)" rx="3"/>
+<!-- Cabinet doors/details -->
+<g stroke="#5A4A3A" stroke-width="1.5">
+  <line x1="300" y1="120" x2="300" y2="170"/><line x1="400" y1="120" x2="400" y2="170"/><line x1="500" y1="120" x2="500" y2="170"/><line x1="600" y1="120" x2="600" y2="170"/><line x1="700" y1="120" x2="700" y2="170"/>
+  <line x1="200" y1="145" x2="800" y2="145" stroke-dasharray="2,2" opacity="0.5"/>
+</g>
+<!-- Cabinet handles -->
+<g fill="#D4AF37">
+  <circle cx="298" cy="145" r="2"/><circle cx="398" cy="145" r="2"/><circle cx="498" cy="145" r="2"/><circle cx="598" cy="145" r="2"/><circle cx="698" cy="145" r="2"/>
+</g>
+<text x="500" y="200" font-size="11" fill="#5A4A3A" text-anchor="middle" font-family="'PingFang SC',sans-serif">整墙鞋帽柜（封闭储物+开放格）</text>
+
+<!-- Full-length mirror on east wall -->
+<rect x="900" y="150" width="15" height="300" fill="#D0E8FF" stroke="#4A90D9" stroke-width="3" rx="2"/>
+<rect x="905" y="160" width="5" height="280" fill="rgba(255,255,255,0.4)"/>
+<text x="960" y="300" font-size="11" fill="#4A90D9" font-family="'PingFang SC',sans-serif">全身镜</text>
+
+<!-- Shoe bench -->
+<rect x="820" y="450" width="80" height="50" fill="#D4C8BC" stroke="#8B7355" stroke-width="2" rx="6" filter="url(#shW)"/>
+<rect x="825" y="420" width="70" height="35" fill="#C8B8A8" stroke="#8B7355" stroke-width="1" rx="4"/>
+<text x="860" y="525" font-size="10" fill="#5A4A3A" text-anchor="middle" font-family="'PingFang SC',sans-serif">换鞋凳</text>
+
+<!-- Smart home control panel on wall near door -->
+<rect x="230" y="350" width="50" height="70" rx="6" fill="#1A1A1E" stroke="#333" stroke-width="2"/>
+<rect x="238" y="360" width="34" height="40" fill="#4A90D9" opacity="0.8" rx="2"/>
+<circle cx="255" cy="408" r="5" fill="#FFD166"/>
+<text x="255" y="440" font-size="9" fill="#333" text-anchor="middle" font-family="'PingFang SC',sans-serif">中控屏</text>
+
+<!-- Smart lock on entry door -->
+<rect x="180" y="300" width="40" height="200" fill="#8B5E3C" stroke="#5A3A20" stroke-width="3" rx="3"/>
+<circle cx="195" cy="340" r="8" fill="#2A2A2E" stroke="#FFD166" stroke-width="1"/>
+<text x="130" y="340" font-size="10" fill="#8B5E3C" text-anchor="end" font-family="'PingFang SC',sans-serif">智能锁</text>
+<!-- Door label -->
+<text x="200" y="280" font-size="10" fill="#8B5E3C" font-family="'PingFang SC',sans-serif">入户门（内开）</text>
+
+<!-- User slippers position -->
+<g filter="url(#shW)">
+  <ellipse cx="350" cy="700" rx="25" ry="12" fill="#FFF5F4" stroke="#FF8A80" stroke-width="1.5"/>
+  <ellipse cx="400" cy="700" rx="25" ry="12" fill="#FFF5F4" stroke="#FF8A80" stroke-width="1.5"/>
+</g>
+<text x="375" y="730" font-size="9" fill="#FF8A80" text-anchor="middle" font-family="'PingFang SC',sans-serif">用户拖鞋位</text>
+
+<!-- Access card tray -->
+<rect x="480" y="680" width="60" height="30" rx="4" fill="#FFF5F4" stroke="#FF8A80" stroke-width="1.5"/>
+<circle cx="495" cy="695" r="6" fill="#FFD166"/><circle cx="525" cy="695" r="6" fill="#4A90D9"/>
+<text x="510" y="725" font-size="9" fill="#FF8A80" text-anchor="middle" font-family="'PingFang SC',sans-serif">门禁卡盘</text>
+
+<!-- Staircase on the right side of entry (贴西墙) -->
+<g filter="url(#shW)">
+  <!-- Stair carriage/side -->
+  <polygon points="1050,200 1050,600 1200,600 1200,250" fill="#E8E5E0" stroke="#8B7355" stroke-width="2"/>
+  <!-- Treads going up (southbound first run) -->
+  <g stroke="#8B7355" stroke-width="1.5">
+    <line x1="1050" y1="600" x2="1200" y2="600"/>
+    <line x1="1050" y1="570" x2="1185" y2="570"/>
+    <line x1="1050" y1="540" x2="1170" y2="540"/>
+    <line x1="1050" y1="510" x2="1155" y2="510"/>
+    <line x1="1050" y1="480" x2="1140" y2="480"/>
+    <line x1="1050" y1="450" x2="1125" y2="450"/>
+    <line x1="1050" y1="420" x2="1110" y2="420"/>
+    <line x1="1050" y1="390" x2="1095" y2="390"/>
+  </g>
+  <!-- Railing/balustrade -->
+  <line x1="1200" y1="250" x2="1200" y2="600" stroke="#4A4A4A" stroke-width="4"/>
+  <line x1="1210" y1="280" x2="1210" y2="580" stroke="#888" stroke-width="2"/>
+  <!-- Newel post -->
+  <rect x="1195" y="245" width="12" height="12" fill="#4A4A4A"/>
+</g>
+<!-- UP arrow/direction -->
+<line x1="1100" y1="580" x2="1100" y2="400" stroke="#2A2A2E" stroke-width="3" marker-end="url(#arrUp)"/>
+<defs><marker id="arrUp" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,8 L4,0 L8,8Z" fill="#2A2A2E"/></marker></defs>
+<text x="1100" y="385" font-size="13" fill="#2A2A2E" text-anchor="middle" font-weight="700" font-family="'PingFang SC',sans-serif">UP</text>
+
+<!-- Storage under stair -->
+<rect x="1060" y="450" width="60" height="140" fill="none" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="4,2" rx="2"/>
+<text x="1090" y="525" font-size="9" fill="#6D717D" text-anchor="middle" font-family="'PingFang SC',sans-serif">储物/设备柜</text>
+<rect x="1060" y="350" width="50" height="90" fill="none" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="4,2" rx="2"/>
+<text x="1085" y="400" font-size="8" fill="#6D717D" text-anchor="middle" font-family="'PingFang SC',sans-serif">挂衣区</text>
+<!-- User coat hanging -->
+<path d="M1075,370 Q1075,360 1085,360 Q1095,360 1095,370 L1095,400 L1075,400 Z" fill="#FF8A80" opacity="0.5" stroke="#FF8A80"/>
+<text x="1130" y="385" font-size="8" fill="#FF8A80" font-family="'PingFang SC',sans-serif">用户外套</text>
+
+<!-- Entry mat -->
+<rect x="250" y="750" width="150" height="80" fill="#E0E0E0" stroke="#AAA" stroke-width="1" rx="4"/>
+<text x="325" y="795" font-size="9" fill="#888" text-anchor="middle" font-family="'PingFang SC',sans-serif">入户地垫</text>
+
+<!-- Ambient light/glow -->
+<circle cx="500" cy="200" r="80" fill="#FFF8E0" opacity="0.3"/>
+<text x="500" y="180" font-size="9" fill="#B8860B" text-anchor="middle" font-family="'PingFang SC',sans-serif">玄关感应灯</text>
+
+<!-- Annotations -->
+<g font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="10" fill="#555">
+  <line x1="860" y1="475" x2="750" y2="550" stroke="#999" stroke-width="1"/>
+  <text x="650" y="560" text-anchor="end">换鞋凳+穿鞋辅助</text>
+  <line x1="907" y1="300" x2="960" y2="350" stroke="#999" stroke-width="1"/>
+  <text x="970" y="350">全身镜（出门整理）</text>
+</g>
+
+</svg>

@@ -8,7 +8,14 @@ _compose_modular_prompt 把命中维度组合进基础提示词，且缺值兜�
 
 from __future__ import annotations
 
-from core.companion import _compose_modular_prompt, _extract_photo_spec
+from core.companion import (
+    _compose_modular_prompt,
+    _extract_llm_json,
+    _extract_photo_spec,
+    _normalize_spec_value,
+    _PHOTO_FOCUS_TABLE,
+    _PHOTO_POSE_TABLE,
+)
 
 
 def _spec(text: str) -> dict:
@@ -66,3 +73,82 @@ def test_compose_none_base_never_empty():
     out = _compose_modular_prompt("", _spec("看看腿"))
     assert isinstance(out, str)
     assert len(out) > 0
+
+
+# ── 方向2：构图协同覆盖 ─────────────────────────
+def test_focus_legs_auto_fills_pose():
+    # 用户只给 focus（未给姿态）→ 自动补默认姿态"坐"，避免落回 base 固定场景
+    out = _compose_modular_prompt("base", _spec("看看你的大腿"))
+    assert "画面重点聚焦在双腿" in out
+    assert "她坐着" in out
+
+
+def test_explicit_pose_wins_over_coverage():
+    # 用户显式给了"躺着"→ 尊重用户，不覆盖成"坐"
+    spec = _spec("在床上躺着拍腿")
+    assert spec["pose"] == "平躺"
+    out = _compose_modular_prompt("base", spec)
+    assert "她平躺着" in out
+    assert "她坐着" not in out
+
+
+def test_focus_back_auto_fills_angle():
+    out = _compose_modular_prompt("base", _spec("给我看背影"))
+    assert "拍摄机位：从后面" in out
+
+
+def test_coverage_does_not_mutate_input():
+    spec = _spec("看看你的大腿")
+    snapshot = dict(spec)
+    _compose_modular_prompt("base", spec)
+    assert spec == snapshot
+
+
+# ── 方向1：语义自补的辅助函数（LLM JSON 解析 + 标签归一化） ──────
+def test_normalize_spec_value_exact_label():
+    # LLM 返回完全一致的标签 → 直接命中
+    assert _normalize_spec_value("双腿", _PHOTO_FOCUS_TABLE) == "双腿"
+
+
+def test_normalize_spec_value_keyword_hit():
+    # LLM 返回近似表述（如"腿部特写"）→ 关键词回退命中"双腿"
+    assert _normalize_spec_value("腿部", _PHOTO_FOCUS_TABLE) == "双腿"
+
+
+def test_normalize_spec_value_unknown_returns_empty():
+    # LLM 返回未知标签（如"全身照"在 angle 表里找不到）→ 空串，防脏值
+    assert _normalize_spec_value("全身照", _PHOTO_POSE_TABLE) == ""
+
+
+def test_extract_llm_json_plain():
+    assert _extract_llm_json('{"focus":"双腿","pose":"坐"}') == {
+        "focus": "双腿",
+        "pose": "坐",
+    }
+
+
+def test_extract_llm_json_with_fence():
+    # 容忍 markdown 代码围栏
+    out = _extract_llm_json('```json\n{"focus":"双腿"}\n```')
+    assert out == {"focus": "双腿"}
+
+
+def test_extract_llm_json_with_surrounding_text():
+    # 容忍前后杂文
+    out = _extract_llm_json('好的，这是分析结果：\n{"focus":"腿","pose":"坐"} 完毕')
+    assert out == {"focus": "腿", "pose": "坐"}
+
+
+def test_extract_llm_json_invalid_returns_none():
+    assert _extract_llm_json("这不是 JSON") is None
+    assert _extract_llm_json("") is None
+
+
+def test_semantic_spec_compose_uses_llm_result():
+    # 语义自补返回的 spec（如"看看腿"推断出 focus+pose+angle）直接组合进提示词，
+    # 语义命中任一维度即视为有效，绝不被关键词表限制。
+    spec = {"focus": "双腿", "pose": "坐", "angle": "特写", "scene": "", "style": ""}
+    out = _compose_modular_prompt("base", spec)
+    assert "画面重点聚焦在双腿" in out
+    assert "她坐着" in out
+    assert "拍摄机位：特写" in out

@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Token usage tracker.
+"""Aerie · 云栖 v0.1.0-beta.1 — Token usage tracker.
 
 Records LLM token consumption per call, supports daily/weekly/monthly aggregation.
 Integrated with brain.py and pipeline.py for automatic recording.
@@ -36,7 +36,7 @@ class TokenTracker:
                     prompt_tokens INTEGER DEFAULT 0,
                     completion_tokens INTEGER DEFAULT 0,
                     total_tokens INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT (datetime('now'))
+                    created_at TEXT DEFAULT (datetime('now', 'localtime'))
                 )
             """)
             self._db.execute("""

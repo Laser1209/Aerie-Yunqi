@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from core.key_rotator import KeyRotator
 from core.provider_health import ProviderHealthManager
 from core.token_tracker import get_token_tracker
 
@@ -121,6 +122,8 @@ class LLMCaller:
     def __init__(self) -> None:
         self._temperature = float(os.getenv("LLM_TEMPERATURE", "0.85"))
         self._max_tokens = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+        # ws 多 Key 轮询池：同一域名下多个 Key 分摊并发。
+        self._ws_rotator = KeyRotator.from_env("AERIE_WS_KEYS", "AERIE_WS_API_KEY")
         self._providers = self._load_providers()
         self._health = ProviderHealthManager()
 
@@ -219,6 +222,19 @@ class LLMCaller:
                 "key": sf_key,
                 "model": sf_light_model,
                 "supports_tools": False,
+            })
+
+        # Aerie WS（阿里云百炼业务空间专属域名）：多 Key 轮询池，用于子 Agent /
+        # 轻量任务，分摊并发、防止单 Key 额度/并发占满。
+        ws_url = os.getenv("AERIE_WS_BASE_URL", "").strip()
+        if ws_url and self._ws_rotator.size:
+            providers.append({
+                "name": "aerie-ws",
+                "url": ws_url,
+                "key": self._ws_rotator.next() or "",
+                "keys": self._ws_rotator.keys,
+                "model": os.getenv("AERIE_WS_MODEL", "qwen3.7-flash").strip() or "qwen3.7-flash",
+                "supports_tools": True,
             })
 
         if not providers:
@@ -671,7 +687,48 @@ class LLMCaller:
         tools: list[dict] | None,
         temperature: float | None = None,
     ) -> LLMCallerResponse:
-        """Call a single provider."""
+        """Call a single provider.
+
+        Multi-key support: when ``provider`` carries a ``keys`` list, keys are
+        tried round-robin — pick the next key from the provider's ``key`` start,
+        then fall through to the remaining keys on failure.
+        """
+        keys: list[str] = provider.get("keys") or [provider.get("key", "")]
+        keys = [k for k in keys if k]
+        if not keys:
+            raise RuntimeError("provider has no api key")
+
+        # Rotate start key so concurrent calls spread across the pool.
+        if len(keys) > 1 and provider["name"] == "aerie-ws":
+            start_key = self._ws_rotator.next() or keys[0]
+        else:
+            start_key = provider.get("key") or keys[0]
+        try:
+            start_idx = keys.index(start_key)
+        except ValueError:
+            start_idx = 0
+        ordered = keys[start_idx:] + keys[:start_idx]
+
+        last_err: Exception | None = None
+        for key in ordered:
+            try:
+                return await self._call_provider_once(provider, key, messages, tools, temperature)
+            except Exception as e:  # try next key
+                last_err = e
+                logger.debug(
+                    "Provider %s key ...%s failed: %s", provider["name"], key[-6:], str(e)[:80]
+                )
+        raise RuntimeError(f"all keys failed: {last_err}")
+
+    async def _call_provider_once(
+        self,
+        provider: dict,
+        key: str,
+        messages: list[dict],
+        tools: list[dict] | None,
+        temperature: float | None,
+    ) -> LLMCallerResponse:
+        """Call a single provider with a single key."""
         body: dict[str, Any] = {
             "model": provider["model"],
             "messages": messages,
@@ -683,7 +740,7 @@ class LLMCaller:
             body["tool_choice"] = "auto"
 
         headers = {
-            "Authorization": f"Bearer {provider['key']}",
+            "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
         }
 

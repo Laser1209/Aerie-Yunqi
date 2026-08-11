@@ -2194,20 +2194,31 @@ class Companion:
                 # 持久化同主题去重：同一视觉主题最近已成功发布（含跨后端重启）→ 跳过。
                 # recent_intents 只活在进程内存里，重启即清零，防不住"重启→重复生成"；
                 # 这里读审计存储判断，窗口取配置的发图间隔与默认窗口的较大值。
-                topic_id = str(topics[0] or "").strip()
-                reason_code = f"world_visual:{topic_id}" if topic_id else ""
+                # 话题轮换：不卡死在 topics[0]——若第一个话题刚发过（去重命中），
+                # 就尝试后续话题（coffee_break / 物件话题等），全被去重才跳过本轮。
                 dedup_sec = max(min_gap_sec, _IMAGE_TOPIC_DEDUP_SEC)
                 dedup_check = getattr(consumer, "has_recent_completed", None)
-                if reason_code and callable(dedup_check):
-                    try:
-                        if dedup_check(reason_code, dedup_sec):
-                            logger.info(
-                                "[WorldImage] skip duplicate visual topic=%s published within %ss",
-                                topic_id, int(dedup_sec),
-                            )
-                            continue
-                    except Exception:
-                        logger.debug("proactive photo topic dedup check failed", exc_info=True)
+                topic_id = ""
+                for _t in topics:
+                    _tid = str(_t or "").strip()
+                    if not _tid:
+                        continue
+                    _rc = f"world_visual:{_tid}"
+                    if callable(dedup_check):
+                        try:
+                            if dedup_check(_rc, dedup_sec):
+                                logger.info(
+                                    "[WorldImage] skip duplicate visual topic=%s published within %ss",
+                                    _tid, int(dedup_sec),
+                                )
+                                continue
+                        except Exception:
+                            logger.debug("proactive photo topic dedup check failed", exc_info=True)
+                    topic_id = _tid
+                    break
+                if not topic_id:
+                    continue
+                reason_code = f"world_visual:{topic_id}" if topic_id else ""
 
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
                 channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
@@ -2231,7 +2242,7 @@ class Companion:
                 recent_intents = recent_intents[-4:]
                 logger.info(
                     "[WorldImage] proactive visual candidate published intent=%s topic=%s score=%s",
-                    intent, topics[0], chosen.score,
+                    intent, topic_id, chosen.score,
                 )
                 # 记录成一条图片工具调用（tool_call_log + 关联最近一条 trace 补写 tools），
                 # 让大脑中枢能看到"主动发图也调用了图片工具"。

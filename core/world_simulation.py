@@ -397,8 +397,12 @@ class WorldSimulation:
     # ── main tick ───────────────────────────────────────────────
     def tick(self, action: WorldAction | None = None) -> WorldSnapshot:
         now = self.clock()
+        # 无论时钟返回 naive 还是 aware（含 UTC），一律归一化到本地时区，
+        # 否则 phase/energy/iso_time 会用 UTC 小时（如 10:26Z 被误判成 morning）。
         if now.tzinfo is None:
             now = now.replace(tzinfo=LOCAL_TZ)
+        else:
+            now = now.astimezone(LOCAL_TZ)
         ts = int(now.timestamp())
 
         # 秒级幂等: 同一秒内再次 tick 直接返回缓存

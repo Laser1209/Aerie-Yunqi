@@ -466,6 +466,56 @@ async def test_completed_proactive_image_records_budget(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_local_send_photo_bypasses_vision_same_scene_dedup(tmp_path):
+    """scene=local_send（用户主动要求）必须豁免视觉场景判重。
+
+    复现线上 bug：用户连续要"自拍"，每张画面高度相似，被视觉判重（与 4h 内
+    最近一张已生成图判为 same scene）当成重复 dedup_skipped，导致主 Agent
+    已同意拍照但图迟迟不出。修复后：local_send 直接放行生图，不走视觉判重。
+    """
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    store = JsonWorldImageCandidateStore(tmp_path / "candidates.json")
+    workflow = WorkflowStub()
+    port = WorldPortStub()
+
+    # 预置一条"4 小时内已完成的同意图图"，使 _recent_completed_asset 有参考图，
+    # 否则视觉判重因无参考图而天然短路，测不出豁免效果。
+    store.put({
+        "idempotency_key": "world-cand-prior",
+        "candidate_id": "cand-prior",
+        "scene": "idle_care",
+        "status": "completed",
+        "updated_at": 1753026000.0,  # 2026-07-20 同小时，在 4h 窗口内
+        "workflow": {"asset_url": "/uploads/prior.png"},
+    })
+
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=workflow,
+        world_port=port,
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=store,
+        clock=_clock,
+    )
+
+    # local_send（用户主动命令）
+    result = await consumer.process_event(
+        _candidate_event(scene="local_send", prompt_key="role_selfie",
+                         idempotency_key="world-cand-user", candidate_id="cand-user")
+    )
+
+    # 必须真正调用了生图 workflow，而不是被视觉判重 dedup_skipped。
+    assert result["status"] == "completed"
+    assert workflow.calls, "local_send 应绕过视觉判重并调用 workflow"
+    assert workflow.calls[0]["prompt"] == "world_prompt:role_selfie"
+
+
+@pytest.mark.asyncio
 async def test_user_requested_photo_bypasses_proactive_budget(tmp_path):
     """scene=local_send（用户主动要求）不占用主动发图每日额度，也不被额度拒绝。"""
     from core.world_image_candidates import (

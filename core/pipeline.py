@@ -1091,6 +1091,10 @@ class Pipeline:
             "source": "manual",
             "score": 1.0,
             "size": _image_size_for_prompt_key(intent),
+            # 原始用户指令（如"看看腿""在床上躺着拍一张"）传给生图提示词组合器，
+            # 让模块化解析器能从真实意图中提取主体/姿态/机位/场景，而不是只用死板的
+            # intent 关键字。缺省给空串，避免下游因 None 中断（缺值即停防护）。
+            "user_raw": str(msg.content or "").strip(),
         }
         try:
             result = await asyncio.wait_for(publisher(candidate), timeout=120)
@@ -2443,7 +2447,13 @@ class Pipeline:
         import re
         return re.sub(r" thinking.*? response", "", text, flags=re.DOTALL).strip()
 
-    _HIST_LABEL_RE = re.compile(r"\[\d{2}-\d{2} ?\d{2}:\d{2}\]\s*")
+    # 模型可能回显对话历史里的时间戳标记，形态多样：
+    #   [MM-DD HH:MM] / [MM-DD HH:MM:SS] / [YYYY-MM-DD HH:MM] / [YYYY-MM-DD HH:MM:SS]
+    # 年份可有可无，秒可有可无，日期与时间之间允许 0~1 个空格，尾部允许多余空格。
+    # 用 re.sub 全文替换（不只是行首），确保正文中间出现也被剥除。
+    _HIST_LABEL_RE = re.compile(
+        r"\[\d{2,4}-\d{2}(?:-\d{2})? ?\d{2}:\d{2}(?::\d{2})?\]\s*"
+    )
 
     @classmethod
     def _strip_leading_timestamp(cls, text: str) -> str:

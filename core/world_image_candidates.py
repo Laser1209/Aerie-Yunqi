@@ -725,16 +725,21 @@ class WorldImageCandidateConsumer:
             }
         # 视觉场景判重（跨路径同画面去重）：主动发图与聊天要图都汇聚于此，
         # 在花钱生成前，用最近一张已生成图 + 新提示词让视觉模型判是否同场景。
-        if await self._check_same_scene_skip(prompt):
-            logger.info(
-                "[WorldImage] skip same-scene image reason=%s prompt_key=%s",
-                candidate.get("reason_code"), candidate.get("prompt_key"),
-            )
-            return {
-                "status": "dedup_skipped",
-                "side_effects": dict(_NO_SIDE_EFFECTS),
-                "delivery_plan": None,
-            }
+        # 用户主动命令（scene=local_send）是直接请求，必须豁免视觉判重——
+        # 否则连续要"自拍"会被误判为"与上一张同场景"而 dedup_skipped，
+        # 导致主 Agent 已同意拍照但图迟迟不出。这与 can_push/budget 的
+        # manual_trigger 豁免保持一致。
+        if not self._is_manual_trigger(candidate):
+            if await self._check_same_scene_skip(prompt):
+                logger.info(
+                    "[WorldImage] skip same-scene image reason=%s prompt_key=%s",
+                    candidate.get("reason_code"), candidate.get("prompt_key"),
+                )
+                return {
+                    "status": "dedup_skipped",
+                    "side_effects": dict(_NO_SIDE_EFFECTS),
+                    "delivery_plan": None,
+                }
         try:
             result = await asyncio.to_thread(
                 self._run_workflow_blocking, prompt, candidate

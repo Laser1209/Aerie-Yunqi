@@ -133,6 +133,115 @@ def _image_orientation_phrase(image_size: str) -> str:
     return "竖构图（手机竖拍 9:16 比例）"
 
 
+# ── 模块化生图规格：从用户原始指令解析出可组合的画面模块 ─────────
+# 用户指令（如"看看腿""在床上躺着拍一张""仰视低角度拍脚"）包含多个画面维度，
+# 但旧实现只靠 intent 关键字，把"腿/床上/躺/仰视"全部丢失，提示词永远是以
+# 完整人物+固定场景为基准。这里用确定性关键词分维度提取，命中即写进画面：
+#   focus（主体特写） / pose（姿态） / angle（机位） / scene（环境）
+# 未命中的维度返回空串，由组合器兜底为默认，绝不让缺值中断生图（缺值即停防护）。
+_PHOTO_FOCUS_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("双腿", ("看看腿", "你的腿", "腿", "腿部", "美腿", "长腿", "腿照")),
+    ("双脚", ("看看脚", "你的脚", "脚", "美脚", "脚丫")),
+    ("手", ("看看手", "你的手", "手部", "玉手")),
+    ("腰", ("看看腰", "你的腰", "腰", "细腰")),
+    ("肩颈锁骨", ("锁骨", "肩", "脖子")),
+    ("背影", ("背影", "从后面", "背对着")),
+    ("头发", ("头发", "发丝", "长发")),
+    ("脸庞", ("看脸", "你的脸", "脸", "正脸")),
+    ("眼睛", ("眼睛", "双眼", "眼神")),
+    ("全身", ("全身", "全身照", "整个你")),
+)
+_PHOTO_POSE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("侧躺", ("侧躺", "侧卧", "躺床上", "躺下")),
+    ("平躺", ("平躺", "仰躺", "躺着")),
+    ("坐", ("坐着", "坐姿", "坐床上")),
+    ("倚靠", ("靠着", "倚在", "半靠", "靠着枕头")),
+    ("跪坐", ("跪坐", "跪着")),
+    ("站立", ("站着", "站立", "站着拍")),
+    ("蹲下", ("蹲着", "蹲下")),
+    ("盘腿", ("盘腿", "盘着腿")),
+    ("跷腿", ("跷腿", "翘腿", "交叠双腿")),
+)
+_PHOTO_ANGLE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("仰视低角度", ("仰视", "低角度", "从下往上", "低机位")),
+    ("俯视高角度", ("俯视", "高角度", "从上往下", "俯拍", "高机位")),
+    ("平视", ("平视", "正面平拍", "平拍")),
+    ("第一人称", ("第一人称", "第一视角", "自己视角")),
+    ("特写", ("特写", "近景", "怼脸", "聚焦")),
+    ("全身入镜", ("全身入镜", "全身入画", "全身")),
+)
+_PHOTO_SCENE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("床上", ("床上", "被窝里", "在被子里")),
+    ("沙发", ("沙发", "客厅沙发")),
+    ("浴室", ("浴室", "浴缸", "淋浴")),
+    ("厨房", ("厨房", "灶台")),
+    ("窗前", ("窗前", "窗边", "落地窗")),
+    ("阳台", ("阳台", "露台")),
+    ("工作室", ("工作室", "书桌", "办公桌")),
+    ("玄关", ("玄关", "门口")),
+)
+_PHOTO_STYLE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("诱惑感", ("诱惑", "撩人", "sexy", "勾人")),
+    ("慵懒", ("慵懒", "懒散", "没精神")),
+    ("清新", ("清新", "清纯", "干净")),
+    ("居家感", ("居家", "生活感", "日常")),
+    ("氛围感", ("氛围", "意境", "情绪")),
+)
+
+
+def _match_photo_spec(text: str, table: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
+    """在用户指令里按优先级返回第一个命中的维度标签；无命中返回空串。"""
+    haystack = str(text or "")
+    if not haystack:
+        return ""
+    for label, keywords in table:
+        if any(kw in haystack for kw in keywords):
+            return label
+    return ""
+
+
+def _extract_photo_spec(user_raw: str) -> dict[str, str]:
+    """从用户原始指令提取模块化生图规格：focus/pose/angle/scene/style。
+
+    每个维度最多命中一个（按表顺序取第一个），未命中的为空串。确定性、零成本、
+    可测，无需调用 LLM；仅用于"用户主动要图"路径的增强，缺值全部由组合器兜底。
+    """
+    return {
+        "focus": _match_photo_spec(user_raw, _PHOTO_FOCUS_TABLE),
+        "pose": _match_photo_spec(user_raw, _PHOTO_POSE_TABLE),
+        "angle": _match_photo_spec(user_raw, _PHOTO_ANGLE_TABLE),
+        "scene": _match_photo_spec(user_raw, _PHOTO_SCENE_TABLE),
+        "style": _match_photo_spec(user_raw, _PHOTO_STYLE_TABLE),
+    }
+
+
+def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
+    """把模块化规格组合进基础提示词：只附加命中的维度，未命中的用 base 默认。
+
+    顺序：主体特写(focus) → 场景(scene) → 姿态(pose) → 机位(angle) → 风格(style)。
+    全部缺省时原样返回 base，绝不返回空串。
+    """
+    parts: list[str] = []
+    focus = str(spec.get("focus") or "").strip()
+    if focus:
+        parts.append(f"画面重点聚焦在{focus}，其余虚化")
+    scene = str(spec.get("scene") or "").strip()
+    if scene:
+        parts.append(f"场景是{scene}")
+    pose = str(spec.get("pose") or "").strip()
+    if pose:
+        parts.append(f"她{pose}")
+    angle = str(spec.get("angle") or "").strip()
+    if angle:
+        parts.append(f"拍摄机位：{angle}")
+    style = str(spec.get("style") or "").strip()
+    if style:
+        parts.append(f"整体氛围{style}")
+    if not parts:
+        return base
+    return f"{base}{'，'.join(parts)}。"
+
+
 # ── 生图上下文：世界数据按场景选择性进画面 ──────────────────────
 # 时间光线决定室内/窗外的氛围光，天气决定窗外/城市画面里能看见的元素。
 # 提示词接力时只把真正能呈现在画面里的数据注入，不把世界快照全部堆叠。
@@ -2448,7 +2557,16 @@ class Companion:
             scene = "她与恋人的温馨合影，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
         else:
             scene = "她坐在重庆的家里，窗外是夜景，她神情放松地看着镜头。"
-        return f"{base}{scene}{orientation}。"
+        full = f"{base}{scene}{orientation}。"
+        # 用户主动要图（scene=local_send）时，candidate 带 user_raw 原始指令，
+        # 用模块化组合器把主体/姿态/机位/场景/风格叠加上去。未命中任何维度时
+        # _compose_modular_prompt 原样返回 full，绝不产生空串（缺值即停防护）。
+        if (candidate or {}).get("scene") == "local_send":
+            user_raw = str((candidate or {}).get("user_raw") or "").strip()
+            if user_raw:
+                spec = _extract_photo_spec(user_raw)
+                full = _compose_modular_prompt(full, spec)
+        return full
 
     def _image_world_context(self, candidate: dict[str, Any] | None = None) -> dict[str, Any]:
         """提取生图可用的世界上下文，只保留真实存在的数据。

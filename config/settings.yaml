@@ -1,11 +1,11 @@
 brief_subscriptions:
   enabled: true
   sources:
+    astronomy:
+      enabled: true
     github_trending:
       enabled: true
       min_stars: 1000
-    astronomy:
-      enabled: true
 douyin:
   api_base_url: https://api.justoneapi.com
   api_token: hTyHR6DVMd4jjZlN
@@ -37,16 +37,15 @@ office:
 proactive:
   enabled: true
   image_max_per_day: 0
-  max_per_day: 10
+  max_per_day: 30
   min_interval_min: 15
   photo_min_interval_sec: 0
   system_notifications: true
 qq:
-  push_pause_when_offline: true
-  startup_wait_timeout: 1.0
-  # 断连探测：独立 WS 存活心跳（周期性发 get_login_info 探活，半开即强制重连）
   heartbeat_interval: 30
   heartbeat_timeout: 10
+  push_pause_when_offline: true
+  startup_wait_timeout: 1.0
 startup:
   auto_start: false
   start_minimized: false

@@ -179,6 +179,236 @@
         "status": "rejected"
       }
     },
+    "chat-photo:3489352115:a42ebe068a875a30": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786454532",
+        "channel": "qq",
+        "created_at": "2026-08-11T13:22:12.475619+00:00",
+        "event_id": "world_evt_22cf5e9fa8d74f0899b38a589c666c15",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_selfie",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 97598,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_22cf5e9fa8d74f0899b38a589c666c15",
+        "event_type": "world.image_candidate.published",
+        "sequence": 97598,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:a42ebe068a875a30",
+      "judge": {},
+      "reason": "vision_same_scene",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": false
+      },
+      "status": "dedup_skipped",
+      "updated_at": "2026-08-11T13:22:49.704554+00:00",
+      "workflow": {
+        "asset_url": "",
+        "delivery_plan_id": "",
+        "request_id": "",
+        "status": "dedup_skipped"
+      }
+    },
+    "chat-photo:3489352115:b61399f78cf359cb": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786454475",
+        "channel": "qq",
+        "created_at": "2026-08-11T13:21:15.079459+00:00",
+        "event_id": "world_evt_8e81b1819f484d6fb7fa26c778d8d66d",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_selfie",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 97541,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_8e81b1819f484d6fb7fa26c778d8d66d",
+        "event_type": "world.image_candidate.published",
+        "sequence": 97541,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:b61399f78cf359cb",
+      "judge": {},
+      "reason": "vision_same_scene",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": false
+      },
+      "status": "dedup_skipped",
+      "updated_at": "2026-08-11T13:21:59.902546+00:00",
+      "workflow": {
+        "asset_url": "",
+        "delivery_plan_id": "",
+        "request_id": "",
+        "status": "dedup_skipped"
+      }
+    },
+    "chat-photo:3489352115:e9fd7d992013d8e5": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786454364",
+        "channel": "qq",
+        "created_at": "2026-08-11T13:19:24.841477+00:00",
+        "event_id": "world_evt_888f19b0a0e64fb2ac3be8b663d0b0e4",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_selfie",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 97433,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_888f19b0a0e64fb2ac3be8b663d0b0e4",
+        "event_type": "world.image_candidate.published",
+        "sequence": 97433,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:e9fd7d992013d8e5",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-11T13:20:59.058119+00:00",
+      "workflow": {
+        "asset_url": "/uploads/0e751fcdc31d47179185d6eb5b09ae20.png",
+        "delivery_plan_id": "imgdelivery_7d550583314840378d8d6c27efd76ba8",
+        "request_id": "imggen_fb6504c81b8a42bdb73c35e53a65d0bc",
+        "status": "completed"
+      }
+    },
+    "chat-photo:3489352115:fd44c8c4886a91cb": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786456894",
+        "channel": "qq",
+        "created_at": "2026-08-11T14:01:34.185706+00:00",
+        "event_id": "world_evt_2c0c1310c2bd4baf9456e0e0709fc23b",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_selfie",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 99865,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_2c0c1310c2bd4baf9456e0e0709fc23b",
+        "event_type": "world.image_candidate.published",
+        "sequence": 99865,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:fd44c8c4886a91cb",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-11T14:02:21.056981+00:00",
+      "workflow": {
+        "asset_url": "/uploads/d38c1e532f8246a5b0ac105b95ca5a61.png",
+        "delivery_plan_id": "imgdelivery_f1906b50f66e440591c13200e8e33dee",
+        "request_id": "imggen_f08f0a2be2764ce9af2c5d0b60cfe4a8",
+        "status": "completed"
+      }
+    },
     "chat-photo:3489352115:turn_06bc44b12adb44388d6ea2dc495f3203": {
       "candidate": {
         "candidate_id": "chat-photo-3489352115-1786366496",
@@ -2057,6 +2287,346 @@
         "delivery_plan_id": "imgdelivery_216b838643aa4a2690a8d70026484d1c",
         "request_id": "imggen_7084dbf9071a48f8b46897f0be9aafc3",
         "status": "completed"
+      }
+    },
+    "proactive-visual:1786448536": {
+      "candidate": {
+        "candidate_id": "proactive-visual-1786448536",
+        "channel": "qq",
+        "created_at": "2026-08-11T11:42:16.463024+00:00",
+        "event_id": "world_evt_d4ee7174530c49d4aaebb37bac570c3e",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "environment_object",
+        "reason_code": "world_visual:evening_chill",
+        "scene": "life_share",
+        "score": 0.42,
+        "sequence": 96991,
+        "size": "1344x768",
+        "source": "generated",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_d4ee7174530c49d4aaebb37bac570c3e",
+        "event_type": "world.image_candidate.published",
+        "sequence": 96991,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "proactive-visual:1786448536",
+      "judge": {},
+      "reason": "vision_same_scene",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": false
+      },
+      "status": "dedup_skipped",
+      "updated_at": "2026-08-11T11:43:02.407122+00:00",
+      "workflow": {
+        "asset_url": "",
+        "delivery_plan_id": "",
+        "request_id": "",
+        "status": "dedup_skipped"
+      }
+    },
+    "proactive-visual:1786448642": {
+      "candidate": {
+        "candidate_id": "proactive-visual-1786448642",
+        "channel": "qq",
+        "created_at": "2026-08-11T11:44:02.512538+00:00",
+        "event_id": "world_evt_f8a65cde1b924b35b8326ccef7d9d910",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "environment_object",
+        "reason_code": "world_visual:evening_chill",
+        "scene": "attention_ack",
+        "score": 0.37,
+        "sequence": 97095,
+        "size": "1344x768",
+        "source": "generated",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_f8a65cde1b924b35b8326ccef7d9d910",
+        "event_type": "world.image_candidate.published",
+        "sequence": 97095,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "proactive-visual:1786448642",
+      "judge": {},
+      "reason": "vision_same_scene",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": false
+      },
+      "status": "dedup_skipped",
+      "updated_at": "2026-08-11T11:44:47.613022+00:00",
+      "workflow": {
+        "asset_url": "",
+        "delivery_plan_id": "",
+        "request_id": "",
+        "status": "dedup_skipped"
+      }
+    },
+    "proactive-visual:1786454195": {
+      "candidate": {
+        "candidate_id": "proactive-visual-1786454195",
+        "channel": "qq",
+        "created_at": "2026-08-11T13:16:35.694158+00:00",
+        "event_id": "world_evt_454ff53b4b984436bc52425b2b135074",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "environment_object",
+        "reason_code": "world_visual:evening_chill",
+        "scene": "life_share",
+        "score": 0.42,
+        "sequence": 97266,
+        "size": "1344x768",
+        "source": "generated",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_454ff53b4b984436bc52425b2b135074",
+        "event_type": "world.image_candidate.published",
+        "sequence": 97266,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "proactive-visual:1786454195",
+      "judge": {
+        "scene": "life_share",
+        "score": 43,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-11T13:17:30.069210+00:00",
+      "workflow": {
+        "asset_url": "/uploads/1b7ac910982a44be8b32e75fdd5d1d71.png",
+        "delivery_plan_id": "imgdelivery_a1ff32a1150c45758d5f2214ba5e6abc",
+        "request_id": "imggen_8eaf04f4b06a42d8a6c734ada76dbe85",
+        "status": "completed"
+      }
+    },
+    "proactive-visual:1786454315": {
+      "candidate": {
+        "candidate_id": "proactive-visual-1786454315",
+        "channel": "qq",
+        "created_at": "2026-08-11T13:18:35.243901+00:00",
+        "event_id": "world_evt_dbf39bb2e3814d97aea279cbf9e0fe77",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "environment_object",
+        "reason_code": "world_visual:reading_time",
+        "scene": "attention_ack",
+        "score": 0.37,
+        "sequence": 97384,
+        "size": "1344x768",
+        "source": "generated",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_dbf39bb2e3814d97aea279cbf9e0fe77",
+        "event_type": "world.image_candidate.published",
+        "sequence": 97384,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "proactive-visual:1786454315",
+      "judge": {},
+      "reason": "vision_same_scene",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": false
+      },
+      "status": "dedup_skipped",
+      "updated_at": "2026-08-11T13:19:11.985317+00:00",
+      "workflow": {
+        "asset_url": "",
+        "delivery_plan_id": "",
+        "request_id": "",
+        "status": "dedup_skipped"
+      }
+    },
+    "proactive-visual:1786456743": {
+      "candidate": {
+        "candidate_id": "proactive-visual-1786456743",
+        "channel": "qq",
+        "created_at": "2026-08-11T13:59:03.391596+00:00",
+        "event_id": "world_evt_62852373533d468bbf204aaa5858d3a9",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "environment_object",
+        "reason_code": "world_visual:reading_time",
+        "scene": "life_share",
+        "score": 0.42,
+        "sequence": 99718,
+        "size": "1344x768",
+        "source": "generated",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_62852373533d468bbf204aaa5858d3a9",
+        "event_type": "world.image_candidate.published",
+        "sequence": 99718,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "proactive-visual:1786456743",
+      "judge": {
+        "scene": "life_share",
+        "score": 43,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-11T14:00:44.300187+00:00",
+      "workflow": {
+        "asset_url": "/uploads/f154351ab809434fa426e4450b53b05c.png",
+        "delivery_plan_id": "imgdelivery_87a7bb9bc29647cab7e93deb3b6a4f86",
+        "request_id": "imggen_ca04810d7d074040b95bccc194ec104d",
+        "status": "completed"
+      }
+    },
+    "proactive-visual:1786456908": {
+      "candidate": {
+        "candidate_id": "proactive-visual-1786456908",
+        "channel": "qq",
+        "created_at": "2026-08-11T14:01:48.764777+00:00",
+        "event_id": "world_evt_21bb36b6b1d14c0ab589d14373affe39",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "environment_object",
+        "reason_code": "world_visual:object_gray_sofa",
+        "scene": "attention_ack",
+        "score": 0.37,
+        "sequence": 99881,
+        "size": "1344x768",
+        "source": "generated",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_21bb36b6b1d14c0ab589d14373affe39",
+        "event_type": "world.image_candidate.published",
+        "sequence": 99881,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "proactive-visual:1786456908",
+      "judge": {},
+      "reason": "vision_same_scene",
+      "side_effects": {
+        "asset_created": false,
+        "delivery_created": false,
+        "provider_called": false
+      },
+      "status": "dedup_skipped",
+      "updated_at": "2026-08-11T14:02:47.589256+00:00",
+      "workflow": {
+        "asset_url": "",
+        "delivery_plan_id": "",
+        "request_id": "",
+        "status": "dedup_skipped"
       }
     }
   },

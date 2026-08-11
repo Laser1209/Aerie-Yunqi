@@ -83,7 +83,9 @@ def _api_base_url() -> str:
 
 # 伊塔重庆复式公寓的物件 ID → 中文描述（与 world_simulation._ENVIRONMENT_OBJECTS
 # 对齐）。环境照 prompt 用它把代码级物件 ID 翻译成自然的画面描述。
-_HER_HOME_OBJECTS_ZH: dict[str, str] = {
+# 新房间(132㎡江景复式)的 75 项 OBJ-xxx 物件翻译统一收口在 core.home_space，
+# 此处仅保留旧英文 ID 兼容表，运行时合并，避免双份数据漂移。
+_HER_HOME_OBJECTS_ZH_LEGACY: dict[str, str] = {
     "king_bed": "主卧那张2米的大床",
     "night_lamp": "床头那盏小夜灯",
     "window": "朝南的江景窗",
@@ -102,6 +104,25 @@ _HER_HOME_OBJECTS_ZH: dict[str, str] = {
     "drawing_tablet": "数位板",
     "corkboard": "钉着你纸条的软木板",
 }
+
+
+def _merged_home_objects_zh() -> dict[str, str]:
+    """合并新房间(OBJ-xxx) + 旧英文 ID 两套翻译表。
+
+    home_space 为单一事实源；合并失败时退化仅用旧表（生图不中断）。
+    """
+    merged = dict(_HER_HOME_OBJECTS_ZH_LEGACY)
+    try:
+        from core.home_space import LEGACY_OBJECT_ZH, OBJECT_ZH
+
+        merged.update(LEGACY_OBJECT_ZH)
+        merged.update(OBJECT_ZH)
+    except Exception:
+        pass
+    return merged
+
+
+_HER_HOME_OBJECTS_ZH: dict[str, str] = _merged_home_objects_zh()
 
 
 # ── 生图构图：手机拍摄比例（横 16:9 / 竖 9:16），横竖由伊塔按场景自决 ──
@@ -2740,11 +2761,24 @@ class Companion:
             city = str(snapshot.get("city") or "").strip()
             location = str(snapshot.get("location") or "home")
             activity = str(snapshot.get("activity") or "idle")
+            # 房间级细粒度定位（方向5）：floor/zone/position_desc 来自世界快照，
+            # 缺省时用 home_space 按 phase 兜底，保证生图上下文永远带得上"在哪层哪区"。
+            floor = snapshot.get("floor")
+            zone = str(snapshot.get("zone") or "")
+            position_desc = str(snapshot.get("position_desc") or "")
+            if not zone or not position_desc:
+                try:
+                    from core.home_space import position_desc as hs_pos, zone_for_phase
+                    zone = zone or zone_for_phase(phase)
+                    position_desc = position_desc or hs_pos(floor, zone)
+                except Exception:
+                    pass
             nearby_objects = [str(x) for x in (snapshot.get("nearby_objects") or []) if str(x)]
             visual_topics = [str(x) for x in (snapshot.get("available_visual_topics") or []) if str(x)]
             city_events = [e for e in (snapshot.get("city_events") or []) if isinstance(e, dict) and e.get("title")]
         else:
             phase = iso_time = weather_mood = weather_detail = city = location = activity = ""
+            floor = zone = position_desc = ""
             nearby_objects = visual_topics = city_events = []
 
         # 时间兜底：候选事件时间 → 本地当前时间；时段缺省时按小时映射。
@@ -2807,6 +2841,9 @@ class Companion:
             "weather_desc": weather_desc,
             "city": city,
             "location": location,
+            "floor": floor,
+            "zone": zone,
+            "position_desc": position_desc,
             "activity": activity,
             "nearby_objects": nearby_objects[:6],
             "visual_topics": visual_topics[:6],
@@ -2841,7 +2878,11 @@ class Companion:
         if weather_desc:
             lines.append(f"天气：{weather_desc}")
         place_parts = []
-        if location:
+        # 优先用细粒度位置描述（"二层·工作室"），缺省退回 location 兼容层。
+        position_desc = str(context.get("position_desc") or "").strip()
+        if position_desc:
+            place_parts.append(f"她现在在{position_desc}")
+        elif location:
             place_parts.append(f"她现在在{location}")
         if city:
             place_parts.append(city)
@@ -3220,6 +3261,12 @@ def _dashboard_world_summary(
             ("phase", "phase"),
             ("location", "location"),
             ("activity", "activity"),
+            ("energy", "energy"),
+            # 房间级细粒度定位（方向5）：世界界面据此展示楼层/区域/大致位置。
+            ("floor", "floor"),
+            ("zone", "zone"),
+            ("positionDesc", "position_desc", "positionDesc"),
+            ("nearbyObjects", "nearby_objects", "nearbyObjects"),
             ("weather", "weather", "weather_mood"),
             ("weatherMood", "weather_mood", "weather"),
             ("sequence", "sequence"),

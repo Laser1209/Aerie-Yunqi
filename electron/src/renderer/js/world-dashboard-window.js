@@ -16,6 +16,48 @@
   const PAD_COLORS = { P: "#007aff", A: "#5e5ce6", D: "#34c759" };
   const NEURO_COLORS = { vitality: "#007aff", calm: "#34c759", strain: "#ff3b30" };
   const REL_COLORS = { attachment: "#007aff", trust: "#34c759", security: "#5e5ce6", conflict: "#ff3b30" };
+  // 区域 id → 中文名（房间级定位：楼层竖条上的区域展示）
+  const ZONE_LABELS = {
+    living: "客厅", studio: "工作室", master_bedroom: "主卧", dining: "餐厅",
+    kitchen: "厨房", entrance: "玄关", balcony: "阳台", guest_bath: "客卫",
+    stair: "楼梯", corridor: "走廊", bridge: "连廊", closet: "衣帽间", master_bath: "主卫",
+  };
+  // zone → 平面图 SVG（viewBox 1400×980）上的百分比坐标（光球锚点）。
+  // 依据设计图 floor_plan_level*.svg 各区域文本/边界换算：
+  //   level1: 玄关(226,323) 厨房(486,294) 客卫(802,244) 餐厅(514,460) 客厅(536,640) 阳台(954,798) 楼梯(183,510)
+  //   level2: 走廊(183,438) 工作室(486,352) 主卫(802,244) 桥廊(442,474) 衣帽间(752,582) 主卧(802,755)
+  const ZONE_POS = {
+    level1: {
+      entrance: { x: 16.2, y: 33.0 },
+      kitchen: { x: 34.7, y: 30.0 },
+      guest_bath: { x: 57.3, y: 24.9 },
+      dining: { x: 36.7, y: 47.0 },
+      living: { x: 38.3, y: 65.3 },
+      balcony: { x: 68.1, y: 81.4 },
+      stair: { x: 13.1, y: 52.0 },
+    },
+    level2: {
+      corridor: { x: 13.1, y: 44.7 },
+      studio: { x: 34.7, y: 35.9 },
+      master_bath: { x: 57.3, y: 24.9 },
+      bridge: { x: 31.6, y: 48.4 },
+      closet: { x: 53.7, y: 59.4 },
+      master_bedroom: { x: 57.3, y: 77.0 },
+    },
+  };
+  // activity → 中文作息描述（世界预设表：sleeping/planning/dining/working/relaxing/idle）
+  const ACTIVITY_LABELS = {
+    sleeping: "在休息（睡觉）",
+    planning: "在规划一天",
+    dining: "在用餐",
+    working: "在专注工作",
+    relaxing: "在放松休息",
+    idle: "空闲中",
+  };
+  // phase → 中文时段（世界阶段展示用）
+  const PHASE_LABELS = {
+    night: "深夜", morning: "清晨", noon: "正午", afternoon: "下午", evening: "傍晚",
+  };
 
   function $(id) { return document.getElementById(id); }
 
@@ -29,6 +71,14 @@
     els.weather = $("wdw-weather");
     els.generated = $("wdw-generated");
     els.scene = $("wdw-world-scene");
+    els.floor = $("wdw-floor");
+    els.locIndicator = $("wdw-loc-indicator");
+    els.locPos = $("wdw-loc-pos");
+    els.locCells = els.locIndicator ? els.locIndicator.querySelectorAll(".wdw-loc-floor-cell") : [];
+    els.mapBox = $("wdw-map");
+    els.mapImg = $("wdw-map-img");
+    els.mapOrb = $("wdw-map-orb");
+    els.mapZoneLabel = $("wdw-map-zone-label");
     els.emotionLabel = $("wdw-emotion-label");
     els.padVal = { P: $("wdw-pad-P-val"), A: $("wdw-pad-A-val"), D: $("wdw-pad-D-val") };
     els.padBar = { P: $("wdw-pad-P"), A: $("wdw-pad-A"), D: $("wdw-pad-D") };
@@ -130,11 +180,18 @@
     setText(els.worldTime, formatWorldTime(state));
 
     const summary = obj(state.worldSummary);
-    // 顶部"位置"应展示用户设置的世界所在城市，而非时段地点(home/study)。
-    setText(els.location, str(summary.city) || str(summary.location) || "--");
-    setText(els.activity, str(summary.activity) || "--");
+    // 顶部"地点"优先展示房间级位置描述（如"二层·工作室"），城市作为辅助；
+    // 无房间定位时回退到用户设置的城市 / 时段地点(home/study)。
+    const posDesc = str(summary.positionDesc);
+    const city = str(summary.city);
+    const legacyLoc = str(summary.location);
+    setText(els.location, posDesc
+      ? (city ? posDesc + " · " + city : posDesc)
+      : (city || legacyLoc || "--"));
+    setText(els.floor, floorLabel(summary.floor));
+    setText(els.activity, ACTIVITY_LABELS[str(summary.activity)] || str(summary.activity) || "--");
     setText(els.energy, formatEnergy(summary.energy));
-    setText(els.phase, str(summary.phase) || "--");
+    setText(els.phase, PHASE_LABELS[str(summary.phase)] || str(summary.phase) || "--");
     setText(els.generated, formatTs(summary.generatedAt));
 
     const phase = normPhase(str(summary.phase));
@@ -142,6 +199,7 @@
     els.scene.setAttribute("data-phase", phase);
     els.scene.setAttribute("data-weather", weather);
     setText(els.weather, weatherLabel(weather));
+    renderLocation(summary);
 
     const pad = (state.emotion && obj(state.emotion.pad)) || {};
     renderPad(pad);
@@ -150,6 +208,59 @@
 
     renderRelationship(state);
     renderEvents(state);
+  }
+
+  // ── 当前位置指示器 + 平面图光球（房间级定位） ───────────────
+  // 依据 worldSummary.floor / zone / positionDesc 更新场景区右上角的光圈、
+  // 位置描述、1F/2F 楼层竖条，以及在平面图底图上叠加呼吸光球；
+  // 无 position_desc 时整块隐藏（绝不显示 undefined）。
+  function renderLocation(summary) {
+    const posDesc = str(summary.positionDesc);
+    if (!posDesc) {
+      if (els.locIndicator) els.locIndicator.hidden = true;
+      if (els.mapBox) els.mapBox.hidden = true;
+      if (els.scene) els.scene.classList.remove("has-loc");
+      return;
+    }
+    if (els.locIndicator) {
+      els.locIndicator.hidden = false;
+      els.scene.classList.add("has-loc");
+      setText(els.locPos, posDesc);
+    }
+    const floor = Number(summary.floor);
+    const zoneId = str(summary.zone);
+    const zoneLabel = ZONE_LABELS[zoneId] || zoneId;
+    if (els.locCells) {
+      els.locCells.forEach((cell) => {
+        const active = Number(cell.getAttribute("data-floor")) === floor;
+        cell.classList.toggle("is-active", active);
+        const zoneEl = cell.querySelector(".wdw-loc-floor-zone");
+        if (zoneEl) zoneEl.textContent = active ? zoneLabel : "";
+      });
+    }
+    renderMap(floor, zoneId, zoneLabel);
+  }
+
+  // 平面图底图 + 光球：切换当前楼层 SVG，把光球锚定到 zone 百分比坐标。
+  function renderMap(floor, zoneId, zoneLabel) {
+    if (!els.mapBox || !els.mapImg || !els.mapOrb) return;
+    const layer = floor === 2 ? "level2" : "level1";
+    const anchor = (ZONE_POS[layer] && ZONE_POS[layer][zoneId]) || null;
+    if (!anchor) {
+      els.mapBox.hidden = true;
+      return;
+    }
+    els.mapBox.hidden = false;
+    const imgSrc = layer === "level2"
+      ? "assets/floor_plan_level2.svg"
+      : "assets/floor_plan_level1.svg";
+    if (str(els.mapImg.getAttribute("src")) !== imgSrc) {
+      els.mapImg.setAttribute("src", imgSrc);
+    }
+    els.mapOrb.hidden = false;
+    els.mapOrb.style.left = anchor.x + "%";
+    els.mapOrb.style.top = anchor.y + "%";
+    setText(els.mapZoneLabel, zoneLabel);
   }
 
   function renderRelationship(state) {
@@ -750,6 +861,9 @@
   function renderUnavailable() {
     setStatus("offline");
     setText(els.worldTime, "--:--:--");
+    if (els.locIndicator) els.locIndicator.hidden = true;
+    if (els.mapBox) els.mapBox.hidden = true;
+    if (els.scene) els.scene.classList.remove("has-loc");
   }
 
   function setStatus(status) {
@@ -822,6 +936,12 @@
     const n = Number(v);
     if (Number.isFinite(n) && n > 0 && n <= 1) return Math.round(n * 100) + "%";
     return str(v);
+  }
+  function floorLabel(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "--";
+    const names = { 1: "一层 / 1F", 2: "二层 / 2F" };
+    return names[n] || n + " 层 / " + n + "F";
   }
   function formatWorldTime(state) {
     const ts = Number(state && state.updatedAt) || Number(obj(state.worldSummary).generatedAt);

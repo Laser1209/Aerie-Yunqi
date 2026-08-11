@@ -342,7 +342,7 @@ function startPythonBackend() {
     // one running), attach to it instead of fighting for the port.
     healthCheck().then((alive) => {
       if (alive) {
-        console.log("[main] existing backend detected on port " + PY_PORT + " — attaching");
+        console.log("[main] existing backend detected on port " + PY_PORT + " - attaching");
         _backendReady = true;
         _recomputeBackendState();
         broadcastHealth();
@@ -545,7 +545,7 @@ function _forceRestartPythonBackend() {
   //    reject our new child (even though *we* spawned it).
   EXPECTED_BACKEND_INSTANCE_ID = crypto.randomUUID();
   console.log("[main] restart backend: new EXPECTED_BACKEND_INSTANCE_ID =",
-    EXPECTED_BACKEND_INSTANCE_ID.slice(0, 8) + "…");
+    EXPECTED_BACKEND_INSTANCE_ID.slice(0, 8) + "...");
 
   // 4) Spawn via the SAME code path as cold boot.
   //    startPythonBackend() probes the port first:

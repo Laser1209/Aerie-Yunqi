@@ -139,6 +139,11 @@ class WorldSnapshot:
     phase: str = "unknown"
     location: str = "home"
     activity: str = "idle"
+    # 房间级细粒度定位（方向5）：floor 楼层 / zone 区域 / position_desc 中文描述。
+    # 旧字段 location 保留为兼容层（home/study），新定位以 zone 为准，缺省空串兜底。
+    floor: int = 0
+    zone: str = ""
+    position_desc: str = ""
     energy: float = 0.5
     social: str = "private"
     nearby_objects: list[str] = field(default_factory=list)
@@ -417,6 +422,33 @@ class WorldSimulation:
         location = str(phase_data.get("location", "home"))
         activity = self._compute_activity(phase_name, phase_data)
 
+        # 房间级细粒度定位（方向5）：phase -> zone -> floor/position_desc。
+        # home_space 是纯静态数据模块，缺省/异常一律安全兜底，绝不中断 tick。
+        zone = ""
+        zone_objects: list[str] = []
+        floor = 0
+        position = ""
+        try:
+            from core.home_space import (
+                ZONES,
+                objects_for_zone,
+                position_desc as hs_position_desc,
+                zone_for_phase,
+            )
+
+            zone = zone_for_phase(phase_name)
+            zone_objects = objects_for_zone(zone, limit=6) if zone else []
+            floor = int(ZONES.get(zone, {}).get("level") or 0)
+            position = hs_position_desc(floor, zone) if zone else ""
+        except Exception:
+            zone = ""
+            zone_objects = []
+            floor = 0
+            position = ""
+        # 兜底：zone 解析异常时退化为旧的 home/study 位置描述（保持兼容）。
+        if not position and location:
+            position = {"home": "一层·家中", "study": "二层·工作室"}.get(location, location)
+
         action_result = None
         if action is not None:
             action_result = self.action_registry.execute(
@@ -437,7 +469,8 @@ class WorldSimulation:
 
         # 房间物件（她的重庆公寓）在前，窗外/附近的真实城市地点（重庆 POI）在后，
         # 合并去重：视觉素材既有"她的家"，也有"她窗外的重庆"，与 location 语义一致。
-        room_objects = self._compute_nearby_objects(location, activity)
+        # zone 定位可用时优先用该区域的实际物件（方向5），否则回退旧 (location, activity) 表。
+        room_objects = zone_objects if zone_objects else self._compute_nearby_objects(location, activity)
         real_nearby = self._reality_nearby_objects()
         nearby_objects = list(dict.fromkeys(room_objects + real_nearby))[:6]
         visual_topics = self._derive_visual_topics(activity, nearby_objects)
@@ -461,6 +494,9 @@ class WorldSimulation:
             phase=phase_name,
             location=location,
             activity=activity,
+            floor=floor,
+            zone=zone,
+            position_desc=position,
             energy=energy,
             social=social,
             nearby_objects=nearby_objects,
@@ -522,6 +558,9 @@ class WorldSimulation:
                 "phase",
                 "location",
                 "activity",
+                "floor",
+                "zone",
+                "position_desc",
                 "energy",
                 "social",
                 "source",

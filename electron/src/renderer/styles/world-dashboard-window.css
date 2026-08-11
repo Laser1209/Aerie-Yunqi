@@ -140,6 +140,7 @@
 
 /* ── 世界场景 ── */
 .wdw-scene {
+  position: relative;
   border-radius: 10px;
   padding: 14px;
   transition: background 0.6s ease;
@@ -154,6 +155,11 @@
 .wdw-scene[data-weather="snow"] { background-image: linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05)), linear-gradient(160deg, #3a465e, #1c2434); }
 .wdw-scene[data-weather="cloudy"] { background-image: linear-gradient(rgba(200,200,200,0.05), rgba(200,200,200,0.05)), linear-gradient(160deg, #2e3a4d, #1a2231); }
 .wdw-scene[data-weather="neutral"] { }
+/* 场景区背景恒为深色渐变，其内部文字必须用白色系保证可读；
+   不能沿用 --wdw-text（浅色主题下是深色，深底深字看不清） */
+.wdw-scene .wdw-kv dt { color: rgba(255, 255, 255, 0.68); }
+.wdw-scene .wdw-kv dd { color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
+.wdw-scene .wdw-scene-hint { color: rgba(255, 255, 255, 0.55); }
 
 .wdw-kv {
   display: grid;
@@ -164,6 +170,163 @@
 .wdw-kv div { display: flex; justify-content: space-between; gap: 8px; }
 .wdw-kv dt { color: var(--wdw-muted); font-size: 12px; }
 .wdw-kv dd { margin: 0; font-size: 13px; color: var(--wdw-text); }
+
+/* ── 世界场景 · 平面图底图 + 光球（房间级定位可视化） ── */
+.wdw-map {
+  margin-top: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #ffffff;
+}
+.wdw-map[hidden] { display: none; }
+.wdw-map-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1400 / 980;
+}
+.wdw-map-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+/* 光球：光圈呼吸 + 中心点 + 区域名，绝对定位在平面图上对应 zone */
+.wdw-map-orb {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
+.wdw-map-orb[hidden] { display: none; }
+.wdw-map-orb-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--wdw-accent);
+  opacity: 0.45;
+  animation: wdw-orb-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.wdw-map-orb-dot {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--wdw-accent);
+  box-shadow: 0 0 10px 2px var(--wdw-accent), 0 0 0 3px rgba(255, 255, 255, 0.85);
+}
+.wdw-map-zone-label {
+  margin-top: 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes wdw-orb-ping {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+  80%, 100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+
+/* ── 世界场景 · 当前位置指示器（房间级定位） ── */
+/* 指示器可见时，为 kv 信息列表预留右上空间，避免被光圈/楼层竖条遮挡 */
+.wdw-scene.has-loc .wdw-scene-meta { padding-right: 96px; }
+.wdw-loc-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.wdw-loc-indicator[hidden] { display: none; }
+
+/* 光圈呼吸：圆形发光点 + 两圈扩散波纹（ping 效果），主题色 --wdw-accent */
+.wdw-loc-pulse {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+.wdw-loc-pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--wdw-accent);
+  opacity: 0.55;
+  animation: wdw-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.wdw-loc-pulse-ring:nth-child(2) { animation-delay: 1.1s; }
+.wdw-loc-pulse-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--wdw-accent);
+  box-shadow: 0 0 8px 1px var(--wdw-accent);
+}
+@keyframes wdw-ping {
+  75%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* 位置描述文字：白色半透明底，浅色/深色主题下场景均为深色底，白字恒可读 */
+.wdw-loc-pos {
+  max-width: 120px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 楼层/区域示意：1F / 2F 两格竖条，当前楼层格高亮（背景变亮 + 边框发光） */
+.wdw-loc-floor {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wdw-loc-floor-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 68px;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.wdw-loc-floor-label { font-variant-numeric: tabular-nums; }
+.wdw-loc-floor-zone { margin-left: auto; opacity: 0; transition: opacity 0.3s ease; }
+.wdw-loc-floor-cell.is-active {
+  border-color: var(--wdw-accent);
+  background: rgba(0, 122, 255, 0.35);
+  box-shadow: 0 0 8px rgba(0, 122, 255, 0.55);
+  color: #ffffff;
+}
+.wdw-loc-floor-cell.is-active .wdw-loc-floor-zone { opacity: 1; }
 
 /* ── 情绪 PAD ── */
 .wdw-emotion-label {
@@ -401,5 +564,8 @@
   .wdw-chart { transition: none; }
   .wdw-bar-fill, .wdw-tl-fill { transition: none; }
   .wdw-scene { transition: none; }
+  .wdw-loc-pulse-ring { animation: none; }
+  .wdw-loc-floor-zone { transition: none; }
+  .wdw-map-orb-pulse { animation: none; }
 }
 

@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="980" viewBox="0 0 1400 980" style="background:#FFFFFF;">
+<defs>
+<pattern id="hatchVoidL2" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
+<line x1="0" y1="0" x2="0" y2="7" stroke="#94A3B8" stroke-width="0.6"/>
+</pattern>
+<marker id="arrowDnL2" markerWidth="12" markerHeight="12" refX="6" refY="6" orient="auto">
+<path d="M0,0 L6,12 L12,0 Z" fill="#111827"/>
+</marker>
+</defs>
+<text x="700.0" y="32" font-size="20" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">二层平面图 · 私密休息层</text>
+<text x="700.0" y="52" font-size="11" fill="#475569" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">比例 1:72 · 单位：米（m）· 斜线区域挑空至一层客厅 · 约 52㎡</text>
+<polyline points="140.0,150.0 442.4,150.0 442.4,106.8 946.4,106.8 946.4,236.4 1061.6,236.4 1061.6,870.0 255.2,870.0 255.2,798.0 140.0,798.0" fill="none" stroke="#94A3B8" stroke-width="1.2" stroke-dasharray="8,4" stroke-linejoin="round"/>
+<text x="600.8" y="888.0" font-size="9" fill="#94A3B8" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >—— 一层外轮廓对位参考（浅灰虚线） ——</text>
+<rect x="226.4" y="524.4" width="432.0" height="345.6" fill="#F1F5F9" stroke="none"/>
+<rect x="226.4" y="524.4" width="432.0" height="345.6" fill="url(#hatchVoidL2)" stroke="none" opacity="0.7"/>
+<rect x="946.4" y="236.4" width="115.2" height="633.6" fill="#F1F5F9" stroke="none"/>
+<rect x="946.4" y="236.4" width="115.2" height="633.6" fill="url(#hatchVoidL2)" stroke="none" opacity="0.7"/>
+<text x="442.4" y="690.0" font-size="16" fill="#94A3B8" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >挑空至客厅</text>
+<text x="442.4" y="715.2" font-size="10" fill="#94A3B8" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >OPEN TO BELOW</text>
+<polygon points="140.0,150.0 442.4,150.0 442.4,106.8 946.4,106.8 946.4,870.0 658.4,870.0 658.4,524.4 226.4,524.4 226.4,798.0 140.0,798.0" fill="#FFFFFF" stroke="none"/>
+<line x1="226.4" y1="524.4" x2="658.4" y2="524.4" stroke="#475569" stroke-width="1.5" />
+<line x1="226.4" y1="528.0" x2="658.4" y2="528.0" stroke="#475569" stroke-width="0.8" />
+<line x1="946.4" y1="524.4" x2="946.4" y2="639.6" stroke="#475569" stroke-width="1.5" />
+<line x1="950.0" y1="524.4" x2="950.0" y2="639.6" stroke="#475569" stroke-width="0.8" />
+<line x1="226.4" y1="524.4" x2="226.4" y2="798.0" stroke="#475569" stroke-width="1.5" />
+<line x1="230.0" y1="524.4" x2="230.0" y2="798.0" stroke="#475569" stroke-width="0.8" />
+<circle cx="226.4" cy="524.4" r="2" fill="#475569"/>
+<circle cx="320.0" cy="524.4" r="2" fill="#475569"/>
+<circle cx="428.0" cy="524.4" r="2" fill="#475569"/>
+<circle cx="536.0" cy="524.4" r="2" fill="#475569"/>
+<circle cx="658.4" cy="524.4" r="2" fill="#475569"/>
+<circle cx="946.4" cy="524.4" r="2" fill="#475569"/>
+<circle cx="226.4" cy="582.0" r="2" fill="#475569"/>
+<circle cx="226.4" cy="654.0" r="2" fill="#475569"/>
+<circle cx="226.4" cy="726.0" r="2" fill="#475569"/>
+<circle cx="226.4" cy="798.0" r="2" fill="#475569"/>
+<circle cx="946.4" cy="582.0" r="2" fill="#475569"/>
+<text x="442.4" y="513.6" font-size="8" fill="#475569" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >玻璃护栏 / GLASS RAILING</text>
+<line x1="140.0" y1="150.0" x2="442.4" y2="150.0" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="442.4" y1="150.0" x2="442.4" y2="106.8" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="442.4" y1="106.8" x2="456.8" y2="106.8" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="658.4" y1="106.8" x2="881.6" y2="106.8" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="946.4" y1="106.8" x2="946.4" y2="236.4" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="946.4" y1="236.4" x2="946.4" y2="524.4" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="946.4" y1="639.6" x2="946.4" y2="870.0" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="658.4" y1="870.0" x2="672.8" y2="870.0" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="658.4" y1="639.6" x2="658.4" y2="870.0" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="140.0" y1="798.0" x2="140.0" y2="150.0" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="226.4" y1="798.0" x2="140.0" y2="798.0" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<line x1="456.8" y1="102.5" x2="658.4" y2="102.5" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="456.8" y1="105.4" x2="658.4" y2="105.4" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="456.8" y1="108.2" x2="658.4" y2="108.2" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="456.8" y1="111.1" x2="658.4" y2="111.1" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="881.6" y1="102.5" x2="946.4" y2="102.5" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="881.6" y1="105.4" x2="946.4" y2="105.4" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="881.6" y1="108.2" x2="946.4" y2="108.2" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="881.6" y1="111.1" x2="946.4" y2="111.1" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="672.8" y1="865.7" x2="946.4" y2="865.7" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="672.8" y1="868.6" x2="946.4" y2="868.6" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="672.8" y1="871.4" x2="946.4" y2="871.4" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="672.8" y1="874.3" x2="946.4" y2="874.3" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="950.7" y1="668.4" x2="950.7" y2="798.0" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="947.8" y1="668.4" x2="947.8" y2="798.0" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="945.0" y1="668.4" x2="945.0" y2="798.0" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="942.1" y1="668.4" x2="942.1" y2="798.0" stroke="#475569" stroke-width="1" stroke-linecap="square"/>
+<line x1="226.4" y1="150.0" x2="226.4" y2="366.0" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="226.4" y1="423.6" x2="226.4" y2="524.4" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="312.8" y1="150.0" x2="312.8" y2="524.4" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="658.4" y1="106.8" x2="658.4" y2="150.0" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="658.4" y1="150.0" x2="658.4" y2="524.4" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="658.4" y1="337.2" x2="716.0" y2="337.2" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="773.6" y1="337.2" x2="946.4" y2="337.2" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="312.8" y1="524.4" x2="370.4" y2="524.4" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="435.2" y1="524.4" x2="658.4" y2="524.4" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="658.4" y1="524.4" x2="658.4" y2="546.0" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="658.4" y1="610.8" x2="658.4" y2="639.6" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="845.6" y1="524.4" x2="845.6" y2="639.6" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<line x1="370.4" y1="524.4" x2="435.2" y2="524.4" stroke="#334155" stroke-width="2" stroke-linecap="round"/>
+<path d="M 435.2 524.4 A 64.8 64.8 0 0 0 370.4 459.6" fill="none" stroke="#334155" stroke-width="1.5"/>
+<line x1="716.0" y1="337.2" x2="773.6" y2="337.2" stroke="#334155" stroke-width="2" stroke-linecap="round"/>
+<path d="M 773.6 337.2 A 57.6 57.6 0 0 1 716.0 394.8" fill="none" stroke="#334155" stroke-width="1.5"/>
+<line x1="658.4" y1="546.0" x2="658.4" y2="610.8" stroke="#334155" stroke-width="2" stroke-linecap="round"/>
+<path d="M 658.4 610.8 A 64.8 64.8 0 0 1 593.6 546.0" fill="none" stroke="#334155" stroke-width="1.5"/>
+<line x1="842.7" y1="538.8" x2="842.7" y2="610.8" stroke="#334155" stroke-width="0.8"/>
+<line x1="848.5" y1="538.8" x2="848.5" y2="610.8" stroke="#334155" stroke-width="0.8"/>
+<line x1="843.8" y1="542.4" x2="843.8" y2="585.6" stroke="#334155" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+<line x1="847.4" y1="564.0" x2="847.4" y2="607.2" stroke="#334155" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+<rect x="150.8" y="351.6" width="68.4" height="151.2" fill="#F8FAFC" stroke="#64748B" stroke-width="0.8" stroke-dasharray="4,2"/>
+<line x1="154.4" y1="366.0" x2="215.6" y2="366.0" stroke="#64748B" stroke-width="1" />
+<line x1="154.4" y1="387.6" x2="215.6" y2="387.6" stroke="#64748B" stroke-width="1" />
+<line x1="154.4" y1="409.2" x2="215.6" y2="409.2" stroke="#64748B" stroke-width="1" />
+<line x1="154.4" y1="430.8" x2="215.6" y2="430.8" stroke="#64748B" stroke-width="1" />
+<line x1="154.4" y1="452.4" x2="215.6" y2="452.4" stroke="#64748B" stroke-width="1" />
+<text x="183.2" y="344.4" font-size="8" fill="#64748B" text-anchor="middle" font-weight="600" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >楼梯口</text>
+<line x1="184.6" y1="380.4" x2="184.6" y2="481.2" stroke="#111827" stroke-width="2.5" marker-end="url(#arrowDnL2)"/>
+<text x="184.6" y="499.2" font-size="13" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >DN</text>
+<rect x="341.6" y="160.8" width="187.2" height="39.6" fill="#F8FAFC" stroke="#64748B" stroke-width="1.2" />
+<text x="435.2" y="186.0" font-size="8" fill="#64748B" text-anchor="middle" font-weight="600" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >2.6m 设计桌</text>
+<rect x="413.6" y="150.0" width="36.0" height="14.4" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="1"/>
+<text x="431.6" y="146.4" font-size="6" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >显示器</text>
+<rect x="413.6" y="222.0" width="36.0" height="36.0" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="6"/>
+<text x="431.6" y="247.2" font-size="7" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >工作椅</text>
+<rect x="316.4" y="222.0" width="21.6" height="180.0" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
+<text x="305.6" y="312.0" font-size="7" fill="#64748B" text-anchor="end" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" transform="rotate(-90,305.6,312.0)">资</text>
+<text x="305.6" y="326.4" font-size="7" fill="#64748B" text-anchor="end" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" transform="rotate(-90,305.6,326.4)">料</text>
+<text x="305.6" y="340.8" font-size="7" fill="#64748B" text-anchor="end" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" transform="rotate(-90,305.6,340.8)">柜</text>
+<rect x="356.0" y="481.2" width="288.0" height="28.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
+<text x="500.0" y="501.4" font-size="7" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >矮柜</text>
+<rect x="647.6" y="207.6" width="7.2" height="122.4" fill="#F8FAFC" stroke="#64748B" stroke-width="1.2" />
+<text x="665.6" y="272.4" font-size="6" fill="#64748B" text-anchor="start" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >软木板</text>
+<rect x="680.0" y="157.2" width="216.0" height="50.4" fill="#F8FAFC" stroke="#64748B" stroke-width="1.2" rx="4"/>
+<text x="788.0" y="189.6" font-size="8" fill="#64748B" text-anchor="middle" font-weight="600" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >浴缸</text>
+<rect x="680.0" y="222.0" width="36.0" height="39.6" fill="none" stroke="#64748B" stroke-width="1" rx="4"/>
+<text x="698.0" y="247.2" font-size="7" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >坐便</text>
+<rect x="752.0" y="279.6" width="165.6" height="32.4" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
+<text x="834.8" y="301.2" font-size="7" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >双台盆洗手台</text>
+<rect x="662.0" y="531.6" width="25.2" height="100.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
+<rect x="820.4" y="531.6" width="25.2" height="100.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
+<rect x="687.2" y="625.2" width="129.6" height="14.4" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
+<line x1="672.8" y1="546.0" x2="672.8" y2="618.0" stroke="#64748B" stroke-width="1.5" />
+<line x1="834.8" y1="546.0" x2="834.8" y2="618.0" stroke="#64748B" stroke-width="1.5" />
+<line x1="716.0" y1="631.0" x2="802.4" y2="631.0" stroke="#64748B" stroke-width="1.5" />
+<text x="752.0" y="585.6" font-size="9" fill="#64748B" text-anchor="middle" font-weight="600" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >衣帽间</text>
+<rect x="716.0" y="740.4" width="129.6" height="72.0" fill="#F8FAFC" stroke="#64748B" stroke-width="1.2" rx="3"/>
+<text x="780.8" y="783.6" font-size="9" fill="#64748B" text-anchor="middle" font-weight="600" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >1.8m 床</text>
+<rect x="726.8" y="744.0" width="39.6" height="18.0" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="2"/>
+<rect x="795.2" y="744.0" width="39.6" height="18.0" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="2"/>
+<rect x="687.2" y="762.0" width="28.8" height="28.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="2"/>
+<rect x="845.6" y="762.0" width="28.8" height="28.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="2"/>
+<rect x="910.4" y="654.0" width="28.8" height="180.0" fill="#F8FAFC" stroke="#64748B" stroke-width="1.2" />
+<text x="928.4" y="747.6" font-size="7" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" transform="rotate(-90,928.4,747.6)">衣柜</text>
+<rect x="755.6" y="697.2" width="36.0" height="28.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="4"/>
+<text x="773.6" y="717.4" font-size="6" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >榻</text>
+<rect x="161.6" y="654.0" width="43.2" height="43.2" fill="#F8FAFC" stroke="#64748B" stroke-width="1" rx="5"/>
+<text x="183.2" y="682.8" font-size="7" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >阅读椅</text>
+<circle cx="176.0" cy="610.8" r="10.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1"/>
+<text x="183.2" y="438.0" font-size="12" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >楼梯口</text>
+<text x="183.2" y="463.2" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >5.0㎡</text>
+<text x="183.2" y="726.0" font-size="12" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >走廊</text>
+<text x="183.2" y="751.2" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >3.5㎡</text>
+<text x="485.6" y="351.6" font-size="18" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >工作室</text>
+<text x="485.6" y="376.8" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >18.5㎡</text>
+<text x="802.4" y="243.6" font-size="14" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >主卫</text>
+<text x="802.4" y="268.8" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >5.8㎡</text>
+<text x="442.4" y="474.0" font-size="14" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >桥廊</text>
+<text x="442.4" y="499.2" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >7.2㎡</text>
+<text x="752.0" y="582.0" font-size="13" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >衣帽间</text>
+<text x="752.0" y="607.2" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >4.5㎡</text>
+<text x="802.4" y="754.8" font-size="18" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >主卧</text>
+<text x="802.4" y="780.0" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >12.5㎡</text>
+<line x1="140.0" y1="870.0" x2="140.0" y2="990.2" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="870.0" x2="946.4" y2="990.2" stroke="#64748B" stroke-width="0.8"/>
+<line x1="140.0" y1="985.2" x2="946.4" y2="985.2" stroke="#64748B" stroke-width="0.8"/>
+<line x1="135.0" y1="980.2" x2="145.0" y2="990.2" stroke="#64748B" stroke-width="0.8"/>
+<line x1="941.4" y1="980.2" x2="951.4" y2="990.2" stroke="#64748B" stroke-width="0.8"/>
+<text x="543.2" y="999.2" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">11200 楼板总宽</text>
+<line x1="140.0" y1="870.0" x2="140.0" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="255.2" y1="870.0" x2="255.2" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="140.0" y1="942.0" x2="255.2" y2="942.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="135.0" y1="937.0" x2="145.0" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="250.2" y1="937.0" x2="260.2" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<text x="197.6" y="956.0" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">1600</text>
+<line x1="658.4" y1="870.0" x2="658.4" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="870.0" x2="946.4" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="658.4" y1="942.0" x2="946.4" y2="942.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="653.4" y1="937.0" x2="663.4" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="941.4" y1="937.0" x2="951.4" y2="947.0" stroke="#64748B" stroke-width="0.8"/>
+<text x="802.4" y="956.0" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">4000</text>
+<line x1="672.8" y1="870.0" x2="672.8" y2="907.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="870.0" x2="946.4" y2="907.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="672.8" y1="902.4" x2="946.4" y2="902.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="667.8" y1="897.4" x2="677.8" y2="907.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="941.4" y1="897.4" x2="951.4" y2="907.4" stroke="#64748B" stroke-width="0.8"/>
+<text x="809.6" y="916.4" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">3800 主卧落地窗</text>
+<line x1="442.4" y1="106.8" x2="442.4" y2="-13.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="106.8" x2="946.4" y2="-13.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="442.4" y1="-8.4" x2="946.4" y2="-8.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="437.4" y1="-13.4" x2="447.4" y2="-3.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="941.4" y1="-13.4" x2="951.4" y2="-3.4" stroke="#64748B" stroke-width="0.8"/>
+<text x="694.4" y="-13.4" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">7000 北向设备带</text>
+<line x1="456.8" y1="106.8" x2="456.8" y2="29.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="658.4" y1="106.8" x2="658.4" y2="29.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="456.8" y1="34.8" x2="658.4" y2="34.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="451.8" y1="29.8" x2="461.8" y2="39.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="653.4" y1="29.8" x2="663.4" y2="39.8" stroke="#64748B" stroke-width="0.8"/>
+<text x="557.6" y="29.8" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">2800 工作室窗</text>
+<line x1="881.6" y1="106.8" x2="881.6" y2="29.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="106.8" x2="946.4" y2="29.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="881.6" y1="34.8" x2="946.4" y2="34.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="876.6" y1="29.8" x2="886.6" y2="39.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="941.4" y1="29.8" x2="951.4" y2="39.8" stroke="#64748B" stroke-width="0.8"/>
+<text x="914.0" y="29.8" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">900</text>
+<line x1="140.0" y1="106.8" x2="19.8" y2="106.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="140.0" y1="870.0" x2="19.8" y2="870.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="24.8" y1="106.8" x2="24.8" y2="870.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="19.8" y1="101.8" x2="29.8" y2="111.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="19.8" y1="865.0" x2="29.8" y2="875.0" stroke="#64748B" stroke-width="0.8"/>
+<text x="10.8" y="488.4" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" transform="rotate(-90,10.8,488.4)">10600 总进深</text>
+<line x1="140.0" y1="150.0" x2="63.0" y2="150.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="140.0" y1="524.4" x2="63.0" y2="524.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="68.0" y1="150.0" x2="68.0" y2="524.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="63.0" y1="145.0" x2="73.0" y2="155.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="63.0" y1="519.4" x2="73.0" y2="529.4" stroke="#64748B" stroke-width="0.8"/>
+<text x="54.0" y="337.2" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" transform="rotate(-90,54.0,337.2)">5200</text>
+<line x1="140.0" y1="524.4" x2="63.0" y2="524.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="140.0" y1="798.0" x2="63.0" y2="798.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="68.0" y1="524.4" x2="68.0" y2="798.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="63.0" y1="519.4" x2="73.0" y2="529.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="63.0" y1="793.0" x2="73.0" y2="803.0" stroke="#64748B" stroke-width="0.8"/>
+<text x="54.0" y="661.2" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" transform="rotate(-90,54.0,661.2)">3800 走廊</text>
+<line x1="946.4" y1="106.8" x2="1066.6" y2="106.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="524.4" x2="1066.6" y2="524.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1061.6" y1="106.8" x2="1061.6" y2="524.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1056.6" y1="101.8" x2="1066.6" y2="111.8" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1056.6" y1="519.4" x2="1066.6" y2="529.4" stroke="#64748B" stroke-width="0.8"/>
+<text x="1075.6" y="315.6" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" transform="rotate(-90,1075.6,315.6)">5800</text>
+<line x1="946.4" y1="639.6" x2="1066.6" y2="639.6" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="870.0" x2="1066.6" y2="870.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1061.6" y1="639.6" x2="1061.6" y2="870.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1056.6" y1="634.6" x2="1066.6" y2="644.6" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1056.6" y1="865.0" x2="1066.6" y2="875.0" stroke="#64748B" stroke-width="0.8"/>
+<text x="1075.6" y="754.8" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" transform="rotate(-90,1075.6,754.8)">3200 主卧</text>
+<line x1="946.4" y1="668.4" x2="983.8" y2="668.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="798.0" x2="983.8" y2="798.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="978.8" y1="668.4" x2="978.8" y2="798.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="973.8" y1="663.4" x2="983.8" y2="673.4" stroke="#64748B" stroke-width="0.8"/>
+<line x1="973.8" y1="793.0" x2="983.8" y2="803.0" stroke="#64748B" stroke-width="0.8"/>
+<text x="992.8" y="733.2" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" transform="rotate(-90,992.8,733.2)">1800 内窗</text>
+<line x1="946.4" y1="236.4" x2="946.4" y2="199.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1061.6" y1="236.4" x2="1061.6" y2="199.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="946.4" y1="204.0" x2="1061.6" y2="204.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="941.4" y1="199.0" x2="951.4" y2="209.0" stroke="#64748B" stroke-width="0.8"/>
+<line x1="1056.6" y1="199.0" x2="1066.6" y2="209.0" stroke="#64748B" stroke-width="0.8"/>
+<text x="1004.0" y="199.0" font-size="11" fill="#334155" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">1600 (挑空)</text>
+<circle cx="1290" cy="100" r="28" fill="white" stroke="#111827" stroke-width="1.2"/>
+<polygon points="1290,77 1283,108 1290,102 1297,108" fill="#111827"/>
+<text x="1290" y="67" font-size="14" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">N</text>
+<text x="1290" y="146" font-size="10" fill="#475569" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif">南 · 江景方向 ↓</text>
+<rect x="1130" y="140" width="250" height="600" fill="white" stroke="#64748B" stroke-width="0.8"/>
+<text x="1255.0" y="162" font-size="14" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">图 例</text>
+<line x1="1145" y1="190" x2="1185" y2="190" stroke="#111827" stroke-width="6" stroke-linecap="square"/>
+<text x="1200" y="194" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">二层外墙 (6px 实线)</text>
+<line x1="1145" y1="218" x2="1185" y2="218" stroke="#1E293B" stroke-width="3" stroke-linecap="square"/>
+<text x="1200" y="222" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">内墙 (3px 实线)</text>
+<line x1="1145" y1="246" x2="1185" y2="246" stroke="#94A3B8" stroke-width="1.2" stroke-dasharray="6,3"/>
+<text x="1200" y="250" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">一层轮廓 (浅灰虚线)</text>
+<rect x="1145" y="266" width="40" height="14" fill="#F1F5F9" stroke="#94A3B8" stroke-width="0.8"/>
+<rect x="1145" y="266" width="40" height="14" fill="url(#hatchVoidL2)" opacity="0.7"/>
+<text x="1200" y="278" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">挑空区 (斜线填充)</text>
+<line x1="1145" y1="302" x2="1185" y2="302" stroke="#475569" stroke-width="1.5"/>
+<line x1="1145" y1="306" x2="1185" y2="306" stroke="#475569" stroke-width="0.8"/>
+<text x="1200" y="306" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">玻璃护栏 (双线)</text>
+<line x1="1145" y1="327" x2="1185" y2="327" stroke="#475569" stroke-width="1"/>
+<line x1="1145" y1="329" x2="1185" y2="329" stroke="#475569" stroke-width="1"/>
+<line x1="1145" y1="331" x2="1185" y2="331" stroke="#475569" stroke-width="1"/>
+<line x1="1145" y1="333" x2="1185" y2="333" stroke="#475569" stroke-width="1"/>
+<text x="1200" y="334" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">窗 (四线符号)</text>
+<line x1="1145" y1="358" x2="1145" y2="333" stroke="#334155" stroke-width="2" stroke-linecap="round"/>
+<path d="M 1145 333 A 25 25 0 0 1 1170 358" fill="none" stroke="#334155" stroke-width="1.2"/>
+<text x="1200" y="362" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">平开门 (门扇+开启弧)</text>
+<line x1="1147" y1="384" x2="1167" y2="384" stroke="#334155" stroke-width="3" opacity="0.7" stroke-linecap="round"/>
+<line x1="1157" y1="390" x2="1183" y2="390" stroke="#334155" stroke-width="3" opacity="0.7" stroke-linecap="round"/>
+<line x1="1145" y1="378" x2="1185" y2="378" stroke="#334155" stroke-width="0.6"/>
+<line x1="1145" y1="394" x2="1185" y2="394" stroke="#334155" stroke-width="0.6"/>
+<text x="1200" y="390" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">推拉门 (轨道+错位门扇)</text>
+<line x1="1145" y1="402" x2="1185" y2="402" stroke="#64748B" stroke-width="1"/>
+<line x1="1145" y1="408" x2="1185" y2="408" stroke="#64748B" stroke-width="1"/>
+<line x1="1145" y1="414" x2="1185" y2="414" stroke="#64748B" stroke-width="1"/>
+<line x1="1145" y1="420" x2="1185" y2="420" stroke="#64748B" stroke-width="1"/>
+<polygon points="1165,418 1161,410 1169,410" fill="#111827"/>
+<text x="1165" y="430" font-size="7" fill="#111827" text-anchor="middle" font-weight="700">DN</text>
+<text x="1200" y="418" font-size="11" fill="#111827" font-family="'PingFang SC','Microsoft YaHei',sans-serif">楼梯 (DN=下楼方向)</text>
+<line x1="1140" y1="457" x2="1370" y2="457" stroke="#64748B" stroke-width="0.5"/>
+<text x="1255.0" y="477" font-size="13" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">房间面积表</text>
+<text x="1145" y="505" font-size="10" fill="#475569" font-family="'PingFang SC','Microsoft YaHei',sans-serif">楼梯口/走廊</text>
+<text x="1365" y="505" font-size="10" fill="#475569" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif">8.5 ㎡</text>
+<text x="1145" y="523" font-size="10" fill="#475569" font-family="'PingFang SC','Microsoft YaHei',sans-serif">工作室</text>
+<text x="1365" y="523" font-size="10" fill="#475569" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif">18.5 ㎡</text>
+<text x="1145" y="541" font-size="10" fill="#475569" font-family="'PingFang SC','Microsoft YaHei',sans-serif">主卫</text>
+<text x="1365" y="541" font-size="10" fill="#475569" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif">5.8 ㎡</text>
+<text x="1145" y="559" font-size="10" fill="#475569" font-family="'PingFang SC','Microsoft YaHei',sans-serif">桥廊</text>
+<text x="1365" y="559" font-size="10" fill="#475569" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif">7.2 ㎡</text>
+<text x="1145" y="577" font-size="10" fill="#475569" font-family="'PingFang SC','Microsoft YaHei',sans-serif">衣帽间</text>
+<text x="1365" y="577" font-size="10" fill="#475569" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif">4.5 ㎡</text>
+<text x="1145" y="595" font-size="10" fill="#475569" font-family="'PingFang SC','Microsoft YaHei',sans-serif">主卧</text>
+<text x="1365" y="595" font-size="10" fill="#475569" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif">12.5 ㎡</text>
+<line x1="1140" y1="607" x2="1370" y2="607" stroke="#111827" stroke-width="1"/>
+<text x="1145" y="625" font-size="11" fill="#111827" font-weight="700" font-family="'PingFang SC','Microsoft YaHei',sans-serif">二层合计</text>
+<text x="1365" y="625" font-size="11" fill="#111827" font-weight="700" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif">约 52 ㎡</text>
+<text x="572.0" y="895.2" font-size="11" fill="#475569" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >南 · 江景方向</text>
+</svg>

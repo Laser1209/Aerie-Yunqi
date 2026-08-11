@@ -312,6 +312,12 @@ def _world_dashboard_public_world_summary(value: Any) -> dict[str, Any]:
             ("phase", "phase"),
             ("location", "location"),
             ("activity", "activity"),
+            ("energy", "energy"),
+            # 房间级细粒度定位（方向5）：透传楼层/区域/大致位置/周边物件到世界界面。
+            ("floor", "floor"),
+            ("zone", "zone"),
+            ("positionDesc", "position_desc", "positionDesc"),
+            ("nearbyObjects", "nearby_objects", "nearbyObjects"),
             ("weather", "weather", "weather_mood"),
             ("weatherMood", "weather_mood", "weather"),
             ("weatherDetail", "weather_detail", "weatherDetail"),

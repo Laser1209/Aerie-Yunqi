@@ -46,12 +46,46 @@
           <div class="wdw-scene-meta">
             <dl class="wdw-kv">
               <div><dt>地点</dt><dd id="wdw-location">--</dd></div>
+              <div><dt>楼层</dt><dd id="wdw-floor">--</dd></div>
               <div><dt>活动</dt><dd id="wdw-activity">--</dd></div>
               <div><dt>精力</dt><dd id="wdw-energy">--</dd></div>
               <div><dt>阶段</dt><dd id="wdw-phase">--</dd></div>
               <div><dt>天气</dt><dd id="wdw-weather">--</dd></div>
               <div><dt>时间</dt><dd id="wdw-generated">--</dd></div>
             </dl>
+          </div>
+          <!-- 平面图底图 + 光球位置指示（房间级定位可视化） -->
+          <div id="wdw-map" class="wdw-map" hidden>
+            <div class="wdw-map-frame">
+              <img id="wdw-map-img" class="wdw-map-img"
+                   alt="伊塔的复式公寓平面图"
+                   draggable="false" />
+              <!-- Agent 当前位置光球（光圈呼吸 + 中心点） -->
+              <div id="wdw-map-orb" class="wdw-map-orb" hidden>
+                <span class="wdw-map-orb-pulse" aria-hidden="true"></span>
+                <span class="wdw-map-orb-dot" aria-hidden="true"></span>
+                <span id="wdw-map-zone-label" class="wdw-map-zone-label">--</span>
+              </div>
+            </div>
+          </div>
+          <!-- 当前位置指示器：房间级定位（楼层/区域）可视化 -->
+          <div id="wdw-loc-indicator" class="wdw-loc-indicator" hidden>
+            <div class="wdw-loc-pulse" aria-hidden="true">
+              <span class="wdw-loc-pulse-ring"></span>
+              <span class="wdw-loc-pulse-ring"></span>
+              <span class="wdw-loc-pulse-dot"></span>
+            </div>
+            <span id="wdw-loc-pos" class="wdw-loc-pos">--</span>
+            <div class="wdw-loc-floor" aria-hidden="true">
+              <div class="wdw-loc-floor-cell" data-floor="2">
+                <span class="wdw-loc-floor-label">2F</span>
+                <span class="wdw-loc-floor-zone"></span>
+              </div>
+              <div class="wdw-loc-floor-cell" data-floor="1">
+                <span class="wdw-loc-floor-label">1F</span>
+                <span class="wdw-loc-floor-zone"></span>
+              </div>
+            </div>
           </div>
         </div>
         <!-- 情绪 PAD 摘要 -->

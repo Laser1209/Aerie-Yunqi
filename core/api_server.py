@@ -852,6 +852,16 @@ def _main_process_request_authorized(request: Request) -> bool:
     return bool(expected and provided) and secrets.compare_digest(expected, provided)
 
 
+def _memory_write_validation_enabled() -> bool:
+    """P2 写入校验门开关（§3.7-2），PoC 阶段默认关闭。"""
+    try:
+        from core.feature_flags import FeatureFlags
+
+        return bool(FeatureFlags().is_enabled("memory_write_validation_v1"))
+    except Exception:
+        return False
+
+
 @app.post("/api/world/runtime/bind")
 async def world_runtime_bind(request: Request) -> Response:
     if not _main_process_request_authorized(request):
@@ -5030,7 +5040,26 @@ async def knowledge_add(request: Request) -> dict:
         return JSONResponse({"error": "category, title and content are required"}, status_code=400)
     try:
         item_id = _knowledge.add(*fields)
-        return JSONResponse(_knowledge.get(item_id), status_code=201)
+        result = _knowledge.get(item_id)
+        # P2 写入校验门（§3.7-2）：flag 开启时对关键知识做一致性校验，
+        # 结果附加到响应与日志，不阻塞写入（PoC 观察期）。
+        if _memory_write_validation_enabled():
+            try:
+                from core.memory_validation import validate_fact
+
+                verdict = await validate_fact(
+                    str(fields[2] or ""),
+                    channel="system",
+                    source="knowledge_add",
+                    importance=7,
+                    timeout=5.0,
+                )
+                result = dict(result or {})
+                result["validation"] = verdict
+                logger.info("knowledge_add validation verdict=%s", verdict.get("status"))
+            except Exception:
+                logger.exception("knowledge_add validation error")
+        return JSONResponse(result, status_code=201)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

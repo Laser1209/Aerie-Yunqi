@@ -476,7 +476,7 @@ class WorldImageCandidateConsumer:
             workflow_result=workflow_result,
         )
         if completed:
-            await self._deliver(workflow_result)
+            await self._deliver(workflow_result, candidate)
             self._record_push(candidate["scene"])
             self._record_budget("proactive", candidate)
         acked = await self._ack(_event_sequence(event))
@@ -860,7 +860,7 @@ class WorldImageCandidateConsumer:
             },
         )
 
-    async def _deliver(self, workflow_result: dict[str, Any]) -> bool:
+    async def _deliver(self, workflow_result: dict[str, Any], candidate: dict[str, Any] | None = None) -> bool:
         """Deliver a completed image to an external channel via the injected sender.
 
         Best-effort: the workflow already produced the asset and delivery plan;
@@ -877,6 +877,12 @@ class WorldImageCandidateConsumer:
         channel = str(plan.get("channel") or "").lower()
         if channel not in {"qq", "local_chat"}:
             return False
+        # 把候选的语义字段注入 delivery plan，供 sender 生成图片事件描述（P3）：
+        # 聊天要图 / 主动发图两条路径都汇聚到 consumer，发送端据此知道"发了张什么图"。
+        if isinstance(candidate, dict):
+            plan.setdefault("reason_code", str(candidate.get("reason_code") or ""))
+            plan.setdefault("prompt_key", str(candidate.get("prompt_key") or ""))
+            plan.setdefault("scene", str(candidate.get("scene") or ""))
         try:
             result = self.sender(plan, workflow_result)
             if hasattr(result, "__await__"):

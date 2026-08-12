@@ -1076,3 +1076,82 @@ def test_room_fallback_empty_returns_base():
     out = _fallback_injector()("base。", {"prompt_key": "role_selfie"}, {"prompt_key": "role_selfie"})
     assert out == "base。"
 
+
+# ── P3：consumer 派发时把候选语义字段注入 delivery plan（发图自我认知） ──
+class _PlanCaptureSender:
+    """记录 sender 收到的 plan，用于断言注入的语义字段。"""
+
+    def __init__(self) -> None:
+        self.plan: dict | None = None
+
+    async def __call__(self, plan: dict, workflow_result: dict) -> bool:
+        self.plan = dict(plan)
+        return True
+
+
+@pytest.mark.asyncio
+async def test_deliver_injects_candidate_fields_to_plan(tmp_path):
+    """_deliver 把 candidate 的 reason_code/prompt_key/scene 注入 delivery plan，
+    供 sender 生成图片事件描述（P3：发图后知道图里是什么）。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    sender = _PlanCaptureSender()
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "deliver-inject.json"),
+        clock=_clock,
+        sender=sender,
+    )
+    workflow_result = {
+        "delivery_plan": {
+            "channel": "qq",
+            "target": "3489352115",
+            "delivery_plan_id": "delivery-p3",
+        },
+    }
+    ok = await consumer._deliver(
+        workflow_result,
+        {
+            "reason_code": "world_visual:reading_time",
+            "prompt_key": "role_in_scene",
+            "scene": "life_share",
+        },
+    )
+    assert ok is True
+    assert sender.plan is not None
+    assert sender.plan["reason_code"] == "world_visual:reading_time"
+    assert sender.plan["prompt_key"] == "role_in_scene"
+    assert sender.plan["scene"] == "life_share"
+
+
+@pytest.mark.asyncio
+async def test_deliver_without_candidate_keeps_plan_unchanged(tmp_path):
+    """无 candidate 时 plan 不被注入额外字段（幂等兼容旧调用方）。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    sender = _PlanCaptureSender()
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "deliver-no-cand.json"),
+        clock=_clock,
+        sender=sender,
+    )
+    plan = {"channel": "qq", "target": "123", "delivery_plan_id": "d0"}
+    ok = await consumer._deliver({"delivery_plan": plan})
+    assert ok is True
+    assert sender.plan == plan
+

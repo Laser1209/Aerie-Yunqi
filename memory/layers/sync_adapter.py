@@ -188,5 +188,8 @@ class LayeredMemorySyncAdapter:
                 "created_at": d.get("created_at"),
                 "updated_at": d.get("updated_at"),
                 "confidence": d.get("confidence"),
+                # P3-4 EVENT 记忆召回需要 occurred_at（按时间线排序/过滤）；
+                # 新增字段，不改已有字段，缺失时置空由调用方兜底。
+                "metadata": d.get("metadata") or {},
             })
         return rows[: int(limit)]

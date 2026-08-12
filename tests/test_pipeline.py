@@ -506,3 +506,17 @@ class TestPipelineRouteModes:
         msg = IncomingMessage.from_local("hi", 3489352115)
         result = await pipeline.handle(msg, force_full=True)
         assert result is not None
+
+
+# ── P3 发图自我认知：用户追问"你发的什么"能触发事件记忆召回 ──
+def test_recall_keywords_include_photo_followups():
+    """_RECALL_KEYWORDS 必须含发图回忆触发词，否则用户追问图片内容不会触发召回。"""
+    kws = Pipeline._RECALL_KEYWORDS
+    for phrase in ("你发的", "发的什么", "那张图", "那张照片", "照片给我看"):
+        assert phrase in kws, f"RECALL keywords missing photo follow-up: {phrase}"
+
+
+def test_recall_keywords_still_include_legacy():
+    kws = Pipeline._RECALL_KEYWORDS
+    assert "你记得" in kws
+    assert "还记得" in kws

@@ -126,6 +126,100 @@ def _merged_home_objects_zh() -> dict[str, str]:
 _HER_HOME_OBJECTS_ZH: dict[str, str] = _merged_home_objects_zh()
 
 
+# 活动/时刻话题 → 中文画面描述（P2 修复）。世界模拟产出的 available_visual_topics
+# 除 object_<obj> 物件话题外，还有按 activity 派生的话题（reading_time / deep_focus /
+# coffee_break 等）。这些话题曾直接以英文 token 进生图提示词（"…眼前的一角：reading_time"）。
+# 这里补全中文翻译，覆盖 world_simulation._ACTIVITY_TOPIC_PREFIXES 全部前缀，
+# 供环境照 prompt、role_in_scene 人物时刻、以及 _world_context_text 接力上下文统一翻译。
+_VISUAL_TOPIC_ZH: dict[str, str] = {
+    "reading_time": "她窝在沙发里翻书",
+    "deep_focus": "她在工作台前专注地画着设计稿",
+    "morning_plan": "清晨她在桌前做今天的计划",
+    "coffee_break": "她端着咖啡杯短暂休息的片刻",
+    "lunch_time": "她的午餐时光",
+    "tea_break": "她泡了杯茶的茶歇时刻",
+    "evening_chill": "她靠在窗边放松的傍晚时光",
+    "good_night": "她睡前窝在床上的片刻",
+    "starry_window": "窗外洒进来的星空夜色",
+    "desk_view": "她书桌前一角",
+    "quiet_moment": "她安安静静独处的时刻",
+    # 兼容历史旧话题名（不在 _ACTIVITY_TOPIC_PREFIXES 但可能来自旧数据/POI）
+    "evening_home": "她家中的傍晚一景",
+    "city_night": "窗外重庆的夜景",
+    "river_view": "落地窗外的江景",
+}
+
+
+def _visual_topic_zh(topic: str) -> str:
+    """把视觉话题 id 翻译成中文画面描述；物件话题走 _HER_HOME_OBJECTS_ZH，未知兜底原文。
+
+    翻译优先级：活动时刻话题（_VISUAL_TOPIC_ZH）→ 物件话题（_HER_HOME_OBJECTS_ZH）
+    → 原样返回。任何已知话题都不该把英文 token 漏进生图提示词。
+    """
+    text = str(topic or "").strip()
+    if not text:
+        return ""
+    if text in _VISUAL_TOPIC_ZH:
+        return _VISUAL_TOPIC_ZH[text]
+    stripped = text.replace("object_", "", 1) if text.startswith("object_") else text
+    if stripped in _HER_HOME_OBJECTS_ZH:
+        return _HER_HOME_OBJECTS_ZH[stripped]
+    return text
+
+
+def _prompt_key_for_visual_topic(topic: str) -> str:
+    """按素材类型决断发图模板：活动/时刻话题 → 人物入镜（role_in_scene），
+    物件/环境话题 → 第一人称环境照（environment_object）。未知话题回退环境照。
+
+    P2 修复：主动发图曾把所有话题都塞进 environment_object，导致"看书/咖啡"
+    这类人物时刻也生成"随手拍的一角"环境照，模板能力被浪费。
+    """
+    text = str(topic or "").strip()
+    if not text:
+        return "environment_object"
+    stripped = text.replace("object_", "", 1) if text.startswith("object_") else text
+    # 物件话题（含 OBJ-xxx 与旧英文物件 id）→ 环境照
+    if text.startswith("object_") or text.startswith("OBJ-"):
+        return "environment_object"
+    if text in _HER_HOME_OBJECTS_ZH or stripped in _HER_HOME_OBJECTS_ZH:
+        return "environment_object"
+    # 活动时刻话题 → 人物自拍入镜（POV 由 M1 保证）
+    if text in _VISUAL_TOPIC_ZH:
+        return "role_in_scene"
+    return "environment_object"
+
+
+# prompt_key → 图片事件的中文描述（P3 发图自我认知）。用户/系统主动发图落账时，
+# 若没有可翻译的视觉话题（reason_code 无 world_visual 前缀），用这个映射兜底。
+_IMAGE_PROMPT_KEY_ZH: dict[str, str] = {
+    "role_selfie": "她的一张自拍",
+    "role_in_scene": "她在场景里的一张照片",
+    "couple_photo": "他们的合照",
+    "environment_object": "她随手拍的生活一角",
+}
+
+
+def _image_event_desc(plan: dict) -> str:
+    """从 delivery plan 生成图片事件的中文描述（P3）。
+
+    优先级：视觉话题翻译（world_visual:<topic> → _VISUAL_TOPIC_ZH/_HER_HOME_OBJECTS_ZH）
+    → prompt_key 兜底映射 → 通用描述。保证聊天历史/记忆里有"图里是什么"。
+    """
+    plan = plan if isinstance(plan, dict) else {}
+    reason_code = str(plan.get("reason_code") or "").strip()
+    topic = ""
+    if reason_code.startswith("world_visual:"):
+        topic = reason_code.split("world_visual:", 1)[1].replace("object_", "").strip()
+    if topic:
+        zh = _visual_topic_zh(topic)
+        if zh and zh != topic:
+            return zh
+    prompt_key = str(plan.get("prompt_key") or "").strip()
+    if prompt_key in _IMAGE_PROMPT_KEY_ZH:
+        return _IMAGE_PROMPT_KEY_ZH[prompt_key]
+    return "她发来的一张照片"
+
+
 # ── 生图构图：手机拍摄比例（横 16:9 / 竖 9:16），横竖由伊塔按场景自决 ──
 # 自拍/人像/合影 → 竖屏 9:16；环境/物件/风景 → 横屏 16:9。
 # 尺寸满足中转站规则（边长 512~4096 且为 64 的倍数），1344x768 ≈ 16:9、768x1344 ≈ 9:16。
@@ -210,6 +304,21 @@ _PHOTO_STYLE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("氛围感", ("氛围", "意境", "情绪")),
 )
 
+# 手持自拍硬约束（POV）：所有人物类生图必须以此为前提——照片是伊塔本人手持
+# 手机拍的（前置自拍 / 后置对镜 / 支架定时），绝不出现第三方拍摄者视角。
+# 通过三个闸口保证：①基础提示词模板追加；②组合器机位措辞自拍化；
+# ③_ensure_selfie_pov 出口兜底。与 _PHOTO_POSE_PHRASE 等并列放在表定义区。
+_SELFIE_POV_PHRASE = (
+    "这张照片由她本人手持手机拍摄，画面角落可见她的手指或手机边缘，微微手持感，绝无他人拍摄。"
+)
+
+# POV 黑名单：LLM 接力（_light_relay_refine_prompt）的输出若出现任一关键词，
+# 说明它引入了"第三方拍摄"视角，拒绝采用，回退确定性兜底。仅用于校验输出，
+# 不含会误伤正常描述的泛词（"背后"等语义歧义词不列入）。
+_POV_THIRD_PARTY_BLACKLIST: tuple[str, ...] = (
+    "摄影师", "他人拍摄", "旁观", "第三人称", "路人", "拍摄者", "别人拍",
+)
+
 # 姿态标签 → 自然措辞（组合器输出"她{phrase}"，避免"她坐/她躺"这类生硬表述）。
 _PHOTO_POSE_PHRASE: dict[str, str] = {
     "侧躺": "侧躺在床上",
@@ -221,6 +330,20 @@ _PHOTO_POSE_PHRASE: dict[str, str] = {
     "蹲下": "蹲着",
     "盘腿": "盘着腿",
     "跷腿": "跷着腿",
+}
+
+# 机位标签 → 自拍化措辞（POV 约束）：保留关键词解析（_PHOTO_ANGLE_TABLE 不变），
+# 仅把"拍摄机位"的输出措辞重定义为"她本人手持手机"的自拍取景，杜绝"别人拍她"。
+_PHOTO_ANGLE_PHRASE: dict[str, str] = {
+    "仰视低角度": "她手持手机放低，从低处自拍取景",
+    "俯视高角度": "她举高手机，从上往下俯拍自己",
+    "平视": "她手持手机平视自拍",
+    "第一人称": "第一人称手持自拍视角",
+    "特写": "她手持手机近距离特写自拍",
+    "全身入镜": "她手持手机（或自拍杆）把全身收进画面",
+    # focus 协同覆盖（背影）补出的机位：后置对镜/举到身后的自拍取景，
+    # 避免"从后面"被理解成"别人从她背后拍她"。
+    "从后面": "她把手机举到身后，用后置摄像头拍自己的背影",
 }
 
 # focus → 构图协同覆盖规则（方向2）。focus 作为构图主轴，反向约束姿态/机位：
@@ -347,13 +470,30 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
         parts.append(f"她{_PHOTO_POSE_PHRASE.get(pose, pose)}")
     angle = str(spec.get("angle") or "").strip()
     if angle:
-        parts.append(f"拍摄机位：{angle}")
+        # POV 约束：机位一律自拍化措辞，禁止"别人从某角度拍她"的第三方解读。
+        parts.append(f"拍摄机位：{_PHOTO_ANGLE_PHRASE.get(angle, angle)}")
     style = str(spec.get("style") or "").strip()
     if style:
         parts.append(f"整体氛围{style}")
     if not parts:
         return base
     return f"{base}{'，'.join(parts)}。"
+
+
+def _ensure_selfie_pov(prompt: str, prompt_key: str) -> str:
+    """POV 出口兜底：人物类提示词若缺手持自拍前提，自动追加 _SELFIE_POV_PHRASE。
+
+    幂等：已含手持类关键词（手持手机/自拍/前置摄像头/手机边缘）时不重复追加，
+    避免多次接力后约束叠加成噪音。environment_object（环境照）不强制带人物，
+    第一人称视角由模板天然保证，跳过追加。
+    """
+    text = str(prompt or "")
+    key = str(prompt_key or "default")
+    if key == "environment_object":
+        return text
+    if any(kw in text for kw in ("手持手机", "自拍", "前置摄像头", "手机边缘")):
+        return text
+    return f"{text}{_SELFIE_POV_PHRASE}"
 
 
 # ── 生图上下文：世界数据按场景选择性进画面 ──────────────────────
@@ -1179,7 +1319,7 @@ class Companion:
         async def _deliver_world_image(plan: dict, workflow_result: dict) -> bool:
             channel = str(plan.get("channel") or "").lower()
             if channel == "local_chat":
-                return _deliver_local_chat_image(plan, workflow_result)
+                return await _deliver_local_chat_image(plan, workflow_result)
             target = str(plan.get("target") or "").strip()
             if not target.isdigit():
                 primary = self.get_primary_user_selection()
@@ -1191,9 +1331,39 @@ class Companion:
             if not image_ref:
                 logger.warning("[WorldImage] generated asset missing for delivery")
                 return False
-            return await self.qq.send_image(int(target), image_ref)
+            sent = await self.qq.send_image(int(target), image_ref)
+            if not sent:
+                return False
+            # P3 发图自我认知：QQ 通道补写 chat_log（含中文内容描述）+ 落 EVENT 记忆，
+            # 让"我发了张什么图"进入对话历史与记忆召回，用户追问时能接住。
+            try:
+                desc = _image_event_desc(plan)
+                db = getattr(self, "db", None)
+                if db is not None and hasattr(db, "insert"):
+                    db.insert("chat_log", {
+                        "user_id": int(target),
+                        "role": "assistant",
+                        "content": f"[图片] {desc}",
+                        "msg_type": str(plan.get("scene") or "world_image"),
+                        "route_mode": "PROACTIVE",
+                        "scene": str(plan.get("scene") or "world_image"),
+                        "channel": "qq",
+                    })
+                try:
+                    import os as _os
+                    rel = _os.path.relpath(image_ref, (Path.cwd() / "uploads").resolve())
+                    if not rel.startswith(".."):
+                        image_ref = rel.replace("\\", "/")
+                except Exception:
+                    pass
+                await self._persist_image_event(
+                    int(target), desc, "qq", image_path=str(image_ref),
+                )
+            except Exception:
+                logger.debug("[WorldImage] qq image event record failed", exc_info=True)
+            return True
 
-        def _deliver_local_chat_image(plan: dict, workflow_result: dict) -> bool:
+        async def _deliver_local_chat_image(plan: dict, workflow_result: dict) -> bool:
             asset = workflow_result.get("asset") if isinstance(workflow_result, dict) else {}
             url = str(asset.get("url") or "") if isinstance(asset, dict) else ""
             if not url:
@@ -1204,7 +1374,9 @@ class Companion:
             base = _api_base_url()
             image_url = url if url.startswith("http") else base + (url if url.startswith("/") else "/" + url)
             target = str(plan.get("target") or "").strip() or "master"
-            content = f"![图片]({image_url})"
+            # P3：本地聊天内容补图片描述，让上下文装配能看到"图里是什么"而非只有 URL。
+            desc = _image_event_desc(plan)
+            content = f"![图片]({image_url})\n[图片内容] {desc}"
             scene = str(plan.get("scene") or "world_image")
             message_id: int | str = generate_id("message")
             try:
@@ -1243,6 +1415,16 @@ class Companion:
                 scene=scene if scene else "world_image",
                 channel="desktop",
             )
+            # P3：本地通道也落 EVENT 记忆（content 存相对路径，不存完整 URL）。
+            try:
+                await self._persist_image_event(
+                    int(user_id_int) if "user_id_int" in dir() else 0,
+                    desc,
+                    "desktop",
+                    image_path=str(plan.get("asset_url") or "").lstrip("/"),
+                )
+            except Exception:
+                logger.debug("[WorldImage] local chat image event record failed", exc_info=True)
             logger.info("[WorldImage] delivered generated image to local chat: %s", image_url)
             return True
 
@@ -2477,6 +2659,9 @@ class Companion:
 
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
                 channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
+                # P2：按素材类型决断模板——活动时刻话题（看书/咖啡等）→ 人物自拍
+                # 入镜（role_in_scene），物件/环境话题 → 第一人称环境照（environment_object）。
+                prompt_key = _prompt_key_for_visual_topic(topic_id)
                 publish_result = await self.publish_image_candidate({
                     "candidate_id": f"proactive-visual-{int(now_ts)}",
                     "idempotency_key": f"proactive-visual:{int(now_ts)}",
@@ -2484,11 +2669,11 @@ class Companion:
                     "owner_id": master_id,
                     "channel": channel,
                     "target": master_id,
-                    "prompt_key": "environment_object",
+                    "prompt_key": prompt_key,
                     "reason_code": reason_code,
                     "source": "generated",
                     "score": round(float(chosen.score), 2),
-                    "size": _image_size_for_prompt_key("environment_object"),
+                    "size": _image_size_for_prompt_key(prompt_key),
                 })
                 publish_result = publish_result if isinstance(publish_result, dict) else {}
                 # 发布动作即记录节奏（无论结果，避免失败后立刻重试刷屏）。
@@ -2571,6 +2756,44 @@ class Companion:
         except Exception:
             logger.debug("proactive photo trace patch failed", exc_info=True)
 
+    async def _persist_image_event(
+        self,
+        user_id: int,
+        desc: str,
+        channel: str,
+        image_path: str = "",
+    ) -> None:
+        """P3 发图自我认知：把一次发图落成 EVENT 类型长期记忆，供后续对话召回。
+
+        写入约定（审计 H2/M2）：
+        - importance≥7.0 落 long_term 层——_recall_event_memories 只查 long_term；
+        - metadata 必写 occurred_at（ISO 时间）——召回按它降序过滤；
+        - content 只存中文描述 + 相对路径，不存完整 URL（防泄漏 + 避免无效链接刷屏）。
+        失败仅降级为 debug（发图链路不因落账失败而中断）。
+        """
+        layered = getattr(self, "_layered_memory", None)
+        if layered is None:
+            return
+        from memory.layers.base import MemoryType
+
+        desc = str(desc or "").strip()
+        if not desc:
+            return
+        try:
+            await layered.store(
+                user_id=int(user_id),
+                content=f"我发了一张照片：{desc}"[:200],
+                memory_type=MemoryType.EVENT,
+                importance=7.0,
+                metadata={
+                    "occurred_at": datetime.now(LOCAL_TZ).isoformat(),
+                    "channel": str(channel or ""),
+                    "image_path": str(image_path or ""),
+                },
+            )
+        except Exception:
+            logger.debug("image event memory store failed", exc_info=True)
+
     async def _semantic_photo_spec(self, user_raw: str) -> dict[str, str] | None:
         """轻量 LLM 语义自补：从用户指令推断画面维度 focus/pose/angle/scene/style。
 
@@ -2601,7 +2824,9 @@ class Companion:
             "1. 指令提到身体部位，focus 填对应部位（腿/脚/手/腰/脸/眼睛/背影/头发/全身）。\n"
             "2. 若语义暗示了姿态/机位但未明说，自行补全最合理的（如'看看腿'→pose=坐，angle=特写）。\n"
             "3. 提到环境填 scene，提到氛围/情绪填 style。\n"
-            "4. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字。"
+            "4. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字。\n"
+            "硬性前提：这张照片是伊塔本人手持手机拍摄的自拍（前置自拍/后置对镜/支架定时），"
+            "所有机位都是她自己的取景，不存在摄影师/他人拍摄。angle 只表达她从哪个方位/距离拍自己。"
         )
         try:
             messages = [
@@ -2650,11 +2875,14 @@ class Companion:
         try:
             context = self._image_world_context(candidate)
             if not context:
-                return base
+                return _ensure_selfie_pov(base, prompt_key)
             refined = await self._light_relay_refine_prompt(base, context, candidate)
             if refined:
-                return refined
-            return self._inject_world_context_fallback(base, context, candidate)
+                return _ensure_selfie_pov(refined, prompt_key)
+            return _ensure_selfie_pov(
+                self._inject_world_context_fallback(base, context, candidate),
+                prompt_key,
+            )
         except Exception:
             # 世界数据接力失败不影响生图：退回基础提示词（base 恒非空）。
             # warning 而非 debug：历史空提示词问题曾因 debug 级吞错无法事后复盘，
@@ -2663,7 +2891,7 @@ class Companion:
                 "world image context relay failed; falling back to base prompt (key=%s)",
                 prompt_key, exc_info=True,
             )
-            return base
+            return _ensure_selfie_pov(base, prompt_key)
 
     def _compose_base_image_prompt(self, prompt_key: str, candidate: dict[str, Any] | None = None, spec: dict[str, str] | None = None) -> str:
         """基础提示词：persona 外貌/身材 + 场景构图（不含世界上下文）。"""
@@ -2721,7 +2949,9 @@ class Companion:
             else:
                 topic = ""
             if topic:
-                translated = _HER_HOME_OBJECTS_ZH.get(topic, topic)
+                # P2：统一走 _visual_topic_zh 翻译（活动时刻话题 + 物件话题全覆盖），
+                # 杜绝英文 token（如 reading_time）直接进生图提示词。
+                translated = _visual_topic_zh(topic)
                 return (
                     f"一张写实照片，第一人称视角，{orientation}，她在重庆的家/窗边随手拍下眼前的一角：{translated}。"
                     "画面自然、生活化、暖色调、真实摄影质感，微微的随手感，"
@@ -2734,12 +2964,31 @@ class Companion:
         if key == "role_selfie":
             scene = "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑直视镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
         elif key == "role_in_scene":
-            scene = "她站在重庆高层复式公寓落地窗前，身后是黄昏江景，银灰色长发被晚风轻轻吹起，她侧身望向镜头，笑容温柔。"
+            # POV 约束：自拍视角，画面里能看出是她本人手持手机拍下的这一刻，
+            # 绝不能用"侧身望向镜头"这种第三方拍摄摆姿（那暗示存在一个拍摄者）。
+            # P2 参数化：候选带活动时刻话题（reading_time 等）时，用话题中文描述
+            # 替换固定场景，让"看书/咖啡/傍晚"这类人物时刻真正进画面。
+            topic = str((candidate or {}).get("reason_code") or "")
+            if topic.startswith("world_visual:"):
+                topic = topic.split("world_visual:", 1)[1].strip()
+            else:
+                topic = ""
+            topic_zh = _visual_topic_zh(topic) if topic else ""
+            if topic_zh and topic_zh != topic:
+                scene = (
+                    f"{topic_zh}，她举着手机前置摄像头对着自己，嘴角带笑，"
+                    "像刚拍下这一刻随手发给你，身后是她重庆的家。"
+                )
+            else:
+                scene = "她举着手机前置摄像头对着自己，嘴角带笑，像刚拍下这一刻随手发给你，身后是重庆高层复式公寓落地窗。"
         elif key == "couple_photo":
-            scene = "她与恋人的温馨合影，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
+            scene = "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
         else:
-            scene = "她坐在重庆的家里，窗外是夜景，她神情放松地看着镜头。"
+            scene = "她坐在重庆的家里，窗外是夜景，她手持手机前置摄像头对着自己，神情放松地看着镜头。"
         full = f"{base}{scene}{orientation}。"
+        # POV 硬约束：所有人物类（非环境照）在基础提示词阶段就追加手持自拍前提，
+        # 即便后续世界接力/模块化组合器未显式携带，也保证"她本人手持拍摄"成立。
+        full = f"{full}{_SELFIE_POV_PHRASE}"
         # 用户主动要图（scene=local_send）时，candidate 带 user_raw 原始指令，
         # 用模块化组合器把主体/姿态/机位/场景/风格叠加上去。spec 来源：
         #   1) 语义自补优先（_semantic_photo_spec 已解析，命中任一维度）；
@@ -2900,9 +3149,12 @@ class Companion:
         if activity and activity != "idle":
             lines.append(f"她此刻在：{activity}")
         if nearby:
-            lines.append("房间/周围可见物件：" + "、".join(nearby))
+            # 物件 id 翻译成自然描述再进上下文（环境/物件话题走 _visual_topic_zh）。
+            lines.append("房间/周围可见物件：" + "、".join(_visual_topic_zh(o) for o in nearby))
         if topics:
-            lines.append("可拍的画面主题：" + "、".join(topics))
+            # P2：可拍主题统一翻译后拼接，杜绝英文 token（reading_time 等）经
+            # 轻量 LLM 接力路径泄漏进最终提示词。
+            lines.append("可拍的画面主题：" + "、".join(_visual_topic_zh(t) for t in topics))
         if events:
             lines.append("城市动态：" + "；".join(events))
         return "\n".join(lines) or "（暂无世界数据）"
@@ -2934,7 +3186,10 @@ class Companion:
             "1. 判断哪些背景数据对这张照片的画面有实际影响，只把真正能呈现在画面里的写进提示词；\n"
             "2. 无关的数据不要写（例如室内自拍通常不需要天气、白天照片不要深夜光线），不要堆叠所有数据；\n"
             "3. 保留基础提示词里的人物外貌、身材、风格与构图信息，只做上下文增强；\n"
-            "4. 只用中文输出一条完整、自然、连贯的生图提示词本身，不要解释，不要JSON，不要加引号。"
+            "4. 只用中文输出一条完整、自然、连贯的生图提示词本身，不要解释，不要JSON，不要加引号。\n"
+            "硬性前提：这张照片由伊塔本人手持手机拍摄（前置自拍/后置对镜/支架定时），"
+            "必须保持这个自拍视角；绝对禁止出现拍摄者、第三人称旁观视角、摄影师、路人等"
+            "任何暗示'别人在拍她'的表述。"
         )
         user_msg = (
             f"【基础提示词】\n{base_prompt}\n\n"
@@ -2950,6 +3205,13 @@ class Companion:
             resp = await asyncio.wait_for(call, timeout=_IMAGE_LIGHT_RELAY_TIMEOUT)
             text = (resp.text or "").strip().strip('"').strip("'")
             if 30 <= len(text) <= 4000 and ("写实" in text or "照片" in text):
+                # POV 黑名单：LLM 输出若引入"第三方拍摄"视角，拒绝采用，回退确定性兜底。
+                if any(kw in text for kw in _POV_THIRD_PARTY_BLACKLIST):
+                    logger.debug(
+                        "world image prompt light relay rejected (POV blacklist hit) key=%s",
+                        key,
+                    )
+                    return None
                 logger.debug("world image prompt refined by light relay (key=%s)", key)
                 return text
         except Exception:

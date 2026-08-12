@@ -128,3 +128,37 @@ related_risks:
 - `world_sidecar_v1` 被 runtime_config 覆盖成 true + 无端点 → 走 RemoteWorldAdapter（schema 不匹配）→ 检查 `data/runtime_config.json`。
 - 图源欠费/宕机 → `image provider call failed`，图片工作流返回 failed。
 - doubao 欠费 → `Provider doubao banned`，deepseek 兜底。
+
+## 2026-08-12 升级：POV 自拍约束 + 发图自我认知闭环（M1–M4）
+
+> 本轮升级解决四个体验问题：① 生图第三人称视角失控；② 活动话题模板匮乏；③ 主动发图后伊塔"失忆"不知图里内容；④ `[图片](...)` 伪 markdown 被当正文输出。方案详见 [[plans/生图提示词模块化升级与室内定位计划#九、生图体验修缮（M1–M4）记录]]。
+
+### M1 · POV 手持自拍约束（companion.py）
+- **恒定注入** `_SELFIE_POV_PHRASE`："这张照片由她本人手持手机拍摄，画面角落可见她的手指或手机边缘……绝无他人拍摄。"人物类 full 提示词始终追加。
+- **机位自拍化** `_PHOTO_ANGLE_PHRASE`：把第三方机位词（"仰视低角度""从后面"等）改写为"她手持手机放低自拍取景""她把手机举到身后用后置摄像头拍背影"。
+- **出口兜底** `_ensure_selfie_pov(prompt, prompt_key)`：幂等（已含手持关键词不重复追加），`_image_prompt_for` 三处返回点统一接入。
+- **黑名单** `_POV_THIRD_PARTY_BLACKLIST`：轻量 LLM 接力校验门拒绝"摄影师/他人拍摄/旁观/第三人称/路人/拍摄者/别人拍"。
+
+### M2 · 活动话题翻译 + 模板动态映射（companion.py）
+- `_VISUAL_TOPIC_ZH`：11 个活动话题（reading_time/deep_focus/morning_plan/coffee_break/lunch_time/tea_break/evening_chill/good_night/starry_window/desk_view/quiet_moment）+ 3 个兼容话题 → 中文画面描述；`_visual_topic_zh(topic)` 翻译优先级 `_VISUAL_TOPIC_ZH` → `_HER_HOME_OBJECTS_ZH` → 原文。
+- `_prompt_key_for_visual_topic(topic)`：活动话题 → `role_in_scene`，物件 → `environment_object`（主动发图不再硬编码 environment_object，size 跟随）。
+- `role_in_scene` 模板参数化：改为"她举着手机前置摄像头对着自己……"，`_world_context_text` topics/nearby 统一走翻译表。
+
+### M3 · 发图自我认知落账（companion.py + world_image_candidates.py + memory/sync_adapter.py）
+- `_deliver_world_image`（async）：QQ 发送成功后补写 chat_log `[图片] {desc}` + `_persist_image_event`。
+- `_deliver_local_chat_image`（async）：content 追加 `\n[图片内容] {desc}` + 落 EVENT 记忆。
+- `_persist_image_event`：EVENT 记忆落 long_term 层，`importance ≥ 7.0`，metadata 含 `occurred_at/channel/image_path`，**不存完整 URL**（防记忆膨胀）。
+- `_image_event_desc(plan)`：从 delivery plan 生成中文描述（含场景/动作）。
+- `_deliver(workflow_result, candidate=None)`：把 `reason_code/prompt_key/scene` 注入 delivery plan（setdefault），供 sender 生成图片事件描述。
+- 消费端 → sender 双接线：主动发图与用户要图两条路径都落账。
+- **RECALL 触发**：pipeline `_RECALL_KEYWORDS` 扩展"你发的/发的什么/那张图/那张照片/照片给我看/刚才发的"，用户追问时召回图片事件记忆 → 伊塔能回答"我发的是什么"。
+
+### M4 · 发图机制定义 + 出口清洗（context_builder.py + qq_client.py）
+- L6 `_build_l6_image_capability` 重写：新增【发图机制 · How Sending a Photo Works】段——发图 = 系统后台生图 + 附件送达；**绝对禁止**写 `[图片](...)` / `![图片](...)` / 生图提示词 / 画面描述文字。
+- `strip_fake_image_markdown(text)`：剥伪 markdown（`!?[图片](...)` 且 URL 非 http(s)），空输入返回 `""`；接入 `send_message` 与 `send_message_with_segments` 清洗链（在 `strip_thought_action_tags → strip_timestamp_markers` 之后），真实 `image` 附件段不受影响。
+
+### 测试覆盖
+- `tests/test_modular_photo_prompt.py`（34 例）：POV 出口兜底 / 机位自拍化 / 翻译表全覆盖 / prompt_key 映射 / `_image_event_desc` / `_persist_image_event`（long_term/occurred_at/无URL）。
+- `tests/test_phase14_world_image_candidates.py`（27 例）：`_deliver` 注入 candidate 字段 + 无 candidate 幂等。
+- `tests/test_pipeline.py`：RECALL 关键词含发图触发词 + 旧关键词保留。
+- `tests/test_communication.py`（22 例）：`strip_fake_image_markdown` 六项（剥伪语法 / 保留真实 URL / 保留裸词 / 空输入）+ 保真 image segment。

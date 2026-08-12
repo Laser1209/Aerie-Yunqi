@@ -65,6 +65,28 @@ def strip_timestamp_markers(text: str) -> str:
     return _TIMESTAMP_MARKER_RE.sub("", text).strip()
 
 
+# 伪图片 markdown 过滤（P4 兜底）：LLM 偶发把"生图提示词"写进回复文本，形如
+# `[图片](一张局部特写。昏暗的光线下…)` 或 `![图片](描述)`。这些是给后台生图系统的
+# 输入，不该出现在 QQ 文本里。正则只剥 `[图片](...)` / `![图片](...)` 且括号内
+# **不是合法 http(s) URL** 的片段——真实图片消息 `![图片](http://127.0.0.1:7890/...)`
+# 是附件渲染语法，不受影响。与 strip_timestamp_markers 同为输出端兜底。
+_FAKE_IMAGE_MARKDOWN_RE = re.compile(
+    r"!?\[图片\]\((?!https?://)(?![^)]*https?://)[^)]*\)"
+)
+
+
+def strip_fake_image_markdown(text: str) -> str:
+    """剥除 LLM 误写的伪图片 markdown（`[图片](描述)` / `![图片](描述)`）。
+
+    仅匹配完整语法形态（含括号与"图片"字样），不误伤裸词"图片"；
+    括号内含 http(s) URL 的真实图片语法被负向前瞻排除，保留不动。
+    """
+    if not text:
+        return ""
+    cleaned = _FAKE_IMAGE_MARKDOWN_RE.sub("", text)
+    return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+
 def _port_is_open(host: str, port: int, timeout: float = 1.0) -> bool:
     """Check if a TCP port is accepting connections."""
     try:
@@ -491,6 +513,8 @@ class QQClient:
         content = strip_thought_action_tags(content)
         # 输出端兜底：剥离 LLM 回显的时间戳标记
         content = strip_timestamp_markers(content)
+        # 输出端兜底：剥离 LLM 误写的伪图片 markdown（[图片](提示词)），防提示词外泄
+        content = strip_fake_image_markdown(content)
         if not content:
             logger.warning("QQ send: content empty after stripping tags, skip")
             return False
@@ -738,6 +762,7 @@ class QQClient:
             if seg.get("type") == "text" and "text" in (seg.get("data") or {}):
                 cleaned = strip_thought_action_tags(seg["data"]["text"])
                 cleaned = strip_timestamp_markers(cleaned)
+                cleaned = strip_fake_image_markdown(cleaned)
                 cleaned_segments.append({**seg, "data": {**seg["data"], "text": cleaned}})
                 if cleaned:
                     has_usable_content = True

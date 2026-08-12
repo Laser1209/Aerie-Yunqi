@@ -14,6 +14,7 @@ const ALLOWED_METHODS = [
   "getMemory",
   "control",
   "getB3",
+  "getStats",
   "minimize",
   "close",
   "setWorldLocation",
@@ -32,6 +33,8 @@ const world = {
   getMemory: () => ipcRenderer.invoke("world-dashboard:get-memory"),
   // 第三批只读聚合（B3.2）：内在状态/趋势/决策观察/插件设置。仅读。
   getB3: () => ipcRenderer.invoke("world-dashboard:get-b3"),
+  // 数据统计看板（P4）：token/高频话题/决策统计。仅读。
+  getStats: (window) => ipcRenderer.invoke("world-dashboard:get-stats", String(window || "7d")),
   // 世界控制台（P8）：动作白名单在 main 侧与 host 侧双重校验。
   control: (action, payload = {}) => ipcRenderer.invoke(
     "world-dashboard:control",

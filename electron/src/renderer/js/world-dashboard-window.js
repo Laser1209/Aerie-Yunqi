@@ -1,6 +1,6 @@
 "use strict";
 
-// aerie.world 独立仪表盘窗口渲染逻辑（9 页，B3.2）。
+// aerie.world 独立仪表盘窗口渲染逻辑（10 页，B3.2 + P4 统计）。
 // 仅通过专用 preload（window.world）获取数据，绝不触碰通用 API。
 
 (function () {
@@ -97,8 +97,16 @@
     els.decision = $("wdw-decision");
     els.imageCandidates = $("wdw-image-candidates");
     els.settings = $("wdw-settings");
+    els.statsKpis = $("wdw-stats-kpis");
+    els.statsWindow = $("wdw-stats-window");
+    els.statsEmpty = $("wdw-stats-empty");
+    els.statsCharts = {
+      tokens: $("wdw-chart-tokens"),
+      topics: $("wdw-chart-topics"),
+      decisions: $("wdw-chart-decisions"),
+    };
 
-    // 9 页导航
+    // 10 页导航
     document.querySelectorAll(".wdw-nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => switchPage(btn.getAttribute("data-page")));
     });
@@ -115,13 +123,18 @@
     document.querySelectorAll("[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => runControl(btn.getAttribute("data-action"), btn));
     });
+    // 统计窗口切换时重拉数据
+    if (els.statsWindow) {
+      els.statsWindow.addEventListener("change", () => renderStats());
+    }
     // 无外壳窗口控制
     $("wdw-min").addEventListener("click", () => { const b = api(); if (b && b.minimize) b.minimize(); });
     $("wdw-close").addEventListener("click", () => { const b = api(); if (b && b.close) b.close(); });
-    // 窗口尺寸变化时重绘趋势图（若内在状态页可见）
+    // 窗口尺寸变化时重绘趋势图（若内在状态页可见），并同步调整统计页 ECharts。
     window.addEventListener("resize", () => {
       const panel = document.querySelector('[data-page-panel="internal"]');
       if (panel && !panel.hidden) requestAnimationFrame(() => drawTrends());
+      resizeStatsCharts();
     });
     document.addEventListener("visibilitychange", () => {
       visible = !document.hidden;
@@ -142,6 +155,7 @@
     });
     // 内在状态页变为可见后，等布局完成再绘制趋势图，保证 canvas 使用真实渲染宽度。
     if (page === "internal") requestAnimationFrame(() => drawTrends());
+    if (page === "stats") requestAnimationFrame(() => renderStats());
   }
 
   function api() { return window.world || null; }
@@ -875,6 +889,185 @@
     el.textContent = text;
     if (cls) el.className = cls;
     return el;
+  }
+
+  // ── P4 数据统计看板（ECharts，完整版本地 vendor） ─────────────
+  // 结构对应 /api/stats/dashboard：tokens.daily_series/by_provider、
+  // topics.top、decisions.total/by_kind。切换页签/窗口时按需拉取。
+  const statsCharts = { tokens: null, topics: null, decisions: null };
+
+  async function renderStats() {
+    const bridge = api();
+    if (!bridge || typeof bridge.getStats !== "function") return;
+    const win = els.statsWindow ? els.statsWindow.value : "7d";
+    let data;
+    try {
+      data = await bridge.getStats(win);
+    } catch (_) {
+      data = null;
+    }
+    data = data && typeof data === "object" ? data : {};
+    renderStatsKpis(data);
+    renderTokensChart(data);
+    renderTopicsChart(data);
+    renderDecisionsChart(data);
+    const hasAny = (Array.isArray(data.tokens && data.tokens.daily_series) && data.tokens.daily_series.length)
+      || (Array.isArray(data.topics && data.topics.top) && data.topics.top.length)
+      || Number(data.decisions && data.decisions.total) > 0;
+    if (els.statsEmpty) els.statsEmpty.hidden = !!hasAny;
+  }
+
+  function renderStatsKpis(data) {
+    if (!els.statsKpis) return;
+    els.statsKpis.textContent = "";
+    const series = Array.isArray(data.tokens && data.tokens.daily_series) ? data.tokens.daily_series : [];
+    // 后端按 date('now')（UTC 日）聚合，今日比对也用 UTC 日期。
+    const today = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const todayStr = today.getUTCFullYear() + "-" + pad(today.getUTCMonth() + 1) + "-" + pad(today.getUTCDate());
+    let todayTokens = 0, totalTokens = 0, totalCalls = 0;
+    series.forEach((s) => {
+      const tokens = Number(s.total_tokens) || 0;
+      const calls = Number(s.calls) || 0;
+      totalTokens += tokens;
+      totalCalls += calls;
+      if (String(s.date) === todayStr) todayTokens = tokens;
+    });
+    // 数据未含今日（早于当日入库）时回退到最近一天
+    const last = series[series.length - 1];
+    if (todayTokens === 0 && last) todayTokens = Number(last.total_tokens) || 0;
+    const dec = obj(data.decisions);
+    const decTotal = Number(dec.total) || 0;
+    const rate = Number(dec.chosen_rate);
+    const rateTxt = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "--";
+    els.statsKpis.appendChild(kpiCard("今日 Token", fmtInt(todayTokens)));
+    els.statsKpis.appendChild(kpiCard("窗口 Token", fmtInt(totalTokens)));
+    els.statsKpis.appendChild(kpiCard("调用次数", fmtInt(totalCalls)));
+    els.statsKpis.appendChild(kpiCard("决策记录", fmtInt(decTotal), "命中率 " + rateTxt));
+  }
+
+  function kpiCard(label, value, suffix) {
+    const card = document.createElement("div");
+    card.className = "wdw-kpi";
+    const l = document.createElement("span");
+    l.className = "wdw-kpi-label";
+    l.textContent = label;
+    const v = document.createElement("span");
+    v.className = "wdw-kpi-value";
+    v.textContent = value;
+    if (suffix) {
+      const s = document.createElement("small");
+      s.textContent = suffix;
+      v.appendChild(s);
+    }
+    card.appendChild(l);
+    card.appendChild(v);
+    return card;
+  }
+
+  function fmtInt(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "--";
+    return n >= 10000 ? (n / 10000).toFixed(1) + "w" : String(Math.round(n));
+  }
+
+  function statsTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (name, fallback) => (cs.getPropertyValue(name) || "").trim() || fallback;
+    return {
+      text: v("--wdw-text", "#1d1d1f"),
+      muted: v("--wdw-muted", "#8e8e93"),
+      bar: v("--wdw-bar", "#e5e5ea"),
+      accent: v("--wdw-accent", "#007aff"),
+      bg: v("--wdw-list", "#f2f2f7"),
+    };
+  }
+
+  function hasECharts() {
+    return typeof window.echarts !== "undefined" && typeof window.echarts.init === "function";
+  }
+
+  function setStatsOption(key, option) {
+    const el = els.statsCharts[key];
+    if (!el) return;
+    if (!hasECharts()) { el.textContent = "图表引擎不可用"; return; }
+    if (!option) {
+      if (statsCharts[key]) { statsCharts[key].dispose(); statsCharts[key] = null; }
+      el.textContent = "暂无数据";
+      return;
+    }
+    if (!statsCharts[key]) {
+      statsCharts[key] = window.echarts.init(el, null, { renderer: "canvas" });
+    }
+    statsCharts[key].setOption(option, true);
+    el.textContent = "";
+  }
+
+  function resizeStatsCharts() {
+    Object.keys(statsCharts).forEach((k) => { if (statsCharts[k]) statsCharts[k].resize(); });
+  }
+
+  function renderTokensChart(data) {
+    const series = Array.isArray(data.tokens && data.tokens.daily_series) ? data.tokens.daily_series : [];
+    if (!series.length) { setStatsOption("tokens", null); return; }
+    const th = statsTheme();
+    setStatsOption("tokens", {
+      backgroundColor: "transparent",
+      tooltip: { trigger: "axis" },
+      legend: { top: 0, right: 0, textStyle: { color: th.muted, fontSize: 10 }, itemWidth: 12, itemHeight: 8 },
+      grid: { left: 8, right: 8, top: 28, bottom: 8, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: series.map((s) => String(s.date).slice(5)),
+        axisLabel: { color: th.muted, fontSize: 10 },
+        axisLine: { lineStyle: { color: th.bar } },
+        axisTick: { show: false },
+      },
+      yAxis: [
+        { type: "value", name: "Token", nameTextStyle: { color: th.muted, fontSize: 10 }, axisLabel: { color: th.muted, fontSize: 10 }, splitLine: { lineStyle: { color: th.bar } } },
+        { type: "value", name: "调用", nameTextStyle: { color: th.muted, fontSize: 10 }, axisLabel: { color: th.muted, fontSize: 10 }, splitLine: { show: false } },
+      ],
+      series: [
+        { name: "Token", type: "line", smooth: true, data: series.map((s) => Number(s.total_tokens) || 0), itemStyle: { color: th.accent }, lineStyle: { width: 2 }, areaStyle: { opacity: 0.12 } },
+        { name: "调用", type: "line", yAxisIndex: 1, data: series.map((s) => Number(s.calls) || 0), itemStyle: { color: "#34c759" }, lineStyle: { width: 1.5 } },
+      ],
+    });
+  }
+
+  function renderTopicsChart(data) {
+    const topics = Array.isArray(data.topics && data.topics.top) ? data.topics.top : [];
+    if (!topics.length) { setStatsOption("topics", null); return; }
+    const th = statsTheme();
+    setStatsOption("topics", {
+      backgroundColor: "transparent",
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      grid: { left: 8, right: 16, top: 8, bottom: 8, containLabel: true },
+      xAxis: { type: "value", minInterval: 1, axisLabel: { color: th.muted, fontSize: 10 }, splitLine: { lineStyle: { color: th.bar } } },
+      yAxis: { type: "category", inverse: true, data: topics.map((t) => str(t.topic) || "--"), axisLabel: { color: th.text, fontSize: 11 }, axisLine: { lineStyle: { color: th.bar } }, axisTick: { show: false } },
+      series: [{ type: "bar", data: topics.map((t) => Number(t.count) || 0), itemStyle: { color: th.accent, borderRadius: [0, 4, 4, 0] }, barWidth: 12 }],
+    });
+  }
+
+  function renderDecisionsChart(data) {
+    const byKind = obj(data.decisions && data.decisions.by_kind);
+    const kindNames = { topic_motive: "话题动机", behavior: "行为决策", movement: "移动决策", unknown: "未知" };
+    const pieData = Object.keys(byKind).map((k) => ({ name: kindNames[k] || k, value: Number(byKind[k]) || 0 }));
+    if (!pieData.length) { setStatsOption("decisions", null); return; }
+    const th = statsTheme();
+    setStatsOption("decisions", {
+      backgroundColor: "transparent",
+      tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+      legend: { bottom: 0, textStyle: { color: th.muted, fontSize: 10 }, itemWidth: 12, itemHeight: 8 },
+      color: ["#007aff", "#34c759", "#5e5ce6", "#ff9500", "#ff3b30", "#8e8e93"],
+      series: [{
+        type: "pie",
+        radius: ["42%", "68%"],
+        center: ["50%", "44%"],
+        label: { color: th.text, fontSize: 11, formatter: "{b}\n{c}" },
+        itemStyle: { borderRadius: 4, borderColor: th.bg, borderWidth: 2 },
+        data: pieData,
+      }],
+    });
   }
 
   function renderPad(pad) {

@@ -1321,12 +1321,25 @@ ipcMain.handle("world-dashboard:get-b3", async () => {
     const r = await apiRequest({ method: "GET", path: "/api/cognition/recent?limit=30" });
     const d = (r && r.data && typeof r.data === "object") ? r.data : {};
     out.cognition = Array.isArray(d.traces) ? d.traces : [];
+    // P4: 候选决策日志（伪主观性证据），随 get-b3 一并透传。
+    out.decisionLog = Array.isArray(d.decision_log) ? d.decision_log : [];
   } catch (_) {}
   try {
     const r = await apiRequest({ method: "GET", path: "/api/permissions/config" });
     out.permissions = (r && r.data && typeof r.data === "object") ? r.data : {};
   } catch (_) {}
   return out;
+});
+
+// 数据统计看板（P4）：只读聚合端点，供"统计"页图表使用。
+ipcMain.handle("world-dashboard:get-stats", async (_event, windowParam) => {
+  const win = typeof windowParam === "string" ? windowParam : "7d";
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/stats/dashboard?window=" + encodeURIComponent(win) });
+    return (r && r.data && typeof r.data === "object") ? r.data : {};
+  } catch (_) {
+    return {};
+  }
 });
 
 ipcMain.handle("world-dashboard:show", async () => {

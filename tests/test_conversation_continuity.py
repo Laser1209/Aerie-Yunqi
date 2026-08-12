@@ -142,3 +142,56 @@ def test_turn_window_elasticity_truncates_oldest():
     assert any("a" * 1400 in c for c in contents)
     assert result.audit["l0_truncated"] is True
     assert result.audit["l0_turns_included"] == 2
+
+
+def test_channel_awareness_injected_into_system_prompt():
+    """system prompt 头部注入【当前通道】（§3.4 / §4 #11 用例③）。"""
+    asm = _assembler()
+    asm.conversations.history_page.return_value = _page(
+        {"role": "user", "content": "早上好", "ts": "2026-08-09 04:06:47", "channel": "qq"},
+    )
+    asm.summaries.get.return_value = None
+
+    result = asm.assemble(
+        system_prompt="SYSTEM",
+        current_user_content="看看腿我就去",
+        actor_id="actor_primary",
+        channel="qq",
+        channel_account_id="3489352115",
+        user_id=3489352115,
+    )
+    assert "【当前通道】你正在通过「QQ 私聊」与用户聊天。" in result.messages[0]["content"]
+
+    result_desktop = asm.assemble(
+        system_prompt="SYSTEM",
+        current_user_content="看看腿我就去",
+        actor_id="actor_primary",
+        channel="desktop",
+        channel_account_id="3489352115",
+        user_id=3489352115,
+    )
+    assert "【当前通道】你正在通过「云栖桌面 App」与用户聊天。" in result_desktop.messages[0]["content"]
+
+
+def test_cross_channel_history_gets_source_tag():
+    """跨通道来源的历史消息追加 [QQ]/[桌面] 标记；同通道消息不标注。"""
+    asm = _assembler()
+    asm.conversations.history_page.return_value = _page(
+        # 同通道（desktop）历史：不标注
+        {"role": "user", "content": "桌面端说的", "ts": "2026-08-09 04:06:47", "channel": "desktop"},
+        # 跨通道来源（qq）：标注 [QQ]
+        {"role": "user", "content": "QQ端说的", "ts": "2026-08-09 04:06:48", "channel": "qq"},
+    )
+    asm.summaries.get.return_value = None
+
+    result = asm.assemble(
+        system_prompt="SYSTEM",
+        current_user_content="继续",
+        actor_id="actor_primary",
+        channel="desktop",
+        channel_account_id="3489352115",
+        user_id=3489352115,
+    )
+    contents = [m["content"] for m in result.messages[1:-1]]
+    assert any("[QQ] QQ端说的" in c for c in contents)
+    assert any("桌面端说的" in c and "[桌面]" not in c for c in contents)

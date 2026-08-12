@@ -11,6 +11,13 @@ from core.conversation_repository import ConversationRepository
 
 logger = logging.getLogger(__name__)
 
+# 通道 → 中文显示名，用于通道感知段（§3.4）
+_CHANNEL_CN: dict[str, str] = {
+    "qq": "QQ 私聊",
+    "desktop": "云栖桌面 App",
+    "local": "本地测试",
+}
+
 
 class SummaryConflict(RuntimeError):
     pass
@@ -335,6 +342,10 @@ class ContextAssembler:
             self.max_total_chars - len(current) - history_reserve,
             0,
         )
+        # ── 通道感知段（§3.4）：让 AI 知道当前在哪个端回复 ──
+        channel_label = _CHANNEL_CN.get(channel or "", "未知通道")
+        channel_segment = f"【当前通道】你正在通过「{channel_label}」与用户聊天。"
+        channel_chars = len(channel_segment)
         supplemental_chars = sum(len(section) + 2 for section in supplemental_sections)
         if supplemental_chars and system_budget:
             supplemental_reserve = min(
@@ -345,11 +356,14 @@ class ContextAssembler:
             supplemental_reserve = 0
         base_budget = min(
             len(str(system_prompt or "")),
-            max(system_budget - supplemental_reserve, 0),
+            max(system_budget - channel_chars - supplemental_reserve, 0),
         )
         base = self._clip(system_prompt, base_budget)
-        system_parts = [base] if base else []
-        remaining_system = max(system_budget - len(base), 0)
+        # 通道段优先注入（预算内最先保证）
+        system_parts = [channel_segment] if channel_chars <= system_budget else []
+        if base:
+            system_parts.append(base)
+        remaining_system = max(system_budget - channel_chars - len(base), 0)
         for section in supplemental_sections:
             separator = 2 if system_parts else 0
             if remaining_system <= separator:
@@ -372,7 +386,7 @@ class ContextAssembler:
             content = str(item.get("content") or "")
             if not content:
                 continue
-            label = _hist_label(item)
+            label = _hist_label(item, current_channel=channel)
             entry: dict[str, Any] = {
                 "role": role,
                 "content": label + content,

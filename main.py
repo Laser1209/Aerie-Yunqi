@@ -113,7 +113,9 @@ async def _main() -> None:
 
     settings = load_settings()
     http_cfg = get_http_config()
-    host = http_cfg.get("host", "127.0.0.1")
+    # 安全门（P4 前置）：7890 强制回环绑定——管理 API（/api/admin/*）可删除
+    # 记忆/向量，绝不允许暴露到局域网（即使配置写了 0.0.0.0 也忽略）。
+    host = "127.0.0.1"
     port = int(os.getenv("AERIE_BACKEND_PORT") or http_cfg.get("port", 7890))
 
     runtime_config_service = RuntimeConfigService(

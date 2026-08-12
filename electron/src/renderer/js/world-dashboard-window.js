@@ -9,7 +9,7 @@
   let pollTimer = null;
   let visible = true;
   let lastState = null;
-  let b3 = { internal: {}, trends: [], cognition: [], permissions: {} };
+  let b3 = { internal: {}, trends: [], cognition: [], permissions: {}, decisionLog: [] };
   let eventFilter = "all";
 
   // 与主程序主题一致的品牌色（与 CSS --wdw-pad-* 对应）
@@ -169,6 +169,7 @@
     try {
       const data = await bridge.getB3();
       b3 = data && typeof data === "object" ? data : b3;
+      b3.decisionLog = Array.isArray(data.decision_log) ? data.decision_log : b3.decisionLog;
     } catch (_) {}
     renderInternal();
     renderDecision();
@@ -612,6 +613,29 @@
       row.appendChild(meta);
       els.decision.appendChild(row);
     });
+    // P4: 候选决策日志（伪主观性证据：候选→选择→动机句）。
+    const logs = Array.isArray(b3.decisionLog) ? b3.decisionLog : [];
+    if (logs.length) {
+      const head = document.createElement("div");
+      head.className = "wdw-section-title";
+      head.textContent = "候选决策日志";
+      els.decision.appendChild(head);
+      logs.slice(0, 30).forEach((log) => {
+        const chosen = obj(log.chosen) || {};
+        const chosenTopic = str(chosen.topic) || str(chosen.to_zone) || str(chosen.mode) || "选择";
+        const row = document.createElement("div");
+        row.className = "wdw-row";
+        const main = document.createElement("span");
+        main.className = "wdw-row-main";
+        main.textContent = str(log.kind) + " → " + chosenTopic;
+        const meta = document.createElement("span");
+        meta.className = "wdw-row-meta";
+        meta.textContent = (log.fallback ? "兜底 · " : "") + formatTs(log.ts);
+        row.appendChild(main);
+        row.appendChild(meta);
+        els.decision.appendChild(row);
+      });
+    }
   }
 
   // ── P7 图片工作台 ──────────────────────────────────────────────

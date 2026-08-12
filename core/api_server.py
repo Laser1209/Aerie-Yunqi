@@ -2555,7 +2555,32 @@ async def cognition_recent(
 ) -> dict:
     """Recent cognition traces (lightweight summary list)."""
     eng = CognitionEngine(_db)
-    return {"traces": eng.recent(user_id=user_id, source=source, limit=limit)}
+    data: dict = {"traces": eng.recent(user_id=user_id, source=source, limit=limit)}
+    # P4: 候选决策证据日志（伪主观性"她选了哪个候选"）附加返回最新 30 条。
+    try:
+        from core.decision_log import DecisionLogger
+        from core.paths import data_dir
+
+        data["decision_log"] = DecisionLogger(log_dir=data_dir()).recent(limit=30)
+    except Exception:
+        data["decision_log"] = []
+    return data
+
+
+@app.get("/api/stats/dashboard")
+async def stats_dashboard(
+    window: str = Query(default="7d", pattern="^(24h|7d|30d)$"),
+) -> dict:
+    """数据统计看板聚合端点（token/高频话题/决策统计）。"""
+    try:
+        from core.paths import data_dir
+        from core.stats_service import StatsService
+
+        svc = StatsService(db=_db, decision_log_dir=data_dir())
+        return svc.dashboard(window=window)
+    except Exception:
+        logger.exception("stats dashboard failed")
+        return {"error": "stats unavailable"}
 
 
 @app.get("/api/cognition/stats")

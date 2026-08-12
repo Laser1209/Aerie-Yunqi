@@ -875,8 +875,14 @@ async def world_runtime_bind(request: Request) -> Response:
         return JSONResponse({"error": "invalid_json"}, status_code=400)
     connection = body.get("connection") if isinstance(body, dict) else None
     if connection is None:
-        from core.world_port import NullWorldAdapter
-
+        from core.world_port import NullWorldAdapter, InProcessWorldAdapter
+        # 世界 supervisor 停止通知只在 sidecar 场景有意义。InProcess 世界由
+        # Core 自己驱动，不依赖 sidecar supervisor；Electron 的 world connection
+        # monitor 在 sidecar 未启用时每 2s 上报 connection=null，若这里无条件
+        # 覆盖，会把正在运行的 InProcess 世界静默替换为 NullWorldAdapter，
+        # 导致 publish_image_candidate 全部返回 world_disabled，生图链路瘫痪。
+        if isinstance(getattr(companion, "world_port", None), InProcessWorldAdapter):
+            return JSONResponse({"accepted": True, "adapter": "in_process_kept"})
         companion.world_port = NullWorldAdapter(reason="supervisor_stopped")
         return JSONResponse({"accepted": True, "adapter": "null"})
     if not isinstance(connection, dict):
@@ -5653,8 +5659,10 @@ async def brief_greeting_fresh() -> dict:
 
     today = datetime.now().strftime("%Y-%m-%d")
     cached = brief_fetcher.load_brief(today) or {}
-    todo_stats = cached.get("todo_stats") or {}
-    todos = cached.get("todos") or []
+    # The disk cache may predate task creation, so never trust its todo
+    # snapshot when composing the greeting — always read live from the DB.
+    todo_stats = brief_fetcher.get_todo_stats(today)
+    todos = brief_fetcher.get_today_todos(today)
     # Highest-priority incomplete task title, if any.
     priority_rank = {"high": 0, "medium": 1, "low": 2}
     top_task: str | None = None
@@ -5676,6 +5684,14 @@ async def brief_greeting_fresh() -> dict:
         logger.warning("brief_greeting: quick greeting failed: %s", e)
     if not greeting:
         greeting = cached.get("greeting") or ""
+    # Persist the fresh greeting so the cached /api/brief/today response
+    # (which serves the saved brief) stays in sync with the live todos.
+    if greeting and greeting != cached.get("greeting"):
+        cached["greeting"] = greeting
+        try:
+            brief_fetcher.save_brief(today, cached)
+        except Exception as e:
+            logger.warning("brief_greeting: persist greeting failed: %s", e)
     return {"date": today, "greeting": greeting}
 
 

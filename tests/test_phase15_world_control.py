@@ -88,3 +88,42 @@ def test_world_control_no_world_port(monkeypatch):
     assert r.status_code == 200
     assert r.json()["errorCode"] == "world_unavailable"
     assert r.json()["accepted"] is False
+
+
+def test_world_runtime_bind_keeps_inprocess_world(monkeypatch):
+    """bind with no connection must NOT replace a running in-process world.
+
+    Electron's world connection monitor reports connection=null every 2s while
+    the sidecar plugin is disabled. Overwriting the world_port in that case
+    silently kills the in-process world simulation and every image-candidate
+    publish (world_disabled), so the image pipeline goes dark.
+    """
+    from core.world_port import InProcessWorldAdapter, NullWorldAdapter
+
+    world_port = InProcessWorldAdapter(
+        world=SimpleNamespace(),
+        relationship=SimpleNamespace(),
+        self_model=SimpleNamespace(),
+    )
+    monkeypatch.setattr(api_server, "get_companion", lambda: _companion(world_port))
+
+    r = client.post("/api/world/runtime/bind", json={}, headers=_auth_headers())
+    assert r.status_code == 200
+    assert r.json()["accepted"] is True
+    assert r.json()["adapter"] == "in_process_kept"
+    assert isinstance(world_port, InProcessWorldAdapter)
+    assert not isinstance(world_port, NullWorldAdapter)
+
+
+def test_world_runtime_bind_null_stays_null(monkeypatch):
+    """bind with no connection still maps to null when no in-process world runs."""
+    from core.world_port import NullWorldAdapter
+
+    world_port = NullWorldAdapter(reason="flag_off")
+    monkeypatch.setattr(api_server, "get_companion", lambda: _companion(world_port))
+
+    r = client.post("/api/world/runtime/bind", json={}, headers=_auth_headers())
+    assert r.status_code == 200
+    assert r.json()["accepted"] is True
+    assert r.json()["adapter"] == "null"
+    assert isinstance(world_port, NullWorldAdapter)

@@ -625,3 +625,69 @@ class AdminService:
         except OSError:
             logger.exception("read state file failed: %s", kind)
             return None
+
+    def reset_state(self, kind: str, companion: Any = None) -> dict[str, Any]:
+        """状态重置：先落 undo 快照，再走引擎方法复位。
+
+        - desire：写引擎默认状态（确定性 default）
+        - topic：调 companion.topic_tracker.reset()（引擎方法）
+        - proactive/runtime：无确定性默认 → 仅快照，返回 unavailable
+        """
+        filename = self._STATE_FILES.get(kind)
+        if not filename:
+            return {"status": "unknown_kind", "kind": kind}
+        path = self._data_dir / filename
+        snapshotted = False
+        try:
+            if path.exists():
+                self._data_dir.mkdir(parents=True, exist_ok=True)
+                snapshot_path = self._data_dir / f"{kind}.undo.json"
+                snapshot_path.write_text(
+                    path.read_text(encoding="utf-8"), encoding="utf-8"
+                )
+                snapshotted = True
+        except OSError:
+            logger.exception("state reset snapshot failed: %s", kind)
+
+        if kind == "desire":
+            from core.desire_engine import _atomic_write_json, _default_state
+
+            _atomic_write_json(path, _default_state())
+            self.audit("reset_state", kind)
+            return {"status": "ok", "kind": kind, "snapshot": snapshotted}
+
+        if kind == "topic" and companion is not None:
+            tracker = getattr(companion, "topic_tracker", None)
+            if tracker is not None and hasattr(tracker, "reset"):
+                try:
+                    tracker.reset()
+                    self.audit("reset_state", kind)
+                    return {"status": "ok", "kind": kind, "snapshot": snapshotted}
+                except Exception:
+                    logger.exception("topic reset failed")
+            return {"status": "unavailable", "kind": kind, "reason": "no_topic_tracker"}
+
+        self.audit("reset_state", kind)
+        return {
+            "status": "unavailable",
+            "kind": kind,
+            "reason": "engine_reset_not_implemented",
+            "snapshot": snapshotted,
+        }
+
+    def undo_state(self, kind: str) -> dict[str, Any]:
+        """恢复最近一次重置前的状态快照（{kind}.undo.json）。"""
+        if kind not in self._STATE_FILES:
+            return {"status": "unknown_kind", "kind": kind}
+        snapshot_path = self._data_dir / f"{kind}.undo.json"
+        try:
+            if not snapshot_path.exists():
+                return {"status": "no_snapshot", "kind": kind}
+            target = self._data_dir / self._STATE_FILES[kind]
+            target.write_text(snapshot_path.read_text(encoding="utf-8"), encoding="utf-8")
+            snapshot_path.unlink()
+            self.audit("restore", f"state:{kind}")
+            return {"status": "ok", "kind": kind}
+        except OSError:
+            logger.exception("undo state failed: %s", kind)
+            return {"status": "error", "kind": kind}

@@ -344,6 +344,34 @@ def test_state_files_list_and_view(tmp_path, admin_db):
     assert service.get_state("unknown") is None
 
 
+def test_state_reset_and_undo(tmp_path, admin_db):
+    data_dir = tmp_path / "d"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    state_path = data_dir / "desire_state.json"
+    state_path.write_text('{"score": 75.0, "ts": 1700000000.0}', encoding="utf-8")
+    service = AdminService(db=admin_db, data_dir=data_dir, runtime_config=_FakeRuntimeConfig())
+
+    # 重置 desire → 引擎默认态
+    result = service.reset_state("desire")
+    assert result["status"] == "ok"
+    got = service.get_state("desire")
+    assert got["content"]["score"] == 0.0
+    assert got["content"]["history"] == []
+
+    # undo → 恢复原内容
+    assert service.undo_state("desire")["status"] == "ok"
+    got = service.get_state("desire")
+    assert got["content"]["score"] == 75.0
+
+    # 无确定性默认的 kind → unavailable（仅快照不写）
+    unavailable = service.reset_state("proactive")
+    assert unavailable["status"] == "unavailable"
+
+    # 未知 kind / 无快照 undo
+    assert service.reset_state("nope")["status"] == "unknown_kind"
+    assert service.undo_state("topic")["status"] in ("no_snapshot", "unknown_kind")
+
+
 # ── 审计 ──────────────────────────────────────────────────
 def test_audit_entries_written(tmp_path, admin_db):
     service = AdminService(db=admin_db, data_dir=tmp_path / "d", runtime_config=_FakeRuntimeConfig())

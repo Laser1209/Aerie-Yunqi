@@ -2857,6 +2857,32 @@ async def admin_state_get(request: Request, kind: str) -> Response:
     return JSONResponse(data)
 
 
+@app.post("/api/admin/state/{kind}/reset")
+async def admin_state_reset(request: Request, kind: str) -> Response:
+    """状态重置：先落 undo 快照，再走引擎方法（desire 默认态 / topic tracker.reset）。"""
+    if not _require_admin(request):
+        return _admin_denied()
+    result = _admin_service().reset_state(kind, companion=get_companion())
+    if result.get("status") == "unavailable":
+        return JSONResponse({"error": result.get("reason", "unavailable"), "errorCode": "engine_reset_unavailable", **result}, status_code=501)
+    if result.get("status") != "ok":
+        return JSONResponse({"error": "unknown_state_kind", "errorCode": "unknown_state_kind"}, status_code=400)
+    return JSONResponse({"status": "ok", **result})
+
+
+@app.post("/api/admin/state/{kind}/undo")
+async def admin_state_undo(request: Request, kind: str) -> Response:
+    """恢复最近一次重置前的状态快照。"""
+    if not _require_admin(request):
+        return _admin_denied()
+    result = _admin_service().undo_state(kind)
+    if result.get("status") == "no_snapshot":
+        return JSONResponse({"error": "no_snapshot", "errorCode": "no_snapshot"}, status_code=404)
+    if result.get("status") != "ok":
+        return JSONResponse({"error": "unknown_state_kind", "errorCode": "unknown_state_kind"}, status_code=400)
+    return JSONResponse({"status": "ok", **result})
+
+
 @app.get("/admin.html")
 async def admin_page() -> Response:
     """浏览器端管理页（Electron 管理窗口直接加载本地 renderer，不经此端点）。"""

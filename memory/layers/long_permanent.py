@@ -288,6 +288,9 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                         score = max(0.0, 1.0 - dist)
                         # 从 SQLite 取完整数据
                         item = await self.get(mid)
+                        # P4b: 软删过滤——已删除（回收站）的记忆不参与检索
+                        if item and getattr(item, "deleted_at", None):
+                            continue
                         if item:
                             results.append(MemorySearchResult(
                                 item=item, score=score,
@@ -309,6 +312,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                 sql = """
                     SELECT * FROM long_term_memory
                     WHERE user_id = ?
+                      AND (deleted_at IS NULL OR deleted_at = 0)
                 """
                 params: List[Any] = [user_id]
 

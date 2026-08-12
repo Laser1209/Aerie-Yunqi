@@ -2583,6 +2583,303 @@ async def stats_dashboard(
         return {"error": "stats unavailable"}
 
 
+# ── P4b 后台管理平台（§3.5.2） ───────────────────────────
+# 访问控制：服务端门闩（runtime_config.admin_unlocked）+ 随机 token 头。
+# Electron 管理窗口经 main 进程注入 token；浏览器端 unlock 后携 token 直连。
+_admin_service_instance = None
+_admin_purge_task: asyncio.Task | None = None
+
+
+def _admin_service():
+    global _admin_service_instance
+    companion = get_companion()
+    runtime_config = getattr(companion, "runtime_config_service", None) if companion else None
+    # 启动早期可能 companion 未就绪 → 不缓存降级实例，待就绪后重建
+    if _admin_service_instance is None or (
+        _admin_service_instance._runtime_config is None and runtime_config is not None
+    ):
+        from core.admin_service import AdminService
+        from core.paths import data_dir
+
+        _admin_service_instance = AdminService(
+            db=_db,
+            data_dir=data_dir(),
+            runtime_config=runtime_config,
+            memory=getattr(companion, "memory", None) if companion else None,
+        )
+    return _admin_service_instance
+
+
+def _require_admin(request: Request) -> bool:
+    """管理 API 门闩：未解锁或 token 不符一律拒绝（无鉴权的管理 API = 数据毁灭级）。"""
+    svc = _admin_service()
+    if not svc.is_unlocked():
+        return False
+    token = request.headers.get("x-aerie-admin-token") or ""
+    return svc.verify_token(token)
+
+
+def _admin_denied() -> JSONResponse:
+    return JSONResponse(
+        {"error": "admin_locked", "errorCode": "admin_locked"},
+        status_code=403,
+    )
+
+
+async def _admin_purge_loop() -> None:
+    """每小时清理回收站过期数据（幂等，≤500/批），异步不阻塞请求。"""
+    while True:
+        try:
+            _admin_service().purge_expired()
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("admin purge loop error")
+            await asyncio.sleep(3600)
+
+
+@app.on_event("startup")
+async def _start_admin_purge() -> None:
+    global _admin_purge_task
+    if _admin_purge_task is None or _admin_purge_task.done():
+        _admin_purge_task = asyncio.create_task(_admin_purge_loop())
+
+
+@app.on_event("shutdown")
+async def _stop_admin_purge() -> None:
+    global _admin_purge_task
+    if _admin_purge_task:
+        _admin_purge_task.cancel()
+        try:
+            await _admin_purge_task
+        except asyncio.CancelledError:
+            pass
+        _admin_purge_task = None
+
+
+@app.post("/api/admin/unlock")
+async def admin_unlock() -> dict:
+    """置位服务端门闩并返回随机 token（浏览器端存入 sessionStorage）。"""
+    token = _admin_service().unlock()
+    return {"status": "ok", "token": token}
+
+
+@app.post("/api/admin/lock")
+async def admin_lock() -> dict:
+    _admin_service().lock()
+    return {"status": "ok"}
+
+
+@app.get("/api/admin/status")
+async def admin_status() -> dict:
+    return {"unlocked": _admin_service().is_unlocked()}
+
+
+@app.get("/api/admin/conversations")
+async def admin_conversations(
+    request: Request,
+    channel: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    return JSONResponse(
+        _admin_service().list_conversations(channel=channel, limit=limit, offset=offset)
+    )
+
+
+@app.post("/api/admin/conversations/trash")
+async def admin_conversations_trash(request: Request) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json", "errorCode": "invalid_json"}, status_code=400)
+    ids = body.get("conversation_ids") if isinstance(body, dict) else None
+    if not isinstance(ids, list) or not ids:
+        return JSONResponse({"error": "invalid_ids", "errorCode": "invalid_ids"}, status_code=400)
+    return JSONResponse({"status": "ok", **_admin_service().trash_conversations(ids)})
+
+
+@app.post("/api/admin/conversations/restore")
+async def admin_conversations_restore(request: Request) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json", "errorCode": "invalid_json"}, status_code=400)
+    ids = body.get("conversation_ids") if isinstance(body, dict) else None
+    if not isinstance(ids, list) or not ids:
+        return JSONResponse({"error": "invalid_ids", "errorCode": "invalid_ids"}, status_code=400)
+    return JSONResponse({"status": "ok", **_admin_service().restore_conversations(ids)})
+
+
+@app.post("/api/admin/trash/purge")
+async def admin_trash_purge(request: Request) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    purge_all = bool((body or {}).get("all"))
+    result = _admin_service().purge_all() if purge_all else _admin_service().purge_expired()
+    return JSONResponse({"status": "ok", **result})
+
+
+@app.get("/api/admin/memory")
+async def admin_memory_list(
+    request: Request,
+    layer: str = Query(default="long_term"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    include_trashed: bool = Query(default=True),
+) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    user_id = _primary_user_id(get_companion())
+    if user_id is None:
+        return JSONResponse({"error": "no_primary_user", "errorCode": "no_primary_user"}, status_code=400)
+    return JSONResponse(
+        _admin_service().list_memory(
+            user_id=user_id,
+            layer=layer,
+            limit=limit,
+            offset=offset,
+            include_trashed=include_trashed,
+        )
+    )
+
+
+@app.get("/api/admin/memory/{memory_id}")
+async def admin_memory_get(request: Request, memory_id: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    row = _admin_service().get_memory(memory_id)
+    if not row:
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse(row)
+
+
+@app.put("/api/admin/memory/{memory_id}")
+async def admin_memory_update(request: Request, memory_id: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json", "errorCode": "invalid_json"}, status_code=400)
+    row = _admin_service().update_memory(memory_id, body if isinstance(body, dict) else {})
+    if not row:
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse(row)
+
+
+@app.delete("/api/admin/memory/{memory_id}")
+async def admin_memory_delete(request: Request, memory_id: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    if not _admin_service().delete_memory(memory_id):
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse({"status": "ok"})
+
+
+@app.post("/api/admin/memory/{memory_id}/restore")
+async def admin_memory_restore(request: Request, memory_id: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    if not _admin_service().restore_memory(memory_id):
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/api/admin/audit")
+async def admin_audit(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=200),
+) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    return JSONResponse({"items": _admin_service().recent_audit(limit=limit)})
+
+
+@app.get("/api/admin/kb")
+async def admin_kb_list(
+    request: Request,
+    category: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    return JSONResponse(_admin_service().list_kb(category=category, limit=limit, offset=offset))
+
+
+@app.delete("/api/admin/kb/{item_id}")
+async def admin_kb_delete(request: Request, item_id: int) -> Response:
+    """知识库删除：确认 + undo 快照（非回收站，软删后立即可 undo）。"""
+    if not _require_admin(request):
+        return _admin_denied()
+    snapshot = _admin_service().delete_kb_with_undo(item_id)
+    if not snapshot:
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse({"status": "ok", "snapshot": {k: snapshot[k] for k in ("id", "category", "title")}})
+
+
+@app.post("/api/admin/kb/{item_id}/undo")
+async def admin_kb_undo(request: Request, item_id: int) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    if not _admin_service().undo_kb_delete(item_id):
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/admin.html")
+async def admin_page() -> Response:
+    """浏览器端管理页（Electron 管理窗口直接加载本地 renderer，不经此端点）。"""
+    from fastapi.responses import FileResponse
+
+    candidates = [
+        Path(__file__).resolve().parent.parent / "electron" / "src" / "renderer" / "admin-window.html",
+        Path(__file__).resolve().parent.parent / "electron" / "src" / "admin-window.html",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return FileResponse(str(candidate))
+    return JSONResponse({"error": "admin_page_missing", "errorCode": "admin_page_missing"}, status_code=404)
+
+
+@app.get("/styles/admin-window.css")
+async def admin_page_css() -> Response:
+    from fastapi.responses import FileResponse
+
+    target = (
+        Path(__file__).resolve().parent.parent
+        / "electron" / "src" / "renderer" / "styles" / "admin-window.css"
+    )
+    if target.exists():
+        return FileResponse(str(target), media_type="text/css")
+    return JSONResponse({"error": "asset_missing", "errorCode": "asset_missing"}, status_code=404)
+
+
+@app.get("/js/admin-window.js")
+async def admin_page_js() -> Response:
+    from fastapi.responses import FileResponse
+
+    target = (
+        Path(__file__).resolve().parent.parent
+        / "electron" / "src" / "renderer" / "js" / "admin-window.js"
+    )
+    if target.exists():
+        return FileResponse(str(target), media_type="application/javascript")
+    return JSONResponse({"error": "asset_missing", "errorCode": "asset_missing"}, status_code=404)
+
+
 @app.get("/api/cognition/stats")
 async def cognition_stats() -> dict:
     """Cognition log aggregate stats."""

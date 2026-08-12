@@ -116,6 +116,12 @@ DEFAULT_RUNTIME_CONFIG_SPECS: tuple[RuntimeConfigSpec, ...] = (
         env_name="AERIE_WORLD_DESIRED",
         allowed_values=("stopped", "running", "paused"),
     ),
+    RuntimeConfigSpec(
+        key="admin_unlocked",
+        default=False,
+        value_type="bool",
+        requires_restart=False,
+    ),
 )
 
 

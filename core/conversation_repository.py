@@ -116,6 +116,20 @@ class ConversationRepository:
     def __init__(self, database: Any, *, enabled: bool) -> None:
         self.database = database
         self.enabled = enabled
+        self._soft_delete = None  # None=未知；True/False=已缓存列检测结果
+
+    def _has_soft_delete(self, conn: sqlite3.Connection) -> bool:
+        """messages 是否已带 deleted_at（迁移 011）。旧库无该列时跳过过滤。"""
+        if self._soft_delete is None:
+            try:
+                cols = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(messages)").fetchall()
+                }
+                self._soft_delete = "deleted_at" in cols
+            except Exception:
+                self._soft_delete = False
+        return self._soft_delete
 
     def _find_user_conversation_ids(
         self,
@@ -639,6 +653,7 @@ class ConversationRepository:
                 user_id=user_id,
             )
             ex_ph = ",".join("?" * len(conversation_ids))
+            deleted_filter = " AND m.deleted_at IS NULL" if self._has_soft_delete(conn) else ""
             rows = conn.execute(
                 f"""WITH recent_turns AS (
                        SELECT turn_id, created_at, rowid AS turn_order
@@ -650,7 +665,7 @@ class ConversationRepository:
                    )
                    SELECT m.role, m.content, m.sequence, m.channel, rt.created_at
                    FROM recent_turns rt
-                   JOIN messages m ON m.turn_id = rt.turn_id
+                   JOIN messages m ON m.turn_id = rt.turn_id{deleted_filter}
                    ORDER BY rt.created_at ASC, rt.turn_order ASC, m.sequence ASC""",
                 tuple(conversation_ids) + (limit,),
             ).fetchall()
@@ -754,13 +769,14 @@ class ConversationRepository:
             anchor_sql = f" AND rowid {comparator} ?"
             params.append(anchor)
         params.append(limit + 1)
+        deleted_filter = " AND deleted_at IS NULL" if self._has_soft_delete(conn) else ""
         rows = conn.execute(
             f"""SELECT rowid AS history_rowid, message_id, conversation_id,
                        turn_id, role, content, attachments,
                        response_group_id, sequence, channel,
                        channel_account_id, actor_id, created_at
                 FROM messages
-                WHERE conversation_id = ?{anchor_sql}
+                WHERE conversation_id = ?{anchor_sql}{deleted_filter}
                 ORDER BY rowid {order}
                 LIMIT ?""",
             tuple(params),
@@ -786,13 +802,14 @@ class ConversationRepository:
         limit: int,
     ) -> dict[str, Any]:
         placeholders = ",".join("?" * len(conversation_ids))
+        deleted_filter = " AND deleted_at IS NULL" if self._has_soft_delete(conn) else ""
         rows = conn.execute(
             f"""SELECT rowid AS history_rowid, message_id, conversation_id,
                        turn_id, role, content, attachments,
                        response_group_id, sequence, channel,
                        channel_account_id, actor_id, created_at
                 FROM messages
-                WHERE conversation_id IN ({placeholders})
+                WHERE conversation_id IN ({placeholders}){deleted_filter}
                 ORDER BY rowid DESC
                 LIMIT ?""",
             tuple(conversation_ids) + (limit + 1,),
@@ -805,7 +822,7 @@ class ConversationRepository:
         newest_rowid = int(selected[-1]["history_rowid"])
         has_older = conn.execute(
             f"SELECT 1 FROM messages WHERE conversation_id IN ({placeholders}) "
-            "AND rowid < ? LIMIT 1",
+            f"AND rowid < ?{deleted_filter} LIMIT 1",
             tuple(conversation_ids) + (oldest_rowid,),
         ).fetchone() is not None
         items: list[dict[str, Any]] = []

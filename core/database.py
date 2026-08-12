@@ -15,6 +15,7 @@ from typing import Any, Iterable, Optional
 
 from core.feature_flags import FeatureFlags
 from core.migrations import (
+    admin_management_migrations,
     desktop_chat_continuity_migrations,
     MigrationRunner,
     mobile_gateway_migrations,
@@ -376,6 +377,7 @@ class Database:
                 runner.run(desktop_chat_continuity_migrations())
                 runner.run(summary_buckets_migrations())
                 runner.run(persona_timeline_migrations())
+                runner.run(admin_management_migrations())
             else:
                 # Desktop attachments stay available on legacy installations.
                 # This creates only additive desktop-owned tables and leaves the

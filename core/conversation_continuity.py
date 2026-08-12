@@ -190,15 +190,30 @@ class ConversationSummaryRepository:
             (table,),
         ).fetchone() is not None
 
+    def _bucket_deleted_filter(self, conn: sqlite3.Connection) -> str:
+        """conversation_summary_buckets 带 deleted_at（迁移 011）时过滤已删桶。"""
+        try:
+            cols = {
+                row["name"]
+                for row in conn.execute(
+                    "PRAGMA table_info(conversation_summary_buckets)"
+                ).fetchall()
+            }
+            return " AND deleted_at IS NULL" if "deleted_at" in cols else ""
+        except Exception:
+            return ""
+
     # ── 分组摘要（§3.2）：conversation_summary_buckets ──────────
 
     def latest_bucket(self, conversation_id: str) -> dict[str, Any] | None:
         with self._connection() as conn:
             if not self._table_exists(conn, "conversation_summary_buckets"):
                 return None
+            deleted_filter = self._bucket_deleted_filter(conn)
             row = conn.execute(
-                "SELECT * FROM conversation_summary_buckets "
-                "WHERE conversation_id = ? ORDER BY bucket_index DESC LIMIT 1",
+                f"SELECT * FROM conversation_summary_buckets "
+                f"WHERE conversation_id = ?{deleted_filter} "
+                f"ORDER BY bucket_index DESC LIMIT 1",
                 (conversation_id,),
             ).fetchone()
         return dict(row) if row is not None else None
@@ -213,9 +228,11 @@ class ConversationSummaryRepository:
         with self._connection() as conn:
             if not self._table_exists(conn, "conversation_summary_buckets"):
                 return []
+            deleted_filter = self._bucket_deleted_filter(conn)
             rows = conn.execute(
-                "SELECT * FROM conversation_summary_buckets "
-                "WHERE conversation_id = ? ORDER BY bucket_index DESC LIMIT ?",
+                f"SELECT * FROM conversation_summary_buckets "
+                f"WHERE conversation_id = ?{deleted_filter} "
+                f"ORDER BY bucket_index DESC LIMIT ?",
                 (conversation_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]

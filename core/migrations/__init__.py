@@ -592,6 +592,58 @@ cross-channel event index for multi-device presence / dual-view assembly / proac
     ]
 
 
+def _apply_admin_management(conn: sqlite3.Connection) -> None:
+    """Add admin-platform soft-delete columns + audit log (P4b, §3.5.2).
+
+    - messages / conversation_summary_buckets / knowledge_base 增加 deleted_at
+      （软删回收站：仅标记，purge 期才物理删除，rowid 游标保持稳定）。
+    - audit_log：append-only 审计（action/target_id/reason_code/timestamp/actor）。
+    """
+    _add_column_if_missing(conn, "messages", "deleted_at", "TEXT DEFAULT NULL")
+    _add_column_if_missing(
+        conn, "conversation_summary_buckets", "deleted_at", "TEXT DEFAULT NULL"
+    )
+    _add_column_if_missing(conn, "knowledge_base", "deleted_at", "TEXT DEFAULT NULL")
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            target_id TEXT NOT NULL DEFAULT '',
+            reason_code TEXT NOT NULL DEFAULT 'manual',
+            timestamp TEXT NOT NULL,
+            actor TEXT NOT NULL DEFAULT 'local_user'
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(timestamp DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_deleted_at "
+        "ON messages(deleted_at) WHERE deleted_at IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_buckets_deleted_at "
+        "ON conversation_summary_buckets(deleted_at) WHERE deleted_at IS NOT NULL"
+    )
+
+
+def admin_management_migrations() -> list[Migration]:
+    contract = """011_admin_management
+messages(deleted_at)
+conversation_summary_buckets(deleted_at)
+knowledge_base(deleted_at)
+audit_log(action,target_id,reason_code,timestamp,actor)
+soft-delete recycle bin columns + append-only audit for admin platform
+"""
+    return [
+        Migration(
+            version="011_admin_management",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_admin_management,
+        )
+    ]
+
+
 def phase2_identity_migrations() -> list[Migration]:
     contract = """002_actor_channel_identity
 actors(actor_id)

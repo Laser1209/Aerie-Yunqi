@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolution L1/L2/L3.
+"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolution L1/L2/L3.
 
 升级自进化机制，从 v9.0 的工具提案扩展为三级进化：
 
@@ -359,6 +359,7 @@ class SessionReflector:
                         "topics": result.topics,
                         "message_count": result.message_count,
                         "user_mood": result.user_mood,
+                        "channel": "system",
                     },
                     source="session_reflection",
                 )
@@ -515,6 +516,7 @@ class KnowledgeDistiller:
                     metadata={
                         "new_cards": result.new_knowledge_cards,
                         "topics": topics,
+                        "channel": "system",
                     },
                     source="knowledge_distill",
                 )

@@ -82,10 +82,13 @@ class LayeredMemorySyncAdapter:
         importance: int = 5,
         *,
         actor_id: Optional[str] = None,
+        channel: Optional[str] = None,
     ) -> int:
         metadata: dict[str, Any] = {}
         if actor_id:
             metadata["actor_id"] = actor_id
+        if channel:
+            metadata["channel"] = channel
         try:
             mid = self._run(
                 self._layered.store(
@@ -123,6 +126,7 @@ class LayeredMemorySyncAdapter:
         for r in results or []:
             item = getattr(r, "item", r)
             mtype = getattr(item, "memory_type", "memory")
+            meta = getattr(item, "metadata", None) or {}
             rows.append({
                 "content": str(getattr(item, "content", "")),
                 "memory_type": (
@@ -130,6 +134,7 @@ class LayeredMemorySyncAdapter:
                 ),
                 "importance": getattr(item, "importance", ""),
                 "score": float(getattr(r, "score", 0.0)),
+                "channel": str(meta.get("channel") or "unknown"),
             })
         return rows[:limit]
 

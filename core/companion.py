@@ -2351,6 +2351,7 @@ class Companion:
                     await self._layered_memory.store(
                         user_id=0, content=content, importance=10.0,
                         source="identity_seed",
+                        metadata={"channel": "system"},
                     )
                 except Exception:
                     logger.debug("identity memory seed item failed", exc_info=True)

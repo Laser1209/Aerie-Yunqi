@@ -26,6 +26,7 @@ from communication.message import (
     OutgoingReply,
 )
 from communication.splitter import SemanticMessageSplitter
+from core._hist_utils import channel_short
 from core.attachment_handler import extract_markdown
 from core.chat_events import emit
 from core.chat_request_repository import RequestContext
@@ -1506,7 +1507,14 @@ class Pipeline:
                 except Exception:
                     continue
             content = str(row.get("content") or "").strip()
-            if content:
+            if not content:
+                continue
+            # 来源标注（§3.3）：记忆带 channel 时追加 [来源:XX]，让 AI 知道从哪端听到
+            ch = str(row.get("channel") or "unknown")
+            short = channel_short(ch) if ch != "unknown" else ""
+            if short:
+                snippets.append(f"[来源:{short}] {content}")
+            else:
                 snippets.append(content)
         return snippets
 

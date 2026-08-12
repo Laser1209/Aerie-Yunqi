@@ -98,6 +98,24 @@ def test_adapter_decay_no_crash(tmp_path):
     adapter.decay()  # 不应抛异常
 
 
+def test_adapter_store_channel_then_retrieve_tags_source(tmp_path):
+    """store 带 channel 后 retrieve 透出 channel；缺失时默认 unknown（§4 #11 用例⑥）。"""
+    adapter = _make_adapter(tmp_path)
+
+    adapter.store(1, "preference", "用户说过喜欢吃火锅", importance=8, channel="qq")
+    rows = adapter.retrieve(1, "火锅", limit=5)
+    assert rows
+    row = rows[0]
+    assert "channel" in row
+    assert row["channel"] == "qq"
+
+    # 不带 channel 的记忆：channel=unknown
+    adapter.store(1, "fact", "无来源的记忆", importance=8)
+    rows = adapter.retrieve(1, "无来源", limit=5)
+    assert rows
+    assert all(r.get("channel") in ("unknown", "qq") for r in rows)
+
+
 def test_adapter_retrieve_empty_when_no_memory(tmp_path):
     adapter = _make_adapter(tmp_path)
     rows = adapter.retrieve(999, "不存在", limit=5)

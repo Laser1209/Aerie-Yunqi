@@ -168,6 +168,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                             "memory_type": item.memory_type.value if isinstance(item.memory_type, MemoryType) else item.memory_type,
                             "importance": item.importance,
                             "source": item.source,
+                            "channel": str((item.metadata or {}).get("channel") or ""),
                         }],
                     )
                     has_embedding = 1
@@ -356,6 +357,10 @@ class LongTermMemoryLayer(BaseMemoryLayer):
             return False
         try:
             kwargs["updated_at"] = time.time()
+            # 提前提取 metadata 中的 channel（dumps 前），供 ChromaDB 同步
+            meta_channel = None
+            if "metadata" in kwargs and isinstance(kwargs["metadata"], dict):
+                meta_channel = kwargs["metadata"].get("channel")
             if "metadata" in kwargs and isinstance(kwargs["metadata"], dict):
                 kwargs["metadata"] = json.dumps(kwargs["metadata"], ensure_ascii=False)
 
@@ -373,6 +378,10 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     for k in ("importance", "source", "memory_type"):
                         if k in kwargs:
                             meta[k] = kwargs[k]
+                    if meta_channel:
+                        meta["channel"] = str(meta_channel)
+                    elif "channel" in kwargs:
+                        meta["channel"] = str(kwargs["channel"])
                     if meta:
                         update_data["metadatas"] = [meta]
                     if update_data:

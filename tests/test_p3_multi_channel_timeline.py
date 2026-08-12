@@ -198,3 +198,71 @@ def test_multi_channel_flag_default_off():
     from core.feature_flags import FeatureFlags
 
     assert FeatureFlags().is_enabled("multi_channel_identity_v1") is False
+
+
+def test_view_b_budget_within_500_chars():
+    """附录 A.3.3：视图 B（多端存在提示 + 跨端回忆 3 条）预算 ≤ 500 字符。"""
+    asm = _assembler()
+    result = asm.assemble(
+        system_prompt="SYSTEM",
+        current_user_content="继续",
+        actor_id="actor",
+        channel="desktop",
+        channel_account_id="local",
+        user_id=7,
+        conversation_id="conv_budget",
+        multi_channel_identity=True,
+        timeline_events=[
+            {
+                "channel": ch,
+                "occurred_at": "2026-08-12T22:10:00Z",
+                "event_summary": "事件摘要" * 20,
+            }
+            for ch in ("qq", "qq", "mobile")
+        ],
+    )
+    system = result.messages[0]["content"]
+    # 视图 B 段落（多端存在提示 + [跨端回忆]）整体不超过 500 字符
+    multi_start = system.find("【多端存在】")
+    recall_start = system.find("[跨端回忆]")
+    if multi_start != -1 and recall_start != -1:
+        view_b = system[multi_start: recall_start + 500]
+        assert len(view_b) <= 500
+    # 3 条事件行均被 80 字符截断（行 = 前缀 + 80 字符摘要，前缀 ≤ 30）
+    for line in system.splitlines():
+        if line.startswith("- "):
+            assert len(line) <= 80 + 30
+            assert len(line.split("] ", 1)[-1]) <= 80
+
+
+def test_write_isolation_red_line_l0_never_injects_other_channels():
+    """附录 A.2 写入隔离红线：跨端时间线只进视图 B 摘要，不进 L0 历史。"""
+    asm = _assembler()
+    result = asm.assemble(
+        system_prompt="SYSTEM",
+        current_user_content="继续",
+        actor_id="actor",
+        channel="desktop",
+        channel_account_id="local",
+        user_id=7,
+        conversation_id="conv_isolation",
+        multi_channel_identity=True,
+        timeline_events=[
+            {
+                "channel": "qq",
+                "occurred_at": "2026-08-12T22:10:00Z",
+                "event_summary": "QQ端完整对话内容泄漏标记XYZ",
+            }
+        ],
+    )
+    messages = result.messages
+    system = messages[0]["content"]
+    # 跨端内容以 [跨端回忆] 摘要形式存在于 system（视图 B）
+    assert "[跨端回忆]" in system
+    assert "泄漏标记XYZ" in system
+    # 但 L0 历史消息（system 之后、user 之前）不含任何跨端消息正文
+    history = messages[1:-1]
+    for h in history:
+        assert "泄漏标记XYZ" not in h["content"]
+        assert h["role"] in {"user", "assistant"}
+    assert messages[-1]["role"] == "user"

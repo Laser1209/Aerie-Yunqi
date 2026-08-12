@@ -3,25 +3,10 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Callable, Iterator, Sequence
 
+from core._hist_utils import hist_label as _hist_label
 from core.conversation_repository import ConversationRepository
-
-
-def _hist_label(row: dict) -> str:
-    """给一条历史消息生成绝对时间前缀，如 `[08-09 04:07] `。
-
-    无法解析时间时返回空串，保证不破坏原有内容。
-    """
-    ts = row.get("created_at") or row.get("ts")
-    if not ts:
-        return ""
-    try:
-        dt = datetime.fromisoformat(str(ts))
-    except (ValueError, TypeError):
-        return ""
-    return f"[{dt.strftime('%m-%d %H:%M')}] "
 
 
 class SummaryConflict(RuntimeError):

@@ -41,6 +41,8 @@
 
 
 ## 修复状态（2026-08-13 同日修复）
+- **实现细节修正**：同源 POST 浏览器会带 Origin（如 http://127.0.0.1:7890），守卫同时放行服务端自身 Origin（request.url.scheme://netloc），浏览器模式不受影响；测试补充同源 POST 用例，admin API 4 例全绿。
+
 
 - **已落地**：`core/api_server.py` 新增 `_admin_origin_guard` HTTP 中间件（L2598-2607），对 `/api/admin/*` 做 Origin 白名单校验（允许 空/file:///null/app://），任意 http/https 网页 Origin 一律 403——直接网页攻击链（fetch unlock → 拿 token → purge）已阻断；中间件先于 CORS 执行，跨源预检同样被 403 拦截。
 - **测试**：`tests/test_admin_api.py::test_admin_cross_origin_guard_blocks_web_pages` 新增 7 断言（evil Origin 对 unlock/status/conversations/purge 全 403；无 Origin 与 file:///null 正常），admin 测试 17 例全绿。

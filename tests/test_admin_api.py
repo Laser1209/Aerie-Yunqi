@@ -120,6 +120,10 @@ def test_admin_cross_origin_guard_blocks_web_pages(api_env):
     assert client.post("/api/admin/unlock").status_code == 200
     assert client.get("/api/admin/status", headers={"Origin": "file://"}).status_code == 200
     assert client.get("/api/admin/status", headers={"Origin": "null"}).status_code == 200
+    # 同源 POST（浏览器同源请求会带 Origin: http://<server>）也必须放行
+    assert client.post(
+        "/api/admin/unlock", headers={"Origin": "http://testserver"}
+    ).status_code == 200
 
 
 def test_admin_conversation_trash_restore_purge_chain(api_env):

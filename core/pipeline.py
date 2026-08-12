@@ -2522,12 +2522,12 @@ class Pipeline:
     ) -> list[dict]:
         """按 P3-5 三个触发器决定注入哪些跨端事件（含 P3-4 event 记忆）。
 
-        触发器优先级：显式回忆 > 跨端切换检测 > 长间隔回归。
+        触发器执行顺序（与优先级一致）：显式回忆 > 长间隔回归（≥2 小时）> 跨端切换（≥30 分钟）。
         任一命中即返回对应事件集（受 limit=3 / 24h 窗口约束），否则返回空。
         """
         text = str(current_user_content or "")
         if any(keyword in text for keyword in self._RECALL_KEYWORDS):
-            # 触发器 3：显式回忆 → 时间线召回 + event 记忆（P3-4）
+            # 触发器 1：显式回忆 → 时间线召回 + event 记忆（P3-4）
             events = timeline.recent_events(
                 actor_id=msg.actor_id,
                 user_id=msg.user_id,
@@ -2562,7 +2562,7 @@ class Pipeline:
             )
 
         if last_local is not None and now - last_local >= 30 * 60:
-            # 触发器 1：跨端切换检测（当前端 ≥30 分钟无历史）
+            # 触发器 3：跨端切换检测（当前端 ≥30 分钟无历史）
             return timeline.recent_events(
                 actor_id=msg.actor_id,
                 user_id=msg.user_id,

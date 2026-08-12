@@ -1364,6 +1364,13 @@
             <div class="settings-actions">
               <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
               <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>
+              <!-- P4b: 管理平台显式入口（设置面板兜底，另有两处彩蛋入口） -->
+              <button id="settings-admin-btn" class="btn btn-secondary" title="管理平台 · 软删回收站 / 记忆 / 审计 / 统计">
+                <svg class="icon icon--14" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                <span style="margin-left:4px;">管理平台</span>
+              </button>
               <!-- R6.6: one-click backend restart button. Triggers a
                    self-restart of the Python main.py so any pending
                    code edits / config changes take effect without

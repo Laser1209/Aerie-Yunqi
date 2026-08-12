@@ -234,6 +234,9 @@ window.addEventListener("DOMContentLoaded", () => {
   const adminBtn = document.getElementById("btn-admin-open");
   if (adminBtn) adminBtn.addEventListener("click", openAdmin);
 
+  const settingsAdminBtn = document.getElementById("settings-admin-btn");
+  if (settingsAdminBtn) settingsAdminBtn.addEventListener("click", openAdmin);
+
   // Double-click app-header to toggle maximize (Windows convention)
   const appHeader = document.getElementById("app-header");
   if (appHeader && winApi) {

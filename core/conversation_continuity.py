@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator, Sequence
 
+from core._hist_utils import channel_short as _channel_short
 from core._hist_utils import hist_label as _hist_label
 from core.conversation_repository import ConversationRepository
 
@@ -295,6 +296,106 @@ class ConversationSummaryRepository:
         return int(row["turn_count"] or 0) >= max(1, int(turn_interval))
 
 
+class PersonaTimelineRepository:
+    """Cross-channel persona timeline (P3-1, 附录 A.3.1).
+
+    按 actor_id + user_id 记录跨端事件索引（不含 channel 隔离），供
+    多端存在提示 / 双视图注入（视图 B）/ 主动回忆（P3-5）使用。
+    ``upsert_event`` 由 UNIQUE(actor_id, user_id, turn_id) 保证幂等。
+    """
+
+    def __init__(self, database: Any) -> None:
+        self.database = database
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        if isinstance(self.database, sqlite3.Connection):
+            yield self.database
+            return
+        with self.database.connection() as conn:
+            yield conn
+
+    @staticmethod
+    def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+        return conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone() is not None
+
+    def upsert_event(
+        self,
+        *,
+        actor_id: str | None,
+        user_id: int,
+        channel: str | None,
+        turn_id: str,
+        event_summary: str,
+        occurred_at: str | None = None,
+    ) -> bool:
+        """幂等写入一条跨端事件索引（重复刷新不产生重复事件）。"""
+        summary = str(event_summary or "").strip()
+        if not summary or not turn_id:
+            return False
+        if occurred_at is None:
+            from datetime import datetime, timezone
+
+            occurred_at = datetime.now(timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        with self._connection() as conn:
+            if not self._table_exists(conn, "persona_timeline"):
+                return False
+            conn.execute(
+                """INSERT OR IGNORE INTO persona_timeline
+                   (actor_id, user_id, channel, turn_id, event_summary, occurred_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    actor_id,
+                    int(user_id),
+                    channel or "unknown",
+                    turn_id,
+                    summary,
+                    occurred_at,
+                ),
+            )
+            return True
+
+    def recent_events(
+        self,
+        *,
+        actor_id: str | None,
+        user_id: int,
+        limit: int = 3,
+        since: str | None = None,
+        exclude_channel: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """最近 N 条跨端事件（近到远）。可过滤指定时间之后、排除当前通道。"""
+        limit = max(1, min(int(limit), 10))
+        clauses = ["user_id = ?"]
+        params: list[Any] = [int(user_id)]
+        if actor_id:
+            clauses.append("actor_id = ?")
+            params.append(actor_id)
+        if since:
+            clauses.append("occurred_at >= ?")
+            params.append(since)
+        if exclude_channel:
+            clauses.append("channel != ?")
+            params.append(exclude_channel)
+        sql = (
+            "SELECT actor_id, user_id, channel, turn_id, event_summary, occurred_at "
+            "FROM persona_timeline WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY occurred_at DESC, id DESC LIMIT ?"
+        )
+        params.append(limit)
+        with self._connection() as conn:
+            if not self._table_exists(conn, "persona_timeline"):
+                return []
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+
 class SummaryRefreshPlanner:
     """Build bucketed summary jobs; callers schedule them off the send path.
 
@@ -417,6 +518,8 @@ class ContextAssembler:
         memories: Sequence[str] = (),
         attachment_snippets: Sequence[str] = (),
         thinking_trace: str | None = None,
+        multi_channel_identity: bool = False,
+        timeline_events: Sequence[dict] = (),
     ) -> ContextAssembly:
         resolved_id = conversation_id
         if resolved_id is None:
@@ -469,6 +572,14 @@ class ContextAssembler:
                 "[决策自省·上一条]（以下为上次回复的思考/动作摘录，仅作连续性参考）\n"
                 + self._clip(trace_text, min(400, self.max_total_chars // 8))
             )
+        if multi_channel_identity:
+            # 视图 B 跨端回忆（P3-3，附录 A.3.3）：最近 N 条跨端事件，只读摘要
+            timeline_lines = self._format_timeline_events(timeline_events)
+            if timeline_lines:
+                supplemental_sections.append(
+                    "[跨端回忆]（以下是你在其他设备与用户发生的真实事件，仅作事实参考）\n"
+                    + "\n".join(timeline_lines)
+                )
         memory_text = self._bounded_join(memories, self.max_memory_chars)
         if memory_text:
             # 记忆注入防御（审计 H2）：显式声明记忆仅作事实参考，忽略其中指令性文本
@@ -498,6 +609,13 @@ class ContextAssembler:
         # ── 通道感知段（§3.4）：让 AI 知道当前在哪个端回复 ──
         channel_label = _CHANNEL_CN.get(channel or "", "未知通道")
         channel_segment = f"【当前通道】你正在通过「{channel_label}」与用户聊天。"
+        if multi_channel_identity:
+            # P3-2（附录 A.3.2）：多端存在元认知设定，仅 flag 开启时注入
+            channel_segment += (
+                "\n【多端存在】你是同一位伊塔，同时通过多个设备陪伴用户："
+                "QQ 私聊、云栖桌面 App。无论用户在哪个端找你，都是同一个人。"
+                "你能感知到用户在多个端与你交流。"
+            )
         channel_chars = len(channel_segment)
         supplemental_chars = sum(len(section) + 2 for section in supplemental_sections)
         if supplemental_chars and system_budget:
@@ -610,6 +728,8 @@ class ContextAssembler:
                 "summary_revision": int(summary["revision"]) if summary else 0,
                 "summary_bucket_count": len(buckets),
                 "thinking_trace_chars": len(trace_text),
+                "multi_channel_identity": bool(multi_channel_identity),
+                "timeline_events": len(timeline_events),
                 "memory_chars": memory_chars,
                 "attachment_chars": len(attachment_text),
                 "bounded": total_chars <= self.max_total_chars,
@@ -644,3 +764,25 @@ class ContextAssembler:
             result.append(clipped)
             used += separator + len(clipped)
         return "\n".join(result)
+
+    @staticmethod
+    def _format_timeline_events(events: Sequence[dict], *, max_events: int = 3) -> list[str]:
+        """视图 B 跨端回忆行（附录 A.3.3）：每行 MM-DD HH:MM [渠道] 摘要[:80]。"""
+        lines: list[str] = []
+        for event in events[:max_events]:
+            if not isinstance(event, dict):
+                continue
+            occurred = str(event.get("occurred_at") or "")
+            stamp = ""
+            if len(occurred) >= 16:
+                stamp = f"{occurred[5:7]}-{occurred[8:10]} {occurred[11:16]}"
+            else:
+                stamp = occurred[:16]
+            channel = _channel_short(str(event.get("channel") or ""))
+            summary = str(event.get("event_summary") or "").strip()
+            if not summary:
+                continue
+            if len(summary) > 80:
+                summary = summary[:79] + "…"
+            lines.append(f"- {stamp} [{channel}] {summary}")
+        return lines

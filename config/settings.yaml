@@ -20,6 +20,7 @@ feature_flags:
   memory_write_validation_v1: false
   migration_framework_v1: true
   mobile_gateway_v1: false
+  multi_channel_identity_v1: false
   persona_hub_source_v1: false
   proactive_delivery_v2: true
   recall_llm_instruction_v1: true

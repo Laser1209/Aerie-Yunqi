@@ -26,6 +26,7 @@ from core.computer_control import ComputerController, PermissionLevel
 from core.conversation_continuity import (
     ContextAssembler,
     ConversationSummaryRepository,
+    PersonaTimelineRepository,
     SummaryRefreshPlanner,
 )
 from core.conversation_repository import ConversationRepository
@@ -484,6 +485,8 @@ class Companion:
         self.summary_refresh_planner = SummaryRefreshPlanner(
             self.conversation_summary_repository,
         )
+        # P3-1（附录 A.3.1）：跨端时间线事件索引，随摘要刷新幂等写入
+        self.persona_timeline_repository = PersonaTimelineRepository(self.db)
         self.context_assembler = ContextAssembler(
             self.conversation_repository,
             self.conversation_summary_repository,
@@ -633,6 +636,7 @@ class Companion:
             conversation_repository=self.conversation_repository,
             context_assembler=self.context_assembler,
             summary_planner=self.summary_refresh_planner,
+            timeline_repository=self.persona_timeline_repository,
             attachment_service=self.desktop_attachment_service,
             memory_store=self.memory,
         )

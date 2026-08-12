@@ -18,6 +18,7 @@ from core.migrations import (
     desktop_chat_continuity_migrations,
     MigrationRunner,
     mobile_gateway_migrations,
+    persona_timeline_migrations,
     phase2_identity_migrations,
     phase3_backfill_migrations,
     phase3_conversation_migrations,
@@ -374,6 +375,7 @@ class Database:
                 runner.run(mobile_gateway_migrations())
                 runner.run(desktop_chat_continuity_migrations())
                 runner.run(summary_buckets_migrations())
+                runner.run(persona_timeline_migrations())
             else:
                 # Desktop attachments stay available on legacy installations.
                 # This creates only additive desktop-owned tables and leaves the

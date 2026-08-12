@@ -129,6 +129,7 @@ class Pipeline:
         conversation_repository: Any = None,
         context_assembler: Any = None,
         summary_planner: Any = None,
+        timeline_repository: Any = None,
         summary_summarizer: Any = None,
         attachment_service: Any = None,
         memory_store: Any = None,
@@ -148,6 +149,7 @@ class Pipeline:
         self.conversation_repository = conversation_repository
         self.context_assembler = context_assembler
         self.summary_planner = summary_planner
+        self.timeline_repository = timeline_repository
         self.summary_summarizer = (
             summary_summarizer or self._default_rolling_summary
         )
@@ -1496,6 +1498,23 @@ class Pipeline:
             except Exception:
                 logger.debug("thinking trace injection unavailable", exc_info=True)
                 thinking_trace = None
+        # P3 多端存在（附录 A.3.2/A.3.3）：flag 开启时取跨端时间线注入视图 B
+        multi_channel_identity = False
+        timeline_events: list[dict] = []
+        if self._multi_channel_identity_enabled():
+            multi_channel_identity = True
+            timeline = self.timeline_repository
+            if timeline is not None:
+                try:
+                    timeline_events = timeline.recent_events(
+                        actor_id=msg.actor_id,
+                        user_id=msg.user_id,
+                        limit=3,
+                        exclude_channel=msg.channel,
+                    )
+                except Exception:
+                    logger.debug("persona timeline read unavailable", exc_info=True)
+                    timeline_events = []
         try:
             assembled = assembler.assemble(
                 system_prompt=system_prompt,
@@ -1512,6 +1531,8 @@ class Pipeline:
                 memories=memories,
                 attachment_snippets=attachment_snippets,
                 thinking_trace=thinking_trace,
+                multi_channel_identity=multi_channel_identity,
+                timeline_events=timeline_events,
             )
             messages = getattr(assembled, "messages", None)
             audit = getattr(assembled, "audit", None)
@@ -2222,7 +2243,12 @@ class Pipeline:
             bind_error = None
 
         if canonical_result is not None and conversation_id:
-            self._schedule_summary_refresh(str(conversation_id))
+            self._schedule_summary_refresh(
+                str(conversation_id),
+                actor_id=msg.actor_id,
+                user_id=msg.user_id,
+                channel=msg.channel,
+            )
         return bind_error
 
     def _canonical_user_message_id(
@@ -2254,7 +2280,14 @@ class Pipeline:
         except (KeyError, TypeError):
             return str(getattr(row, "message_id", "") or "") or None
 
-    def _schedule_summary_refresh(self, conversation_id: str) -> None:
+    def _schedule_summary_refresh(
+        self,
+        conversation_id: str,
+        *,
+        actor_id: str | None = None,
+        user_id: int | None = None,
+        channel: str | None = None,
+    ) -> None:
         if self.summary_planner is None or conversation_id in self._summary_inflight:
             return
         try:
@@ -2264,13 +2297,25 @@ class Pipeline:
             return
         self._summary_inflight.add(conversation_id)
         task = loop.create_task(
-            self._refresh_summary(conversation_id),
+            self._refresh_summary(
+                conversation_id,
+                actor_id=actor_id,
+                user_id=user_id,
+                channel=channel,
+            ),
             name=f"conversation-summary-{conversation_id}",
         )
         self._summary_tasks.add(task)
         task.add_done_callback(self._summary_tasks.discard)
 
-    async def _refresh_summary(self, conversation_id: str) -> None:
+    async def _refresh_summary(
+        self,
+        conversation_id: str,
+        *,
+        actor_id: str | None = None,
+        user_id: int | None = None,
+        channel: str | None = None,
+    ) -> None:
         try:
             job = await asyncio.to_thread(
                 self.summary_planner.prepare,
@@ -2278,11 +2323,25 @@ class Pipeline:
             )
             if job is None:
                 return
-            await asyncio.to_thread(
+            bucket = await asyncio.to_thread(
                 self.summary_planner.complete,
                 job,
                 self.summary_summarizer,
             )
+            # P3-1（附录 A.3.1）：复用摘要刷新调度，同步写一条跨端时间线事件。
+            # UNIQUE(actor_id, user_id, turn_id) 保证幂等；以 conversation+bucket 为键。
+            timeline = self.timeline_repository
+            if timeline is not None and user_id is not None and bucket:
+                try:
+                    timeline.upsert_event(
+                        actor_id=actor_id,
+                        user_id=int(user_id),
+                        channel=channel,
+                        turn_id=f"{conversation_id}:b{bucket.get('bucket_index')}",
+                        event_summary=str(bucket.get("summary") or "")[:400],
+                    )
+                except Exception:
+                    logger.exception("persona timeline event write failed")
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -2387,6 +2446,14 @@ class Pipeline:
         """P2 决策自省段注入开关（§3.6-2 / §4 #9），默认关闭防 token 膨胀。"""
         try:
             return FeatureFlags().is_enabled("thinking_trace_injection_v1")
+        except Exception:
+            return False
+
+    @staticmethod
+    def _multi_channel_identity_enabled() -> bool:
+        """P3 多端存在提示 + 视图 B 注入开关（附录 A.3.2），默认关闭。"""
+        try:
+            return FeatureFlags().is_enabled("multi_channel_identity_v1")
         except Exception:
             return False
 

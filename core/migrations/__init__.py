@@ -553,6 +553,45 @@ bucketed summaries, 8 turns per bucket; old conversation_summaries kept read-onl
     ]
 
 
+def _apply_persona_timeline(conn: sqlite3.Connection) -> None:
+    """Add cross-channel persona timeline table (P3-1, 附录 A.3.1).
+
+    按 actor_id + user_id 记录跨端事件索引（不含 channel 隔离），
+    供多端存在提示 / 双视图注入 / 主动回忆使用。
+    UNIQUE(actor_id, user_id, turn_id) 保证幂等，重复刷新不产生重复事件。
+    """
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS persona_timeline (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            channel TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            event_summary TEXT NOT NULL,
+            occurred_at TEXT NOT NULL,
+            UNIQUE (actor_id, user_id, turn_id)
+        )"""
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_timeline_lookup
+           ON persona_timeline (actor_id, user_id, occurred_at DESC)"""
+    )
+
+
+def persona_timeline_migrations() -> list[Migration]:
+    contract = """010_persona_timeline
+persona_timeline(actor_id,user_id,channel,turn_id,event_summary,occurred_at)
+cross-channel event index for multi-device presence / dual-view assembly / proactive recall
+"""
+    return [
+        Migration(
+            version="010_persona_timeline",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_persona_timeline,
+        )
+    ]
+
+
 def phase2_identity_migrations() -> list[Migration]:
     contract = """002_actor_channel_identity
 actors(actor_id)

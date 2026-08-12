@@ -1,0 +1,30 @@
+{
+  "runs": 50,
+  "turns_seeded": 40,
+  "baseline": {
+    "mean_ms": 0.87,
+    "median_ms": 0.824,
+    "p95_ms": 1.077,
+    "min_ms": 0.712,
+    "max_ms": 1.418,
+    "total_chars": 665,
+    "n": 50
+  },
+  "view_b": {
+    "mean_ms": 0.861,
+    "median_ms": 0.838,
+    "p95_ms": 1.018,
+    "min_ms": 0.759,
+    "max_ms": 1.235,
+    "total_chars": 878,
+    "n": 50
+  },
+  "overhead_pct": -1.03,
+  "abs_overhead_ms": -0.009,
+  "view_b_added_chars": 213,
+  "threshold": {
+    "abs_ms": "< 5ms",
+    "added_chars": "<= 500"
+  },
+  "pass": true
+}

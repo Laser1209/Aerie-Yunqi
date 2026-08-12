@@ -121,7 +121,7 @@
 |---|---|---|
 | **P0 过关点：审计（艾莲）交付评审通过** | §5-1 轮次窗口（`test_turn_grouping_keeps_recent_turns_complete`/`test_turn_window_elasticity_truncates_oldest` 实跑通过）；§5-3 通道感知（`test_channel_awareness_injected_into_system_prompt` 通过 + `_hist_utils` 通道标记）；§5-5 记忆来源（`test_adapter_store_channel_then_retrieve_tags_source` 通过，identity seed=system 已实现）；§5-7 安全（`test_knowledge_writes_require_auth` 实跑通过 + evolution_manager 签名兼容）；§6.1 监控日志（`context_assemble` 结构化日志含 9 项指标在 assemble() 落地） | **通过** |
 | **P0 过关点：Agent 安全扫描无新增高危** | `work_progress/security_review_P0-P3.md`（提交 `da88fd1`）：TRAE-security-review 三遍法，"No exploitable issues found"，7 个安全面全绿；扫描范围覆盖 pre-p0→1344291 全部 P0-P3 交付 | **通过** |
-| **P1 过关点：Agent 回归复核通过** | B.7 记载"伊塔执行 1228 passed/27 failed……待 Agent 正式会签"；艾莲本次独立全量回归 1259 passed/26 failed，与声称一致且无新增回归。**Agent 独立回归复核的正式记录未发现**（`security_review_P0-P3.md` 为安全扫描非回归复核） | **条件通过**（伊塔侧回归证据充分、艾莲复核一致；Agent 正式会签记录缺失，需 Agent 补签后闭环） |
+| **P1 过关点：Agent 回归复核通过** | B.7 记载"伊塔执行 1228 passed/27 failed……待 Agent 正式会签"；艾莲本次独立全量回归 1259 passed/26 failed，与声称一致且无新增回归；**Agent 补签（2026-08-13）**：独立 Agent 全量回归 1406 passed/27 failed 零新增，正式记录 `work_progress/agent_regression_recheck_P0-P4.md`（hash `822a826e`） | **通过** |
 | **P2 门户节点：审计确认 P2 项 ROI 可行（写入校验门 PoC 范围界定）** | `1a31727` 提交 `core/memory_validation.py` + `tools/memory_validation_poc.py`；B.8 实测：11 合成用例判定一致率 100%（误判 0）、平均时延 3436.7ms/次、平均 179.9 tokens/次、估算成本约 0.054 元/千次；结论建议异步 fire-and-forget 或仅 importance≥7 同步校验。PoC 范围界定（importance≥7 + knowledge_add 接线 + flag 默认关闭 + fail-open）合理，成本与误判率双达标，`validate_fact`/`MemoryFactValidator` 实现与 PoC 描述一致 | **通过** |
 | **P3 门户节点：persona_timeline 表设计评审（艾莲）通过** | `010_persona_timeline` DDL（`migrations/__init__.py` L563-578）与附录 A.3.1 规格逐字段一致：`id/actor_id/user_id/channel/turn_id/event_summary/occurred_at` + `UNIQUE(actor_id, user_id, turn_id)` 幂等键 + `idx_timeline_lookup (actor_id, user_id, occurred_at DESC)`；写入时机（摘要刷新同步写事件）与 A.3.1 一致；副本 DB 实跑建表/索引/账本成功 | **通过** |
 | **P3 过关点：多端自我叙事实测（用户验收）** | B.9 明确"需 QQ/桌面真实链路，开启 `multi_channel_identity_v1` 后实测"，当前未执行 | **待用户**（本审计仅记录状态；离线代理证据见 §5，视图 B 注入率 10/10） |
@@ -136,7 +136,7 @@
 
 - **通过**：P0 交付评审 ✅、Agent 安全扫描无新增高危 ✅、P2 门户 ROI 可行 ✅、P3 门户 persona_timeline 表设计 ✅、视图 B 预算/隔离红线 ✅、实施记录全部提交哈希真实且内容匹配 ✅、§4 十六项改动全部落实 ✅、定向测试与全量回归（1259 passed/26 failed，失败均为既有环境性）✅、三份离线证据报告真实有效 ✅。
 - **条件**：
-  1. P1 过关点"Agent 回归复核"需 Agent 补签正式复核记录后闭环（F-补签）。
+  1. P1 过关点"Agent 回归复核"——**已补签闭环（2026-08-13）**：独立 Agent（general_purpose_task）全量回归实测 **1406 passed / 27 failed**（总 1433，89.26s），与 P4 基线 1405/27 对比零新增失败；正式复核记录 `work_progress/agent_regression_recheck_P0-P4.md`（含基线三要素 hash+命令+日期），git hash-object 校验 `822a826e...` 落盘确认。
   2. F1：B.7"磁盘 DB 实跑"证据表述需修正（现盘 DB 账本无 009/010，副本实跑已验证迁移正确）；P0-P3 交付后的首次真实启动应复核账本出现 009_summary_buckets/010_persona_timeline。
   3. F2：§5 验收 2 离线代理样本量已整改为 10/10（100%，对照组 4/10），规格 ≥10 达成；真实 QQ/桌面链路复测随用户验收（B.9 待办）一并关闭。
 - **遗留（不属本交付）**：26 个既有环境性测试失败、F3 版本号语义、F4 注释不一致。

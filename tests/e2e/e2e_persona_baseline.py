@@ -1,11 +1,11 @@
 """Aerie · 云栖 v9.0 — E2E: T4 · Persona 9/10 全文件基线守门 (12 cases).
 
 R8.1 三原则之「零回退」要求所有跟人格相关的参数都被守门。
-本套件直接读 4 类源（YAML 文件 + Python 常量）验证 9/10 基线：
+本套件直接读 4 类源（YAML 文件 + Persona Hub 动态投影）验证 9/10 基线：
   - config/persona.yaml 5 项
   - config/persona_behavior.yaml 4 项
-  - core/context_builder.py 2 项（L1 + L2）
-  - core/brain.py 1 项（TONE_PROMPTS）
+  - core/context_builder.py 2 项（L1 + L2 动态投影）
+  - core/llm_caller.py 1 项（TONE_PROMPTS）
 
 12 个用例 (T4)：
   1.  persona.yaml.big_five.extraversion == 0.78
@@ -17,9 +17,9 @@ R8.1 三原则之「零回退」要求所有跟人格相关的参数都被守门
   7.  persona_behavior.yaml.thresholds.anxiety.initial_value == 25
   8.  persona_behavior.yaml.thresholds.desire.initial_value == 55
   9.  persona_behavior.yaml.thresholds.tenderness.initial_value == 15
-  10. context_builder._PERSONA_L1 含 "9/10"
-  11. context_builder._PERSONA_L2 含直球表达关键字
-  12. brain.TONE_PROMPTS["warm_with_light_flirt"] 含 "想你" 且不含 "克制"
+  10. context_builder L1 投影含 "9/10"（热情度 9/10）
+  11. context_builder L2 投影含直球表达标记
+  12. llm_caller.TONE_PROMPTS["warm_with_light_flirt"] 温暖直球 且不含 "克制"
 
 纯本地（直接读文件 + import Python 模块，不依赖 backend / DB / LLM）。
 """
@@ -35,12 +35,13 @@ import os
 import sys
 
 # Ensure repo root on path
-_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 from config.persona_loader import load_persona  # noqa: E402
-from core.context_builder import _PERSONA_L1, _PERSONA_L2  # noqa: E402
+from core.context_builder import ContextBuilder  # noqa: E402
+# main 侧已将 TONE_PROMPTS 从 core.brain 收敛到 core.llm_caller（26314fd）
 from core.llm_caller import TONE_PROMPTS  # noqa: E402
 
 
@@ -201,42 +202,51 @@ def case_9_tenderness_15() -> bool:
     return ok_flag
 
 
-# ── Case 10: _PERSONA_L1 contains "9/10" ─────────────────────
+# ── Case 10: L1 projection contains "9/10" ───────────────────
 def case_10_persona_l1_9_10() -> bool:
-    ok_flag = "9/10" in _PERSONA_L1
+    # Persona Hub 架构：L1 由 _build_l1_identity 动态生成，不再使用静态常量
+    cb = ContextBuilder()
+    persona = cb._persona_mgr.get_active()
+    l1 = cb._build_l1_identity(persona)
+    ok_flag = "9/10" in l1
     _check(
-        "Case 10 · context_builder._PERSONA_L1 含 '9/10'",
+        "Case 10 · context_builder L1 投影含 '9/10'（热情度 9/10）",
         ok_flag,
-        f"_PERSONA_L1 has '9/10': {ok_flag}",
+        f"L1 has '9/10': {ok_flag}",
     )
     return ok_flag
 
 
-# ── Case 11: _PERSONA_L2 contains direct-expression marker ───
+# ── Case 11: L2 projection contains direct-expression marker ─
 def case_11_persona_l2_direct_marker() -> bool:
-    # _PERSONA_L2 应含 9 分直球版相关标记
-    markers = ["9 分直球", "直球", "不许不接"]
-    found = [m for m in markers if m in _PERSONA_L2]
+    # Persona Hub 架构：L2 由 _build_l2_relationship 动态生成
+    cb = ContextBuilder()
+    persona = cb._persona_mgr.get_active()
+    l2 = cb._build_l2_relationship(persona)
+    # L2 直球版应含直球表达标记
+    markers = ["直球", "不许不接", "表达直接"]
+    found = [m for m in markers if m in l2]
     ok_flag = len(found) >= 1
     _check(
-        "Case 11 · context_builder._PERSONA_L2 含直球表达标记",
+        "Case 11 · context_builder L2 投影含直球表达标记",
         ok_flag,
         f"found={found}",
     )
     return ok_flag
 
 
-# ── Case 12: TONE_PROMPTS["warm_with_light_flirt"] contains "想你" ──
+# ── Case 12: TONE_PROMPTS["warm_with_light_flirt"] is warm & direct ──
 def case_12_tone_warm_light_flirt() -> bool:
     tone = TONE_PROMPTS.get("warm_with_light_flirt", "")
-    # 9/10 直球版应含"想你"等直球措辞，且不应含"克制"等暗涌表达
-    has_thinking = "想你" in tone
+    # main 侧文案已更新（26314fd 起）：温暖 + 直球撩，主动分享小事逗他。
+    # 断言其保持"温暖 + 直球 + 无克制暗涌"特征，而非绑定历史措辞"想你"。
+    is_warm = ("温暖" in tone) and ("直球" in tone)
     has_restrained = "克制" in tone
-    ok_flag = has_thinking and not has_restrained
+    ok_flag = is_warm and not has_restrained
     _check(
-        "Case 12 · brain.TONE_PROMPTS['warm_with_light_flirt'] 含 '想你' 不含 '克制'",
+        "Case 12 · llm_caller.TONE_PROMPTS['warm_with_light_flirt'] 温暖直球 且不含 '克制'",
         ok_flag,
-        f"has_thinking={has_thinking} has_restrained={has_restrained} "
+        f"is_warm={is_warm} has_restrained={has_restrained} "
         f"tone head: {tone[:80]!r}",
     )
     return ok_flag

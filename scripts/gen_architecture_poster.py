@@ -81,7 +81,7 @@ card(col[0], y0, cw, ch, "COMPANION · 编排器",
      "core/companion.py")
 card(col[1], y0, cw, ch, "BRAIN · 调度器",
      "7-Provider fallback 链 | Qwen DeepSeek MiniMax | BigModel SiliconFlow Gemini GPT",
-     "core/brain.py · core/providers/*")
+     "core/llm_caller.py · core/providers/*")
 card(col[2], y0, cw, ch, "EMOTION · 情感引擎",
      "PAD 三维情感 · 5 类分类 | 4 槽累积阈值 · 角色磨损",
      "core/emotion_engine.py · core/emotion_threshold.py", accent=True)

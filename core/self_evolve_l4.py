@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolution L4: Code Self-Modification.
+"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolution L4: Code Self-Modification.
 
   ╔══════════════════════════════════════════════════════════╗
   ║  L4 自进化：代码自修改（沙箱自动进化模式）              ║
@@ -96,7 +96,7 @@ CORE_MODULES: list[str] = [
     "core/provider_router.py",
     "core/tool_isolation.py",
     "core/prompt_injection.py",
-    "core/brain.py",
+    "core/llm_caller.py",
     "core/companion.py",
     "core/decision.py",
     "core/pipeline.py",

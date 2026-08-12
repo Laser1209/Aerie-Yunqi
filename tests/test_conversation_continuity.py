@@ -195,3 +195,35 @@ def test_cross_channel_history_gets_source_tag():
     contents = [m["content"] for m in result.messages[1:-1]]
     assert any("[QQ] QQ端说的" in c for c in contents)
     assert any("桌面端说的" in c and "[桌面]" not in c for c in contents)
+
+
+def test_rolling_summary_fallback_injected_alongside_turn_window():
+    """超 8 轮对话时，早期内容以滚动摘要形式降级兜底注入（§7 Step5）。"""
+    asm = _assembler()
+    items = []
+    for t in range(10):
+        tid = f"turn-{t}"
+        items.append({"role": "user", "content": f"第{t}轮问题", "ts": "2026-08-09 10:00:00", "turn_id": tid})
+        items.append({"role": "assistant", "content": f"第{t}轮回复", "ts": "2026-08-09 10:00:01", "turn_id": tid})
+    asm.conversations.history_page.return_value = _page(*items)
+    # 滚动摘要代表更早轮次的压缩内容（L1 分组摘要未就绪前的降级兜底）
+    asm.summaries.get.return_value = {
+        "summary": "【摘要】用户早前讨论过旅行计划",
+        "revision": 3,
+    }
+
+    result = asm.assemble(
+        system_prompt="SYSTEM",
+        current_user_content="继续",
+        actor_id="actor_primary",
+        channel="qq",
+        channel_account_id="3489352115",
+        user_id=3489352115,
+    )
+    # 早期内容以摘要形式进入 system prompt
+    assert "【摘要】用户早前讨论过旅行计划" in result.messages[0]["content"]
+    # L0 仍只含最近 8 轮
+    assert result.audit["l0_turns_included"] == 8
+    contents = [m["content"] for m in result.messages[1:-1]]
+    assert not any("第0轮" in c for c in contents)
+    assert not any("第1轮" in c for c in contents)

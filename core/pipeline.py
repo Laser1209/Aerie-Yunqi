@@ -1485,6 +1485,17 @@ class Pipeline:
             msg,
             current_user_content,
         )
+        thinking_trace = None
+        if self._thinking_trace_injection_enabled():
+            try:
+                thinking_trace = self.cognition.recent_react_summary(
+                    msg.user_id,
+                    limit=1,
+                    max_chars=300,
+                )
+            except Exception:
+                logger.debug("thinking trace injection unavailable", exc_info=True)
+                thinking_trace = None
         try:
             assembled = assembler.assemble(
                 system_prompt=system_prompt,
@@ -1500,6 +1511,7 @@ class Pipeline:
                 ),
                 memories=memories,
                 attachment_snippets=attachment_snippets,
+                thinking_trace=thinking_trace,
             )
             messages = getattr(assembled, "messages", None)
             audit = getattr(assembled, "audit", None)
@@ -2367,6 +2379,14 @@ class Pipeline:
     def _context_budget_enabled() -> bool:
         try:
             return FeatureFlags().is_enabled("context_budget_v1")
+        except Exception:
+            return False
+
+    @staticmethod
+    def _thinking_trace_injection_enabled() -> bool:
+        """P2 决策自省段注入开关（§3.6-2 / §4 #9），默认关闭防 token 膨胀。"""
+        try:
+            return FeatureFlags().is_enabled("thinking_trace_injection_v1")
         except Exception:
             return False
 

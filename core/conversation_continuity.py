@@ -416,6 +416,7 @@ class ContextAssembler:
         conversation_id: str | None = None,
         memories: Sequence[str] = (),
         attachment_snippets: Sequence[str] = (),
+        thinking_trace: str | None = None,
     ) -> ContextAssembly:
         resolved_id = conversation_id
         if resolved_id is None:
@@ -460,6 +461,13 @@ class ContextAssembler:
             supplemental_sections.append(
                 "[滚动对话摘要]\n"
                 + self._clip(summary["summary"], self.max_summary_chars)
+            )
+        trace_text = (str(thinking_trace or "").strip() if thinking_trace else "") or ""
+        if trace_text:
+            # 决策自省段（§3.6-2）：仅事实参考，不叠加指令；默认由 flag 关闭
+            supplemental_sections.append(
+                "[决策自省·上一条]（以下为上次回复的思考/动作摘录，仅作连续性参考）\n"
+                + self._clip(trace_text, min(400, self.max_total_chars // 8))
             )
         memory_text = self._bounded_join(memories, self.max_memory_chars)
         if memory_text:
@@ -601,6 +609,7 @@ class ContextAssembler:
                 "l0_chars": l0_chars,
                 "summary_revision": int(summary["revision"]) if summary else 0,
                 "summary_bucket_count": len(buckets),
+                "thinking_trace_chars": len(trace_text),
                 "memory_chars": memory_chars,
                 "attachment_chars": len(attachment_text),
                 "bounded": total_chars <= self.max_total_chars,

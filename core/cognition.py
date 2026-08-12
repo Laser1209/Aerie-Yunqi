@@ -435,3 +435,79 @@ class CognitionEngine:
             "today": today["n"],
             "avg_duration_ms": round(avg["a"], 1),
         }
+
+    def recent_react_summary(
+        self,
+        user_id: int,
+        *,
+        limit: int = 1,
+        max_chars: int = 300,
+    ) -> str | None:
+        """Build a compact self-reflection snippet from the latest react trace.
+
+        P2 思维链自省（§3.6-2）：取该用户最近一条 cognition_log 的
+        ``react_trace``（thought/action）与 ``decision_trace``（chosen），
+        拼接为「上次回复为什么这样选」的简短决策摘要。供
+        ``thinking_trace_injection_v1`` 开关开启时注入 system prompt 辅助段。
+
+        返回 None 表示无可用 trace 或内容为空；返回文本长度受 ``max_chars`` 限制。
+        """
+        if not user_id:
+            return None
+        try:
+            rows = self._db.query(
+                "SELECT react_trace, decision_trace FROM cognition_log "
+                "WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+                (int(user_id), max(1, min(int(limit), 5))),
+            )
+        except Exception:
+            logger.debug("recent_react_summary query failed", exc_info=True)
+            return None
+        parts: list[str] = []
+        for row in (rows or []):
+            if not isinstance(row, dict):
+                try:
+                    row = dict(row)
+                except Exception:
+                    continue
+            react_raw = row.get("react_trace")
+            react: dict = {}
+            if isinstance(react_raw, str) and react_raw.strip():
+                try:
+                    parsed = json.loads(react_raw)
+                    if isinstance(parsed, dict):
+                        react = parsed
+                except Exception:
+                    react = {}
+            thought = str(react.get("thought") or "").strip()
+            action = str(react.get("action") or "").strip()
+            tool_name = str(react.get("tool_name") or "").strip()
+            decision_raw = row.get("decision_trace")
+            chosen = ""
+            if isinstance(decision_raw, str) and decision_raw.strip():
+                try:
+                    parsed = json.loads(decision_raw)
+                    if isinstance(parsed, dict):
+                        chosen = str(parsed.get("chosen") or "").strip()
+                except Exception:
+                    pass
+            snippet_parts: list[str] = []
+            if thought:
+                snippet_parts.append(f"思考：{thought}")
+            if action:
+                snippet_parts.append(f"动作：{action}")
+            if tool_name:
+                snippet_parts.append(f"工具：{tool_name}")
+            if chosen:
+                snippet_parts.append(f"决策：{chosen}")
+            if not snippet_parts:
+                continue
+            combined = "；".join(snippet_parts)
+            if len(combined) > max(1, int(max_chars)):
+                combined = combined[: max(1, int(max_chars)) - 1] + "…"
+            parts.append(combined)
+            if len(parts) >= max(1, min(int(limit), 5)):
+                break
+        if not parts:
+            return None
+        return "\n".join(parts)

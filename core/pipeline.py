@@ -79,6 +79,37 @@ class _RequestRunState:
         return self.sequence
 
 
+# 记忆注入防御（审计 H2）：记忆内容命中指令性前缀时清洗，
+# 防止用户注入的"忽略指令"文本通过记忆层劫持 AI 行为。
+_INSTRUCTION_PREFIXES: tuple[str, ...] = (
+    "ignore previous",
+    "ignore all previous",
+    "ignore above",
+    "system:",
+    "system prompt",
+    "you are now",
+    "now act as",
+    "act as",
+    "from now on",
+    "忽略之前",
+    "忽略以上",
+    "忽略上面",
+    "从现在开始",
+    "你是",
+)
+
+
+def _sanitize_memory_text(text: str) -> str:
+    """Strip instruction-like prefixes from memory content (H2)."""
+    stripped = str(text or "").lstrip()
+    lowered = stripped.lower()
+    for kw in _INSTRUCTION_PREFIXES:
+        if lowered.startswith(kw):
+            remainder = stripped[len(kw):].lstrip(":：,，;； \n")
+            return remainder
+    return stripped
+
+
 class Pipeline:
     def __init__(
         self,
@@ -1499,8 +1530,15 @@ class Pipeline:
         except Exception:
             logger.debug("continuity memory retrieval failed", exc_info=True)
             return []
+        # 无来源记忆降权（§3.7-1）：来源已知的记忆优先，unknown 排后
+        rows_ordered = list(rows or [])
+        rows_ordered.sort(
+            key=lambda r: 0
+            if str((r or {}).get("channel") or "unknown") != "unknown"
+            else 1
+        )
         snippets: list[str] = []
-        for row in rows or []:
+        for row in rows_ordered:
             if not isinstance(row, dict):
                 try:
                     row = dict(row)
@@ -1509,13 +1547,18 @@ class Pipeline:
             content = str(row.get("content") or "").strip()
             if not content:
                 continue
-            # 来源标注（§3.3）：记忆带 channel 时追加 [来源:XX]，让 AI 知道从哪端听到
+            # 记忆注入防御（审计 H2）：清洗指令性前缀
+            content = _sanitize_memory_text(content)
+            if not content:
+                continue
             ch = str(row.get("channel") or "unknown")
-            short = channel_short(ch) if ch != "unknown" else ""
-            if short:
-                snippets.append(f"[来源:{short}] {content}")
+            if ch == "unknown":
+                snippets.append(f"(来源未知) <memory source=\"unknown\">{content}</memory>")
             else:
-                snippets.append(content)
+                snippets.append(
+                    f"[来源:{channel_short(ch)}] "
+                    f"<memory source=\"{ch}\">{content}</memory>"
+                )
         return snippets
 
     def _extract_trusted_attachment_markdown(

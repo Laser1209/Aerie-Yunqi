@@ -13,6 +13,7 @@ _CHANNEL_SHORT: dict[str, str] = {
     "qq": "QQ",
     "desktop": "桌面",
     "local": "本地",
+    "system": "系统",
 }
 
 

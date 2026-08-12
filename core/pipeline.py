@@ -1498,7 +1498,7 @@ class Pipeline:
             except Exception:
                 logger.debug("thinking trace injection unavailable", exc_info=True)
                 thinking_trace = None
-        # P3 多端存在（附录 A.3.2/A.3.3）：flag 开启时取跨端时间线注入视图 B
+        # P3 多端存在（附录 A.3.2/A.3.3）：flag 开启时按触发条件取跨端时间线注入视图 B
         multi_channel_identity = False
         timeline_events: list[dict] = []
         if self._multi_channel_identity_enabled():
@@ -1506,14 +1506,18 @@ class Pipeline:
             timeline = self.timeline_repository
             if timeline is not None:
                 try:
-                    timeline_events = timeline.recent_events(
-                        actor_id=msg.actor_id,
-                        user_id=msg.user_id,
-                        limit=3,
-                        exclude_channel=msg.channel,
+                    timeline_events = self._resolve_recall_events(
+                        timeline=timeline,
+                        msg=msg,
+                        current_user_content=current_user_content,
+                        conversation_id=(
+                            request_context.conversation_id
+                            if request_context is not None
+                            else None
+                        ),
                     )
                 except Exception:
-                    logger.debug("persona timeline read unavailable", exc_info=True)
+                    logger.exception("proactive recall resolution failed")
                     timeline_events = []
         try:
             assembled = assembler.assemble(
@@ -2456,6 +2460,155 @@ class Pipeline:
             return FeatureFlags().is_enabled("multi_channel_identity_v1")
         except Exception:
             return False
+
+    # ── P3-5 主动回忆触发器（附录 A.3.5）──────────────
+    _RECALL_KEYWORDS: tuple[str, ...] = (
+        "你记得", "还记得", "记不记得", "记得吗", "你记得吗",
+        "我说过", "提过", "你忘了", "想起来",
+    )
+
+    @staticmethod
+    def _parse_ts(value: Any) -> float | None:
+        """解析 messages created_at（local naive）与 timeline ISO（UTC）为 epoch。"""
+        if not value:
+            return None
+        text = str(value).strip()
+        try:
+            from datetime import datetime, timezone
+
+            if "T" in text:
+                text = text.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(text)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.timestamp()
+            dt = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+            return dt.timestamp()
+        except Exception:
+            return None
+
+    def _last_conversation_activity(
+        self,
+        msg: IncomingMessage,
+        conversation_id: str | None,
+    ) -> float | None:
+        """当前 conversation 最近一条消息的时间戳（epoch），取不到返回 None。"""
+        try:
+            page = self.conversation_repository.history_page(
+                actor_id=msg.actor_id,
+                channel=msg.channel,
+                channel_account_id=msg.channel_account_id,
+                user_id=msg.user_id,
+                conversation_id=conversation_id,
+                limit=1,
+            )
+            items = page.get("items") or []
+            if not items:
+                return None
+            return self._parse_ts(items[-1].get("created_at"))
+        except Exception:
+            logger.debug("last conversation activity unavailable", exc_info=True)
+            return None
+
+    def _resolve_recall_events(
+        self,
+        *,
+        timeline: Any,
+        msg: IncomingMessage,
+        current_user_content: str,
+        conversation_id: str | None,
+    ) -> list[dict]:
+        """按 P3-5 三个触发器决定注入哪些跨端事件（含 P3-4 event 记忆）。
+
+        触发器优先级：显式回忆 > 跨端切换检测 > 长间隔回归。
+        任一命中即返回对应事件集（受 limit=3 / 24h 窗口约束），否则返回空。
+        """
+        text = str(current_user_content or "")
+        if any(keyword in text for keyword in self._RECALL_KEYWORDS):
+            # 触发器 3：显式回忆 → 时间线召回 + event 记忆（P3-4）
+            events = timeline.recent_events(
+                actor_id=msg.actor_id,
+                user_id=msg.user_id,
+                limit=3,
+            )
+            event_memories = self._recall_event_memories(msg)
+            return list(events) + event_memories
+
+        now = time.time()
+        last_local = self._last_conversation_activity(msg, conversation_id)
+        recent = timeline.recent_events(
+            actor_id=msg.actor_id,
+            user_id=msg.user_id,
+            limit=1,
+        )
+        latest_event_ts = self._parse_ts(recent[0].get("occurred_at")) if recent else None
+
+        last_any = max(
+            t for t in (last_local, latest_event_ts) if t is not None
+        ) if (last_local is not None or latest_event_ts is not None) else None
+        if last_any is not None and now - last_any >= 2 * 60 * 60:
+            # 触发器 2：长间隔回归（≥2 小时未联系）→ 最近 24h 事件（全通道）
+            since = time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ",
+                time.gmtime(now - 24 * 60 * 60),
+            )
+            return timeline.recent_events(
+                actor_id=msg.actor_id,
+                user_id=msg.user_id,
+                limit=3,
+                since=since,
+            )
+
+        if last_local is not None and now - last_local >= 30 * 60:
+            # 触发器 1：跨端切换检测（当前端 ≥30 分钟无历史）
+            return timeline.recent_events(
+                actor_id=msg.actor_id,
+                user_id=msg.user_id,
+                limit=3,
+                exclude_channel=msg.channel,
+            )
+        return []
+
+    def _recall_event_memories(self, msg: IncomingMessage) -> list[dict]:
+        """P3-4 显式回忆时召回 EVENT 类型事件记忆（按 occurred_at 降序取 3 条）。"""
+        try:
+            list_by_user = getattr(self.memory_store, "list_by_user", None)
+            if not callable(list_by_user):
+                return []
+            items = list_by_user(
+                msg.user_id,
+                layer="long_term",
+                limit=50,
+                memory_type="event",
+            ) or []
+            scored: list[tuple[float, dict]] = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                occurred = self._parse_ts(
+                    (item.get("metadata") or {}).get("occurred_at")
+                )
+                if occurred is None:
+                    continue
+                scored.append(
+                    (
+                        -occurred,
+                        {
+                            "channel": str(
+                                (item.get("metadata") or {}).get("channel") or "unknown"
+                            ),
+                            "occurred_at": time.strftime(
+                                "%Y-%m-%dT%H:%M:%SZ", time.gmtime(occurred)
+                            ),
+                            "event_summary": str(item.get("content") or "")[:200],
+                        },
+                    )
+                )
+            scored.sort(key=lambda pair: pair[0])
+            return [d for _, d in scored[:3]]
+        except Exception:
+            logger.debug("event memory recall failed", exc_info=True)
+            return []
 
     @staticmethod
     def _context_budget_kwargs(msg: IncomingMessage) -> dict[str, Any]:

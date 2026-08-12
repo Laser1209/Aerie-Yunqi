@@ -1,16 +1,10 @@
 {
-  "daily_count": 10,
+  "daily_count": 0,
   "enabled": true,
   "feedback": {},
   "last_push_at": "2026-08-12T22:30:13.039980",
   "mute_until": null,
   "scene_blocks": {},
-  "scene_last_sent": {
-    "goodnight": "2026-08-12T22:30:13.039980",
-    "life_share": "2026-08-12T22:13:36.539067",
-    "local_send": "2026-08-12T22:17:48.952505",
-    "lunch_remind": "2026-08-12T12:30:10.205981",
-    "morning_brief_9am": "2026-08-12T09:00:38.039433"
-  },
-  "today": "2026-08-12"
+  "scene_last_sent": {},
+  "today": "2026-08-13"
 }

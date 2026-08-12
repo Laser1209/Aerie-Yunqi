@@ -8,6 +8,7 @@ def _connection(*, desktop=True):
         MigrationRunner,
         desktop_chat_continuity_migrations,
         phase3_conversation_migrations,
+        summary_buckets_migrations,
     )
 
     conn = sqlite3.connect(":memory:")
@@ -21,6 +22,7 @@ def _connection(*, desktop=True):
     conn.execute("ALTER TABLE messages ADD COLUMN channel_account_id TEXT")
     if desktop:
         runner.run(desktop_chat_continuity_migrations())
+        runner.run(summary_buckets_migrations())
     return conn
 
 
@@ -203,7 +205,6 @@ def test_summary_refresh_and_context_assembly_are_bounded():
     from core.conversation_continuity import (
         ContextAssembler,
         ConversationSummaryRepository,
-        SummaryConflict,
         SummaryRefreshPlanner,
     )
     from core.conversation_repository import ConversationRepository
@@ -229,15 +230,14 @@ def test_summary_refresh_and_context_assembly_are_bounded():
     assert job is not None
     assert sum(len(item["content"]) for item in job["messages"]) <= 5000
     saved = planner.complete(job, lambda previous, messages: "early sentinel: ALPHA")
+    assert saved["bucket_index"] == 1
     assert saved["revision"] == 1
-    with pytest.raises(SummaryConflict):
-        summaries.upsert(
-            conversation_id="conv_summary",
-            summary="stale update",
-            through_message_rowid=saved["through_message_rowid"],
-            source_message_count=saved["source_message_count"],
-            expected_revision=0,
-        )
+    # 同一桶再次写入 -> revision 递增（分桶 upsert 语义）
+    refreshed = planner.complete(
+        job,
+        lambda previous, messages: "early sentinel: ALPHA",
+    )
+    assert refreshed["revision"] == 2
 
     assembler = ContextAssembler(
         repository,

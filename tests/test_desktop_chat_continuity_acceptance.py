@@ -13,6 +13,7 @@ def _connection() -> sqlite3.Connection:
         MigrationRunner,
         desktop_chat_continuity_migrations,
         phase3_conversation_migrations,
+        summary_buckets_migrations,
     )
 
     connection = sqlite3.connect(":memory:")
@@ -25,6 +26,7 @@ def _connection() -> sqlite3.Connection:
     runner.run(phase3_conversation_migrations())
     connection.execute("ALTER TABLE messages ADD COLUMN channel_account_id TEXT")
     runner.run(desktop_chat_continuity_migrations())
+    runner.run(summary_buckets_migrations())
     return connection
 
 
@@ -153,11 +155,12 @@ def test_acceptance_200_turn_summary_retrieval_is_bounded_and_keeps_early_fact()
             assert job is not None
             planner.complete(job, Pipeline._default_rolling_summary)
 
-    summary = summaries.get(conversation_id)
-    assert summary is not None
-    assert summary["revision"] == total_turns // summary_interval
-    assert summary["source_message_count"] == total_turns * 2
-    assert sentinel in summary["summary"]
+    # 分桶语义（§3.2）：每桶 8 轮，200 轮 → 10 桶；早期事实持久化在最早一桶
+    buckets = summaries.recent_buckets(conversation_id, limit=100)
+    assert len(buckets) == total_turns // summary_interval
+    oldest_bucket = buckets[-1]
+    assert oldest_bucket["bucket_index"] == 1
+    assert sentinel in oldest_bucket["summary"]
 
     retrieval_marker = "SYNTHETIC_RETRIEVAL_CHANNEL_PRESENT"
     attachment_marker = "SYNTHETIC_ATTACHMENT_CHANNEL_PRESENT"
@@ -180,12 +183,16 @@ def test_acceptance_200_turn_summary_retrieval_is_bounded_and_keeps_early_fact()
     )
 
     system_content = context.messages[0]["content"]
-    assert sentinel in system_content
+    # 组装注入最近 3 段（远到近），更早内容以"第 N 段摘要"存在桶表中
+    assert "[滚动对话摘要·第 8 段]" in system_content
+    assert "[滚动对话摘要·第 9 段]" in system_content
+    assert "[滚动对话摘要·第 10 段]" in system_content
+    assert system_content.index("第 8 段") < system_content.index("第 10 段")
     assert retrieval_marker in system_content
     assert attachment_marker in system_content
     assert context.audit["bounded"] is True
     assert context.audit["total_chars"] <= 24_000
-    assert context.audit["summary_revision"] == 10
+    assert context.audit["summary_bucket_count"] == 3
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
     print(
         "ACCEPTANCE_METRIC "
@@ -195,10 +202,11 @@ def test_acceptance_200_turn_summary_retrieval_is_bounded_and_keeps_early_fact()
                 "turnCount": total_turns,
                 "messageCount": total_turns * 2,
                 "summaryIntervalTurns": summary_interval,
-                "summaryRevision": context.audit["summary_revision"],
-                "summarySourceMessageCount": summary["source_message_count"],
-                "earlyFactPresentInSummary": True,
-                "earlyFactAvailableInContext": True,
+                "bucketCount": len(buckets),
+                "injectedBucketCount": context.audit["summary_bucket_count"],
+                "bucketSourceMessageCount": oldest_bucket["source_message_count"],
+                "earlyFactPersistedInBucket": True,
+                "earlyFactAvailableInContext": sentinel in system_content,
                 "retrievalChannelPresent": True,
                 "attachmentChannelPresent": True,
                 "historyMessagesInContext": context.audit["history_messages"],

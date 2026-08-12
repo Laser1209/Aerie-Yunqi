@@ -202,7 +202,9 @@ async def test_pipeline_uses_bounded_continuity_binds_then_summarizes_nonblockin
     assert conversations.persist_turn.called
     assembly = assembler.calls[0]
     assert assembly["conversation_id"] == "conv_desktop"
-    assert assembly["memories"] == ["MEMORY_SENTINEL"]
+    assert assembly["memories"] == [
+        '(来源未知) <memory source="unknown">MEMORY_SENTINEL</memory>'
+    ]
     assert assembly["attachment_snippets"] == [
         "[sentinel.txt] ATTACHMENT_SENTINEL"
     ]

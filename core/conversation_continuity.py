@@ -189,24 +189,139 @@ class ConversationSummaryRepository:
             (table,),
         ).fetchone() is not None
 
+    # ── 分组摘要（§3.2）：conversation_summary_buckets ──────────
+
+    def latest_bucket(self, conversation_id: str) -> dict[str, Any] | None:
+        with self._connection() as conn:
+            if not self._table_exists(conn, "conversation_summary_buckets"):
+                return None
+            row = conn.execute(
+                "SELECT * FROM conversation_summary_buckets "
+                "WHERE conversation_id = ? ORDER BY bucket_index DESC LIMIT 1",
+                (conversation_id,),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def recent_buckets(
+        self,
+        conversation_id: str,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]:
+        """最近 N 个桶，近到远（bucket_index DESC）。"""
+        limit = max(1, min(int(limit), 20))
+        with self._connection() as conn:
+            if not self._table_exists(conn, "conversation_summary_buckets"):
+                return []
+            rows = conn.execute(
+                "SELECT * FROM conversation_summary_buckets "
+                "WHERE conversation_id = ? ORDER BY bucket_index DESC LIMIT ?",
+                (conversation_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def upsert_bucket(
+        self,
+        *,
+        conversation_id: str,
+        bucket_index: int,
+        bucket_start_rowid: int,
+        through_rowid: int,
+        source_message_count: int,
+        summary: str,
+    ) -> dict[str, Any]:
+        cleaned = str(summary or "").strip()
+        if not cleaned:
+            raise ValueError("bucket summary must not be empty")
+        if through_rowid < 0 or source_message_count < 0 or bucket_index < 1:
+            raise ValueError("bucket counters must be positive")
+        with self._connection() as conn:
+            conn.execute("SAVEPOINT upsert_summary_bucket")
+            try:
+                conn.execute(
+                    """INSERT INTO conversation_summary_buckets
+                       (conversation_id, bucket_index, bucket_start_rowid,
+                        through_rowid, source_message_count, summary, revision)
+                       VALUES (?, ?, ?, ?, ?, ?, 1)
+                       ON CONFLICT(conversation_id, bucket_index) DO UPDATE SET
+                         summary = excluded.summary,
+                         through_rowid = excluded.through_rowid,
+                         source_message_count = excluded.source_message_count,
+                         revision = revision + 1,
+                         updated_at = strftime(
+                             '%Y-%m-%dT%H:%M:%fZ', 'now'
+                         )""",
+                    (
+                        conversation_id,
+                        int(bucket_index),
+                        int(bucket_start_rowid),
+                        int(through_rowid),
+                        int(source_message_count),
+                        cleaned,
+                    ),
+                )
+            except Exception:
+                conn.execute("ROLLBACK TO SAVEPOINT upsert_summary_bucket")
+                conn.execute("RELEASE SAVEPOINT upsert_summary_bucket")
+                raise
+            conn.execute("RELEASE SAVEPOINT upsert_summary_bucket")
+            row = conn.execute(
+                "SELECT * FROM conversation_summary_buckets "
+                "WHERE conversation_id = ? AND bucket_index = ?",
+                (conversation_id, int(bucket_index)),
+            ).fetchone()
+        return dict(row)
+
+    def bucket_refresh_due(
+        self,
+        *,
+        conversation_id: str,
+        turn_interval: int = 8,
+    ) -> bool:
+        """自最近一个桶以来新增的 completed turn 数 >= turn_interval 则需刷新。"""
+        latest = self.latest_bucket(conversation_id)
+        after = int(latest["through_rowid"]) if latest else 0
+        with self._connection() as conn:
+            if not self._table_exists(conn, "messages"):
+                return False
+            row = conn.execute(
+                """SELECT COUNT(DISTINCT m.turn_id) AS turn_count
+                   FROM messages m
+                   JOIN turns t ON t.turn_id = m.turn_id
+                   WHERE m.conversation_id = ?
+                     AND m.rowid > ?
+                     AND t.status = 'completed'""",
+                (conversation_id, after),
+            ).fetchone()
+        return int(row["turn_count"] or 0) >= max(1, int(turn_interval))
+
 
 class SummaryRefreshPlanner:
-    """Build bounded summary jobs; callers schedule them off the send path."""
+    """Build bucketed summary jobs; callers schedule them off the send path.
+
+    P1 分组摘要（§3.2）：每 turn_interval 轮生成一个新桶（bucket_index 递增），
+    每桶独立摘要、不依赖 previous，替代单层滚动摘要。
+    """
 
     def __init__(
         self,
         repository: ConversationSummaryRepository,
         *,
         max_input_chars: int = 24_000,
+        turn_interval: int = 8,
     ) -> None:
         self.repository = repository
         self.max_input_chars = max(1000, int(max_input_chars))
+        self.turn_interval = max(1, int(turn_interval))
 
     def prepare(self, conversation_id: str) -> dict[str, Any] | None:
-        if not self.repository.refresh_due(conversation_id=conversation_id):
+        if not self.repository.bucket_refresh_due(
+            conversation_id=conversation_id,
+            turn_interval=self.turn_interval,
+        ):
             return None
-        current = self.repository.get(conversation_id)
-        after = int(current["through_message_rowid"]) if current else 0
+        latest = self.repository.latest_bucket(conversation_id)
+        after = int(latest["through_rowid"]) if latest else 0
+        bucket_index = int(latest["bucket_index"]) + 1 if latest else 1
         rows = self.repository.completed_messages_after(
             conversation_id=conversation_id,
             after_rowid=after,
@@ -215,23 +330,31 @@ class SummaryRefreshPlanner:
             return None
         selected: list[dict[str, Any]] = []
         used = 0
+        seen_turns: set[str] = set()
         for row in rows:
             content = str(row.get("content") or "")
             remaining = self.max_input_chars - used
             if remaining <= 0:
                 break
+            tid = str(row.get("turn_id") or "")
+            if tid:
+                seen_turns.add(tid)
+                # 每桶只收 turn_interval 轮，保证分段粒度
+                if len(seen_turns) > self.turn_interval:
+                    break
             clipped = content[:remaining]
             selected.append({"role": row.get("role", "user"), "content": clipped})
             used += len(clipped)
+        if not selected:
+            return None
+        first_rowid = int(rows[0]["history_rowid"])
         last_rowid = int(rows[len(selected) - 1]["history_rowid"])
         return {
             "conversation_id": conversation_id,
-            "previous_summary": (current or {}).get("summary", ""),
-            "expected_revision": int((current or {}).get("revision", 0)),
+            "bucket_index": bucket_index,
+            "bucket_start_rowid": first_rowid,
             "through_message_rowid": last_rowid,
-            "source_message_count": int(
-                (current or {}).get("source_message_count", 0)
-            ) + len(selected),
+            "source_message_count": len(selected),
             "messages": selected,
         }
 
@@ -240,16 +363,15 @@ class SummaryRefreshPlanner:
         job: dict[str, Any],
         summarizer: Callable[[str, Sequence[dict[str, str]]], str],
     ) -> dict[str, Any]:
-        summary = summarizer(
-            str(job.get("previous_summary") or ""),
-            job["messages"],
-        )
-        return self.repository.upsert(
+        # 每桶独立摘要（previous 传空），不跨桶累积避免幻觉叠加
+        summary = summarizer("", job["messages"])
+        return self.repository.upsert_bucket(
             conversation_id=job["conversation_id"],
-            summary=summary,
-            through_message_rowid=int(job["through_message_rowid"]),
+            bucket_index=int(job["bucket_index"]),
+            bucket_start_rowid=int(job["bucket_start_rowid"]),
+            through_rowid=int(job["through_message_rowid"]),
             source_message_count=int(job["source_message_count"]),
-            expected_revision=int(job["expected_revision"]),
+            summary=summary,
         )
 
 
@@ -265,6 +387,7 @@ class ContextAssembler:
         recent_turn_limit: int = 8,
         max_turn_chars: int = 6_000,
         max_summary_chars: int = 3_500,
+        max_summary_buckets: int = 3,
         max_memory_chars: int = 2_000,
         max_attachment_chars: int = 4_000,
     ) -> None:
@@ -276,6 +399,8 @@ class ContextAssembler:
         # L0 热窗口字符硬上限（弹性兜底）：从最近向远累加，超限即截断
         self.max_turn_chars = max(0, int(max_turn_chars))
         self.max_summary_chars = max(0, int(max_summary_chars))
+        # 温层分桶摘要（§3.2）：注入最近 N 段，远到近
+        self.max_summary_buckets = max(1, min(int(max_summary_buckets), 10))
         self.max_memory_chars = max(0, int(max_memory_chars))
         self.max_attachment_chars = max(0, int(max_attachment_chars))
 
@@ -313,9 +438,25 @@ class ContextAssembler:
             limit=candidate_limit,
         )
         summary = self.summaries.get(resolved_id)
+        buckets = self.summaries.recent_buckets(
+            resolved_id,
+            limit=self.max_summary_buckets,
+        )
 
         supplemental_sections: list[str] = []
-        if summary and summary.get("summary"):
+        if buckets:
+            # 分桶摘要（§3.2）：远到近注入最近 N 段，第 1 段（最早）在前
+            for bucket in reversed(buckets):
+                bucket_idx = int(bucket["bucket_index"])
+                supplemental_sections.append(
+                    f"[滚动对话摘要·第 {bucket_idx} 段]\n"
+                    + self._clip(
+                        bucket.get("summary") or "",
+                        self.max_summary_chars,
+                    )
+                )
+        elif summary and summary.get("summary"):
+            # 降级兜底：分桶未就绪时回退到旧滚动摘要
             supplemental_sections.append(
                 "[滚动对话摘要]\n"
                 + self._clip(summary["summary"], self.max_summary_chars)
@@ -432,7 +573,13 @@ class ContextAssembler:
         total_chars = sum(len(item["content"]) for item in messages)
 
         # ── 监控指标（§6.1.1）：每次组装输出一条结构化日志 ──
-        summary_chars = len(self._clip(summary["summary"], self.max_summary_chars)) if summary and summary.get("summary") else 0
+        if buckets:
+            summary_chars = sum(
+                len(self._clip(b.get("summary") or "", self.max_summary_chars))
+                for b in buckets
+            )
+        else:
+            summary_chars = len(self._clip(summary["summary"], self.max_summary_chars)) if summary and summary.get("summary") else 0
         memory_chars = len(memory_text)
         logger.info(
             "context_assemble total_chars=%d l0_chars=%d turns=%d/%d "
@@ -453,6 +600,7 @@ class ContextAssembler:
                 "l0_truncated": l0_truncated,
                 "l0_chars": l0_chars,
                 "summary_revision": int(summary["revision"]) if summary else 0,
+                "summary_bucket_count": len(buckets),
                 "memory_chars": memory_chars,
                 "attachment_chars": len(attachment_text),
                 "bounded": total_chars <= self.max_total_chars,

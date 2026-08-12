@@ -23,6 +23,7 @@ from core.migrations import (
     phase3_conversation_migrations,
     phase4_request_queue_migrations,
     phase5_batch_request_migrations,
+    summary_buckets_migrations,
 )
 
 
@@ -372,6 +373,7 @@ class Database:
                 runner.run(phase5_batch_request_migrations())
                 runner.run(mobile_gateway_migrations())
                 runner.run(desktop_chat_continuity_migrations())
+                runner.run(summary_buckets_migrations())
             else:
                 # Desktop attachments stay available on legacy installations.
                 # This creates only additive desktop-owned tables and leaves the

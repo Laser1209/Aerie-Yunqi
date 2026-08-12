@@ -490,6 +490,7 @@ class Companion:
             max_total_chars=24_000,
             recent_turn_limit=8,
             max_turn_chars=6_000,
+            max_summary_buckets=3,
         )
 
         self.data_path = _resolve_companion_data_path(self.settings)

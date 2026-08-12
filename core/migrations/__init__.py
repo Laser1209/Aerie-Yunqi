@@ -504,6 +504,55 @@ desktop-only storage; no mobile gateway table or filesystem dependency
     ]
 
 
+def _apply_summary_buckets(conn: sqlite3.Connection) -> None:
+    """Add bucketed conversation summaries (P1 分组摘要, §3.2).
+
+    每 8 轮一段，bucket_index 递增、不覆盖旧桶；替代单层滚动摘要。
+    旧 conversation_summaries 表保留只读兼容。
+    """
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS conversation_summary_buckets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT NOT NULL,
+            bucket_index INTEGER NOT NULL,
+            bucket_start_rowid INTEGER NOT NULL,
+            through_rowid INTEGER NOT NULL,
+            source_message_count INTEGER NOT NULL,
+            summary TEXT NOT NULL DEFAULT '',
+            revision INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            ),
+            updated_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            ),
+            UNIQUE (conversation_id, bucket_index),
+            CHECK(bucket_index >= 1),
+            CHECK(through_rowid >= 0),
+            CHECK(source_message_count >= 0),
+            CHECK(revision >= 1)
+        )"""
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_summary_buckets_lookup
+           ON conversation_summary_buckets (conversation_id, bucket_index DESC)"""
+    )
+
+
+def summary_buckets_migrations() -> list[Migration]:
+    contract = """009_summary_buckets
+conversation_summary_buckets(conversation_id,bucket_index,bucket_start_rowid,through_rowid,source_message_count,summary,revision)
+bucketed summaries, 8 turns per bucket; old conversation_summaries kept read-only
+"""
+    return [
+        Migration(
+            version="009_summary_buckets",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_summary_buckets,
+        )
+    ]
+
+
 def phase2_identity_migrations() -> list[Migration]:
     contract = """002_actor_channel_identity
 actors(actor_id)

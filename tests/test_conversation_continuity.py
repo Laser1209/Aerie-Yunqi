@@ -6,9 +6,12 @@ from core.conversation_continuity import ContextAssembler
 
 
 def _assembler(max_total_chars=16_000, max_turn_chars=6_000):
+    summaries = MagicMock()
+    summaries.get.return_value = None
+    summaries.recent_buckets.return_value = []
     return ContextAssembler(
         conversations=MagicMock(),
-        summaries=MagicMock(),
+        summaries=summaries,
         max_total_chars=max_total_chars,
         recent_turn_limit=8,
         max_turn_chars=max_turn_chars,
@@ -227,3 +230,32 @@ def test_rolling_summary_fallback_injected_alongside_turn_window():
     contents = [m["content"] for m in result.messages[1:-1]]
     assert not any("第0轮" in c for c in contents)
     assert not any("第1轮" in c for c in contents)
+
+
+def test_bucketed_summaries_injected_in_order():
+    """分桶摘要远到近注入，第 1 段在前（§3.2 / §5-4）。"""
+    asm = _assembler()
+    asm.conversations.history_page.return_value = _page(
+        {"role": "user", "content": "现在的话题", "ts": "2026-08-09 10:00:00"},
+    )
+    asm.summaries.recent_buckets.return_value = [
+        {"bucket_index": 2, "summary": "【第2段】最近的旧对话", "revision": 1},
+        {"bucket_index": 1, "summary": "【第1段】更早的对话", "revision": 1},
+    ]
+    asm.summaries.get.return_value = None
+
+    result = asm.assemble(
+        system_prompt="SYSTEM",
+        current_user_content="继续",
+        actor_id="actor_primary",
+        channel="qq",
+        channel_account_id="3489352115",
+        user_id=3489352115,
+    )
+    system = result.messages[0]["content"]
+    assert "[滚动对话摘要·第 1 段]" in system
+    assert "[滚动对话摘要·第 2 段]" in system
+    # 远到近：第 1 段（更早）在前
+    assert system.index("第 1 段") < system.index("第 2 段")
+    assert "【第1段】更早的对话" in system
+    assert "【第2段】最近的旧对话" in system

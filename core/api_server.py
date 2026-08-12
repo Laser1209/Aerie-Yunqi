@@ -5023,6 +5023,8 @@ def _knowledge_fields(body: dict) -> tuple[str, str, str, str] | None:
 
 @app.post("/api/knowledge")
 async def knowledge_add(request: Request) -> dict:
+    if not _main_process_request_authorized(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     fields = _knowledge_fields(await request.json())
     if not fields:
         return JSONResponse({"error": "category, title and content are required"}, status_code=400)
@@ -5035,6 +5037,8 @@ async def knowledge_add(request: Request) -> dict:
 
 @app.put("/api/knowledge/{item_id}")
 async def knowledge_update(item_id: int, request: Request) -> dict:
+    if not _main_process_request_authorized(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     fields = _knowledge_fields(await request.json())
     if not fields:
         return JSONResponse({"error": "category, title and content are required"}, status_code=400)
@@ -5047,7 +5051,9 @@ async def knowledge_update(item_id: int, request: Request) -> dict:
 
 
 @app.delete("/api/knowledge/{item_id}")
-async def knowledge_delete(item_id: int) -> dict:
+async def knowledge_delete(item_id: int, request: Request) -> dict:
+    if not _main_process_request_authorized(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     try:
         if not _knowledge.delete(item_id):
             return JSONResponse({"error": "knowledge not found"}, status_code=404)

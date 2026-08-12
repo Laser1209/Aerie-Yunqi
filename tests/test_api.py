@@ -6,11 +6,17 @@ Uses httpx or FastAPI TestClient with mocked companion.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
 from core.database import Database
 from knowledge.kb import KnowledgeBase
+
+# 设置主进程 token，供受保护的写端点（/api/knowledge 等）鉴权使用
+os.environ["AERIE_MAIN_PROCESS_TOKEN"] = "test-main-token"
+_AUTH_HEADERS = {"X-Aerie-Main-Token": "test-main-token"}
 
 # Mock companion before importing api_server
 mock_companion = MagicMock()
@@ -347,10 +353,10 @@ def test_chat_send_passthroughs_persistence_status():
 def test_knowledge_crud_pagination_search_and_timestamps(api_db):
     first = client.post("/api/knowledge", json={
         "category": "world", "title": "Alpha", "content": "first body", "tags": "one,two",
-    })
+    }, headers=_AUTH_HEADERS)
     second = client.post("/api/knowledge", json={
         "category": "task", "title": "Beta", "content": "searchable body", "tags": "three",
-    })
+    }, headers=_AUTH_HEADERS)
 
     assert first.status_code == 201
     assert second.status_code == 201
@@ -371,22 +377,32 @@ def test_knowledge_crud_pagination_search_and_timestamps(api_db):
 
     updated = client.put(f"/api/knowledge/{first_item['id']}", json={
         "category": "persona", "title": "Alpha updated", "content": "new body", "tags": "updated",
-    })
+    }, headers=_AUTH_HEADERS)
     assert updated.status_code == 200
     assert updated.json()["updated_at"] >= first_item["updated_at"]
     assert updated.json()["title"] == "Alpha updated"
 
-    deleted = client.delete(f"/api/knowledge/{first_item['id']}")
+    deleted = client.delete(f"/api/knowledge/{first_item['id']}", headers=_AUTH_HEADERS)
     assert deleted.status_code == 200
     assert client.get(f"/api/knowledge/{first_item['id']}").status_code == 404
 
 
+def test_knowledge_writes_require_auth(api_db):
+    """未认证的写操作必须返回 403（审计 H1）。"""
+    body = {"category": "world", "title": "unauth", "content": "body"}
+    assert client.post("/api/knowledge", json=body).status_code == 403
+    assert client.put("/api/knowledge/1", json=body).status_code == 403
+    assert client.delete("/api/knowledge/1").status_code == 403
+    # 读端点保持开放
+    assert client.get("/api/knowledge/list").status_code == 200
+
+
 def test_knowledge_validates_required_fields_and_missing_records(api_db):
-    assert client.post("/api/knowledge", json={"category": "world", "title": "", "content": "body"}).status_code == 400
+    assert client.post("/api/knowledge", json={"category": "world", "title": "", "content": "body"}, headers=_AUTH_HEADERS).status_code == 400
     assert client.put("/api/knowledge/9999", json={
         "category": "world", "title": "missing", "content": "body",
-    }).status_code == 404
-    assert client.delete("/api/knowledge/9999").status_code == 404
+    }, headers=_AUTH_HEADERS).status_code == 404
+    assert client.delete("/api/knowledge/9999", headers=_AUTH_HEADERS).status_code == 404
 
 
 def test_system_stats_include_backend_diagnostics(api_db):

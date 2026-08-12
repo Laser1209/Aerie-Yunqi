@@ -66,7 +66,9 @@ def test_world_snapshot_prefers_shared_runtime_flag_over_legacy_yaml(monkeypatch
 
 def test_world_candidate_approval_flag_off_has_no_side_effects(monkeypatch):
     handler = AsyncMock(side_effect=AssertionError("handler should not run"))
+    # 世界完全关闭：sidecar 与 inprocess 双 flag 均关闭，审批 handler 不应被调用。
     monkeypatch.setenv("AERIE_FEATURE_WORLD_SIDECAR_V1", "false")
+    monkeypatch.setenv("AERIE_FEATURE_WORLD_INPROCESS_V1", "false")
     monkeypatch.setattr(
         api_server,
         "get_companion",

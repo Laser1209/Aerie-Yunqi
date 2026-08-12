@@ -2857,6 +2857,8 @@ class Companion:
         """把世界上下文转成可读文本，供轻量 LLM 接力判断。"""
         phase = str(context.get("time_of_day") or "")
         clock = str(context.get("clock") or "")
+        time_cn = str(context.get("time_cn") or "").strip()
+        light_cn = str(context.get("light_cn") or "").strip()
         time_light = str(context.get("time_of_day_light") or "").strip()
         weather_desc = str(context.get("weather_desc") or "").strip()
         city = str(context.get("city") or "").strip()

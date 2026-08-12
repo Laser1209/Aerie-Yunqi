@@ -213,16 +213,27 @@ _WORLD_DASHBOARD_EMPTY_SNAPSHOT = {
 
 
 def _world_sidecar_enabled(companion: Any | None = None) -> bool:
-    """Read the shared effective flag, with a legacy-instance fallback."""
+    """世界是否以任一模式启用（sidecar 或 inprocess）。
 
+    世界既可能运行在 sidecar（world_sidecar_v1）也可能运行在进程内
+    （world_inprocess_v1）。之前只查 sidecar flag：当世界以 inprocess
+    运行时 dashboard 会被误判 disabled，世界总览/生图候选全部不可见。
+    """
     flags = getattr(companion, "feature_flags", None)
     is_enabled = getattr(flags, "is_enabled", None)
     if callable(is_enabled):
         try:
-            return is_enabled("world_sidecar_v1") is True
+            return (
+                is_enabled("world_sidecar_v1") is True
+                or is_enabled("world_inprocess_v1") is True
+            )
         except Exception:
             logger.warning("shared world feature flag lookup failed", exc_info=True)
-    return FeatureFlags().is_enabled("world_sidecar_v1")
+    flags_fallback = FeatureFlags()
+    return (
+        flags_fallback.is_enabled("world_sidecar_v1") is True
+        or flags_fallback.is_enabled("world_inprocess_v1") is True
+    )
 
 
 def _world_dashboard_safe_text(value: Any, limit: int = 200) -> str:

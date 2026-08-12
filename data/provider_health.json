@@ -1,8 +1,12 @@
 {
   "providers": {
+    "aerie-ws": {
+      "reason": "",
+      "status": "ok"
+    },
     "deepseek": {
-      "balance": 17.78,
-      "last_checked_at": "2026-08-11T19:56:47.817462+00:00",
+      "balance": 16.8,
+      "last_checked_at": "2026-08-12T03:36:50.268918+00:00",
       "reason": "",
       "status": "ok"
     },

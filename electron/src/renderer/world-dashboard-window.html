@@ -60,6 +60,12 @@
               <img id="wdw-map-img" class="wdw-map-img"
                    alt="伊塔的复式公寓平面图"
                    draggable="false" />
+              <!-- P2: 移动路径 overlay（米制坐标 toSvg 换算渲染，仅移动时显示） -->
+              <svg id="wdw-map-path" class="wdw-map-path" viewBox="0 0 1400 980"
+                   preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <path id="wdw-map-path-line" class="wdw-map-path-line" d="" />
+                <circle id="wdw-map-path-dot" class="wdw-map-path-dot" r="6" />
+              </svg>
               <!-- Agent 当前位置光球（光圈呼吸 + 中心点） -->
               <div id="wdw-map-orb" class="wdw-map-orb" hidden>
                 <span class="wdw-map-orb-pulse" aria-hidden="true"></span>

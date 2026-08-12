@@ -79,6 +79,9 @@
     els.mapImg = $("wdw-map-img");
     els.mapOrb = $("wdw-map-orb");
     els.mapZoneLabel = $("wdw-map-zone-label");
+    els.mapPath = $("wdw-map-path");
+    els.mapPathLine = $("wdw-map-path-line");
+    els.mapPathDot = $("wdw-map-path-dot");
     els.emotionLabel = $("wdw-emotion-label");
     els.padVal = { P: $("wdw-pad-P-val"), A: $("wdw-pad-A-val"), D: $("wdw-pad-D-val") };
     els.padBar = { P: $("wdw-pad-P"), A: $("wdw-pad-A"), D: $("wdw-pad-D") };
@@ -239,6 +242,59 @@
       });
     }
     renderMap(floor, zoneId, zoneLabel);
+    renderMovementPath(summary);
+  }
+
+  // P2: 米制坐标 → SVG 像素（viewBox 1400×980，与平面图同坐标系）。
+  function toSvg(level, x, y) {
+    return { x: 140 + Number(x) * 72, y: 150 + Number(y) * 72 };
+  }
+
+  function pathLength(pts) {
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) {
+      len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    }
+    return len;
+  }
+
+  function pointAtLength(pts, target) {
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      if (acc + seg >= target || i === pts.length - 1) {
+        const t = seg === 0 ? 0 : Math.max(0, Math.min(1, (target - acc) / seg));
+        return {
+          x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t,
+          y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t,
+        };
+      }
+      acc += seg;
+    }
+    return pts[pts.length - 1];
+  }
+
+  // P2: 移动中 → 渲染避障路径折线 + 蓝点沿路径按 progress 插值；
+  // 未移动/无数据 → 隐藏 overlay（不影响原有光球锚点逻辑）。
+  function renderMovementPath(summary) {
+    if (!els.mapPath || !els.mapPathLine || !els.mapPathDot) return;
+    const mv = obj(summary.movement);
+    const waypoints = Array.isArray(mv.waypoints) ? mv.waypoints : [];
+    if (mv.status !== "moving" || waypoints.length < 2) {
+      els.mapPath.hidden = true;
+      return;
+    }
+    els.mapPath.hidden = false;
+    const pts = waypoints.map((w) => toSvg(Number(w.level) || 1, Number(w.x) || 0, Number(w.y) || 0));
+    const d = "M" + pts.map((p) => p.x.toFixed(1) + " " + p.y.toFixed(1)).join(" L");
+    els.mapPathLine.setAttribute("d", d);
+    const total = pathLength(pts);
+    const progress = Math.max(0, Math.min(1, Number(mv.progress) || 0));
+    const pos = pointAtLength(pts, total * progress);
+    if (pos) {
+      els.mapPathDot.setAttribute("cx", pos.x.toFixed(1));
+      els.mapPathDot.setAttribute("cy", pos.y.toFixed(1));
+    }
   }
 
   // 平面图底图 + 光球：切换当前楼层 SVG，把光球锚定到 zone 百分比坐标。

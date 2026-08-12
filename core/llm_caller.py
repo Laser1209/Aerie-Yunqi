@@ -795,22 +795,30 @@ class LLMCaller:
         tone_hint: str | None = None,
         judge_context: dict | None = None,
         knowledge_fragment: str = "",
+        dialogue_context: str = "",
+        topic_mode: str = "new",
         temperature: float | None = None,
         **kwargs,
     ) -> str:
         """Generate a proactive push message as a conversational initiator.
 
         Sends a system prompt that frames the model as the *initiator* (not a
-        responder), asking it to open a new topic with share + open question,
-        using experience-exchange / situational-stitching / anti-AI-flavor
-        principles, plus a "break-the-rule" escape hatch so creativity isn't
-        over-constrained. Falls back to raw template filling on failure.
+        responder). When ``topic_mode == "new"`` it opens a brand-new topic;
+        when ``topic_mode`` is ``"continue"`` / ``"revive"`` it instead
+        continues an ongoing (or recently closed) conversation using
+        ``dialogue_context`` as the continuation basis — preventing the
+        "context gap" where a proactive message ignores what was just talked
+        about. Uses experience-exchange / situational-stitching / anti-AI-
+        flavor principles, plus a "break-the-rule" escape hatch. Falls back to
+        raw template filling on failure.
 
         R7.5+: ``tone_hint`` lets the ProactiveJudge's Decision pick wording
         style directly — keys match ``TONE_PROMPTS``.
         ``knowledge_fragment`` (Workstream 6) carries retrieved ``dialogue``
         knowledge as *generation principles* (how to talk), injected into the
         system prompt; it must never be recited into the message itself.
+        ``dialogue_context`` carries the recent chat history + active-topic
+        summary; only meaningful when ``topic_mode != "new"``.
         """
         # Resolve tone. Priority: tone_hint > mood alias > neutral.
         tone = tone_hint or MOOD_TO_TONE.get(str(mood).lower(), "casual_warm")
@@ -835,14 +843,46 @@ class LLMCaller:
         if ctx_lines:
             ctx_fragment = "上下文（仅参考，不要复述）：" + "，".join(ctx_lines) + "。"
 
+        # Topic-awareness: branch the "open a new topic" hard-code so that a
+        # proactive push can continue / revive an existing conversation instead
+        # of ignoring it (topic-mode continuation, P0 topic system).
+        topic_line = (
+            "此刻没有任何用户消息需要你回应——你是主动发起方，这条消息是你自己开新话题的第一句话。\n"
+            if topic_mode == "new"
+            else (
+                "此刻没有新消息要你回应——你是'接着聊'：用户暂时没在线，而你想起刚聊的话题"
+                + (
+                    "还没聊完，于是自然地接着发一条。\n"
+                    if topic_mode == "continue"
+                    else "值得再提起，于是自然地重新提起它。\n"
+                )
+            )
+        )
+        topic_instruction = (
+            "主动开一个新话题，并且用'体验交换'而不是'信息交换'"
+            if topic_mode == "new"
+            else (
+                "延续你们刚才的话题（下方有对话上下文），并且用'体验交换'而不是'信息交换'"
+                if topic_mode == "continue"
+                else "自然地重新提起那段旧话题（下方有对话上下文），并且用'体验交换'而不是'信息交换'"
+            )
+        )
+        dialogue_fragment = ""
+        if dialogue_context and topic_mode in ("continue", "revive"):
+            dialogue_fragment = (
+                "你们最近聊的（接着聊下去，不要生硬复述他的话，要自然衔接）：\n"
+                + dialogue_context
+                + "\n"
+            )
+
         system_msg = (
             "你是伊塔（Ita），通过 QQ / 桌面 App 主动找用户聊天。\n"
-            "此刻没有任何用户消息需要你回应——你是主动发起方，这条消息是你自己开新话题的第一句话。\n"
+            f"{topic_line}"
             "你主动发消息的目的：用户此刻可能正一个人待着、或很久没互动。你在用这条消息补上"
             "'没有人主动找他聊'的空缺，成为那个先开口的人。这是情感弥补，不是例行公事。\n"
             "所以你必须：\n"
             "- 当发起者，不是回应者。不要写'我在回答你刚才问的…'，更不要去回应一个用户根本没问过的问题。\n"
-            "- 主动开一个新话题，并且用'体验交换'而不是'信息交换'：少陈述事实，多传递一个携带着感受、"
+            f"- {topic_instruction}：少陈述事实，多传递一个携带着感受、"
             "画面或行动邀约的私人瞬间（感官、情绪、或对关系的直接作用，至少含其一）。\n"
             "- 好的开场 = 一个小分享 + 一个轻量开放式问题，给对方容易接话的口子。\n"
             "- 调用任何检索到的记忆/知识时，必须用一个当前的情感动作把它'缝合'进当下，而不是冷冰冰贴上去"
@@ -855,6 +895,7 @@ class LLMCaller:
             "- 带主观偏见：永远不中立客观，表达对用户明显的偏袒与偏爱。\n"
             f"{tone_fragment}\n"
             f"{ctx_fragment}\n"
+            f"{dialogue_fragment}"
             f"{knowledge_fragment}\n"
             "破格条款（给创造力留一条缝）：以上所有规则，在遇到一个极具伊塔个人风格、能让对话产生惊喜感的"
             "念头时，可以被有意识地打破。唯一要问自己的是：这句话，像'我'（伊塔）会说的吗？若像，就大胆"

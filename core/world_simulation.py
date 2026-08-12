@@ -19,62 +19,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, ItemsView, Iterable
 
 from core.action_registry import ActionRegistry, WorldAction
+from core.world_phase import DEFAULT_WORLD_PHASES
 
 # 世界模拟统一使用本地时区（北京时间 UTC+08:00）。
 # 此前误用 UTC 导致时段/光线提示词整体错位 8 小时（凌晨被判定成下午）。
 LOCAL_TZ: timezone = timezone(timedelta(hours=8))
-
-
-# ── Phase definitions ────────────────────────────────────────────
-# 新的 5 段时段映射(基于小时):
-#   night      23:00 – 06:00
-#   morning    06:00 – 12:00
-#   noon       12:00 – 14:00
-#   afternoon  14:00 – 19:00
-#   evening    19:00 – 23:00
-# energy 在 morning 最高, afternoon 衰减, evening 进一步下降, night 最低(恢复中)
-DEFAULT_WORLD_PHASES: dict[str, dict[str, Any]] = {
-    "night": {
-        "start": "23:00",
-        "end": "06:00",
-        "location": "home",
-        "activity": "sleeping",
-        "energy": 0.22,
-        "social": "private",
-    },
-    "morning": {
-        "start": "06:00",
-        "end": "12:00",
-        "location": "home",
-        "activity": "planning",
-        "energy": 0.78,
-        "social": "private",
-    },
-    "noon": {
-        "start": "12:00",
-        "end": "14:00",
-        "location": "home",
-        "activity": "dining",
-        "energy": 0.62,
-        "social": "private",
-    },
-    "afternoon": {
-        "start": "14:00",
-        "end": "19:00",
-        "location": "study",
-        "activity": "working",
-        "energy": 0.55,
-        "social": "focused",
-    },
-    "evening": {
-        "start": "19:00",
-        "end": "23:00",
-        "location": "home",
-        "activity": "relaxing",
-        "energy": 0.42,
-        "social": "private",
-    },
-}
 
 
 # ── Environment objects per (location, activity) ─────────────────
@@ -94,6 +43,8 @@ _DEFAULT_STUDY_OBJECTS = ["design_desk", "imac", "drawing_tablet"]
 # ── Visual topic derivation rules ────────────────────────────────
 # 每个 activity 可选的视觉话题前缀; 与 nearby_objects 组合后去重
 _ACTIVITY_TOPIC_PREFIXES: dict[str, list[str]] = {
+    "waking_up": ["morning_plan", "starry_window"],
+    "winding_down": ["good_night", "quiet_moment"],
     "sleeping": ["good_night", "starry_window"],
     "planning": ["morning_plan", "coffee_break"],
     "dining": ["lunch_time", "tea_break"],

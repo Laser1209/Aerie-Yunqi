@@ -181,6 +181,16 @@ class PushEventEngine:
         self._idle_threshold_hours = 4
         self._running = False
         self._idle_monitor_task: Optional[asyncio.Task] = None
+        # P0 topic system: 统一沉寂时钟回调（companion 注入），
+        # EventBus 路径（_on_user_message）也走同一时钟。
+        self.on_user_active: Optional[Callable] = None
+
+    def _notify_user_active(self) -> None:
+        if self.on_user_active is not None:
+            try:
+                self.on_user_active()
+            except Exception:
+                logger.debug("on_user_active hook failed", exc_info=True)
 
     def bind_scheduler(self, scheduler: Any) -> None:
         """绑定 PushScheduler"""
@@ -216,6 +226,7 @@ class PushEventEngine:
     def record_user_activity(self) -> None:
         """记录用户活动（每次用户发消息时调用）"""
         self._last_user_activity = datetime.now()
+        self._notify_user_active()
         if not self._user_online:
             self._user_online = True
             self.bus.publish(PushEvent(
@@ -226,6 +237,7 @@ class PushEventEngine:
     def _on_user_message(self, event: PushEvent) -> None:
         """用户消息事件处理"""
         self._last_user_activity = datetime.now()
+        self._notify_user_active()
         if not self._user_online:
             self._user_online = True
 

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from core.world_phase import PHASE_ZONE  # phase → zone 单一真源
+
 # ── 楼层中文名 ──────────────────────────────────────────────
 LEVEL_CN: dict[int, str] = {
     1: "一层",
@@ -356,17 +358,55 @@ def describe_objects(object_ids: Iterable[str]) -> str:
 
 
 # ── 世界模拟接入: phase/activity -> zone 映射 ───────────────
-# 由 DEFAULT_WORLD_PHASES 的活动语义映射到新房间精确 zone,
-# 让世界快照具备"楼层+区域"的细粒度定位(方向5 核心).
-PHASE_ZONE: dict[str, str] = {
-    "night": "master_bedroom",     # 深夜在主卧睡觉
-    "morning": "living",           # 清晨在客厅规划一天
-    "noon": "dining",              # 正午在餐区用餐
-    "afternoon": "studio",         # 下午在工作室专注工作
-    "evening": "living",           # 傍晚在客厅放松
-}
+# PHASE_ZONE 由 core.world_phase 提供（单一真源，加档位只改一处）.
 
 
 def zone_for_phase(phase: str) -> str:
     """phase -> zone_id; 未知时段返回 "unknown"(安全)."""
     return PHASE_ZONE.get(str(phase or ""), "unknown")
+
+
+# ── zone 连通图（P2 寻路：BFS 叙事层路径）──────────────────────
+# 基于平面图 bounds 相邻性校正：一层链式 + 阳台直达客厅；
+# 跨层仅 stair ↔ corridor（楼梯）；二层 corridor 为交通枢纽。
+ZONE_ADJACENCY: dict[str, list[str]] = {
+    "entrance": ["stair", "living"],
+    "stair": ["entrance", "living", "corridor"],
+    "living": ["entrance", "stair", "dining", "balcony"],
+    "dining": ["living", "kitchen"],
+    "kitchen": ["dining", "guest_bath"],
+    "guest_bath": ["kitchen"],
+    "balcony": ["living"],
+    "corridor": ["stair", "studio", "master_bedroom"],
+    "studio": ["corridor", "master_bedroom"],
+    "master_bedroom": ["corridor", "studio", "master_bath", "closet"],
+    "master_bath": ["master_bedroom"],
+    "closet": ["master_bedroom", "bridge"],
+    "bridge": ["closet"],
+}
+
+
+def path_between(from_zone: str, to_zone: str) -> list[str]:
+    """zone 间最短路径（BFS，无权重）。不可达/非法返回空列表。
+
+    例：path_between("living", "master_bedroom")
+      -> ["living", "stair", "corridor", "master_bedroom"]（沙发→楼梯→二楼→主卧）
+    """
+    fz = str(from_zone or "")
+    tz = str(to_zone or "")
+    if fz == tz:
+        return [fz] if fz in ZONE_ADJACENCY or fz == "unknown" else []
+    if fz not in ZONE_ADJACENCY or tz not in ZONE_ADJACENCY:
+        return []
+    queue: list[list[str]] = [[fz]]
+    visited = {fz}
+    while queue:
+        path = queue.pop(0)
+        for nxt in ZONE_ADJACENCY.get(path[-1], []):
+            if nxt in visited:
+                continue
+            if nxt == tz:
+                return path + [nxt]
+            visited.add(nxt)
+            queue.append(path + [nxt])
+    return []

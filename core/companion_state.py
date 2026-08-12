@@ -84,6 +84,8 @@ class CompanionState:
     pending_topics: list[PendingTopic] = field(default_factory=list)
     recent_pain_points: list[PainPoint] = field(default_factory=list)
     recent_joy_points: list[JoyPoint] = field(default_factory=list)
+    # P0 topic system: 统一沉寂时钟（time.time() epoch；0 = 从未记录）。
+    last_user_active_at: float = 0.0
 
     STAGES: ClassVar[tuple[str, ...]] = RELATIONSHIP_STAGES
     MAX_RECENT: ClassVar[int] = MAX_RECENT_POINTS
@@ -191,6 +193,17 @@ class CompanionState:
         self.relationship_stage = stage
         return self.relationship_stage
 
+    # ── 统一沉寂时钟（P0 topic system）──────────────
+    def mark_user_active(self) -> None:
+        """记录用户活跃（统一 time.time() 时钟）。"""
+        self.last_user_active_at = time.time()
+
+    def idle_hours(self) -> float:
+        """距上次活跃的小时数；从未活跃返回 0（防误触发）。"""
+        if not self.last_user_active_at:
+            return 0.0
+        return max(0.0, (time.time() - self.last_user_active_at) / 3600.0)
+
     # ── 序列化 ─────────────────────────────────────
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -199,6 +212,7 @@ class CompanionState:
             "pending_topics": [_pending_to_dict(p) for p in self.pending_topics],
             "recent_pain_points": [_pain_to_dict(p) for p in self.recent_pain_points],
             "recent_joy_points": [_joy_to_dict(j) for j in self.recent_joy_points],
+            "last_user_active_at": self.last_user_active_at,
         }
 
     @classmethod
@@ -224,6 +238,7 @@ class CompanionState:
                 _joy_from_dict(item)
                 for item in (data.get("recent_joy_points") or [])
             ],
+            last_user_active_at=float(data.get("last_user_active_at") or 0.0),
         )
 
     # ── 持久化 ─────────────────────────────────────

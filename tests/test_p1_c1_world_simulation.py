@@ -72,22 +72,23 @@ def test_tick_idempotent_within_same_second():
     assert s1.phase == s2.phase
 
 
-# ── phase 小时映射 ──────────────────────────────────
+# ── phase 小时映射（7 档，world_phase 单一真源）────────────
 @pytest.mark.parametrize(
     "hour,expected",
     [
+        (6, "dawn"),
         (7, "morning"),
         (11, "morning"),
         (12, "noon"),
         (13, "noon"),
         (15, "afternoon"),
-        (18, "afternoon"),
+        (18, "evening"),
         (19, "evening"),
-        (22, "evening"),
-        (23, "night"),
+        (22, "late_evening"),
+        (23, "late_evening"),
+        (0, "night"),
         (2, "night"),
-        (5, "night"),
-        (6, "morning"),
+        (5, "dawn"),
     ],
 )
 def test_phase_mapping_by_hour(hour, expected):

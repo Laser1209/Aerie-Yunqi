@@ -507,21 +507,10 @@ _IMAGE_LIGHT_RELAY_TIMEOUT = 8.0
 # 同一天内不会在窗口内重复出现，故较长窗口不会误伤正常的新场景。
 _IMAGE_TOPIC_DEDUP_SEC = 14400
 
-_TIME_OF_DAY_CN: dict[str, str] = {
-    "night": "深夜",
-    "morning": "清晨",
-    "noon": "正午",
-    "afternoon": "下午",
-    "evening": "傍晚",
-}
-
-_TIME_OF_DAY_LIGHT_CN: dict[str, str] = {
-    "night": "深夜，室内一盏暖黄灯，窗外是安静的夜景",
-    "morning": "清晨，柔和的自然光，空气清透",
-    "noon": "正午，明亮的日光从窗户洒进来",
-    "afternoon": "下午，柔和的自然光，光影层次分明",
-    "evening": "傍晚，黄昏的暖色调光线",
-}
+from core.world_phase import (  # P1 单一真源：phase → 中文/光线
+    TIME_OF_DAY_CN as _TIME_OF_DAY_CN,
+    TIME_OF_DAY_LIGHT_CN as _TIME_OF_DAY_LIGHT_CN,
+)
 
 _WEATHER_MOOD_CN: dict[str, str] = {
     "clear": "晴朗",
@@ -551,17 +540,10 @@ _IMAGE_WORLD_FALLBACK_RULES: dict[str, set[str]] = {
 
 
 def _time_of_day_phase(dt: datetime) -> str:
-    """把本地时刻映射到 5 段时段（与 DEFAULT_WORLD_PHASES 一致）。"""
-    hour = dt.hour
-    if hour >= 23 or hour < 6:
-        return "night"
-    if hour < 12:
-        return "morning"
-    if hour < 14:
-        return "noon"
-    if hour < 19:
-        return "afternoon"
-    return "evening"
+    """把本地时刻映射到时段（world_phase 单一真源，加档位只改一处）。"""
+    from core.world_phase import phase_for_hour
+
+    return phase_for_hour(dt.hour)
 
 
 def _resolve_companion_data_path(settings: dict | None) -> Path:
@@ -784,6 +766,12 @@ class Companion:
         self.pipeline.relationship_snapshot_provider = self._relationship_snapshot_for_context
         self.pipeline.self_model_snapshot_provider = self._self_model_snapshot_for_context
         self.pipeline.internal_snapshot_provider = self._internal_snapshot_for_context
+        # P0 topic system: 给上下文构建器注入话题提供器（L0.5 话题认知层）。
+        # tracker 在 __init__ 后段才创建，provider 用 getattr 惰性读取。
+        try:
+            self.pipeline.ctx_builder.set_topic_provider(self._topic_for_context)
+        except Exception:
+            logger.debug("topic provider bind failed", exc_info=True)
         self.chat_request_queue_requested = self.feature_flags.is_enabled(
             "chat_request_queue_v1",
         )
@@ -849,6 +837,8 @@ class Companion:
         self.push_scheduler.set_dispatcher(self._dispatch_push)
         self.push_event_engine = get_event_engine()
         self.push_event_engine.bind_scheduler(self.push_scheduler)
+        # P0 topic system: EventBus 路径（_on_user_message）也走统一沉寂时钟。
+        self.push_event_engine.on_user_active = self._mark_user_active
         # R7.5+: bind a ProactiveJudge so every dispatch consults
         # 心情 / 想法 / 用户上下文 before sending.
         try:
@@ -877,6 +867,45 @@ class Companion:
         self.desire: Any = None
         # Block-4C R3.4: skill loader (lazy-created on first start()).
         self.skill_loader: Any = None
+        # P0 topic system: 话题生命周期追踪 + 候选决策证据日志。
+        try:
+            from core.topic_tracker import TopicTracker
+
+            self.topic_tracker = TopicTracker()
+        except Exception:
+            logger.exception("TopicTracker init failed")
+            self.topic_tracker = None
+        try:
+            from core.decision_log import DecisionLogger
+
+            self.decision_log = DecisionLogger()
+        except Exception:
+            logger.exception("DecisionLogger init failed")
+            self.decision_log = None
+        # P0 topic system: 统一沉寂时钟宿主（companion_state 单例 + 节流落盘）。
+        try:
+            from core.companion_state import CompanionState
+
+            self.companion_state = CompanionState.load()
+        except Exception:
+            logger.debug("CompanionState init failed", exc_info=True)
+            self.companion_state = None
+        self._last_activity_save = 0.0
+        # P1/P2: 每日规划消费 + 移动状态机（决策日志证据层共用）。
+        try:
+            from core.daily_planner import DailyPlanner
+
+            self.daily_planner = DailyPlanner(decision_log=self.decision_log)
+        except Exception:
+            logger.debug("DailyPlanner init failed", exc_info=True)
+            self.daily_planner = None
+        try:
+            from core.movement import MovementManager
+
+            self.movement_manager = MovementManager(decision_log=self.decision_log)
+        except Exception:
+            logger.debug("MovementManager init failed", exc_info=True)
+            self.movement_manager = None
         _COMPANION = self
 
     def _apply_proactive_overlay(self) -> None:
@@ -1448,14 +1477,34 @@ class Companion:
             return None
         try:
             if max_age_sec is None:
-                return provider()
-            try:
-                return provider(max_age_sec=max_age_sec)
-            except TypeError:  # 旧/无参适配器(如 Null/remote)不支持新鲜度参数
-                return provider()
+                snap = provider()
+            else:
+                try:
+                    snap = provider(max_age_sec=max_age_sec)
+                except TypeError:  # 旧/无参适配器(如 Null/remote)不支持新鲜度参数
+                    snap = provider()
         except Exception:
             logger.debug("world snapshot unavailable", exc_info=True)
             return None
+        # P2: 附加移动状态（实时派生）；移动中 zone 派生优先于 PHASE_ZONE，
+        # 防止 tick 把位置拉回静态映射造成"位置回跳"。
+        if isinstance(snap, dict) and getattr(self, "movement_manager", None) is not None:
+            try:
+                snap = dict(snap)
+                mv = self.movement_manager.snapshot()
+                snap["movement"] = mv
+                cur = str(mv.get("current_zone") or "")
+                if mv.get("status") in ("moving", "arrived") and cur and cur != "unknown":
+                    snap["zone"] = cur
+                    try:
+                        from core.home_space import position_desc as _pd
+
+                        snap["position_desc"] = _pd(int(snap.get("floor") or 0), cur)
+                    except Exception:
+                        pass
+            except Exception:
+                logger.debug("movement snapshot attach failed", exc_info=True)
+        return snap
 
     def _relationship_snapshot_for_context(self, user_id: int) -> dict | None:
         provider = getattr(self.world_port, "get_relationship_snapshot", None)
@@ -2404,6 +2453,34 @@ class Companion:
             })
         return state
 
+    def _consume_daily_plan(self, snap: Any, now: float | None = None) -> None:
+        """消费每日计划：当前 slot 目标 zone 与当前位置不一致 → 发起移动。
+
+        移动动机 = slot 行为描述（如"准备去厨房做晚餐"），写决策日志埋点 3。
+        任何异常静默降级，不阻断世界推进。now 供测试注入确定性时钟。
+        """
+        planner = getattr(self, "daily_planner", None)
+        mover = getattr(self, "movement_manager", None)
+        if planner is None or mover is None:
+            return
+        try:
+            slot = planner.slot_for_now(now=now)
+            if not slot:
+                return
+            target = str(slot.get("zone") or "")
+            if not target or target in ("", "unknown"):
+                return
+            current = mover.current_zone() or str((snap or {}).get("zone") or "")
+            if not current or current in ("", "unknown") or current == target:
+                return
+            mover.move_to(
+                current,
+                target,
+                reason=str(slot.get("behavior_desc") or ""),
+            )
+        except Exception:
+            logger.debug("daily plan consume failed", exc_info=True)
+
     async def _run_world_loop(self) -> None:
         """世界真实时间推进 + 真实数据刷新（inprocess 模式）。
 
@@ -2429,6 +2506,8 @@ class Companion:
                     if phase and phase != getattr(self, "_last_world_phase", None):
                         logger.info("[WorldLoop] phase=%s", phase)
                         self._last_world_phase = phase
+                    # P2: 每日计划消费 → 目标 zone 与当前位置不一致时发起移动。
+                    self._consume_daily_plan(snap)
                 except Exception:
                     logger.warning("[WorldLoop] tick failed", exc_info=True)
                 if not city:
@@ -3077,7 +3156,7 @@ class Companion:
         moon = moon_phase(clock_dt)
         moon_desc = f"月相{moon['emoji']}{moon['phase_name']}，亮度{moon['illumination_pct']}%"
         # 天黑了或傍晚，月亮才真正进得了画面，才并进时间光线描述。
-        if phase in ("night", "evening"):
+        if phase in ("night", "evening", "late_evening"):
             combined_light = "，".join(p for p in (time_cn, light_cn, moon_desc) if p)
         else:
             combined_light = "，".join(p for p in (time_cn, light_cn) if p)
@@ -3131,7 +3210,7 @@ class Companion:
         elif phase:
             phase_cn = _TIME_OF_DAY_CN.get(phase, phase)
             lines.append(f"时间：{phase_cn}（{clock}）。{time_light}" if time_light else f"时间：{phase_cn}（{clock}）。")
-        if phase in ("night", "evening") and context.get("moon_desc"):
+        if phase in ("night", "evening", "late_evening") and context.get("moon_desc"):
             lines.append(f"天象：{context.get('moon_desc')}")
         if weather_desc:
             lines.append(f"天气：{weather_desc}")
@@ -3309,6 +3388,69 @@ class Companion:
         except asyncio.CancelledError:
             return
 
+    def _mark_user_active(self) -> None:
+        """统一沉寂时钟：mark companion_state（30s 节流落盘防高频写）。"""
+        cs = getattr(self, "companion_state", None)
+        if cs is None:
+            return
+        try:
+            cs.mark_user_active()
+            now = time.time()
+            if now - getattr(self, "_last_activity_save", 0.0) >= 30.0:
+                cs.save()
+                self._last_activity_save = now
+        except Exception:
+            logger.debug("companion_state mark_user_active failed", exc_info=True)
+
+    def _topic_for_context(self) -> dict | None:
+        """供 ContextBuilder L0.5 话题认知层查询当前活跃话题（事实注入）。"""
+        tracker = getattr(self, "topic_tracker", None)
+        if tracker is None:
+            return None
+        try:
+            active = tracker.active_topic()
+        except Exception:
+            return None
+        if active is None:
+            return None
+        return {"subject": active.subject, "turn_count": active.turn_count}
+
+    async def _recent_dialogue_text(self, user_id: int, limit: int = 5) -> str:
+        """取最近非主动消息对话文本（主动消息续接素材，失败返回空串）。"""
+        try:
+            rows = self.db.query(
+                "SELECT role, content FROM chat_log "
+                "WHERE user_id = ? AND msg_type != 'proactive' "
+                "ORDER BY id DESC LIMIT ?",
+                (user_id, int(limit)),
+            )
+            rows = list(rows or [])
+            rows.reverse()
+            lines = []
+            for row in rows:
+                role = "伊塔" if str(row.get("role")) == "assistant" else "你"
+                content = str(row.get("content", ""))
+                if content:
+                    lines.append(f"{role}：{content}")
+            return "\n".join(lines)[:600]
+        except Exception:
+            logger.debug("[Push] recent dialogue unavailable", exc_info=True)
+            return ""
+
+    def _build_motive_candidates(
+        self, scene_name: str, topic_mode: str, dialogue_context: str
+    ) -> list[dict]:
+        """确定性动机候选（决策日志证据；不调用 LLM）。"""
+        candidates = [
+            {"id": "scene", "topic": scene_name, "score": 0.2},
+            {"id": "mode", "topic": topic_mode, "score": 0.5},
+        ]
+        if dialogue_context:
+            candidates.append({"id": "context", "topic": dialogue_context[:60], "score": 0.3})
+        else:
+            candidates.append({"id": "context", "topic": "无历史话题", "score": 0.0})
+        return candidates
+
     async def _dispatch_push(self, scene_name: str, scene_cfg: dict) -> bool:
         """Generate one proactive message and deliver it independently."""
         try:
@@ -3346,16 +3488,56 @@ class Companion:
             except Exception as e:
                 logger.debug("[Push] dialogue knowledge retrieval failed: %s", e)
 
+            # P0 topic system: 主动消息动机重定义 —— 续接/再造/新话题。
+            # 判定顺序：有活跃话题→continue；无但有 closed 存根→revive；再无→new。
+            topic_mode = "new"
+            dialogue_context = ""
+            if getattr(self, "topic_tracker", None) is not None:
+                try:
+                    _plan = self.topic_tracker.continuation_plan()
+                    _mode = str(_plan.get("mode", "new"))
+                    if _mode in ("continue", "revive"):
+                        topic_mode = _mode
+                        dialogue_context = str(_plan.get("dialogue_context") or "")
+                except Exception:
+                    logger.debug("[Push] topic continuation plan failed", exc_info=True)
+
+            # 续接/再造时附上最近对话历史作为素材（预算 600 字，失败不阻断）。
+            if topic_mode in ("continue", "revive"):
+                try:
+                    recent = await self._recent_dialogue_text(master_id, limit=5)
+                    if recent:
+                        dialogue_context = (dialogue_context + "\n" + recent).strip()[:600]
+                except Exception:
+                    logger.debug("[Push] recent dialogue fetch failed", exc_info=True)
+
             content = await self.brain.generate_push(
                 template=scene_cfg.get("template", ""),
                 mood=mood,
                 tone_hint=scene_cfg.get("tone_hint"),
                 judge_context=scene_cfg.get("judge_context"),
                 knowledge_fragment=knowledge_fragment,
+                dialogue_context=dialogue_context,
+                topic_mode=topic_mode,
                 date=datetime.now().strftime("%Y年%m月%d日"),
             )
             if not content:
                 return False
+
+            # 决策埋点 1（单点写）：动机候选集 + 本次选择落盘。
+            if getattr(self, "decision_log", None) is not None:
+                try:
+                    candidates = self._build_motive_candidates(
+                        scene_name, topic_mode, dialogue_context
+                    )
+                    self.decision_log.append(
+                        kind="topic_motive",
+                        candidates=candidates,
+                        chosen={"mode": topic_mode, "scene": scene_name},
+                        reason=str(scene_cfg.get("template", ""))[:60],
+                    )
+                except Exception:
+                    logger.debug("[Push] decision log append failed", exc_info=True)
 
             if not delivery_v2:
                 success = await self.qq.send_message(master_id, content)
@@ -3538,6 +3720,8 @@ def _dashboard_world_summary(
             ("zone", "zone"),
             ("positionDesc", "position_desc", "positionDesc"),
             ("nearbyObjects", "nearby_objects", "nearbyObjects"),
+            # P2: 移动状态透传（status/path/waypoints/progress/reason）。
+            ("movement", "movement"),
             ("weather", "weather", "weather_mood"),
             ("weatherMood", "weather_mood", "weather"),
             ("sequence", "sequence"),

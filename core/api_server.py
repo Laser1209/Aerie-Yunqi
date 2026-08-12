@@ -329,6 +329,8 @@ def _world_dashboard_public_world_summary(value: Any) -> dict[str, Any]:
             ("zone", "zone"),
             ("positionDesc", "position_desc", "positionDesc"),
             ("nearbyObjects", "nearby_objects", "nearbyObjects"),
+            # P2: 移动状态透传（status/path/waypoints/progress/reason）。
+            ("movement", "movement"),
             ("weather", "weather", "weather_mood"),
             ("weatherMood", "weather_mood", "weather"),
             ("weatherDetail", "weather_detail", "weatherDetail"),

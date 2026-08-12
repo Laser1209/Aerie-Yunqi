@@ -38,6 +38,15 @@ class ContextBuilder:
         self.knowledge = knowledge
         self._persona_mgr = get_persona_manager()
         self._last_context_audit: dict[str, Any] = {"enabled": False}
+        # P0 topic system: 话题提供器（companion 注入），仅注入事实不注入指令。
+        self._topic_provider: Any = None
+
+    def set_topic_provider(self, provider: Any) -> None:
+        """注入话题提供器：callable() -> dict{subject, turn_count} | None。
+
+        companion 在 pipeline 就绪后调用；provider 失败/缺省时不注入。
+        """
+        self._topic_provider = provider
 
     def build(
         self,
@@ -101,13 +110,34 @@ class ContextBuilder:
                 world_snapshot.get("phase", "unknown"),
                 "未知",
             )
+            pos_desc = str(world_snapshot.get("position_desc") or "")
+            location_line = f"地点：{world_snapshot.get('location', 'unknown')}"
+            if pos_desc:
+                location_line += f"（{pos_desc}）"
+            # P2: 移动中状态（叙事层：从哪→去哪+动机，不含避障细节）。
+            movement_line = ""
+            movement = world_snapshot.get("movement")
+            if isinstance(movement, dict) and movement.get("status") == "moving":
+                try:
+                    from core.home_space import zone_name
+
+                    m_from = str(movement.get("from_zone") or "")
+                    m_to = str(movement.get("to_zone") or "")
+                    m_reason = str(movement.get("reason") or "")
+                    if m_to:
+                        movement_line = f"\n移动中：她正在从{zone_name(m_from)}走向{zone_name(m_to)}"
+                        if m_reason:
+                            movement_line += f"，{m_reason}"
+                except Exception:
+                    movement_line = ""
             system += (
                 "\n\n【世界状态·模拟】\n"
                 f"时段：{phase_cn}\n"
-                f"地点：{world_snapshot.get('location', 'unknown')}\n"
+                f"{location_line}\n"
                 f"活动：{world_snapshot.get('activity', 'idle')}\n"
                 f"精力：{_safe_float(world_snapshot.get('energy', 0.5)):.2f}\n"
                 f"社交场景：{world_snapshot.get('social', 'private')}\n"
+                f"{movement_line}\n"
                 "这是内部连续性模拟，不得把模拟内容声称为现实世界已验证事实。"
             )
 
@@ -511,6 +541,13 @@ class ContextBuilder:
         # L1 · 核心身份（所有模式）
         parts.append(self._build_l1_identity(persona))
 
+        # L0.5 · 话题认知层（FULL/AUTO，仅 topic_tracking_v1 开启 + provider 可用）
+        # 只注入"当前活跃话题"事实，不注入判定指令（避免过度约束）。
+        if route_mode in ("FULL", "AUTO") and self._topic_tracking_enabled():
+            topic_cog = self._build_topic_cognition()
+            if topic_cog:
+                parts.append(topic_cog)
+
         # L1.5 · 当前时间快照（FULL/AUTO）：放在头部安全区，
         # 避免被尾部预算截断导致"感知不到当前时间"。
         if route_mode in ("FULL", "AUTO") and time_context:
@@ -593,6 +630,37 @@ class ContextBuilder:
                 if kw in t:
                     return f"层级[表情包sticker] 命中关键词[{kw}] 消息[{t[:40]}]"
         return None
+
+    def _topic_tracking_enabled(self) -> bool:
+        """读取 topic_tracking_v1 开关，默认关闭（发布闸门语义）。"""
+        try:
+            from core.feature_flags import FeatureFlags
+            return bool(FeatureFlags().is_enabled("topic_tracking_v1"))
+        except Exception:
+            logger.debug("读取 topic_tracking_v1 失败，默认关闭")
+            return False
+
+    def _build_topic_cognition(self) -> str:
+        """L0.5 · 话题认知层：注入当前活跃话题事实（只事实不指令）。"""
+        provider = getattr(self, "_topic_provider", None)
+        if provider is None:
+            return ""
+        try:
+            topic = provider()
+        except Exception:
+            logger.debug("topic provider failed", exc_info=True)
+            return ""
+        if not topic:
+            return ""
+        subject = str(topic.get("subject") or "")
+        turn_count = int(topic.get("turn_count") or 0)
+        if not subject:
+            return ""
+        lines = [f"【当前话题】你们正在聊一个围绕「{subject}」的话题"]
+        if turn_count > 0:
+            lines[0] += f"（已聊 {turn_count} 轮）"
+        lines.append("若用户自然切换到别的话题，请自然地跟随他，不要生硬拉回。")
+        return "\n".join(lines)
 
     def _image_capability_enabled(self) -> bool:
         """读取 world_image_candidates_v1 开关，默认开启。"""

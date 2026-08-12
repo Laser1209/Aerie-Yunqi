@@ -252,6 +252,21 @@
 .adw-row-ops { display: flex; gap: 6px; flex: 0 0 auto; }
 .adw-empty { font-size: 12px; color: var(--adw-muted); text-align: center; padding: 16px 0; }
 .adw-bulk { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.adw-state-content {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: var(--adw-bg);
+  border: 1px solid var(--adw-card-border);
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--adw-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 50vh;
+  overflow: auto;
+}
+.adw-state-content[hidden] { display: none; }
 
 /* ── 模态 ── */
 .adw-modal {

@@ -2839,6 +2839,24 @@ async def admin_kb_undo(request: Request, item_id: int) -> Response:
     return JSONResponse({"status": "ok"})
 
 
+@app.get("/api/admin/state")
+async def admin_state_list(request: Request) -> Response:
+    """状态文件列表（只读查看；重置走引擎方法，运行时验证）。"""
+    if not _require_admin(request):
+        return _admin_denied()
+    return JSONResponse(_admin_service().list_state())
+
+
+@app.get("/api/admin/state/{kind}")
+async def admin_state_get(request: Request, kind: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    data = _admin_service().get_state(kind)
+    if data is None:
+        return JSONResponse({"error": "unknown_state_kind", "errorCode": "unknown_state_kind"}, status_code=400)
+    return JSONResponse(data)
+
+
 @app.get("/admin.html")
 async def admin_page() -> Response:
     """浏览器端管理页（Electron 管理窗口直接加载本地 renderer，不经此端点）。"""

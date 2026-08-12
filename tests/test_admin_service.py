@@ -323,6 +323,27 @@ def test_kb_delete_with_undo(tmp_path, admin_db):
     assert service.list_kb()["total"] == 1
 
 
+# ── 状态文件（只读查看） ────────────────────────────────
+def test_state_files_list_and_view(tmp_path, admin_db):
+    data_dir = tmp_path / "d"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "desire_state.json").write_text(
+        '{"desire": {"level": 0.6}}', encoding="utf-8"
+    )
+    service = AdminService(db=admin_db, data_dir=data_dir, runtime_config=_FakeRuntimeConfig())
+
+    items = service.list_state()["items"]
+    by_kind = {i["kind"]: i for i in items}
+    assert by_kind["desire"]["exists"] is True
+    assert by_kind["desire"]["size"] > 0
+    assert by_kind["topic"]["exists"] is False
+
+    got = service.get_state("desire")
+    assert got is not None and got["exists"] is True
+    assert got["content"]["desire"]["level"] == 0.6
+    assert service.get_state("unknown") is None
+
+
 # ── 审计 ──────────────────────────────────────────────────
 def test_audit_entries_written(tmp_path, admin_db):
     service = AdminService(db=admin_db, data_dir=tmp_path / "d", runtime_config=_FakeRuntimeConfig())

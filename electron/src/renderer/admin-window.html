@@ -32,12 +32,13 @@
     </div>
   </div>
 
-  <!-- 6 页导航 -->
+  <!-- 7 页导航 -->
   <nav class="adw-nav" aria-label="管理平台页面">
     <button class="adw-nav-btn is-active" data-page="overview" type="button">概览</button>
     <button class="adw-nav-btn" data-page="conversations" type="button">聊天记录</button>
     <button class="adw-nav-btn" data-page="memory" type="button">记忆</button>
     <button class="adw-nav-btn" data-page="kb" type="button">知识库</button>
+    <button class="adw-nav-btn" data-page="state" type="button">状态</button>
     <button class="adw-nav-btn" data-page="trash" type="button">回收站</button>
     <button class="adw-nav-btn" data-page="audit" type="button">审计</button>
   </nav>
@@ -123,6 +124,18 @@
           </div>
         </div>
         <div id="adw-kb-list" class="adw-list"></div>
+      </div>
+    </section>
+
+    <!-- 状态 -->
+    <section class="adw-page" data-page-panel="state" aria-labelledby="adw-state-title" hidden>
+      <div class="adw-card">
+        <div class="adw-card-head">
+          <h2 id="adw-state-title" class="adw-card-title">状态文件</h2>
+          <span class="adw-muted">只读查看 · 重置需走引擎方法</span>
+        </div>
+        <div id="adw-state-list" class="adw-list"></div>
+        <pre id="adw-state-content" class="adw-state-content" hidden></pre>
       </div>
     </section>
 

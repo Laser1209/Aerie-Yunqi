@@ -413,6 +413,45 @@
     });
   }
 
+  // ── 状态文件（只读查看） ───────────────────────────────
+  async function loadState() {
+    const r = await admin("GET", "/api/admin/state");
+    const items = (r.ok && r.data && r.data.items) || [];
+    els.stateList.textContent = "";
+    if (!items.length) {
+      els.stateList.appendChild(empty("暂无状态文件"));
+      return;
+    }
+    items.forEach((s) => {
+      const row = document.createElement("div");
+      row.className = "adw-row" + (s.exists ? "" : " adw-row--trashed");
+      const main = document.createElement("span");
+      main.className = "adw-row-main";
+      const title = document.createElement("span");
+      title.className = "adw-row-title";
+      title.textContent = String(s.kind);
+      const preview = document.createElement("span");
+      preview.className = "adw-row-preview";
+      preview.textContent = s.exists ? "大小 " + s.size + " B · 更新于 " + formatTs(s.modified_at) : "文件不存在";
+      main.appendChild(title);
+      main.appendChild(preview);
+      const ops = document.createElement("span");
+      ops.className = "adw-row-ops";
+      if (s.exists) {
+        ops.appendChild(btn("查看", "adw-btn--small", async () => {
+          const rr = await admin("GET", "/api/admin/state/" + encodeURIComponent(s.kind));
+          if (rr.ok && rr.data && rr.data.exists) {
+            els.stateContent.textContent = JSON.stringify(rr.data.content, null, 2);
+            els.stateContent.hidden = false;
+          }
+        }));
+      }
+      row.appendChild(main);
+      row.appendChild(ops);
+      els.stateList.appendChild(row);
+    });
+  }
+
   // ── 工具 ───────────────────────────────────────────────
   function btn(text, cls, onClick) {
     const b = document.createElement("button");
@@ -450,6 +489,7 @@
       conversations: loadConversations,
       memory: loadMemory,
       kb: loadKb,
+      state: loadState,
       trash: loadTrash,
       audit: loadAudit,
     };
@@ -514,6 +554,8 @@
     els.memList = $("adw-mem-list");
     els.kbCategory = $("adw-kb-category");
     els.kbList = $("adw-kb-list");
+    els.stateList = $("adw-state-list");
+    els.stateContent = $("adw-state-content");
     els.trashSummary = $("adw-trash-summary");
     els.trashList = $("adw-trash-list");
     els.auditList = $("adw-audit-list");
@@ -549,7 +591,7 @@
 
   function refreshAll() {
     startProgress();
-    const jobs = [loadOverview(), loadConversations(), loadMemory(), loadKb(), loadTrash(), loadAudit()];
+    const jobs = [loadOverview(), loadConversations(), loadMemory(), loadKb(), loadState(), loadTrash(), loadAudit()];
     Promise.allSettled(jobs).then(finishProgress);
   }
 

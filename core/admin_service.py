@@ -579,3 +579,49 @@ class AdminService:
         except Exception:
             logger.exception("undo kb delete failed")
             return False
+
+    # ── 状态文件：只读查看（重置走引擎方法，运行时验证） ──────
+    _STATE_FILES: dict[str, str] = {
+        "desire": "desire_state.json",
+        "proactive": "proactive_policy_state.json",
+        "topic": "topic_state.json",
+        "runtime": "runtime_config.json",
+    }
+
+    def list_state(self) -> dict[str, Any]:
+        out: list[dict[str, Any]] = []
+        for kind, filename in self._STATE_FILES.items():
+            path = self._data_dir / filename
+            info: dict[str, Any] = {"kind": kind, "exists": False, "size": 0, "modified_at": None}
+            try:
+                if path.exists():
+                    stat = path.stat()
+                    info.update(
+                        {
+                            "exists": True,
+                            "size": int(stat.st_size),
+                            "modified_at": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
+                        }
+                    )
+            except OSError:
+                pass
+            out.append(info)
+        return {"items": out}
+
+    def get_state(self, kind: str) -> Optional[dict[str, Any]]:
+        filename = self._STATE_FILES.get(kind)
+        if not filename:
+            return None
+        path = self._data_dir / filename
+        try:
+            if not path.exists():
+                return {"kind": kind, "exists": False}
+            data: Any = {}
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (ValueError, TypeError):
+                data = path.read_text(encoding="utf-8", errors="replace")
+            return {"kind": kind, "exists": True, "content": data}
+        except OSError:
+            logger.exception("read state file failed: %s", kind)
+            return None

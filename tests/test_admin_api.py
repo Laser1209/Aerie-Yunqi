@@ -104,6 +104,24 @@ def test_admin_latch_gates_all_endpoints(api_env):
     assert client.get("/api/admin/conversations", headers=headers).status_code == 403
 
 
+def test_admin_cross_origin_guard_blocks_web_pages(api_env):
+    """任意网页（http/https Origin）跨源调用管理 API 一律 403（安全审查 #1 修复）。"""
+    client = api_env["client"]
+    evil = {"Origin": "https://evil.example"}
+    # 跨源网页不能解锁（拿不到 token）
+    assert client.post("/api/admin/unlock", headers=evil).status_code == 403
+    # 跨源网页不能访问任何管理端点
+    assert client.get("/api/admin/status", headers=evil).status_code == 403
+    assert client.get("/api/admin/conversations", headers=evil).status_code == 403
+    assert client.post(
+        "/api/admin/trash/purge", headers=evil, json={"all": True}
+    ).status_code == 403
+    # 合法来源不受影响：无 Origin（同源/内部调用）与 file://（Electron）
+    assert client.post("/api/admin/unlock").status_code == 200
+    assert client.get("/api/admin/status", headers={"Origin": "file://"}).status_code == 200
+    assert client.get("/api/admin/status", headers={"Origin": "null"}).status_code == 200
+
+
 def test_admin_conversation_trash_restore_purge_chain(api_env):
     from core.database import Database
 

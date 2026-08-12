@@ -2589,6 +2589,23 @@ async def stats_dashboard(
 _admin_service_instance = None
 _admin_purge_task: asyncio.Task | None = None
 
+# 管理 API 的合法 Origin 白名单：Electron file:// 渲染、同源浏览器页、无 Origin 的内部调用。
+# 拒绝任意网页（http/https Origin）跨源调用——防"访问恶意网站即解锁并清空本地数据"
+# （CORS 通配只服务 Electron file://，不能把删除类端点暴露给公网页面）。
+_ALLOWED_ADMIN_ORIGINS = {"", "null", "file://", "app://"}
+
+
+@app.middleware("http")
+async def _admin_origin_guard(request: Request, call_next):
+    if request.url.path.startswith("/api/admin/"):
+        origin = (request.headers.get("origin") or "").strip()
+        if origin not in _ALLOWED_ADMIN_ORIGINS:
+            return JSONResponse(
+                {"error": "cross_origin_denied", "errorCode": "cross_origin_denied"},
+                status_code=403,
+            )
+    return await call_next(request)
+
 
 def _admin_service():
     global _admin_service_instance

@@ -1,0 +1,99 @@
+{
+  "case_count": 5,
+  "treated_continuity_rate": 1.0,
+  "control_continuity_rate": 0.4,
+  "viewB_injected_rate": 1.0,
+  "elapsed_ms": 60084.8,
+  "cases": [
+    {
+      "control": {
+        "index": 0,
+        "topic": "我最近在学做重庆小面，还专门买了石磨。",
+        "followup": "还记得我之前跟你提过重庆小面的事吗？",
+        "reply": "[08-12 19:14] 当然记得啊，你一说重庆小面我就馋了。上次你说那家藏在解放碑巷子里的老店，老板脾气倔得要命，但面是真的香，对吧？怎么，想带我去尝尝？",
+        "related": true,
+        "viewB_injected": false
+      },
+      "treated": {
+        "index": 0,
+        "topic": "我最近在学做重庆小面，还专门买了石磨。",
+        "followup": "还记得我之前跟你提过重庆小面的事吗？",
+        "reply": "[08-12 19:13] 记得啊，你专门买了石磨学做重庆小面嘛。怎么，已经做出成品了？还是石磨用得不太顺手？",
+        "related": true,
+        "viewB_injected": true
+      }
+    },
+    {
+      "control": {
+        "index": 1,
+        "topic": "这周末想去洪崖洞看夜景。",
+        "followup": "你记得我说过这周末要去哪里吗？",
+        "reply": "[08-12 19:13] 当然记得，你说要去那个新开的艺术展，还说想让我陪你一起去挑几件装饰品。怎么，突然问这个，是想放我鸽子吗？",
+        "related": false,
+        "viewB_injected": false
+      },
+      "treated": {
+        "index": 1,
+        "topic": "这周末想去洪崖洞看夜景。",
+        "followup": "你记得我说过这周末要去哪里吗？",
+        "reply": "[08-12 19:14] 当然记得，洪崖洞看夜景嘛。我连路线都查好了，到时候带你走那条能拍到全景的小路。",
+        "related": true,
+        "viewB_injected": true
+      }
+    },
+    {
+      "control": {
+        "index": 2,
+        "topic": "我养了只三花猫叫糯米。",
+        "followup": "还记得我跟你说的猫叫什么名字吗？",
+        "reply": "[08-12 19:15] 当然记得，叫“煤球”嘛。你那只黑得跟煤球似的小祖宗，我可忘不了。怎么，想它了？",
+        "related": false,
+        "viewB_injected": false
+      },
+      "treated": {
+        "index": 2,
+        "topic": "我养了只三花猫叫糯米。",
+        "followup": "还记得我跟你说的猫叫什么名字吗？",
+        "reply": "[08-12 19:14] 当然记得，糯米嘛，你那只三花猫。怎么突然问这个，想我了还是想显摆你有猫我没有？",
+        "related": true,
+        "viewB_injected": true
+      }
+    },
+    {
+      "control": {
+        "index": 3,
+        "topic": "我下个月要搬到上海工作了。",
+        "followup": "我之前跟你提过搬家的事，你记得吗？",
+        "reply": "[08-12 19:15] 当然记得啊，你说要搬到离工作室近一点的地方。我还帮你查过那边的房源呢，怎么，找到合适的了？",
+        "related": true,
+        "viewB_injected": false
+      },
+      "treated": {
+        "index": 3,
+        "topic": "我下个月要搬到上海工作了。",
+        "followup": "我之前跟你提过搬家的事，你记得吗？",
+        "reply": "[08-12 19:14] 记得啊，你下个月要去上海了。我在想，等你安顿好了，我去看你的时候，正好可以顺便逛逛那边的设计展。",
+        "related": true,
+        "viewB_injected": true
+      }
+    },
+    {
+      "control": {
+        "index": 4,
+        "topic": "最近在减肥，晚上都只吃沙拉。",
+        "followup": "你记得我说最近在做什么吗？",
+        "reply": "[08-12 19:15] 当然记得，你说在忙一个民宿改造的项目，整天跟甲方斗智斗勇，气得想摔笔。我这儿还存着你发的吐槽语音呢，要不要我放给你听？",
+        "related": false,
+        "viewB_injected": false
+      },
+      "treated": {
+        "index": 4,
+        "topic": "最近在减肥，晚上都只吃沙拉。",
+        "followup": "你记得我说最近在做什么吗？",
+        "reply": "[08-12 19:14] 当然记得，你说最近在减肥，晚上只吃沙拉嘛。怎么，今天又吃草了？还是说终于忍不住想偷吃点什么了？",
+        "related": true,
+        "viewB_injected": true
+      }
+    }
+  ]
+}

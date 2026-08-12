@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>AERIE.ADMIN · 管理平台</title>
+  <link rel="stylesheet" href="styles/admin-window.css" />
+</head>
+<body class="adw-body">
+  <!-- 顶部状态栏（无外壳窗口：整条可拖拽 + 窗口控制） -->
+  <header class="adw-topbar">
+    <div class="adw-brand">AERIE.ADMIN</div>
+    <div class="adw-topbar-right">
+      <span id="adw-status" class="adw-status adw-status--locked" data-status="locked">未解锁</span>
+      <div class="adw-winctrl">
+        <button id="adw-min" class="adw-winctrl-btn" title="最小化" type="button" aria-label="最小化">─</button>
+        <button id="adw-close" class="adw-winctrl-btn adw-winctrl-btn--close" title="关闭" type="button" aria-label="关闭">✕</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 加载进度条（懒加载分阶段推进，默认隐藏） -->
+  <div id="adw-progress" class="adw-progress" hidden>
+    <div class="adw-progress-head">
+      <span id="adw-progress-label">加载中…</span>
+      <span id="adw-progress-pct">0%</span>
+    </div>
+    <div class="adw-progress-track">
+      <div id="adw-progress-bar" class="adw-progress-bar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- 6 页导航 -->
+  <nav class="adw-nav" aria-label="管理平台页面">
+    <button class="adw-nav-btn is-active" data-page="overview" type="button">概览</button>
+    <button class="adw-nav-btn" data-page="conversations" type="button">聊天记录</button>
+    <button class="adw-nav-btn" data-page="memory" type="button">记忆</button>
+    <button class="adw-nav-btn" data-page="kb" type="button">知识库</button>
+    <button class="adw-nav-btn" data-page="trash" type="button">回收站</button>
+    <button class="adw-nav-btn" data-page="audit" type="button">审计</button>
+  </nav>
+
+  <main class="adw-main">
+    <!-- 概览 -->
+    <section class="adw-page" data-page-panel="overview" aria-labelledby="adw-overview-title">
+      <div class="adw-card">
+        <div class="adw-card-head">
+          <h2 id="adw-overview-title" class="adw-card-title">概览</h2>
+          <button id="adw-unlock-btn" class="adw-btn adw-btn--primary" type="button">解锁管理</button>
+        </div>
+        <p id="adw-overview-hint" class="adw-muted">管理平台可删除聊天记录与记忆，操作进入回收站（默认保留 7 天）后仍可恢复。</p>
+        <div id="adw-overview-kpis" class="adw-kpis"></div>
+      </div>
+      <div class="adw-card">
+        <h3 class="adw-card-title">快捷操作</h3>
+        <div class="adw-actions">
+          <button id="adw-refresh-all" class="adw-btn" type="button">刷新全部</button>
+          <button id="adw-lock-btn" class="adw-btn" type="button">锁定管理</button>
+          <button id="adw-purge-expired" class="adw-btn" type="button">清理过期回收站</button>
+          <button id="adw-purge-all" class="adw-btn adw-btn--danger" type="button">立即清空回收站</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 聊天记录 -->
+    <section class="adw-page" data-page-panel="conversations" aria-labelledby="adw-conv-title" hidden>
+      <div class="adw-card">
+        <div class="adw-card-head">
+          <h2 id="adw-conv-title" class="adw-card-title">聊天记录</h2>
+          <div class="adw-card-tools">
+            <select id="adw-conv-channel" class="adw-select" aria-label="通道筛选">
+              <option value="">全部通道</option>
+              <option value="desktop">桌面</option>
+              <option value="qq">QQ</option>
+              <option value="mobile">移动端</option>
+            </select>
+            <button id="adw-conv-refresh" class="adw-btn" type="button">刷新</button>
+          </div>
+        </div>
+        <div class="adw-bulk">
+          <button id="adw-conv-trash" class="adw-btn adw-btn--danger" type="button">移入回收站</button>
+          <button id="adw-conv-restore" class="adw-btn" type="button">恢复</button>
+          <span id="adw-conv-selected" class="adw-muted">已选 0 项</span>
+        </div>
+        <div id="adw-conv-list" class="adw-list"></div>
+      </div>
+    </section>
+
+    <!-- 记忆 -->
+    <section class="adw-page" data-page-panel="memory" aria-labelledby="adw-mem-title" hidden>
+      <div class="adw-card">
+        <div class="adw-card-head">
+          <h2 id="adw-mem-title" class="adw-card-title">分层记忆</h2>
+          <div class="adw-card-tools">
+            <select id="adw-mem-layer" class="adw-select" aria-label="记忆层">
+              <option value="long_term">长期</option>
+              <option value="permanent">永久</option>
+            </select>
+            <label class="adw-check"><input id="adw-mem-trashed" type="checkbox" checked /> 含回收站</label>
+            <button id="adw-mem-refresh" class="adw-btn" type="button">刷新</button>
+          </div>
+        </div>
+        <div id="adw-mem-list" class="adw-list"></div>
+      </div>
+    </section>
+
+    <!-- 知识库 -->
+    <section class="adw-page" data-page-panel="kb" aria-labelledby="adw-kb-title" hidden>
+      <div class="adw-card">
+        <div class="adw-card-head">
+          <h2 id="adw-kb-title" class="adw-card-title">知识库</h2>
+          <div class="adw-card-tools">
+            <select id="adw-kb-category" class="adw-select" aria-label="知识分类">
+              <option value="">全部分类</option>
+              <option value="persona">persona</option>
+              <option value="user">user</option>
+              <option value="world">world</option>
+              <option value="task">task</option>
+            </select>
+            <button id="adw-kb-refresh" class="adw-btn" type="button">刷新</button>
+          </div>
+        </div>
+        <div id="adw-kb-list" class="adw-list"></div>
+      </div>
+    </section>
+
+    <!-- 回收站 -->
+    <section class="adw-page" data-page-panel="trash" aria-labelledby="adw-trash-title" hidden>
+      <div class="adw-card">
+        <div class="adw-card-head">
+          <h2 id="adw-trash-title" class="adw-card-title">回收站</h2>
+          <span class="adw-muted">保留期默认 7 天，过期自动物理清理（向量在清理期一并删除）</span>
+        </div>
+        <div id="adw-trash-summary" class="adw-kpis"></div>
+        <div id="adw-trash-list" class="adw-list"></div>
+      </div>
+    </section>
+
+    <!-- 审计 -->
+    <section class="adw-page" data-page-panel="audit" aria-labelledby="adw-audit-title" hidden>
+      <div class="adw-card">
+        <div class="adw-card-head">
+          <h2 id="adw-audit-title" class="adw-card-title">审计留痕</h2>
+          <button id="adw-audit-refresh" class="adw-btn" type="button">刷新</button>
+        </div>
+        <div id="adw-audit-list" class="adw-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="adw-modal" class="adw-modal" hidden>
+    <div class="adw-modal-box">
+      <h3 id="adw-modal-title">确认操作</h3>
+      <p id="adw-modal-text"></p>
+      <div class="adw-modal-actions">
+        <button id="adw-modal-cancel" class="adw-btn" type="button">取消</button>
+        <button id="adw-modal-ok" class="adw-btn adw-btn--danger" type="button">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/admin-window.js"></script>
+</body>
+</html>

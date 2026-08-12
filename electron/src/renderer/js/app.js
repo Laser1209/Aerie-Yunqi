@@ -194,6 +194,46 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // ── P4b 管理平台入口（懒加载窗口） ──────────────
+  // 主 logo 连点 5 次 / 关于页版权连点 3 次 / 关于页显式按钮，三路同效。
+  const adminApi = (window.aerie && window.aerie.admin) || null;
+  const openAdmin = () => { if (adminApi && adminApi.show) adminApi.show(); };
+
+  const logoEl = document.querySelector(".app-header-logo");
+  if (logoEl) {
+    logoEl.style.cursor = "pointer";
+    let logoClicks = 0, logoTimer = null;
+    logoEl.addEventListener("click", () => {
+      logoClicks += 1;
+      if (logoTimer) clearTimeout(logoTimer);
+      logoTimer = setTimeout(() => { logoClicks = 0; }, 2000);
+      logoEl.style.transform = "scale(0.9)";
+      setTimeout(() => { logoEl.style.transform = ""; }, 120);
+      if (logoClicks >= 5) {
+        logoClicks = 0;
+        openAdmin();
+      }
+    });
+  }
+
+  const copyrightEl = document.querySelector(".about-copyright");
+  if (copyrightEl) {
+    copyrightEl.style.cursor = "pointer";
+    let copyClicks = 0, copyTimer = null;
+    copyrightEl.addEventListener("click", () => {
+      copyClicks += 1;
+      if (copyTimer) clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => { copyClicks = 0; }, 2000);
+      if (copyClicks >= 3) {
+        copyClicks = 0;
+        openAdmin();
+      }
+    });
+  }
+
+  const adminBtn = document.getElementById("btn-admin-open");
+  if (adminBtn) adminBtn.addEventListener("click", openAdmin);
+
   // Double-click app-header to toggle maximize (Windows convention)
   const appHeader = document.getElementById("app-header");
   if (appHeader && winApi) {

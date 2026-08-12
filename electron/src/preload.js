@@ -151,6 +151,10 @@ contextBridge.exposeInMainWorld("aerie", {
     approveCandidate: (payload) => ipcRenderer.invoke("world-dashboard:approve-candidate", payload || {}),
     previewCreative: (payload) => ipcRenderer.invoke("world-dashboard:preview-creative", payload || {}),
   },
+  admin: {
+    // P4b 管理平台（懒加载窗口，入口连点解锁后打开）
+    show: () => ipcRenderer.invoke("admin:show"),
+  },
   startup: {
     get: () => ipcRenderer.invoke("startup:get"),
     set: (options) => ipcRenderer.invoke("startup:set", options || {}),

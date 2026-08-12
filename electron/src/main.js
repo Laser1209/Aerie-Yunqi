@@ -665,6 +665,15 @@ function healthCheck() {
   });
 }
 
+// P4b: 管理平台 token（后端 unlock 后落 BACKEND_DATA_DIR/admin_unlock.token）。
+function getAdminToken() {
+  try {
+    return fs.readFileSync(path.join(BACKEND_DATA_DIR, "admin_unlock.token"), "utf-8").trim();
+  } catch (_) {
+    return "";
+  }
+}
+
 function apiRequest(opts) {
   return new Promise((resolve, reject) => {
     const url = new URL(PY_BACKEND + (opts.path || "/"));
@@ -674,6 +683,9 @@ function apiRequest(opts) {
       : { "Content-Type": "application/json" };
     if (opts.internal === true) {
       headers["X-Aerie-Main-Token"] = MAIN_PROCESS_TOKEN;
+    }
+    if (opts.admin === true) {
+      headers["X-Aerie-Admin-Token"] = getAdminToken();
     }
     const options = {
       hostname: "127.0.0.1",
@@ -1124,6 +1136,35 @@ function openWorldDashboardWindow() {
   return worldDashboardWindow;
 }
 
+// ── P4b 管理平台独立窗口（懒创建：首次入口点击才实例化） ──
+let adminWindow = null;
+
+function openAdminWindow() {
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    adminWindow.show();
+    adminWindow.focus();
+    return adminWindow;
+  }
+  adminWindow = new BrowserWindow({
+    width: 920,
+    height: 720,
+    minWidth: 760,
+    minHeight: 560,
+    title: "AERIE.ADMIN · 管理平台",
+    backgroundColor: "#ffffff",
+    frame: false,
+    icon: ICON_PATH,
+    webPreferences: {
+      preload: path.join(__dirname, "admin-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  adminWindow.loadFile(path.join(__dirname, "renderer", "admin-window.html"));
+  adminWindow.on("closed", () => { adminWindow = null; });
+  return adminWindow;
+}
+
 // ── Dynamic Island Mouse Input ──────────────
 let _islandIgnoreState = false;
 let _islandExpanded = false;
@@ -1352,6 +1393,33 @@ ipcMain.handle("world-dashboard:hide", async () => {
     worldDashboardWindow.close();
   }
   return await worldDashboardHost.hide();
+});
+
+// ── P4b 管理平台 IPC（懒加载；路径/method 双重白名单） ──
+ipcMain.handle("admin:api", async (_event, input) => {
+  const req = input && typeof input === "object" ? input : {};
+  const method = String(req.method || "GET").toUpperCase();
+  const path = String(req.path || "");
+  if (!path.startsWith("/api/admin/")) return { ok: false, error: "bad_path" };
+  if (!["GET", "POST", "PUT", "DELETE"].includes(method)) {
+    return { ok: false, error: "bad_method" };
+  }
+  try {
+    const r = await apiRequest({ method, path, body: req.body, admin: true });
+    return { ok: true, status: r.status, data: r.data };
+  } catch (err) {
+    return {
+      ok: false,
+      status: (err && err.status) || 0,
+      error: String((err && err.message) || err),
+      data: err && err.data,
+    };
+  }
+});
+
+ipcMain.handle("admin:show", async () => {
+  openAdminWindow();
+  return { ok: true };
 });
 
 ipcMain.handle("attachments:open", async (_event, attachmentId) => {

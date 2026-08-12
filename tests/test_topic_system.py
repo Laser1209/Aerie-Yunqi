@@ -330,23 +330,18 @@ class TestDispatchPushTopicMode:
 
 # ── 提示词框架 L0.5 话题认知层（P0d）───────────────────────────
 from core.context_builder import ContextBuilder  # noqa: E402
-from core.feature_flags import FeatureFlags  # noqa: E402
 
 
 class TestTopicCognitionLayer:
-    def test_disabled_by_default(self, monkeypatch):
-        """topic_tracking_v1 默认关闭 → 不注入话题段。"""
-        monkeypatch.setattr(FeatureFlags, "is_enabled", lambda self, f: False)
+    def test_injects_active_topic_by_default(self):
+        """发布闸门 flag 已删除 → FULL 模式有活跃话题即注入话题事实段。"""
         cb = ContextBuilder()
         cb.set_topic_provider(lambda: {"subject": "工作", "turn_count": 3})
         msgs = cb.build(1, "你好", "FULL", history_msgs=[])
-        assert "【当前话题】" not in msgs[0]["content"]
+        assert "【当前话题】" in msgs[0]["content"]
 
-    def test_injects_active_topic_when_enabled(self, monkeypatch):
-        """flag 开启 + 有活跃话题 → 注入话题事实段。"""
-        monkeypatch.setattr(
-            FeatureFlags, "is_enabled", lambda self, f: f == "topic_tracking_v1"
-        )
+    def test_injects_active_topic_when_provided(self):
+        """有活跃话题 → 注入话题事实段。"""
         cb = ContextBuilder()
         cb.set_topic_provider(lambda: {"subject": "看书", "turn_count": 3})
         msgs = cb.build(1, "你看到哪了", "FULL", history_msgs=[])
@@ -356,31 +351,22 @@ class TestTopicCognitionLayer:
         # 只注入事实，不注入判定指令
         assert "终止判定" not in system
 
-    def test_no_inject_when_no_topic(self, monkeypatch):
+    def test_no_inject_when_no_topic(self):
         """无活跃话题 → 不注入。"""
-        monkeypatch.setattr(
-            FeatureFlags, "is_enabled", lambda self, f: f == "topic_tracking_v1"
-        )
         cb = ContextBuilder()
         cb.set_topic_provider(lambda: None)
         msgs = cb.build(1, "你好", "FULL", history_msgs=[])
         assert "【当前话题】" not in msgs[0]["content"]
 
-    def test_basic_mode_skips_topic_layer(self, monkeypatch):
+    def test_basic_mode_skips_topic_layer(self):
         """BASIC 模式不注入话题层。"""
-        monkeypatch.setattr(
-            FeatureFlags, "is_enabled", lambda self, f: f == "topic_tracking_v1"
-        )
         cb = ContextBuilder()
         cb.set_topic_provider(lambda: {"subject": "看书", "turn_count": 3})
         msgs = cb.build(1, "你好", "BASIC", history_msgs=[])
         assert "【当前话题】" not in msgs[0]["content"]
 
-    def test_provider_error_safe(self, monkeypatch):
+    def test_provider_error_safe(self):
         """provider 抛异常 → 安全跳过不阻断。"""
-        monkeypatch.setattr(
-            FeatureFlags, "is_enabled", lambda self, f: f == "topic_tracking_v1"
-        )
 
         def boom():
             raise RuntimeError("no topic")

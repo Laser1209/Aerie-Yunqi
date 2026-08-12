@@ -60,7 +60,7 @@ active ──收尾词命中 / 沉默 ≥24h──▶ closed ──(再造窗口
 
 ## L0.5 话题认知层
 
-[context_builder.py](file:///e:/Agent_reply/core/context_builder.py) `_build_topic_cognition`：FULL/AUTO + `topic_tracking_v1` flag 开启时注入"【当前话题】围绕「subject」（已聊 N 轮）"，**只注入事实不注入指令**；`set_topic_provider` 由 companion 注入（`_topic_for_context`）。
+[context_builder.py](file:///e:/Agent_reply/core/context_builder.py) `_build_topic_cognition`：FULL/AUTO + provider 有活跃话题时注入"【当前话题】围绕「subject」（已聊 N 轮）"，**只注入事实不注入指令**；`set_topic_provider` 由 companion 注入（`_topic_for_context`）。**发布闸门 flag `topic_tracking_v1` 已于 P0 验收后删除（2026-08-13）**，不再受开关门控。
 
 ## 文件
 

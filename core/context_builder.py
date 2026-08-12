@@ -541,9 +541,9 @@ class ContextBuilder:
         # L1 · 核心身份（所有模式）
         parts.append(self._build_l1_identity(persona))
 
-        # L0.5 · 话题认知层（FULL/AUTO，仅 topic_tracking_v1 开启 + provider 可用）
+        # L0.5 · 话题认知层（FULL/AUTO，provider 有活跃话题时注入；发布闸门 flag 已删除）
         # 只注入"当前活跃话题"事实，不注入判定指令（避免过度约束）。
-        if route_mode in ("FULL", "AUTO") and self._topic_tracking_enabled():
+        if route_mode in ("FULL", "AUTO"):
             topic_cog = self._build_topic_cognition()
             if topic_cog:
                 parts.append(topic_cog)
@@ -630,15 +630,6 @@ class ContextBuilder:
                 if kw in t:
                     return f"层级[表情包sticker] 命中关键词[{kw}] 消息[{t[:40]}]"
         return None
-
-    def _topic_tracking_enabled(self) -> bool:
-        """读取 topic_tracking_v1 开关，默认关闭（发布闸门语义）。"""
-        try:
-            from core.feature_flags import FeatureFlags
-            return bool(FeatureFlags().is_enabled("topic_tracking_v1"))
-        except Exception:
-            logger.debug("读取 topic_tracking_v1 失败，默认关闭")
-            return False
 
     def _build_topic_cognition(self) -> str:
         """L0.5 · 话题认知层：注入当前活跃话题事实（只事实不指令）。"""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -7,6 +8,8 @@ from typing import Any, Callable, Iterator, Sequence
 
 from core._hist_utils import hist_label as _hist_label
 from core.conversation_repository import ConversationRepository
+
+logger = logging.getLogger(__name__)
 
 
 class SummaryConflict(RuntimeError):
@@ -252,7 +255,8 @@ class ContextAssembler:
         summaries: ConversationSummaryRepository,
         *,
         max_total_chars: int = 16_000,
-        recent_message_limit: int = 24,
+        recent_turn_limit: int = 8,
+        max_turn_chars: int = 6_000,
         max_summary_chars: int = 3_500,
         max_memory_chars: int = 2_000,
         max_attachment_chars: int = 4_000,
@@ -260,7 +264,10 @@ class ContextAssembler:
         self.conversations = conversations
         self.summaries = summaries
         self.max_total_chars = max(2000, int(max_total_chars))
-        self.recent_message_limit = max(2, min(int(recent_message_limit), 200))
+        # 热窗口按"完整轮次"计算：保留最近 N 个 turn，每个 turn 内所有消息全量保留
+        self.recent_turn_limit = max(1, min(int(recent_turn_limit), 50))
+        # L0 热窗口字符硬上限（弹性兜底）：从最近向远累加，超限即截断
+        self.max_turn_chars = max(0, int(max_turn_chars))
         self.max_summary_chars = max(0, int(max_summary_chars))
         self.max_memory_chars = max(0, int(max_memory_chars))
         self.max_attachment_chars = max(0, int(max_attachment_chars))
@@ -288,13 +295,15 @@ class ContextAssembler:
                 channel_account_id=channel_account_id,
                 user_id=user_id,
             )
+        # 候选取回条数：按平均每 turn 最多 16 条子消息估算，确保覆盖 recent_turn_limit 个完整 turn
+        candidate_limit = max(self.recent_turn_limit * 16, 128)
         page = self.conversations.history_page(
             actor_id=actor_id,
             channel=channel,
             channel_account_id=channel_account_id,
             user_id=user_id,
             conversation_id=resolved_id,
-            limit=self.recent_message_limit,
+            limit=candidate_limit,
         )
         summary = self.summaries.get(resolved_id)
 
@@ -352,9 +361,11 @@ class ContextAssembler:
         system = "\n\n".join(system_parts)
         budget = max(self.max_total_chars - len(system) - len(current), 0)
 
-        history: list[dict[str, str]] = []
-        used = 0
-        for item in reversed(page["items"]):
+        # ── L0 热窗口：按 turn_id 分组，保留最近 recent_turn_limit 个完整 turn ──
+        # 每条消息按 sequence 全量保留；max_turn_chars 为弹性兜底上限，
+        # 从最近轮次向远累加，超限即截断（优先保最近内容）。
+        groups: list[tuple[str, list[dict[str, Any]]]] = []
+        for item in page["items"]:
             role = item.get("role")
             if role not in {"user", "assistant"}:
                 continue
@@ -362,16 +373,56 @@ class ContextAssembler:
             if not content:
                 continue
             label = _hist_label(item)
-            entry_len = len(label) + len(content)
-            if used + entry_len > budget:
-                continue
-            history.append({"role": role, "content": label + content})
-            used += entry_len
+            entry: dict[str, Any] = {
+                "role": role,
+                "content": label + content,
+                "_len": len(label) + len(content),
+            }
+            tid = str(item.get("turn_id") or "")
+            # 无 turn_id 的消息（legacy 历史）每条视为独立轮次组，
+            # 避免多条无 turn_id 消息合并成一组后整组超限被丢弃
+            if tid and groups and groups[-1][0] == tid:
+                groups[-1][1].append(entry)
+            else:
+                groups.append((tid, [entry]))
+
+        history: list[dict[str, str]] = []
+        used = 0
+        l0_chars = 0
+        l0_turns_included = 0
+        l0_truncated = False
+        for tid, entries in reversed(groups):
+            group_chars = sum(e["_len"] for e in entries)
+            # 只保留最近 recent_turn_limit 个完整 turn
+            if l0_turns_included >= self.recent_turn_limit:
+                break
+            # L0 token 弹性上限：从最近向远累加，超限即截断
+            if l0_chars + group_chars > self.max_turn_chars:
+                l0_truncated = True
+                break
+            if used + group_chars > budget:
+                break
+            history.extend(entries)
+            l0_chars += group_chars
+            l0_turns_included += 1
+            used += group_chars
         history.reverse()
+
         messages = [{"role": "system", "content": system}]
         messages.extend(history)
         messages.append({"role": "user", "content": current})
         total_chars = sum(len(item["content"]) for item in messages)
+
+        # ── 监控指标（§6.1.1）：每次组装输出一条结构化日志 ──
+        summary_chars = len(self._clip(summary["summary"], self.max_summary_chars)) if summary and summary.get("summary") else 0
+        memory_chars = len(memory_text)
+        logger.info(
+            "context_assemble total_chars=%d l0_chars=%d turns=%d/%d "
+            "l0_truncated=%s summary_chars=%d memory_chars=%d channel=%s user_id=%d",
+            total_chars, l0_chars, l0_turns_included, self.recent_turn_limit,
+            l0_truncated, summary_chars, memory_chars, channel, user_id,
+        )
+
         return ContextAssembly(
             messages=messages,
             audit={
@@ -379,8 +430,12 @@ class ContextAssembler:
                 "total_chars": total_chars,
                 "max_total_chars": self.max_total_chars,
                 "history_messages": len(history),
+                "l0_turns_included": l0_turns_included,
+                "l0_turns_requested": self.recent_turn_limit,
+                "l0_truncated": l0_truncated,
+                "l0_chars": l0_chars,
                 "summary_revision": int(summary["revision"]) if summary else 0,
-                "memory_chars": len(memory_text),
+                "memory_chars": memory_chars,
                 "attachment_chars": len(attachment_text),
                 "bounded": total_chars <= self.max_total_chars,
             },

@@ -31,7 +31,7 @@ class RecordingAttachmentService:
             for attachment_id in attachment_ids
         ]
 
-    def context_snippets(self, attachment_ids, *, max_chars):
+    def context_snippets(self, attachment_ids, *, max_chars, query=None):
         if self.snippet_error:
             raise RuntimeError("parser unavailable")
         return ["[sentinel.txt] ATTACHMENT_SENTINEL"][:max_chars]

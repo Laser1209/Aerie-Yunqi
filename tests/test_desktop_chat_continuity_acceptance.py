@@ -165,7 +165,7 @@ def test_acceptance_200_turn_summary_retrieval_is_bounded_and_keeps_early_fact()
         repository,
         summaries,
         max_total_chars=24_000,
-        recent_message_limit=24,
+        recent_turn_limit=8,
     )
     context = assembler.assemble(
         system_prompt="synthetic system " + "s" * 5_800,

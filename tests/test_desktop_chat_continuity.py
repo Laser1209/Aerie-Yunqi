@@ -243,7 +243,7 @@ def test_summary_refresh_and_context_assembly_are_bounded():
         repository,
         summaries,
         max_total_chars=3500,
-        recent_message_limit=20,
+        recent_turn_limit=8,
     )
     result = assembler.assemble(
         system_prompt="system " + "s" * 5000,

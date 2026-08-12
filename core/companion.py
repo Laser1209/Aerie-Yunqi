@@ -488,7 +488,8 @@ class Companion:
             self.conversation_repository,
             self.conversation_summary_repository,
             max_total_chars=24_000,
-            recent_message_limit=24,
+            recent_turn_limit=8,
+            max_turn_chars=6_000,
         )
 
         self.data_path = _resolve_companion_data_path(self.settings)

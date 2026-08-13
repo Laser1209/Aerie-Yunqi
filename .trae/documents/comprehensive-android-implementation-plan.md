@@ -511,11 +511,11 @@ deadline: 2026-09-01
   - [x] 日志规范落地（§3.2.9）：分级（debug/info/warn/error）+ 脱敏 + 落盘轮转（`logs/` ≤5MB × 3 份）
   - [x] L1 自检：`flutter analyze` 零告警；`flutter test` 默认测试通过
 
-- [ ] **T1.2 网络层（并联支路 A）**
-  - [ ] 后端 `openapi.json` → `openapi_sdk_gen` 生成 `lib/gen/`（auth/chat/file/readonly）
-  - [ ] `mobile_gateway_client.dart`：baseUrl 策略（Debug 127.0.0.1 / Release https://aerie.etta.top）
-  - [ ] 鉴权拦截器（401 单次刷新互斥重试）+ `ApiResult<T>` 错误映射
-  - [ ] L1 自检：网络层单测（MockWebServer/dio 拦截器 mock）通过
+- [x] **T1.2 网络层（并联支路 A）**
+  - [x] 后端 `openapi.json` → `openapi_sdk_gen` 生成 `lib/gen/`（auth/chat/file/readonly）
+  - [x] `mobile_gateway_client.dart`：baseUrl 策略（Debug 127.0.0.1 / Release https://aerie.etta.top）
+  - [x] 鉴权拦截器（401 单次刷新互斥重试）+ `ApiResult<T>` 错误映射
+  - [x] L1 自检：网络层单测（dio 拦截器 mock）通过
 
 - [ ] **T1.3 本地存储（并联支路 B）**
   - [ ] `auth_store.dart`（flutter_secure_storage + allowBackup 排除）

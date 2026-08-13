@@ -2603,16 +2603,16 @@ class Companion:
             ]
             for content in seeds:
                 try:
-                    # 幂等：按内容前缀检查是否已存在同名种子（避免语义相近误判跳过）。
+                    # 幂等：按 content 前缀 + source 在长期记忆表直接查重。
+                    # 不能依赖向量检索（search）：Chroma 集合状态异常或 limit
+                    # 截断时可能漏命中已存在的种子，导致每次启动重复播种。
                     probe = content[:12]
-                    existing = await self._layered_memory.search(
-                        user_id=0, query=probe, limit=5,
+                    existing = self.db.query_one(
+                        "SELECT id FROM long_term_memory "
+                        "WHERE user_id = ? AND source = ? AND content LIKE ? LIMIT 1",
+                        (0, "identity_seed", probe + "%"),
                     )
-                    if any(
-                        (r.item.source or "") == "identity_seed"
-                        and probe in (r.item.content or "")
-                        for r in existing
-                    ):
+                    if existing:
                         continue
                     await self._layered_memory.store(
                         user_id=0, content=content, importance=10.0,

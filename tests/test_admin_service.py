@@ -157,6 +157,39 @@ def test_overview_excludes_trashed_messages_from_active_count(tmp_path, admin_db
     assert ov["conversations"] == 1  # 会话仍存在（DISTINCT conversation_id）
 
 
+# ── 单条消息级操作（精确到每一条的编辑/软删/恢复） ─────────
+def test_message_level_list_edit_trash_restore(tmp_path, admin_db):
+    service = _make_service(tmp_path, admin_db)
+    _seed_conversation(admin_db, "conv-a", "desktop", content="原始消息")
+
+    msgs = service.list_messages("conv-a")
+    assert msgs["total"] == 1
+    mid = msgs["items"][0]["message_id"]
+
+    # 编辑正文
+    row = service.update_message(mid, "修改后消息")
+    assert row is not None and row["content"] == "修改后消息"
+
+    # 软删单条消息
+    assert service.trash_message(mid)
+    msgs2 = service.list_messages("conv-a")
+    assert msgs2["items"][0]["deleted_at"] is not None
+
+    # 恢复单条消息
+    assert service.restore_message(mid)
+    msgs3 = service.list_messages("conv-a")
+    assert msgs3["items"][0]["deleted_at"] is None
+
+
+def test_list_messages_excludes_trashed_when_filtered(tmp_path, admin_db):
+    service = _make_service(tmp_path, admin_db)
+    _seed_conversation(admin_db, "conv-a", "desktop", content="a")
+    mid = service.list_messages("conv-a")["items"][0]["message_id"]
+    service.trash_message(mid)
+    assert service.list_messages("conv-a", include_trashed=False)["total"] == 0
+    assert service.list_messages("conv-a", include_trashed=True)["total"] == 1
+
+
 # ── 解锁门闩 ──────────────────────────────────────────────
 def test_unlock_latch_flow(tmp_path, admin_db):
     service = _make_service(tmp_path, admin_db)

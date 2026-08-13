@@ -99,13 +99,13 @@
   }
 
   // ── 概览 ───────────────────────────────────────────────
-  // 浏览器模式：门闩已解锁但本地无 token 时（如 Electron 先解锁、再开浏览器），
-  // 幂等重新 unlock 取 token，避免受保护接口 403 → KPI 误显 0。
-  async function ensureAdminToken() {
+  // 浏览器模式：门闩已解锁但本地无 token，或 token 已失效（如后端重启后 token 变化）时，
+  // 幂等重新 unlock 取新 token，避免受保护接口 403 → KPI 误显 0。
+  async function ensureAdminToken(force) {
     if (bridge) return;
     const status = await admin("GET", "/api/admin/status");
     if (!(status.ok && status.data && status.data.unlocked)) return;
-    if (!sessionStorage.getItem("aerie_admin_token")) {
+    if (force || !sessionStorage.getItem("aerie_admin_token")) {
       const r = await admin("POST", "/api/admin/unlock", {});
       if (r.ok && r.data && r.data.token) {
         sessionStorage.setItem("aerie_admin_token", r.data.token);
@@ -120,7 +120,12 @@
     setUnlocked(unlocked);
 
     // 用 overview 端点取真实总量（SQL COUNT），非列表分页截断长度。
-    const ov = await admin("GET", "/api/admin/overview");
+    let ov = await admin("GET", "/api/admin/overview");
+    if (!ov.ok && ov.status === 403 && !bridge) {
+      // token 失效 → 强制重新 unlock 并重试一次
+      await ensureAdminToken(true);
+      ov = await admin("GET", "/api/admin/overview");
+    }
     const k = (ov.ok && ov.data) ? ov.data : {};
     els.overviewKpis.textContent = "";
     els.overviewKpis.appendChild(kpi("会话", fmtInt(k.conversations)));
@@ -128,6 +133,15 @@
     els.overviewKpis.appendChild(kpi("记忆", fmtInt(k.memory)));
     els.overviewKpis.appendChild(kpi("回收站消息", fmtInt(k.trashed_messages)));
     els.overviewKpis.appendChild(kpi("审计", fmtInt(k.audit)));
+    els.overviewKpis.appendChild(kpi("总 tokens", fmtTokens(k.total_tokens)));
+  }
+
+  function fmtTokens(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "--";
+    if (n >= 1e8) return (n / 1e8).toFixed(2) + "亿";
+    if (n >= 1e4) return (n / 1e4).toFixed(1) + "万";
+    return String(Math.round(n));
   }
 
   function kpi(label, value, suffix) {
@@ -192,10 +206,83 @@
       const meta = document.createElement("span");
       meta.className = "adw-row-meta";
       meta.textContent = "共 " + c.message_count + " 条" + (Number(c.trashed_count) > 0 ? " · 回收站 " + c.trashed_count : "");
+      const ops = document.createElement("span");
+      ops.className = "adw-row-ops";
+      const msgBtn = btn("消息", "adw-btn--small", () => toggleMessages(row, c.conversation_id));
+      ops.appendChild(msgBtn);
       row.appendChild(check);
       row.appendChild(main);
       row.appendChild(meta);
+      row.appendChild(ops);
       els.convList.appendChild(row);
+    });
+  }
+
+  // 展开/收起某会话的单条消息列表（惰性加载，每条可编辑/软删/恢复）
+  async function toggleMessages(row, conversationId) {
+    const existing = row.querySelector(".adw-msg-wrap");
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const wrap = document.createElement("div");
+    wrap.className = "adw-msg-wrap";
+    const loading = document.createElement("p");
+    loading.className = "adw-empty";
+    loading.textContent = "加载中…";
+    wrap.appendChild(loading);
+    row.appendChild(wrap);
+
+    const r = await admin("GET", "/api/admin/conversations/" + encodeURIComponent(conversationId) + "/messages?limit=200&include_trashed=true");
+    const msgs = (r.ok && r.data && r.data.items) || [];
+    wrap.textContent = "";
+    if (!msgs.length) {
+      wrap.appendChild(empty("该会话暂无消息"));
+      return;
+    }
+    msgs.forEach((m) => {
+      const mrow = document.createElement("div");
+      mrow.className = "adw-msg-row" + (m.deleted_at ? " adw-msg-row--trashed" : "");
+      const head = document.createElement("span");
+      head.className = "adw-msg-head";
+      head.textContent = (m.role === "assistant" ? "伊塔" : "你") + " · " + (m.created_at || "");
+      const body = document.createElement("span");
+      body.className = "adw-msg-body";
+      body.textContent = String(m.content || "");
+      const mops = document.createElement("span");
+      mops.className = "adw-row-ops";
+      if (!m.deleted_at) {
+        mops.appendChild(btn("编辑", "adw-btn--small", () => editMessage(m, mrow, conversationId)));
+        mops.appendChild(btn("删除", "adw-btn--small adw-btn--danger", () => {
+          confirmBox("删除消息", "该消息将进入回收站，可恢复。确认？", async () => {
+            await admin("DELETE", "/api/admin/messages/" + encodeURIComponent(m.message_id));
+            toggleMessages(row, conversationId);
+            toggleMessages(row, conversationId); // 重新展开刷新
+          });
+        }));
+      } else {
+        mops.appendChild(btn("恢复", "adw-btn--small", async () => {
+          await admin("POST", "/api/admin/messages/" + encodeURIComponent(m.message_id) + "/restore");
+          toggleMessages(row, conversationId);
+          toggleMessages(row, conversationId);
+        }));
+      }
+      mrow.appendChild(head);
+      mrow.appendChild(body);
+      mrow.appendChild(mops);
+      wrap.appendChild(mrow);
+    });
+  }
+
+  function editMessage(m, mrow, conversationId) {
+    const content = prompt("编辑消息内容：", String(m.content || ""));
+    if (content === null || content === String(m.content || "")) return;
+    admin("PUT", "/api/admin/messages/" + encodeURIComponent(m.message_id), { content }).then((r) => {
+      if (r.ok) {
+        m.content = content;
+        mrow.querySelector(".adw-msg-body").textContent = content;
+        loadOverview();
+      }
     });
   }
 

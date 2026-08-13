@@ -230,6 +230,7 @@
   background: var(--adw-list);
   border: 1px solid var(--adw-card-border);
   border-radius: 8px;
+  flex-wrap: wrap;
 }
 .adw-row--trashed { opacity: 0.62; }
 .adw-row-check { flex: 0 0 auto; }
@@ -250,6 +251,35 @@
 }
 .adw-row-meta { font-size: 11px; color: var(--adw-muted); flex: 0 0 auto; }
 .adw-row-ops { display: flex; gap: 6px; flex: 0 0 auto; }
+/* 会话内单条消息列表（精确到每一条的编辑） */
+.adw-msg-wrap {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-left: 26px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--adw-card-border);
+}
+.adw-msg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  background: var(--adw-bg);
+  border: 1px solid var(--adw-card-border);
+  border-radius: 6px;
+}
+.adw-msg-row--trashed { opacity: 0.55; }
+.adw-msg-head { font-size: 10px; color: var(--adw-muted); }
+.adw-msg-body {
+  font-size: 12px;
+  color: var(--adw-text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.adw-msg-row .adw-row-ops { margin-top: 3px; }
 .adw-empty { font-size: 12px; color: var(--adw-muted); text-align: center; padding: 16px 0; }
 .adw-bulk { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .adw-state-content {

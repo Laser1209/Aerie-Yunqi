@@ -2717,6 +2717,61 @@ async def admin_conversations(
     )
 
 
+@app.get("/api/admin/conversations/{conversation_id}/messages")
+async def admin_conversation_messages(
+    request: Request,
+    conversation_id: str,
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    include_trashed: bool = Query(default=True),
+) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    return JSONResponse(
+        _admin_service().list_messages(
+            conversation_id=conversation_id,
+            limit=limit,
+            offset=offset,
+            include_trashed=include_trashed,
+        )
+    )
+
+
+@app.put("/api/admin/messages/{message_id}")
+async def admin_message_update(request: Request, message_id: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json", "errorCode": "invalid_json"}, status_code=400)
+    content = body.get("content") if isinstance(body, dict) else None
+    if not isinstance(content, str) or not content.strip():
+        return JSONResponse({"error": "invalid_content", "errorCode": "invalid_content"}, status_code=400)
+    row = _admin_service().update_message(message_id, content)
+    if not row:
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse(row)
+
+
+@app.delete("/api/admin/messages/{message_id}")
+async def admin_message_delete(request: Request, message_id: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    if not _admin_service().trash_message(message_id):
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse({"status": "ok"})
+
+
+@app.post("/api/admin/messages/{message_id}/restore")
+async def admin_message_restore(request: Request, message_id: str) -> Response:
+    if not _require_admin(request):
+        return _admin_denied()
+    if not _admin_service().restore_message(message_id):
+        return JSONResponse({"error": "not_found", "errorCode": "not_found"}, status_code=404)
+    return JSONResponse({"status": "ok"})
+
+
 @app.post("/api/admin/conversations/trash")
 async def admin_conversations_trash(request: Request) -> Response:
     if not _require_admin(request):
@@ -2768,12 +2823,8 @@ async def admin_memory_list(
 ) -> Response:
     if not _require_admin(request):
         return _admin_denied()
-    user_id = _primary_user_id(get_companion())
-    if user_id is None:
-        return JSONResponse({"error": "no_primary_user", "errorCode": "no_primary_user"}, status_code=400)
     return JSONResponse(
         _admin_service().list_memory(
-            user_id=user_id,
             layer=layer,
             limit=limit,
             offset=offset,

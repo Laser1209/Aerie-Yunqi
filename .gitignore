@@ -58,6 +58,7 @@ uploads/
 .env
 .env.local
 .env.*.local
+data/admin_unlock.token
 
 # Node / Electron
 node_modules/

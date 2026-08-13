@@ -160,6 +160,7 @@ class AdminService:
                 "memory": 0,
                 "trashed_messages": 0,
                 "audit": 0,
+                "total_tokens": 0,
             }
 
         def _count(sql: str) -> int:
@@ -184,6 +185,9 @@ class AdminService:
                 "SELECT COUNT(*) AS n FROM messages WHERE deleted_at IS NOT NULL"
             ),
             "audit": _count("SELECT COUNT(*) AS n FROM audit_log"),
+            "total_tokens": _count(
+                "SELECT COALESCE(SUM(total_tokens), 0) AS n FROM token_usage"
+            ),
         }
 
     # ── 聊天记录：列表 ───────────────────────────────────
@@ -241,6 +245,85 @@ class AdminService:
         except Exception:
             logger.exception("list conversations failed")
             return {"items": [], "total": 0}
+
+    # ── 聊天记录：单条消息（精确到每一条的查看/编辑/软删/恢复） ─
+    def list_messages(
+        self,
+        conversation_id: str,
+        limit: int = 200,
+        offset: int = 0,
+        include_trashed: bool = True,
+    ) -> dict[str, Any]:
+        if self._db is None:
+            return {"items": [], "total": 0}
+        try:
+            where = "conversation_id = ?"
+            params: list[Any] = [str(conversation_id)]
+            if not include_trashed:
+                where += " AND deleted_at IS NULL"
+            total_rows = self._db.query(
+                f"SELECT COUNT(*) AS n FROM messages WHERE {where}",
+                tuple(params),
+            )
+            total = int(total_rows[0]["n"]) if total_rows else 0
+            rows = self._db.query(
+                f"SELECT * FROM messages WHERE {where} "
+                "ORDER BY created_at DESC, sequence DESC, rowid DESC LIMIT ? OFFSET ?",
+                tuple(params + [int(limit), int(offset)]),
+            )
+            return {"items": rows, "total": total}
+        except Exception:
+            logger.exception("list messages failed")
+            return {"items": [], "total": 0}
+
+    def update_message(self, message_id: str, content: str) -> Optional[dict[str, Any]]:
+        """编辑单条消息正文（只改 content，其余字段不变）。"""
+        if self._db is None:
+            return None
+        try:
+            self._db.execute(
+                "UPDATE messages SET content = ? WHERE message_id = ?",
+                (str(content), str(message_id)),
+            )
+            row = self._db.query_one(
+                "SELECT * FROM messages WHERE message_id = ?",
+                (str(message_id),),
+            )
+            self.audit("update_message", str(message_id))
+            return row
+        except Exception:
+            logger.exception("update message failed")
+            return None
+
+    def trash_message(self, message_id: str) -> bool:
+        if self._db is None:
+            return False
+        try:
+            n = self._db.execute(
+                "UPDATE messages SET deleted_at = ? WHERE message_id = ? AND deleted_at IS NULL",
+                (_now_str(), str(message_id)),
+            ).rowcount
+            if n:
+                self.audit("trash_message", str(message_id))
+            return bool(n)
+        except Exception:
+            logger.exception("trash message failed")
+            return False
+
+    def restore_message(self, message_id: str) -> bool:
+        if self._db is None:
+            return False
+        try:
+            n = self._db.execute(
+                "UPDATE messages SET deleted_at = NULL WHERE message_id = ? AND deleted_at IS NOT NULL",
+                (str(message_id),),
+            ).rowcount
+            if n:
+                self.audit("restore_message", str(message_id))
+            return bool(n)
+        except Exception:
+            logger.exception("restore message failed")
+            return False
 
     # ── 聊天记录：级联软删 / 恢复 / 清空 ─────────────────
     def trash_conversations(self, conversation_ids: list[str]) -> dict[str, Any]:
@@ -436,7 +519,7 @@ class AdminService:
     # ── 分层记忆（long_term_memory 表维度） ──────────────
     def list_memory(
         self,
-        user_id: int,
+        user_id: Optional[int] = None,
         layer: str = "long_term",
         limit: int = 100,
         offset: int = 0,
@@ -445,17 +528,25 @@ class AdminService:
         if self._db is None:
             return {"items": [], "total": 0}
         try:
-            base = "SELECT * FROM long_term_memory WHERE user_id = ?"
-            params: list[Any] = [int(user_id)]
+            # 管理平台为系统级视角：默认列出全部记忆（含 persona 的 user_id=0 记录），
+            # 仅在显式传入 user_id 时按用户过滤。
+            base = "SELECT * FROM long_term_memory"
+            where: list[str] = []
+            params: list[Any] = []
+            if user_id is not None:
+                where.append("user_id = ?")
+                params.append(int(user_id))
             if layer in ("permanent",):
-                base += " AND memory_type = 'permanent'"
+                where.append("memory_type = 'permanent'")
             elif layer in ("long_term", "working", "transient"):
                 # transient/working 为内存态不落库，统一按 long_term 表管理
-                base += " AND memory_type != 'permanent'"
+                where.append("memory_type != 'permanent'")
             else:
                 return {"items": [], "total": 0, "layer": layer}
             if not include_trashed:
-                base += " AND (deleted_at IS NULL OR deleted_at = 0)"
+                where.append("(deleted_at IS NULL OR deleted_at = 0)")
+            if where:
+                base += " WHERE " + " AND ".join(where)
             total = self._db.query(
                 f"SELECT COUNT(*) AS n FROM ({base})",
                 tuple(params),

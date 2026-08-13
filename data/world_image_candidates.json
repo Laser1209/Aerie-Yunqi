@@ -991,6 +991,66 @@
         "status": "failed"
       }
     },
+    "chat-photo:3489352115:turn_ea4115e3b80d40e5b48640d0870a8cbc": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786596353",
+        "channel": "local_chat",
+        "created_at": "2026-08-13T04:45:53.160100+00:00",
+        "event_id": "world_evt_959006f923db46a8ada1026bd2427d85",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_in_scene",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 1,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_959006f923db46a8ada1026bd2427d85",
+        "event_type": "world.image_candidate.published",
+        "sequence": 1,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:turn_ea4115e3b80d40e5b48640d0870a8cbc",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-13T04:46:42.945916+00:00",
+      "workflow": {
+        "asset_url": "/uploads/7f15b584c9ad40e4bb0d1fcf91234a44.png",
+        "delivery_plan_id": "imgdelivery_459b1a052b444344abee632bb9baf4d3",
+        "request_id": "imggen_6762ba8fe71d42e89f131c67e04dcc39",
+        "status": "completed"
+      }
+    },
     "chat-photo:3489352115:turn_f6e6707b2bd64443a6f0170633fd9f29": {
       "candidate": {
         "candidate_id": "chat-photo-3489352115-1786359569",

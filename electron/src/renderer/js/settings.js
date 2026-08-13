@@ -1031,6 +1031,8 @@ class SettingsPanel {
               source: "settings",
             },
           }));
+          // 灵动岛头像同步：让主进程刷新绝对头像 URL 并广播到灵动岛窗口
+          try { window.aerie?.islandControl?.refreshAvatar?.(); } catch (_) {}
           return;
         }
       }

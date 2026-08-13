@@ -327,9 +327,10 @@ class AdminService:
 
     # ── 聊天记录：级联软删 / 恢复 / 清空 ─────────────────
     def trash_conversations(self, conversation_ids: list[str]) -> dict[str, Any]:
-        """级联软删：消息 + 摘要分桶 + 关联 long_term_memory（Chroma purge 期才删）。"""
+        """级联软删：消息 + 摘要分桶 + 关联 long_term_memory（Chroma purge 期才删）。
+        chat_log 同步打标记，保证 /api/chat/poll 与 /api/chat/history 不再露出已清空记录。"""
         if self._db is None or not conversation_ids:
-            return {"trashed_messages": 0, "trashed_buckets": 0, "trashed_memories": 0}
+            return {"trashed_messages": 0, "trashed_buckets": 0, "trashed_memories": 0, "trashed_chat_log": 0}
         ids = [str(i) for i in conversation_ids if i]
         placeholders = ",".join("?" * len(ids))
         ts = _now_str()
@@ -338,6 +339,15 @@ class AdminService:
             n_msg = self._db.execute(
                 f"UPDATE messages SET deleted_at = ? "
                 f"WHERE conversation_id IN ({placeholders}) AND deleted_at IS NULL",
+                (ts, *ids),
+            ).rowcount
+            n_log = self._db.execute(
+                f"""UPDATE chat_log SET deleted_at = ?
+                    WHERE deleted_at IS NULL AND id IN (
+                        SELECT legacy_chat_log_id FROM messages
+                        WHERE conversation_id IN ({placeholders})
+                          AND legacy_chat_log_id IS NOT NULL
+                    )""",
                 (ts, *ids),
             ).rowcount
             n_bucket = self._db.execute(
@@ -364,24 +374,34 @@ class AdminService:
             self.audit("trash", ",".join(ids))
             return {
                 "trashed_messages": int(n_msg or 0),
+                "trashed_chat_log": int(n_log or 0),
                 "trashed_buckets": int(n_bucket or 0),
                 "trashed_memories": int(n_mem or 0),
             }
         except Exception:
             logger.exception("trash conversations failed")
             self.audit("trash", ",".join(ids), reason_code="error")
-            return {"trashed_messages": 0, "trashed_buckets": 0, "trashed_memories": 0}
+            return {"trashed_messages": 0, "trashed_buckets": 0, "trashed_memories": 0, "trashed_chat_log": 0}
 
     def restore_conversations(self, conversation_ids: list[str]) -> dict[str, Any]:
         """级联恢复（软删反向：清 deleted_at）。"""
         if self._db is None or not conversation_ids:
-            return {"restored_messages": 0, "restored_buckets": 0, "restored_memories": 0}
+            return {"restored_messages": 0, "restored_buckets": 0, "restored_memories": 0, "restored_chat_log": 0}
         ids = [str(i) for i in conversation_ids if i]
         placeholders = ",".join("?" * len(ids))
         try:
             n_msg = self._db.execute(
                 f"UPDATE messages SET deleted_at = NULL "
                 f"WHERE conversation_id IN ({placeholders})",
+                (*ids,),
+            ).rowcount
+            n_log = self._db.execute(
+                f"""UPDATE chat_log SET deleted_at = NULL
+                    WHERE deleted_at IS NOT NULL AND id IN (
+                        SELECT legacy_chat_log_id FROM messages
+                        WHERE conversation_id IN ({placeholders})
+                          AND legacy_chat_log_id IS NOT NULL
+                    )""",
                 (*ids,),
             ).rowcount
             n_bucket = self._db.execute(
@@ -408,12 +428,13 @@ class AdminService:
             self.audit("restore", ",".join(ids))
             return {
                 "restored_messages": int(n_msg or 0),
+                "restored_chat_log": int(n_log or 0),
                 "restored_buckets": int(n_bucket or 0),
                 "restored_memories": int(n_mem or 0),
             }
         except Exception:
             logger.exception("restore conversations failed")
-            return {"restored_messages": 0, "restored_buckets": 0, "restored_memories": 0}
+            return {"restored_messages": 0, "restored_buckets": 0, "restored_memories": 0, "restored_chat_log": 0}
 
     def purge_expired(self, limit: int = PURGE_BATCH_SIZE) -> dict[str, Any]:
         """物理删除超过保留期的已软删数据（幂等，按批 ≤limit）。"""
@@ -452,7 +473,18 @@ class AdminService:
                     (cutoff_ts, *msg_ids),
                 )
                 mem_ids = [r["id"] for r in mem_rows]
-                # 3) 再物理删除消息
+                # 3) 物理删除前先把 chat_log 对应行打上删除标记（删除后
+                #    legacy_chat_log_id 关联会丢失，只能在此刻同步）
+                self._db.execute(
+                    f"""UPDATE chat_log SET deleted_at = ?
+                        WHERE deleted_at IS NULL AND id IN (
+                            SELECT legacy_chat_log_id FROM messages
+                            WHERE message_id IN ({msg_ph})
+                              AND legacy_chat_log_id IS NOT NULL
+                        )""",
+                    (cutoff_str, *msg_ids),
+                )
+                # 4) 再物理删除消息
                 self._db.delete("messages", f"message_id IN ({msg_ph})", tuple(msg_ids))
 
             n_msg = len(msg_ids)

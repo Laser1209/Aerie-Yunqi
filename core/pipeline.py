@@ -3360,6 +3360,19 @@ class Pipeline:
                 except Exception:
                     logger.exception("[Batch %s] db insert ai msg error seq=%d", batch_id, seq_idx)
 
+                # 规范化镜像：批量路径同样写入 messages/turns 会话模型，
+                # 让 QQ / mobile 消息在桌面端历史（读 messages 表）可见，
+                # 不再只活在 chat_log 里。失败不阻塞主流程。
+                if user_row_id and len(ai_row_ids) == len(segments):
+                    self._checkpoint_cancel(request_state, "before_canonical")
+                    self._persist_canonical_turn(
+                        msg,
+                        segments,
+                        request_context=None,
+                        user_legacy_chat_log_id=user_row_id or None,
+                        assistant_legacy_chat_log_ids=ai_row_ids,
+                    )
+
                 all_user_row_ids.append(user_row_id)
 
                 result = {
@@ -3378,53 +3391,55 @@ class Pipeline:
                 }
                 results.append(result)
 
-                if source == "local":
-                    user_emit_data = {
-                        "event_type": "user",
-                        "kwargs": {
-                            "role": "user",
-                            "id": user_row_id,
-                            "user_id": msg.user_id,
-                            "content": msg.content,
-                            "source": source,
-                            "attachments": msg.attachments if msg.attachments else None,
-                        }
+                # 批量路径实时事件：所有来源（local/qq/mobile）都推送到桌面
+                # 端，保证 QQ / 手机发来的消息在电脑端对话框实时出现，
+                # 不再仅限 local。事件经 stderr bridge → IPC / SSE → 渲染层。
+                user_emit_data = {
+                    "event_type": "user",
+                    "kwargs": {
+                        "role": "user",
+                        "id": user_row_id,
+                        "user_id": msg.user_id,
+                        "content": msg.content,
+                        "source": source,
+                        "attachments": msg.attachments if msg.attachments else None,
                     }
+                }
+                local_emit_items.append({
+                    "seq_idx": seq_idx,
+                    "seg_idx": -1,
+                    "type": "user",
+                    "data": user_emit_data,
+                    "reply_text": "",
+                    "emotion": emotion_info.get("label") if emotion_info else None,
+                    "is_eruption": bool(eruption_info and eruption_info.get("mode")),
+                    "thresholds": (emotion_info or {}).get("thresholds", {}) or {},
+                    "is_last_in_message": False,
+                })
+                for seg_idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
+                    emit_kwargs = {
+                        "role": "assistant",
+                        "id": rid,
+                        "user_id": msg.user_id,
+                        "content": seg,
+                        "source": source,
+                    }
+                    if seg_idx == 0:
+                        if emotion_info:
+                            emit_kwargs["emotion"] = emotion_info["label"]
+                        if eruption_info:
+                            emit_kwargs["eruption"] = eruption_info["mode"]
                     local_emit_items.append({
                         "seq_idx": seq_idx,
-                        "seg_idx": -1,
-                        "type": "user",
-                        "data": user_emit_data,
-                        "reply_text": "",
+                        "seg_idx": seg_idx,
+                        "type": "assistant",
+                        "data": {"event_type": "assistant", "kwargs": emit_kwargs},
+                        "reply_text": seg,
                         "emotion": emotion_info.get("label") if emotion_info else None,
                         "is_eruption": bool(eruption_info and eruption_info.get("mode")),
                         "thresholds": (emotion_info or {}).get("thresholds", {}) or {},
-                        "is_last_in_message": False,
+                        "is_last_in_message": seg_idx == len(segments) - 1,
                     })
-                    for seg_idx, (seg, rid) in enumerate(zip(segments, ai_row_ids)):
-                        emit_kwargs = {
-                            "role": "assistant",
-                            "id": rid,
-                            "user_id": msg.user_id,
-                            "content": seg,
-                            "source": source,
-                        }
-                        if seg_idx == 0:
-                            if emotion_info:
-                                emit_kwargs["emotion"] = emotion_info["label"]
-                            if eruption_info:
-                                emit_kwargs["eruption"] = eruption_info["mode"]
-                        local_emit_items.append({
-                            "seq_idx": seq_idx,
-                            "seg_idx": seg_idx,
-                            "type": "assistant",
-                            "data": {"event_type": "assistant", "kwargs": emit_kwargs},
-                            "reply_text": seg,
-                            "emotion": emotion_info.get("label") if emotion_info else None,
-                            "is_eruption": bool(eruption_info and eruption_info.get("mode")),
-                            "thresholds": (emotion_info or {}).get("thresholds", {}) or {},
-                            "is_last_in_message": seg_idx == len(segments) - 1,
-                        })
 
                 if source == "qq" and ai_row_ids:
                     reply_to_qq_mid = 0

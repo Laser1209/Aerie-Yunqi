@@ -1048,8 +1048,15 @@ function createDynamicIsland() {
 
   const display = screen.getPrimaryDisplay();
   const { workArea } = display;
-  const width = 200;
-  const height = 36;
+  // 窗口固定为「最大尺寸」：宽 = 最大内容宽度(宽屏 720) + 两侧 10px 边距；
+  // 高 = 胶囊 44 + 面板最大展开高 640 + 上下 10px 边距。
+  // hover 拉长 / 点击展开 / 宽屏 的宽度动画全部在窗口内居中完成，窗口不再
+  // resize —— 从根本上消除「CSS 动画先于 setBounds 反应」的瞬时裁切与闪烁。
+  // 桌面遮挡由「动态鼠标穿透」解决：renderer 按鼠标位置实时切换
+  // setIgnoreMouseEvents（鼠标在交互区则接收，否则穿透；按住 ALT 强制穿透）。
+  const ISLAND_EDGE = 10;
+  const width = 720 + ISLAND_EDGE * 2; // 740
+  const height = 44 + 640 + ISLAND_EDGE * 2; // 704
   const x = Math.round(workArea.x + (workArea.width - width) / 2);
   const y = workArea.y + 12;
 
@@ -1077,10 +1084,10 @@ function createDynamicIsland() {
 
   dynamicIsland.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   ensureDynamicIslandOnTop();
-  // The collapsed native window is only 200x36, exactly the capsule hit area.
-  // Let it receive input directly; everything outside that small window is
-  // naturally click-through without a high-frequency cursor polling loop.
-  dynamicIsland.setIgnoreMouseEvents(false);
+  // 初始穿透：窗口尺寸固定最大，靠 renderer 按鼠标位置动态切换穿透，
+  // 鼠标不在灵动岛交互区时窗口不拦截桌面点击（forward 转发 mousemove 供判断）。
+  _islandIgnoreState = true;
+  dynamicIsland.setIgnoreMouseEvents(true, { forward: true });
 
   dynamicIsland.loadFile(path.join(__dirname, "renderer", "dynamic-island.html"));
 
@@ -1572,6 +1579,35 @@ ipcMain.handle("island:set-config", async (_event, cfg) => {
 
 ipcMain.handle("island:get-config", async () => {
   return { ok: true, config: _islandConfig };
+});
+
+// 灵动岛头像：返回带时间戳的绝对 URL（防缓存），未设置时后端返回 404 → renderer onerror 回退 logo
+ipcMain.handle("island:get-avatar-url", async () => {
+  return { ok: true, url: `${PY_BACKEND}/api/persona/avatar?t=${Date.now()}` };
+});
+
+// 设置页头像上传成功后调用：刷新绝对 URL 并广播到灵动岛窗口
+ipcMain.handle("island:refresh-avatar", async () => {
+  const avatarUrl = `${PY_BACKEND}/api/persona/avatar?t=${Date.now()}`;
+  _islandConfig = Object.assign({}, _islandConfig, { avatarUrl });
+  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
+    try { dynamicIsland.webContents.send("island:config-change", _islandConfig); } catch (_) {}
+  }
+  return { ok: true, url: avatarUrl };
+});
+
+// 灵动岛宽屏右栏数据供给：只读转发到后端（简报/日历），白名单 GET，不带任何凭据外的参数
+ipcMain.handle("island:api", async (_event, opts) => {
+  try {
+    const path = String((opts && opts.path) || "");
+    if (!path.startsWith("/api/") || /[?&=]/.test(path)) {
+      return { ok: false, error: "invalid_path" };
+    }
+    const response = await apiRequest({ path, method: (opts && opts.method) || "GET" });
+    return { ok: true, data: response && response.data };
+  } catch (err) {
+    return { ok: false, error: err && err.message || String(err) };
+  }
 });
 
 // R8.1: master enable/disable IPC.  These are deliberately *not* guarded by

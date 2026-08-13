@@ -1677,6 +1677,52 @@ class ChatManager {
     }
   }
 
+  /* 展示净化：把后端给 LLM 看的方括号占位符转成小角标，不再作为纯文本
+     露在气泡里。覆盖三类：
+       - [图片] / [图片:描述] / [表情包] / [表情包:描述] → 类型小角标
+       - [图片内容] 描述 → 细节默认隐藏，hover / 聚焦才显示
+     LLM 上下文标记（[话题：]/[世界事件]/[来源:]）不应出现在正文，这里
+     一并剥离，避免任何泄漏。 */
+  _markerToken(i) {
+    return "\uE000" + i + "\uE001";
+  }
+
+  _decorateContentMarkers(content) {
+    const decorations = [];
+    let cleaned = String(content || "");
+    // 1) [图片内容] <描述>：吃掉本行剩余内容作为描述
+    cleaned = cleaned.replace(/\[图片内容\][ \t]*([^\n]*)/g, (_m, info) => {
+      const token = this._markerToken(decorations.length);
+      decorations.push({ kind: "info", info: String(info || "").trim() });
+      return token;
+    });
+    // 2) [图片:描述] / [表情包:描述] / [表情:描述] / [图片] / [表情包] / [表情]
+    cleaned = cleaned.replace(
+      /\[(图片|表情包|表情)(?::([^\]]*))?\]/g,
+      (_m, kind, desc) => {
+        const token = this._markerToken(decorations.length);
+        const isSticker = kind === "表情包" || kind === "表情";
+        decorations.push({ kind: isSticker ? "sticker" : "image", info: String(desc || "").trim() });
+        return token;
+      },
+    );
+    // 3) 防御性剥离系统上下文标记（正常情况下不该出现在正文里）
+    cleaned = cleaned.replace(/\[话题：[^\]]*\]/g, "");
+    return { cleaned, decorations };
+  }
+
+  _buildMarkerBadge(d) {
+    const isSticker = d.kind === "sticker";
+    const label = isSticker ? "表情包" : (d.kind === "info" ? "图片说明" : "图片");
+    const icon = isSticker ? "icon-mood-joy" : "icon-ui-image";
+    const info = this._escapeHtml(d.info || "");
+    const title = info ? label + "：" + info : label;
+    const pop = info ? `<span class="chat-marker__info">${info}</span>` : "";
+    return `<span class="chat-marker chat-marker--${isSticker ? "sticker" : "image"}" title="${title}" tabindex="0" aria-label="${title}">
+      <svg class="icon icon--12" aria-hidden="true"><use href="#${icon}"/></svg>
+      <span class="chat-marker__label">${label}</span>${pop}</span>`;
+  }
+
   /* R7.4: split a message into text / action / thought segments and
      render each in its own bubble. Text segments get full markdown
      treatment via marked + DOMPurify + highlight.js. Action/thought
@@ -1710,7 +1756,12 @@ class ChatManager {
     return parts
       .map((p) => {
         if (p.type === "text") {
-          return `<div class="chat-bubble chat-bubble--text">${this._renderMarkdown(p.body)}</div>`;
+          const deco = this._decorateContentMarkers(p.body);
+          let html = this._renderMarkdown(deco.cleaned);
+          for (const d of deco.decorations) {
+            html = html.split(d.token).join(this._buildMarkerBadge(d));
+          }
+          return `<div class="chat-bubble chat-bubble--text">${html}</div>`;
         }
         const esc = this._escapeHtml(p.body);
         return `<div class="chat-bubble chat-bubble--${p.type}">${esc}</div>`;

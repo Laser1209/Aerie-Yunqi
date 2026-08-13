@@ -644,6 +644,52 @@ soft-delete recycle bin columns + append-only audit for admin platform
     ]
 
 
+def _apply_chat_log_trash_state(conn: sqlite3.Connection) -> None:
+    """给 legacy 的 chat_log 补齐软删状态（回收站后置修复）。
+
+    admin 清空/回收站只软删了规范化 messages 表，而桌面端对话框的轮询
+    （/api/chat/poll）和聊天记录（/api/chat/history）直接读 chat_log，
+    导致清空后的记录依旧出现在对话框里。这里给 chat_log 加 deleted_at
+    并回填：镜像 messages 已软删的行同步打上删除标记。
+    """
+    _add_column_if_missing(conn, "chat_log", "deleted_at", "TEXT DEFAULT NULL")
+    has_messages = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'"
+    ).fetchone()
+    if has_messages:
+        conn.execute(
+            """UPDATE chat_log SET deleted_at = (
+                   SELECT m.deleted_at FROM messages m
+                   WHERE m.legacy_chat_log_id = chat_log.id
+                     AND m.deleted_at IS NOT NULL
+               )
+               WHERE deleted_at IS NULL
+                 AND EXISTS (
+                     SELECT 1 FROM messages m
+                     WHERE m.legacy_chat_log_id = chat_log.id
+                       AND m.deleted_at IS NOT NULL
+                 )"""
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_log_deleted_at "
+        "ON chat_log(deleted_at) WHERE deleted_at IS NOT NULL"
+    )
+
+
+def chat_log_trash_state_migrations() -> list[Migration]:
+    contract = """012_chat_log_trash_state
+chat_log(deleted_at)
+mirror admin soft-delete state onto the legacy chat_log so chat_log-based reads (poll / history) hide trashed conversations
+"""
+    return [
+        Migration(
+            version="012_chat_log_trash_state",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_chat_log_trash_state,
+        )
+    ]
+
+
 def phase2_identity_migrations() -> list[Migration]:
     contract = """002_actor_channel_identity
 actors(actor_id)

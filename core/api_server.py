@@ -1590,7 +1590,11 @@ async def chat_history(
     try:
         if user_id is not None and user_id <= 0:
             return JSONResponse({"error": "invalid_user_id"}, status_code=400)
-        where = " WHERE user_id = ?" if user_id is not None else ""
+        where = (
+            " WHERE user_id = ? AND deleted_at IS NULL"
+            if user_id is not None
+            else " WHERE deleted_at IS NULL"
+        )
         params = (user_id,) if user_id is not None else ()
         count = _db.query_one(f"SELECT COUNT(*) AS cnt FROM chat_log{where}", params)
         rows = _db.query(
@@ -1638,7 +1642,8 @@ async def chat_poll(
         return JSONResponse({"error": "invalid_user_id"}, status_code=400)
     try:
         rows = _db.query(
-            "SELECT * FROM chat_log WHERE user_id = ? AND id > ? ORDER BY id",
+            "SELECT * FROM chat_log WHERE user_id = ? AND id > ? "
+            "AND deleted_at IS NULL ORDER BY id",
             (user_id, since_id),
         )
         import json as _json
@@ -5762,9 +5767,9 @@ async def system_stats() -> dict:
         mins = (uptime_seconds % 3600) // 60
         uptime_str = f"{hours}h {mins}m"
 
-        # Count total messages
+        # Count total messages (exclude trashed)
         msg_count = _db.query_one(
-            "SELECT COUNT(*) as cnt FROM chat_log"
+            "SELECT COUNT(*) as cnt FROM chat_log WHERE deleted_at IS NULL"
         )
         message_count = msg_count["cnt"] if msg_count else 0
 

@@ -1,0 +1,79 @@
+=== key_rotator.py history ===
+fcc3e67 chore: 批量更新项目数据、配置与代码逻辑
+
+=== f4f7bbf ===
+fix(
+
+ core/api_server.py                                 |  17 +-
+ core/companion.py                                  |   2 +
+ .../data_level0.bin                                | Bin 167600 -> 167600 bytes
+ .../length.bin                                     | Bin 400 -> 400 bytes
+ data/chroma/chroma.sqlite3                         | Bin 274432 -> 274432 bytes
+ data/desire_state.json                             | 564 ++++++++++-----------
+ data/image_budget_state.json                       |   2 +-
+ data/proactive_policy_state.json                   |  10 +-
+ data/provider_health.json                          |   8 +-
+ data/runtime_config.json                           |   6 +-
+ data/world_image_candidates.json                   | 170 +++++++
+ tests/test_phase15_world_dashboard_api.py          |   2 +
+ ...224\271\351\200\240\346\226\271\346\241\210.md" |  61 ++-
+ 13 files changed, 524 insertions(+), 318 deletions(-)
+
+=== 9a5ef6d (room-level positioning) ===
+feat(world-sim): 实现房间级精确定位功能
+
+ .../comprehensive-android-implementation-plan.md   | 277 ++++++++-------
+ ...256\232\344\275\215\350\256\241\345\210\222.md" |  45 ++-
+ core/api_server.py                                 |   6 +
+ core/companion.py                                  |  51 ++-
+ core/home_space.py                                 | 372 +++++++++++++++++++++
+ core/world_simulation.py                           |  41 ++-
+ .../data_level0.bin                                | Bin 167600 -> 167600 bytes
+ .../length.bin                                     | Bin 400 -> 400 bytes
+ data/chroma/chroma.sqlite3                         | Bin 274432 -> 274432 bytes
+ data/desire_state.json                             | 226 ++++++-------
+ data/provider_health.json                          |   8 +-
+ data/world_image_candidates.json                   | 220 ++++++++++++
+ electron/src/main.js                               |   4 +-
+ electron/src/renderer/assets/floor_plan_level1.svg | 318 ++++++++++++++++++
+ electron/src/renderer/assets/floor_plan_level2.svg | 292 ++++++++++++++++
+ electron/src/renderer/js/world-dashboard-window.js | 128 ++++++-
+ .../src/renderer/styles/world-dashboard-window.css | 166 +++++++++
+ electron/src/renderer/world-dashboard-window.html  |  34 ++
+ tests/test_home_space.py                           | 141 ++++++++
+ tests/test_room_zone_integration.py                | 117 +++++++
+ ...224\271\351\200\240\346\226\271\346\241\210.md" | 324 ++++++++++++++++++
+ 21 files changed, 2530 insertions(+), 240 deletions(-)
+
+=== 35b7094 (topic tracking) ===
+feat(context): 话题追踪·行为调度·寻路感知系统（P0-P3）
+
+ .../modules/DailyBehaviorScheduler.md              |  67 ++++
+ Aerie_Obsidian_Vault/modules/IndoorNavigation.md   |  71 ++++
+ Aerie_Obsidian_Vault/modules/TopicTracking.md      |  77 ++++
+ _pytest_final.txt                                  | Bin 74 -> 0 bytes
+ _pytest_out2.txt                                   |  45 ---
+ core/api_server.py                                 |   2 +
+ core/behavior_library.py                           | 148 +++++++
+ core/companion.py                                  | 250 ++++++++++--
+ core/companion_state.py                            |  15 +
+ core/context_builder.py                            |  70 +++-
+ core/daily_planner.py                              | 198 +++++++++
+ core/decision_log.py                               | 119 ++++++
+ core/home_space.py                                 |  58 ++-
+ core/llm_caller.py                                 |  53 ++-
+ core/movement.py                                   | 223 +++++++++++
+ core/navigation_data.py                            | 285 +++++++++++++
+ core/push_event_engine.py                          |  12 +
+ core/topic_tracker.py                              | 322 +++++++++++++++
+ core/world_phase.py                                | 135 +++++++
+ core/world_simulation.py                           |  55 +--
+ electron/src/renderer/js/world-dashboard-window.js |  56 +++
+ .../src/renderer/styles/world-dashboard-window.css |  22 +
+ electron/src/renderer/world-dashboard-window.html  |   6 +
+ tests/test_behavior_planner.py                     | 148 +++++++
+ tests/test_navigation.py                           | 310 +++++++++++++++
+ tests/test_p1_c1_world_simulation.py               |  13 +-
+ tests/test_topic_system.py                         | 441 +++++++++++++++++++++
+ ...264\257\346\200\247\346\216\222\346\237\245.md" |  60 +++
+ 28 files changed, 3109 insertions(+), 152 deletions(-)

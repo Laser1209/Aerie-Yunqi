@@ -858,6 +858,8 @@ class ConversationRepository:
     ) -> dict[str, Any]:
         if not self._table_exists(conn, "chat_log"):
             return self._empty_page()
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(chat_log)")}
+        deleted_sql = " AND deleted_at IS NULL" if "deleted_at" in cols else ""
         comparator = "<" if direction == "older" else ">"
         order = "DESC" if direction == "older" else "ASC"
         params: list[Any] = [int(user_id)]
@@ -870,7 +872,7 @@ class ConversationRepository:
             f"""SELECT id AS history_rowid, id, role, content,
                        attachments, created_at
                 FROM chat_log
-                WHERE user_id = ?{anchor_sql}
+                WHERE user_id = ?{anchor_sql}{deleted_sql}
                 ORDER BY id {order}
                 LIMIT ?""",
             tuple(params),
@@ -878,11 +880,12 @@ class ConversationRepository:
         selected = list(rows[:limit])
         if direction == "older":
             selected.reverse()
+        partition_sql = "user_id = ?" + deleted_sql
         return self._build_page(
             conn,
             selected,
             table="chat_log",
-            partition_sql="user_id = ?",
+            partition_sql=partition_sql,
             partition_params=(int(user_id),),
             direction=direction,
         )

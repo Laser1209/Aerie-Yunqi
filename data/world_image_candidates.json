@@ -239,6 +239,66 @@
         "status": "rejected"
       }
     },
+    "chat-photo:3489352115:a37740551c27fd13": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786605510",
+        "channel": "qq",
+        "created_at": "2026-08-13T07:18:30.917707+00:00",
+        "event_id": "world_evt_5f1250e4b66e4a8b820bd2dd2a3d1fd5",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_selfie",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 1,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_5f1250e4b66e4a8b820bd2dd2a3d1fd5",
+        "event_type": "world.image_candidate.published",
+        "sequence": 1,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:a37740551c27fd13",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-13T07:19:23.225236+00:00",
+      "workflow": {
+        "asset_url": "/uploads/cd5fd69f39a1439fa4857b49413580b5.png",
+        "delivery_plan_id": "imgdelivery_46172e155ea34468bc4d01f4657d7392",
+        "request_id": "imggen_7ab9dab4692d42159e5c8392959f9864",
+        "status": "completed"
+      }
+    },
     "chat-photo:3489352115:a42ebe068a875a30": {
       "candidate": {
         "candidate_id": "chat-photo-3489352115-1786454532",
@@ -646,6 +706,66 @@
         "status": "failed"
       }
     },
+    "chat-photo:3489352115:turn_1ddfe66e97554102bf72ea108ab60a82": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786604721",
+        "channel": "local_chat",
+        "created_at": "2026-08-13T07:05:21.408941+00:00",
+        "event_id": "world_evt_1948466875b940608591c229a5f73f41",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_in_scene",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 1,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_1948466875b940608591c229a5f73f41",
+        "event_type": "world.image_candidate.published",
+        "sequence": 1,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:turn_1ddfe66e97554102bf72ea108ab60a82",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-13T07:06:17.149440+00:00",
+      "workflow": {
+        "asset_url": "/uploads/2988442de327478fb6462d12fce76cf7.png",
+        "delivery_plan_id": "imgdelivery_819b9f0f3eff4317b43449c2761a9e37",
+        "request_id": "imggen_695826e5a9254cbab5413c30727d80f1",
+        "status": "completed"
+      }
+    },
     "chat-photo:3489352115:turn_1e21415a7f48437584e89318336ccc5f": {
       "candidate": {
         "candidate_id": "chat-photo-3489352115-1786369761",
@@ -701,6 +821,66 @@
         "delivery_plan_id": "",
         "request_id": "imggen_f51caa624c174bef99619d9c20ea3285",
         "status": "failed"
+      }
+    },
+    "chat-photo:3489352115:turn_2046f4517ed54563b4780f4a5f87337f": {
+      "candidate": {
+        "candidate_id": "chat-photo-3489352115-1786604104",
+        "channel": "local_chat",
+        "created_at": "2026-08-13T06:55:04.353195+00:00",
+        "event_id": "world_evt_d0cc81fa35624e7a9824226db176975e",
+        "expires_at": "",
+        "owner_id": "3489352115",
+        "payload_keys": [
+          "candidate_id",
+          "channel",
+          "created_at",
+          "expires_at",
+          "idempotency_key",
+          "owner_id",
+          "prompt_key",
+          "reason_code",
+          "scene",
+          "score",
+          "size",
+          "source",
+          "target"
+        ],
+        "prompt_key": "role_in_scene",
+        "reason_code": "user_requested",
+        "scene": "local_send",
+        "score": 1.0,
+        "sequence": 1,
+        "size": "768x1344",
+        "source": "manual",
+        "target": "3489352115"
+      },
+      "event": {
+        "event_id": "world_evt_d0cc81fa35624e7a9824226db176975e",
+        "event_type": "world.image_candidate.published",
+        "sequence": 1,
+        "topic": "image_candidates"
+      },
+      "idempotency_key": "chat-photo:3489352115:turn_2046f4517ed54563b4780f4a5f87337f",
+      "judge": {
+        "scene": "local_send",
+        "score": 75,
+        "suppress_reason": "",
+        "tone": "casual_warm"
+      },
+      "reason": "completed",
+      "side_effects": {
+        "asset_created": true,
+        "delivery_created": true,
+        "provider_called": true
+      },
+      "status": "completed",
+      "updated_at": "2026-08-13T06:55:53.037579+00:00",
+      "workflow": {
+        "asset_url": "/uploads/de2b142a4f1149b3abbd048d7a1dd35d.png",
+        "delivery_plan_id": "imgdelivery_b352697930ee4d56a3f6d9df5690b20e",
+        "request_id": "imggen_4346ff1fe5de43c8aae5621393ff3b31",
+        "status": "completed"
       }
     },
     "chat-photo:3489352115:turn_483f578b2bde420eadb77b9a8ae075de": {

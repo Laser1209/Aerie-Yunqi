@@ -16,6 +16,7 @@ from typing import Any, Iterable, Optional
 from core.feature_flags import FeatureFlags
 from core.migrations import (
     admin_management_migrations,
+    chat_log_trash_state_migrations,
     desktop_chat_continuity_migrations,
     MigrationRunner,
     mobile_gateway_migrations,
@@ -378,6 +379,7 @@ class Database:
                 runner.run(summary_buckets_migrations())
                 runner.run(persona_timeline_migrations())
                 runner.run(admin_management_migrations())
+                runner.run(chat_log_trash_state_migrations())
             else:
                 # Desktop attachments stay available on legacy installations.
                 # This creates only additive desktop-owned tables and leaves the
@@ -413,6 +415,7 @@ class Database:
             ("channel_account_id", "TEXT DEFAULT NULL"),
             ("batch_id", "TEXT DEFAULT NULL"),
             ("qq_message_id", "INTEGER DEFAULT NULL"),
+            ("deleted_at", "TEXT DEFAULT NULL"),
         ]
         for col, decl in migrations:
             if col not in existing:

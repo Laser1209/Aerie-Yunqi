@@ -392,6 +392,45 @@ body {
   border-top-left-radius: 4px;    /* the small tail pointing toward avatar */
 }
 
+/* 方括号占位符净化后的类型角标：图片 / 表情包 / 图片说明。
+   柔和圆角小胶囊，细节（描述）默认隐藏，hover / 点击聚焦时展开。 */
+.chat-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: baseline;
+  padding: 2px 8px;
+  margin: 0 2px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: default;
+  white-space: nowrap;
+}
+.chat-marker--image {
+  background: #fff0f3;
+  color: #ff5b9c;
+}
+.chat-marker--sticker {
+  background: #eef3ff;
+  color: #6e8efb;
+}
+.chat-marker:focus {
+  outline: 2px solid rgba(110, 142, 251, 0.4);
+  outline-offset: 1px;
+}
+.chat-marker__info {
+  display: none;
+  margin-left: 4px;
+  font-weight: 400;
+  white-space: normal;
+}
+.chat-marker:hover .chat-marker__info,
+.chat-marker:focus .chat-marker__info {
+  display: inline;
+}
+
 .chat-msg--typing .chat-bubble--typing {
   display: inline-flex;
   align-items: center;

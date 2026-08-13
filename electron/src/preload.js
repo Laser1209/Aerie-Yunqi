@@ -183,6 +183,8 @@ contextBridge.exposeInMainWorld("aerie", {
     notify: (data) => ipcRenderer.invoke("island:notify", data || {}),
     systemNotify: (data) => ipcRenderer.invoke("system:notify", data || {}),
     getSystemStatus: () => ipcRenderer.invoke("island:get-system-status"),
+    getAvatarUrl: () => ipcRenderer.invoke("island:get-avatar-url"),
+    api: (opts) => ipcRenderer.invoke("island:api", opts || {}),
     onSystemStatus: (cb) => {
       ipcRenderer.on("island:system-status", (_event, data) => cb(data || {}));
     },

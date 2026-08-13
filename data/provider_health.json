@@ -5,15 +5,15 @@
       "status": "ok"
     },
     "deepseek": {
-      "balance": 43.06,
-      "last_checked_at": "2026-08-13T05:16:31.969515+00:00",
+      "balance": 29.52,
+      "last_checked_at": "2026-08-13T10:38:04.728654+00:00",
       "reason": "",
       "status": "ok"
     },
     "doubao": {
-      "detected_at": "2026-08-13T04:45:42.596090+00:00",
+      "detected_at": "2026-08-13T08:17:43.598051+00:00",
       "reason": "balance_exhausted",
-      "recheck_after": "2026-08-13T05:45:42.596101+00:00",
+      "recheck_after": "2026-08-13T09:17:43.598058+00:00",
       "status": "banned"
     },
     "openai": {

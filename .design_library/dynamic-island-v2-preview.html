@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aerie · 浮屿 Dynamic Island v2 — 设计预览</title>
+<style>
+/* ══════════════════════════════════════════════════════
+   Aerie · 浮屿 Floating Isle — Dynamic Island v2 设计预览
+   概念：液态玻璃 · 情绪光晕 · 时间叙事 · 窄屏/宽屏自适应
+   展开后胶囊拉宽至与面板同宽，无缝成为面板头部
+   ══════════════════════════════════════════════════════ */
+
+:root {
+  --font: "Microsoft YaHei", "PingFang SC", "Segoe UI", "SF Pro Display", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  min-height: 100vh;
+  color: #1c2028;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(255, 138, 128, 0.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 20%, rgba(106, 173, 238, 0.12), transparent 55%),
+    linear-gradient(180deg, #f6f7fb 0%, #eef0f6 100%);
+  padding: 48px 40px 120px;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.stage { position: relative; z-index: 1; max-width: 1500px; margin: 0 auto; }
+
+.hero { margin-bottom: 36px; }
+.kicker { font-size: 11px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: #4a90d9; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+.kicker::before { content: ""; width: 26px; height: 1px; background: #4a90d9; opacity: .5; }
+.hero h1 { font-size: 40px; font-weight: 300; color: #161a22; line-height: 1.1; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.hero h1 .cn { font-size: 18px; font-weight: 400; color: #6aadee; }
+.hero p.sub { margin-top: 12px; font-size: 13px; color: #767b87; max-width: 760px; line-height: 1.8; }
+.hero .chips { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; }
+.hero .chips span { font-size: 11px; color: #4d5461; padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.6); border: 1px solid rgba(26,32,44,.08); }
+
+.theme-switch { display: inline-flex; background: rgba(255,255,255,.65); border: 1px solid rgba(26,32,44,.08); border-radius: 999px; padding: 4px; gap: 2px; margin-bottom: 30px; backdrop-filter: blur(12px); }
+.theme-switch button { appearance: none; border: 0; background: transparent; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 400; color: #575b66; padding: 7px 16px; border-radius: 999px; transition: all .25s var(--ease-out); }
+.theme-switch button[data-on="1"] { background: #fff; color: #1c2028; box-shadow: 0 2px 10px rgba(16,24,40,.10); font-weight: 500; }
+.theme-switch button .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+
+.scene-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 28px; }
+.scene { border-radius: 24px; padding: 26px 24px 28px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.55); box-shadow: 0 24px 48px -20px rgba(16,24,40,0.16); transition: background .6s ease, border-color .6s ease; }
+.scene:has(.expanded.wide) { overflow: visible; }
+.scene-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.scene-head h2 { font-size: 15px; font-weight: 500; }
+.scene-head code { font-family: var(--font-mono); font-size: 10.5px; opacity: .65; }
+.scene-meta { font-size: 11px; opacity: .55; margin-bottom: 22px; line-height: 1.7; }
+
+.scene[data-theme="dark"] { background: linear-gradient(160deg, #10131b 0%, #0b0e15 100%); border-color: rgba(255,255,255,.07); }
+.scene[data-theme="pink"] { background: linear-gradient(160deg, #fff0ee 0%, #ffe4e8 100%); }
+.scene[data-theme="light"] { background: linear-gradient(160deg, #ffffff 0%, #f2f5fa 100%); }
+.scene[data-theme="dark"] .scene-head h2 { color: #e6e8ee; }
+.scene[data-theme="dark"] .scene-head code, .scene[data-theme="dark"] .scene-meta { color: #8f95a3; }
+
+.scene[data-theme="dark"] {
+  --glass: rgba(24, 27, 36, 0.72);
+  --glass-card: rgba(255, 255, 255, 0.05);
+  --glass-stroke: rgba(255, 255, 255, 0.13);
+  --glass-stroke-strong: rgba(255, 255, 255, 0.26);
+  --text-hi: #f2f4f8; --text-mid: rgba(242,244,248,.72); --text-low: rgba(242,244,248,.46);
+  --accent: #7db5ee; --accent-soft: rgba(125,181,238,.14);
+  --halo: 125, 181, 238;
+  --toplight: rgba(255,255,255,.16);
+}
+.scene[data-theme="pink"] {
+  --glass: rgba(255, 255, 255, 0.66);
+  --glass-card: rgba(255, 255, 255, 0.46);
+  --glass-stroke: rgba(255, 255, 255, 0.9);
+  --glass-stroke-strong: rgba(255, 138, 128, 0.38);
+  --text-hi: #4a3a40; --text-mid: rgba(74,58,64,.68); --text-low: rgba(74,58,64,.45);
+  --accent: #ff8a80; --accent-soft: rgba(255,138,128,.14);
+  --halo: 255, 138, 128;
+  --toplight: rgba(255,255,255,.85);
+}
+.scene[data-theme="light"] {
+  --glass: rgba(255, 255, 255, 0.76);
+  --glass-card: rgba(255, 255, 255, 0.54);
+  --glass-stroke: rgba(28, 32, 44, 0.10);
+  --glass-stroke-strong: rgba(74, 144, 217, 0.34);
+  --text-hi: #22252c; --text-mid: rgba(34,37,44,.66); --text-low: rgba(34,37,44,.42);
+  --accent: #4a90d9; --accent-soft: rgba(74,144,217,.10);
+  --halo: 74, 144, 217;
+  --toplight: rgba(255,255,255,.9);
+}
+
+/* ── 岛盒：胶囊 + 面板，展开时无缝衔接 ── */
+.island-box { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 10px; transition: gap .3s ease; }
+.scene:has(.capsule.open) .island-box { gap: 0; }
+.size-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; opacity: .5; display: flex; align-items: center; gap: 8px; }
+.size-tag::before, .size-tag::after { content: ""; width: 30px; height: 1px; opacity: .35; background: currentColor; }
+
+/* ═══════════════ 胶囊态（收起 200×44，无外层阴影）═══════════════ */
+.capsule {
+  position: relative;
+  width: 200px; height: 44px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: inset 0 1px 0 var(--toplight);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  display: flex; align-items: center;
+  padding: 0 10px 0 8px;
+  cursor: pointer;
+  transition: width .38s var(--ease-spring), border-radius .38s var(--ease-spring), border-color .3s ease;
+  animation: rise .7s var(--ease-spring) both;
+  z-index: 2;
+}
+@keyframes rise { 0% { opacity: 0; transform: translateY(-14px) scale(.86); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+.capsule:not(.open):hover { width: 320px; border-color: var(--glass-stroke-strong); }
+.capsule:not(.open):hover .cap-txt .main { max-width: none; }
+
+/* 展开后胶囊 = 面板头部：拉宽至与面板同宽，上圆角保持、下直角无缝连接 */
+.capsule.open { width: 340px; border-radius: 24px 24px 0 0; border-bottom-color: transparent; padding: 0 10px 0 8px; }
+.scene:has(.expanded.wide) .capsule.open { width: 720px; }
+
+.capsule .halo {
+  position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
+  width: 56px; height: 56px; border-radius: 50%; pointer-events: none; z-index: 0;
+  background: radial-gradient(circle, rgba(var(--halo), .36) 0%, rgba(var(--halo), 0) 68%);
+  animation: breathe 4s ease-in-out infinite;
+}
+@keyframes breathe { 0%, 100% { opacity: .55; transform: translateY(-50%) scale(1); } 50% { opacity: 1; transform: translateY(-50%) scale(1.14); } }
+
+.capsule .avatar {
+  position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: conic-gradient(from 210deg, #4a90d9, #7ed9c4, #ff8a80, #4a90d9);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.14);
+  overflow: hidden;
+}
+.scene[data-theme="light"] .capsule .avatar, .scene[data-theme="pink"] .capsule .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+.capsule .avatar::after {
+  content: ""; position: absolute; inset: 6px; border-radius: 50%;
+  background: linear-gradient(160deg, rgba(255,255,255,.92), rgba(255,255,255,.55));
+  -webkit-mask: radial-gradient(circle at 38% 32%, #000 0 30%, transparent 31% 100%), radial-gradient(circle at 62% 68%, #000 0 34%, transparent 35% 100%), linear-gradient(#000,#000);
+  -webkit-mask-composite: destination-in; mask-composite: intersect; opacity: .9;
+}
+.capsule .cap-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0 6px; position: relative; z-index: 1; }
+.capsule .cap-txt .main { font-size: 12.5px; font-weight: 500; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 128px; line-height: 1.15; transition: max-width .38s var(--ease-spring); }
+.capsule .cap-txt .sub { font-size: 9.5px; font-weight: 400; letter-spacing: .06em; color: var(--text-low); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 128px; line-height: 1.15; transition: max-width .38s var(--ease-spring); }
+.capsule .badge {
+  flex-shrink: 0; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
+  background: linear-gradient(135deg, #ff8a80, #ff6b9d);
+  color: #fff; font-size: 9.5px; font-weight: 500; display: flex; align-items: center; justify-content: center;
+  position: relative; z-index: 1;
+}
+.capsule .dot { width: 6px; height: 6px; border-radius: 50%; background: #4cd678; margin-left: 7px; flex-shrink: 0; box-shadow: 0 0 6px #4cd678; position: relative; z-index: 1; }
+.capsule .cap-txt, .capsule .badge, .capsule .dot { transition: opacity .2s ease; }
+.capsule.open .cap-txt, .capsule.open .badge, .capsule.open .dot { display: none; }
+
+/* 展开后胶囊内的头部条 */
+.cap-bar { display: none; flex: 1; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px 0 6px; position: relative; z-index: 1; }
+.capsule.open .cap-bar { display: flex; }
+.cap-bar .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cap-bar .who .name { font-size: 12px; font-weight: 500; color: var(--text-hi); letter-spacing: .02em; white-space: nowrap; }
+.cap-bar .who .live { display: flex; align-items: center; gap: 5px; font-size: 9.5px; color: var(--text-low); letter-spacing: .05em; white-space: nowrap; }
+.cap-bar .who .live i { width: 5px; height: 5px; border-radius: 50%; background: #4cd678; box-shadow: 0 0 5px #4cd678; }
+.cap-bar .close { width: 22px; height: 22px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; color: var(--text-low); display: flex; align-items: center; justify-content: center; transition: all .2s ease; flex-shrink: 0; }
+.cap-bar .close:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* ═══════════════ 展开面板（顶部与胶囊无缝相接）═══════════════ */
+.expanded {
+  display: none; /* 初始只显示胶囊，点击后才展开 */
+  position: relative;
+  width: 340px;
+  border-radius: 0 0 24px 24px;
+  background: var(--glass);
+  border: 1px solid var(--glass-stroke);
+  border-top: none;
+  box-shadow: inset 0 -1px 0 rgba(0,0,0,0) ;
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  padding: 12px 12px 14px;
+  transition: width .42s var(--ease-spring), border-color .3s ease;
+}
+.expanded .wide-body { display: block; }
+.expanded .wide-pane { display: none; }
+
+.expanded.wide { width: 720px; }
+.expanded.wide .wide-body { display: grid; grid-template-columns: 1fr min(344px, 48%); gap: 10px; }
+.expanded.wide .wide-pane { display: block; min-width: 0; }
+@media (max-width: 800px) {
+  .expanded.wide { width: min(720px, calc(100vw - 48px)); }
+  .expanded.wide .wide-body { grid-template-columns: 1fr 300px; }
+}
+@media (max-width: 620px) {
+  .expanded.wide .wide-body { grid-template-columns: 1fr; }
+}
+
+.expanded.collapsing { animation: fold .34s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+@keyframes fold { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.6) translateY(-20px); } }
+
+/* 玻璃卡片 */
+.card { border-radius: 16px; background: var(--glass-card); border: 1px solid var(--glass-stroke); position: relative; overflow: hidden; }
+.card .card-title { display: flex; align-items: center; gap: 6px; padding: 10px 13px 0 13px; font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-low); }
+.card .card-title svg { width: 12px; height: 12px; opacity: .8; }
+
+.quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 9px 10px 10px; }
+.quick button { appearance: none; border: 0; background: transparent; cursor: pointer; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 4px 7px; border-radius: 12px; transition: all .22s var(--ease-out); }
+.quick button .ic { width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); transition: all .22s var(--ease-spring); }
+.quick button .lb { font-size: 10px; color: var(--text-mid); }
+.quick button:hover { transform: translateY(-1px); }
+.quick button:hover .ic { transform: scale(1.08); }
+
+.companion { display: flex; align-items: center; gap: 11px; padding: 12px 13px; }
+.companion .av { position: relative; width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; background: conic-gradient(from 210deg, #4a90d9, #7ed9c4, #ff8a80, #4a90d9); box-shadow: 0 0 0 2px rgba(255,255,255,.16), 0 0 18px rgba(var(--halo), .4); overflow: hidden; }
+.scene[data-theme="light"] .companion .av, .scene[data-theme="pink"] .companion .av { box-shadow: 0 0 0 2px rgba(255,255,255,.85), 0 0 18px rgba(var(--halo), .32); }
+.companion .av::after { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: linear-gradient(160deg, rgba(255,255,255,.94), rgba(255,255,255,.6)); -webkit-mask: radial-gradient(circle at 38% 32%, #000 0 30%, transparent 31% 100%), radial-gradient(circle at 62% 68%, #000 0 34%, transparent 35% 100%), linear-gradient(#000,#000); -webkit-mask-composite: destination-in; mask-composite: intersect; opacity: .9; }
+.companion .info { flex: 1; min-width: 0; }
+.companion .info .nm { font-size: 13px; font-weight: 500; color: var(--text-hi); display: flex; align-items: baseline; gap: 7px; }
+.companion .info .nm .mood { font-size: 10px; color: var(--accent); }
+.companion .info .line { font-size: 11px; color: var(--text-mid); margin-top: 2px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.companion .info .since { font-size: 9.5px; color: var(--text-low); margin-top: 3px; letter-spacing: .03em; }
+
+.media { display: flex; align-items: center; gap: 10px; padding: 11px 12px; }
+.media .cover { width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0; overflow: hidden; position: relative; background: linear-gradient(150deg, #4a90d9 0%, #7ed9c4 55%, #ff8a80 110%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.media .cover::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 90% at 70% 20%, rgba(255,255,255,.5), transparent 55%); }
+.media .mi { flex: 1; min-width: 0; }
+.media .mi .t { font-size: 11.5px; font-weight: 500; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.media .mi .a { font-size: 10px; color: var(--text-low); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.media .mi .track { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+.media .mi .track .now, .media .mi .track .tot { font-family: var(--font-mono); font-size: 8.5px; color: var(--text-low); width: 24px; flex-shrink: 0; text-align: right; }
+.media .mi .track .bar { flex: 1; height: 3px; border-radius: 2px; background: rgba(127,133,145,.22); overflow: hidden; }
+.media .mi .track .bar i { display: block; height: 100%; width: 42%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), rgba(var(--halo), .7)); }
+.media .ctl { display: flex; gap: 2px; flex-shrink: 0; }
+.media .ctl button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; color: var(--text-mid); display: flex; align-items: center; justify-content: center; transition: all .2s ease; }
+.media .ctl button:hover { background: var(--accent-soft); color: var(--accent); }
+.media .ctl button.play { background: var(--accent); color: #fff; }
+.media .ctl button.play:hover { color: #fff; filter: brightness(1.06); }
+
+.sys { display: grid; grid-template-columns: repeat(3, 1fr); padding: 9px 9px 10px; gap: 4px; }
+.sys .cell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px; border-radius: 11px; }
+.sys .cell .k { font-size: 9px; color: var(--text-low); letter-spacing: .1em; display: flex; align-items: center; gap: 4px; }
+.sys .cell .k svg { width: 10px; height: 10px; }
+.sys .cell .v { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text-hi); }
+.sys .cell .v small { font-size: 8.5px; color: var(--text-low); margin-left: 1px; }
+.sys .cell .g { width: 40px; height: 3px; border-radius: 2px; background: rgba(127,133,145,.22); overflow: hidden; margin-top: 2px; }
+.sys .cell .g i { display: block; height: 100%; border-radius: 2px; }
+.sys .cell:nth-child(1) .g i { width: 18%; background: linear-gradient(90deg, #4a90d9, #7db5ee); }
+.sys .cell:nth-child(2) .g i { width: 43%; background: linear-gradient(90deg, #7ed9c4, #8fe1ce); }
+.sys .cell:nth-child(3) .g i { width: 62%; background: linear-gradient(90deg, #ff8a80, #ffb3ab); }
+
+.notifs { display: flex; flex-direction: column; gap: 2px; padding: 7px 8px 9px; }
+.notifs .item { display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 11px; cursor: pointer; transition: background .2s ease; }
+.notifs .item:hover { background: var(--accent-soft); }
+.notifs .item .ic { width: 24px; height: 24px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); }
+.notifs .item .ic svg { width: 12px; height: 12px; }
+.notifs .item .body { flex: 1; min-width: 0; }
+.notifs .item .body .t { font-size: 11px; font-weight: 500; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notifs .item .body .d { font-size: 10px; color: var(--text-low); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.notifs .item .tm { font-size: 9px; font-family: var(--font-mono); color: var(--text-low); flex-shrink: 0; }
+
+/* 宽屏右栏：简报 / 日程 */
+.pane-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 0 14px; }
+.pane-head .pt { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; color: var(--text-hi); }
+.pane-head .pt svg { width: 14px; height: 14px; color: var(--accent); }
+.pane-head .back { font-size: 10px; color: var(--text-low); background: transparent; border: 0; cursor: pointer; font-family: inherit; padding: 4px 8px; border-radius: 999px; transition: all .2s ease; }
+.pane-head .back:hover { background: var(--accent-soft); color: var(--accent); }
+.pane-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
+.pane-body .wx { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 13px; background: var(--glass-card); border: 1px solid var(--glass-stroke); }
+.pane-body .wx .em { font-size: 20px; }
+.pane-body .wx .tm { font-size: 22px; font-weight: 500; font-family: var(--font-mono); color: var(--text-hi); }
+.pane-body .wx .ds { font-size: 10px; color: var(--text-low); line-height: 1.6; }
+.pane-body .tx { padding: 10px 12px; border-radius: 13px; background: var(--glass-card); border: 1px solid var(--glass-stroke); font-size: 10.5px; color: var(--text-mid); line-height: 1.7; }
+.pane-body .tx b { color: var(--accent); font-weight: 500; }
+.pane-body .ev { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 13px; background: var(--glass-card); border: 1px solid var(--glass-stroke); }
+.pane-body .ev .ht { font-family: var(--font-mono); font-size: 11px; color: var(--accent); width: 40px; flex-shrink: 0; }
+.pane-body .ev .ln { width: 2px; align-self: stretch; border-radius: 1px; background: var(--glass-stroke-strong); }
+.pane-body .ev .dt { flex: 1; min-width: 0; }
+.pane-body .ev .dt .n { font-size: 11.5px; font-weight: 500; color: var(--text-hi); }
+.pane-body .ev .dt .d { font-size: 10px; color: var(--text-low); margin-top: 1px; }
+
+.note { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 6px; }
+.note span { font-size: 10px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(127,133,145,.25); color: rgba(127,133,145,.9); }
+.scene[data-theme="dark"] .note span { color: rgba(200,205,216,.55); border-color: rgba(200,205,216,.18); }
+
+.ic-svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <header class="hero">
+    <div class="kicker">Aerie Design Study · 灵动岛 v2 · 第三轮</div>
+    <h1>浮屿 <span class="cn">Floating Isle</span></h1>
+    <p class="sub">展开后胶囊横向拉宽至与面板同宽（窄屏 340 / 宽屏 720），无缝变身为面板头部，一体生长。点击胶囊体验「胶囊 → 头部 + 面板」的变换；点简报/日程拉宽屏；点外部回弹。</p>
+    <div class="chips">
+      <span>展开＝胶囊拉宽同面板</span>
+      <span>胶囊变头顶条</span>
+      <span>无外层阴影</span>
+      <span>hover 拉长 200→320</span>
+      <span>窄屏 340 · 宽屏 720</span>
+      <span>点击外部自动回弹</span>
+      <span>媒体查询自适应</span>
+    </div>
+  </header>
+
+  <div class="theme-switch" id="themeSwitch">
+    <button data-t="dark" data-on="1"><span class="dot" style="background:#0b0e15"></span>深色夜空</button>
+    <button data-t="pink"><span class="dot" style="background:#ff8a80"></span>恋粉治愈</button>
+    <button data-t="light"><span class="dot" style="background:#4a90d9"></span>晨雾浅白</button>
+  </div>
+
+  <div class="scene-grid">
+
+    <!-- ── 深色夜空 ── -->
+    <section class="scene" data-theme="dark">
+      <div class="scene-head"><h2>深色夜空</h2><code>glass rgba(24,27,36,.72) · blur 28 · 无外层阴影</code></div>
+      <div class="scene-meta">① 悬停胶囊看拉长 ② 点击胶囊 → 胶囊拉宽成面板头部、面板生长 ③ 点「今日简报/日程」拉宽屏 ④ 点击卡外回弹</div>
+      <div class="island-box">
+        <div class="size-tag">CAPSULE · 200 → hover 320 · open 340 / 720</div>
+        <div class="capsule" data-cap>
+          <span class="halo"></span>
+          <span class="avatar"></span>
+          <span class="cap-txt"><span class="main">午后的阳光落在设计台上，江面波光粼粼</span><span class="sub">STUDIO · 14:26</span></span>
+          <span class="badge">3</span><span class="dot"></span>
+          <div class="cap-bar">
+            <div class="who"><span class="name">云栖 · 浮屿</span><span class="live"><i></i>在线陪伴中</span></div>
+            <button class="close" aria-label="收起"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+        </div>
+        <div class="expanded" data-exp>
+          <div class="wide-body">
+            <div class="narrow-col">
+              <div class="card">
+                <div class="card-title">快捷操作</div>
+                <div class="quick">
+                  <button><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="lb">快捷对话</span></button>
+                  <button data-wide="brief"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><span class="lb">今日简报</span></button>
+                  <button><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/></svg></span><span class="lb">认知面板</span></button>
+                  <button data-wide="calendar"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><span class="lb">日程</span></button>
+                </div>
+              </div>
+              <div class="card companion">
+                <span class="av"></span>
+                <div class="info">
+                  <div class="nm">云栖 <span class="mood">· 开心陪伴中</span></div>
+                  <div class="line">今天看到江边的落日，想起上次和你一起看的那场。</div>
+                  <div class="since">已陪伴 3 小时 12 分 · 此刻在设计台</div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-title">正在播放</div>
+                <div class="media">
+                  <div class="cover"></div>
+                  <div class="mi">
+                    <div class="t">星河流转</div><div class="a">云栖 与 你的歌单</div>
+                    <div class="track"><span class="now">1:24</span><span class="bar"><i></i></span><span class="tot">3:05</span></div>
+                  </div>
+                  <div class="ctl">
+                    <button aria-label="上一首"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M19 20 9 12l10-8z"/><path d="M5 19V5"/></svg></button>
+                    <button class="play" aria-label="暂停"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="4" height="16" x="6" y="4" rx="1"/><rect width="4" height="16" x="14" y="4" rx="1"/></svg></button>
+                    <button aria-label="下一首"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/></svg></button>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-title">此刻系统</div>
+                <div class="sys">
+                  <div class="cell"><span class="k">CPU</span><span class="v">18<small>%</small></span><span class="g"><i></i></span></div>
+                  <div class="cell"><span class="k">内存</span><span class="v">43<small>%</small></span><span class="g"><i></i></span></div>
+                  <div class="cell"><span class="k">网络</span><span class="v">24<small>KB/s</small></span><span class="g"><i></i></span></div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-title">最近消息</div>
+                <div class="notifs">
+                  <div class="item"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><div class="body"><div class="t">云栖</div><div class="d">今天看到江边的落日，余晖洒在江面上。</div></div><span class="tm">14:26</span></div>
+                  <div class="item"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><div class="body"><div class="t">日程提醒</div><div class="d">20:00 记得陪我看一部电影。</div></div><span class="tm">13:05</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="wide-pane card" data-pane="brief">
+              <div class="pane-head"><span class="pt"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>今日简报</span><button class="back" data-back>回窄屏</button></div>
+              <div class="pane-body">
+                <div class="wx"><span class="em">☀️</span><div><div class="tm">26°</div><div class="ds">重庆 · 晴转多云<br>湿度 58% · 东南风 2 级</div></div></div>
+                <div class="tx">上午有 2 场会议；<b>14:30 设计评审</b> 建议提前 10 分钟。今天整体节奏比较满，记得留 20 分钟午休。</div>
+                <div class="tx">待办 · 3 项<br>① 回复甲方邮件　② 提交日报　③ 晚上 20:00 和云栖看电影</div>
+              </div>
+            </div>
+            <div class="wide-pane card" data-pane="calendar">
+              <div class="pane-head"><span class="pt"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>今日日程</span><button class="back" data-back>回窄屏</button></div>
+              <div class="pane-body">
+                <div class="ev"><span class="ht">10:00</span><span class="ln"></span><div class="dt"><div class="n">产品周会</div><div class="d">3 楼会议室 · 60 分钟</div></div></div>
+                <div class="ev"><span class="ht">14:30</span><span class="ln"></span><div class="dt"><div class="n">设计评审</div><div class="d">灵动岛 v2 方案 · 线上</div></div></div>
+                <div class="ev"><span class="ht">17:00</span><span class="ln"></span><div class="dt"><div class="n">健身</div><div class="d">江边跑步 · 40 分钟</div></div></div>
+                <div class="ev"><span class="ht">20:00</span><span class="ln"></span><div class="dt"><div class="n">和云栖看电影</div><div class="d">客厅 · 记得准备零食</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note"><span>展开＝胶囊拉宽同面板并变顶条</span><span>无外层阴影 · 内高光</span><span>点简报/日程 → 720 宽屏右侧内嵌</span><span>点外部自动回弹</span></div>
+    </section>
+
+    <!-- ── 恋粉治愈 ── -->
+    <section class="scene" data-theme="pink">
+      <div class="scene-head"><h2>恋粉治愈</h2><code>glass rgba(255,255,255,.66) · 珊瑚粉光</code></div>
+      <div class="scene-meta">情绪主题 · 奶油玻璃 + 珊瑚粉强调 · 交互同上</div>
+      <div class="island-box">
+        <div class="size-tag">CAPSULE · 200 → hover 320 · open 340 / 720</div>
+        <div class="capsule" data-cap>
+          <span class="halo"></span>
+          <span class="avatar"></span>
+          <span class="cap-txt"><span class="main">想你了，今天也要好好吃饭</span><span class="sub">EVENING · 21:40</span></span>
+          <span class="badge">3</span><span class="dot"></span>
+          <div class="cap-bar">
+            <div class="who"><span class="name">云栖 · 浮屿</span><span class="live"><i></i>在线陪伴中</span></div>
+            <button class="close" aria-label="收起"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+        </div>
+        <div class="expanded" data-exp>
+          <div class="wide-body">
+            <div class="narrow-col">
+              <div class="card"><div class="card-title">快捷操作</div>
+                <div class="quick">
+                  <button><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="lb">快捷对话</span></button>
+                  <button data-wide="brief"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><span class="lb">今日简报</span></button>
+                  <button><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/></svg></span><span class="lb">认知面板</span></button>
+                  <button data-wide="calendar"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><span class="lb">日程</span></button>
+                </div>
+              </div>
+              <div class="card companion">
+                <span class="av"></span>
+                <div class="info"><div class="nm">云栖 <span class="mood">· 想你在发呆</span></div><div class="line">刚泡了杯蜂蜜水，你的那杯我放在桌上了。</div><div class="since">已陪伴 128 天 · 此刻在客厅</div></div>
+              </div>
+              <div class="card"><div class="card-title">正在播放</div>
+                <div class="media">
+                  <div class="cover"></div>
+                  <div class="mi"><div class="t">小城夏天</div><div class="a">私人收藏</div>
+                    <div class="track"><span class="now">0:42</span><span class="bar"><i style="width:26%"></i></span><span class="tot">2:44</span></div>
+                  </div>
+                  <div class="ctl">
+                    <button aria-label="上一首"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M19 20 9 12l10-8z"/><path d="M5 19V5"/></svg></button>
+                    <button class="play" aria-label="暂停"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="4" height="16" x="6" y="4" rx="1"/><rect width="4" height="16" x="14" y="4" rx="1"/></svg></button>
+                    <button aria-label="下一首"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/></svg></button>
+                  </div>
+                </div>
+              </div>
+              <div class="card"><div class="card-title">此刻系统</div>
+                <div class="sys">
+                  <div class="cell"><span class="k">CPU</span><span class="v">12<small>%</small></span><span class="g"><i></i></span></div>
+                  <div class="cell"><span class="k">内存</span><span class="v">38<small>%</small></span><span class="g"><i></i></span></div>
+                  <div class="cell"><span class="k">网络</span><span class="v">8<small>KB/s</small></span><span class="g"><i></i></span></div>
+                </div>
+              </div>
+              <div class="card"><div class="card-title">最近消息</div>
+                <div class="notifs"><div class="item"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><div class="body"><div class="t">云栖</div><div class="d">晚上冷，记得披上那件外套。</div></div><span class="tm">21:12</span></div></div>
+              </div>
+            </div>
+            <div class="wide-pane card" data-pane="brief">
+              <div class="pane-head"><span class="pt"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>今日简报</span><button class="back" data-back>回窄屏</button></div>
+              <div class="pane-body">
+                <div class="wx"><span class="em">🌙</span><div><div class="tm">21°</div><div class="ds">重庆 · 夜间多云<br>湿度 64% · 微风</div></div></div>
+                <div class="tx">今晚没有会议安排。<b>20:00 电影</b> 已经准备好，零食在柜子里。</div>
+                <div class="tx">睡前提醒 · 2 项<br>① 敷面膜　② 调暗台灯，明天早上有 8:30 的会</div>
+              </div>
+            </div>
+            <div class="wide-pane card" data-pane="calendar">
+              <div class="pane-head"><span class="pt"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>今日日程</span><button class="back" data-back>回窄屏</button></div>
+              <div class="pane-body">
+                <div class="ev"><span class="ht">19:30</span><span class="ln"></span><div class="dt"><div class="n">晚饭</div><div class="d">和云栖一起吃</div></div></div>
+                <div class="ev"><span class="ht">20:00</span><span class="ln"></span><div class="dt"><div class="n">电影时间</div><div class="d">客厅 · 云栖挑选片单</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note"><span>珊瑚粉＝想你的颜色</span><span>胶囊 open＝面板头部</span><span>宽屏内嵌简报/日程</span></div>
+    </section>
+
+    <!-- ── 晨雾浅白 ── -->
+    <section class="scene" data-theme="light">
+      <div class="scene-head"><h2>晨雾浅白</h2><code>glass rgba(255,255,255,.76) · 天空蓝光</code></div>
+      <div class="scene-meta">白日模式 · 轻透玻璃 + 天空蓝强调 · 交互同上</div>
+      <div class="island-box">
+        <div class="size-tag">CAPSULE · 200 → hover 320 · open 340 / 720</div>
+        <div class="capsule" data-cap>
+          <span class="halo"></span>
+          <span class="avatar"></span>
+          <span class="cap-txt"><span class="main">早安，新的一天也要加油</span><span class="sub">MORNING · 08:15</span></span>
+          <span class="badge">3</span><span class="dot"></span>
+          <div class="cap-bar">
+            <div class="who"><span class="name">云栖 · 浮屿</span><span class="live"><i></i>在线陪伴中</span></div>
+            <button class="close" aria-label="收起"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+        </div>
+        <div class="expanded" data-exp>
+          <div class="wide-body">
+            <div class="narrow-col">
+              <div class="card"><div class="card-title">快捷操作</div>
+                <div class="quick">
+                  <button><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="lb">快捷对话</span></button>
+                  <button data-wide="brief"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><span class="lb">今日简报</span></button>
+                  <button><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/></svg></span><span class="lb">认知面板</span></button>
+                  <button data-wide="calendar"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><span class="lb">日程</span></button>
+                </div>
+              </div>
+              <div class="card companion">
+                <span class="av"></span>
+                <div class="info"><div class="nm">云栖 <span class="mood">· 元气满满</span></div><div class="line">今天的安排已经整理好了，第一件事是杯温水。</div><div class="since">已陪伴 128 天 · 此刻在工作室</div></div>
+              </div>
+              <div class="card"><div class="card-title">正在播放</div>
+                <div class="media">
+                  <div class="cover"></div>
+                  <div class="mi"><div class="t">晨间练习</div><div class="a">专注白噪音</div>
+                    <div class="track"><span class="now">2:10</span><span class="bar"><i style="width:58%"></i></span><span class="tot">5:00</span></div>
+                  </div>
+                  <div class="ctl">
+                    <button aria-label="上一首"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M19 20 9 12l10-8z"/><path d="M5 19V5"/></svg></button>
+                    <button class="play" aria-label="暂停"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="4" height="16" x="6" y="4" rx="1"/><rect width="4" height="16" x="14" y="4" rx="1"/></svg></button>
+                    <button aria-label="下一首"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/></svg></button>
+                  </div>
+                </div>
+              </div>
+              <div class="card"><div class="card-title">此刻系统</div>
+                <div class="sys">
+                  <div class="cell"><span class="k">CPU</span><span class="v">6<small>%</small></span><span class="g"><i></i></span></div>
+                  <div class="cell"><span class="k">内存</span><span class="v">31<small>%</small></span><span class="g"><i></i></span></div>
+                  <div class="cell"><span class="k">网络</span><span class="v">36<small>KB/s</small></span><span class="g"><i></i></span></div>
+                </div>
+              </div>
+              <div class="card"><div class="card-title">最近消息</div>
+                <div class="notifs"><div class="item"><span class="ic"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><div class="body"><div class="t">云栖</div><div class="d">早安！今天早上七点给你发的天气预报看到了吗。</div></div><span class="tm">08:15</span></div></div>
+              </div>
+            </div>
+            <div class="wide-pane card" data-pane="brief">
+              <div class="pane-head"><span class="pt"><svg class="ic-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>今日简报</span><button class="back" data-back>回窄屏</button></div>
+              <div class="pane-body">
+                <div class="wx"><span class="em">☀️</span><div><div class="tm">23°</div><div class="ds">重庆 · 晴<br>湿度 45% · 东南风 1 级</div></div></div>
+                <div class="tx">上午 8:30 晨会。<b>今天整体计划已排好</b>，下午 14:30 设计评审，提前准备材料。</div>
+                <div class="tx">待办 · 3 项<br>① 回复邮件　② 准备评审材料　③ 晚上陪云栖看电影</div>
+              </div>
+            </div>
+            <div class="wide-pane card" data-pane="calendar">
+              <div class="pane-head"><span class="pt"><svg class="ic-svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>今日日程</span><button class="back" data-back>回窄屏</button></div>
+              <div class="pane-body">
+                <div class="ev"><span class="ht">08:30</span><span class="ln"></span><div class="dt"><div class="n">晨会</div><div class="d">线上 · 20 分钟</div></div></div>
+                <div class="ev"><span class="ht">10:00</span><span class="ln"></span><div class="dt"><div class="n">产品周会</div><div class="d">3 楼会议室</div></div></div>
+                <div class="ev"><span class="ht">14:30</span><span class="ln"></span><div class="dt"><div class="n">设计评审</div><div class="d">灵动岛 v2 方案 · 线上</div></div></div>
+                <div class="ev"><span class="ht">20:00</span><span class="ln"></span><div class="dt"><div class="n">和云栖看电影</div><div class="d">客厅 · 记得准备零食</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note"><span>天空蓝＝专注</span><span>胶囊 open＝面板头部</span><span>轻透高光 · 无外层阴影</span></div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+// 主题切换
+const scenes = document.querySelectorAll(".scene");
+const btns = document.querySelectorAll("#themeSwitch button");
+btns.forEach((b) => b.addEventListener("click", (e) => {
+  e.stopPropagation();
+  btns.forEach((x) => x.dataset.on = "0");
+  b.dataset.on = "1";
+  scenes.forEach((s) => s.dataset.theme = b.dataset.t);
+}));
+
+// 每个场景：胶囊点击 → 胶囊拉宽成面板头部 + 面板生长；点外部回弹；宽屏内嵌简报·日程
+scenes.forEach((scene) => {
+  const cap = scene.querySelector(".capsule");
+  const exp = scene.querySelector(".expanded");
+
+  function open() {
+    cap.classList.add("open");
+    exp.classList.remove("collapsing");
+    exp.style.display = "block";
+    exp.animate([{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "translateY(0)" }], { duration: 380, easing: "cubic-bezier(0.34,1.56,0.64,1)" });
+  }
+  function close() {
+    cap.classList.remove("open");
+    exp.classList.remove("wide");
+    exp.querySelectorAll(".wide-pane").forEach((p) => { p.style.display = "none"; });
+    exp.classList.add("collapsing");
+    setTimeout(() => { exp.classList.remove("collapsing"); exp.style.display = "none"; }, 340);
+  }
+
+  // 点击胶囊 → 展开（已展开则收起）
+  cap.addEventListener("click", () => { cap.classList.contains("open") ? close() : open(); });
+
+  // 头部关闭按钮 → 收起
+  cap.querySelector(".close").addEventListener("click", (e) => { e.stopPropagation(); close(); });
+
+  // 今日简报 / 日程 → 拉宽屏，右侧内嵌
+  scene.querySelectorAll("[data-wide]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      cap.classList.add("open");
+      exp.classList.remove("collapsing");
+      exp.style.display = "";
+      exp.classList.add("wide");
+      exp.querySelectorAll(".wide-pane").forEach((p) => { p.style.display = p.dataset.pane === btn.dataset.wide ? "" : "none"; });
+    });
+  });
+
+  // 宽屏右栏「回窄屏」
+  scene.querySelectorAll("[data-back]").forEach((b) => {
+    b.addEventListener("click", () => {
+      exp.classList.remove("wide");
+      exp.querySelectorAll(".wide-pane").forEach((p) => { p.style.display = "none"; });
+    });
+  });
+});
+
+// 点击岛外 → 所有面板自动回弹
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".expanded") || e.target.closest(".capsule") || e.target.closest("#themeSwitch")) return;
+  scenes.forEach((scene) => {
+    const cap = scene.querySelector(".capsule");
+    const exp = scene.querySelector(".expanded");
+    cap.classList.remove("open");
+    exp.classList.remove("wide");
+    exp.querySelectorAll(".wide-pane").forEach((p) => { p.style.display = "none"; });
+    exp.classList.add("collapsing");
+    setTimeout(() => { exp.classList.remove("collapsing"); exp.style.display = "none"; }, 340);
+  });
+});
+</script>
+</body>
+</html>

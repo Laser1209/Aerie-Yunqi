@@ -1,0 +1,80 @@
+c833517 fix(notify): SSE重放事件去重+主窗口聚焦时不弹系统通知
+02d38cb feat(world): 对话移动意图+世界动作set_location，让伊塔真的动起来
+2029cab fix(memory): identity_seed记忆播种改为DB精确查重
+b434aea fix(config): Bocha申请教程链接更新为官方开放平台
+1f286ad fix(settings): 申请教程改用系统浏览器打开
+8be9f3a fix(admin): topic状态文件启动即落盘+列表行grid右对齐布局
+0f7fca4 feat(settings): 新增功能API配置界面(搜索/天气/位置)
+f2df75c feat(settings): API余额显示+模型功能点自定义面板+热加载
+4ffa679 feat(admin): 聊天记录逐条编辑+记忆全量展示+概览总tokens
+2a374cb fix(admin): KPI数据同步-新增overview真实总量端点+修复token同步
+1262c5c chore(data): 更新每日运行状态数据
+4109f53 feat(context): 删除topic_tracking_v1发布闸门flag，话题认知层常驻生效
+c1ca236 docs: 计划文档记录艾莲审计发现项全数闭环
+434ba17 fix(pipeline): 修正召回触发器注释与执行顺序一致（审计F4）
+243062e docs: 计划文档记录艾莲审计条件项闭环（F2+F-补签）
+4a22460 test: Agent补签P1回归复核闭环（1406/27零新增失败）
+dd5d817 test(acceptance): 跨通道离线验收扩展至10组并复跑达标
+23e569e docs: 计划文档记录P4b安全审查收口
+203da1c chore(data): 提交冒烟复验后chroma元数据变更
+28a758e chore(data): 提交安全审查冒烟复验运行时数据
+5a70199 fix(admin): Origin 守卫放行服务端自身 Origin，修复浏览器同源 POST 误拦
+3556299 fix(admin): 管理 API 增加 Origin 守卫阻断跨源解锁攻击（安全审查#1）
+a18f3db docs(plan): 记录管理界面浏览器端到端验证证据
+430c1e4 chore(data): 更新运行时数据文件（管理界面浏览器冒烟产物）
+4a333de chore(data): 更新运行时数据文件（全量回归产物）
+7a8723d feat(admin): 设置面板新增管理平台显式入口（§3.5.2③ 兜底）
+49b58ce docs(plan): 记录 P4b 状态重置完成与真实运行时冒烟证据
+62367e1 feat(admin): 状态重置与 undo 快照端点 + 管理 API HTTP 集成测试
+16959b1 feat(admin): 状态文件只读查看端点与管理页状态页
+ceae6ca feat(admin): 管理平台窗口懒加载与三路入口（P4b 前端）
+ff5d149 feat(admin): 后台管理平台软删回收站与审计门闩（P4b 核心）
+97ef12c chore(data): 更新运行时数据文件
+b5808e9 feat(admin): 世界仪表盘统计页前端渲染与决策日志透传（P4a）
+c1a5c4a feat(admin): 统计看板服务与决策日志展示（P4a）
+35b7094 feat(context): 话题追踪·行为调度·寻路感知系统（P0-P3）
+15078dc chore(data): 更新运行时数据文件
+63025f6 feat(photo): 生图POV自拍约束与发图自我认知闭环
+88dfe37 chore(data): 更新各类运行时数据与文档
+3d9285c docs(plan): 归档 Aerie-Model-X 分支升级执行计划 Step 6 完成 - 记录 6 步全流程毫秒级时间戳归档 - 记录最终交付：两分支通过 cherry-pick 对齐，全程未执行 merge
+c59c9ac docs(perf): 启动性能优化方案升级至 v2.0 并归档分支升级计划 - 12_启动性能分析与优化方案.md v2.0：补入 main↔Aerie-Model-X 同步后最新架构（B08 architecture_guard、brain→llm_caller 收敛、InProcess 世界保护、multi_channel_identity_v1） - 更新 import 实测数据：升级后 10.93s（原 7.89s），全量 1278 passed/27 failed 与基线一致 - U-7 附件 import 懒加载收益上调至 -6.4s，10s 目标数学推演 ~9.5s 确认可达 - 新增 plans/Aerie-Model-X分支升级执行计划.md：6 步全流程精确到毫秒归档 - boot_trace_data.md 同步升级后实测
+41a66af test: close P2-00 B08 architecture guard and BLK-005
+14cf306 fix(model-x): 合并 main 后修正 brain 模块收敛引用 - e2e_persona_baseline.py: TONE_PROMPTS 从 core.brain 迁移到 core.llm_caller（main 侧 26314fd 命名收敛），修复导入断裂 - case_12 断言改为验证温暖+直球+无克制特征，不再绑定已更新的旧文案想你 - self_evolve_l4.py / gen_architecture_poster.py: core.brain.py 引用更新为 core.llm_caller.py
+e69093d fix(world): 保护 InProcess 世界免被 supervisor 空绑定覆盖
+e45f743 docs(context): 艾莲审计会签 P0-P3 交付（通过，有条件）
+57e9a3d test(context): P3 过关点性能微基准（assemble 视图B 增量≈0）
+050aa18 chore: 移除写盘测试残留 _edit_test.md
+da88fd1 docs(context): 记录 Agent 安全扫描结论（无可用利用项）
+1344291 test(context): 跨通道连续性离线验收（§5 验收 2 代理）
+406343e docs(context): 关闭基线/端口/全量回归检查项
+9003a37 docs(context): 勾选 pre-p0 基线与运行验证待办
+a494216 docs(context): 记录 P3 实施进度与过关点验收状态
+a0f1e10 test(context): 视图B预算与写入隔离红线验收测试
+50a72a2 feat(context): 主动回忆触发器与事件记忆召回（P3-4/P3-5）
+e217bd2 feat(context): 跨端时间线与多端存在提示（P3-1~P3-3）
+acf5a61 docs(context): 记录 P2 实施进度与校验门 PoC 结论
+1a31727 feat(memory): 写入校验门 ConsistencyGate PoC
+bdc00c9 feat(context): 决策自省段注入（thinking_trace_injection_v1）
+7696ca8 chore: 更新测试文件、数据库与媒体资源
+8093f1f docs(context): 更新 P1 过关点与回归验证结论
+2fa32c1 docs(context): 记录 P1 分组摘要实施进度与过关点
+cb247ec feat(context): 温层分组摘要分桶
+9b36ad0 fix(memory): 记忆注入防御与无来源记忆降权
+cac3cdc docs(context): 更新 P0 实施记录与过关点状态
+db6b194 test(context): 验证滚动摘要降级兜底与轮次窗口共存
+79a4a7e feat(memory): 记忆来源标注与系统记忆 channel 补齐
+78a79b4 feat(context): 注入通道感知段与跨端来源标记
+24afd06 feat(context): 热窗口按轮次计算并加入 token 弹性兜底
+0fcb755 refactor(context): _hist_label 抽取公共模块去重
+3782c31 fix(evolution): 系统生成记忆补传 channel 来源
+d9ad40b fix(api-server): knowledge 写端点补主进程 token 鉴权
+96468b5 chore: 更新数据文件与上下文记忆系统改造方案
+f4f7bbf fix(
+9a5ef6d feat(world-sim): 实现房间级精确定位功能
+fcc3e67 chore: 批量更新项目数据、配置与代码逻辑
+de8a620 feat(photo-pipeline): 实现生图提示词模块化升级与主动发图修复
+70001ba refactor(world-image): 完成世界生图情绪链路全量修复与加固
+94b3751 fix(world, companion): 修复主动发图卡死与世界时段误判问题
+02a270b chore(data+scripts): 同步更新运行时数据与启动追踪工具
+dbb05bf feat(qq&image): 修复空提示词生图秒拒与QQ消息渲染问题
+51951a8 refactor(core+frontend): 重构纠错逻辑与工具链路，优化体验

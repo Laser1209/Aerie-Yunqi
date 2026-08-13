@@ -533,13 +533,24 @@ class SettingsPanel {
         ${fieldsBlock}
         ${actionBlock}
         <div style="font-size:12px;line-height:1.5;margin-top:8px;color:var(--text-muted,#999);">
-          ${f.how_to} · <a href="${f.tutorial}" target="_blank" rel="noopener" style="color:var(--accent,#ff5b9c);">申请教程 ↗</a>
+          ${f.how_to}${f.tutorial ? ` · <a href="#" data-tutorial="${f.tutorial}" class="feature-tutorial-link" style="color:var(--accent,#ff5b9c);">申请教程 ↗</a>` : ""}
         </div>
       `;
       list.appendChild(card);
     });
     list.querySelectorAll(".feature-save-btn").forEach((btn) => {
       btn.addEventListener("click", () => this.saveFeatureApi(btn.dataset.feature));
+    });
+    list.querySelectorAll(".feature-tutorial-link").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const url = a.dataset.tutorial || "";
+        if (window.aerie && window.aerie.electron && window.aerie.electron.shell && window.aerie.electron.shell.openExternal) {
+          window.aerie.electron.shell.openExternal(url);
+        } else {
+          window.open(url, "_blank", "noopener");
+        }
+      });
     });
   }
 

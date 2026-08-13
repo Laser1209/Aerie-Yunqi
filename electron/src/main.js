@@ -2576,6 +2576,18 @@ ipcMain.handle("shell:openPath", async (_event, path) => {
   }
 });
 
+// 用系统默认浏览器打开外链（避免 Electron 内嵌新窗口打不开外部页面）
+ipcMain.handle("shell:openExternal", async (_event, url) => {
+  const { shell } = require("electron");
+  if (!url || !/^https?:\/\//i.test(url)) return { success: false, error: "invalid url" };
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 // R7.0: Forward /api/health as-is so the renderer can read stale_code
 // without a second round-trip. The renderer's poll already calls
 // /api/health, so this IPC is mainly used by the very first paint

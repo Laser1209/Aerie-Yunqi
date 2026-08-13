@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld("aerie", {
     },
     shell: {
       openPath: (path) => ipcRenderer.invoke("shell:openPath", path),
+      openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
     },
     // Block-5A: brief popup/detail window IPC bridge
     brief: {

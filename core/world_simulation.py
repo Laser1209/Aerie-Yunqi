@@ -408,6 +408,26 @@ class WorldSimulation:
             )
             if action_result.get("action") == "set_activity":
                 activity = str(action_result.get("activity") or activity)
+            elif action_result.get("action") == "set_location":
+                # 世界动作 set_location：直接把角色位置移动到目标 zone，
+                # 覆盖 phase 静态映射（zone/floor/position/location 兼容层）。
+                target_zone = str(action_result.get("zone") or "").strip()
+                if target_zone:
+                    try:
+                        from core.home_space import (
+                            ZONES,
+                            objects_for_zone,
+                            position_desc as hs_position_desc,
+                        )
+
+                        if target_zone in ZONES:
+                            zone = target_zone
+                            zone_objects = objects_for_zone(zone, limit=6)
+                            floor = int(ZONES.get(zone, {}).get("level") or 0)
+                            position = hs_position_desc(floor, zone) or ""
+                            location = "study" if floor >= 2 else "home"
+                    except Exception:
+                        pass
 
         self._ticks += 1
         energy = self._compute_energy(phase_name, phase_data, now)

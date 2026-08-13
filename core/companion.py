@@ -766,6 +766,8 @@ class Companion:
         self.pipeline.relationship_snapshot_provider = self._relationship_snapshot_for_context
         self.pipeline.self_model_snapshot_provider = self._self_model_snapshot_for_context
         self.pipeline.internal_snapshot_provider = self._internal_snapshot_for_context
+        # 对话移动意图：用户"去X"指令 → MovementManager.move_to()，让她的身体真的移动。
+        self.pipeline.movement_intent_provider = self.apply_movement_intent
         # P0 topic system: 给上下文构建器注入话题提供器（L0.5 话题认知层）。
         # tracker 在 __init__ 后段才创建，provider 用 getattr 惰性读取。
         try:
@@ -2480,6 +2482,62 @@ class Companion:
             )
         except Exception:
             logger.debug("daily plan consume failed", exc_info=True)
+
+    def apply_movement_intent(self, text: str) -> Optional[dict]:
+        """对话移动意图执行：识别「去X / 走到X / 坐到X」→ MovementManager.move_to()。
+
+        让用户在对话里让她移动时，她的"身体"真的改变位置，而不是只在话里答应。
+        返回移动结果描述（供 pipeline 注入上下文）；无指令/失败均返回 None。
+        """
+        try:
+            from core.movement_intent import detect_move_intent
+
+            intent = detect_move_intent(text)
+            if not intent:
+                logger.debug("[MoveIntent] no intent in %r", str(text)[:30])
+                return None
+            mover = getattr(self, "movement_manager", None)
+            if mover is None:
+                logger.info("[MoveIntent] movement_manager unavailable")
+                return None
+            target = intent["zone"]
+            snap = self._world_snapshot_for_context() or {}
+            current = mover.current_zone() or str(snap.get("zone") or "")
+            if not current or current in ("", "unknown"):
+                current = "unknown"
+            if current == target:
+                return {
+                    "moved": False,
+                    "from_zone": current,
+                    "to_zone": target,
+                    "to_zone_cn": intent["zone_cn"],
+                    "note": f"她本来就在{intent['zone_cn']}，没有移动。",
+                }
+            mover.move_to(current, target, reason=f"用户指令：{intent['matched']}")
+            logger.info(
+                "[MoveIntent] move_to %s -> %s (%s)",
+                current, target, intent["matched"],
+            )
+            # 推进世界 tick，让快照立刻带上移动状态。
+            wp = getattr(self, "world_port", None)
+            if wp and callable(getattr(wp, "tick", None)):
+                try:
+                    wp.tick()
+                except Exception:
+                    logger.debug("world tick after move failed", exc_info=True)
+            from core.home_space import ZONE_CN
+
+            from_cn = ZONE_CN.get(current, current) if current != "unknown" else "刚才的地方"
+            return {
+                "moved": True,
+                "from_zone": current,
+                "to_zone": target,
+                "to_zone_cn": intent["zone_cn"],
+                "note": f"她收到你的指令，正从{from_cn}走向{intent['zone_cn']}。",
+            }
+        except Exception:
+            logger.debug("apply movement intent failed", exc_info=True)
+            return None
 
     async def _run_world_loop(self) -> None:
         """世界真实时间推进 + 真实数据刷新（inprocess 模式）。

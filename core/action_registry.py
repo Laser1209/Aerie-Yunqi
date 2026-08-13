@@ -129,6 +129,7 @@ class ActionRegistry:
         self._world_actions: dict[str, str] = {
             "wait": "No-op safe fallback",
             "set_activity": "Update simulated activity",
+            "set_location": "Update simulated location/zone",
         }
         # P1-B 注册
         self._registered: dict[str, _RegisteredAction] = {}
@@ -151,6 +152,11 @@ class ActionRegistry:
             if not activity:
                 return self.choose_safe_action(reason="invalid_activity")
             return WorldAction("set_activity", {"activity": activity[:80]})
+        if action_type == "set_location":
+            zone = str(params.get("zone") or "").strip()
+            if not zone:
+                return self.choose_safe_action(reason="invalid_zone")
+            return WorldAction("set_location", {"zone": zone[:40]})
         return WorldAction("wait", reason=str(payload.get("reason") or ""))
 
     def choose_safe_action(self, *, reason: str = "safe_fallback") -> WorldAction:
@@ -167,6 +173,12 @@ class ActionRegistry:
                 "status": "ok",
                 "action": "set_activity",
                 "activity": action.params.get("activity", "idle"),
+            }
+        if action.action_type == "set_location":
+            return {
+                "status": "ok",
+                "action": "set_location",
+                "zone": action.params.get("zone", ""),
             }
         return {
             "status": "ok",

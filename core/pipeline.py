@@ -133,6 +133,7 @@ class Pipeline:
         summary_summarizer: Any = None,
         attachment_service: Any = None,
         memory_store: Any = None,
+        movement_intent_provider: Any = None,
     ) -> None:
         self.router = router
         self.emotion = emotion_engine
@@ -155,6 +156,8 @@ class Pipeline:
         )
         self.attachment_service = attachment_service
         self.memory_store = memory_store or getattr(context_builder, "memory", None)
+        # 对话移动意图执行器（companion 注入）：用户"去X"指令 → 世界移动。
+        self.movement_intent_provider = movement_intent_provider
         self._summary_tasks: set[asyncio.Task[Any]] = set()
         self._summary_inflight: set[str] = set()
         # 用户明确要求照片时触发的后台生图任务（fire-and-forget，文本先发、图后到）。
@@ -241,6 +244,10 @@ class Pipeline:
                 model_content = await correct_typos(self.brain, model_content)
             except Exception:
                 logger.exception("typo correction failed, fallback to original")
+
+        # 对话移动意图：用户"去X / 走到X / 坐到X"指令 → 世界移动。
+        # 执行结果注入系统提示，让 LLM 在回复中自然体现"她真的在动"。
+        movement_result = self._apply_movement_intent(model_content)
 
         (
             context_attachments,
@@ -451,6 +458,12 @@ class Pipeline:
             attachment_snippets=attachment_snippets,
             request_context=request_context,
         )
+        # 移动意图注入：把"她正在/已经移动"写进系统提示，让回复自然体现动作。
+        if movement_result and movement_result.get("moved") and ctx_messages:
+            note = movement_result.get("note") or ""
+            if note:
+                sys_content = ctx_messages[0].get("content", "")
+                ctx_messages[0]["content"] = sys_content + "\n\n[世界事件] " + note
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
@@ -1329,6 +1342,23 @@ class Pipeline:
             return provider(*args)
         except Exception:
             logger.warning("%s unavailable", name, exc_info=True)
+            return None
+
+    def _apply_movement_intent(self, text: str) -> dict | None:
+        """执行对话移动意图（companion 注入的 movement_intent_provider）。
+
+        命中移动指令并真实移动时返回结果 dict；无指令/未配置/失败返回 None。
+        """
+        provider = getattr(self, "movement_intent_provider", None)
+        if not callable(provider) or not text:
+            logger.info("movement intent skipped: provider=%s text=%r", callable(provider), str(text)[:20])
+            return None
+        try:
+            result = provider(text)
+            logger.info("movement intent result: %r", result)
+            return result
+        except Exception:
+            logger.debug("movement intent execution failed", exc_info=True)
             return None
 
     def _message_from_request_context(

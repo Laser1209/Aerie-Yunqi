@@ -120,7 +120,7 @@ DISLIKED_SECTION_LIMIT = 1
 # R7.0 Bocha Web Search API 配置
 # Bocha 是中文友好的多模态搜索 API，AI/IT/新闻都覆盖，
 # 用作 RSS 全挂时的兜底。需要环境变量 BOCHA_API_KEY 启用。
-# 文档：https://bocha-ai.feishu.cn/docx/Mk0IdjA1EozLRAx36YicI5bJnOh
+# 文档：https://open.bochaai.com
 # ══════════════════════════════════════════════════
 BOCHA_ENDPOINT = "https://api.bochaai.com/v1/web-search"
 BOCHA_TIMEOUT_SEC = 10

@@ -5152,8 +5152,8 @@ _FEATURE_APIS = [
         "key": "bocha_search",
         "name": "Bocha 网页搜索",
         "desc": "资讯简报搜索的最终兜底层（AI / IT / 新闻搜索）",
-        "tutorial": "https://bocha-ai.feishu.cn/docx/Mk0IdjA1EozLRAx36YicI5bJnOh",
-        "how_to": "注册 Bocha 开放平台 → 创建应用 → 复制 API Key 填入下方",
+        "tutorial": "https://open.bochaai.com",
+        "how_to": "注册博查 AI 开放平台 → 右上角登录（微信扫码）→ API KEY 管理 → 创建密钥（sk-xxxxxx）填入下方",
         "fields": [{"env_key": "BOCHA_API_KEY", "label": "API Key", "secret": True}],
     },
     {

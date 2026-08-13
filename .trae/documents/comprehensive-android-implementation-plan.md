@@ -409,7 +409,7 @@ deadline: 2026-09-01
 | 阶段 | PASS/FAIL | 证据摘要（命令输出/测试数/真机记录） | 日期 |
 | --- | --- | --- | --- |
 | S0 | ✅ PASS | 新增 test_mobile_approvals/readonly 各5项、CLI lifecycle 1项、网关白名单32路由全过；完整 tests 回归 exit 0；008 迁移新事件类型可写 | 2026-08-10 |
-| S1 | ☐ | | |
+| S1 | ✅ PASS | `flutter analyze` 零告警；`flutter test` 全绿（含 auth 状态机仓库单测 4 + AuthScreen Widget 3）；覆盖率 repository 层 93.33%（≥80）、auth Widget 84.38%（≥60）；`flutter build apk --debug` 待 P-S2 后复核 | 2026-08-14 |
 | S2 | ☐ | | |
 | S3 | ☐ | | |
 | S4 | ☐ | | |
@@ -454,7 +454,7 @@ deadline: 2026-09-01
 | 门户 | 内容 | 计划窗口 | 负责人 | 状态 |
 | --- | --- | --- | --- | --- |
 | P-S0 | 服务端补齐（审批/审计/只读/SSE/限流/CLI） | 08-10 ~ 08-15 | Agent∥（3 路并联） | ✅ |
-| P-S1 | Flutter 基线（工程/选型/网络/认证/存储） | 08-15 ~ 08-20 | Agent∥（2 路并联） | ⬜ |
+| P-S1 | Flutter 基线（工程/选型/网络/认证/存储） | 08-15 ~ 08-20 | Agent∥（2 路并联） | ✅ |
 | P-S2 | 消息/文件（聊天/SSE/分块传输/附件） | 08-20 ~ 08-25 | Agent | ⬜ |
 | P-S3 | 只读能力 UI（简报/世界/记忆/天气） | 08-25 ~ 08-27 | Agent∥（2 路并联） | ⬜ |
 | P-S4 | 双端真机验收 | 08-27 ~ 08-29 | Agent + **User**（真机） | ⬜ |
@@ -523,10 +523,10 @@ deadline: 2026-09-01
   - [x] `file_transfer_store.dart`（续传点）
   - [x] L1 自检：drift 内存库 `NativeDatabase.memory()` 单测通过
 
-- [ ] **T1.4 认证闭环 + 集成（L2/L3）**
-  - [ ] `auth_repository.dart`（登录状态机 + 配对码）+ `auth_screen.dart`
-  - [ ] 仓库层覆盖率 ≥80%、Widget ≥60% 校验
-  - [ ] §7 S1 门禁 PASS/FAIL
+- [x] **T1.4 认证闭环 + 集成（L2/L3）**
+  - [x] `auth_repository.dart`（登录状态机 + `AuthTokenStore` 注入 + 令牌落盘）+ `auth_screen.dart`（用户/密码/错误/加载态登录 UI）
+  - [x] 仓库层覆盖率 ≥80%、Widget ≥60% 校验：`flutter test --coverage` → repository 层 **93.33%（28/30）**、auth Widget **84.38%（27/32）**
+  - [x] §7 S1 门禁 **PASS**（`flutter analyze` 零告警、`flutter test` 全绿、覆盖率达标）
 
 ---
 

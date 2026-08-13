@@ -503,13 +503,13 @@ deadline: 2026-09-01
 **时间节点**：08-15 ~ 08-20（依赖：P-S0）。
 **负责人**：`Agent∥`（两路并联：T1.2 网络层 / T1.3 存储层 互不依赖，均在 T1.1 骨架就绪后启动）。
 
-- [ ] **T1.1 工程骨架**
-  - [ ] `flutter create aerie_mobile`，包名 `top.etta.aerie.mobile`，`pubspec.yaml version: 0.1.0+1`
-  - [ ] 按 §3.2.0 添加依赖（锁定版本）+ `flutter_lints`/`very_good_analysis`
-  - [ ] 建 `lib/features/*` + `lib/ui/theme|widgets` + `lib/gen/` 目录骨架
-  - [ ] 平台安全配置落地（§3.2.8）：Android `allowBackup=false` + `network_security_config`（debug 明文/release HTTPS）+ `FOREGROUND_SERVICE_DATA_SYNC` 前台服务类型；iOS `Info.plist` ATS 例外 + `NSLocalNetworkUsageDescription`
-  - [ ] 日志规范落地（§3.2.9）：分级（debug/info/warn/error）+ 脱敏 + 落盘轮转（`logs/` ≤5MB × 3 份）
-  - [ ] L1 自检：`flutter analyze` 零告警；`flutter test` 默认测试通过
+- [x] **T1.1 工程骨架**
+  - [x] `flutter create aerie_mobile`，包名 `top.etta.aerie.mobile`，`pubspec.yaml version: 0.1.0+1`
+  - [x] 按 §3.2.0 添加依赖（锁定版本）+ `flutter_lints`/`very_good_analysis`
+  - [x] 建 `lib/features/*` + `lib/ui/theme|widgets` + `lib/gen/` 目录骨架
+  - [x] 平台安全配置落地（§3.2.8）：Android `allowBackup=false` + `network_security_config`（debug 明文/release HTTPS）+ `FOREGROUND_SERVICE_DATA_SYNC` 前台服务类型；iOS `Info.plist` ATS 例外 + `NSLocalNetworkUsageDescription`
+  - [x] 日志规范落地（§3.2.9）：分级（debug/info/warn/error）+ 脱敏 + 落盘轮转（`logs/` ≤5MB × 3 份）
+  - [x] L1 自检：`flutter analyze` 零告警；`flutter test` 默认测试通过
 
 - [ ] **T1.2 网络层（并联支路 A）**
   - [ ] 后端 `openapi.json` → `openapi_sdk_gen` 生成 `lib/gen/`（auth/chat/file/readonly）

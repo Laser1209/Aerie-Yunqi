@@ -5145,6 +5145,47 @@ _MODEL_ROLES = [
      "desc": "语音转写 ASR"},
 ]
 
+# 功能 API（外部服务）元数据：设置页「功能 API 配置」界面展示。
+# builtin=True 表示内置免费、无需密钥；fields 中 secret=True 的字段脱敏展示。
+_FEATURE_APIS = [
+    {
+        "key": "bocha_search",
+        "name": "Bocha 网页搜索",
+        "desc": "资讯简报搜索的最终兜底层（AI / IT / 新闻搜索）",
+        "tutorial": "https://bocha-ai.feishu.cn/docx/Mk0IdjA1EozLRAx36YicI5bJnOh",
+        "how_to": "注册 Bocha 开放平台 → 创建应用 → 复制 API Key 填入下方",
+        "fields": [{"env_key": "BOCHA_API_KEY", "label": "API Key", "secret": True}],
+    },
+    {
+        "key": "baidu_map",
+        "name": "百度地图 Web 服务",
+        "desc": "天气优先源 + 附近地点/本地活动 + 地理编码/POI",
+        "tutorial": "https://lbsyun.baidu.com/",
+        "how_to": "创建应用并开启 Web 服务 API。推荐 SN 校验模式（同时填 AK + SK，无需 IP 白名单）；只填 AK 则走 IP 白名单模式",
+        "fields": [
+            {"env_key": "BAIDU_MAP_AK", "label": "AK · Access Key", "secret": False},
+            {"env_key": "BAIDU_MAP_SK", "label": "SK · Security Key（SN 校验）", "secret": True},
+        ],
+    },
+    {
+        "key": "dailyhot",
+        "name": "今日热榜聚合",
+        "desc": "资讯简报的热榜聚合数据源（DailyHotApi）",
+        "tutorial": "https://github.com/imsyy/DailyHotApi",
+        "how_to": "本地或服务器部署 DailyHotApi 后填入其地址，默认 http://127.0.0.1:6688",
+        "fields": [{"env_key": "DAILYHOT_API_BASE", "label": "API 地址", "secret": False}],
+    },
+    {
+        "key": "open_meteo",
+        "name": "Open-Meteo 天气",
+        "desc": "免费天气回退源，无需密钥，开箱即用",
+        "tutorial": "https://open-meteo.com/",
+        "how_to": "无需配置，百度地图不可用时自动回退",
+        "builtin": True,
+        "fields": [],
+    },
+]
+
 
 def _env_file_path() -> Path:
     """Return path to .env file (same directory as main.py)."""
@@ -5208,6 +5249,16 @@ def _read_provider_health_state() -> dict[str, Any]:
         return (data or {}).get("providers", {}) or {}
     except Exception:
         return {}
+
+
+def _mask_secret(value: str) -> str:
+    """脱敏展示密钥：保留末 4 位，其余以圆点遮挡。"""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    if len(value) <= 4:
+        return "•" * len(value)
+    return "•" * 8 + value[-4:]
 
 
 @app.get("/api/env/providers")
@@ -5316,6 +5367,72 @@ async def env_model_roles_save(request: Request) -> dict:
             except Exception:
                 pass
         return {"status": "ok", "hot_reloaded": list(changed_env.keys())}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/env/feature-apis")
+async def env_feature_apis_get() -> dict:
+    """返回功能 API（搜索/天气/位置等）配置项、教程与当前状态。"""
+    env = _read_env_file()
+    features = []
+    for meta in _FEATURE_APIS:
+        item = {
+            "key": meta["key"],
+            "name": meta["name"],
+            "desc": meta["desc"],
+            "tutorial": meta["tutorial"],
+            "how_to": meta["how_to"],
+        }
+        if meta.get("builtin"):
+            item["builtin"] = True
+            item["configured"] = True
+            item["status"] = "builtin"
+            item["fields"] = []
+        else:
+            fields = []
+            values = []
+            for f in meta["fields"]:
+                raw = env.get(f["env_key"], "")
+                values.append(raw.strip())
+                fields.append({
+                    "env_key": f["env_key"],
+                    "label": f["label"],
+                    "secret": f.get("secret", False),
+                    "masked": _mask_secret(raw) if f.get("secret") else raw,
+                })
+            item["builtin"] = False
+            item["configured"] = any(values)
+            item["status"] = "configured" if item["configured"] else "unconfigured"
+            item["fields"] = fields
+        features.append(item)
+    return {"features": features}
+
+
+@app.post("/api/env/feature-apis")
+async def env_feature_apis_save(request: Request) -> dict:
+    """保存功能 API 密钥到 .env（热加载）。Body: {"feature_key": "...", "fields": {"ENV_KEY": "value"}}"""
+    try:
+        body = await request.json()
+        feature_key = body.get("feature_key") if isinstance(body, dict) else None
+        meta = next((m for m in _FEATURE_APIS if m["key"] == feature_key), None)
+        if not meta or meta.get("builtin"):
+            return JSONResponse({"error": "unknown_feature"}, status_code=400)
+        fields = body.get("fields") if isinstance(body, dict) else None
+        if not isinstance(fields, dict):
+            return JSONResponse({"error": "invalid_fields"}, status_code=400)
+        env = _read_env_file()
+        changed: dict[str, str] = {}
+        for f in meta["fields"]:
+            env_key = f["env_key"]
+            if env_key in fields:
+                val = str(fields[env_key] or "").strip()
+                env[env_key] = val
+                changed[env_key] = val
+        _write_env_file(env)
+        if changed:
+            os.environ.update(changed)
+        return {"status": "ok", "hot_reloaded": list(changed.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

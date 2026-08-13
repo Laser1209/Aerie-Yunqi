@@ -1043,6 +1043,10 @@
               <span class="is-mode-tab__dot"></span>
               <span class="is-mode-tab__label">API Key</span>
             </button>
+            <button class="settings-mode-tab is-mode-tab" role="tab" aria-selected="false" data-mode="feature" id="tab-settings-feature" aria-controls="settings-feature-view">
+              <span class="is-mode-tab__dot"></span>
+              <span class="is-mode-tab__label">功能 API</span>
+            </button>
             <button class="settings-mode-tab is-mode-tab" role="tab" aria-selected="false" data-mode="yaml" id="tab-settings-yaml" aria-controls="settings-yaml-view">
               <span class="is-mode-tab__dot"></span>
               <span class="is-mode-tab__label">高级 (YAML)</span>
@@ -1456,6 +1460,21 @@
             <div id="apikey-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
             <div class="settings-actions" style="margin-top:16px;">
               <button id="apikey-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
+            </div>
+          </div>
+
+          <!-- 功能 API 视图 -->
+          <div id="settings-feature-view" role="tabpanel" aria-labelledby="tab-settings-feature" tabindex="0" style="display:none;">
+            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6;">
+              <strong style="color: var(--accent, #ff5b9c);">功能 API 配置</strong><br>
+              管理搜索、天气、位置等外部服务的密钥。留空的功能会自动回退内置免费源，开箱即用。
+            </div>
+            <div id="feature-api-list" class="apikey-provider-list">
+              <!-- JS 动态渲染 -->
+            </div>
+            <div id="feature-api-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
+            <div class="settings-actions" style="margin-top:16px;">
+              <button id="feature-api-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
             </div>
           </div>
 

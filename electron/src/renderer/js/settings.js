@@ -98,6 +98,8 @@ class SettingsPanel {
     if (customApiToggle) customApiToggle.addEventListener("click", () => this.toggleCustomApi());
     const customApiSave = document.getElementById("custom-api-save-btn");
     if (customApiSave) customApiSave.addEventListener("click", () => this.saveModelRoles());
+    const featureReloadBtn = document.getElementById("feature-api-reload-btn");
+    if (featureReloadBtn) featureReloadBtn.addEventListener("click", () => this.loadFeatureApis());
   }
 
   _syncModePill() {
@@ -125,9 +127,11 @@ class SettingsPanel {
     });
     const formView = document.getElementById("settings-form-view");
     const apikeyView = document.getElementById("settings-apikey-view");
+    const featureView = document.getElementById("settings-feature-view");
     const yamlView = document.getElementById("settings-yaml-view");
     if (formView) formView.style.display = mode === "form" ? "" : "none";
     if (apikeyView) apikeyView.style.display = mode === "apikey" ? "" : "none";
+    if (featureView) featureView.style.display = mode === "feature" ? "" : "none";
     if (yamlView) yamlView.style.display = mode === "yaml" ? "" : "none";
     this._syncModePill();
     if (mode === "yaml") {
@@ -136,6 +140,8 @@ class SettingsPanel {
       this.loadApiKeys();
       this.loadBaiduMap();
       this.loadModelRoles();
+    } else if (mode === "feature") {
+      this.loadFeatureApis();
     }
   }
 
@@ -470,6 +476,91 @@ class SettingsPanel {
       if (st) { st.textContent = "已保存并热加载 ✓"; st.style.color = "var(--success,#2ecc71)"; }
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
+    } finally {
+      if (btn) btn.disabled = false;
+      setTimeout(() => { if (st) st.textContent = ""; }, 5000);
+    }
+  }
+
+  // ── 功能 API 配置：搜索 / 天气 / 位置等外部服务 ──────────
+  async loadFeatureApis() {
+    const list = document.getElementById("feature-api-list");
+    if (!list) return;
+    const st = document.getElementById("feature-api-status");
+    try {
+      if (st) { st.textContent = "加载中…"; st.style.color = "var(--text-muted, #999)"; }
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/feature-apis" });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      const features = (r && r.data && r.data.features) || [];
+      this._renderFeatureApis(features);
+      if (st) { st.textContent = ""; }
+    } catch (e) {
+      if (st) { st.textContent = "加载失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+    }
+  }
+
+  _renderFeatureApis(features) {
+    const list = document.getElementById("feature-api-list");
+    if (!list) return;
+    list.innerHTML = "";
+    features.forEach((f) => {
+      const card = document.createElement("div");
+      card.className = "apikey-provider-card" + (f.configured ? " configured" : "");
+      const statusText = f.builtin ? "内置 · 无需密钥" : (f.configured ? "已配置" : "未配置");
+      const statusColor = (f.builtin || f.configured) ? "var(--success, #2ecc71)" : "var(--text-muted, #999)";
+      const fieldsHtml = (f.fields || []).map((fd) => `
+        <label class="apikey-field">
+          <span>${fd.label}</span>
+          <input type="${fd.secret ? 'password' : 'text'}" class="apikey-input" data-feature="${f.key}" data-env="${fd.env_key}"
+                 value="${fd.masked || ''}" placeholder="${fd.secret ? '请输入密钥' : ''}">
+        </label>
+      `).join("");
+      const fieldsBlock = f.builtin ? "" : `<div class="apikey-provider-fields">${fieldsHtml}</div>`;
+      const actionBlock = f.builtin ? "" : `
+        <div class="apikey-provider-actions">
+          <button type="button" class="btn btn-primary btn-sm feature-save-btn" data-feature="${f.key}">保存并热加载 · Save</button>
+        </div>
+      `;
+      card.innerHTML = `
+        <div class="apikey-provider-header">
+          <div class="apikey-provider-name">
+            <span class="apikey-provider-dot" style="background: ${f.configured ? 'var(--success, #2ecc71)' : 'var(--text-muted, #999)'}"></span>
+            ${f.name}
+          </div>
+          <div class="apikey-provider-status" style="color:${statusColor}">${statusText}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted,#999);margin:0 0 8px;">${f.desc}</div>
+        ${fieldsBlock}
+        ${actionBlock}
+        <div style="font-size:12px;line-height:1.5;margin-top:8px;color:var(--text-muted,#999);">
+          ${f.how_to} · <a href="${f.tutorial}" target="_blank" rel="noopener" style="color:var(--accent,#ff5b9c);">申请教程 ↗</a>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+    list.querySelectorAll(".feature-save-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this.saveFeatureApi(btn.dataset.feature));
+    });
+  }
+
+  async saveFeatureApi(featureKey) {
+    const st = document.getElementById("feature-api-status");
+    const list = document.getElementById("feature-api-list");
+    if (!list) return;
+    const fields = {};
+    list.querySelectorAll(`input[data-feature="${featureKey}"]`).forEach((input) => {
+      fields[input.dataset.env] = input.value.trim();
+    });
+    const btn = list.querySelector(`.feature-save-btn[data-feature="${featureKey}"]`);
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "保存并热加载中…"; st.style.color = "var(--text-muted, #999)"; }
+    try {
+      const r = await window.aerie.api.request({ method: "POST", path: "/api/env/feature-apis", body: { feature_key: featureKey, fields } });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      await this.loadFeatureApis();
+      if (st) { st.textContent = "已保存并热加载 ✓"; st.style.color = "var(--success, #2ecc71)"; }
+    } catch (e) {
+      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     } finally {
       if (btn) btn.disabled = false;
       setTimeout(() => { if (st) st.textContent = ""; }, 5000);

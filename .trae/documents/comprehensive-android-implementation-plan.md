@@ -542,10 +542,10 @@ deadline: 2026-09-01
   - [x] `chat_screen.dart`（消息流 + 输入栏 + 附件钮 + 发送胶囊 + 发送态）+ `message_bubble.dart`（左白/右浅粉气泡、附件文件卡、任务状态徽章）
   - [x] L1 自检：`flutter analyze` 零告警；聊天仓库单测 6 + MessageBubble Widget 4 + ChatScreen Widget 1 全绿
 
-- [ ] **T2.2 SSE 状态机（§3.2.6）**
-  - [ ] `SseController`：dio 流式解析 / Last-Event-ID / 指数退避+抖动 / 去重 / connectionHealth
-  - [ ] 接入 AppBar 连接状态胶囊
-  - [ ] L1 自检：SSE 断线重连回放去重单测通过
+- [x] **T2.2 SSE 状态机（§3.2.6）**
+  - [x] `sse_controller.dart`：dio 流式字节流源注入 + `\n\n` 切帧解析（id/event/data）+ `:` 心跳忽略 + Last-Event-ID 续传 + 按事件 ID 去重 + 指数退避(1→30s)+抖动重连 + `connectionHealth`（connected/reconnecting/disconnected）
+  - [x] `sse_status_capsule.dart` 接入 ChatScreen AppBar 连接状态胶囊
+  - [x] L1 自检：SSE 解析/去重/心跳/健康态/续传重连单测 5 项 + 胶囊 Widget 3 项通过
 
 - [ ] **T2.3 文件双向传输**
   - [ ] `file_repository.dart`：分块上传（流式 SHA-256）/ Range 下载 / 断点续传

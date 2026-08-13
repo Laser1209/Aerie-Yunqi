@@ -699,6 +699,10 @@
     api?.systemNotify?.({ title: `日程提醒：${title}`, body: desc })?.catch?.(() => {});
   }
 
+  // SSE 断线重连时后端会重放最近 500 个事件（chat/proactive 等历史消息）。
+  // 已处理过的 event_id 不再弹通知/进列表，避免"很早之前的记录又弹出来"。
+  const seenNotifyEventIds = new Set();
+
   function handleSseEvent(payload) {
     if (!payload?.type) return;
     switch (payload.type) {
@@ -706,6 +710,15 @@
       case "chat_message": {
         const data = payload.data || payload;
         if (data.text) {
+          const eid = payload.event_id || data.event_id;
+          if (eid) {
+            if (seenNotifyEventIds.has(eid)) return;
+            seenNotifyEventIds.add(eid);
+            if (seenNotifyEventIds.size > 800) {
+              const first = seenNotifyEventIds.values().next().value;
+              seenNotifyEventIds.delete(first);
+            }
+          }
           addNotification(
             data.title || "云栖",
             data.text,

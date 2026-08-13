@@ -1531,6 +1531,11 @@ ipcMain.handle("island:notify", async (_event, data) => {
 
 ipcMain.handle("system:notify", async (_event, data) => {
   try {
+    // 主窗口在最上层且有焦点时不弹系统通知——用户正看着窗口，不该打扰。
+    // （聊天窗口/主动消息的通知只在窗口不在最上层时弹出。）
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+      return { ok: false, reason: "main_window_focused" };
+    }
     if (!Notification.isSupported()) return { ok: false, error: "notification_not_supported" };
     const notification = new Notification({
       title: String(data?.title || "Aerie · 云栖"),

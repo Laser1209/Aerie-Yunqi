@@ -91,9 +91,13 @@ class SettingsPanel {
 
     // API Key view controls
     const reloadApiBtn = document.getElementById("apikey-reload-btn");
-    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => { this.loadApiKeys(); this.loadBaiduMap(); });
+    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => { this.loadApiKeys(); this.loadBaiduMap(); this.loadModelRoles(); });
     const baiduSaveBtn = document.getElementById("baidu-map-save-btn");
     if (baiduSaveBtn) baiduSaveBtn.addEventListener("click", () => this.saveBaiduMap());
+    const customApiToggle = document.getElementById("custom-api-toggle-btn");
+    if (customApiToggle) customApiToggle.addEventListener("click", () => this.toggleCustomApi());
+    const customApiSave = document.getElementById("custom-api-save-btn");
+    if (customApiSave) customApiSave.addEventListener("click", () => this.saveModelRoles());
   }
 
   _syncModePill() {
@@ -131,6 +135,7 @@ class SettingsPanel {
     } else if (mode === "apikey") {
       this.loadApiKeys();
       this.loadBaiduMap();
+      this.loadModelRoles();
     }
   }
 
@@ -226,6 +231,18 @@ class SettingsPanel {
     list.innerHTML = "";
 
     this._apikeyProviders.forEach((p) => {
+      let statusText = p.configured ? "已配置" : "未配置";
+      let statusCls = "";
+      if (p.health_status === "banned") {
+        statusText = "余额耗尽";
+        statusCls = "danger";
+      } else if (p.health_status === "cooldown") {
+        statusText = "限流冷却";
+        statusCls = "warning";
+      } else if (p.balance != null && p.balance !== "") {
+        statusText = "余额 ¥" + p.balance;
+        statusCls = "success";
+      }
       const card = document.createElement("div");
       card.className = "apikey-provider-card" + (p.configured ? " configured" : "");
       card.innerHTML = `
@@ -234,7 +251,7 @@ class SettingsPanel {
             <span class="apikey-provider-dot" style="background: ${p.configured ? 'var(--success, #2ecc71)' : 'var(--text-muted, #999)'}"></span>
             ${p.name}
           </div>
-          <div class="apikey-provider-status">${p.configured ? '已配置' : '未配置'}</div>
+          <div class="apikey-provider-status" style="${statusCls === 'danger' ? 'color:var(--danger,#e74c3c);' : statusCls === 'success' ? 'color:var(--success,#2ecc71);' : statusCls === 'warning' ? 'color:var(--warning,#f39c12);' : ''}">${statusText}</div>
         </div>
         <div class="apikey-provider-fields">
           <label class="apikey-field">
@@ -388,6 +405,74 @@ class SettingsPanel {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     } finally {
       if (btn) btn.disabled = false;
+    }
+  }
+
+  // ── 自定义 API：模型功能点配置面板 ────────────────────
+  toggleCustomApi() {
+    const panel = document.getElementById("custom-api-panel");
+    if (!panel) return;
+    const willShow = panel.style.display === "none";
+    panel.style.display = willShow ? "" : "none";
+    if (willShow) this.loadModelRoles();
+  }
+
+  async loadModelRoles() {
+    const list = document.getElementById("custom-api-role-list");
+    if (!list) return;
+    try {
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/model-roles" });
+      const roles = (r && r.data && r.data.roles) || [];
+      list.innerHTML = "";
+      roles.forEach((role) => {
+        const label = document.createElement("label");
+        label.className = "apikey-field";
+        const name = document.createElement("span");
+        name.textContent = role.name + " · " + role.desc;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "apikey-input";
+        input.dataset.role = role.key;
+        input.value = role.model || "";
+        input.placeholder = "模型名 / model";
+        label.appendChild(name);
+        label.appendChild(input);
+        list.appendChild(label);
+      });
+    } catch (e) {
+      list.innerHTML = "<span style='font-size:12px;color:var(--danger,#e74c3c);'>加载失败: " + e.message + "</span>";
+    }
+  }
+
+  async saveModelRoles() {
+    const st = document.getElementById("custom-api-status");
+    const btn = document.getElementById("custom-api-save-btn");
+    const list = document.getElementById("custom-api-role-list");
+    if (!list) return;
+    const roles = [];
+    list.querySelectorAll("input[data-role]").forEach((input) => {
+      const v = input.value.trim();
+      if (v) roles.push({ key: input.dataset.role, model: v });
+    });
+    if (!roles.length) {
+      if (st) { st.textContent = "请至少填写一个模型"; st.style.color = "var(--warning,#f39c12)"; }
+      return;
+    }
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "保存并热加载中…"; st.style.color = "var(--text-muted,#999)"; }
+    try {
+      const r = await window.aerie.api.request({ method: "POST", path: "/api/env/model-roles", body: { roles } });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      // 热加载：触发后端重载配置（无需整机重启）
+      if (window.aerie && window.aerie.electron && window.aerie.electron.system && window.aerie.electron.system.reloadConfig) {
+        try { await window.aerie.electron.system.reloadConfig(); } catch (_) {}
+      }
+      if (st) { st.textContent = "已保存并热加载 ✓"; st.style.color = "var(--success,#2ecc71)"; }
+    } catch (e) {
+      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
+    } finally {
+      if (btn) btn.disabled = false;
+      setTimeout(() => { if (st) st.textContent = ""; }, 5000);
     }
   }
 

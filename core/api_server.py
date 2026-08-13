@@ -5131,6 +5131,20 @@ _PROVIDER_META = [
      "default_url": "https://api.minimaxi.com/v1", "default_model": "MiniMax-M3"},
 ]
 
+# 模型功能点（role）→ 环境变量的映射（自定义 API 配置面板）。
+_MODEL_ROLES = [
+    {"key": "main_chat", "name": "对话 AI", "env_key": "DEEPSEEK_MODEL",
+     "desc": "主对话场景的默认模型"},
+    {"key": "subagent", "name": "辅助 AI", "env_key": "AERIE_WS_MODEL",
+     "desc": "子 Agent / 轻量任务"},
+    {"key": "subagent_code", "name": "代码辅助", "env_key": "AERIE_WS_CODE_MODEL",
+     "desc": "代码类子 Agent"},
+    {"key": "light_assist", "name": "轻量辅助", "env_key": "SILICONFLOW_LIGHT_MODEL",
+     "desc": "快速辅助（问候纠错 / 生图提示词接力）"},
+    {"key": "asr", "name": "语音转写", "env_key": "AERIE_WS_ASR_MODEL",
+     "desc": "语音转写 ASR"},
+]
+
 
 def _env_file_path() -> Path:
     """Return path to .env file (same directory as main.py)."""
@@ -5178,13 +5192,33 @@ def _write_env_file(data: dict[str, str]) -> None:
     env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 
+# provider key 到健康状态名的别名映射（provider_health.json 使用运行时的 provider name）
+_HEALTH_ALIAS = {"siliconflow": "siliconflow-light"}
+
+
+def _read_provider_health_state() -> dict[str, Any]:
+    """读取 provider_health.json 的 providers 状态（余额/健康/禁用原因）。"""
+    try:
+        from core.paths import data_dir
+
+        p = data_dir() / "provider_health.json"
+        if not p.exists():
+            return {}
+        data = json.loads(p.read_text(encoding="utf-8"))
+        return (data or {}).get("providers", {}) or {}
+    except Exception:
+        return {}
+
+
 @app.get("/api/env/providers")
 async def env_providers() -> dict:
-    """Return list of AI providers with config status (keys masked)."""
+    """Return list of AI providers with config status (keys masked) + 余额/健康状态。"""
     env = _read_env_file()
+    health = _read_provider_health_state()
     providers = []
     for meta in _PROVIDER_META:
         key_val = env.get(meta["env_key"], "")
+        h = health.get(meta["key"]) or health.get(_HEALTH_ALIAS.get(meta["key"], "")) or {}
         providers.append({
             "key": meta["key"],
             "name": meta["name"],
@@ -5197,6 +5231,9 @@ async def env_providers() -> dict:
             "env_model": meta["env_model"],
             "default_url": meta["default_url"],
             "default_model": meta["default_model"],
+            "balance": h.get("balance"),
+            "health_status": h.get("status", "unknown"),
+            "health_reason": h.get("reason", ""),
         })
     return {"providers": providers}
 
@@ -5227,6 +5264,58 @@ async def env_save(request: Request) -> dict:
 
         _write_env_file(env)
         return {"status": "ok", "provider": provider_key}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/env/model-roles")
+async def env_model_roles_get() -> dict:
+    """返回模型功能点（role）的当前映射（对话 AI / 辅助 AI / 代码辅助 / 轻量辅助 / 语音转写）。"""
+    env = _read_env_file()
+    roles = []
+    for meta in _MODEL_ROLES:
+        roles.append({
+            "key": meta["key"],
+            "name": meta["name"],
+            "desc": meta["desc"],
+            "env_key": meta["env_key"],
+            "model": env.get(meta["env_key"], ""),
+        })
+    return {"roles": roles}
+
+
+@app.post("/api/env/model-roles")
+async def env_model_roles_save(request: Request) -> dict:
+    """保存模型功能点映射到 .env（热加载）。Body: {"roles": [{"key": "...", "model": "..."}]}"""
+    try:
+        body = await request.json()
+        roles = body.get("roles") if isinstance(body, dict) else None
+        if not isinstance(roles, list):
+            return JSONResponse({"error": "invalid_roles", "errorCode": "invalid_roles"}, status_code=400)
+        env = _read_env_file()
+        changed_env: dict[str, str] = {}
+        for item in roles:
+            if not isinstance(item, dict):
+                continue
+            key = item.get("key")
+            model = str(item.get("model") or "").strip()
+            meta = next((m for m in _MODEL_ROLES if m["key"] == key), None)
+            if meta and model:
+                env[meta["env_key"]] = model
+                changed_env[meta["env_key"]] = model
+        _write_env_file(env)
+        # 热加载：更新进程内环境变量并重建对话 brain，使新模型立即生效，
+        # 无需重启后端。临时实例化的 LLMCaller / ASR 客户端会读取新 env。
+        if changed_env:
+            os.environ.update(changed_env)
+            try:
+                comp = get_companion()
+                if comp and hasattr(comp, "brain"):
+                    from core.llm_caller import LLMCaller
+                    comp.brain = LLMCaller()
+            except Exception:
+                pass
+        return {"status": "ok", "hot_reloaded": list(changed_env.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

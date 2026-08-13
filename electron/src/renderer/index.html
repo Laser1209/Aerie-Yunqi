@@ -1402,9 +1402,28 @@
 
           <!-- API Key 视图 -->
           <div id="settings-apikey-view" role="tabpanel" aria-labelledby="tab-settings-apikey" tabindex="0" style="display:none;">
-            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6;">
-              <strong style="color: var(--accent, #ff5b9c);">AI 服务配置</strong><br>
-              选择你常用的 AI 服务商，填入 API Key 就能开始对话了。所有密钥只保存在本地，不会上传到任何地方。
+            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong style="color: var(--accent, #ff5b9c);">AI 服务配置</strong><br>
+                选择你常用的 AI 服务商，填入 API Key 就能开始对话了。所有密钥只保存在本地，不会上传到任何地方。
+              </div>
+              <button id="custom-api-toggle-btn" class="btn btn-secondary btn-sm" type="button" style="flex:0 0 auto;">自定义 API</button>
+            </div>
+            <div id="custom-api-panel" class="apikey-provider-card" style="display:none; margin-bottom:16px;">
+              <div class="apikey-provider-header">
+                <div class="apikey-provider-name">
+                  <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
+                  自定义模型功能点 · Model Roles
+                </div>
+                <div class="apikey-provider-status" style="font-size:11px;color:var(--text-muted,#999);">为每个功能点指定 AI 模型，保存后热加载</div>
+              </div>
+              <div id="custom-api-role-list" class="apikey-provider-fields" style="display:flex;flex-direction:column;gap:10px;">
+                <!-- JS 动态渲染 -->
+              </div>
+              <div class="apikey-provider-actions">
+                <button type="button" id="custom-api-save-btn" class="btn btn-primary btn-sm">保存并热加载 · Save</button>
+                <span id="custom-api-status" style="font-size:11px;color:var(--text-muted,#999);"></span>
+              </div>
             </div>
             <div id="apikey-provider-list" class="apikey-provider-list">
               <!-- JS 动态渲染 -->

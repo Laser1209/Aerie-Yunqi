@@ -517,11 +517,11 @@ deadline: 2026-09-01
   - [x] 鉴权拦截器（401 单次刷新互斥重试）+ `ApiResult<T>` 错误映射
   - [x] L1 自检：网络层单测（dio 拦截器 mock）通过
 
-- [ ] **T1.3 本地存储（并联支路 B）**
-  - [ ] `auth_store.dart`（flutter_secure_storage + allowBackup 排除）
-  - [ ] `chat_database.dart`（drift 表 + schema migration）
-  - [ ] `file_transfer_store.dart`（续传点）
-  - [ ] L1 自检：drift 内存库 `NativeDatabase.memory()` 单测通过
+- [x] **T1.3 本地存储（并联支路 B）**
+  - [x] `auth_store.dart`（flutter_secure_storage + allowBackup 排除）
+  - [x] `chat_database.dart`（drift 表 + schema migration）
+  - [x] `file_transfer_store.dart`（续传点）
+  - [x] L1 自检：drift 内存库 `NativeDatabase.memory()` 单测通过
 
 - [ ] **T1.4 认证闭环 + 集成（L2/L3）**
   - [ ] `auth_repository.dart`（登录状态机 + 配对码）+ `auth_screen.dart`

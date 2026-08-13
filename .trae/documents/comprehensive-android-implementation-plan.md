@@ -547,11 +547,10 @@ deadline: 2026-09-01
   - [x] `sse_status_capsule.dart` 接入 ChatScreen AppBar 连接状态胶囊
   - [x] L1 自检：SSE 解析/去重/心跳/健康态/续传重连单测 5 项 + 胶囊 Widget 3 项通过
 
-- [ ] **T2.3 文件双向传输**
-  - [ ] `file_repository.dart`：分块上传（流式 SHA-256）/ Range 下载 / 断点续传
-  - [ ] `file_screen.dart`：列表 / 上传入口（file_picker）/ 传输进度卡 / 下载打开
-  - [ ] 传输保活：Android 前台服务 / iOS 前台提示（§3.2.5 分平台）
-  - [ ] L1 自检：文件仓库单测（MockWebServer）通过
+- [x] **T2.3 文件双向传输**
+  - [x] `file_repository.dart`：流式 SHA-256（分块 1MB）/ create 会话 / 分块 PUT（`X-Part-SHA256`）/ complete；断点续传跳过已传块；`Range` 断点下载落盘 + 续传点持久化（FileTransferStore）
+  - [x] `file_screen.dart`（上传入口 + 进度卡列表）+ `transfer_card.dart`（进度条 + 状态微章）；传输保活前置：Android 前台服务 `dataSync` 已在 T1.1 清单声明，运行时激活随 P-S4 接通
+  - [x] L1 自检：仓库单测（SHA-256/分块续传/Range 下载）6 项 + TransferCard Widget 3 项通过
 
 - [ ] **T2.4 附件打通 + 集成（L2/L3）**
   - [ ] 上传完成 `fileIds` 填入 requests（文本+附件）

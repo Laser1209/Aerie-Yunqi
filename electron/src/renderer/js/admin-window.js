@@ -99,27 +99,35 @@
   }
 
   // ── 概览 ───────────────────────────────────────────────
+  // 浏览器模式：门闩已解锁但本地无 token 时（如 Electron 先解锁、再开浏览器），
+  // 幂等重新 unlock 取 token，避免受保护接口 403 → KPI 误显 0。
+  async function ensureAdminToken() {
+    if (bridge) return;
+    const status = await admin("GET", "/api/admin/status");
+    if (!(status.ok && status.data && status.data.unlocked)) return;
+    if (!sessionStorage.getItem("aerie_admin_token")) {
+      const r = await admin("POST", "/api/admin/unlock", {});
+      if (r.ok && r.data && r.data.token) {
+        sessionStorage.setItem("aerie_admin_token", r.data.token);
+      }
+    }
+  }
+
   async function loadOverview() {
+    await ensureAdminToken();
     const status = await admin("GET", "/api/admin/status");
     const unlocked = !!(status.ok && status.data && status.data.unlocked);
     setUnlocked(unlocked);
 
-    const conv = await admin("GET", "/api/admin/conversations?limit=100");
-    const mem = await admin("GET", "/api/admin/memory?layer=long_term&limit=500&include_trashed=true");
-    const audit = await admin("GET", "/api/admin/audit?limit=5");
-    const convItems = (conv.ok && conv.data && conv.data.items) || [];
-    const memItems = (mem.ok && mem.data && mem.data.items) || [];
-    let convMsgs = 0, trashed = 0;
-    convItems.forEach((c) => {
-      convMsgs += Number(c.message_count) || 0;
-      trashed += Number(c.trashed_count) || 0;
-    });
+    // 用 overview 端点取真实总量（SQL COUNT），非列表分页截断长度。
+    const ov = await admin("GET", "/api/admin/overview");
+    const k = (ov.ok && ov.data) ? ov.data : {};
     els.overviewKpis.textContent = "";
-    els.overviewKpis.appendChild(kpi("会话", String(convItems.length)));
-    els.overviewKpis.appendChild(kpi("消息", fmtInt(convMsgs)));
-    els.overviewKpis.appendChild(kpi("记忆", String(memItems.length)));
-    els.overviewKpis.appendChild(kpi("回收站消息", String(trashed)));
-    els.overviewKpis.appendChild(kpi("审计", String((audit.ok && audit.data && audit.data.items) ? audit.data.items.length : 0)));
+    els.overviewKpis.appendChild(kpi("会话", fmtInt(k.conversations)));
+    els.overviewKpis.appendChild(kpi("消息", fmtInt(k.messages)));
+    els.overviewKpis.appendChild(kpi("记忆", fmtInt(k.memory)));
+    els.overviewKpis.appendChild(kpi("回收站消息", fmtInt(k.trashed_messages)));
+    els.overviewKpis.appendChild(kpi("审计", fmtInt(k.audit)));
   }
 
   function kpi(label, value, suffix) {

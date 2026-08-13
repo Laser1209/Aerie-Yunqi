@@ -130,6 +130,33 @@ def test_migration_011_checksum_ledger(admin_db):
         assert MigrationRunner(conn).run(admin_management_migrations()) == []
 
 
+# ── 概览 KPI 真实总量 ─────────────────────────────────────
+def test_overview_counts_real_totals(tmp_path, admin_db):
+    service = _make_service(tmp_path, admin_db)
+    _seed_conversation(admin_db, "conv-a", "desktop", content="a")
+    _seed_conversation(admin_db, "conv-b", "qq", content="b")
+    service.audit("trash", "conv-a")
+    service.audit("trash", "conv-b")
+
+    ov = service.overview()
+    assert ov["conversations"] == 2
+    assert ov["messages"] == 2
+    assert ov["memory"] == 2
+    assert ov["trashed_messages"] == 0
+    assert ov["audit"] == 2
+
+
+def test_overview_excludes_trashed_messages_from_active_count(tmp_path, admin_db):
+    service = _make_service(tmp_path, admin_db)
+    _seed_conversation(admin_db, "conv-a", "desktop", content="a")
+    # 软删一条消息 → 回收站计数 +1，活跃消息不变
+    service.trash_conversations(["conv-a"])
+    ov = service.overview()
+    assert ov["messages"] == 0  # 唯一消息已软删
+    assert ov["trashed_messages"] == 1
+    assert ov["conversations"] == 1  # 会话仍存在（DISTINCT conversation_id）
+
+
 # ── 解锁门闩 ──────────────────────────────────────────────
 def test_unlock_latch_flow(tmp_path, admin_db):
     service = _make_service(tmp_path, admin_db)

@@ -151,6 +151,41 @@ class AdminService:
             logger.exception("audit read failed")
             return []
 
+    def overview(self) -> dict[str, Any]:
+        """概览 KPI 真实总量（SQL COUNT，非列表分页截断）。"""
+        if self._db is None:
+            return {
+                "conversations": 0,
+                "messages": 0,
+                "memory": 0,
+                "trashed_messages": 0,
+                "audit": 0,
+            }
+
+        def _count(sql: str) -> int:
+            try:
+                rows = self._db.query(sql)
+                return int(rows[0]["n"]) if rows else 0
+            except Exception:
+                logger.exception("overview count failed: %s", sql)
+                return 0
+
+        return {
+            "conversations": _count(
+                "SELECT COUNT(DISTINCT conversation_id) AS n FROM messages"
+            ),
+            "messages": _count(
+                "SELECT COUNT(*) AS n FROM messages WHERE deleted_at IS NULL"
+            ),
+            "memory": _count(
+                "SELECT COUNT(*) AS n FROM long_term_memory WHERE deleted_at IS NULL"
+            ),
+            "trashed_messages": _count(
+                "SELECT COUNT(*) AS n FROM messages WHERE deleted_at IS NOT NULL"
+            ),
+            "audit": _count("SELECT COUNT(*) AS n FROM audit_log"),
+        }
+
     # ── 聊天记录：列表 ───────────────────────────────────
     def list_conversations(
         self,

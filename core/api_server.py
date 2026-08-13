@@ -2695,6 +2695,14 @@ async def admin_status() -> dict:
     return {"unlocked": _admin_service().is_unlocked()}
 
 
+@app.get("/api/admin/overview")
+async def admin_overview(request: Request) -> Response:
+    """概览 KPI 真实总量（会话/消息/记忆/回收站消息/审计）。"""
+    if not _require_admin(request):
+        return _admin_denied()
+    return JSONResponse(_admin_service().overview())
+
+
 @app.get("/api/admin/conversations")
 async def admin_conversations(
     request: Request,
@@ -2913,7 +2921,7 @@ async def admin_page() -> Response:
     ]
     for candidate in candidates:
         if candidate.exists():
-            return FileResponse(str(candidate))
+            return FileResponse(str(candidate), headers={"Cache-Control": "no-store"})
     return JSONResponse({"error": "admin_page_missing", "errorCode": "admin_page_missing"}, status_code=404)
 
 
@@ -2926,7 +2934,7 @@ async def admin_page_css() -> Response:
         / "electron" / "src" / "renderer" / "styles" / "admin-window.css"
     )
     if target.exists():
-        return FileResponse(str(target), media_type="text/css")
+        return FileResponse(str(target), media_type="text/css", headers={"Cache-Control": "no-store"})
     return JSONResponse({"error": "asset_missing", "errorCode": "asset_missing"}, status_code=404)
 
 
@@ -2939,7 +2947,7 @@ async def admin_page_js() -> Response:
         / "electron" / "src" / "renderer" / "js" / "admin-window.js"
     )
     if target.exists():
-        return FileResponse(str(target), media_type="application/javascript")
+        return FileResponse(str(target), media_type="application/javascript", headers={"Cache-Control": "no-store"})
     return JSONResponse({"error": "asset_missing", "errorCode": "asset_missing"}, status_code=404)
 
 

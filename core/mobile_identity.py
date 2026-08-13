@@ -744,3 +744,43 @@ class MobileIdentityStore:
                 "DELETE FROM mobile_accounts WHERE account_id = ?",
                 (account["account_id"],),
             )
+
+    def list_audit_events(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        account_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List audit events (owner-only mobile audit trail)."""
+        if limit < 1 or limit > 200:
+            raise ValueError("limit must be between 1 and 200")
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        clause = ""
+        params: list[Any] = []
+        if account_id is not None:
+            clause = " WHERE account_id = ?"
+            params.append(account_id)
+        params.extend([limit, offset])
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """SELECT audit_id, account_id, device_id, event_type,
+                          outcome, ip_address, created_at
+                   FROM mobile_audit""" + clause + """
+                   ORDER BY created_at DESC, audit_id DESC
+                   LIMIT ? OFFSET ?""",
+                params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_guests(self) -> list[dict[str, Any]]:
+        """List guest accounts (owner-only, guest role only)."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """SELECT account_id, username, role, actor_id, user_id,
+                          enabled, created_at
+                   FROM mobile_accounts WHERE role = 'guest'
+                   ORDER BY created_at"""
+            ).fetchall()
+        return [dict(row) for row in rows]

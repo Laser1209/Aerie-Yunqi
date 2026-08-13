@@ -1,9 +1,9 @@
 import sys
 sys.path.insert(0, '.')
-from core.computer_control import ComputerController, PermissionLevel
+from core.computer_control import ComputerController, ControlMode
 import os
 
-cc = ComputerController(permission_level=PermissionLevel.FULL)
+cc = ComputerController(mode=ControlMode.FULL)
 
 print('=== 测试1: echo 命令 ===')
 result = cc.shell_execute('echo hello world')

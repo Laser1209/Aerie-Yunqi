@@ -1107,7 +1107,7 @@
 /* ── 电脑操控 Tab ─────────────────────────────── */
 .cog-cc-levels {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 .cog-cc-level {
@@ -1136,6 +1136,89 @@
 .cog-cc-level-desc {
   font-size: 11px;
   color: var(--cog-glass-muted);
+}
+
+/* ── 黑白名单管理 ─────────────────────────────── */
+.cog-cc-list-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.cog-cc-list-type {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--cog-glass-border);
+  background: var(--cog-glass-bg);
+  color: var(--cog-glass-text);
+  font-size: 12px;
+  outline: none;
+}
+.cog-cc-list-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--cog-glass-border);
+  background: var(--cog-glass-bg);
+  color: var(--cog-glass-text);
+  font-size: 12px;
+  outline: none;
+}
+.cog-cc-list-value::placeholder { color: var(--cog-glass-muted); opacity: 0.7; }
+.cog-cc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.cog-cc-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--cog-glass-bg);
+  border: 1px solid var(--cog-glass-border);
+}
+.cog-cc-list-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.cog-cc-list-tag--action { background: rgba(124, 58, 237, 0.15); color: var(--color-pad-dominance, #3acfd5); }
+.cog-cc-list-tag--command { background: rgba(255, 105, 180, 0.15); color: var(--color-pad-pleasure, #ff5b9c); }
+.cog-cc-list-tag--pattern { background: rgba(255, 193, 7, 0.18); color: #f0b400; }
+.cog-cc-list-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--cog-glass-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cog-cc-list-del {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cog-glass-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.cog-cc-list-del:hover {
+  background: color-mix(in srgb, var(--color-danger, #e91e63) 14%, transparent);
+  color: var(--color-danger, #e91e63);
 }
 
 .cog-cc-log {

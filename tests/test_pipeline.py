@@ -98,6 +98,7 @@ class TestPipelineHandle:
     @pytest.fixture
     def pipeline(
         self,
+        monkeypatch,
         router,
         emotion,
         ctx_builder,
@@ -108,6 +109,13 @@ class TestPipelineHandle:
         identity_resolver,
         conversation_repository,
     ):
+        # 角色隔离语义：本组测试聚焦 actor/channel 身份作用域，不依赖激活人设。
+        # persona 过滤行为由 tests/test_persona_isolation_read.py 专项覆盖。
+        monkeypatch.setattr(
+            "core.pipeline.active_persona_id",
+            lambda: None,
+            raising=False,
+        )
         return Pipeline(
             router=router,
             emotion_engine=emotion,

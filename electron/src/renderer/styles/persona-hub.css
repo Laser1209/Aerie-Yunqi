@@ -683,3 +683,424 @@
 .dark .persona-three-view-card__label {
   color: var(--text-200, #c7c7cc);
 }
+
+/* ── AI 智能生成人设向导 (Wizard View) ── */
+
+/* 容器：与 list / editor 平级 */
+.persona-wizard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.persona-wizard--hidden {
+  display: none;
+}
+
+/* 表单 / 进度两个子面板 */
+.persona-wizard__panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.persona-wizard__panel--hidden {
+  display: none;
+}
+
+.persona-wizard__panel--error {
+  opacity: 0.85;
+}
+
+/* 头部 */
+.persona-wizard__head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 20px;
+  max-width: 640px;
+}
+
+.persona-wizard__title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--text-800, #1d1d1f);
+}
+
+.persona-wizard__subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-500, #6e6e73);
+}
+
+.persona-wizard__label {
+  display: block;
+  margin: 14px 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-700, #3c3c43);
+}
+
+/* 进度头部：标题 + 脉冲点 + 提示文案，垂直居中 */
+.persona-wizard__progress-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 640px;
+}
+
+.persona-wizard__msg {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-500, #6e6e73);
+}
+
+.persona-wizard__panel--error .persona-wizard__msg {
+  color: var(--danger, #e5484d);
+}
+
+/* 表单区 */
+.persona-wizard__body {
+  max-width: 640px;
+}
+
+.persona-wizard__desc {
+  width: 100%;
+  min-height: 110px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e5e5ea);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: var(--text-800, #1d1d1f);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.persona-wizard__desc:focus {
+  outline: none;
+  border-color: var(--color-primary, var(--color-static-ff8fb1, #ff8fb1));
+  box-shadow: 0 0 0 3px rgba(255, 143, 177, 0.18);
+}
+
+.persona-wizard__desc::placeholder {
+  color: var(--text-400, #8e8e93);
+}
+
+/* 可选字段栅格 */
+.persona-wizard__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.persona-wizard__opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-500, #6e6e73);
+  cursor: pointer;
+}
+
+/* 勾选框/单选框在 .persona-form-input 基础上还原为固定尺寸的勾选框 */
+.persona-wizard__opt input[type="checkbox"],
+.persona-wizard__opt input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+}
+
+/* 操作区 */
+.persona-wizard__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  max-width: 640px;
+}
+
+/* 进度条 */
+.persona-wizard__bar {
+  width: 100%;
+  max-width: 640px;
+  height: 8px;
+  margin: 18px 0;
+  border-radius: 999px;
+  background: var(--surface-2, #f2f2f5);
+  overflow: hidden;
+}
+
+.persona-wizard__bar-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+    var(--color-primary, var(--color-static-ff6b9d, #ff6b9d)) 0%,
+    var(--color-static-ff8fb1, #ff8fb1) 100%);
+  transition: width 0.5s ease;
+}
+
+/* 运行时叠加柔和流光（无运行类时为静态） */
+.persona-wizard__bar-fill--running {
+  background-image: linear-gradient(90deg,
+    var(--color-primary, var(--color-static-ff6b9d, #ff6b9d)) 0%,
+    var(--color-static-ffb3cc, #ffb3cc) 50%,
+    var(--color-primary, var(--color-static-ff6b9d, #ff6b9d)) 100%);
+  background-size: 200% auto;
+  animation: persona-wizard-flow 2s linear infinite;
+}
+
+/* 阶段清单 */
+.persona-wizard__stages {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.persona-wizard__stage {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-500, #6e6e73);
+}
+
+.persona-wizard__stage-dot {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--text-300, #d2d2d7);
+  background: transparent;
+  transition: all 0.25s ease;
+}
+
+/* 进行中：主色圆点 + 呼吸动画 */
+.persona-wizard__stage--active {
+  color: var(--text-800, #1d1d1f);
+  font-weight: 600;
+}
+
+.persona-wizard__stage--active .persona-wizard__stage-dot {
+  border-color: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+  background: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.18);
+  animation: persona-wizard-pulse 1.2s ease-in-out infinite;
+}
+
+/* 已完成：实心主色圆点 + 纯 CSS 对勾 */
+.persona-wizard__stage--done {
+  color: var(--text-700, #3c3c43);
+}
+
+.persona-wizard__stage--done .persona-wizard__stage-dot {
+  position: relative;
+  border-color: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+  background: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+}
+
+.persona-wizard__stage--done .persona-wizard__stage-dot::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 4px;
+  height: 7px;
+  border: solid var(--color-static-fff, #fff);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* .persona-wizard__stage--pending 为默认态，复用基础 .persona-wizard__stage 样式即可 */
+
+/* 错误区 */
+.persona-wizard__error {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 80, 90, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 80, 90, 0.08);
+  max-width: 640px;
+}
+
+.persona-wizard__error--hidden {
+  display: none;
+}
+
+.persona-wizard__error-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--danger, #e5484d);
+}
+
+/* 动画 */
+@keyframes persona-wizard-flow {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes persona-wizard-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.6);
+  }
+}
+
+/* 进度头部装饰脉冲点 */
+.persona-wizard__pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+  vertical-align: middle;
+  animation: persona-wizard-pulse 1.2s ease-in-out infinite;
+}
+
+/* 深色模式适配 */
+.dark .persona-wizard__desc {
+  background: var(--bg-800, #2c2c2e);
+  border-color: var(--bg-600, #3a3a3c);
+  color: var(--text-100, #e3e3e8);
+}
+
+.dark .persona-wizard__desc:focus {
+  border-color: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
+}
+
+.dark .persona-wizard__bar {
+  background: var(--bg-600, #3a3a3c);
+}
+
+/* ── 两人故事起因 + 概念推荐 ── */
+
+.persona-wizard__story {
+  max-width: 640px;
+  margin-top: 16px;
+}
+
+.persona-wizard__desc--short {
+  min-height: 76px;
+}
+
+.persona-wizard__story-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.persona-wizard__story-hint {
+  font-size: 12px;
+  color: var(--text-500, #6e6e73);
+}
+
+/* 小尺寸按钮 */
+.persona-btn--sm {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+/* 概念推荐区 */
+.persona-wizard__concepts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.persona-wizard__concepts-loading {
+  grid-column: 1 / -1;
+  padding: 14px 2px;
+  font-size: 13px;
+  color: var(--text-500, #6e6e73);
+}
+
+.persona-wizard__concept {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e5e5ea);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.persona-wizard__concept:hover {
+  border-color: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+}
+
+.persona-wizard__concept--selected {
+  border-color: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+  background: rgba(255, 143, 177, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 143, 177, 0.15);
+}
+
+.persona-wizard__concept-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-800, #1d1d1f);
+}
+
+.persona-wizard__concept-tagline {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-500, #6e6e73);
+}
+
+.persona-wizard__concept-tags {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-primary, var(--color-static-ff6b9d, #ff6b9d));
+}
+
+.dark .persona-wizard__concept {
+  background: var(--bg-800, #2c2c2e);
+  border-color: var(--bg-600, #3a3a3c);
+}
+
+.dark .persona-wizard__concept-title {
+  color: var(--text-100, #e3e3e8);
+}

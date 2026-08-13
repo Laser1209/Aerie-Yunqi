@@ -6,8 +6,13 @@ class PersonaHubPanel {
     this._personas = [];
     this._activeId = null;
     this._currentId = null;
-    this._viewMode = "list"; // "list" | "editor"
+    this._viewMode = "list"; // "list" | "editor" | "wizard"
     this._isLoaded = false;
+    this._genTaskId = null;
+    this._genTimer = null;
+    this._genPayload = null;
+    this._genPollCount = 0;
+    this._selectedConcept = null;
   }
 
   init() {
@@ -189,7 +194,7 @@ class PersonaHubPanel {
                 </div>
                 <div class="persona-form-row">
                   <label class="persona-form-label">说话风格</label>
-                  <textarea class="persona-form-textarea" id="persona-field-speech_style" rows="4" placeholder="描述她的说话方式，例如：温柔、带点撒娇、喜欢用～结尾"></textarea>
+                  <textarea class="persona-form-textarea" id="persona-field-speech_style" rows="4" placeholder="描述 TA 的说话方式，例如：温柔、带点撒娇、喜欢用～结尾"></textarea>
                 </div>
                 <div class="persona-slider-group">
                   <div class="persona-slider-row">
@@ -215,7 +220,7 @@ class PersonaHubPanel {
                 <h3 class="persona-section__title">背景故事</h3>
                 <div class="persona-form-row">
                   <label class="persona-form-label">身份设定</label>
-                  <textarea class="persona-form-textarea" id="persona-field-background_story" rows="8" placeholder="她的身份、来历、与用户的关系..."></textarea>
+                  <textarea class="persona-form-textarea" id="persona-field-background_story" rows="8" placeholder="TA 的身份、来历、与用户的关系..."></textarea>
                 </div>
                 <div class="persona-form-row">
                   <label class="persona-form-label">职业 / 特长</label>
@@ -223,7 +228,7 @@ class PersonaHubPanel {
                 </div>
                 <div class="persona-form-row">
                   <label class="persona-form-label">兴趣爱好</label>
-                  <textarea class="persona-form-textarea" id="persona-field-hobbies" rows="3" placeholder="她喜欢做什么..."></textarea>
+                  <textarea class="persona-form-textarea" id="persona-field-hobbies" rows="3" placeholder="TA 喜欢做什么..."></textarea>
                 </div>
               </div>
 
@@ -236,11 +241,11 @@ class PersonaHubPanel {
                 </div>
                 <div class="persona-form-row">
                   <label class="persona-form-label">口头禅 / 常用语</label>
-                  <textarea class="persona-form-textarea" id="persona-field-catchphrases" rows="3" placeholder="她常说的话..."></textarea>
+                  <textarea class="persona-form-textarea" id="persona-field-catchphrases" rows="3" placeholder="TA 常说的话..."></textarea>
                 </div>
                 <div class="persona-form-row">
                   <label class="persona-form-label">行为准则</label>
-                  <textarea class="persona-form-textarea" id="persona-field-behavior_guidelines" rows="6" placeholder="她的行为原则、道德底线..."></textarea>
+                  <textarea class="persona-form-textarea" id="persona-field-behavior_guidelines" rows="6" placeholder="TA 的行为原则、道德底线..."></textarea>
                 </div>
               </div>
 
@@ -262,12 +267,92 @@ class PersonaHubPanel {
         </div>
       </div>
     `;
+
+    // Wizard View（AI 智能生成人设向导）
+    // 必须插入 .persona-hub__container 内部，与 list/editor 平级，
+    // 才能共享其 flex 布局空间；插在 panel 层会被 height:100% 的
+    // container 挤成 0 高度，导致点击"新建人设"后整面板空白（白屏）。
+    const wizardHost = panel.querySelector(".persona-hub__container");
+    if (wizardHost && !wizardHost.querySelector(".persona-wizard")) {
+      wizardHost.insertAdjacentHTML("beforeend", `
+        <div class="persona-wizard persona-wizard--hidden" id="persona-hub-wizard-view">
+          <!-- 表单步骤 -->
+          <div class="persona-wizard__panel" id="persona-wizard-form">
+            <div class="persona-wizard__head">
+              <h2 class="persona-wizard__title">用一句话，让 TA 成为你想的人</h2>
+              <p class="persona-wizard__subtitle">AI 会理解你的描述，自动生成完整人设框架；生成后你可以逐项完善</p>
+            </div>
+            <div class="persona-wizard__body">
+              <label class="persona-wizard__label">角色描述 *</label>
+              <textarea id="persona-wizard-desc" class="persona-wizard__desc" rows="5"
+                placeholder="例如：银发红瞳的温柔御姐设计师，28岁，是我的恋人，表面从容克制、私下占有欲极强，会用最轻的声音说最笃定的情话…"></textarea>
+              <div class="persona-wizard__options">
+                <label class="persona-wizard__opt">名字 <input id="persona-wizard-name" class="persona-form-input" placeholder="可选"></label>
+                <label class="persona-wizard__opt">英文名 <input id="persona-wizard-english_name" class="persona-form-input" placeholder="可选"></label>
+                <label class="persona-wizard__opt">性别
+                  <select id="persona-wizard-gender" class="persona-form-input">
+                    <option value="">— 可选 —</option><option value="female">女性</option><option value="male">男性</option><option value="other">其他</option>
+                  </select>
+                </label>
+                <label class="persona-wizard__opt">年龄 <input id="persona-wizard-age" class="persona-form-input" type="number" min="0" max="200" placeholder="可选"></label>
+                <label class="persona-wizard__opt">关系类型 <input id="persona-wizard-relationship" class="persona-form-input" placeholder="恋人 / 朋友 / 导师…"></label>
+                <label class="persona-wizard__opt">你的名字 <input id="persona-wizard-user-name" class="persona-form-input" placeholder="你的昵称，可选"></label>
+              </div>
+
+              <div class="persona-wizard__story">
+                <label class="persona-wizard__label">两人故事起因（可选）</label>
+                <textarea id="persona-wizard-story" class="persona-wizard__desc persona-wizard__desc--short" rows="3"
+                  placeholder="例如：TA 是我的秘书，想先从工作关系慢慢靠近我…"></textarea>
+                <div class="persona-wizard__story-actions">
+                  <button type="button" class="persona-btn persona-btn--ghost persona-btn--sm" id="persona-wizard-recommend-btn">
+                    为我推荐故事概念
+                  </button>
+                  <span class="persona-wizard__story-hint" id="persona-wizard-story-hint">选一个喜欢的故事设定，生成时会融进两人的背景</span>
+                </div>
+                <div class="persona-wizard__concepts" id="persona-wizard-concepts"></div>
+              </div>
+            </div>
+            <div class="persona-wizard__actions">
+              <button class="persona-btn persona-btn--ghost" id="persona-wizard-skip-btn">跳过 AI 生成，手动创建</button>
+              <button class="persona-btn persona-btn--primary" id="persona-wizard-start-btn">开始生成</button>
+            </div>
+          </div>
+
+          <!-- 进度步骤 -->
+          <div class="persona-wizard__panel persona-wizard__panel--hidden" id="persona-wizard-progress">
+            <div class="persona-wizard__progress-head">
+              <div class="persona-wizard__pulse" aria-hidden="true"></div>
+              <h2 class="persona-wizard__title">AI 正在帮你生成你的角色…</h2>
+              <p class="persona-wizard__msg" id="persona-wizard-msg">正在分析角色概念</p>
+            </div>
+            <div class="persona-wizard__bar"><div class="persona-wizard__bar-fill" id="persona-wizard-bar-fill"></div></div>
+            <ul class="persona-wizard__stages" id="persona-wizard-stages">
+              <li class="persona-wizard__stage" data-key="concept"><span class="persona-wizard__stage-dot"></span><span class="persona-wizard__stage-name">分析角色概念</span></li>
+              <li class="persona-wizard__stage" data-key="detail"><span class="persona-wizard__stage-dot"></span><span class="persona-wizard__stage-name">生成外貌与性格</span></li>
+              <li class="persona-wizard__stage" data-key="assemble"><span class="persona-wizard__stage-dot"></span><span class="persona-wizard__stage-name">构建人设框架</span></li>
+              <li class="persona-wizard__stage" data-key="prompt"><span class="persona-wizard__stage-dot"></span><span class="persona-wizard__stage-name">组装系统提示词</span></li>
+              <li class="persona-wizard__stage" data-key="finalize"><span class="persona-wizard__stage-dot"></span><span class="persona-wizard__stage-name">校验并保存</span></li>
+            </ul>
+            <div class="persona-wizard__error persona-wizard__error--hidden" id="persona-wizard-error">
+              <div class="persona-wizard__error-text" id="persona-wizard-error-text"></div>
+              <div class="persona-wizard__actions">
+                <button class="persona-btn persona-btn--primary" id="persona-wizard-retry-btn">重新生成</button>
+                <button class="persona-btn persona-btn--ghost" id="persona-wizard-back-btn">返回</button>
+              </div>
+            </div>
+            <div class="persona-wizard__actions" style="margin-top:16px">
+              <button class="persona-btn persona-btn--ghost" id="persona-wizard-cancel-btn">取消</button>
+            </div>
+          </div>
+        </div>
+      `);
+    }
   }
 
   _bindEvents(panel) {
     // List view
     panel.querySelector("#persona-hub-create-btn").addEventListener("click", () => {
-      this._createNew();
+      this._openWizard();
     });
 
     panel.querySelector("#persona-hub-import-btn").addEventListener("click", () => {
@@ -302,6 +387,12 @@ class PersonaHubPanel {
     panel.querySelector("#persona-editor-upload-btn").addEventListener("click", () => {
       panel.querySelector("#persona-editor-avatar-upload").click();
     });
+    // 角色级隔离：编辑器头像上传 —— 打开裁切弹窗 → 裁切后按当前角色上传
+    panel.querySelector("#persona-editor-avatar-upload").addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) this._openAvatarCrop(file);
+      e.target.value = "";
+    });
 
     // Three-view: upload / remove
     panel.querySelectorAll(".persona-three-view-card").forEach((card) => {
@@ -335,6 +426,26 @@ class PersonaHubPanel {
           valueEl.textContent = slider.value;
         });
       }
+    });
+
+    // Wizard view
+    panel.querySelector("#persona-wizard-start-btn").addEventListener("click", () => {
+      this._startGeneration();
+    });
+    panel.querySelector("#persona-wizard-skip-btn").addEventListener("click", () => {
+      this._skipToEditor();
+    });
+    panel.querySelector("#persona-wizard-cancel-btn").addEventListener("click", () => {
+      this._showList();
+    });
+    panel.querySelector("#persona-wizard-back-btn").addEventListener("click", () => {
+      this._showList();
+    });
+    panel.querySelector("#persona-wizard-retry-btn").addEventListener("click", () => {
+      this._startGeneration();
+    });
+    panel.querySelector("#persona-wizard-recommend-btn").addEventListener("click", () => {
+      this._recommendConcepts();
     });
   }
 
@@ -393,7 +504,7 @@ class PersonaHubPanel {
         <div class="persona-card__avatar">
           ${p.avatar_dataurl
             ? `<img src="${p.avatar_dataurl}" alt="${p.name}">`
-            : `<span>${(p.name || "?").charAt(0)}</span>`
+            : `<span style="${this._avatarPlaceholderStyle(p.id)}">${(p.name || "?").charAt(0)}</span>`
           }
           ${p.id === this._activeId ? '<div class="persona-card__badge">使用中</div>' : ""}
         </div>
@@ -437,6 +548,10 @@ class PersonaHubPanel {
   }
 
   _createNew() {
+    this._openWizard();
+  }
+
+  _skipToEditor() {
     this._currentId = null;
     this._resetForm();
     this._showEditor();
@@ -694,7 +809,23 @@ class PersonaHubPanel {
       avatarEl.innerHTML = `<img src="${persona.avatar_dataurl}" alt="avatar">`;
     } else if (persona.name) {
       avatarText.textContent = persona.name.charAt(0);
+      avatarText.style.background = this._avatarPlaceholderColor(persona.id || persona.name);
     }
+  }
+
+  // 默认头像占位：按角色 id 确定性取色，避免所有无头像角色看起来一模一样
+  _avatarPlaceholderColor(seed) {
+    let h = 0;
+    const s = String(seed || "default");
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    const hue = h % 360;
+    return "hsl(" + hue + ", 62%, 62%)";
+  }
+
+  _avatarPlaceholderStyle(seed) {
+    return "display:inline-flex;align-items:center;justify-content:center;"
+      + "width:100%;height:100%;color:#fff;font-size:26px;font-weight:600;"
+      + "background:" + this._avatarPlaceholderColor(seed) + ";";
   }
 
   _resetForm() {
@@ -797,6 +928,194 @@ class PersonaHubPanel {
     }
   }
 
+  // ── 头像上传：文件 → 裁切弹窗 → 按角色上传 ──────────────
+  _openAvatarCrop(file) {
+    if (!this._currentId) {
+      alert("请先保存人设再上传头像");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = String(reader.result || "");
+      if (!src) return;
+      const img = new Image();
+      img.onload = () => this._renderAvatarCropModal(img, file);
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  _renderAvatarCropModal(img, file) {
+    const old = document.getElementById("persona-avatar-crop-modal");
+    if (old) old.remove();
+
+    const natural = { w: img.naturalWidth, h: img.naturalHeight };
+    if (!natural.w || !natural.h) return;
+
+    const modal = document.createElement("div");
+    modal.id = "persona-avatar-crop-modal";
+    modal.style.cssText =
+      "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;";
+
+    const box = document.createElement("div");
+    box.style.cssText =
+      "background:#fff;border-radius:14px;padding:18px;width:min(480px,92vw);display:flex;flex-direction:column;gap:12px;font-family:inherit;box-shadow:0 10px 40px rgba(0,0,0,.3);";
+
+    const title = document.createElement("div");
+    title.textContent = "裁切头像（方形）· 拖动调整位置，右下角手柄缩放";
+    title.style.cssText = "font-size:15px;font-weight:600;color:#3c3c43;";
+
+    const viewport = document.createElement("div");
+    viewport.style.cssText =
+      "position:relative;overflow:hidden;background:#111;border-radius:10px;user-select:none;touch-action:none;";
+    const maxW = 440, maxH = 360;
+    const scale = Math.min(maxW / natural.w, maxH / natural.h);
+    const dispW = Math.round(natural.w * scale);
+    const dispH = Math.round(natural.h * scale);
+    viewport.style.width = dispW + "px";
+    viewport.style.height = dispH + "px";
+
+    const imgEl = document.createElement("img");
+    imgEl.src = img.src;
+    imgEl.style.cssText = "position:absolute;top:0;left:0;width:" + dispW + "px;height:" + dispH + "px;display:block;pointer-events:none;";
+
+    const crop = {
+      size: Math.max(40, Math.round(Math.min(dispW, dispH) * 0.7)),
+      x: 0, y: 0,
+    };
+    crop.x = Math.round((dispW - crop.size) / 2);
+    crop.y = Math.round((dispH - crop.size) / 2);
+
+    const cropEl = document.createElement("div");
+    cropEl.style.cssText =
+      "position:absolute;border:2px solid #fff;box-sizing:border-box;cursor:move;"
+      + "box-shadow:0 0 0 9999px rgba(0,0,0,.45);";
+    const handle = document.createElement("div");
+    handle.style.cssText =
+      "position:absolute;right:-7px;bottom:-7px;width:16px;height:16px;"
+      + "background:#fff;border:2px solid #ff6b9d;border-radius:4px;cursor:se-resize;";
+
+    function paint() {
+      cropEl.style.left = crop.x + "px";
+      cropEl.style.top = crop.y + "px";
+      cropEl.style.width = crop.size + "px";
+      cropEl.style.height = crop.size + "px";
+    }
+    paint();
+
+    let dragging = null;
+    cropEl.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      dragging = { type: "move", sx: e.clientX, sy: e.clientY, ox: crop.x, oy: crop.y };
+      cropEl.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      dragging = { type: "resize", sx: e.clientX, sy: e.clientY, osize: crop.size };
+      handle.setPointerCapture(e.pointerId);
+    });
+    cropEl.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - dragging.sx;
+      const dy = e.clientY - dragging.sy;
+      if (dragging.type === "move") {
+        crop.x = Math.min(Math.max(dragging.ox + dx, 0), dispW - crop.size);
+        crop.y = Math.min(Math.max(dragging.oy + dy, 0), dispH - crop.size);
+      } else {
+        const s = Math.min(Math.max(dragging.osize + Math.max(dx, dy), 40), Math.min(dispW, dispH));
+        crop.size = s;
+        crop.x = Math.min(crop.x, dispW - s);
+        crop.y = Math.min(crop.y, dispH - s);
+      }
+      paint();
+    });
+    const endDrag = () => { dragging = null; };
+    cropEl.addEventListener("pointerup", endDrag);
+    handle.addEventListener("pointerup", endDrag);
+    cropEl.addEventListener("pointercancel", endDrag);
+    handle.addEventListener("pointercancel", endDrag);
+
+    cropEl.appendChild(handle);
+    viewport.appendChild(imgEl);
+    viewport.appendChild(cropEl);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;justify-content:flex-end;gap:10px;";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.textContent = "取消";
+    cancelBtn.style.cssText = "padding:8px 18px;border-radius:20px;border:1px solid #e5e5ea;background:#fafafa;color:#3c3c43;font-size:14px;cursor:pointer;";
+    const okBtn = document.createElement("button");
+    okBtn.type = "button";
+    okBtn.textContent = "确认裁切并上传";
+    okBtn.style.cssText = "padding:8px 18px;border-radius:20px;border:none;background:#ff8fb1;color:#fff;font-size:14px;cursor:pointer;";
+
+    cancelBtn.addEventListener("click", () => modal.remove());
+    okBtn.addEventListener("click", () => {
+      const out = 512;
+      const cvs = document.createElement("canvas");
+      cvs.width = out; cvs.height = out;
+      const c2 = cvs.getContext("2d");
+      const nx = crop.x / scale, ny = crop.y / scale, nsize = crop.size / scale;
+      c2.drawImage(img, nx, ny, nsize, nsize, 0, 0, out, out);
+      const mime = (file && file.type === "image/jpeg") ? "image/jpeg" : "image/png";
+      const outUrl = cvs.toDataURL(mime, 0.92);
+      modal.remove();
+      this._uploadAvatar(outUrl, mime);
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    box.appendChild(title);
+    box.appendChild(viewport);
+    box.appendChild(actions);
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+  }
+
+  _uploadAvatar(dataurl, mime) {
+    const pid = this._currentId;
+    if (!pid) return;
+    try {
+      const idx = dataurl.indexOf(",");
+      const bin = atob(dataurl.slice(idx + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const ext = mime === "image/jpeg" ? "jpg" : "png";
+      const doUpload = async () => {
+        let r = null;
+        if (window.aerie && window.aerie.api && window.aerie.api.upload) {
+          r = await window.aerie.api.upload({
+            path: "/api/persona/avatar?persona_id=" + encodeURIComponent(pid),
+            filename: "avatar." + ext,
+            contentType: mime,
+            bytes: Array.from(bytes),
+          });
+        }
+        if (!r || !r.data || r.data.status !== "ok") {
+          throw new Error((r && r.data && r.data.error) || "上传失败");
+        }
+        const dataurlResp = r.data.avatar_dataurl || dataurl;
+        const avatarEl = document.getElementById("persona-editor-avatar");
+        if (avatarEl) avatarEl.innerHTML = `<img src="${dataurlResp}" alt="avatar">`;
+        // 刷新人设列表（卡片头像即时可见，无需重启应用）
+        this._loadList();
+        // 角色级隔离：带 persona_id 通知 chat/settings —— 只有当前激活角色
+        // 的头像更新才被聊天窗口采纳，非激活角色的头像不会串到聊天里。
+        window.dispatchEvent(new CustomEvent("aerie:persona-updated", {
+          detail: { persona_id: pid, avatar_dataurl: dataurlResp, source: "persona-hub" },
+        }));
+      };
+      doUpload().catch((e) => {
+        console.error("avatar upload failed:", e);
+        alert("头像上传失败: " + (e.message || "unknown"));
+      });
+    } catch (e) {
+      alert("头像处理失败: " + (e.message || "unknown"));
+    }
+  }
+
   _switchSection(section, panel) {
     panel.querySelectorAll(".persona-nav-item").forEach((item) => {
       item.classList.toggle("persona-nav-item--active", item.getAttribute("data-section") === section);
@@ -811,6 +1130,7 @@ class PersonaHubPanel {
     const editorView = document.getElementById("persona-hub-editor-view");
     if (listView) listView.classList.remove("persona-hub__list-view--hidden");
     if (editorView) editorView.classList.add("persona-hub__editor-view--hidden");
+    this._hideWizard();
     this._viewMode = "list";
     this._loadList();
   }
@@ -820,12 +1140,304 @@ class PersonaHubPanel {
     const editorView = document.getElementById("persona-hub-editor-view");
     if (listView) listView.classList.add("persona-hub__list-view--hidden");
     if (editorView) editorView.classList.remove("persona-hub__editor-view--hidden");
+    this._hideWizard();
     this._viewMode = "editor";
 
     const deleteBtn = document.getElementById("persona-hub-delete-btn");
     const exportBtn = document.getElementById("persona-hub-export-btn");
     if (deleteBtn) deleteBtn.style.display = this._currentId ? "" : "none";
     if (exportBtn) exportBtn.style.display = this._currentId ? "" : "none";
+  }
+
+  _hideWizard() {
+    const wizardView = document.getElementById("persona-hub-wizard-view");
+    if (wizardView) wizardView.classList.add("persona-wizard--hidden");
+  }
+
+  _openWizard() {
+    this._currentId = null;
+    const payload = this._genPayload || {};
+    const opts = payload.options || {};
+    const setVal = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value === undefined || value === null ? "" : value;
+    };
+    setVal("persona-wizard-desc", payload.description || "");
+    setVal("persona-wizard-name", opts.name || "");
+    setVal("persona-wizard-english_name", opts.english_name || "");
+    setVal("persona-wizard-gender", opts.gender || "");
+    setVal("persona-wizard-age", opts.age !== undefined ? opts.age : "");
+    setVal("persona-wizard-relationship", opts.relationship_type || "");
+    setVal("persona-wizard-story", opts.story_seed || "");
+    // 用户昵称：优先用上次生成用的，否则读聊天模块缓存的名字（非默认"你"）
+    const cachedUser = (window._chat && window._chat._userName && window._chat._userName !== "你")
+      ? window._chat._userName : "";
+    setVal("persona-wizard-user-name", opts.user_name || cachedUser);
+    this._selectedConcept = opts.story_concept || null;
+    this._showWizard();
+  }
+
+  _showWizard() {
+    const wizardView = document.getElementById("persona-hub-wizard-view");
+    if (!wizardView) {
+      // 防御：向导视图未构建（DOM 异常/旧缓存）时退回编辑器，避免整面板空白
+      console.warn("wizard view missing, fallback to blank editor");
+      this._skipToEditor();
+      return;
+    }
+    const listView = document.getElementById("persona-hub-list-view");
+    const editorView = document.getElementById("persona-hub-editor-view");
+    if (listView) listView.classList.add("persona-hub__list-view--hidden");
+    if (editorView) editorView.classList.add("persona-hub__editor-view--hidden");
+    if (wizardView) wizardView.classList.remove("persona-wizard--hidden");
+    this._viewMode = "wizard";
+
+    // 每次进入默认展示表单步骤（若上次停留在进度/错误页则回退）
+    const form = document.getElementById("persona-wizard-form");
+    const progress = document.getElementById("persona-wizard-progress");
+    if (form) form.classList.remove("persona-wizard__panel--hidden");
+    if (progress) progress.classList.add("persona-wizard__panel--hidden");
+
+    // 重置提示文案与颜色，避免上次校验的红色提示残留
+    const hint = document.getElementById("persona-wizard-story-hint");
+    if (hint) {
+      hint.textContent = "选一个喜欢的故事设定，生成时会融进两人的背景";
+      hint.style.color = "";
+    }
+  }
+
+  _esc(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  async _recommendConcepts() {
+    const storyEl = document.getElementById("persona-wizard-story");
+    const relEl = document.getElementById("persona-wizard-relationship");
+    const descEl = document.getElementById("persona-wizard-desc");
+    const hint = document.getElementById("persona-wizard-story-hint");
+    const box = document.getElementById("persona-wizard-concepts");
+    if (!box) return;
+
+    const storySeed = storyEl ? storyEl.value.trim() : "";
+    if (!storySeed) {
+      // Non-blocking hint + focus instead of alert(): a native modal steals
+      // focus in Electron and can leave the wizard uneditable afterwards.
+      if (hint) hint.textContent = "请先在「两人故事起因」里简单描述一下你们的开始，我再为你推荐";
+      if (hint) hint.style.color = "var(--danger, #e5484d)";
+      if (storyEl) storyEl.focus();
+      return;
+    }
+    if (hint) {
+      hint.textContent = "正在生成故事概念…";
+      hint.style.color = "";
+    }
+    box.innerHTML = `<div class="persona-wizard__concepts-loading">AI 正在构思中…</div>`;
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/persona/hub/generate/concepts",
+        body: JSON.stringify({
+          relationship_type: relEl && relEl.value.trim() ? relEl.value.trim() : "恋人",
+          story_seed: storySeed,
+          description: descEl ? descEl.value.trim() : "",
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+      const concepts = (r && r.data && r.data.concepts) || [];
+      if (!concepts.length) {
+        throw new Error("没有拿到推荐，请稍后重试");
+      }
+      if (hint) hint.textContent = "点击选择一个，生成时会作为两人的相识背景";
+      this._renderConcepts(concepts);
+    } catch (e) {
+      console.error("recommend concepts failed:", e);
+      box.innerHTML = "";
+      if (hint) hint.textContent = "推荐失败：" + (e.message || "unknown") + "，可稍后再试";
+    }
+  }
+
+  _renderConcepts(concepts) {
+    const box = document.getElementById("persona-wizard-concepts");
+    if (!box) return;
+    box.innerHTML = concepts.map((c, idx) => `
+      <button type="button" class="persona-wizard__concept" data-idx="${idx}">
+        <span class="persona-wizard__concept-title">${this._esc(c.title || "")}</span>
+        <span class="persona-wizard__concept-tagline">${this._esc(c.tagline || "")}</span>
+        ${(c.tags || []).length ? `<span class="persona-wizard__concept-tags">${(c.tags || []).map((t) => this._esc(t)).join(" ")}</span>` : ""}
+      </button>
+    `).join("");
+
+    box.querySelectorAll(".persona-wizard__concept").forEach((btn, idx) => {
+      btn.addEventListener("click", () => {
+        const selected = concepts[idx];
+        this._selectedConcept = selected;
+        box.querySelectorAll(".persona-wizard__concept").forEach((b) => {
+          b.classList.toggle("persona-wizard__concept--selected", b === btn);
+        });
+      });
+    });
+  }
+
+  async _startGeneration() {
+    const descEl = document.getElementById("persona-wizard-desc");
+    const description = descEl ? descEl.value.trim() : "";
+    if (!description) {
+      // Non-blocking hint + focus instead of alert() (same Electron focus bug).
+      const hint = document.getElementById("persona-wizard-story-hint");
+      if (hint) {
+        hint.textContent = "请先在上方描述你的角色，再开始生成";
+        hint.style.color = "var(--danger, #e5484d)";
+      }
+      if (descEl) descEl.focus();
+      return;
+    }
+
+    const options = {};
+    const nameEl = document.getElementById("persona-wizard-name");
+    const englishNameEl = document.getElementById("persona-wizard-english_name");
+    const genderEl = document.getElementById("persona-wizard-gender");
+    const ageEl = document.getElementById("persona-wizard-age");
+    const relEl = document.getElementById("persona-wizard-relationship");
+    const storyEl = document.getElementById("persona-wizard-story");
+    const userNameEl = document.getElementById("persona-wizard-user-name");
+    if (nameEl && nameEl.value.trim()) options.name = nameEl.value.trim();
+    if (englishNameEl && englishNameEl.value.trim()) options.english_name = englishNameEl.value.trim();
+    if (genderEl && genderEl.value) options.gender = genderEl.value;
+    if (ageEl && ageEl.value !== "") {
+      const age = parseInt(ageEl.value, 10);
+      if (!isNaN(age)) options.age = age;
+    }
+    if (relEl && relEl.value.trim()) options.relationship_type = relEl.value.trim();
+    if (storyEl && storyEl.value.trim()) options.story_seed = storyEl.value.trim();
+    if (userNameEl && userNameEl.value.trim()) options.user_name = userNameEl.value.trim();
+    if (this._selectedConcept) options.story_concept = this._selectedConcept;
+
+    this._genPayload = { description, options };
+    this._resetWizardProgress();
+
+    const form = document.getElementById("persona-wizard-form");
+    const progress = document.getElementById("persona-wizard-progress");
+    if (form) form.classList.add("persona-wizard__panel--hidden");
+    if (progress) progress.classList.remove("persona-wizard__panel--hidden");
+
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/persona/hub/generate",
+        body: JSON.stringify(this._genPayload),
+        headers: { "Content-Type": "application/json" },
+      });
+      const taskId = r && r.data && r.data.task_id;
+      if (!taskId) {
+        throw new Error((r && r.data && r.data.error) || "返回数据格式异常");
+      }
+      this._genTaskId = taskId;
+      this._genPollCount = 0;
+      this._pollGeneration();
+    } catch (e) {
+      console.error("start generation failed:", e);
+      this._showWizardError("生成任务创建失败: " + (e.message || "unknown"));
+    }
+  }
+
+  _resetWizardProgress() {
+    const fill = document.getElementById("persona-wizard-bar-fill");
+    if (fill) fill.style.width = "0%";
+    const msg = document.getElementById("persona-wizard-msg");
+    if (msg) msg.textContent = "正在分析角色概念";
+    const err = document.getElementById("persona-wizard-error");
+    if (err) err.classList.add("persona-wizard__error--hidden");
+    document.querySelectorAll(".persona-wizard__stage").forEach((li) => {
+      li.classList.remove("persona-wizard__stage--done", "persona-wizard__stage--active");
+    });
+  }
+
+  _pollGeneration() {
+    if (this._genTimer) {
+      clearTimeout(this._genTimer);
+      this._genTimer = null;
+    }
+    this._genTimer = setTimeout(async () => {
+      this._genTimer = null;
+      if (!this._genTaskId) return;
+      this._genPollCount += 1;
+      try {
+        const r = await window.aerie.api.request({
+          method: "GET",
+          path: `/api/persona/hub/generate/${this._genTaskId}`,
+        });
+        const task = r && r.data && r.data.task;
+        if (!task) {
+          this._showWizardError("生成任务已失效，请重试");
+          return;
+        }
+        this._updateWizardProgress(task);
+
+        if (task.state === "done") {
+          const persona = task.persona;
+          const pid = task.persona_id;
+          this._currentId = pid;
+          if (persona) this._fillForm(persona);
+          this._showEditor();
+          if (pid) this._loadThreeViewSummary(pid);
+          this._loadList();
+          alert("人设已生成，可继续完善细节");
+        } else if (task.state === "error") {
+          this._showWizardError(task.error || "生成失败，请重试");
+        } else if (this._genPollCount >= 120) {
+          this._showWizardError("生成超时，请重试");
+        } else {
+          this._pollGeneration();
+        }
+      } catch (e) {
+        console.error("poll generation failed:", e);
+        if (this._genPollCount >= 120) {
+          this._showWizardError("生成超时，请重试");
+        } else {
+          this._pollGeneration();
+        }
+      }
+    }, 800);
+  }
+
+  _updateWizardProgress(task) {
+    const pct = task.progress || 0;
+    const fill = document.getElementById("persona-wizard-bar-fill");
+    if (fill) fill.style.width = pct + "%";
+
+    const msg = document.getElementById("persona-wizard-msg");
+    if (msg) msg.textContent = task.message || task.stage || "";
+
+    const order = ["concept", "detail", "assemble", "prompt", "finalize"];
+    const stageIdx = typeof task.stage_index === "number"
+      ? task.stage_index
+      : order.indexOf(task.stage_key);
+    document.querySelectorAll(".persona-wizard__stage").forEach((li) => {
+      li.classList.remove("persona-wizard__stage--done", "persona-wizard__stage--active");
+      const keyIdx = order.indexOf(li.getAttribute("data-key"));
+      if (keyIdx >= 0 && stageIdx >= 0) {
+        if (keyIdx < stageIdx) {
+          li.classList.add("persona-wizard__stage--done");
+        } else if (keyIdx === stageIdx) {
+          li.classList.add("persona-wizard__stage--active");
+        }
+      }
+    });
+  }
+
+  _showWizardError(msg) {
+    if (this._genTimer) {
+      clearTimeout(this._genTimer);
+      this._genTimer = null;
+    }
+    const err = document.getElementById("persona-wizard-error");
+    const errText = document.getElementById("persona-wizard-error-text");
+    if (err) err.classList.remove("persona-wizard__error--hidden");
+    if (errText) errText.textContent = msg;
   }
 
   async _exportPersona(personaId) {

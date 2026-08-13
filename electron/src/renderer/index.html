@@ -6,7 +6,7 @@
 <title>Aerie · 云栖</title>
 <link rel="stylesheet" href="styles/main.css">
 <link rel="stylesheet" href="styles/icons.css">
-<link rel="stylesheet" href="styles/approval-modal.css">
+<link rel="stylesheet" href="styles/cognition-panel.css">
 <link rel="stylesheet" href="styles/persona-hub.css">
 <link rel="stylesheet" href="styles/office-mode.css">
 <link rel="stylesheet" href="styles/world-dashboard.css">
@@ -755,7 +755,7 @@
           <div class="about-hero">
             <img src="assets/logo.png" alt="" class="about-logo">
             <h1>Aerie · 云栖</h1>
-            <p class="about-version">Aerie · 云栖 v0.2.0-beta.1</p>
+            <p class="about-version">Aerie · 云栖 V 0.3.1-Beta.1</p>
             <p class="about-desc">Always with you. Only for you.</p>
             <p class="about-desc-sub">本地优先 · 私人专属 · Made Only for You</p>
           </div>
@@ -1058,8 +1058,8 @@
           <div id="settings-form-view" role="tabpanel" aria-labelledby="tab-settings-form" tabindex="0">
             <!-- Block-2 A2: persona 头像 + 中英名 -->
             <div class="settings-group settings-group--persona">
-              <h3 class="settings-section-title">她的样子 · Her Appearance</h3>
-              <p class="settings-hint">这是她在你眼中的样子。改完她就是这个人。/ This is who she is to you.</p>
+              <h3 class="settings-section-title"><span id="persona-pronoun-title">她</span>的样子 · Appearance</h3>
+              <p class="settings-hint">这是<span id="persona-pronoun-subj">她</span>在你眼中的样子。改完<span id="persona-pronoun-obj">她</span>就是这个人。/ This is who she is to you.</p>
               <div class="persona-edit">
                 <div class="persona-avatar">
                   <img id="persona-avatar-preview" src="assets/avatar_default.svg" alt="" data-default-src="assets/avatar_default.svg" onerror="this.src='assets/avatar_default.svg'">
@@ -1072,7 +1072,7 @@
                 </div>
               </div>
               <div class="settings-actions">
-                <button id="persona-save-btn" class="btn btn-primary" type="button">保存她 · Save</button>
+                <button id="persona-save-btn" class="btn btn-primary" type="button">保存<span id="persona-pronoun-save">她</span> · Save</button>
               </div>
               <div id="persona-status" class="settings-status" style="font-size:12px;color:var(--success);margin-top:6px;"></div>
             </div>
@@ -1202,6 +1202,24 @@
               <span class="settings-hint">不限制时，伊塔会自主决定发图节奏 / Unlimited lets Ita decide on her own</span>
             </div>
 
+            <div class="settings-group settings-group--self-evolution">
+              <h3 class="settings-section-title">自进化 · Self Evolution</h3>
+              <p class="settings-hint">检测到能力缺口时，允许伊塔自动生成代码修改提案（内测） / Beta: let Ita auto-propose code changes when a capability gap is detected</p>
+              <div class="settings-subgroup se-master-switch-row" id="se-master-switch-row">
+                <div class="se-master-switch-text">
+                  <label>启用 L4 代码自进化</label>
+                  <p class="settings-hint se-master-hint">
+                    开启后，伊塔将调用代码模型生成 file_changes 提案，经四道安全闸门审查后自动应用或等待你审批，24 小时内可一键回滚。默认关闭。
+                  </p>
+                </div>
+                <label class="di-switch" aria-label="启用 L4 代码自进化开关" title="点击切换（含两次风险确认）">
+                  <input type="checkbox" id="setting-self-evolve-l4">
+                  <span class="di-switch-slider"></span>
+                </label>
+                <div class="se-master-status" id="se-master-status" style="display:none;"></div>
+              </div>
+            </div>
+
             <div class="settings-group settings-group--dynamic-island">
               <h3 class="settings-section-title">灵动岛 · Dynamic Island</h3>
               <p class="settings-hint">桌面顶部灵动岛的外观、交互和组件配置 / Desktop Dynamic Island appearance & interaction</p>
@@ -1323,6 +1341,25 @@
               <div class="settings-actions">
                 <button id="di-settings-apply" class="btn btn-primary">应用到灵动岛</button>
                 <button id="di-settings-reset" class="btn btn-secondary">恢复默认</button>
+              </div>
+            </div>
+
+            <!-- 消息提醒设置 -->
+            <div class="settings-group settings-group--notifications">
+              <h3 class="settings-section-title">消息提醒 · Notifications</h3>
+              <p class="settings-hint">新消息 / 日程 / 主动消息的系统通知总开关 / Master switch for system notifications</p>
+              <div class="settings-subgroup notif-master-switch-row" id="notif-master-switch-row">
+                <div class="notif-master-switch-text">
+                  <label>启用消息提醒</label>
+                  <p class="settings-hint notif-master-hint">
+                    关闭后，伊塔的新消息、日程提醒和主动消息都不会再弹出系统通知（应用内对话不受影响）。
+                  </p>
+                </div>
+                <label class="di-switch" aria-label="启用消息提醒开关" title="点击切换">
+                  <input type="checkbox" id="notif-master-enabled" checked>
+                  <span class="di-switch-slider"></span>
+                </label>
+                <div class="notif-master-status" id="notif-master-status" style="display:none;"></div>
               </div>
             </div>
 
@@ -1599,6 +1636,50 @@
               </div>
             </div>
           </div>
+
+          <!-- L4 自进化开启：两条风险提示 + 两次确认（内测） -->
+          <div id="l4-enable-modal" class="data-modal hidden" role="dialog" aria-modal="true" aria-labelledby="l4-enable-title">
+            <div class="data-modal-backdrop" data-l4-close></div>
+            <div class="data-modal-panel data-modal-panel--confirm">
+              <div class="data-modal-header">
+                <h3 id="l4-enable-title">开启 L4 代码自进化 · 内测</h3>
+                <button class="data-modal-close" type="button" data-l4-close aria-label="关闭">×</button>
+              </div>
+              <div class="data-modal-body">
+                <div class="l4-warn-step" id="l4-warn-step-1">
+                  <div class="l4-warn-head">
+                    <svg class="icon icon--20 l4-warn-icon" aria-hidden="true"><use href="#icon-ui-warning"/></svg>
+                    <h4>第一条 · 危险警告 / Risk Warning</h4>
+                  </div>
+                  <p class="l4-warn-text">
+                    开启后，伊塔将获得<strong>自动修改本机代码文件的能力</strong>。检测到能力缺口时，她会调用
+                    代码模型生成修改提案，白名单内低风险改动将被<strong>自动应用并写入磁盘</strong>，
+                    核心模块改动则等待你审批。尽管提案需通过四道安全闸门（安全审查 / 语法检查 /
+                    测试验证 / 回滚备份），AI 生成的代码仍可能<strong>包含逻辑错误或与现有功能冲突</strong>，
+                    请在开启后留意系统的行为变化。
+                  </p>
+                </div>
+                <div class="l4-warn-step hidden" id="l4-warn-step-2">
+                  <div class="l4-warn-head">
+                    <svg class="icon icon--20 l4-warn-icon" aria-hidden="true"><use href="#icon-ui-warning"/></svg>
+                    <h4>第二条 · 免责声明 / Disclaimer</h4>
+                  </div>
+                  <p class="l4-warn-text">
+                    本功能为<strong>内测实验特性</strong>，自动生成的代码修改可能导致程序异常、功能不可用或数据异常。
+                    虽提供 24 小时回滚窗口与备份机制，但回滚并不保证覆盖所有可能后果。
+                    因启用本功能造成的任何问题，需由你自行承担。所有自动应用的修改均记录在
+                    <code>data/evolution_backups/</code>，可随时通过设置页审计与回滚。
+                  </p>
+                </div>
+                <p class="l4-warn-note" id="l4-warn-progress">请完整阅读以上两条提示后，逐次确认（当前第 1 / 2 条）</p>
+              </div>
+              <div class="data-modal-footer">
+                <button class="btn btn-secondary" type="button" data-l4-close>取消</button>
+                <button id="l4-warn-next" class="btn btn-warning" type="button">我已了解（1/2）</button>
+                <button id="l4-warn-confirm" class="btn btn-danger hidden" type="button">我同意并开启（2/2）</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1804,12 +1885,12 @@
               <div class="cog-v2-hero-icon"><svg class="icon icon--40" style="color: var(--color-accent, #7c3aed);"><use href="#icon-ui-mouse"/></svg></div>
                 <div class="cog-v2-hero-text">
                   <h3>电脑操控 · Computer Control</h3>
-                  <p>3 级权限 · 键鼠/截图/UIA · 危险命令拦截</p>
+                  <p>4 种权限模式 · 键鼠/截图/UIA · 默认拦截 + 白名单放行</p>
                 </div>
                 <div class="cog-v2-hero-stats">
                   <div class="cog-v2-stat">
-                    <span class="cog-v2-stat-label">当前权限</span>
-                    <span class="cog-v2-stat-value" id="cog-cc-level">VIEW_ONLY</span>
+                    <span class="cog-v2-stat-label">当前模式</span>
+                    <span class="cog-v2-stat-value" id="cog-cc-level">MANUAL</span>
                   </div>
                   <div class="cog-v2-stat">
                     <span class="cog-v2-stat-label">今日操作</span>
@@ -1824,22 +1905,64 @@
 
               <div class="cog-section">
                 <h3>
-                  <span class="cog-section-title">权限档位</span>
-                  <span class="cog-section-sub">Permission level</span>
+                  <span class="cog-section-title">权限模式</span>
+                  <span class="cog-section-sub">Permission mode</span>
                 </h3>
                 <div class="cog-cc-levels">
-                  <div class="cog-cc-level" data-level="VIEW_ONLY">
-                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-eye"/></svg> 仅查看</div>
-                    <div class="cog-cc-level-desc">只能截图、查看窗口信息</div>
+                  <div class="cog-cc-level" data-level="MANUAL">
+                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-eye"/></svg> 手动审批</div>
+                    <div class="cog-cc-level-desc">所有操作均需你确认</div>
                   </div>
-                  <div class="cog-cc-level" data-level="STANDARD">
-                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-hand"/></svg> 标准</div>
-                    <div class="cog-cc-level-desc">可键鼠操作、执行安全命令</div>
+                  <div class="cog-cc-level" data-level="AUTO">
+                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-hand"/></svg> 自动批阅</div>
+                    <div class="cog-cc-level-desc">低风险自动放行，中高需确认</div>
                   </div>
                   <div class="cog-cc-level" data-level="FULL">
-                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-bolt"/></svg> 完全</div>
-                    <div class="cog-cc-level-desc">完整控制，需用户持续确认</div>
+                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-bolt"/></svg> 完全访问</div>
+                    <div class="cog-cc-level-desc">全部放行，仅危险命令拦截</div>
                   </div>
+                  <div class="cog-cc-level" data-level="CUSTOM">
+                    <div class="cog-cc-level-name"><svg class="icon icon--16" style="margin-right:4px;vertical-align:-2px;"><use href="#icon-ui-shield"/></svg> 自定义</div>
+                    <div class="cog-cc-level-desc">默认拦截，按名单/规则放行</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">白名单</span>
+                  <span class="cog-section-sub">Whitelist · 命中直接放行</span>
+                </h3>
+                <div class="cog-cc-list-form">
+                  <select class="cog-cc-list-type" id="cog-cc-wl-type">
+                    <option value="action">操作类型</option>
+                    <option value="command">命令前缀</option>
+                    <option value="pattern">正则</option>
+                  </select>
+                  <input type="text" class="cog-cc-list-value" id="cog-cc-wl-value" placeholder="如 shell_cmd / dir / ping">
+                  <button class="btn btn-primary btn-sm" id="cog-cc-wl-add">添加</button>
+                </div>
+                <div id="cog-cc-wl-list" class="cog-cc-list">
+                  <div class="cog-list-empty">暂无白名单条目</div>
+                </div>
+              </div>
+
+              <div class="cog-section">
+                <h3>
+                  <span class="cog-section-title">黑名单</span>
+                  <span class="cog-section-sub">Blacklist · 命中直接拦截</span>
+                </h3>
+                <div class="cog-cc-list-form">
+                  <select class="cog-cc-list-type" id="cog-cc-bl-type">
+                    <option value="action">操作类型</option>
+                    <option value="command">命令前缀</option>
+                    <option value="pattern">正则</option>
+                  </select>
+                  <input type="text" class="cog-cc-list-value" id="cog-cc-bl-value" placeholder="如 shell_cmd / shutdown">
+                  <button class="btn btn-primary btn-sm" id="cog-cc-bl-add">添加</button>
+                </div>
+                <div id="cog-cc-bl-list" class="cog-cc-list">
+                  <div class="cog-list-empty">暂无黑名单条目</div>
                 </div>
               </div>
 
@@ -1856,17 +1979,16 @@
 
               <div class="cog-section">
                 <h3>
-                  <span class="cog-section-title">危险命令黑名单</span>
-                  <span class="cog-section-sub">Dangerous command blacklist</span>
+                  <span class="cog-section-title">系统危险命令黑名单</span>
+                  <span class="cog-section-sub">Built-in dangerous commands · 不可绕过</span>
                 </h3>
                 <div class="cog-cc-blacklist" id="cog-cc-blacklist">
-                  <span class="cog-tag">rm -rf /</span>
                   <span class="cog-tag">format</span>
                   <span class="cog-tag">del /s /q</span>
-                  <span class="cog-tag">mkfs</span>
-                  <span class="cog-tag">dd if=</span>
+                  <span class="cog-tag">shutdown</span>
                   <span class="cog-tag">reg delete</span>
-                  <span class="cog-tag">shutdown /s</span>
+                  <span class="cog-tag">net user</span>
+                  <span class="cog-tag">wmic</span>
                 </div>
               </div>
             </div><!-- /#cog-pane-computer -->
@@ -2137,7 +2259,6 @@
     <script src="js/settings.js"></script>
     <script src="js/data-viewer.js"></script>
     <script src="js/calendar-panel.js"></script>
-<script src="js/approval-modal.js"></script>
 <script src="js/persona-hub.js"></script>
 <script src="js/office-mode.js"></script>
 <script src="js/world-dashboard.js"></script>

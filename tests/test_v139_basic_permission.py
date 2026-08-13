@@ -3,7 +3,7 @@ import asyncio
 import sys
 sys.path.insert(0, "e:\\Agent_reply")
 
-from core.computer_control import PermissionLevel
+from core.computer_control import ControlMode
 
 
 def test_permission_singleton():
@@ -24,14 +24,14 @@ def test_permission_singleton():
     assert comp.computer_controller is ctrl_tools, "两个实例不相同！"
     print("  ✅ screen_tools 和 companion 共享同一实例")
 
-    # 测试权限设置是否双向同步
-    comp.computer_controller.set_permission(PermissionLevel.FULL)
-    assert ctrl_tools.permission_level == PermissionLevel.FULL
+    # 测试模式设置是否双向同步
+    comp.computer_controller.set_mode(ControlMode.FULL)
+    assert ctrl_tools.mode == ControlMode.FULL
     print("  ✅ companion 设置 FULL → screen_tools 同步生效")
 
-    ctrl_tools.set_permission(PermissionLevel.VIEW_ONLY)
-    assert comp.computer_controller.permission_level == PermissionLevel.VIEW_ONLY
-    print("  ✅ screen_tools 设置 VIEW_ONLY → companion 同步生效")
+    ctrl_tools.set_mode(ControlMode.MANUAL)
+    assert comp.computer_controller.mode == ControlMode.MANUAL
+    print("  ✅ screen_tools 设置 MANUAL → companion 同步生效")
 
     print()
 

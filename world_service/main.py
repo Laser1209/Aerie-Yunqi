@@ -29,7 +29,7 @@ class LocalWorldSidecarService:
 
     protocol = "aerie.world"
     protocol_version = "1.0"
-    service_version = "0.2.0"
+    service_version = "0.3.1-Beta.1"
 
     def __init__(
         self,

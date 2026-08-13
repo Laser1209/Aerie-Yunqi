@@ -17,7 +17,7 @@ import base64
 import logging
 from typing import Any, Optional
 
-from .computer_control import ComputerController, PermissionLevel, ControlAction
+from .computer_control import ComputerController, ControlMode, ControlAction
 from .tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -39,27 +39,6 @@ def get_controller() -> ComputerController:
         if _controller is None:
             _controller = ComputerController()
     return _controller
-
-
-def set_permission_level(level: str) -> None:
-    """设置权限档位。"""
-    controller = get_controller()
-    level_map = {
-        "VIEW_ONLY": PermissionLevel.VIEW_ONLY,
-        "STANDARD": PermissionLevel.STANDARD,
-        "FULL": PermissionLevel.FULL,
-        "view_only": PermissionLevel.VIEW_ONLY,
-        "standard": PermissionLevel.STANDARD,
-        "full": PermissionLevel.FULL,
-    }
-    perm = level_map.get(level, PermissionLevel.VIEW_ONLY)
-    controller.set_permission(perm)
-    logger.info("screen control permission set to %s", perm.value)
-
-
-def get_permission_level() -> str:
-    controller = get_controller()
-    return controller.permission_level().value.upper()
 
 
 # ── 工具函数 ──────────────────────────────────────
@@ -477,21 +456,12 @@ def register_screen_tools(registry: ToolRegistry) -> None:
     logger.info("screen control tools registered: %d tools", len(tool_fns))
 
 
-def get_available_tools(permission_level: str) -> list[str]:
-    """根据权限档位返回可用工具列表。"""
-    level = permission_level.upper()
-    if level == "VIEW_ONLY":
-        return ["screen_screenshot", "screen_window_list"]
-    elif level == "STANDARD":
-        return [
-            "screen_screenshot",
-            "screen_window_list",
-            "screen_mouse_click",
-            "screen_key_type",
-            "app_launch",
-            "screen_shell",
-        ]
-    elif level == "FULL":
+def get_available_tools(mode: str = "manual") -> list[str]:
+    """根据权限模式返回可用工具列表。
+
+    manual / auto / custom 下仅暴露只读类工具；
+    full 模式暴露全部电脑操控工具。
+    """
+    if mode.lower() == ControlMode.FULL.value:
         return list(_TOOL_SCHEMAS.keys())
-    else:
-        return ["screen_screenshot", "screen_window_list"]
+    return ["screen_screenshot", "screen_window_list"]

@@ -1,4 +1,21 @@
 {
   "enabled": true,
-  "updatedAt": 1786609148342
+  "config": {
+    "theme": "light",
+    "interaction": "click",
+    "expandType": "panel",
+    "capsuleComponents": [
+      "companion",
+      "status",
+      "notifications",
+      "media"
+    ],
+    "expandedComponents": [
+      "quickActions",
+      "notifList",
+      "mediaControl",
+      "systemStatus"
+    ]
+  },
+  "updatedAt": 1786639941650
 }

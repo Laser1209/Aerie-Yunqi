@@ -70,7 +70,8 @@ class CognitionPanel {
     this._bindV2Refresh();     // v2: refresh buttons on capability tabs
     this._bindFileOrganizerQuick(); // v13.9: 文件整理四个快捷按钮
     this._bindQQWhitelist();   // v13.9: QQ whitelist management
-    this._bindCCLevelButtons(); // v13.9: computer control permission level buttons
+    this._bindCCModeButtons(); // v2: computer control mode + whitelist/blacklist
+    this._bindCCListAdd();
     this._bindDocWriter();      // v13.9: 文档写作模板/样式/导出交互
     this._loadHistory();
     this._loadStats();
@@ -1176,21 +1177,23 @@ class CognitionPanel {
     const logEl = document.getElementById("cog-cc-log");
     if (!levelEl || !logEl) return;
 
-    this._bindCCLevelButtons();
-
     Promise.all([
       window.aerie.api.request({ method: "GET", path: "/api/computer_control/stats" }).catch(() => null),
       window.aerie.api.request({ method: "GET", path: "/api/computer_control/logs?limit=20" }).catch(() => null),
-    ]).then(([statsRes, logsRes]) => {
+      window.aerie.api.request({ method: "GET", path: "/api/computer_control/policy" }).catch(() => null),
+    ]).then(([statsRes, logsRes, policyRes]) => {
       const stats = (statsRes && statsRes.data) || {};
       const logs = (logsRes && logsRes.data && logsRes.data.logs) || [];
+      const policy = (policyRes && policyRes.data && policyRes.data.policy) || {};
 
-      const level = stats.permission_level || "view_only";
-      levelEl.textContent = level.toUpperCase();
+      const mode = stats.mode || "manual";
+      levelEl.textContent = mode.toUpperCase();
       todayEl.textContent = stats.today_operations != null ? stats.today_operations : 0;
       blockedEl.textContent = stats.blocked_operations != null ? stats.blocked_operations : 0;
 
-      this._updateCCLevelUI(level);
+      this._updateCCModeUI(mode);
+      this._renderCCList("cog-cc-wl-list", policy.whitelist || [], "whitelist");
+      this._renderCCList("cog-cc-bl-list", policy.blacklist || [], "blacklist");
 
       if (!logs.length) {
         logEl.innerHTML = '<div class="cog-list-empty">暂无操作记录</div>';
@@ -1223,47 +1226,118 @@ class CognitionPanel {
     });
   }
 
-  _bindCCLevelButtons() {
-    if (this._ccLevelBound) return;
-    this._ccLevelBound = true;
+  _bindCCModeButtons() {
+    if (this._ccModeBound) return;
+    this._ccModeBound = true;
     const levels = document.querySelectorAll(".cog-cc-level");
     levels.forEach((el) => {
       el.addEventListener("click", () => {
-        const level = el.dataset.level;
-        if (!level) return;
-        this._updateCCLevelUI(level);
-        this._setCCLevel(level.toLowerCase());
+        const mode = el.dataset.level;
+        if (!mode) return;
+        this._updateCCModeUI(mode);
+        this._setCCMode(mode.toLowerCase());
       });
     });
   }
 
-  _updateCCLevelUI(level) {
+  _updateCCModeUI(mode) {
     const levels = document.querySelectorAll(".cog-cc-level");
-    const levelUp = level.toUpperCase();
+    const modeUp = mode.toUpperCase();
     levels.forEach((el) => {
-      if (el.dataset.level === levelUp) {
+      if (el.dataset.level === modeUp) {
         el.classList.add("active");
       } else {
         el.classList.remove("active");
       }
     });
     const levelEl = document.getElementById("cog-cc-level");
-    if (levelEl) levelEl.textContent = levelUp;
+    if (levelEl) levelEl.textContent = modeUp;
   }
 
-  async _setCCLevel(level) {
+  async _setCCMode(mode) {
     try {
       const r = await window.aerie.api.request({
         method: "PUT",
-        path: "/api/computer_control/level",
-        body: { level },
+        path: "/api/computer_control/mode",
+        body: { mode },
       });
       if (r.data && r.data.status === "ok") {
-        this._updateCCLevelUI(r.data.level || level);
+        this._updateCCModeUI(r.data.mode || mode);
       }
     } catch (e) {
-      console.warn("[cog-panel] set cc level failed", e);
+      console.warn("[cog-panel] set cc mode failed", e);
     }
+  }
+
+  // ── 黑白名单管理 ──────────────────────────────
+
+  _bindCCListAdd() {
+    if (this._ccListBound) return;
+    this._ccListBound = true;
+    const bind = (btnId, typeSelId, valueId, kind) => {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        const type = document.getElementById(typeSelId).value;
+        const value = document.getElementById(valueId).value.trim();
+        if (!value) return;
+        try {
+          await window.aerie.api.request({
+            method: "POST",
+            path: "/api/computer_control/" + kind,
+            body: { type, value },
+          });
+          document.getElementById(valueId).value = "";
+          this._reloadCCPolicy();
+        } catch (e) {
+          console.warn("[cog-panel] add cc " + kind + " failed", e);
+        }
+      });
+    };
+    bind("cog-cc-wl-add", "cog-cc-wl-type", "cog-cc-wl-value", "whitelist");
+    bind("cog-cc-bl-add", "cog-cc-bl-type", "cog-cc-bl-value", "blacklist");
+  }
+
+  async _reloadCCPolicy() {
+    try {
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/computer_control/policy" });
+      const policy = (r.data && r.data.policy) || {};
+      this._renderCCList("cog-cc-wl-list", policy.whitelist || [], "whitelist");
+      this._renderCCList("cog-cc-bl-list", policy.blacklist || [], "blacklist");
+    } catch (e) {
+      console.warn("[cog-panel] reload cc policy failed", e);
+    }
+  }
+
+  _renderCCList(listId, entries, kind) {
+    const el = document.getElementById(listId);
+    if (!el) return;
+    if (!entries.length) {
+      el.innerHTML = '<div class="cog-list-empty">暂无' + (kind === "whitelist" ? "白名单" : "黑名单") + "条目</div>";
+      return;
+    }
+    const typeLabel = { action: "操作", command: "命令", pattern: "正则" };
+    el.innerHTML = entries.map((e) => `
+      <div class="cog-cc-list-item">
+        <span class="cog-cc-list-tag cog-cc-list-tag--${this._escape(e.type)}">${this._escape(typeLabel[e.type] || e.type)}</span>
+        <span class="cog-cc-list-value">${this._escape(e.value)}</span>
+        <button class="cog-cc-list-del" data-kind="${kind}" data-id="${this._escape(e.id)}" title="删除">
+          <svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-close"/></svg>
+        </button>
+      </div>
+    `).join("");
+
+    el.querySelectorAll(".cog-cc-list-del").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const { kind: k, id } = btn.dataset;
+        try {
+          await window.aerie.api.request({ method: "DELETE", path: `/api/computer_control/${k}/${id}` });
+          this._reloadCCPolicy();
+        } catch (err) {
+          console.warn("[cog-panel] remove cc " + k + " failed", err);
+        }
+      });
+    });
   }
 
   _loadFileOrganizerData() {

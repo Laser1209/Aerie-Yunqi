@@ -553,7 +553,10 @@ class QQClient:
                     if data.get("echo") == echo_tag:
                         if data.get("status") == "ok":
                             logger.info("QQ -> %s: %.80s", user_id, content)
-                            return True
+                            # Quote V2: return the platform message_id so the
+                            # caller can backfill chat_log.qq_message_id.
+                            mid = (data.get("data") or {}).get("message_id")
+                            return int(mid) if mid else True
                         logger.warning("QQ send failed: %s", data)
                         return False
                     # Otherwise it's a meta_event / heartbeat / unrelated
@@ -676,6 +679,20 @@ class QQClient:
         logger.warning("QQ recall failed: %s", resp)
         return False
 
+    async def get_msg(self, message_id: int, timeout: float = 8.0) -> dict | None:
+        """Fetch a single message's raw content via OneBot11 ``get_msg``.
+
+        Used to resolve inbound quotes whose quoted message is not stored in
+        chat_log (e.g. the user quotes a message the bot never persisted).
+        Returns the full response dict (``data.message`` holds the segment
+        array) or None on failure.
+        """
+        if self._disabled or not self.is_connected:
+            return None
+        return await self._rpc_call(
+            "get_msg", {"message_id": int(message_id)}, timeout=timeout,
+        )
+
     async def send_poke(self, user_id: int) -> bool:
         """Send a poke (戳一戳) to a user via NapCat OneBot11."""
         if self._disabled or self._connectivity_test:
@@ -781,10 +798,11 @@ class QQClient:
         if resp is None:
             return False
         if resp.get("status") == "ok":
-            # data.data.message_id is the new OneBot11 message_id
-            # (currently logged for debugging; not consumed by caller)
-            _msg_id = (resp.get("data") or {}).get("message_id")
-            return True
+            # Quote V2: return the platform message_id so callers can
+            # backfill chat_log.qq_message_id (reply segments reference
+            # this id). Falls back to True when NapCat omits message_id.
+            mid = (resp.get("data") or {}).get("message_id")
+            return int(mid) if mid else True
         return False
 
     async def send_image(self, user_id: int, image_ref: str, caption: str = "") -> bool:

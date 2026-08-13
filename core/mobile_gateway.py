@@ -13,6 +13,8 @@ import logging
 import os
 import secrets
 import socket
+import time
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.feature_flags import FeatureFlags
+from core.mobile_approvals import (
+    MobileApprovalError,
+    decide_approval as mobile_approval_decide,
+    list_pending_approvals as mobile_approval_list,
+)
 from core.mobile_chat import MobileChatError, MobileChatService
 from core.mobile_files import (
     PART_SIZE,
@@ -36,6 +43,13 @@ from core.mobile_identity import (
     MobileIdentityStore,
     MobilePrincipal,
     TokenPair,
+)
+from core.mobile_readonly import (
+    MobileReadonlyError,
+    get_brief,
+    get_memory,
+    get_weather,
+    get_world,
 )
 
 
@@ -117,6 +131,14 @@ class SubmitRequest(_MobileModel):
     client_request_id: str = Field(alias="clientRequestId", min_length=36, max_length=36)
     text: str = Field(default="", max_length=20_002)
     file_ids: list[str] = Field(default_factory=list, alias="fileIds", max_length=20)
+    # Quote V2: unified quote support — the chat_log.id being replied to.
+    reply_to_id: int = Field(default=0, alias="replyToId", ge=0)
+
+
+class ApprovalDecisionRequest(_MobileModel):
+    approved: bool
+    whitelist: bool = False
+    blacklist: bool = False
 
 
 class CreateUploadRequest(_MobileModel):
@@ -244,6 +266,53 @@ def create_mobile_app(
         response.headers.setdefault("Cache-Control", "no-store")
         return response
 
+    # ── Lightweight in-process rate limiting (§12.2) ──────────────────────
+    # Buckets are keyed by (class, identity) with fixed-window counting.  This
+    # is intentionally per-process state: the gateway runs a single uvicorn
+    # worker on 127.0.0.1, so cross-process coordination is unnecessary.
+    _window = 60.0
+    _limits: dict[str, int] = {
+        # class -> requests per 60s window (per client+token identity)
+        "auth": 120,
+        "message": 10,
+        "sse": 2,
+    }
+    _buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+    def _classify_rate_path(path: str) -> str | None:
+        if path.startswith("/api/mobile/v1/auth/") or path == "/api/mobile/v1/auth/login":
+            return "auth"
+        if path == "/api/mobile/v1/requests":
+            return "message"
+        if path == "/api/mobile/v1/events":
+            return "sse"
+        return None
+
+    def _rate_limit_key(request: Request, cls: str) -> str:
+        identity = request.headers.get("authorization", "") or ""
+        client = request.client.host if request.client else "unknown"
+        return f"{cls}:{client}:{identity}"
+
+    @app.middleware("http")
+    async def rate_limit(request: Request, call_next: Any) -> Response:
+        cls = _classify_rate_path(request.url.path)
+        if cls is not None:
+            now = time.monotonic()
+            limit = _limits[cls]
+            key = _rate_limit_key(request, cls)
+            bucket = _buckets[key]
+            while bucket and now - bucket[0] > _window:
+                bucket.popleft()
+            if len(bucket) >= limit:
+                return _error_response(
+                    request,
+                    code="rate_limited",
+                    message="请求过于频繁，请稍后再试",
+                    status_code=429,
+                )
+            bucket.append(now)
+        return await call_next(request)
+
     @app.exception_handler(MobileAuthError)
     async def mobile_auth_error(
         request: Request,
@@ -322,6 +391,42 @@ def create_mobile_app(
             message=messages.get(exc.code, "文件操作失败"),
             status_code=exc.status_code,
             headers=exc.headers,
+        )
+
+    @app.exception_handler(MobileApprovalError)
+    async def mobile_approval_error(
+        request: Request,
+        exc: MobileApprovalError,
+    ) -> JSONResponse:
+        messages = {
+            "forbidden": "没有执行此操作的权限",
+            "approval_not_found": "审批请求不存在",
+            "approvals_unavailable": "审批服务暂不可用",
+        }
+        return _error_response(
+            request,
+            code=exc.code,
+            message=messages.get(exc.code, "审批操作失败"),
+            status_code=exc.status_code,
+        )
+
+    @app.exception_handler(MobileReadonlyError)
+    async def mobile_readonly_error(
+        request: Request,
+        exc: MobileReadonlyError,
+    ) -> JSONResponse:
+        messages = {
+            "service_unavailable": "只读服务暂不可用",
+            "brief_unavailable": "今日简报暂不可用",
+            "world_unavailable": "世界状态暂不可用",
+            "memory_unavailable": "记忆档案暂不可用",
+            "weather_unavailable": "天气信息暂不可用",
+        }
+        return _error_response(
+            request,
+            code=exc.code,
+            message=messages.get(exc.code, "只读操作失败"),
+            status_code=exc.status_code,
         )
 
     def store(request: Request) -> MobileIdentityStore:
@@ -418,6 +523,100 @@ def create_mobile_app(
                 "approvals": current.role == "owner",
             },
         }
+
+    # ── Approvals (owner-only; Phase 6 mobile contract §7.5) ─────────────
+    @app.get("/api/mobile/v1/approvals")
+    async def approvals(
+        current: MobilePrincipal = Depends(principal),
+    ) -> dict[str, Any]:
+        return mobile_approval_list(current)
+
+    @app.get("/api/mobile/v1/approvals/{approval_id}")
+    async def approval_detail(
+        approval_id: str,
+        current: MobilePrincipal = Depends(principal),
+    ) -> dict[str, Any]:
+        from core.mobile_approvals import get_approval
+
+        return get_approval(current, approval_id)
+
+    @app.post("/api/mobile/v1/approvals/{approval_id}/decision")
+    async def approval_decision(
+        approval_id: str,
+        payload: ApprovalDecisionRequest,
+        current: MobilePrincipal = Depends(principal),
+    ) -> dict[str, Any]:
+        return mobile_approval_decide(
+            current,
+            approval_id,
+            approved=payload.approved,
+            whitelist=payload.whitelist,
+            blacklist=payload.blacklist,
+        )
+
+    # ── Owner-only audit / guest browsing (§7.5) ─────────────────────────
+    @app.get("/api/mobile/v1/owner/guests")
+    async def owner_guests(
+        current: MobilePrincipal = Depends(principal),
+        identity: MobileIdentityStore = Depends(store),
+    ) -> dict[str, Any]:
+        if current.role != "owner":
+            raise MobileAuthError("forbidden", status_code=403)
+        return {"items": identity.list_guests()}
+
+    @app.get("/api/mobile/v1/owner/guests/{account_id}/messages")
+    async def owner_guest_messages(
+        account_id: str,
+        limit: int = Query(default=50, ge=1, le=100),
+        current: MobilePrincipal = Depends(principal),
+        service: MobileChatService = Depends(chat),
+    ) -> dict[str, Any]:
+        if current.role != "owner":
+            raise MobileAuthError("forbidden", status_code=403)
+        return service.list_messages_for_actor(account_id, limit=limit)
+
+    @app.get("/api/mobile/v1/owner/audit")
+    async def owner_audit(
+        limit: int = Query(default=50, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        account_id: str | None = Query(default=None, alias="accountId"),
+        current: MobilePrincipal = Depends(principal),
+        identity: MobileIdentityStore = Depends(store),
+    ) -> dict[str, Any]:
+        if current.role != "owner":
+            raise MobileAuthError("forbidden", status_code=403)
+        return {
+            "items": identity.list_audit_events(
+                limit=limit,
+                offset=offset,
+                account_id=account_id,
+            )
+        }
+
+    # ── Read-only capability facade (§7.5 / §3.1.2) ──────────────────────
+    @app.get("/api/mobile/v1/readonly/brief")
+    async def readonly_brief(
+        current: MobilePrincipal = Depends(principal),
+    ) -> dict[str, Any]:
+        return await get_brief()
+
+    @app.get("/api/mobile/v1/readonly/world")
+    async def readonly_world(
+        current: MobilePrincipal = Depends(principal),
+    ) -> dict[str, Any]:
+        return await get_world()
+
+    @app.get("/api/mobile/v1/readonly/memory")
+    async def readonly_memory(
+        current: MobilePrincipal = Depends(principal),
+    ) -> dict[str, Any]:
+        return await get_memory(current.user_id)
+
+    @app.get("/api/mobile/v1/readonly/weather")
+    async def readonly_weather(
+        current: MobilePrincipal = Depends(principal),
+    ) -> dict[str, Any]:
+        return await get_weather()
 
     @app.get("/api/mobile/v1/devices")
     async def devices(
@@ -591,6 +790,7 @@ def create_mobile_app(
             client_request_id=payload.client_request_id,
             text=payload.text,
             file_ids=payload.file_ids,
+            reply_to_id=payload.reply_to_id,
         )
 
     @app.get("/api/mobile/v1/requests/{request_id}")

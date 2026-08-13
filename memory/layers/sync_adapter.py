@@ -83,12 +83,16 @@ class LayeredMemorySyncAdapter:
         *,
         actor_id: Optional[str] = None,
         channel: Optional[str] = None,
+        persona_id: Optional[str] = None,
     ) -> int:
+        from core.conversation_repository import active_persona_id
+
         metadata: dict[str, Any] = {}
         if actor_id:
             metadata["actor_id"] = actor_id
         if channel:
             metadata["channel"] = channel
+        pid = persona_id if persona_id is not None else active_persona_id()
         try:
             mid = self._run(
                 self._layered.store(
@@ -97,6 +101,7 @@ class LayeredMemorySyncAdapter:
                     memory_type=_coerce_memory_type(memory_type),
                     importance=float(importance),
                     metadata=metadata,
+                    persona_id=pid,
                 )
             )
             sid = str(mid or "")
@@ -111,13 +116,18 @@ class LayeredMemorySyncAdapter:
         limit: int = 5,
         *,
         actor_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
     ) -> list[dict[str, Any]]:
+        from core.conversation_repository import active_persona_id
+
+        pid = persona_id if persona_id is not None else active_persona_id()
         try:
             results = self._run(
                 self._layered.search(
                     user_id=int(user_id),
                     query=str(query),
                     limit=int(limit),
+                    persona_id=pid,
                 )
             )
         except Exception:
@@ -150,10 +160,21 @@ class LayeredMemorySyncAdapter:
         layer: str = "long_term",
         limit: int = 50,
         memory_type: Optional[str] = None,
+        persona_id: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        """按层列出用户的记忆（只读，供记忆档案页使用）。"""
+        """按层列出用户的记忆（只读，供记忆档案页使用）。
+
+        角色级隔离：persona_id 缺省取当前激活角色，非 None 时仅返回本角色 + NULL 共享。
+        """
         from memory.layers.base import MemoryLayer, MemoryType
 
+        if persona_id is None:
+            try:
+                from core.conversation_repository import active_persona_id
+
+                persona_id = active_persona_id()
+            except Exception:
+                persona_id = None
         try:
             layer_enum = MemoryLayer(layer)
         except ValueError:
@@ -171,6 +192,7 @@ class LayeredMemorySyncAdapter:
                     layer=layer_enum,
                     limit=int(limit),
                     memory_type=mtype,
+                    persona_id=persona_id,
                 )
             )
         except Exception:

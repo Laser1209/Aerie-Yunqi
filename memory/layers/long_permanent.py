@@ -109,7 +109,8 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     confidence REAL DEFAULT 0.5,
                     user_confirmed INTEGER DEFAULT 0,
                     expires_at REAL,
-                    deleted_at REAL
+                    deleted_at REAL,
+                    persona_id TEXT
                 )
             """)
             self.db.execute(
@@ -125,6 +126,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                 ("user_confirmed", "INTEGER DEFAULT 0"),
                 ("expires_at", "REAL"),
                 ("deleted_at", "REAL"),
+                ("persona_id", "TEXT"),  # 013 迁移已加列，此处幂等兜底
             ]:
                 try:
                     self.db.execute(
@@ -145,7 +147,9 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                 return None
         return None
 
-    async def store(self, item: MemoryItem) -> str:
+    async def store(self, item: MemoryItem, persona_id: Optional[str] = None) -> str:
+        if persona_id is not None:
+            item.persona_id = persona_id
         item.layer = MemoryLayer.LONG_TERM
         now = time.time()
         item.created_at = item.created_at or now
@@ -169,6 +173,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                             "importance": item.importance,
                             "source": item.source,
                             "channel": str((item.metadata or {}).get("channel") or ""),
+                            "persona_id": item.persona_id or "",  # NULL 用空串占位（共享兼容）
                         }],
                     )
                     has_embedding = 1
@@ -202,6 +207,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     "user_confirmed": uc_int,
                     "expires_at": item.expires_at,
                     "deleted_at": item.deleted_at,
+                    "persona_id": item.persona_id,
                 }
 
                 # 判断 id 是否为数字（兼容 INTEGER PRIMARY KEY）
@@ -262,6 +268,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
         query: str = "",
         limit: int = 5,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemorySearchResult]:
         results: List[MemorySearchResult] = []
 
@@ -273,6 +280,13 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     where = {"user_id": user_id}
                     if memory_type:
                         where["memory_type"] = memory_type.value
+                    # ChromaDB 无法表达 `= NULL OR = x`；NULL 写入时空串占位，
+                    # 显式 $or 匹配「当前角色 + 共享空串」，SQLite 侧再做权威过滤。
+                    if persona_id:
+                        where["$or"] = [
+                            {"persona_id": persona_id},
+                            {"persona_id": ""},
+                        ]
 
                     chroma_result = self._collection.query(
                         query_embeddings=[query_embedding],
@@ -286,10 +300,13 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                     for mid, dist, doc in zip(ids, distances, documents):
                         # cosine distance → similarity score
                         score = max(0.0, 1.0 - dist)
-                        # 从 SQLite 取完整数据
+                        # 从 SQLite 取完整数据（persona 权威过滤：角色不匹配则跳过）
                         item = await self.get(mid)
                         # P4b: 软删过滤——已删除（回收站）的记忆不参与检索
                         if item and getattr(item, "deleted_at", None):
+                            continue
+                        # P1-D: 角色隔离——非共享记忆与当前角色不符时跳过
+                        if item and persona_id and getattr(item, "persona_id", None) and item.persona_id != persona_id:
                             continue
                         if item:
                             results.append(MemorySearchResult(
@@ -315,6 +332,11 @@ class LongTermMemoryLayer(BaseMemoryLayer):
                       AND (deleted_at IS NULL OR deleted_at = 0)
                 """
                 params: List[Any] = [user_id]
+
+                # P1-D: 角色隔离——当前角色可见「本角色 + NULL 共享」
+                if persona_id:
+                    sql += " AND (persona_id = ? OR persona_id IS NULL)"
+                    params.append(persona_id)
 
                 if memory_type:
                     sql += " AND memory_type = ?"
@@ -419,6 +441,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
         user_id: int,
         limit: int = 50,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemoryItem]:
         if not self.db:
             return []
@@ -428,6 +451,10 @@ class LongTermMemoryLayer(BaseMemoryLayer):
             if memory_type:
                 sql += " AND memory_type = ?"
                 params.append(memory_type.value)
+            if persona_id:
+                # 角色级隔离：本角色 + NULL 共享
+                sql += " AND (persona_id = ? OR persona_id IS NULL)"
+                params.append(persona_id)
             sql += " ORDER BY importance DESC, created_at DESC LIMIT ?"
             params.append(limit)
             rows = self.db.query(sql, tuple(params))
@@ -471,6 +498,7 @@ class LongTermMemoryLayer(BaseMemoryLayer):
             user_confirmed=bool(row.get("user_confirmed", 0)),
             expires_at=row.get("expires_at"),
             deleted_at=row.get("deleted_at"),
+            persona_id=row.get("persona_id"),
         )
         meta_str = row.get("metadata", "{}")
         if meta_str:
@@ -572,11 +600,13 @@ class PermanentMemoryLayer(BaseMemoryLayer):
         except Exception:
             logger.exception("Failed to load permanent memories")
 
-    async def store(self, item: MemoryItem) -> str:
+    async def store(self, item: MemoryItem, persona_id: Optional[str] = None) -> str:
         """
         存储永久记忆 —— 写入 Markdown 文件。
         注意：正式环境下应该有审批流程，这里提供基础功能。
         """
+        if persona_id is not None:
+            item.persona_id = persona_id
         item.layer = MemoryLayer.PERMANENT
         item.importance = 10.0
         item.id = item.id or f"perm_{int(time.time())}"
@@ -598,6 +628,7 @@ class PermanentMemoryLayer(BaseMemoryLayer):
         query: str = "",
         limit: int = 5,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,  # persona 仅对长期层生效，签名保持统一透传
     ) -> List[MemorySearchResult]:
         results: List[MemorySearchResult] = []
         for item in self._cache.values():
@@ -656,10 +687,14 @@ class PermanentMemoryLayer(BaseMemoryLayer):
         user_id: int,
         limit: int = 50,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemoryItem]:
         items = list(self._cache.values())
         if memory_type:
             items = [i for i in items if i.memory_type == memory_type]
+        if persona_id:
+            # 角色级隔离：本角色 + NULL 共享
+            items = [i for i in items if i.persona_id in (None, persona_id)]
         return items[:limit]
 
     def _git_commit(self, message: str) -> None:

@@ -21,6 +21,7 @@ class _MemoryDouble:
         limit: int = 5,
         *,
         actor_id: str | None = None,
+        persona_id: str | None = None,
     ) -> list[dict]:
         self.calls.append(
             {
@@ -28,6 +29,7 @@ class _MemoryDouble:
                 "query": query,
                 "limit": limit,
                 "actor_id": actor_id,
+                "persona_id": persona_id,
             }
         )
         return [
@@ -57,7 +59,15 @@ class _KnowledgeDouble:
         ]
 
 
-def test_context_budget_injects_actor_scoped_memory_and_knowledge_without_audit_leakage():
+def test_context_budget_injects_actor_scoped_memory_and_knowledge_without_audit_leakage(
+    monkeypatch,
+):
+    # 角色隔离语义：本测试聚焦 actor scope 注入；persona 过滤由隔离专项测试覆盖。
+    monkeypatch.setattr(
+        "core.conversation_repository.active_persona_id",
+        lambda: None,
+        raising=False,
+    )
     memory = _MemoryDouble()
     knowledge = _KnowledgeDouble()
     builder = ContextBuilder(memory=memory, knowledge=knowledge)
@@ -83,6 +93,7 @@ def test_context_budget_injects_actor_scoped_memory_and_knowledge_without_audit_
             "query": "猫今天不喝水怎么办",
             "limit": 3,
             "actor_id": "actor_primary",
+            "persona_id": None,
         }
     ]
     assert knowledge.calls == [{"query": "猫今天不喝水怎么办", "limit": 3}]

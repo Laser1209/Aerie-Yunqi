@@ -18,6 +18,9 @@ def project_persona_to_legacy(persona: dict[str, Any]) -> dict[str, Any]:
         "product_name": basic.get("product_name") or "Aerie · 云栖",
         "profile": {
             "age": basic.get("age"),
+            "gender": basic.get("gender", ""),
+            "occupation": basic.get("occupation", ""),
+            "one_liner": basic.get("one_liner", ""),
             "personality_archetype": personality.get("archetype", ""),
             "big_five": deepcopy(personality.get("big_five") or {}),
         },

@@ -1,4 +1,4 @@
-# Aerie · 云栖 v0.2.0-beta.1
+# Aerie · 云栖 V 0.3.1-Beta.1
 
 > **本地优先的 AI 桌面伴侣 / Local-first AI desktop companion**
 > 你的私人 AI · 伊塔 · 在 Windows 11 上随时待命。办公学习、情感陪伴、电脑操控、主动关怀、世界模拟、多模态生图与多端互联，一个就够了。
@@ -31,17 +31,22 @@
 
 | 项目 / Item                        | 状态 / Status                                                                                                                               |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **版本 / Version**           | `0.2.0-beta.1` 内测基线                                                                                                                   |
+| **版本 / Version**           | `0.3.1-Beta.1` 内测基线                                                                                                                   |
 | **桌面端 / Desktop**         | Electron 28 + 渲染层多面板 UI + 灵动岛                                                                                                      |
 | **后端 / Backend**           | Python 3.10+ aiohttp + asyncio · LLMCaller 统一调用层                                                                                      |
 | **QQ 接入 / QQ Bridge**      | NapCat OneBot11 WebSocket · 三端撤回 (QQ/本地/微信预留)                                                                                    |
-| **官网 / Spotlight**         | [https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/) · React 18 + Vite 6 + Tailwind + Framer Motion |
-| **世界模拟 / World Service** | 独立 Python sidecar + SQLite storage · 世界仪表盘与天气同步 · 默认重庆 · 百度地图 REST |
+| **官网 / Spotlight**         | [https://spotlight.etta.top/](https://spotlight.etta.top/) · React 18 + Vite 6 + Tailwind + Framer Motion |
+| **世界模拟 / World Service** | 独立 Python sidecar + SQLite storage · 世界仪表盘与天气同步 · 默认重庆 · 百度地图 REST · 房间级定位与话题追踪 |
 | **向量知识库 / Vector KB**   | ChromaDB 语义检索 · 本地 ONNX 离线 embedding · 生产记忆已切 LayeredMemory · 附件专用向量库                                               |
 | **多模态生图 / Image**       | 三视图生图辅助 · 图片候选人生成推送 (QQ/本地聊天) · 主动发图预算 · 图生图 · SiliconFlow 视觉技能                                        |
-| **移动端 / Mobile**          | Android 移动网关 · 多端会话与文件能力 · 账号鉴权                                                                                          |
-| **验证 / Tests**             | 107 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、v13.9、E2E) + 16 个 Electron 测试文件                                                      |
-| **交付 / Release**           | 线上官网下载页指向`v0.1.0-beta.1` 便携版与安装包，`0.2.0-beta.1` 构建待发布                                                             |
+| **移动端 / Mobile**          | Android 移动网关 · 多端会话与文件能力 · 账号鉴权 · 跨端时间线 (多端存在/视图 B)                                                          |
+| **上下文记忆 / Context Mem** | P0-P3 记忆系统改造：轮次化热窗口 · 温层摘要分桶 · 通道感知注入 · 决策自省段 · 跨端时间线 (视图 B)                                          |
+| **三端引用 / Unified Quote** | 桌面/QQ/移动三端统一 `QuoteContext` 引用机制 · `qq_message_id` 双向映射 · 被引用图片/文件注入 LLM 上下文 · user_id/persona_id 边界隔离 |
+| **管理平台 / Admin Panel**   | 统计看板 · 决策日志 · 聊天记录软删回收站 · 状态文件查看/重置 · 记忆全量展示 · 概览总 tokens                                            |
+| **角色隔离 / Persona Isolation** | 多角色对话/记忆/头像/图片产出按 `persona_id` 隔离 · 会话 ID 按角色哈希 · admin 记录角色标注                                                  |
+| **24h 持续监听 / 24H Mon**   | 欲望引擎 / 话题追踪 / 情绪触发 24h 轮询 · watchdog 崩溃自动拉起 · 断点续采 (start-24h-monitor.bat)                                        |
+| **验证 / Tests**             | 127 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、P0-P3 上下文记忆、管理平台、v13.9、E2E) + 17 个 Electron 测试文件                                                      |
+| **交付 / Release**           | 线上官网下载页指向`v0.1.0-beta.1` 便携版与安装包，`0.3.1-Beta.1` 构建待发布                                                             |
 
 ---
 
@@ -50,20 +55,62 @@
 | 模块 / Module                                     | 说明 / Description                                                                                           |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Electron 桌面壳 / Electron Shell**        | 主窗口、灵动岛、侧边栏、托盘、CSP 安全渲染层                                                                 |
-| **Python 智能内核 / Python Brain**          | LLMCaller 统一调用层、多 Provider 调度、预算跟踪、上下文构建、消息流水线                                     |
-| **Persona Hub / 人设基础设施**              | Persona 模板、校验、投影、配置热加载、三视图生图参考图                                                       |
+| **灵动岛 v2 / Dynamic Island v2**           | 固定最大窗口（无 resize 裁切/闪烁）+ 动态鼠标穿透（ALT 强制穿透）、胶囊动态优先级（未读消息 > 媒体 > 系统 > 状态）、毛玻璃防裁切 10px 呼吸边距、配置落盘持久化 |
+| **Python 智能内核 / Python Brain**          | LLMCaller 统一调用层、多 Provider 调度、Aerie WS 多 Key 轮询、预算跟踪、上下文构建、消息流水线                 |
+| **Persona Hub / 人设基础设施**              | Persona 模板、校验、投影、配置热加载、三视图生图参考图、AI 智能生成（一句话→完整人设）、多角色对话/记忆/头像/图片产出隔离 |
 | **情感与关系引擎 / Emotion & Relationship** | PAD 情绪、累积阈值、欲望引擎、关系建模、同理心策略、拟人化节奏                                               |
 | **主动推送 / Proactive Messenger**          | cron、事件、情绪触发，频控、静默时段、主动发图预算与反馈闭环                                                 |
 | **三端撤回 / Recall**                       | QQ/本地/微信预留 三端撤回适配器、LLM 主动撤回指令、消息合并编排                                              |
+| **三端引用 / Unified Quote**                | 桌面/QQ/移动统一 `QuoteContext` 引用 · `qq_message_id` 双向映射 · 被引用图片/文件注入 LLM · user_id/persona_id 边界隔离 · 引用气泡与附件缩略图 |
 | **办公模式 / Office Mode**                  | 办公任务识别、文档写作工具链、文件整理去重、任务规划与异步执行                                               |
-| **电脑操控 / Computer Control**             | 权限分级、键鼠、截图、UIA、受限 Shell、审计日志                                                              |
+| **电脑操控 / Computer Control**             | 四模式权限（手动/自动批阅/完全/自定义）、默认拦截+黑白名单、键鼠/截图/UIA、受限 Shell、对话框内审批、审计日志                                          |
 | **文件与文档 / File & Docs**                | 文件整理、文档写作、上传处理、附件向量索引、图片工作流                                                       |
 | **多模态 / Multimodal**                     | 三视图生图、图生图、图片候选人生成推送、TTS、SiliconFlow 视觉技能                                            |
-| **世界模拟 / World Simulation**             | world port、domain、sidecar、仪表盘 API、天气同步、图片候选人管线、默认重庆、百度地图 REST、主动发图节奏循环 |
+| **世界模拟 / World Simulation**             | world port、domain、sidecar、仪表盘 API、天气同步、图片候选人管线、默认重庆、百度地图 REST、房间级定位/话题追踪/行为调度、主动发图节奏循环 |
 | **向量知识库 / Vector KB**                  | ChromaDB 语义检索、本地 ONNX 离线 embedding、LayeredMemory 多层记忆、附件专用向量库                          |
-| **多端 / Mobile & Multi-client**            | Android 移动网关、移动会话/文件/身份鉴权、多端消息通道                                                       |
-| **自进化 / Self Evolution**                 | L1-L4 演进、Skill 创建、安全沙箱、代码修改闸门                                                               |
+| **多端 / Mobile & Multi-client**            | Android 移动网关、移动会话/文件/身份鉴权、多端消息通道、跨端时间线（视图 B）                                   |
+| **上下文记忆 / Context Memory**             | P0-P3：轮次化热窗口、温层摘要分桶、通道感知注入、来源标注、决策自省段、写入一致性校验门、事件记忆召回          |
+| **后台管理 / Admin Panel**                  | P4a/P4b：统计看板、决策日志、聊天软删回收站、状态文件查看/重置/撤销、记忆全量展示、概览总 tokens              |
+| **24h 持续监听 / 24H Monitor**              | 欲望引擎 / 话题追踪 / 情绪触发 24h 轮询、watchdog 崩溃自动拉起、断点续采（start-24h-monitor.bat）              |
+| **自进化 / Self Evolution**                 | L1-L4 演进、Skill 创建、安全沙箱、代码修改闸门（L4 代码自修改为内测开关，默认关闭）                     |
 | **Spotlight 官网 / Web Spotlight**          | 6 页面产品站、发布下载页、Remotion 视频素材工程                                                              |
+
+### 人设 AI 智能生成 / AI Persona Generator
+
+在「人设 → 新建人设」界面输入**一句话/一段话**角色描述，AI 会自动生成一套完整人设并套合成熟骨架，生成后进入编辑器逐项完善，基础框架全程保留。
+
+| 阶段 / Stage                    | 说明 / Description                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `concept` 分析角色概念          | LLM 抽取姓名/年龄/职业/一句话介绍/人格原型/大五人格/标签（5-25%）                                                  |
+| `detail` 生成外貌与性格         | LLM 抽取外貌、性格内核、说话风格、关系与背景故事（25-55%）                                                         |
+| `assemble` 构建人设框架         | 与 `preset_templates/yita_default.json` 骨架合并，**剥离伊塔专属数据**（身高三围/外观/故事/称呼），保留 emotion/desire/behavior/cognition 等系统级字段（55-65%） |
+| `prompt` 组装系统提示词         | LLM 以**第一人称自洽**撰写人设专属叙事（角色=名字、用户=你），后端强制附加「屏幕隔空铁律 + 消息结构约定」固定规则块（65-90%） |
+| `finalize` 校验并保存           | PersonaValidator 校验，落盘为草稿（不激活），前端自动进入编辑器（90-100%）                                         |
+
+- **前端交互 / Frontend UX**：AI 向导提供进度条与 5 步清单实时反馈（`AI 正在帮你生成你的角色…`），800ms 轮询，超时/失败可重试；支持「跳过 AI 生成，手动创建」。
+- **两人故事起因 / Story Concept**：可选输入"两人故事起因"并一键获取 AI 推荐的网文式故事概念（4-5 张卡片），点击选中即融入生成；LLM 不可用时回退预置模板池（恋人/朋友/导师）。
+- **用户昵称 / User Name**：向导可填写"你的名字"（自动带入设置页已存昵称），生成时注入 LLM——用户以"你"出现并可用昵称称呼，绝不与角色名混淆。
+- **人称与隐私 / Persona & Privacy**：全篇第一人称自洽（"我"=角色名、"你"=用户、不假设用户性别，不用他/她）；身高/三围等**隐私字段默认留空**，由用户在编辑器自行填写。
+- **称呼动态化 / Pronoun-aware UI**：设置页对 AI 的称呼（她/他/TA）按当前启用的人设性别自动切换。
+- **兜底策略 / Fallback**：LLM 任一环节失败自动降级为确定性生成，流程永不中断，始终产出可用的基础框架。
+- **API**：`POST /api/persona/hub/generate`（创建生成任务，返回 `task_id`）→ `GET /api/persona/hub/generate/{task_id}`（轮询进度/结果）；`POST /api/persona/hub/generate/concepts`（故事概念推荐）。
+- **文档 / Docs**：Obsidian 知识库 `Aerie_Obsidian_Vault/modules/PersonaGenerator.md`。
+
+### 电脑操控权限 v2 / Computer Control Permission v2
+
+电脑操控升级为 **四模式 + 黑白名单**：默认拦截，所有操作等你放行；放行过的操作可加入白名单，之后自动放行。
+
+| 模式 / Mode | 行为 / Behavior |
+| --- | --- |
+| `manual` 手动审批 | 所有操作均需你确认 |
+| `auto` 自动批阅 | 低风险自动放行，中/高风险需确认 |
+| `full` 完全访问 | 全部放行（系统危险命令硬闸除外） |
+| `custom` 自定义 | 默认拦截，按操作类型 / 名单 / 规则放行 |
+
+- **决策链 / Decision chain**：系统危险命令硬闸 → 用户黑名单 → 用户白名单 → 模式裁决。危险命令在任何模式下都不可绕过。
+- **审批交互 / Approval UX**：仿 Trae 在**对话框内弹出审批卡片**（放行 / 放行并入白名单 / 拒绝 / 拒绝并入黑名单），结果状态回灌对话流。
+- **名单管理 / List management**：设置面板「电脑操控」页可增删白/黑名单（按操作类型 / 命令前缀 / 正则），持久化到 `settings.yaml` 的 `computer_control` 键，热更新无需重启。
+- **API**：`GET/PUT /api/computer_control/mode`、`GET /api/computer_control/policy`、`POST/DELETE /api/computer_control/whitelist|blacklist`、`POST /api/computer_control/approvals/{id}/approve|reject`（支持 `{whitelist}` / `{blacklist}` 入账）。
 
 ---
 
@@ -95,6 +142,16 @@ LOG_LEVEL=INFO
 
 # 轻量辅助模型（错别字订正 / 快捷问候语 / 生图提示词接力等快速任务，不触碰主模型）
 # SILICONFLOW_LIGHT_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507
+
+# Aerie WS（阿里云百炼业务空间专属域名，子 Agent/轻量任务/ASR 主链路，多 Key RoundRobin 轮询）
+# AERIE_WS_BASE_URL=https://<workspace-id>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+# AERIE_WS_KEYS=sk-ws-xxx,sk-ws-yyy
+# AERIE_WS_MODEL=qwen3.7-flash
+# AERIE_WS_CODE_MODEL=kimi-k2.7-code
+# AERIE_WS_ASR_MODEL=qwen3-asr-flash
+
+# QQ 语音转写 ASR 模型（compatible-mode chat/completions + input_audio；qwen-long 文本模型不支持转写）
+# DASHSCOPE_ASR_MODEL=qwen3-asr-flash
 
 # 百度地图 Web 服务（可选，替代 MCP；用于附近地点/本地活动 + 天气优先源）
 # 推荐 SN 校验模式（填 AK+SK，无需 IP 白名单）；全部留空则回退内置城市数据 + Open-Meteo
@@ -144,7 +201,7 @@ npm start
 
 ### 6. 访问或本地启动 Spotlight 官网
 
-线上官网：[https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/)
+线上官网：[https://spotlight.etta.top/](https://spotlight.etta.top/)
 
 ```powershell
 cd Spotlight
@@ -169,7 +226,7 @@ npm run dev
 ├─ Spotlight/                 # React/Vite 官网与 Remotion 素材工程
 ├─ NapCat/                    # NapCat Shell 与 QQ 协议客户端资源
 ├─ tests/                     # Python 单测、E2E、Phase 验证
-├─ tools/ scripts/            # 诊断、迁移、验证、构建辅助脚本
+├─ tools/ scripts/            # 诊断、迁移、验证、构建辅助脚本（含 24h 监听 watchdog）
 ├─ documents/ docs/           # 设计、排障、实施记录
 └─ data/ logs/                # 本地运行数据与日志
 ```
@@ -189,6 +246,8 @@ npm run dev
 | `data/chroma/`                 | 向量知识库 ChromaDB 本地存储                             |
 | `data/chroma_attachments/`     | 桌面附件专用向量库                                       |
 | `data/briefs/`                 | 每日简报缓存                                             |
+| `data/island_prefs.json`       | 灵动岛主开关与配置持久化（Electron 侧）                  |
+| `data/notif_prefs.json`        | 消息提醒总开关持久化（Electron 侧）                      |
 | `data/audit/`                  | 权限与电脑操控审计日志                                   |
 | `logs/`                        | 后端与诊断日志                                           |
 
@@ -210,6 +269,14 @@ npm run dev
 | `recall_llm_instruction_v1` | LLM 主动撤回指令`<recall>`                   | 开   |
 | `chat_request_queue_v1`     | 聊天请求队列                                   | 开   |
 | `context_budget_v1`         | 上下文预算                                     | 开   |
+| `conversation_model_v1`     | 会话模型（独立对话建模/摘要分桶）               | 开   |
+| `proactive_delivery_v2`     | 主动消息投放 v2                                 | 开   |
+| `multi_channel_identity_v1` | 多端存在时间线（跨端回忆 / 视图 B）             | 开   |
+| `thinking_trace_injection_v1` | 决策自省段注入（thinking_trace）              | 关   |
+| `memory_write_validation_v1`  | 记忆写入一致性校验门（ConsistencyGate）       | 关   |
+| `self_evolve_l4_enabled`      | L4 代码自进化（内测）：能力缺口 → LLM 生成 file_changes → 四道安全闸门 → 自动应用/审批/24h 回滚。设置页开启需两次风险确认（危险警告 + 免责声明），开启后即时生效无需重启 | 关   |
+
+> **自进化 / Self Evolution 说明**：L0（能力缺口检测）每次回复后静默运行，命中"模型自述无法 + 工具失败"双信号才提议。L4（代码自修改）默认关闭，开启后由代码模型（`AERIE_WS_CODE_MODEL`）将缺口转成具体 `file_changes`，经白名单/黑名单 + 风险分级 + Gate1 安全审查 / Gate2 语法检查 / Gate3 测试验证（`test_command` 白名单净化）/ Gate4 回滚备份四道闸门：白名单低风险自动应用，核心模块（`core/`）等待人工审批，24 小时内可经 `/api/self_evolve/l4/*` 一键回滚。幻觉防护：AI 提案注册的占位工具一律显式失败（`success=False`），主模型无法把 stub 当作真实能力。变更审计台账存于 `data/evolution_backups/` 与 journal。
 
 > **注意**：向量附件索引（`data/chroma_attachments`）依赖 `chromadb`，生产环境需手动安装并配置 embedding API Key；否则附件分块仅作分段存储与上下文注入，不进行语义检索。
 
@@ -231,7 +298,7 @@ Auto-Wake 是 Aerie 的核心能力之一：伊塔会在固定时间、情绪事
 | `idle_care` 失联关怀       | 用户长时间无活动     | event       |
 | `emotion_comfort` 情绪安抚 | 情感槽阈值突破       | emotion     |
 
-默认频控：每日上限 10 次（`proactive.max_per_day`）、间隔不少于 15 分钟（`min_interval_min`）、静默时段 23:30-07:00，早安/晚安/纪念日等场景可按配置豁免。
+频控以 `config/settings.yaml` 的 `proactive` 段为准（设置页可改并即时生效，`_apply_proactive_overlay` 运行时覆盖 `proactive.yaml`）：`max_per_day`（当前 `0` = 不限制，可设 3/5/8/10/15/20/30）、`min_interval_min`（间隔不少于 15 分钟）、静默时段 23:30-07:00，早安/晚安/纪念日等场景可按配置豁免。
 
 主动发图默认为**纯约束型调度**（由伊塔自主决策节奏，不再受推送频控抑制）：
 
@@ -244,7 +311,7 @@ Auto-Wake 是 Aerie 的核心能力之一：伊塔会在固定时间、情绪事
 ## 常用验证 / Verification
 
 ```powershell
-# Python 测试（107 个测试文件：Phase 0-15、P1 陪伴融合、v13.9、E2E）
+# Python 测试（127 个测试文件：Phase 0-15、P1 陪伴融合、P0-P3 上下文记忆、管理平台、v13.9、E2E）
 pytest tests
 
 # 重点阶段验证示例
@@ -259,7 +326,7 @@ pytest tests/test_desktop_attachment_vector_index.py
 cd electron
 npm run check:all
 
-# Electron 渲染层单测（16 个 .test.js 文件，node --test）
+# Electron 渲染层单测（17 个 .test.js 文件，node --test）
 cd electron
 npm run test:unit
 
@@ -287,14 +354,14 @@ npm run build:win:alt
 
 ### Spotlight 发布资源
 
-线上官网：[https://laser1209.github.io/Aerie_Spotlight/](https://laser1209.github.io/Aerie_Spotlight/)
+线上官网：[https://spotlight.etta.top/](https://spotlight.etta.top/)
 
 当前官网下载配置位于 `Spotlight/src/config/release.ts`，仍指向 GitHub Release `v0.1.0-beta.1`：
 
 - `Aerie-Cloud-0.1.0-beta.1-Portable.exe`
 - `Aerie-Cloud-0.1.0-beta.1-Setup.exe`
 
-> **说明**：`0.2.0-beta.1` 代码已合并上述新能力，安装包构建待发布，届时将更新 `release.ts` 指向新版本。
+> **说明**：`0.3.1-Beta.1` 代码已合并上述新能力，安装包构建待发布，届时将更新 `release.ts` 指向新版本。
 
 ---
 
@@ -318,6 +385,10 @@ npm run build:win:alt
 | T07 | **伪造 RAR 文件（空壳/篡改扩展名）被误判为 ready**，可被绑定并发送（归档安全门失效） | `rarfile` 库对无有效成员的伪造文件过于宽容，解析后返回**空成员清单但不抛异常**，下游误把空清单当"解析成功"，状态推进至 ready | 1. `attachment_worker_runtime.py` 增加硬校验：当 RAR/7Z 解析完成后**没有任何可读成员**时，按 `invalid_archive:empty_manifest` 直接抛错，不允许状态推进至 ready。<br>2. `desktop_attachments.py` 统一归档处理行为，所有归档类型必须通过"有效成员 ≥ 1"闸门。<br>3. 运行 `pytest tests/test_desktop_attachments.py::test_fake_rar_fails_closed` 验证闸门。<br>**预防**：新增归档格式支持时，把"至少存在一个有效成员"作为 ready 前置必要条件，fail-closed 设计。 |
 | T08 | **归档文件被隔离，状态 `quarantined`，提示签名不匹配** | `archive_signature_mismatch` 安全门触发：文件头部 magic bytes 与扩展名声明不一致（如把 `.txt` 手动改成 `.rar`）；或文件下载/传输损坏导致头丢失 | 1. 用对应解压工具（WinRAR / 7-Zip）本地验证文件可打开。<br>2. 保留原始扩展名重新上传，勿手动篡改。<br>3. 通过 attachments API 读取 `attachment.error.code`，查看具体 mismatch 的字节位置。<br>**预防**：传输过程中不手动改扩展名；接收端校验 MIME 与声明扩展名双向匹配。 |
 | T09 | **DOMPurify 后 Markdown 内嵌 `<img>` 相对路径不显示**，明明 uploads 有文件前端却 404 | Electron 以 `file://` 协议打开 index.html，若 Markdown 输出 `src="uploads/xxx.png"`（无前导斜杠）或 `src="/uploads/..."`（有斜杠），都会被浏览器按 file:// 解析，去找本地不存在的目录；旧重写正则只覆盖前导斜杠的情况 | 1. `_renderMarkdown` 正则改用可选斜杠 `\/?`，对 `<img src>` 与 `<a href>` 都执行重写：凡匹配 `uploads/`、`api/` 开头（无论是否带斜杠）一律规范化补齐 `/` 并加绝对前缀 `http://127.0.0.1:7890`。<br>2. 主动发图/要图的 emit content 写**绝对** `http://127.0.0.1:7890/uploads/...` URL 入库，避免 DOMPurify 后仍有漏网相对路径。<br>**预防**：对 `file://` 渲染环境建立统一"本地相对路径 → 绝对 API URL" rewrite helper，不要各模块各写一套。 |
+| T10 | **清空/回收站聊天记录后，对话框仍显示历史记录**（重启后依旧） | 回收站与清空只软删规范化 `messages` 表；桌面轮询 `/api/chat/poll` 与历史 `/api/chat/history` 直读 legacy `chat_log` 表，未做删除过滤，导致已清空记录被重新拉回 | 1. 迁移 `012_chat_log_trash_state` 给 `chat_log` 补 `deleted_at` 列并镜像 `messages` 软删状态。<br>2. admin 回收站/恢复/purge 级联标记 `chat_log`（purge 物理删 `messages` 前先标记，避免镜像关联丢失）。<br>3. `/api/chat/poll`、`/api/chat/history` 与消息统计统一加 `deleted_at IS NULL` 过滤。<br>**预防**：删除/回收站能力必须同时处理规范表与 legacy 表的镜像状态，读路径统一走带删除过滤的查询。 |
+| T11 | **手机 QQ 发给伊塔的消息，电脑端对话框不实时出现，历史里也看不到** | 批量合批路径 `_handle_batch` 的实时事件 emit 被 `source == "local"` 门控（QQ/移动不产生推送），且批量路径不调用 `_persist_canonical_turn` 落规范化 `messages` 表（桌面历史读 messages 表，看不到只进 chat_log 的批量消息） | 1. 批量路径放行 QQ/移动实时推送（去掉 `source == "local"` 门控）。<br>2. 批量路径补 `_persist_canonical_turn` 规范化落库。<br>**预防**：新增消息来源通道时，实时推送与规范化落库必须在单条与批量两条路径对等实现。 |
+| T12 | **对话框里出现大量 `[]` 符号**（`[图片]` / `[图片:描述]` / `[表情包]` / `[图片内容]` 等），显得出戏 | 多模态占位符是给 LLM 看的上下文元数据，被当普通文本直接渲染进气泡；图片消息本身还带 attachments 缩略图，正文里的占位符纯冗余 | 1. 渲染层角标净化：图片/表情占位符转小角标图标，描述默认隐藏、hover/点击才展开。<br>2. `[话题：xxx]` 等系统上下文注入防御性剥离，永不落展示层。<br>**预防**：区分"给 LLM 的上下文"与"给用户看的正文"，多模态元数据永不直接进展示层。 |
+| T13 | **最近聊天记录里图片变成链接文本，无法显示** | 角标净化正则把 markdown 图片语法 `![图片](url)` 里的 `[图片]` 误当占位符，替换后 marked 不再识别为图片；且 decoration 对象漏存 token，角标替换失效 | 1. 正则加负向后顾/前视排除 `![...](...)` 与 `[...](...)` 两种 markdown 语法。<br>2. decoration 补齐 token 字段，让角标替换生效。<br>**预防**：净化/改写 Markdown 的规则必须先跑 markdown 语法单测，覆盖图片/链接/占位符三类输入。 |
 
 ---
 
@@ -345,7 +416,7 @@ npm run build:win:alt
 | 桌面端白屏     | Electron 渲染资源或 CSP 问题            | 查看 Electron DevTools 与`electron/python-*.log`         |
 | 官网构建失败   | Node 依赖未安装                         | 在`Spotlight/` 执行 `npm install` 后重试               |
 | 后端冷启动崩溃、重启后需手动重启后端 | 移动网关端口(7891)被孤儿进程占用，uvicorn 内部 `sys.exit(3)` 抛出 `SystemExit` 未被 `except Exception` 捕获，拖垮整个后端进程 | 启动前端口预检测、捕获 `SystemExit`、Electron 启动前清理 7890/7891 孤儿进程（详见下方深度排查 7） |
-| 对话页加载大量历史记录卡顿 | 一次性加载全部历史记录，DOM 过大导致渲染卡顿 | 只加载最近 100 条，向上滚动自动分页加载，DOM 上限裁剪（详见下方深度排查 8） |
+| 对话页加载大量历史记录卡顿 | 一次性加载全部历史记录，DOM 过大导致渲染卡顿 | 只加载最近 50 条，向上滚动自动分页加载，DOM 上限裁剪（详见下方深度排查 8） |
 | 对话底部出现"加载更新消息"按钮 / 新消息不自动滚动 | 旧版内联翻页控件残留，且缺乏"在底部才自动滚"的智能判断 | 移除内联按钮，改为浮动"回到底部"按钮；智能自动滚动 + 新消息系统通知（详见下方深度排查 9） |
 | 每日简报内容缺失（欢迎语/日志/新闻/GitHub/天气为空） | 后端未启动，`/api/brief/today` 返回空 | 修复后端冷启动问题后自动恢复（详见下方深度排查 7） |
 | 对话中图片生成触发但无图片产出 | 图片服务商断连，`httpcore.RemoteProtocolError: Server disconnected without sending a response` | 重试生成或检查 `IMAGE_GEN_BASE_URL` / API Key 可用性（详见下方深度排查 10） |
@@ -371,9 +442,11 @@ npm run build:win:alt
 | 简报欢迎语每次打开都相同（一天一句） | 欢迎语随简报 JSON 缓存于 `data/briefs/{date}.json`，`GET /api/brief/today` 命中缓存直接返回 | 新增 `POST /api/brief/greeting` 轻量实时生成 + 前端异步刷新（见深度排查 12） |
 | 欢迎语快速生成返回模板文案（非 LLM 生成） | 轻量 LLM 调用 4s 超时过紧，端到端实测 3.8~4.3s 被 `asyncio.wait_for` 掐断 | 超时上调至 6s（`compose_quick_greeting` 默认值）；失败回退随机模板，每次仍不同（见深度排查 12） |
 | 后端代码改动不生效（新接口 404 / 行为不变） | `main.py` 以 `asyncio.run()` 启动，无热重载；配置热加载仅覆盖 `config/` YAML | 结束现有 `main.py` 进程 → 等 7890 端口释放 → 用 `.venv\Scripts\python.exe -X dev main.py` 以 detached 方式重启 |
+| admin 记忆详情页报 `KeyError: 'persona_id'` | 改完 `admin_service._persona_name` 后未重启后端，旧进程仍跑旧代码 `info["persona_id"]` 硬取键（新版已改 `.get()` 安全访问） | 重启应用让最新代码生效（`start-dev.bat`）；确认 `GET /api/health` 返回 `stale_code.stale=false` 即运行的是最新代码 |
 | PowerShell 显示中文乱码（如 `å®è´...`） | PowerShell 5 控制台默认代码页非 UTF-8；接口实际返回的 UTF-8 数据正确 | 用 `[Text.Encoding]::UTF8` 转换后输出，或用 Python 脚本并设 `PYTHONIOENCODING=utf-8` 校验，勿误判数据损坏 |
 | 深夜/凌晨发"白天照"，时段光线与真实时刻错位 8 小时 | 世界模拟时钟与生图时间注入均用 UTC 未转本地（+08:00），凌晨 02:02 被当 UTC 18:02 判成 `afternoon` | 已统一到 `LOCAL_TZ` 并 `astimezone` 归一（详见下方深度排查 14） |
 | 生图提示词为空（empty_prompt）秒拒、无图片产出 | `_image_prompt_for` 世界数据接力异常被 `_resolve_prompt` 的 `except: return ""` 静默吞成空串，generate_image 以 empty_prompt 拒绝 | 已实现两层兜底：`_image_prompt_for` 异常退回基础提示词；`_resolve_prompt` 异常/空返回非空占位；吞错日志升 `warning`（详见下方深度排查 19） |
+| 灵动岛 v2 开启后主窗口聊天输入框点击有选中效果但无光标（caret），Tab 能聚焦，重启恢复 / Main chat input shows focus state but no caret after Dynamic Island v2; Tab works; recovers after restart | 灵动岛 v2 为 `alwaysOnTop` + `transparent` + blur + 粒子动画的置顶窗口，持续占用 GPU 合成器；合成器负载抖动或重建时，主窗口渲染进程的 caret 合成偶发失效。事件层完全正常（点击、focus、输入均可达），纯属绘制层异常 | 重启应用即恢复；复发时可先按 `Alt` 或切换窗口焦点强制合成器刷新，或 `Ctrl+Shift+I` 开合 DevTools 触发重绘；若频繁出现，考虑为主窗口增加渲染进程 watchdog，或降低灵动岛动画/粒子的 GPU 开销（详见下方深度排查 20） |
 
 ---
 
@@ -614,7 +687,7 @@ npm run build:win:alt
 
 **解决方案 / Fix**
 
-1. 首次只加载最近 100 条（`/api/chat/history/page?limit=50` 分页）
+1. 首次只加载最近 50 条（`/api/chat/history/page?limit=50` 分页），向上滚动自动加载更早消息
 2. 用户向上滚动到顶部（`scrollTop < 60`）时自动加载更早消息，并带冷却时间防止停在顶部时连发多批
 3. 设置 DOM 消息上限（`_maxDomMessages = 200`），超出即裁剪最旧气泡，控制渲染规模
 
@@ -838,13 +911,13 @@ npm run build:win:alt
 
 1. 查 `chat_log` 该条 `content` 是否含 `[CQ:record`；含则说明走了未解析路径
 2. 确认 NapCat `get_record` 可达：`curl`/日志看 RPC 是否返回 base64/路径
-3. 确认转写能力：`SILICONFLOW_API_KEY` 是否配置（云端 SenseVoice），或本地 whisper 是否可用
+3. 确认转写能力：Aerie WS（`AERIE_WS_KEYS` + `AERIE_WS_ASR_MODEL`，qwen3-asr-flash）是否配置；无 WS 时回退 DashScope（`DASHSCOPE_ASR_MODEL`）；本地 whisper 兜底
 4. 检查语音时长 `duration` 是否为 0（依赖 `ffprobe`，见 #18）
 
 **解决方案 / Fix**
 
 1. 新增 `core/qq_media.py::QQMediaPreprocessor`，在 `_on_qq_message` 提交前统一解析 CQ 段（`record`/`image`/`face`/`mface`/`text`）
-2. 语音：`qq.get_record(file, out_format="mp3")` 下载 → `_SFClient.transcribe`（SiliconFlow SenseVoice 云端优先）或本地 `AudioTranscriber`（whisper）回退 → 转写文字写入 `attachments[].transcript`
+2. 语音：`qq.get_record(file, out_format="mp3")` 下载 → `_SFClient.transcribe`（Aerie WS qwen3-asr-flash 多 Key 轮询主链路 → DashScope qwen3-asr-flash 回退 → 本地 `AudioTranscriber`（whisper）兜底）→ 转写文字写入 `attachments[].transcript`
 3. 前端 `chat.js::_buildAttachmentCard` 对 `category="audio"` 渲染语音条（时长）+ 下方转写文字，无需点击播放
 
 **预防措施 / Prevention**
@@ -980,6 +1053,37 @@ npm run build:win:alt
 
 ---
 
+#### 20. 灵动岛 v2 开启后主窗口输入框有焦点但无光标 / Main chat input focused but caret missing after Dynamic Island v2
+
+**问题描述 / Symptom**
+
+- 灵动岛 v2（固定窗口尺寸 + 动态鼠标穿透）上线后，主窗口聊天输入框**点击后有选中态、但光标（caret）不显示**；`Tab` 能正常聚焦，键盘输入逻辑也正常
+- 偶发出现，重启应用后恢复；灵动岛窗口物理位置与主窗口输入框**不重叠**（主窗口 [213,56,1281×800]，灵动岛 [484,12,742×704]，输入框 y≈830 低于灵动岛 bottom≈716），排除遮挡与鼠标穿透误判
+
+**可能原因 / Root cause**
+
+- 灵动岛 v2 为 `alwaysOnTop` + `transparent` + blur + 粒子动画（`dynamic-island.html`）的置顶窗口，持续占用 GPU 合成器（compositor）
+- 合成器负载抖动或重建时，主窗口渲染进程的 caret 合成偶发失效——caret 由 Chromium 单独绘制，事件层（点击 / focus / 输入）完全正常，纯属**绘制层异常**，因此点击有效果、Tab 能聚焦、就是看不见光标
+- 重启后渲染进程重建，合成器重新初始化，光标恢复
+
+**排查步骤 / Diagnosis**
+
+1. 先确认灵动岛窗口与主窗口输入框是否物理重叠（Win32 `GetWindowRect` 对比坐标），排除遮挡/穿透类问题
+2. 确认点击有 `:focus` 选中效果、`Tab` 能聚焦——若事件层正常，可判定为 caret 绘制层问题
+3. 若光标不显示但输入字符仍生效（盲打能出字），进一步佐证为合成器/绘制异常而非事件丢失
+
+**解决方案 / Fix**
+
+- 轻量自救（无需重启）：按一下 `Alt` 或切换窗口焦点强制合成器刷新；或 `Ctrl+Shift+I` 开合 DevTools 触发一次重绘
+- 持久缓解：重启应用（渲染进程重建即恢复）
+
+**预防措施 / Prevention**
+
+- 若频繁出现，考虑为主窗口增加渲染进程 watchdog（检测 caret 丢失后自动 reload）
+- 或降低灵动岛动画/粒子（`di-particles`）的 GPU 开销，减少合成器负载抖动窗口
+
+---
+
 ## 兼容性 / Compatibility
 
 | 项目 / Item        | 要求 / Requirement               |
@@ -1005,8 +1109,9 @@ npm run build:win:alt
 | `docs/debug-window-top-gap.md`                         | 窗口顶部间隙排障记录             |
 | `docs/debug-dynamic-island-expand-fail.md`             | 灵动岛展开问题排障记录           |
 | `.trae/documents/`                                     | 实施计划、修复计划、阶段验证记录 |
-| [官网](https://laser1209.github.io/Aerie_Spotlight/)      | Aerie · 云栖线上项目官网        |
+| [官网](https://spotlight.etta.top/)      | Aerie · 云栖线上项目官网        |
 | `Spotlight/README.md`                                  | Spotlight 官网子项目说明         |
+| `Aerie_Obsidian_Vault/modules/PersonaGenerator.md`    | 人设 AI 智能生成器模块文档       |
 
 ---
 

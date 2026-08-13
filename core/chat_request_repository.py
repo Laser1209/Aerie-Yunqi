@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+from core.conversation_repository import active_persona_id
+
 logger = logging.getLogger(__name__)
 
 UtcClock = Callable[[], datetime]
@@ -31,6 +33,7 @@ class RequestContext:
     attachments: list[dict[str, Any]] = field(default_factory=list)
     reply_to_id: int = 0
     batch_id: str | None = None
+    persona_id: str | None = None  # 角色隔离：缺省 NULL 保持存量共享语义
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,22 @@ class ChatRequestRepository:
     ) -> None:
         self.database = database
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self._persona_columns: dict[str, bool] = {}  # 表名 → 是否含 persona_id 列
+
+    def _has_persona_column(self, conn: sqlite3.Connection, table: str) -> bool:
+        """表是否已带 persona_id 列（迁移 013）。旧库无该列时跳过 persona 写入。"""
+        if table not in self._persona_columns:
+            try:
+                cols = {
+                    row["name"]
+                    for row in conn.execute(
+                        f"PRAGMA table_info({table})"
+                    ).fetchall()
+                }
+                self._persona_columns[table] = "persona_id" in cols
+            except Exception:
+                self._persona_columns[table] = False
+        return self._persona_columns[table]
 
     def _now(self) -> datetime:
         current = self.clock()
@@ -81,56 +100,118 @@ class ChatRequestRepository:
         with self.database.connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
-                conn.execute(
-                    """INSERT OR IGNORE INTO conversations
-                       (conversation_id, actor_id, channel,
-                        channel_account_id, status, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, 'active', ?, ?)""",
-                    (
-                        context.conversation_id,
-                        context.identity.actor_id,
-                        context.identity.channel,
-                        context.identity.channel_account_id,
-                        created_at,
-                        created_at,
-                    ),
-                )
-                conn.execute(
-                    """INSERT INTO turns
-                       (turn_id, conversation_id, status, created_at)
-                       VALUES (?, ?, 'pending', ?)""",
-                    (
-                        context.turn_id,
-                        context.conversation_id,
-                        created_at,
-                    ),
-                )
-                conn.execute(
-                    """INSERT INTO requests
-                       (request_id, conversation_id, turn_id, status,
-                        created_at, updated_at, actor_id, channel,
-                        channel_account_id, user_id, input_content,
-                        effective_content, attachments, reply_to_id,
-                        retry_of_request_id, batch_id)
-                       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        context.request_id,
-                        context.conversation_id,
-                        context.turn_id,
-                        created_at,
-                        created_at,
-                        context.identity.actor_id,
-                        context.identity.channel,
-                        context.identity.channel_account_id,
-                        context.identity.user_id,
-                        context.input_content,
-                        context.effective_content,
-                        attachments,
-                        context.reply_to_id,
-                        retry_of_request_id,
-                        context.batch_id,
-                    ),
-                )
+                persona_id = context.persona_id or active_persona_id()  # 角色隔离
+                if self._has_persona_column(conn, "conversations"):
+                    conn.execute(
+                        """INSERT OR IGNORE INTO conversations
+                           (conversation_id, actor_id, channel,
+                            channel_account_id, status, created_at, updated_at,
+                            persona_id)
+                           VALUES (?, ?, ?, ?, 'active', ?, ?, ?)""",
+                        (
+                            context.conversation_id,
+                            context.identity.actor_id,
+                            context.identity.channel,
+                            context.identity.channel_account_id,
+                            created_at,
+                            created_at,
+                            persona_id,
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """INSERT OR IGNORE INTO conversations
+                           (conversation_id, actor_id, channel,
+                            channel_account_id, status, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, 'active', ?, ?)""",
+                        (
+                            context.conversation_id,
+                            context.identity.actor_id,
+                            context.identity.channel,
+                            context.identity.channel_account_id,
+                            created_at,
+                            created_at,
+                        ),
+                    )
+                if self._has_persona_column(conn, "turns"):
+                    conn.execute(
+                        """INSERT INTO turns
+                           (turn_id, conversation_id, status, created_at,
+                            persona_id)
+                           VALUES (?, ?, 'pending', ?, ?)""",
+                        (
+                            context.turn_id,
+                            context.conversation_id,
+                            created_at,
+                            persona_id,
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """INSERT INTO turns
+                           (turn_id, conversation_id, status, created_at)
+                           VALUES (?, ?, 'pending', ?)""",
+                        (
+                            context.turn_id,
+                            context.conversation_id,
+                            created_at,
+                        ),
+                    )
+                if self._has_persona_column(conn, "requests"):
+                    conn.execute(
+                        """INSERT INTO requests
+                           (request_id, conversation_id, turn_id, status,
+                            created_at, updated_at, actor_id, channel,
+                            channel_account_id, user_id, input_content,
+                            effective_content, attachments, reply_to_id,
+                            retry_of_request_id, batch_id, persona_id)
+                           VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            context.request_id,
+                            context.conversation_id,
+                            context.turn_id,
+                            created_at,
+                            created_at,
+                            context.identity.actor_id,
+                            context.identity.channel,
+                            context.identity.channel_account_id,
+                            context.identity.user_id,
+                            context.input_content,
+                            context.effective_content,
+                            attachments,
+                            context.reply_to_id,
+                            retry_of_request_id,
+                            context.batch_id,
+                            persona_id,
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """INSERT INTO requests
+                           (request_id, conversation_id, turn_id, status,
+                            created_at, updated_at, actor_id, channel,
+                            channel_account_id, user_id, input_content,
+                            effective_content, attachments, reply_to_id,
+                            retry_of_request_id, batch_id)
+                           VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            context.request_id,
+                            context.conversation_id,
+                            context.turn_id,
+                            created_at,
+                            created_at,
+                            context.identity.actor_id,
+                            context.identity.channel,
+                            context.identity.channel_account_id,
+                            context.identity.user_id,
+                            context.input_content,
+                            context.effective_content,
+                            attachments,
+                            context.reply_to_id,
+                            retry_of_request_id,
+                            context.batch_id,
+                        ),
+                    )
                 conn.execute("COMMIT")
             except Exception:
                 conn.execute("ROLLBACK")
@@ -159,55 +240,117 @@ class ChatRequestRepository:
                         context.attachments,
                         ensure_ascii=False,
                     )
-                    conn.execute(
-                        """INSERT OR IGNORE INTO conversations
-                           (conversation_id, actor_id, channel,
-                            channel_account_id, status, created_at, updated_at)
-                           VALUES (?, ?, ?, ?, 'active', ?, ?)""",
-                        (
-                            context.conversation_id,
-                            context.identity.actor_id,
-                            context.identity.channel,
-                            context.identity.channel_account_id,
-                            created_at,
-                            created_at,
-                        ),
-                    )
-                    conn.execute(
-                        """INSERT INTO turns
-                           (turn_id, conversation_id, status, created_at)
-                           VALUES (?, ?, 'pending', ?)""",
-                        (
-                            context.turn_id,
-                            context.conversation_id,
-                            created_at,
-                        ),
-                    )
-                    conn.execute(
-                        """INSERT INTO requests
-                           (request_id, conversation_id, turn_id, status,
-                            created_at, updated_at, actor_id, channel,
-                            channel_account_id, user_id, input_content,
-                            effective_content, attachments, reply_to_id,
-                            batch_id)
-                           VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            context.request_id,
-                            context.conversation_id,
-                            context.turn_id,
-                            created_at,
-                            created_at,
-                            context.identity.actor_id,
-                            context.identity.channel,
-                            context.identity.channel_account_id,
-                            context.identity.user_id,
-                            context.input_content,
-                            context.effective_content,
-                            attachments,
-                            context.reply_to_id,
-                            batch_id,
-                        ),
-                    )
+                    persona_id = context.persona_id or active_persona_id()  # 角色隔离
+                    if self._has_persona_column(conn, "conversations"):
+                        conn.execute(
+                            """INSERT OR IGNORE INTO conversations
+                               (conversation_id, actor_id, channel,
+                                channel_account_id, status, created_at,
+                                updated_at, persona_id)
+                               VALUES (?, ?, ?, ?, 'active', ?, ?, ?)""",
+                            (
+                                context.conversation_id,
+                                context.identity.actor_id,
+                                context.identity.channel,
+                                context.identity.channel_account_id,
+                                created_at,
+                                created_at,
+                                persona_id,
+                            ),
+                        )
+                    else:
+                        conn.execute(
+                            """INSERT OR IGNORE INTO conversations
+                               (conversation_id, actor_id, channel,
+                                channel_account_id, status, created_at,
+                                updated_at)
+                               VALUES (?, ?, ?, ?, 'active', ?, ?)""",
+                            (
+                                context.conversation_id,
+                                context.identity.actor_id,
+                                context.identity.channel,
+                                context.identity.channel_account_id,
+                                created_at,
+                                created_at,
+                            ),
+                        )
+                    if self._has_persona_column(conn, "turns"):
+                        conn.execute(
+                            """INSERT INTO turns
+                               (turn_id, conversation_id, status, created_at,
+                                persona_id)
+                               VALUES (?, ?, 'pending', ?, ?)""",
+                            (
+                                context.turn_id,
+                                context.conversation_id,
+                                created_at,
+                                persona_id,
+                            ),
+                        )
+                    else:
+                        conn.execute(
+                            """INSERT INTO turns
+                               (turn_id, conversation_id, status, created_at)
+                               VALUES (?, ?, 'pending', ?)""",
+                            (
+                                context.turn_id,
+                                context.conversation_id,
+                                created_at,
+                            ),
+                        )
+                    if self._has_persona_column(conn, "requests"):
+                        conn.execute(
+                            """INSERT INTO requests
+                               (request_id, conversation_id, turn_id, status,
+                                created_at, updated_at, actor_id, channel,
+                                channel_account_id, user_id, input_content,
+                                effective_content, attachments, reply_to_id,
+                                batch_id, persona_id)
+                               VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (
+                                context.request_id,
+                                context.conversation_id,
+                                context.turn_id,
+                                created_at,
+                                created_at,
+                                context.identity.actor_id,
+                                context.identity.channel,
+                                context.identity.channel_account_id,
+                                context.identity.user_id,
+                                context.input_content,
+                                context.effective_content,
+                                attachments,
+                                context.reply_to_id,
+                                batch_id,
+                                persona_id,
+                            ),
+                        )
+                    else:
+                        conn.execute(
+                            """INSERT INTO requests
+                               (request_id, conversation_id, turn_id, status,
+                                created_at, updated_at, actor_id, channel,
+                                channel_account_id, user_id, input_content,
+                                effective_content, attachments, reply_to_id,
+                                batch_id)
+                               VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (
+                                context.request_id,
+                                context.conversation_id,
+                                context.turn_id,
+                                created_at,
+                                created_at,
+                                context.identity.actor_id,
+                                context.identity.channel,
+                                context.identity.channel_account_id,
+                                context.identity.user_id,
+                                context.input_content,
+                                context.effective_content,
+                                attachments,
+                                context.reply_to_id,
+                                batch_id,
+                            ),
+                        )
                     results.append(
                         SubmittedRequest(
                             request_id=context.request_id,

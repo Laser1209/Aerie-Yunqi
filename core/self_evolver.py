@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolver (Phase 9 Batch 6).
+"""Aerie · 云栖 v0.1.0-beta.1 — Self-Evolver (Phase 9 Batch 6).
 
 Detects capability gaps in the live tool registry and proposes
 *new* tools for the user to approve. Proposals are surfaced as
@@ -159,6 +159,9 @@ class SelfEvolver:
         tool_registry: Any,
         brain: Any = None,
         sandbox: SandboxRunner | None = None,
+        enabled: bool = True,
+        proposer: Any = None,
+        l4: Any = None,
     ) -> None:
         self._db = db
         self._tool_registry = tool_registry
@@ -166,6 +169,11 @@ class SelfEvolver:
         self._sandbox = sandbox or SandboxRunner()
         # Cache of the last few proposals for quick read in UI.
         self._last_proposal_id: int | None = None
+        # 内测开关：默认关闭；由 companion 按 feature_flags 传入，热更新。
+        self.enabled = enabled
+        # L4 链路（可选）：启用后缺口命中改走 LLM 生成 file_changes。
+        self._proposer = proposer
+        self._l4 = l4
 
     # ── Trigger detection ────────────────────────────
     @staticmethod
@@ -204,12 +212,29 @@ class SelfEvolver:
         All DB writes and emits are wrapped in try/except so this method
         MUST never raise.
         """
+        if not self.enabled:
+            return None
         try:
             has_gap, failed_tool = self._detect_gap(react_trace, tool_results)
             if not has_gap:
                 return None
 
             thought = (react_trace or {}).get("thought", "")
+
+            # L4 链路（内测）：缺口命中且 proposer/L4 就绪时，后台调用代码模型
+            # 生成真实 file_changes；不阻塞主回复流程。
+            if (
+                self._proposer is not None
+                and self._l4 is not None
+                and self._proposer.available
+            ):
+                return self._spawn_l4_proposal(
+                    user_id=user_id,
+                    user_message=user_message,
+                    thought=thought,
+                    failed_tool=failed_tool,
+                )
+
             spec = _derive_tool_spec(
                 user_message=user_message,
                 thought=thought,
@@ -267,6 +292,103 @@ class SelfEvolver:
         except Exception:
             logger.exception("self_evolver.maybe_propose error")
             return None
+
+    # ── L4 后台链路（内测）：缺口 → LLM 生成 file_changes → 闸门 ──
+    def _spawn_l4_proposal(
+        self,
+        user_id: int,
+        user_message: str,
+        thought: str,
+        failed_tool: str | None,
+    ) -> int | None:
+        """落审计行 + 触发后台提案生成任务（不阻塞主回复）。"""
+        row_id = None
+        try:
+            ts = int(time.time() * 1000)
+            row_id = self._db.insert(
+                "self_evolve_log",
+                {
+                    "ts": ts,
+                    "user_id": int(user_id) if user_id is not None else None,
+                    "trigger_kind": "capability_gap_l4",
+                    "description": (thought or user_message or "")[:1000],
+                    "proposed_tool_schema": json.dumps(
+                        {
+                            "user_message": user_message,
+                            "thought": thought,
+                            "failed_tool": failed_tool,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "safety_check": "pending_l4",
+                    "user_decision": "pending",
+                },
+            )
+            self._last_proposal_id = row_id
+        except Exception:
+            logger.exception("self_evolver l4 audit insert error")
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            gap_ctx = {
+                "user_message": user_message,
+                "thought": thought,
+                "failed_tool": failed_tool,
+            }
+            loop.create_task(self._run_l4_proposal(row_id, gap_ctx))
+        except RuntimeError:
+            # 无运行 loop（如同步测试上下文）：记录缺口但本次不生成提案。
+            logger.warning(
+                "self_evolver l4: no running loop, gap audit id=%s skipped",
+                row_id,
+            )
+        except Exception:
+            logger.exception("self_evolver l4 task spawn error")
+        return row_id
+
+    async def _run_l4_proposal(self, audit_id: int | None, gap_ctx: dict) -> None:
+        """后台：调用 proposer 生成提案 → L4 四道闸门 → 应用/待审批。"""
+        try:
+            proposal = await self._proposer.propose(gap_ctx)
+            if not proposal or not proposal.get("file_changes"):
+                logger.info(
+                    "self_evolver l4: proposer returned nothing (audit=%s)",
+                    audit_id,
+                )
+                return
+            l4 = self._l4
+            title = f"auto-fix: {str(gap_ctx.get('failed_tool') or 'capability-gap')}"
+            evo = l4.create_proposal(
+                title=title,
+                file_changes=proposal["file_changes"],
+                description=str(gap_ctx.get("thought") or "")[:500],
+                author="ai_self_evolve_l4",
+            )
+            result = await l4.process_proposal(
+                evo,
+                test_command=proposal.get("test_command") or None,
+            )
+            try:
+                stderr_emit(
+                    "self_evolve_l4_proposed",
+                    proposal_id=evo.proposal_id,
+                    title=title,
+                    risk=result.get("risk_level"),
+                    action=result.get("action"),
+                    gates=result.get("gates", {}),
+                    audit_id=audit_id,
+                    ts=int(time.time() * 1000),
+                )
+            except Exception:
+                logger.exception("self_evolve_l4_proposed emit error")
+            logger.info(
+                "self_evolve_l4: proposal=%s action=%s files=%d",
+                evo.proposal_id,
+                result.get("action"),
+                len(proposal["file_changes"]),
+            )
+        except Exception:
+            logger.exception("self_evolver l4 proposal run error")
 
     # ── Read API (used by HTTP layer) ───────────────
     def list_proposals(
@@ -419,11 +541,12 @@ class SelfEvolver:
     def _register_proposed_tool(self, spec: dict) -> None:
         """Register the proposed tool into the live registry.
 
-        We register a *placeholder* function that just returns a
-        confirmation string. The actual implementation is intentionally
-        out of scope for the AI-proposal flow — the user is expected
-        to write real code later. The point of approval is to make the
-        LLM aware of the new tool so it can be called.
+        We register a *placeholder* function that ALWAYS fails explicitly
+        (success=False, status=not_implemented) so the main model can never
+        mistake the stub for a real capability. A failed tool call also feeds
+        the gap detector's "tool failed" signal, re-proposing the gap until a
+        real implementation exists. The actual implementation is intentionally
+        out of scope for the AI-proposal flow.
         """
         name = (spec or {}).get("name")
         if not name:
@@ -431,16 +554,17 @@ class SelfEvolver:
         description = (spec or {}).get("description", "")
         parameters = (spec or {}).get("parameters", {"type": "object", "properties": {}})
 
-        # Build a placeholder callable.
+        # Build a placeholder callable that fails loudly instead of "succeeding".
         def _placeholder(**kwargs) -> dict:
             return {
-                "status": "placeholder",
+                "status": "not_implemented",
+                "success": False,
                 "tool": name,
                 "received": kwargs,
                 "note": (
-                    "this tool was proposed by the self-evolution mechanism "
-                    "and approved, but its real implementation is pending. "
-                    "Override this stub in tools/__init__.py when ready."
+                    "this tool was auto-proposed by the self-evolution mechanism "
+                    "but has NO real implementation yet. Do NOT treat the call as "
+                    "successful; report the gap so a real fix can be proposed."
                 ),
             }
 

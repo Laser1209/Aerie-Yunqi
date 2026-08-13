@@ -250,6 +250,28 @@ class SendQueue:
             else:
                 await self._send_legacy_reply(reply)
 
+    def _backfill_qq_message_id(self, reply: OutgoingReply, send_result: Any) -> None:
+        """Quote V2: persist the platform message_id on the chat_log row.
+
+        Senders now return the OneBot11 message_id (int) on success. Storing
+        it lets inbound QQ quotes map QQ message_id -> chat_log.id, and lets
+        outbound replies attach a real reply segment.
+        """
+        mid = send_result if isinstance(send_result, int) else 0
+        if not mid or not self._db or not reply.msg_id:
+            return
+        try:
+            self._db.update(
+                "chat_log",
+                {"qq_message_id": int(mid)},
+                "id = ?",
+                (reply.msg_id,),
+            )
+        except Exception:
+            logger.exception(
+                "backfill qq_message_id failed for chat_log %s", reply.msg_id
+            )
+
     def _fire_on_reply_sent(self, reply: OutgoingReply) -> None:
         """Fire the post-delivery hook (e.g. sticker sender) without blocking."""
         if not self._on_reply_sent:
@@ -290,6 +312,8 @@ class SendQueue:
                     ok = await self._sender(reply)
                 if not ok:
                     logger.warning("QQ send failed for user %s", reply.user_id)
+                else:
+                    self._backfill_qq_message_id(reply, ok)
                 if first_in_batch and ok and self._recall_manager:
                     try:
                         self._recall_manager.record_sent(
@@ -397,6 +421,8 @@ class SendQueue:
                     "batch send failed: batch_id=%s seq=%s user=%s",
                     batch_id, seq, reply.user_id,
                 )
+            else:
+                self._backfill_qq_message_id(reply, ok)
             if seq == 0 and ok and self._recall_manager:
                 try:
                     self._recall_manager.record_sent(

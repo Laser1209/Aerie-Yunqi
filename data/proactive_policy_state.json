@@ -1,13 +1,10 @@
 {
-  "daily_count": 6,
+  "daily_count": 0,
   "enabled": true,
   "feedback": {},
-  "last_push_at": "2026-08-13T18:30:02.444015",
+  "last_push_at": "2026-08-13T23:47:53.860186",
   "mute_until": null,
   "scene_blocks": {},
-  "scene_last_sent": {
-    "evening_check": "2026-08-13T18:30:02.444015",
-    "local_send": "2026-08-13T15:19:26.559332"
-  },
-  "today": "2026-08-13"
+  "scene_last_sent": {},
+  "today": "2026-08-14"
 }

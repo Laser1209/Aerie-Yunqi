@@ -67,12 +67,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // These controllers are global, but neither needs to block first paint.
   scheduleAfterFirstPaint(() => {
-    if (window.ApprovalModal) {
-      initOnce("approval-modal", () => {
-        window.approvalModal = new ApprovalModal();
-        window.approvalModal.init();
-      });
-    }
     if (window.OfficeModeController) {
       initOnce("office-mode", () => {
         window.officeMode = new OfficeModeController();

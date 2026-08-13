@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Transient + Working 记忆层 (S3 M3.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Transient + Working 记忆层 (S3 M3.1).
 
 Transient (瞬时层): 单会话临时状态，会话结束即清空。
     - 存储在内存 dict 中，按 user_id + session_id 隔离
@@ -43,7 +43,9 @@ class TransientMemory(BaseMemoryLayer):
             self._sessions[session_id] = {}
         return self._sessions[session_id]
 
-    async def store(self, item: MemoryItem) -> str:
+    async def store(self, item: MemoryItem, persona_id: Optional[str] = None) -> str:
+        if persona_id is not None:
+            item.persona_id = persona_id
         session_id = item.metadata.get("session_id", "default")
         sess = self._ensure_session(session_id)
         item.layer = MemoryLayer.TRANSIENT
@@ -58,6 +60,7 @@ class TransientMemory(BaseMemoryLayer):
         query: str = "",
         limit: int = 5,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,  # persona 仅对长期层生效，签名保持统一透传
     ) -> List[MemorySearchResult]:
         results: List[MemorySearchResult] = []
         for sess in self._sessions.values():
@@ -105,12 +108,16 @@ class TransientMemory(BaseMemoryLayer):
         user_id: int,
         limit: int = 50,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemoryItem]:
         items: List[MemoryItem] = []
         for sess in self._sessions.values():
             for item in sess.values():
                 if item.user_id == user_id:
                     if memory_type and item.memory_type != memory_type:
+                        continue
+                    # 角色级隔离：非 None 时仅返回本角色 + 共享
+                    if persona_id and item.persona_id not in (None, persona_id):
                         continue
                     items.append(item)
                     if len(items) >= limit:
@@ -150,7 +157,9 @@ class WorkingMemory(BaseMemoryLayer):
             self._users[user_id] = OrderedDict()
         return self._users[user_id]
 
-    async def store(self, item: MemoryItem) -> str:
+    async def store(self, item: MemoryItem, persona_id: Optional[str] = None) -> str:
+        if persona_id is not None:
+            item.persona_id = persona_id
         user_items = self._ensure_user(item.user_id)
         item.layer = MemoryLayer.WORKING
 
@@ -171,6 +180,7 @@ class WorkingMemory(BaseMemoryLayer):
         query: str = "",
         limit: int = 5,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,  # 角色隔离：非 None 时仅返回本角色 + NULL 共享
     ) -> List[MemorySearchResult]:
         user_items = self._users.get(user_id)
         if not user_items:
@@ -179,6 +189,9 @@ class WorkingMemory(BaseMemoryLayer):
         results: List[MemorySearchResult] = []
         for item in reversed(user_items.values()):  # 最新的在前
             if memory_type and item.memory_type != memory_type:
+                continue
+            # 角色隔离：与长期层语义一致，当前角色可见「本角色 + NULL 共享」
+            if persona_id and item.persona_id not in (None, persona_id):
                 continue
             score = 0.3 + min(item.importance / 10.0, 0.5)
             if query:
@@ -229,6 +242,7 @@ class WorkingMemory(BaseMemoryLayer):
         user_id: int,
         limit: int = 50,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemoryItem]:
         user_items = self._users.get(user_id)
         if not user_items:
@@ -236,6 +250,9 @@ class WorkingMemory(BaseMemoryLayer):
         items: List[MemoryItem] = []
         for item in reversed(user_items.values()):
             if memory_type and item.memory_type != memory_type:
+                continue
+            # 角色级隔离：非 None 时仅返回本角色 + 共享
+            if persona_id and item.persona_id not in (None, persona_id):
                 continue
             items.append(item)
             if len(items) >= limit:

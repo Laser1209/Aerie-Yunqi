@@ -17,7 +17,9 @@ from core.persona_hub.persona_manager import get_persona_manager
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CONFIG_DIR = _PROJECT_ROOT / "config"
 _DATA_DIR = _PROJECT_ROOT / "data"
+# 角色级隔离：头像按 persona_id 分区存储，旧全局路径仅用于一次性迁移
 _PERSONA_AVATAR_DIR = _DATA_DIR / "persona"
+_PERSONA_AVATARS_ROOT = _DATA_DIR / "personas" / "avatars"
 _PERSONA_AVATAR_PATH = _PERSONA_AVATAR_DIR / "avatar.png"
 _AVATAR_BACKUP_RETENTION_DAYS = 28
 
@@ -287,7 +289,8 @@ def get_persona_summary() -> dict[str, Any]:
     """
     p = load_persona() or {}
     persona = p.get("persona") or {}
-    pair = load_avatar_bytes()
+    persona_id = get_persona_manager().get_active_id()
+    pair = load_avatar_bytes(persona_id)
     if pair:
         data, _ct = pair
         import base64 as _b64
@@ -295,6 +298,7 @@ def get_persona_summary() -> dict[str, Any]:
     else:
         dataurl = ""
     return {
+        "persona_id": persona_id,
         "name": persona.get("name") or "伊塔",
         "english_name": persona.get("english_name") or "Ita",
         # Inline dataURL is the primary form. Renderer must prefer this
@@ -302,37 +306,55 @@ def get_persona_summary() -> dict[str, Any]:
         # HTTP paths so /api/... would 404 into a broken-image icon).
         "avatar_dataurl": dataurl,
         # HTTP path retained for external / non-Electron clients.
-        "avatar_url": ("/api/persona/avatar?v=" + str(int(time.time()))) if pair else "",
+        # persona 维度参与缓存爆破：切换角色后头像不串。
+        "avatar_url": (
+            f"/api/persona/avatar?v={int(time.time())}&persona={persona_id}"
+        ) if pair else "",
     }
 
 
-def save_avatar_bytes(data: bytes, ext: str = "png") -> str:
-    """Block-2 A2: write avatar bytes to data/persona/avatar.<ext>.
+def _avatar_dir(persona_id: str) -> Path:
+    """按 persona 分区返回头像目录（含一次性迁移旧全局头像）。"""
+    safe = "".join(c for c in str(persona_id or "default") if c.isalnum() or c in "-_")
+    if not safe:
+        safe = "default"
+    d = _PERSONA_AVATARS_ROOT / safe
+    # 一次性迁移：旧全局头像归属当前 persona（仅当分区无头像时）
+    if not d.exists() and _PERSONA_AVATAR_DIR.exists():
+        for ext in ("png", "jpg", "jpeg"):
+            legacy = _PERSONA_AVATAR_DIR / f"avatar.{ext}"
+            if legacy.exists():
+                d.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copy2(legacy, d / f"avatar.{ext}")
+                except OSError:
+                    pass
+                break
+    return d
 
-    Backs up the previous avatar (if any) and enforces a 28-day retention
-    on the backup folder. Returns the public URL suffix.
 
-    R7.5: before writing, **delete any sibling avatar files** in other
-    formats so we never end up with avatar.png + avatar.jpg + avatar.jpeg
-    all coexisting (which previously made ``load_avatar_bytes()`` always
-    pick the .png and silently ignore the user's latest upload).
-    Also auto-correct the extension by sniffing the first magic bytes
-    — uploading a PNG with ext="jpg" (or vice-versa) won't bite us.
+def save_avatar_bytes(data: bytes, ext: str = "png", persona_id: str | None = None) -> str:
+    """Block-2 A2: write persona avatar to data/personas/avatars/<pid>/avatar.<ext>.
+
+    角色级隔离：头像按 persona_id 分区存储，不同角色各自持有头像；
+    不传 persona_id 时写入当前激活角色。返回公开 URL（按 persona 缓存爆破）。
     """
-    # R7.5: sniff actual format from magic bytes; trust bytes over caller hint.
+    if persona_id is None:
+        persona_id = get_persona_manager().get_active_id()
     real_ext = _sniff_image_ext(data) or (ext or "png").lower().lstrip(".")
     ext = real_ext
     if ext == "jpeg":
         ext = "jpg"
     if ext not in {"png", "jpg"}:
         raise ValueError("unsupported avatar format")
-    _PERSONA_AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+    avatar_dir = _avatar_dir(persona_id)
+    avatar_dir.mkdir(parents=True, exist_ok=True)
     # R7.5: clean up sibling files in OTHER formats so the directory
     # holds at most one canonical avatar.<ext> at any time.
     for sibling_ext in ("png", "jpg", "jpeg"):
         if sibling_ext == ext:
             continue
-        sibling = _PERSONA_AVATAR_DIR / f"avatar.{sibling_ext}"
+        sibling = avatar_dir / f"avatar.{sibling_ext}"
         if sibling.exists():
             try:
                 # Back up the about-to-be-replaced sibling so the user
@@ -349,7 +371,7 @@ def save_avatar_bytes(data: bytes, ext: str = "png") -> str:
             except OSError:
                 pass
     # Backup the file we're about to overwrite (same ext).
-    target = _PERSONA_AVATAR_DIR / f"avatar.{ext}"
+    target = avatar_dir / f"avatar.{ext}"
     if target.exists():
         backup_dir = _DATA_DIR / "backups" / "persona_avatar"
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -368,9 +390,9 @@ def save_avatar_bytes(data: bytes, ext: str = "png") -> str:
                     p.unlink()
             except OSError:
                 continue
-    dest = _PERSONA_AVATAR_DIR / f"avatar.{ext}"
+    dest = avatar_dir / f"avatar.{ext}"
     # Atomic write
-    fd, tmp_path = tempfile.mkstemp(suffix=f".{ext}", dir=str(_PERSONA_AVATAR_DIR))
+    fd, tmp_path = tempfile.mkstemp(suffix=f".{ext}", dir=str(avatar_dir))
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
@@ -381,7 +403,7 @@ def save_avatar_bytes(data: bytes, ext: str = "png") -> str:
         except OSError:
             pass
         raise
-    return f"/api/persona/avatar?v={int(time.time())}"
+    return f"/api/persona/avatar?v={int(time.time())}&persona={persona_id}"
 
 
 def _sniff_image_ext(data: bytes) -> str | None:
@@ -400,10 +422,16 @@ def _sniff_image_ext(data: bytes) -> str | None:
     return None
 
 
-def load_avatar_bytes() -> tuple[bytes, str] | None:
-    """Block-2 A2: load avatar bytes; return (bytes, content_type) or None."""
+def load_avatar_bytes(persona_id: str | None = None) -> tuple[bytes, str] | None:
+    """Block-2 A2: load persona avatar bytes; return (bytes, content_type) or None.
+
+    角色级隔离：按 persona_id 分区读取，不传时读当前激活角色。
+    """
+    if persona_id is None:
+        persona_id = get_persona_manager().get_active_id()
+    avatar_dir = _avatar_dir(persona_id)
     for ext in ("png", "jpg", "jpeg"):
-        p = _PERSONA_AVATAR_DIR / f"avatar.{ext}"
+        p = avatar_dir / f"avatar.{ext}"
         if p.exists() and p.is_file():
             try:
                 data = p.read_bytes()

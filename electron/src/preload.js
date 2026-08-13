@@ -175,6 +175,18 @@ contextBridge.exposeInMainWorld("aerie", {
       return () => ipcRenderer.removeListener("island:enabled-change", handler);
     },
   },
+  // 消息提醒总开关：控制系统通知（新消息 / 日程 / 主动消息）
+  notifControl: {
+    setEnabled: (enable) => ipcRenderer.invoke("notif:set-enabled", { enabled: !!enable }),
+    getEnabled: () => ipcRenderer.invoke("notif:get-enabled"),
+    onEnabledChange: (cb) => {
+      const handler = (_event, data) => {
+        try { cb(data || {}); } catch (_) {}
+      };
+      ipcRenderer.on("notif:enabled-change", handler);
+      return () => ipcRenderer.removeListener("notif:enabled-change", handler);
+    },
+  },
   dynamicIsland: {
     setSize: (width, height) => ipcRenderer.invoke("island:set-size", { width, height }),
     setState: (expanded) => ipcRenderer.invoke("island:state-change", { expanded }),

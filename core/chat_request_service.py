@@ -8,7 +8,7 @@ from typing import Any, Callable
 from communication.message import IncomingMessage
 from config.persona_loader import get_master_qq
 from core.chat_request_repository import RequestContext, RequestIdentity
-from core.conversation_repository import resolve_conversation_id
+from core.conversation_repository import active_persona_id, resolve_conversation_id
 from core.ids import generate_id
 
 
@@ -157,11 +157,13 @@ class ChatRequestService:
             channel_account_id=identity.channel_account_id,
             user_id=legacy_user_id,
         )
+        persona_id = active_persona_id()  # 角色隔离
         conversation_id = resolve_conversation_id(
             actor_id=request_identity.actor_id,
             channel=request_identity.channel,
             channel_account_id=request_identity.channel_account_id,
             user_id=request_identity.user_id,
+            persona_id=persona_id,
         )
         if normalized_reply_to_id and not self.repository.reply_to_belongs_to_context(
             legacy_chat_log_id=normalized_reply_to_id,
@@ -184,6 +186,7 @@ class ChatRequestService:
             ),
             attachments=validated_attachments,
             reply_to_id=normalized_reply_to_id,
+            persona_id=persona_id,  # 角色隔离
         )
         self.repository.submit(context=context)
         self._notify_worker()
@@ -316,11 +319,13 @@ class ChatRequestService:
                 channel_account_id=channel_account_id,
                 user_id=msg.user_id,
             )
+            persona_id = active_persona_id()  # 角色隔离
             conversation_id = resolve_conversation_id(
                 actor_id=request_identity.actor_id,
                 channel=request_identity.channel,
                 channel_account_id=request_identity.channel_account_id,
                 user_id=request_identity.user_id,
+                persona_id=persona_id,
             )
             context = RequestContext(
                 request_id=self.id_factory("req"),
@@ -336,6 +341,7 @@ class ChatRequestService:
                 attachments=validated_attachments,
                 reply_to_id=msg.reply_to_id or 0,
                 batch_id=batch_id,
+                persona_id=persona_id,  # 角色隔离
             )
             contexts.append(context)
 

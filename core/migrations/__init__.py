@@ -348,6 +348,11 @@ def _apply_mobile_event_log(conn: sqlite3.Connection) -> None:
         """CREATE INDEX IF NOT EXISTS idx_mobile_events_actor_sequence
            ON mobile_events(actor_id, event_sequence)"""
     )
+    _create_mobile_event_triggers(conn)
+
+
+def _create_mobile_event_triggers(conn: sqlite3.Connection) -> None:
+    """Create the mobile event triggers (idempotent; recreated after a swap)."""
     conn.execute(
         """CREATE TRIGGER IF NOT EXISTS mobile_message_created
            AFTER INSERT ON messages
@@ -388,8 +393,63 @@ actor-filtered resumable mobile SSE cursor
             version="007_mobile_event_log",
             checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
             apply=_apply_mobile_event_log,
-        )
+        ),
+        Migration(
+            version="008_mobile_event_types",
+            checksum=hashlib.sha256(
+                "008_mobile_event_types broaden mobile_events CHECK".encode("utf-8")
+            ).hexdigest(),
+            apply=_apply_mobile_event_types,
+        ),
     ]
+
+
+def _apply_mobile_event_types(conn: sqlite3.Connection) -> None:
+    """Rebuild mobile_events to allow file.updated and approval.pending.
+
+    SQLite cannot alter a CHECK constraint in place, so the table is rebuilt
+    with the broader whitelist, existing rows are copied, and the old table is
+    swapped out atomically.  The message/request triggers live on the
+    messages/requests tables, so they must be dropped first (RENAME validates
+    trigger references) and recreated after the swap.
+    """
+    for trigger in (
+        "mobile_message_created",
+        "mobile_request_created",
+        "mobile_request_updated",
+    ):
+        conn.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS mobile_events_v2 (
+            event_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK(
+                event_type IN (
+                    'message.created',
+                    'request.updated',
+                    'file.updated',
+                    'approval.pending'
+                )
+            ),
+            entity_id TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            )
+        )"""
+    )
+    conn.execute(
+        """INSERT INTO mobile_events_v2
+           (event_sequence, actor_id, event_type, entity_id, created_at)
+           SELECT event_sequence, actor_id, event_type, entity_id, created_at
+             FROM mobile_events"""
+    )
+    conn.execute("DROP TABLE mobile_events")
+    conn.execute("ALTER TABLE mobile_events_v2 RENAME TO mobile_events")
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_mobile_events_actor_sequence
+           ON mobile_events(actor_id, event_sequence)"""
+    )
+    _create_mobile_event_triggers(conn)
 
 
 def _apply_desktop_chat_continuity(conn: sqlite3.Connection) -> None:
@@ -688,6 +748,129 @@ mirror admin soft-delete state onto the legacy chat_log so chat_log-based reads 
             apply=_apply_chat_log_trash_state,
         )
     ]
+
+
+def _apply_persona_scoped_dialogue_memory(conn: sqlite3.Connection) -> None:
+    """Add role-scoped (persona_id) columns for dialogue & memory isolation.
+
+    7 表加 persona_id（NULL=共享兼容）；所有列幂等（PRAGMA 检测）。
+    依赖 conversations/turns/messages/requests 表存在（migration_framework_v1 on）。
+    """
+    _add_column_if_missing(conn, "chat_log", "persona_id", "TEXT DEFAULT NULL")
+    _add_column_if_missing(conn, "conversations", "persona_id", "TEXT DEFAULT NULL")
+    _add_column_if_missing(conn, "turns", "persona_id", "TEXT DEFAULT NULL")
+    _add_column_if_missing(conn, "messages", "persona_id", "TEXT DEFAULT NULL")
+    _add_column_if_missing(conn, "requests", "persona_id", "TEXT DEFAULT NULL")
+    _add_column_if_missing(conn, "long_term_memory", "persona_id", "TEXT DEFAULT NULL")
+    _add_column_if_missing(
+        conn, "conversation_summary_buckets", "persona_id", "TEXT DEFAULT NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_log_persona "
+        "ON chat_log(persona_id, user_id, created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_persona "
+        "ON conversations(persona_id, actor_id, updated_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_persona "
+        "ON messages(persona_id, conversation_id, sequence)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_requests_persona "
+        "ON requests(persona_id, actor_id, created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ltm_persona "
+        "ON long_term_memory(persona_id, user_id, importance)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_buckets_persona "
+        "ON conversation_summary_buckets(persona_id, bucket_index DESC)"
+    )
+
+
+def persona_scoped_dialogue_memory_migrations() -> list[Migration]:
+    contract = """013_persona_scoped_dialogue_memory
+chat_log(persona_id) conversations(persona_id) turns(persona_id) messages(persona_id)
+requests(persona_id) long_term_memory(persona_id) conversation_summary_buckets(persona_id)
+role-scoped dialogue & memory isolation (NULL=shared compatible)
+"""
+    return [
+        Migration(
+            version="013_persona_scoped_dialogue_memory",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_persona_scoped_dialogue_memory,
+        )
+    ]
+
+
+def _apply_persona_timeline_persona(conn: sqlite3.Connection) -> None:
+    """Add role-scoped (persona_id) column for the cross-channel timeline.
+
+    门户 F：persona_timeline 加 persona_id（NULL=共享兼容）；列幂等（PRAGMA 检测）。
+    依赖 persona_timeline 表存在（010 migration，migration_framework_v1 on）。
+    """
+    _add_column_if_missing(conn, "persona_timeline", "persona_id", "TEXT DEFAULT NULL")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_timeline_persona "
+        "ON persona_timeline(persona_id, user_id, occurred_at DESC)"
+    )
+
+
+def persona_timeline_persona_migrations() -> list[Migration]:
+    contract = """014_persona_timeline_persona
+persona_timeline(persona_id)
+index(persona_id+user_id+occurred_at)
+role-scoped cross-channel timeline (NULL=shared compatible)
+"""
+    return [
+        Migration(
+            version="014_persona_timeline_persona",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_persona_timeline_persona,
+        )
+    ]
+
+
+def quote_unification_migrations() -> list[Migration]:
+    contract = """015_quote_unification_v2
+messages(reply_to_id,reply_to_content,reply_to_role)
+chat_log(qq_message_id) index
+unified quote context across QQ/desktop/mobile channels
+"""
+    return [
+        Migration(
+            version="015_quote_unification_v2",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_quote_unification_v2,
+        )
+    ]
+
+
+def _apply_quote_unification_v2(conn: sqlite3.Connection) -> None:
+    """Quote V2: mirror chat_log quote columns on the canonical messages
+    table and index the platform message_id mapping.
+
+    ``messages(reply_to_id, reply_to_content, reply_to_role)`` let canonical
+    history pages render quotes; ``chat_log(qq_message_id)`` powers the
+    QQ message_id <-> chat_log.id mapping used by inbound quote resolution.
+    """
+    for column, declaration in (
+        ("reply_to_id", "INTEGER DEFAULT NULL"),
+        ("reply_to_content", "TEXT DEFAULT NULL"),
+        ("reply_to_role", "TEXT DEFAULT NULL"),
+        ("reply_to_attachments", "TEXT DEFAULT NULL"),
+    ):
+        _add_column_if_missing(conn, "messages", column, declaration)
+    # chat_log.qq_message_id is normally added by Database._migrate_chat_log
+    # AFTER migrations run; add it here so the index below is valid.
+    _add_column_if_missing(conn, "chat_log", "qq_message_id", "INTEGER DEFAULT NULL")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_qq_message_id "
+        "ON chat_log(qq_message_id)"
+    )
 
 
 def phase2_identity_migrations() -> list[Migration]:

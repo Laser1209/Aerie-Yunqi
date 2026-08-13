@@ -13,7 +13,7 @@ from core.chat_request_repository import (
     RequestIdentity,
 )
 from core.chat_request_service import PURE_ATTACHMENT_EFFECTIVE_CONTENT
-from core.conversation_repository import resolve_conversation_id
+from core.conversation_repository import active_persona_id, resolve_conversation_id
 from core.ids import generate_id
 from core.mobile_identity import MobileIdentityStore, MobilePrincipal
 
@@ -53,6 +53,7 @@ class MobileChatService:
             channel="mobile",
             channel_account_id=principal.account_id,
             user_id=principal.user_id,
+            persona_id=active_persona_id(),  # 角色隔离
         )
 
     @staticmethod
@@ -69,6 +70,7 @@ class MobileChatService:
         client_request_id: str,
         text: str,
         file_ids: list[str],
+        reply_to_id: int = 0,
     ) -> dict[str, Any]:
         try:
             parsed = uuid.UUID(client_request_id)
@@ -119,6 +121,8 @@ class MobileChatService:
                     content if content else PURE_ATTACHMENT_EFFECTIVE_CONTENT
                 ),
                 attachments=attachments,
+                reply_to_id=int(reply_to_id or 0),
+                persona_id=active_persona_id(),  # 角色隔离
             )
         )
         return {
@@ -219,7 +223,8 @@ class MobileChatService:
             direction = "DESC" if before_id or not after_id else "ASC"
             rows = conn.execute(
                 f"""SELECT rowid AS message_order, message_id, conversation_id, turn_id, role,
-                            content, attachments, created_at
+                            content, attachments, created_at,
+                            reply_to_id, reply_to_content, reply_to_role
                      FROM messages WHERE {' AND '.join(clauses)}
                      ORDER BY rowid {direction} LIMIT ?""",
                 (*params, limit),
@@ -233,12 +238,57 @@ class MobileChatService:
                 "role": row["role"],
                 "content": row["content"],
                 "attachments": json.loads(row["attachments"] or "[]"),
+                "replyToId": row["reply_to_id"],
+                "replyToContent": row["reply_to_content"],
+                "replyToRole": row["reply_to_role"],
                 "createdAt": row["created_at"],
             }
             for row in rows
         ]
         if direction == "DESC":
             items.reverse()
+        return {
+            "items": items,
+            "hasMore": len(rows) == limit,
+        }
+
+    def list_messages_for_actor(
+        self,
+        actor_id: str,
+        *,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Owner-only view: list recent messages for an arbitrary actor."""
+        if not actor_id:
+            raise MobileChatError("invalid_cursor")
+        if not 1 <= limit <= 100:
+            raise MobileChatError("invalid_limit")
+        with self.database.connection() as conn:
+            rows = conn.execute(
+                """SELECT rowid AS message_order, message_id, conversation_id, turn_id, role,
+                          content, attachments, created_at,
+                          reply_to_id, reply_to_content, reply_to_role
+                     FROM messages WHERE actor_id = ?
+                     ORDER BY rowid DESC LIMIT ?""",
+                (actor_id, limit),
+            ).fetchall()
+        items = [
+            {
+                "messageId": row["message_id"],
+                "messageOrder": row["message_order"],
+                "conversationId": row["conversation_id"],
+                "turnId": row["turn_id"],
+                "role": row["role"],
+                "content": row["content"],
+                "attachments": json.loads(row["attachments"] or "[]"),
+                "replyToId": row["reply_to_id"],
+                "replyToContent": row["reply_to_content"],
+                "replyToRole": row["reply_to_role"],
+                "createdAt": row["created_at"],
+            }
+            for row in rows
+        ]
+        items.reverse()
         return {
             "items": items,
             "hasMore": len(rows) == limit,
@@ -296,7 +346,8 @@ class MobileChatService:
         if event_type == "message.created":
             row = conn.execute(
                 """SELECT rowid AS message_order, message_id, conversation_id, role,
-                          content, created_at
+                          content, created_at,
+                          reply_to_id, reply_to_content, reply_to_role
                    FROM messages WHERE message_id = ? AND actor_id = ?""",
                 (entity_id, actor_id),
             ).fetchone()
@@ -308,7 +359,25 @@ class MobileChatService:
                 "conversationId": row["conversation_id"],
                 "role": row["role"],
                 "content": row["content"],
+                "replyToId": row["reply_to_id"],
+                "replyToContent": row["reply_to_content"],
+                "replyToRole": row["reply_to_role"],
                 "createdAt": row["created_at"],
+            }
+        if event_type == "file.updated":
+            # mobile_files lives in the separate mobile gateway DB, so the
+            # payload here is intentionally minimal; clients refresh the file
+            # list through GET /files after receiving this event.
+            return {
+                "fileId": entity_id,
+                "status": "updated",
+            }
+        if event_type == "approval.pending":
+            # Pending approvals live in the desktop ComputerController;
+            # the mobile event only carries the id so the client refreshes.
+            return {
+                "approvalId": entity_id,
+                "status": "pending",
             }
         row = conn.execute(
             """SELECT request_id, conversation_id, status, error_code,

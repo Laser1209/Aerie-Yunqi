@@ -1,24 +1,28 @@
 """Aerie v0.1.0-beta.1 · 电脑操控模块
 
-权限三档：
-  - VIEW_ONLY (只读)：仅允许截图、查询窗口信息
-  - STANDARD (标准)：允许键鼠操作、受限 shell
-  - FULL (完全)：允许所有操作，包括 UIA 深度操控
+权限四模式 + 黑白名单：
+  - MANUAL (手动审批)：所有操作均需用户审批
+  - AUTO (自动批阅)：低风险自动放行，中/高风险审批
+  - FULL (完全访问)：全部放行（系统危险黑名单硬闸除外）
+  - CUSTOM (自定义)：默认拦截 + 自定义黑白名单/操作规则
 
 安全机制：
-  - 危险命令黑名单
+  - 系统危险命令硬闸（任何模式不可绕过）
+  - 用户自定义黑名单 / 白名单（白名单命中直接放行）
   - 操作审计日志
-  - 用户审批流程（高风险操作）
+  - 用户审批流程（对话框内审批卡片，支持放行并入白名单）
   - 超时保护
   - 输出截断
 """
 
 from __future__ import annotations
 import os
+import re
 import shlex
 import time
 import json
 import ctypes
+import uuid
 import subprocess
 import logging
 from enum import Enum
@@ -29,11 +33,45 @@ from dataclasses import dataclass, field
 logger = logging.getLogger(__name__)
 
 
-class PermissionLevel(str, Enum):
-    """权限等级"""
-    VIEW_ONLY = "view_only"
-    STANDARD = "standard"
-    FULL = "full"
+class ControlMode(str, Enum):
+    """电脑操控权限模式"""
+    MANUAL = "manual"    # 所有操作均需用户审批
+    AUTO = "auto"        # 低风险自动放行，中/高风险审批
+    FULL = "full"        # 全部放行（系统危险黑名单硬闸除外）
+    CUSTOM = "custom"    # 默认拦截 + 自定义黑白名单/操作规则
+
+
+class Decision(str, Enum):
+    """操作裁决结果"""
+    ALLOW = "allow"      # 放行
+    APPROVE = "approve"  # 需要用户审批
+    BLOCK = "block"      # 拦截（不弹窗）
+
+
+class PolicyEntryType(str, Enum):
+    """黑白名单条目类型"""
+    ACTION = "action"    # 按操作类型（如 shell_cmd / mouse_click）
+    COMMAND = "command"  # shell 命令前缀（如 dir / ping）
+    PATTERN = "pattern"  # 正则匹配操作详情 JSON
+
+
+@dataclass
+class PolicyEntry:
+    """黑白名单条目"""
+    id: str
+    type: str            # PolicyEntryType 值
+    value: str
+    note: str = ""
+    created_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "value": self.value,
+            "note": self.note,
+            "created_at": self.created_at,
+        }
 
 
 class ControlAction(str, Enum):
@@ -72,21 +110,6 @@ DANGEROUS_COMMANDS = [
     "echo . >", "echo >",  # 覆盖文件
 ]
 
-# 白名单命令（VIEW_ONLY 模式下允许的 shell 命令）
-SAFE_COMMANDS_VIEW = [
-    "dir", "ls", "echo", "ver", "date", "time",
-    "tasklist", "whoami", "hostname", "ipconfig",
-    "systeminfo", "wmic os get",  # 只读查询
-]
-
-# STANDARD 模式下允许的额外命令
-SAFE_COMMANDS_STANDARD = [
-    "cd", "pwd", "type", "cat", "head", "tail",
-    "copy", "xcopy", "move", "ren", "mkdir",
-    "ping", "tracert", "nslookup",
-    "python --version", "node --version",
-]
-
 # 操作 → 风险等级映射
 ACTION_RISK_MAP = {
     ControlAction.SCREENSHOT: RiskLevel.SAFE,
@@ -99,26 +122,6 @@ ACTION_RISK_MAP = {
     ControlAction.WINDOW_FOCUS: RiskLevel.LOW,
     ControlAction.SHELL_CMD: RiskLevel.HIGH,
     ControlAction.UIA_ACTION: RiskLevel.HIGH,
-}
-
-# 权限 → 允许的操作
-PERMISSION_ACTIONS = {
-    PermissionLevel.VIEW_ONLY: {
-        ControlAction.SCREENSHOT,
-        ControlAction.WINDOW_INFO,
-    },
-    PermissionLevel.STANDARD: {
-        ControlAction.SCREENSHOT,
-        ControlAction.WINDOW_INFO,
-        ControlAction.MOUSE_MOVE,
-        ControlAction.MOUSE_CLICK,
-        ControlAction.MOUSE_SCROLL,
-        ControlAction.KEY_PRESS,
-        ControlAction.KEY_TYPE,
-        ControlAction.WINDOW_FOCUS,
-        ControlAction.SHELL_CMD,
-    },
-    PermissionLevel.FULL: {action for action in ControlAction},
 }
 
 
@@ -195,37 +198,213 @@ class AuditLogger:
         return entries
 
 
-class PermissionManager:
-    """权限管理器"""
+class AccessPolicy:
+    """访问策略引擎
 
-    def __init__(self, level: PermissionLevel = PermissionLevel.STANDARD):
-        self._level = level
+    决策链（自上而下，先命中先生效）：
+      1. 系统危险命令硬闸（SHELL_CMD 命中内置黑名单 → BLOCK，不可绕过）
+      2. 用户黑名单（命中 → BLOCK，不弹窗）
+      3. 用户白名单（命中 → ALLOW，直接放行，跳过弹窗）
+      4. 模式裁决（MANUAL 全审批 / AUTO 低风险放行 / FULL 全放行 / CUSTOM 默认拦截+规则）
+
+    名单与模式持久化到 settings.yaml 的 computer_control 键。
+    """
+
+    def __init__(self, mode: ControlMode = ControlMode.MANUAL, persist: bool = True):
+        self._mode = mode
+        self._whitelist: dict[str, PolicyEntry] = {}
+        self._blacklist: dict[str, PolicyEntry] = {}
+        self._custom_rules: dict[str, str] = {}  # action_value -> allow/approve/block
+        self._shell: Optional["RestrictedShell"] = None
+        self._persist_enabled = persist
+        self._load_persisted()
+
+    # ── 模式 ────────────────────────────────────────
 
     @property
-    def level(self) -> PermissionLevel:
-        return self._level
+    def mode(self) -> ControlMode:
+        return self._mode
 
-    def set_level(self, level: PermissionLevel) -> None:
-        self._level = level
-        logger.info(f"权限等级已切换为: {level.value}")
+    def set_mode(self, mode: ControlMode) -> None:
+        self._mode = mode
+        logger.info("电脑操控模式已切换为: %s", mode.value)
+        self._persist()
 
-    def can_perform(self, action: ControlAction) -> bool:
-        """检查是否有权限执行指定操作"""
-        return action in PERMISSION_ACTIONS.get(self._level, set())
+    # ── 名单 ────────────────────────────────────────
 
-    def needs_approval(self, action: ControlAction, details: Optional[dict] = None) -> bool:
-        """判断操作是否需要用户审批"""
-        risk = ACTION_RISK_MAP.get(action, RiskLevel.MEDIUM)
+    def get_whitelist(self) -> list[dict]:
+        return [e.to_dict() for e in self._whitelist.values()]
 
-        # 高风险及以上需要审批
-        if risk in (RiskLevel.HIGH, RiskLevel.CRITICAL):
+    def get_blacklist(self) -> list[dict]:
+        return [e.to_dict() for e in self._blacklist.values()]
+
+    def add_whitelist(self, entry_type: str, value: str, note: str = "") -> PolicyEntry:
+        return self._add_entry(self._whitelist, entry_type, value, note)
+
+    def add_blacklist(self, entry_type: str, value: str, note: str = "") -> PolicyEntry:
+        return self._add_entry(self._blacklist, entry_type, value, note)
+
+    def remove_whitelist(self, entry_id: str) -> bool:
+        return self._remove_entry(self._whitelist, entry_id)
+
+    def remove_blacklist(self, entry_id: str) -> bool:
+        return self._remove_entry(self._blacklist, entry_id)
+
+    def _add_entry(self, store: dict, entry_type: str, value: str, note: str) -> PolicyEntry:
+        value = value.strip()
+        if not value:
+            raise ValueError("条目值不能为空")
+        # 相同类型+值去重，避免重复入账
+        for existing in store.values():
+            if existing.type == entry_type and existing.value == value:
+                return existing
+        entry = PolicyEntry(
+            id=f"{entry_type}_{uuid.uuid4().hex[:8]}",
+            type=entry_type,
+            value=value,
+            note=note,
+        )
+        store[entry.id] = entry
+        self._persist()
+        return entry
+
+    def _remove_entry(self, store: dict, entry_id: str) -> bool:
+        if entry_id in store:
+            del store[entry_id]
+            self._persist()
             return True
-
-        # 中等风险 + 低权限 → 需要审批
-        if risk == RiskLevel.MEDIUM and self._level == PermissionLevel.VIEW_ONLY:
-            return True
-
         return False
+
+    # ── 自定义规则（CUSTOM 模式按操作类型） ──────────
+
+    def set_custom_rule(self, action_value: str, decision: str) -> None:
+        if decision not in {Decision.ALLOW.value, Decision.APPROVE.value, Decision.BLOCK.value}:
+            raise ValueError(f"非法规则值: {decision}")
+        self._custom_rules[action_value] = decision
+        self._persist()
+
+    def get_custom_rules(self) -> dict:
+        return dict(self._custom_rules)
+
+    # ── 裁决 ────────────────────────────────────────
+
+    def decide(self, action: ControlAction, details: Optional[dict] = None) -> tuple[Decision, str]:
+        """返回 (决策, 原因)。"""
+        details = details or {}
+
+        # 1. 系统危险命令硬闸（不可绕过）
+        if action == ControlAction.SHELL_CMD:
+            cmd = str(details.get("command", ""))
+            if self._shell is not None:
+                dangerous, issues = self._shell.is_dangerous(cmd)
+                if dangerous:
+                    return Decision.BLOCK, f"命中系统危险命令黑名单: {'; '.join(issues[:2])}"
+
+        # 2. 用户黑名单
+        if self._match(self._blacklist, action, details):
+            return Decision.BLOCK, "命中用户黑名单"
+
+        # 3. 用户白名单
+        if self._match(self._whitelist, action, details):
+            return Decision.ALLOW, "命中白名单，自动放行"
+
+        # 4. 模式裁决
+        if self._mode == ControlMode.FULL:
+            return Decision.ALLOW, "完全访问模式"
+        if self._mode == ControlMode.MANUAL:
+            return Decision.APPROVE, "手动审批模式：需用户确认"
+        if self._mode == ControlMode.AUTO:
+            risk = ACTION_RISK_MAP.get(action, RiskLevel.MEDIUM)
+            if risk in (RiskLevel.SAFE, RiskLevel.LOW):
+                return Decision.ALLOW, "低风险自动放行"
+            return Decision.APPROVE, "自动批阅模式：需用户确认"
+
+        # CUSTOM：默认拦截；命中操作规则则按规则
+        rule = self._custom_rules.get(action.value)
+        if rule == Decision.ALLOW.value:
+            return Decision.ALLOW, "自定义规则放行"
+        if rule == Decision.BLOCK.value:
+            return Decision.BLOCK, "自定义规则拦截"
+        return Decision.APPROVE, "自定义模式默认拦截"
+
+    def _match(self, store: dict, action: ControlAction, details: dict) -> bool:
+        for entry in store.values():
+            if entry.type == PolicyEntryType.ACTION.value:
+                if entry.value == action.value:
+                    return True
+            elif entry.type == PolicyEntryType.COMMAND.value:
+                cmd = str(details.get("command", "")).lower()
+                if cmd.startswith(entry.value.lower()):
+                    return True
+            elif entry.type == PolicyEntryType.PATTERN.value:
+                try:
+                    if re.search(entry.value, json.dumps(details, ensure_ascii=False), re.IGNORECASE):
+                        return True
+                except re.error:
+                    continue
+        return False
+
+    # ── 持久化（settings.yaml computer_control 键） ──
+
+    def _persist(self) -> None:
+        if not self._persist_enabled:
+            return
+        try:
+            from config.persona_loader import load_settings, save_settings
+            settings = load_settings() or {}
+            cc = settings.setdefault("computer_control", {})
+            cc["mode"] = self._mode.value
+            cc["whitelist"] = [e.to_dict() for e in self._whitelist.values()]
+            cc["blacklist"] = [e.to_dict() for e in self._blacklist.values()]
+            cc["custom_rules"] = dict(self._custom_rules)
+            save_settings(settings)
+        except Exception as e:
+            logger.warning("持久化电脑操控策略失败: %s", e)
+
+    def _load_persisted(self) -> None:
+        try:
+            from config.persona_loader import load_settings
+            settings = load_settings() or {}
+            cc = settings.get("computer_control") or {}
+            mode = cc.get("mode")
+            if mode and mode in {m.value for m in ControlMode}:
+                self._mode = ControlMode(mode)
+            for raw in cc.get("whitelist", []):
+                entry = self._entry_from_dict(raw)
+                if entry:
+                    self._whitelist[entry.id] = entry
+            for raw in cc.get("blacklist", []):
+                entry = self._entry_from_dict(raw)
+                if entry:
+                    self._blacklist[entry.id] = entry
+            rules = cc.get("custom_rules") or {}
+            for k, v in rules.items():
+                if v in {Decision.ALLOW.value, Decision.APPROVE.value, Decision.BLOCK.value}:
+                    self._custom_rules[k] = v
+        except Exception as e:
+            logger.warning("加载电脑操控策略失败: %s", e)
+
+    @staticmethod
+    def _entry_from_dict(raw: dict) -> Optional[PolicyEntry]:
+        try:
+            return PolicyEntry(
+                id=str(raw.get("id") or f"import_{uuid.uuid4().hex[:8]}"),
+                type=str(raw.get("type", PolicyEntryType.ACTION.value)),
+                value=str(raw.get("value", "")),
+                note=str(raw.get("note", "")),
+                created_at=float(raw.get("created_at", time.time())),
+            )
+        except Exception:
+            return None
+
+    def to_dict(self) -> dict:
+        """策略快照（供 /api/computer_control/policy 使用）"""
+        return {
+            "mode": self._mode.value,
+            "whitelist": self.get_whitelist(),
+            "blacklist": self.get_blacklist(),
+            "custom_rules": dict(self._custom_rules),
+        }
 
 
 class ScreenshotCapturer:
@@ -644,11 +823,13 @@ class RestrictedShell:
     """受限 Shell 执行器
 
     安全机制：
-    - 命令白名单（按权限等级）
-    - 危险模式黑名单
+    - 系统危险命令黑名单（不可绕过）
+    - shell 元字符拒绝（管道/重定向/命令链）
     - 超时保护
     - 输出截断
     - 工作目录限制
+
+    权限裁决（白名单/审批）由上层 AccessPolicy 负责，本类只做硬性安全闸。
     """
 
     def __init__(self, default_cwd: Optional[str] = None, timeout: int = 30,
@@ -678,36 +859,13 @@ class RestrictedShell:
 
         return len(issues) > 0, issues
 
-    def is_allowed(self, command: str, permission: PermissionLevel) -> bool:
-        """检查命令是否在白名单内（仅对 view_only 严格限制）"""
-        if permission == PermissionLevel.FULL:
-            return True
+    def execute(self, command: str, cwd: Optional[str] = None) -> ControlResult:
+        """执行 shell 命令（安全实现）。
 
-        cmd_lower = command.strip().lower()
-        safe_cmds = SAFE_COMMANDS_VIEW.copy()
-        if permission == PermissionLevel.STANDARD:
-            safe_cmds += SAFE_COMMANDS_STANDARD
-
-        # 检查命令前缀
-        for safe in safe_cmds:
-            if cmd_lower.startswith(safe.lower()):
-                return True
-
-        return False
-
-    def execute(self, command: str, cwd: Optional[str] = None,
-                permission: PermissionLevel = PermissionLevel.STANDARD
-                ) -> ControlResult:
-        """Execute a shell command — safe implementation.
-
-        v0.1.0-beta.1: migrated from subprocess.run(shell=True) to
-        subprocess.run(shlex.split(cmd), shell=False) for injection safety.
-        Commands containing shell metacharacters (|, >, &, ;) are rejected
-        with a clear error asking the LLM to split into multiple calls.
-
-        ZERO-BREAKING: signature unchanged. Return type unchanged.
+        危险命令与 shell 元字符在进入 subprocess 前被硬性拒绝；
+        白名单/审批裁决由上层 AccessPolicy 完成。
         """
-        # 危险检查
+        # 危险检查（系统硬闸）
         is_danger, issues = self.is_dangerous(command)
         if is_danger:
             return ControlResult(
@@ -717,17 +875,7 @@ class RestrictedShell:
                 data={"command": command[:100], "blocked_reason": issues},
             )
 
-        # 权限检查
-        if permission != PermissionLevel.FULL:
-            if not self.is_allowed(command, permission):
-                return ControlResult(
-                    success=False,
-                    action=ControlAction.SHELL_CMD.value,
-                    error=f"权限不足：当前权限 {permission.value} 不允许执行此命令",
-                    data={"command": command[:100], "permission": permission.value},
-                )
-
-        # ── v0.1.0-beta.1: reject shell metacharacters ──
+        # ── shell 元字符拒绝 ──
         shell_meta_chars = {"|", ">", "<", "&", ";"}
         if any(c in command for c in shell_meta_chars):
             return ControlResult(
@@ -1046,11 +1194,12 @@ class ComputerController:
 
     def __init__(
         self,
-        permission_level: PermissionLevel = PermissionLevel.STANDARD,
+        mode: ControlMode = ControlMode.MANUAL,
         audit_log_dir: str = "data/audit",
         shell_timeout: int = 30,
+        persist: bool = True,
     ):
-        self.permission = PermissionManager(permission_level)
+        self.permission = AccessPolicy(mode, persist=persist)
         self.audit = AuditLogger(audit_log_dir)
 
         self.screenshot = ScreenshotCapturer()
@@ -1059,37 +1208,57 @@ class ComputerController:
         self.shell = RestrictedShell(timeout=shell_timeout)
         self.windows = WindowManager()
         self.uia = UIAController()
+        # 将受限 shell 注入策略引擎，供系统危险命令硬闸裁决
+        self.permission._shell = self.shell
 
         self._pending_approvals: dict[str, dict] = {}
 
-    # ---- 权限管理 ----
+    # ---- 模式管理 ----
 
-    def set_permission(self, level: PermissionLevel) -> None:
-        """设置权限等级"""
-        self.permission.set_level(level)
+    def set_mode(self, mode: ControlMode) -> None:
+        """设置权限模式"""
+        self.permission.set_mode(mode)
 
     @property
-    def permission_level(self) -> PermissionLevel:
-        return self.permission.level
+    def mode(self) -> ControlMode:
+        return self.permission.mode
 
-    # ---- 内部：操作前检查 ----
+    @property
+    def policy(self) -> AccessPolicy:
+        """访问策略引擎（黑白名单 / 自定义规则）"""
+        return self.permission
 
-    def _pre_check(self, action: ControlAction, details: Optional[dict] = None
-                   ) -> tuple[bool, list[str]]:
-        """操作前检查
+    # ---- 内部：统一权限闸门 ----
+
+    def _gate(self, action: ControlAction, details: Optional[dict] = None
+              ) -> Optional[ControlResult]:
+        """统一权限闸门。
+
+        裁决链（AccessPolicy）：
+          系统危险硬闸 → 用户黑名单 → 用户白名单 → 模式裁决
 
         Returns:
-            (是否通过, 问题列表)
+            None 表示放行；否则返回需要返回给调用方的 ControlResult
+            （blocked / needs_approval）。
         """
-        issues = []
-
-        # 权限检查
-        if not self.permission.can_perform(action):
-            issues.append(
-                f"权限不足：当前 {self.permission.level.value} 不允许 {action.value}"
+        decision, reason = self.permission.decide(action, details or {})
+        if decision == Decision.ALLOW:
+            return None
+        if decision == Decision.BLOCK:
+            return ControlResult(
+                success=False,
+                action=action.value,
+                error=f"操作被拦截: {reason}",
+                data={"reason": reason, "blocked": True},
             )
-
-        return len(issues) == 0, issues
+        # APPROVE → 创建审批请求（推送到对话框审批卡片）
+        call_id = self.request_approval(action, details or {}, description=reason)
+        return ControlResult(
+            success=False,
+            action=action.value,
+            error="需要用户审批",
+            data={"call_id": call_id, "needs_approval": True, "reason": reason},
+        )
 
     def _audit(self, action: ControlAction, details: dict,
                result: str, user_approved: bool = False) -> None:
@@ -1098,7 +1267,7 @@ class ComputerController:
         entry = AuditLogEntry(
             action=action.value,
             risk_level=risk.value,
-            permission_level=self.permission.level.value,
+            permission_level=self.permission.mode.value,
             details=details,
             result=result,
             user_approved=user_approved,
@@ -1111,11 +1280,11 @@ class ComputerController:
                         ) -> ControlResult:
         """截图"""
         action = ControlAction.SCREENSHOT
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"region": region}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {"region": region})
+        if gate is not None:
+            self._audit(action, {"region": region},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.screenshot.capture(region)
         self._audit(action, {"region": region, "path": result.data.get("path", "")},
@@ -1127,11 +1296,11 @@ class ComputerController:
     def mouse_move(self, x: int, y: int, duration: float = 0.2) -> ControlResult:
         """移动鼠标"""
         action = ControlAction.MOUSE_MOVE
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"x": x, "y": y}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {"x": x, "y": y})
+        if gate is not None:
+            self._audit(action, {"x": x, "y": y},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.mouse.move(x, y, duration)
         self._audit(action, {"x": x, "y": y},
@@ -1142,39 +1311,26 @@ class ComputerController:
                     button: str = "left", clicks: int = 1) -> ControlResult:
         """鼠标点击"""
         action = ControlAction.MOUSE_CLICK
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"x": x, "y": y, "button": button}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
-
-        # 高风险需要审批
-        if self.permission.needs_approval(action):
-            call_id = f"mouse_click_{int(time.time())}"
-            self._pending_approvals[call_id] = {
-                "action": action,
-                "params": {"x": x, "y": y, "button": button, "clicks": clicks},
-            }
-            return ControlResult(
-                success=False,
-                action=action.value,
-                error="需要用户审批",
-                data={"call_id": call_id, "needs_approval": True},
-            )
+        details = {"x": x, "y": y, "button": button, "clicks": clicks}
+        gate = self._gate(action, details)
+        if gate is not None:
+            self._audit(action, details,
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.mouse.click(x, y, button, clicks)
-        self._audit(action, {"x": x, "y": y, "button": button, "clicks": clicks},
+        self._audit(action, details,
                     "success" if result.success else f"failed: {result.error}")
         return result
 
     def mouse_scroll(self, clicks: int) -> ControlResult:
         """滚轮"""
         action = ControlAction.MOUSE_SCROLL
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"clicks": clicks}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {"clicks": clicks})
+        if gate is not None:
+            self._audit(action, {"clicks": clicks},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.mouse.scroll(clicks)
         self._audit(action, {"clicks": clicks},
@@ -1186,11 +1342,11 @@ class ComputerController:
     def key_press(self, key: str) -> ControlResult:
         """按键"""
         action = ControlAction.KEY_PRESS
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"key": key}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {"key": key})
+        if gate is not None:
+            self._audit(action, {"key": key},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.keyboard.press(key)
         self._audit(action, {"key": key},
@@ -1200,11 +1356,11 @@ class ComputerController:
     def type_text(self, text: str) -> ControlResult:
         """输入文本"""
         action = ControlAction.KEY_TYPE
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"text_length": len(text)}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {"text_length": len(text)})
+        if gate is not None:
+            self._audit(action, {"text_length": len(text)},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.keyboard.type_text(text)
         self._audit(action, {"text_length": len(text)},
@@ -1214,11 +1370,11 @@ class ComputerController:
     def hotkey(self, *keys: str) -> ControlResult:
         """快捷键"""
         action = ControlAction.KEY_PRESS
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"keys": list(keys)}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {"keys": list(keys)})
+        if gate is not None:
+            self._audit(action, {"keys": list(keys)},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.keyboard.hotkey(*keys)
         self._audit(action, {"keys": list(keys)},
@@ -1230,34 +1386,54 @@ class ComputerController:
     def shell_execute(self, command: str, cwd: Optional[str] = None) -> ControlResult:
         """执行 shell 命令"""
         action = ControlAction.SHELL_CMD
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"command": command[:100]}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        details = {"command": command[:200], "cwd": cwd}
+        gate = self._gate(action, details)
+        if gate is not None:
+            self._audit(action, details,
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
-        result = self.shell.execute(command, cwd, self.permission.level)
-        self._audit(action, {"command": command[:100], "cwd": cwd},
+        result = self.shell.execute(command, cwd)
+        self._audit(action, details,
                     "success" if result.success else f"failed: {result.error}")
         return result
 
     # ---- UIA ----
 
     def uia_action(self, action_type: str, params: dict | None = None) -> ControlResult:
-        """Execute a UIA action via UIAController."""
+        """执行 UIA 操作（list_controls / click）。"""
         action = ControlAction.UIA_ACTION
-        if not self._pre_check(action):
-            self._audit(action, {"action_type": action_type, "params": params}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="Permission denied: UIA_ACTION not allowed")
+        params = params or {}
+        details = {"action_type": action_type, "params": params}
+        gate = self._gate(action, details)
+        if gate is not None:
+            self._audit(action, details,
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
+
         try:
-            result = UIAController.execute(action_type, params or {})
-            self._audit(action, {"action_type": action_type, "params": params},
-                        "success" if result and result.get("success", True) else "failed")
-            return ControlResult(success=True, action=action.value, data=result)
+            if action_type == "list_controls":
+                result = self.uia.list_controls(title=params.get("window_title") or params.get("title"))
+            elif action_type == "click":
+                result = self.uia.click_control(params.get("control_name", ""))
+            elif action_type in ("get_text", "set_value", "invoke", "select"):
+                return ControlResult(
+                    success=False,
+                    action=action.value,
+                    error=f"UIA 操作暂不支持: {action_type}（仅支持 list_controls / click）",
+                )
+            else:
+                return ControlResult(
+                    success=False,
+                    action=action.value,
+                    error=f"未知 UIA 操作: {action_type}",
+                )
+            self._audit(action, details,
+                        "success" if result.success else f"failed: {result.error}")
+            return result
         except Exception as e:
             err = ControlResult(success=False, action=action.value, error=str(e))
-            self._audit(action, {"action_type": action_type, "params": params}, f"error: {e}")
+            self._audit(action, details, f"error: {e}")
             return err
 
     # ---- 窗口 ----
@@ -1265,11 +1441,11 @@ class ComputerController:
     def list_windows(self) -> ControlResult:
         """列出窗口"""
         action = ControlAction.WINDOW_INFO
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {})
+        if gate is not None:
+            self._audit(action, {},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.windows.list_windows()
         self._audit(action, {"count": result.data.get("count", 0)},
@@ -1279,11 +1455,11 @@ class ComputerController:
     def focus_window(self, hwnd: int) -> ControlResult:
         """聚焦窗口"""
         action = ControlAction.WINDOW_FOCUS
-        passed, issues = self._pre_check(action)
-        if not passed:
-            self._audit(action, {"hwnd": hwnd}, "blocked")
-            return ControlResult(success=False, action=action.value,
-                                 error="; ".join(issues))
+        gate = self._gate(action, {"hwnd": hwnd})
+        if gate is not None:
+            self._audit(action, {"hwnd": hwnd},
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
 
         result = self.windows.focus_window(hwnd)
         self._audit(action, {"hwnd": hwnd},
@@ -1293,53 +1469,14 @@ class ComputerController:
     def _find_window_by_title(self, title: str) -> int:
         """Find a window handle by partial title match."""
         try:
-            wins = WindowManager.list_windows()
-            if wins and wins.data:
-                win_list = wins.data.get("windows", [])
-                for w in win_list:
+            result = self.windows.list_windows()
+            if result and result.data:
+                for w in result.data.get("windows", []):
                     if title.lower() in w.get("title", "").lower():
                         return w.get("hwnd", 0)
         except Exception:
             pass
         return 0
-
-    # ---- 审批 ----
-
-    def approve(self, call_id: str) -> ControlResult:
-        """审批通过待审批操作"""
-        if call_id not in self._pending_approvals:
-            return ControlResult(success=False, action="approve",
-                                 error=f"待审批项不存在: {call_id}")
-
-        pending = self._pending_approvals.pop(call_id)
-        action = pending["action"]
-        params = pending["params"]
-
-        # 根据 action 执行对应操作
-        if action == ControlAction.MOUSE_CLICK:
-            result = self.mouse.click(**params)
-            self._audit(action, params, "success (approved)", user_approved=True)
-            return result
-        elif action == ControlAction.SHELL_CMD:
-            result = self.shell.execute(
-                params.get("command", ""),
-                params.get("cwd"),
-                self.permission.level,
-            )
-            self._audit(action, params, "success (approved)", user_approved=True)
-            return result
-
-        return ControlResult(success=False, action="approve",
-                             error=f"不支持的操作类型: {action}")
-
-    def reject(self, call_id: str, reason: str = "") -> bool:
-        """拒绝待审批操作"""
-        if call_id not in self._pending_approvals:
-            return False
-        pending = self._pending_approvals.pop(call_id)
-        self._audit(pending["action"], pending["params"],
-                    f"rejected: {reason}", user_approved=False)
-        return True
 
     # ---- 审计查询 ----
 
@@ -1352,7 +1489,9 @@ class ComputerController:
     def get_status(self) -> dict:
         """获取当前状态"""
         return {
-            "permission_level": self.permission.level.value,
+            "mode": self.permission.mode.value,
+            "whitelist_count": len(self.permission.get_whitelist()),
+            "blacklist_count": len(self.permission.get_blacklist()),
             "has_pillow": self.screenshot._has_pillow,
             "has_pyautogui": self.mouse._has_pyautogui,
             "has_pywinauto": self.uia.available,
@@ -1414,8 +1553,13 @@ class ComputerController:
 
         return call_id
 
-    def approve_action(self, call_id: str) -> bool:
-        """批准操作，返回是否成功找到并执行"""
+    def approve_action(self, call_id: str, whitelist: bool = False) -> bool:
+        """批准操作并执行。
+
+        Args:
+            call_id: 审批请求 ID
+            whitelist: 是否将该操作加入白名单（后续自动放行）
+        """
         entry = self._pending_approvals.get(call_id)
         if not entry:
             return False
@@ -1424,9 +1568,21 @@ class ComputerController:
         action = entry.get("action")
         params = entry.get("params", {})
 
-        # 执行操作
+        # 放行并入白名单
+        if whitelist:
+            try:
+                self.permission.add_whitelist(
+                    PolicyEntryType.ACTION.value,
+                    action.value,
+                    note="审批放行时加入",
+                )
+            except Exception as e:
+                logger.warning("审批加入白名单失败: %s", e)
+
+        # 执行操作（user_approved 绕过闸门，避免二次审批死循环）
+        result = None
         try:
-            result = self._execute_action(action, params)
+            result = self._execute_action(action, params, user_approved=True)
             entry["result"] = result
             self._audit(
                 action, params,
@@ -1434,24 +1590,34 @@ class ComputerController:
                 user_approved=True,
             )
         except Exception as e:
-            entry["result"] = ControlResult(
+            result = ControlResult(
                 success=False,
                 action=action.value if hasattr(action, "value") else str(action),
                 error=str(e),
             )
+            entry["result"] = result
             self._audit(action, params, f"error: {e}", user_approved=True)
 
-        # 清理（保留一小段时间供查询）
-        import asyncio
-        async def _cleanup():
-            await asyncio.sleep(30)
-            self._pending_approvals.pop(call_id, None)
-        asyncio.create_task(_cleanup())
+        # 推送审批结果到对话框审批卡片
+        self._emit_approval_updated(call_id, "approved", whitelist=whitelist,
+                                    result=result.to_dict() if result else None)
+
+        # 清理（保留一小段时间供查询；用守护线程，避免同步上下文无 event loop 崩溃）
+        import threading
+        threading.Timer(
+            30.0,
+            lambda: self._pending_approvals.pop(call_id, None),
+        ).start()
 
         return True
 
-    def reject_action(self, call_id: str) -> bool:
-        """拒绝操作，返回是否成功找到"""
+    def reject_action(self, call_id: str, blacklist: bool = False) -> bool:
+        """拒绝操作。
+
+        Args:
+            call_id: 审批请求 ID
+            blacklist: 是否将该操作加入黑名单（后续直接拦截）
+        """
         entry = self._pending_approvals.get(call_id)
         if not entry:
             return False
@@ -1459,15 +1625,44 @@ class ComputerController:
         entry["status"] = "rejected"
         action = entry.get("action")
         params = entry.get("params", {})
-        self._audit(action, params, "rejected by user", user_approved=False)
 
-        # 清理
-        import asyncio
-        async def _cleanup():
-            await asyncio.sleep(30)
-            self._pending_approvals.pop(call_id, None)
+        # 拒绝并入黑名单
+        if blacklist:
+            try:
+                self.permission.add_blacklist(
+                    PolicyEntryType.ACTION.value,
+                    action.value,
+                    note="审批拒绝时加入",
+                )
+            except Exception as e:
+                logger.warning("审批加入黑名单失败: %s", e)
+
+        self._audit(action, params, "rejected by user", user_approved=False)
+        self._emit_approval_updated(call_id, "rejected", blacklist=blacklist)
+
+        # 清理（守护线程，避免同步上下文无 event loop 崩溃）
+        import threading
+        threading.Timer(
+            30.0,
+            lambda: self._pending_approvals.pop(call_id, None),
+        ).start()
 
         return True
+
+    def _emit_approval_updated(self, call_id: str, status: str,
+                               whitelist: bool = False, blacklist: bool = False,
+                               result: Optional[dict] = None) -> None:
+        """推送审批结果事件到前端对话框审批卡片。"""
+        try:
+            from core.chat_events import emit
+            emit("computer_control_approval_updated",
+                 id=call_id,
+                 status=status,
+                 whitelist=whitelist,
+                 blacklist=blacklist,
+                 result=result)
+        except Exception:
+            pass
 
     # ── Resource cleanup ──
     async def cleanup(self) -> None:
@@ -1488,18 +1683,36 @@ class ComputerController:
         except Exception:
             logger.debug("cleanup: screenshot temp dir already cleaned")
 
-    def _execute_action(self, action: ControlAction, params: dict) -> ControlResult:
-        """根据 action 类型执行对应操作（审批通过后调用）"""
+    def _execute_action(self, action: ControlAction, params: dict,
+                        user_approved: bool = False) -> ControlResult:
+        """根据 action 类型执行对应操作。
+
+        Args:
+            action: 操作类型
+            params: 操作参数
+            user_approved: True 表示来自用户审批放行，直接调用底层组件，
+                绕过权限闸门（避免审批通过后二次弹窗死循环）。
+        """
         if action == ControlAction.SCREENSHOT:
             region = params.get("region")
+            if user_approved:
+                return self.screenshot.capture(region)
             return self.take_screenshot(region)
         elif action == ControlAction.MOUSE_MOVE:
+            if user_approved:
+                return self.mouse.move(params.get("x", 0), params.get("y", 0),
+                                       params.get("duration", 0.2))
             return self.mouse_move(
                 params.get("x", 0),
                 params.get("y", 0),
                 params.get("duration", 0.2),
             )
         elif action == ControlAction.MOUSE_CLICK:
+            if user_approved:
+                return self.mouse.click(
+                    params.get("x"), params.get("y"),
+                    params.get("button", "left"), params.get("clicks", 1),
+                )
             return self.mouse_click(
                 params.get("x"),
                 params.get("y"),
@@ -1507,18 +1720,30 @@ class ComputerController:
                 params.get("clicks", 1),
             )
         elif action == ControlAction.MOUSE_SCROLL:
+            if user_approved:
+                return self.mouse.scroll(params.get("clicks", 1))
             return self.mouse_scroll(params.get("clicks", 1))
         elif action == ControlAction.KEY_PRESS:
+            if user_approved:
+                return self.keyboard.press(params.get("key", ""))
             return self.key_press(params.get("key", ""))
         elif action == ControlAction.KEY_TYPE:
+            if user_approved:
+                return self.keyboard.type_text(params.get("text", ""))
             return self.type_text(params.get("text", ""))
         elif action == ControlAction.SHELL_CMD:
-            return self.shell_execute(params.get("command", ""))
+            if user_approved:
+                return self.shell.execute(params.get("command", ""), params.get("cwd"))
+            return self.shell_execute(params.get("command", ""), params.get("cwd"))
         elif action == ControlAction.WINDOW_INFO:
+            if user_approved:
+                return self.windows.list_windows()
             return self.list_windows()
         elif action == ControlAction.WINDOW_FOCUS:
             title = params.get("title", "")
             hwnd = self._find_window_by_title(title) if title else 0
+            if user_approved:
+                return self.windows.focus_window(hwnd)
             return self.focus_window(hwnd)
         elif action == ControlAction.UIA_ACTION:
             return self.uia_action(

@@ -8,7 +8,10 @@ from typing import Any, Callable, Iterator, Sequence
 
 from core._hist_utils import channel_short as _channel_short
 from core._hist_utils import hist_label as _hist_label
-from core.conversation_repository import ConversationRepository
+from core.conversation_repository import (
+    ConversationRepository,
+    active_persona_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +141,7 @@ class ConversationSummaryRepository:
         after_rowid: int = 0,
         limit: int = 400,
     ) -> list[dict[str, Any]]:
+        # conversation_id 已含 persona 维度（门户 B），按 conversation_id 过滤即角色隔离
         limit = max(1, min(int(limit), 1000))
         with self._connection() as conn:
             if not self._table_exists(conn, "messages"):
@@ -203,9 +207,24 @@ class ConversationSummaryRepository:
         except Exception:
             return ""
 
+    @staticmethod
+    def _has_persona_column(conn: sqlite3.Connection) -> bool:
+        """conversation_summary_buckets 带 persona_id 列（迁移 013）时写入角色归属。"""
+        try:
+            cols = {
+                row["name"]
+                for row in conn.execute(
+                    "PRAGMA table_info(conversation_summary_buckets)"
+                ).fetchall()
+            }
+            return "persona_id" in cols
+        except Exception:
+            return False
+
     # ── 分组摘要（§3.2）：conversation_summary_buckets ──────────
 
     def latest_bucket(self, conversation_id: str) -> dict[str, Any] | None:
+        # conversation_id 已含 persona 维度（门户 B），按 conversation_id 过滤即角色隔离
         with self._connection() as conn:
             if not self._table_exists(conn, "conversation_summary_buckets"):
                 return None
@@ -224,6 +243,7 @@ class ConversationSummaryRepository:
         limit: int = 3,
     ) -> list[dict[str, Any]]:
         """最近 N 个桶，近到远（bucket_index DESC）。"""
+        # conversation_id 已含 persona 维度（门户 B），按 conversation_id 过滤即角色隔离
         limit = max(1, min(int(limit), 20))
         with self._connection() as conn:
             if not self._table_exists(conn, "conversation_summary_buckets"):
@@ -255,28 +275,58 @@ class ConversationSummaryRepository:
         with self._connection() as conn:
             conn.execute("SAVEPOINT upsert_summary_bucket")
             try:
-                conn.execute(
-                    """INSERT INTO conversation_summary_buckets
-                       (conversation_id, bucket_index, bucket_start_rowid,
-                        through_rowid, source_message_count, summary, revision)
-                       VALUES (?, ?, ?, ?, ?, ?, 1)
-                       ON CONFLICT(conversation_id, bucket_index) DO UPDATE SET
-                         summary = excluded.summary,
-                         through_rowid = excluded.through_rowid,
-                         source_message_count = excluded.source_message_count,
-                         revision = revision + 1,
-                         updated_at = strftime(
-                             '%Y-%m-%dT%H:%M:%fZ', 'now'
-                         )""",
-                    (
-                        conversation_id,
-                        int(bucket_index),
-                        int(bucket_start_rowid),
-                        int(through_rowid),
-                        int(source_message_count),
-                        cleaned,
-                    ),
-                )
+                # conversation_id 已含 persona 维度（门户 B），分桶按 conversation_id
+                # 天然角色隔离；persona_id 列（迁移 013）存在时补写角色归属供审计/管理用。
+                if self._has_persona_column(conn):
+                    conn.execute(
+                        """INSERT INTO conversation_summary_buckets
+                           (conversation_id, bucket_index, bucket_start_rowid,
+                            through_rowid, source_message_count, summary,
+                            revision, persona_id)
+                           VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                           ON CONFLICT(conversation_id, bucket_index) DO UPDATE SET
+                             summary = excluded.summary,
+                             through_rowid = excluded.through_rowid,
+                             source_message_count = excluded.source_message_count,
+                             persona_id = excluded.persona_id,
+                             revision = revision + 1,
+                             updated_at = strftime(
+                                 '%Y-%m-%dT%H:%M:%fZ', 'now'
+                             )""",
+                        (
+                            conversation_id,
+                            int(bucket_index),
+                            int(bucket_start_rowid),
+                            int(through_rowid),
+                            int(source_message_count),
+                            cleaned,
+                            active_persona_id(),
+                        ),
+                    )
+                else:
+                    # 旧库（未跑 013）无 persona_id 列，保持原 INSERT/UPDATE
+                    conn.execute(
+                        """INSERT INTO conversation_summary_buckets
+                           (conversation_id, bucket_index, bucket_start_rowid,
+                            through_rowid, source_message_count, summary, revision)
+                           VALUES (?, ?, ?, ?, ?, ?, 1)
+                           ON CONFLICT(conversation_id, bucket_index) DO UPDATE SET
+                             summary = excluded.summary,
+                             through_rowid = excluded.through_rowid,
+                             source_message_count = excluded.source_message_count,
+                             revision = revision + 1,
+                             updated_at = strftime(
+                                 '%Y-%m-%dT%H:%M:%fZ', 'now'
+                             )""",
+                        (
+                            conversation_id,
+                            int(bucket_index),
+                            int(bucket_start_rowid),
+                            int(through_rowid),
+                            int(source_message_count),
+                            cleaned,
+                        ),
+                    )
             except Exception:
                 conn.execute("ROLLBACK TO SAVEPOINT upsert_summary_bucket")
                 conn.execute("RELEASE SAVEPOINT upsert_summary_bucket")
@@ -296,6 +346,7 @@ class ConversationSummaryRepository:
         turn_interval: int = 8,
     ) -> bool:
         """自最近一个桶以来新增的 completed turn 数 >= turn_interval 则需刷新。"""
+        # conversation_id 已含 persona 维度（门户 B），按 conversation_id 过滤即角色隔离
         latest = self.latest_bucket(conversation_id)
         after = int(latest["through_rowid"]) if latest else 0
         with self._connection() as conn:
@@ -339,6 +390,20 @@ class PersonaTimelineRepository:
             (table,),
         ).fetchone() is not None
 
+    @staticmethod
+    def _has_persona_column(conn: sqlite3.Connection) -> bool:
+        """persona_timeline 带 persona_id 列（迁移 014）时启用角色归属/过滤。"""
+        try:
+            cols = {
+                row["name"]
+                for row in conn.execute(
+                    "PRAGMA table_info(persona_timeline)"
+                ).fetchall()
+            }
+            return "persona_id" in cols
+        except Exception:
+            return False
+
     def upsert_event(
         self,
         *,
@@ -362,19 +427,38 @@ class PersonaTimelineRepository:
         with self._connection() as conn:
             if not self._table_exists(conn, "persona_timeline"):
                 return False
-            conn.execute(
-                """INSERT OR IGNORE INTO persona_timeline
-                   (actor_id, user_id, channel, turn_id, event_summary, occurred_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    actor_id,
-                    int(user_id),
-                    channel or "unknown",
-                    turn_id,
-                    summary,
-                    occurred_at,
-                ),
-            )
+            if self._has_persona_column(conn):
+                # 角色归属：persona_id 列（迁移 014）存在时写入激活角色（NULL=共享）
+                conn.execute(
+                    """INSERT OR IGNORE INTO persona_timeline
+                       (actor_id, user_id, channel, turn_id, event_summary,
+                        occurred_at, persona_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        actor_id,
+                        int(user_id),
+                        channel or "unknown",
+                        turn_id,
+                        summary,
+                        occurred_at,
+                        active_persona_id(),
+                    ),
+                )
+            else:
+                # 旧库（未跑 014）无 persona_id 列，保持原 INSERT
+                conn.execute(
+                    """INSERT OR IGNORE INTO persona_timeline
+                       (actor_id, user_id, channel, turn_id, event_summary, occurred_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        actor_id,
+                        int(user_id),
+                        channel or "unknown",
+                        turn_id,
+                        summary,
+                        occurred_at,
+                    ),
+                )
             return True
 
     def recent_events(
@@ -399,16 +483,22 @@ class PersonaTimelineRepository:
         if exclude_channel:
             clauses.append("channel != ?")
             params.append(exclude_channel)
-        sql = (
-            "SELECT actor_id, user_id, channel, turn_id, event_summary, occurred_at "
-            "FROM persona_timeline WHERE "
-            + " AND ".join(clauses)
-            + " ORDER BY occurred_at DESC, id DESC LIMIT ?"
-        )
-        params.append(limit)
         with self._connection() as conn:
             if not self._table_exists(conn, "persona_timeline"):
                 return []
+            # 角色级过滤：persona_id 列（迁移 014）存在且激活角色非 None 时，
+            # 只返回本角色事件 + NULL 共享事件；旧库/无激活角色时保持现状。
+            persona_id = active_persona_id()
+            if persona_id is not None and self._has_persona_column(conn):
+                clauses.append("(persona_id = ? OR persona_id IS NULL)")
+                params.append(persona_id)
+            sql = (
+                "SELECT actor_id, user_id, channel, turn_id, event_summary, occurred_at "
+                "FROM persona_timeline WHERE "
+                + " AND ".join(clauses)
+                + " ORDER BY occurred_at DESC, id DESC LIMIT ?"
+            )
+            params.append(limit)
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
@@ -540,13 +630,17 @@ class ContextAssembler:
     ) -> ContextAssembly:
         resolved_id = conversation_id
         if resolved_id is None:
-            from core.conversation_repository import resolve_conversation_id
+            from core.conversation_repository import (
+                active_persona_id,
+                resolve_conversation_id,
+            )
 
             resolved_id = resolve_conversation_id(
                 actor_id=actor_id,
                 channel=channel,
                 channel_account_id=channel_account_id,
                 user_id=user_id,
+                persona_id=active_persona_id(),  # 角色隔离兜底
             )
         # 候选取回条数：按平均每 turn 最多 16 条子消息估算，确保覆盖 recent_turn_limit 个完整 turn
         candidate_limit = max(self.recent_turn_limit * 16, 128)

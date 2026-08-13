@@ -20,6 +20,17 @@ const { createCapabilityBroker } = require("./capability-broker");
 const { createPluginSupervisor } = require("./plugin-supervisor");
 const { createEnvFeatureFlags, createWorldDashboardHost } = require("./world-dashboard-host");
 
+// Windows toast 归属：不设置 AppUserModelID 时，系统通知的来源名会显示
+// "Electron" 而非 "Aerie · 云栖"。需与 package.json build.appId 保持一致
+// （electron-builder 安装时按该 appId 注册开始菜单快捷方式）。
+try {
+  const _pkg = require("./package.json");
+  const _appId = _pkg && _pkg.build && _pkg.build.appId;
+  if (typeof _appId === "string" && _appId) {
+    app.setAppUserModelId(_appId);
+  }
+} catch (_) {}
+
 // Development launchers and test harnesses may close their output pipe while
 // Electron stays alive. Without an error listener, later console writes turn a
 // harmless detached terminal into repeated main-process EPIPE dialogs.
@@ -971,6 +982,11 @@ function _loadIslandPrefs() {
       const raw = fs.readFileSync(p, "utf8");
       const obj = JSON.parse(raw || "{}");
       if (obj && typeof obj.enabled === "boolean") _islandEnabled = obj.enabled;
+      // 恢复上次应用的灵动岛配置（主题/触发方式/组件勾选），否则重启后
+      // 设置面板的勾选框会回到初始默认值。
+      if (obj && obj.config && typeof obj.config === "object") {
+        _islandConfig = Object.assign({}, _islandConfig, obj.config);
+      }
     }
   } catch (_e) {
     // Corrupt JSON or ACL problem — fall back to the default (enabled).
@@ -983,13 +999,74 @@ function _saveIslandPrefs() {
   try {
     fs.writeFileSync(
       p,
-      JSON.stringify({ enabled: _islandEnabled, updatedAt: Date.now() }, null, 2),
+      JSON.stringify({ enabled: _islandEnabled, config: _islandConfig || {}, updatedAt: Date.now() }, null, 2),
       { encoding: "utf8" }
     );
     return true;
   } catch (_e) {
     console.warn("[main] failed to save island_prefs.json:", _e && _e.message);
     return false;
+  }
+}
+
+// ── System notifications master switch ───────────────
+// 消息提醒总开关：控制所有系统通知（新消息 / 日程 / 主动消息）。状态持久化
+// 到 {BACKEND_DATA_DIR}/notif_prefs.json，与灵动岛主开关同一套模式 ——
+// 纯 Electron 侧管理，不依赖 Python 后端在线。关闭后 system:notify 直接
+// 短路，窗口是否聚焦也不再弹系统通知。
+let _notificationsEnabled = true;
+let _notifPrefsPath = null;
+
+function _resolveNotifPrefsPath() {
+  if (_notifPrefsPath) return _notifPrefsPath;
+  const base = BACKEND_DATA_DIR
+    ? path.resolve(BACKEND_DATA_DIR)
+    : (app.getPath ? path.resolve(app.getPath("userData")) : process.cwd());
+  try { fs.mkdirSync(base, { recursive: true }); } catch (_) {}
+  _notifPrefsPath = path.join(base, "notif_prefs.json");
+  return _notifPrefsPath;
+}
+function _loadNotifPrefs() {
+  if (process.env.AERIE_DISABLE_NOTIFICATIONS === "1") {
+    _notificationsEnabled = false;
+    return;
+  }
+  const p = _resolveNotifPrefsPath();
+  try {
+    if (fs.existsSync(p)) {
+      const raw = fs.readFileSync(p, "utf8");
+      const obj = JSON.parse(raw || "{}");
+      if (obj && typeof obj.enabled === "boolean") _notificationsEnabled = obj.enabled;
+    }
+  } catch (_e) {
+    console.warn("[main] failed to read notif_prefs.json, defaulting to enabled:", _e && _e.message);
+    _notificationsEnabled = true;
+  }
+}
+function _saveNotifPrefs() {
+  const p = _resolveNotifPrefsPath();
+  try {
+    fs.writeFileSync(
+      p,
+      JSON.stringify({ enabled: _notificationsEnabled, updatedAt: Date.now() }, null, 2),
+      { encoding: "utf8" }
+    );
+    return true;
+  } catch (_e) {
+    console.warn("[main] failed to save notif_prefs.json:", _e && _e.message);
+    return false;
+  }
+}
+function _broadcastNotifEnabled() {
+  const payload = {
+    enabled: _notificationsEnabled,
+    prefsPath: _notifPrefsPath || "",
+    updatedAt: Date.now(),
+  };
+  const wins = BrowserWindow.getAllWindows();
+  for (const w of wins) {
+    if (!w || w.isDestroyed()) continue;
+    try { w.webContents.send("notif:enabled-change", payload); } catch (_) {}
   }
 }
 function _isIslandWindowAlive() {
@@ -1538,6 +1615,10 @@ ipcMain.handle("island:notify", async (_event, data) => {
 
 ipcMain.handle("system:notify", async (_event, data) => {
   try {
+    // 消息提醒总开关：关闭时直接短路，任何来源（新消息/日程/主动消息）都不弹。
+    if (!_notificationsEnabled) {
+      return { ok: false, reason: "notifications_disabled" };
+    }
     // 主窗口在最上层且有焦点时不弹系统通知——用户正看着窗口，不该打扰。
     // （聊天窗口/主动消息的通知只在窗口不在最上层时弹出。）
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
@@ -1571,6 +1652,7 @@ let _islandConfig = {
 
 ipcMain.handle("island:set-config", async (_event, cfg) => {
   _islandConfig = Object.assign(_islandConfig, cfg || {});
+  _saveIslandPrefs();
   if (dynamicIsland && !dynamicIsland.isDestroyed()) {
     dynamicIsland.webContents.send("island:config-change", _islandConfig);
   }
@@ -1680,6 +1762,39 @@ ipcMain.handle("island:set-enabled", async (_event, payload) => {
     prefsPath: _islandPrefsPath || "",
     visible: _isIslandWindowAlive() && dynamicIsland.isVisible(),
     windowExists: _isIslandWindowAlive(),
+  };
+});
+
+// 消息提醒总开关 IPC。与灵动岛主开关同理，不依赖后端就绪。
+ipcMain.handle("notif:get-enabled", async () => {
+  return {
+    ok: true,
+    enabled: _notificationsEnabled,
+    prefsPath: _notifPrefsPath || "",
+    saved: Boolean(_notifPrefsPath && fs.existsSync(_notifPrefsPath)),
+  };
+});
+ipcMain.handle("notif:set-enabled", async (_event, payload) => {
+  const wanted = Boolean(payload && payload.enabled);
+  if (_notificationsEnabled === wanted) {
+    _broadcastNotifEnabled();
+    return {
+      ok: true,
+      changed: false,
+      enabled: _notificationsEnabled,
+      prefsPath: _notifPrefsPath || "",
+    };
+  }
+  // 先持久化，写不进去就整个失败，避免 UI 翻转了但没保存。
+  _notificationsEnabled = wanted;
+  const saved = _saveNotifPrefs();
+  _broadcastNotifEnabled();
+  return {
+    ok: true,
+    changed: true,
+    enabled: _notificationsEnabled,
+    saved,
+    prefsPath: _notifPrefsPath || "",
   };
 });
 
@@ -2844,11 +2959,12 @@ if (gotSingleInstanceLock) {
     configureWorldSupervisor();
     startWorldConnectionMonitor();
     startPythonBackend();
-    createMainWindow();
-    // R8.1: read persistent island prefs *after* configureBackendDataPath
-    //       so BACKEND_DATA_DIR is resolved, then decide whether to create
-    //       the window.  Fallback: if everything fails, default to enabled.
+    // R8.1: read persistent island/notif prefs *before* creating windows,
+    // so the settings panel loads the saved island config (theme / interaction
+    // / component checkboxes) on first paint instead of the defaults.
     try { _loadIslandPrefs(); } catch (_e) { _islandEnabled = true; }
+    try { _loadNotifPrefs(); } catch (_e) { _notificationsEnabled = true; }
+    createMainWindow();
     if (_islandEnabled && process.env.AERIE_DISABLE_DYNAMIC_ISLAND !== "1") {
       createDynamicIsland();
     } else {

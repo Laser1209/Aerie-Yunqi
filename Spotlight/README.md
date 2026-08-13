@@ -2,7 +2,7 @@
 
 Aerie Spotlight is the standalone GitHub Pages showcase site for **Aerie · 云栖**.
 
-Live site: https://laser1209.github.io/Aerie_Spotlight/
+Live site: https://spotlight.etta.top/
 
 ## What This Repo Contains
 

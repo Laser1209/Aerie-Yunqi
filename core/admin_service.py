@@ -191,6 +191,21 @@ class AdminService:
         }
 
     # ── 聊天记录：列表 ───────────────────────────────────
+    def _persona_name(self, persona_id: str) -> str:
+        """按 persona_id 解析角色显示名；空/未知回退空串（前端兜底）。"""
+        if not persona_id:
+            return ""
+        try:
+            from core.persona_hub import get_persona_manager
+
+            p = get_persona_manager().get_persona(persona_id)
+            if not isinstance(p, dict):
+                return ""
+            basic = p.get("basic") or {}
+            return str(basic.get("name") or p.get("name") or persona_id)
+        except Exception:
+            return persona_id
+
     def list_conversations(
         self,
         channel: Optional[str] = None,
@@ -209,6 +224,8 @@ class AdminService:
             total = int(total_rows[0]["n"]) if total_rows else 0
             rows = self._db.query(
                 f"""SELECT conversation_id,
+                           MAX(persona_id) AS persona_id,
+                           MAX(channel) AS channel,
                            COUNT(*) AS total,
                            SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) AS active,
                            SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS trashed,
@@ -227,10 +244,14 @@ class AdminService:
                        ORDER BY rowid DESC LIMIT 1""",
                     (row["conversation_id"],),
                 )
+                persona_id = str(row.get("persona_id") or "")
                 items.append(
                     {
                         "conversation_id": row["conversation_id"],
-                        "channel": channel,
+                        "channel": str(row.get("channel") or ""),
+                        "persona_id": persona_id,
+                        # 角色级隔离：展示层据此标注会话归属，不再把塞纳的会话标成伊塔
+                        "persona_name": self._persona_name(persona_id) or "",
                         "message_count": int(row["total"] or 0),
                         "active_count": int(row["active"] or 0),
                         "trashed_count": int(row["trashed"] or 0),
@@ -271,7 +292,13 @@ class AdminService:
                 "ORDER BY created_at DESC, sequence DESC, rowid DESC LIMIT ? OFFSET ?",
                 tuple(params + [int(limit), int(offset)]),
             )
-            return {"items": rows, "total": total}
+            items = []
+            for m in rows:
+                persona_id = str(m.get("persona_id") or "")
+                m = dict(m)
+                m["persona_name"] = self._persona_name(persona_id) or ""
+                items.append(m)
+            return {"items": items, "total": total}
         except Exception:
             logger.exception("list messages failed")
             return {"items": [], "total": 0}
@@ -587,8 +614,15 @@ class AdminService:
                 base + " ORDER BY importance DESC, created_at DESC LIMIT ? OFFSET ?",
                 tuple(params + [int(limit), int(offset)]),
             )
+            items = []
+            for m in rows:
+                persona_id = str(m.get("persona_id") or "")
+                m = dict(m)
+                # 角色级隔离：标注记忆归属角色，admin 不再只能靠猜
+                m["persona_name"] = self._persona_name(persona_id) or ""
+                items.append(m)
             return {
-                "items": rows,
+                "items": items,
                 "total": int(total[0]["n"]) if total else 0,
                 "layer": layer,
             }
@@ -600,10 +634,15 @@ class AdminService:
         if self._db is None:
             return None
         try:
-            return self._db.query_one(
+            row = self._db.query_one(
                 "SELECT * FROM long_term_memory WHERE id = ?",
                 (str(memory_id),),
             )
+            if row:
+                persona_id = str(row.get("persona_id") or "")
+                row = dict(row)
+                row["persona_name"] = self._persona_name(persona_id) or ""
+            return row
         except Exception:
             logger.exception("get memory failed")
             return None

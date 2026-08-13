@@ -23,7 +23,7 @@ echo    d88P  888 d8P  Y8b 888P"   888 d8P  Y8b
 echo   d88P   888 88888888 888     888 88888888 
 echo  d8888888888 Y8b.     888     888 Y8b.     
 echo d88P     888  "Y8888  888     888  "Y8888  
-echo  Aerie Yunqi V 0.3.0-Beta.1 - Dev Startup
+echo  Aerie Yunqi V 0.3.1-Beta.1 - Dev Startup
 echo ============================================
 echo Root: %ROOT_DIR%
 echo Electron user data: %AERIE_USER_DATA_DIR%

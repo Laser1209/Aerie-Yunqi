@@ -11,7 +11,9 @@ class SettingsPanel {
   init() {
     this.load();
     this._initIslandSettings();
+    this._initNotifSettings();
     this._initOfficeDir();
+    this._initSelfEvolveSwitch();
     // Form view
     document.getElementById("settings-save-btn").addEventListener("click", () => this.save());
     document.getElementById("settings-reset-btn").addEventListener("click", () => this.reset());
@@ -61,6 +63,12 @@ class SettingsPanel {
 
     // Block-2 A2: persona block controls
     this._initPersonaControls();
+
+    // Persona 变更联动：在人设中心切换/启用/保存人设后，
+    // 刷新设置页"她的样子"（名字/头像/称呼性别）
+    window.addEventListener("aerie:persona-updated", () => {
+      this.loadPersona();
+    });
 
     // Mode tabs
     document.querySelectorAll(".settings-mode-tab").forEach((btn) => {
@@ -633,6 +641,12 @@ class SettingsPanel {
         photoIntervalEl.value = String([0, 10, 30, 60, 120].includes(min) ? min : 0);
       }
 
+      // L4 self-evolution (beta) toggle — read back from feature_flags.
+      const l4El = document.getElementById("setting-self-evolve-l4");
+      if (l4El) {
+        l4El.checked = ((s.feature_flags || {}).self_evolve_l4_enabled) === true;
+      }
+
       // R7.1: my-location picker.
       const cityInput = document.getElementById("setting-weather-city");
       const hint = document.getElementById("setting-weather-hint");
@@ -697,6 +711,10 @@ class SettingsPanel {
           },
         },
       },
+      // L4 self-evolution (beta) toggle — persists into feature_flags.
+      feature_flags: {
+        self_evolve_l4_enabled: document.getElementById("setting-self-evolve-l4")?.checked === true,
+      },
     };
     try {
       const r = await window.aerie.api.request({ method: "PUT", path: "/api/settings", body: data });
@@ -743,6 +761,97 @@ class SettingsPanel {
     } catch (e) {
       console.warn("settings reset failed", e);
     }
+  }
+
+  // ── L4 自进化（内测）开关：开启需两次风险确认 ──────────
+
+  _initSelfEvolveSwitch() {
+    const el = document.getElementById("setting-self-evolve-l4");
+    const modal = document.getElementById("l4-enable-modal");
+    if (!el || !modal) return;
+    const statusEl = document.getElementById("se-master-status");
+    const showStatus = (msg, ok) => {
+      if (!statusEl) return;
+      statusEl.style.display = "";
+      statusEl.textContent = msg;
+      statusEl.style.color = ok ? "var(--success, #2ecc71)" : "var(--danger, #e74c3c)";
+      setTimeout(() => { statusEl.style.display = "none"; }, 5000);
+    };
+    // 把开关状态写进 settings.yaml（后端热应用），成功后触发热重载。
+    const applyToggle = async (checked) => {
+      try {
+        const r = await window.aerie.api.request({
+          method: "PUT",
+          path: "/api/settings",
+          body: { feature_flags: { self_evolve_l4_enabled: checked } },
+        });
+        if (r.data && !r.data.error) {
+          if (window.aerie && window.aerie.electron && window.aerie.electron.system && window.aerie.electron.system.reloadConfig) {
+            try { await window.aerie.electron.system.reloadConfig(); } catch (_) {}
+          }
+          showStatus(checked ? "已开启 L4 代码自进化 ✓" : "已关闭 L4 代码自进化 ✓", true);
+        } else {
+          showStatus("保存失败: " + (r.data?.error || "unknown"), false);
+        }
+      } catch (e) {
+        showStatus("保存失败: " + e.message, false);
+      }
+    };
+
+    el.addEventListener("change", () => {
+      if (el.checked) {
+        this._openL4EnableModal(); // 开启 → 两次确认
+      } else {
+        applyToggle(false); // 关闭 → 直接生效
+      }
+    });
+
+    // 取消 / 关闭弹窗 → 回滚开关状态
+    const close = () => {
+      modal.classList.add("hidden");
+      this._resetL4WarnSteps();
+      if (el.checked) el.checked = false;
+    };
+    modal.querySelectorAll("[data-l4-close]").forEach((b) => b.addEventListener("click", close));
+
+    const nextBtn = document.getElementById("l4-warn-next");
+    const confirmBtn = document.getElementById("l4-warn-confirm");
+    const step1 = document.getElementById("l4-warn-step-1");
+    const step2 = document.getElementById("l4-warn-step-2");
+    const note = document.getElementById("l4-warn-progress");
+    if (nextBtn && confirmBtn && step1 && step2 && note) {
+      nextBtn.addEventListener("click", () => {
+        step1.classList.add("hidden");
+        step2.classList.remove("hidden");
+        nextBtn.classList.add("hidden");
+        confirmBtn.classList.remove("hidden");
+        note.textContent = "请完整阅读以上两条提示后，逐次确认（当前第 2 / 2 条）";
+      });
+      confirmBtn.addEventListener("click", async () => {
+        close();
+        await applyToggle(true); // 第二次确认后真正开启
+      });
+    }
+  }
+
+  _openL4EnableModal() {
+    const modal = document.getElementById("l4-enable-modal");
+    if (!modal) return;
+    this._resetL4WarnSteps();
+    modal.classList.remove("hidden");
+  }
+
+  _resetL4WarnSteps() {
+    const s1 = document.getElementById("l4-warn-step-1");
+    const s2 = document.getElementById("l4-warn-step-2");
+    const next = document.getElementById("l4-warn-next");
+    const confirm = document.getElementById("l4-warn-confirm");
+    const note = document.getElementById("l4-warn-progress");
+    if (s1) s1.classList.remove("hidden");
+    if (s2) s2.classList.add("hidden");
+    if (next) next.classList.remove("hidden");
+    if (confirm) confirm.classList.add("hidden");
+    if (note) note.textContent = "请完整阅读以上两条提示后，逐次确认（当前第 1 / 2 条）";
   }
 
   // ── Phase 9 Batch 3: YAML editor mode ─────────────────
@@ -801,7 +910,7 @@ class SettingsPanel {
         rawBody: true,
       });
       if (r.data && r.data.status === "ok") {
-        st.textContent = "已保存。她下次启动会用新配置。/ Saved. She'll use this next time.";
+        st.textContent = "已保存。" + (this._personaPronoun || "她") + "下次启动会用新配置。/ Saved.";
         st.style.color = "var(--success)";
       } else {
         const err = (r.data && (r.data.detail || r.data.error)) || "unknown";
@@ -944,9 +1053,14 @@ class SettingsPanel {
       const enEl = document.getElementById("persona-english-name");
       if (nameEl) nameEl.value = s.name || "伊塔";
       if (enEl) enEl.value = s.english_name || "Ita";
+      this._applyPersonaPronoun(s.gender || "");
       const img = document.getElementById("persona-avatar-preview");
       if (img) {
-        if (s.avatar_url) {
+        // 角色级隔离：后端按激活角色返回独立 avatar_dataurl；
+        // Electron file:// 下相对路径 /api/... 会 404，优先用 inline dataURL。
+        if (s.avatar_dataurl) {
+          img.src = s.avatar_dataurl;
+        } else if (s.avatar_url) {
           // append a cache-buster so re-uploads show
           img.src = s.avatar_url + (s.avatar_url.indexOf("?") >= 0 ? "&_t=" : "?_t=") + Date.now();
         } else {
@@ -957,6 +1071,17 @@ class SettingsPanel {
     } catch (e) {
       this._setPersonaStatus("加载失败: " + e.message, false);
     }
+  }
+
+  // Pronoun-aware labels for the persona panel (她/他/TA), driven by the
+  // currently-active persona's gender.
+  _applyPersonaPronoun(gender) {
+    this._personaPronoun = gender === "male" ? "他" : gender === "other" ? "TA" : "她";
+    const ids = ["persona-pronoun-title", "persona-pronoun-subj", "persona-pronoun-obj", "persona-pronoun-save"];
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = this._personaPronoun;
+    });
   }
 
   async _onAvatarPick(e) {
@@ -1015,19 +1140,20 @@ class SettingsPanel {
           // shows the same image before the backend responds.
           if (data.avatar_dataurl && window._chat
               && typeof window._chat._writeLocalAvatar === "function") {
-            window._chat._writeLocalAvatar("persona", data.avatar_dataurl);
+            window._chat._writeLocalAvatar("persona", data.avatar_dataurl, window._chat._personaId || undefined);
           } else if (localDataUrl && window._chat
               && typeof window._chat._writeLocalAvatar === "function") {
-            window._chat._writeLocalAvatar("persona", localDataUrl);
+            window._chat._writeLocalAvatar("persona", localDataUrl, window._chat._personaId || undefined);
           }
           this._setPersonaStatus("头像已更新 · Avatar updated", true);
           // R7.5 fix: ship the dataURL in the event detail so chat.js
           // can update its cache + DOM in one frame, without waiting
-          // for the next 30s poll.
+          // for the next 30s poll. 角色级隔离：带归属角色，聊天窗口据此判断是否采纳。
           window.dispatchEvent(new CustomEvent("aerie:persona-updated", {
             detail: {
               avatar_url: data.url,
               avatar_dataurl: data.avatar_dataurl || localDataUrl,
+              persona_id: (window._chat && window._chat._personaId) || "",
               source: "settings",
             },
           }));
@@ -1056,17 +1182,18 @@ class SettingsPanel {
         if (img) img.src = finalSrc;
         if (data.avatar_dataurl && window._chat
             && typeof window._chat._writeLocalAvatar === "function") {
-          window._chat._writeLocalAvatar("persona", data.avatar_dataurl);
+          window._chat._writeLocalAvatar("persona", data.avatar_dataurl, window._chat._personaId || undefined);
         } else if (localDataUrl && window._chat
             && typeof window._chat._writeLocalAvatar === "function") {
-          window._chat._writeLocalAvatar("persona", localDataUrl);
+          window._chat._writeLocalAvatar("persona", localDataUrl, window._chat._personaId || undefined);
         }
         this._setPersonaStatus("头像已更新 · Avatar updated (fallback)", true);
-        // R7.5 fix: same as the IPC path
+        // R7.5 fix: same as the IPC path. 角色级隔离：带归属角色。
         window.dispatchEvent(new CustomEvent("aerie:persona-updated", {
           detail: {
             avatar_url: data.url,
             avatar_dataurl: data.avatar_dataurl || localDataUrl,
+            persona_id: (window._chat && window._chat._personaId) || "",
             source: "settings-fallback",
           },
         }));
@@ -1101,7 +1228,7 @@ class SettingsPanel {
         method: "PUT", path: "/api/persona", body,
       });
       if (r.data && r.data.status === "ok") {
-        this._setPersonaStatus("她记住了 · She remembers now", true);
+        this._setPersonaStatus((this._personaPronoun || "她") + "记住了 · Saved", true);
         // Notify chat to refresh persona cache
         if (window._chat && typeof window._chat._loadPersona === "function") {
           window._chat._loadPersona();
@@ -1223,6 +1350,80 @@ class SettingsPanel {
     }
 
     this._loadIslandSettings();
+  }
+
+  /* ── 消息提醒总开关 ───────────────── */
+  // 状态在 main 进程（notif_prefs.json）持久化；这里负责把滑块与真实状态
+  // 双向同步，策略与灵动岛主开关一致：init 读取真实值、change 等 Electron
+  // 确认后才算提交、enabled-change 事件无条件跟随。
+  _initNotifSettings() {
+    const masterCheckbox = document.getElementById("notif-master-enabled");
+    const masterStatusEl = document.getElementById("notif-master-status");
+    if (!masterCheckbox) return;
+
+    let internalSet = false;
+    const setCheckedSafely = (val) => {
+      internalSet = true;
+      try {
+        if (masterCheckbox.checked !== !!val) masterCheckbox.checked = !!val;
+      } finally {
+        internalSet = false;
+      }
+    };
+    const setStatus = (text, cls) => {
+      if (!masterStatusEl) return;
+      if (!text) {
+        masterStatusEl.style.display = "none";
+        masterStatusEl.textContent = "";
+        masterStatusEl.classList.remove("is-ok", "is-err");
+        return;
+      }
+      masterStatusEl.textContent = text;
+      masterStatusEl.style.display = "block";
+      masterStatusEl.classList.remove("is-ok", "is-err");
+      if (cls) masterStatusEl.classList.add(cls);
+    };
+
+    if (window.aerie?.notifControl) {
+      window.aerie.notifControl.getEnabled?.().then((r) => {
+        if (r && typeof r.enabled === "boolean") setCheckedSafely(r.enabled);
+      }).catch(() => {});
+      window.aerie.notifControl.onEnabledChange?.((data) => {
+        if (data && typeof data.enabled === "boolean") setCheckedSafely(data.enabled);
+      });
+    }
+
+    masterCheckbox.addEventListener("change", async (ev) => {
+      if (internalSet) return;
+      if (!window.aerie?.notifControl) {
+        setStatus("Electron IPC 不可用，请重启应用", "is-err");
+        ev.target.checked = !ev.target.checked;
+        return;
+      }
+      const wanted = !!ev.target.checked;
+      masterCheckbox.disabled = true;
+      setStatus(wanted ? "正在开启消息提醒…" : "正在关闭消息提醒…");
+      try {
+        const r = await window.aerie.notifControl.setEnabled(wanted);
+        if (!r || !r.ok) {
+          setCheckedSafely(!wanted);
+          setStatus("切换失败：" + (((r && r.error) || "未知错误") + "").slice(0, 120), "is-err");
+          return;
+        }
+        setCheckedSafely(Boolean(r.enabled));
+        const hint = r.prefsPath ? `（保存在 ${r.prefsPath}）` : "";
+        setStatus(
+          (r.enabled ? "消息提醒已开启" : "消息提醒已关闭") + (r.saved ? hint : "（设置未持久化）"),
+          "is-ok"
+        );
+        setTimeout(() => setStatus(""), 3500);
+      } catch (e) {
+        setCheckedSafely(!wanted);
+        setStatus("切换异常：" + (e.message || String(e)).slice(0, 120), "is-err");
+      } finally {
+        masterCheckbox.disabled = false;
+      }
+    });
   }
 
   async _loadIslandSettings() {

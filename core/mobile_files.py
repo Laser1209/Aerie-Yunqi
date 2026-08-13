@@ -444,6 +444,75 @@ class MobileFileService:
             )
             return grant_id
 
+    def list_directory_grants(
+        self,
+        *,
+        username: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List directory grants (owner-only management view)."""
+        clause = ""
+        params: list[Any] = []
+        if username is not None:
+            with self._lock, self._connect() as conn:
+                account = conn.execute(
+                    "SELECT account_id FROM mobile_accounts WHERE username = ?",
+                    (username,),
+                ).fetchone()
+            if account is None:
+                raise ValueError("account is not available")
+            clause = " WHERE g.account_id = ?"
+            params.append(account["account_id"])
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """SELECT g.grant_id, g.directory_path, g.allow_read, g.allow_upload,
+                          g.allow_download, g.enabled, g.created_at, g.updated_at,
+                          a.username
+                     FROM mobile_directory_grants g
+                     JOIN mobile_accounts a ON a.account_id = g.account_id"""
+                + clause
+                + " ORDER BY g.created_at",
+                params,
+            ).fetchall()
+        return [
+            {
+                "grantId": row["grant_id"],
+                "username": row["username"],
+                "directory": row["directory_path"],
+                "allowRead": bool(row["allow_read"]),
+                "allowUpload": bool(row["allow_upload"]),
+                "allowDownload": bool(row["allow_download"]),
+                "enabled": bool(row["enabled"]),
+                "createdAt": row["created_at"],
+                "updatedAt": row["updated_at"],
+            }
+            for row in rows
+        ]
+
+    def set_directory_grant_enabled(
+        self,
+        *,
+        username: str,
+        directory: str | Path,
+        enabled: bool,
+    ) -> str:
+        """Enable or disable an existing directory grant (owner-only)."""
+        raw_directory = Path(directory).expanduser().resolve()
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """SELECT g.grant_id FROM mobile_directory_grants g
+                   JOIN mobile_accounts a ON a.account_id = g.account_id
+                   WHERE a.username = ? AND g.directory_path = ?""",
+                (username, str(raw_directory)),
+            ).fetchone()
+            if row is None:
+                raise ValueError("directory grant is not available")
+            conn.execute(
+                """UPDATE mobile_directory_grants
+                   SET enabled = ?, updated_at = ? WHERE grant_id = ?""",
+                (int(bool(enabled)), self._timestamp(), row["grant_id"]),
+            )
+            return row["grant_id"]
+
     def _quarantine_directory(self, upload_id: str) -> Path:
         path = (self.quarantine_root / upload_id).resolve()
         if path.parent != self.quarantine_root.resolve():

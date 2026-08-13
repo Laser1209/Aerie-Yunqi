@@ -234,22 +234,31 @@
       handleQuickAction("chat");
     });
 
-    // 中间区：状态文字 / 媒体 / 系统
+    // 中间区：动态优先级（谁在工作谁优先），与勾选顺序无关：
+    //   未读消息 > 播放中的媒体 > 系统状态 > 状态文字 > 兜底
+    // 未播放的媒体不参与（不占位），未勾选的组件不参与。
     let center = "";
-    for (const key of config.capsuleComponents) {
-      if (key === "status") center += renderStatusText();
-      else if (key === "media") center += renderMediaMini();
-      else if (key === "system") center += renderSystemMini();
+    const comps = config.capsuleComponents;
+    if (comps.includes("notifications") && uiState.notifications.count > 0) {
+      center = renderNotifMini();
+    } else if (comps.includes("media") && uiState.media.title) {
+      center = renderMediaMini();
+    } else if (comps.includes("system")) {
+      center = renderSystemMini();
+    } else if (comps.includes("status")) {
+      center = renderStatusText();
+    } else {
+      center = renderStatusText();
     }
     if (!center) center = renderStatusText();
     const plainCenter = center.replace(/<[^>]*>/g, "");
-    if (plainCenter.includes("CPU")) {
+    if (center.includes("cap-media")) {
+      statusMain.textContent = uiState.media.title || "";
+      statusSub.textContent = uiState.media.artist ? `正在播放 · ${uiState.media.artist}` : "";
+    } else if (center.includes("cap-notif")) {
       statusMain.textContent = plainCenter.trim();
       statusSub.textContent = "";
-    } else if (plainCenter.includes("未在播放")) {
-      statusMain.textContent = uiState.media.title || "未在播放";
-      statusSub.textContent = uiState.media.artist ? `正在播放 · ${uiState.media.artist}` : "";
-    } else if (plainCenter.trim()) {
+    } else if (plainCenter.includes("CPU")) {
       statusMain.textContent = plainCenter.trim();
       statusSub.textContent = "";
     } else {
@@ -267,7 +276,14 @@
   function renderMediaMini() {
     const m = uiState.media;
     if (m.title) return `<span class="cap-media">${ICON("ui-music", 12)}${m.title}</span>`;
-    return `<span class="cap-media">${ICON("ui-music", 12)} 未在播放</span>`;
+    return "";
+  }
+
+  function renderNotifMini() {
+    const n = uiState.notifications;
+    const latest = (n.items && n.items[0] && (n.items[0].title || n.items[0].desc)) || "";
+    const text = latest || `${n.count} 条新消息`;
+    return `<span class="cap-status cap-notif">${ICON("ui-bell", 12)}${escapeHtml(text)}</span>`;
   }
 
   function renderSystemMini() {

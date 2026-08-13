@@ -57,6 +57,9 @@ class ChatManager {
     // never goes through `<img src="/api/...">` because Electron's
     // file:// protocol would resolve that to file:///api/... (a 404).
     this._personaCache = { name: "伊塔", english_name: "Ita", avatar_url: "", avatar_dataurl: "" };
+    // 角色级隔离：当前激活角色 id。头像的 localStorage 缓存按它分区
+    // （aerie.persona.<pid>.avatar），保证切换角色后头像不串。
+    this._personaId = "";
     this._masterAvatar = "";
     // R7.5: user-side avatar + name. localStorage-only because these
     // are pure UI affordances and don't need to round-trip to Python.
@@ -103,12 +106,39 @@ class ChatManager {
       try {
         const detail = (ev && ev.detail) || {};
         if (detail.avatar_dataurl) {
-          this._personaCache.avatar_dataurl = detail.avatar_dataurl;
-          this._writeLocalAvatar("persona", detail.avatar_dataurl);
-          this._refreshAvatarsInDom();
+          // 角色级隔离：事件可带 persona_id 归属，只有当前激活角色（或未声明）
+          // 的头像更新才被采纳；非激活角色（人设中心给别的角色传头像）不串进聊天。
+          const srcPid = detail.persona_id || detail.id || "";
+          if (!srcPid || srcPid === this._personaId) {
+            this._personaCache.avatar_dataurl = detail.avatar_dataurl;
+            this._writeLocalAvatar("persona", detail.avatar_dataurl, this._personaId || undefined);
+            this._refreshAvatarsInDom();
+          }
         } else {
           this._loadPersona();
         }
+        // 角色级隔离：persona 切换后后端已按激活角色过滤历史，
+        // 先清空旧角色的消息 DOM + store，再重载当前角色历史（清游标）。
+        // 首次只记录不重载，避免启动即刷历史；settings 保存头像的
+        // 事件 detail 无 id，不触发重载。
+        const newId = detail.id !== undefined ? detail.id : null;
+        if (newId !== null && this._lastPersonaId !== undefined && this._lastPersonaId !== newId) {
+          this._lastPersonaId = newId;
+          this._personaId = newId;
+          this._clearMessagesDom();
+          this._store.clear();
+          this._requests.clear();
+          this._clientToRequest.clear();
+          this._pendingUserBubbles.clear();
+          this._notifiedRequestIds.clear();
+          this._history = {
+            olderCursor: null, newerCursor: null, hasOlder: false, hasNewer: false,
+            loading: false, autoLoadCooldown: 0,
+          };
+          this._sinceId = 0;
+          this.loadHistory();
+        }
+        this._lastPersonaId = newId;
       } catch (_) {}
     });
 
@@ -342,11 +372,235 @@ class ChatManager {
     }
     try {
       this._sseUnsubscribe = window.aerie.sse.subscribe((signal) => {
+        const parsed = this._parseSignalObject(signal);
+        if (
+          parsed &&
+          (parsed.type === "computer_control_approval_requested" ||
+            parsed.type === "computer_control_approval_updated")
+        ) {
+          this._handleComputerControlSignal(parsed);
+          return;
+        }
         this._ingestChatSignal(signal, "sse");
       });
     } catch (_) {
       this._sseUnsubscribe = null;
     }
+  }
+
+  _parseSignalObject(signal) {
+    try {
+      if (typeof signal === "string") return JSON.parse(signal);
+      if (signal && typeof signal.data === "string") return JSON.parse(signal.data);
+      if (signal && typeof signal === "object") return signal;
+    } catch (_) {}
+    return null;
+  }
+
+  // ── 对话框内审批卡片（仿 Trae） ──────────────────
+
+  _handleComputerControlSignal(payload) {
+    if (!payload || !payload.id) return;
+    if (payload.type === "computer_control_approval_requested") {
+      this._upsertApprovalCard(payload);
+    } else if (payload.type === "computer_control_approval_updated") {
+      this._markApprovalCard(payload);
+    }
+  }
+
+  _upsertApprovalCard(payload) {
+    if (!this._el.messages) return;
+    const domId = "cc_approval_" + payload.id;
+    let el = this._el.messages.querySelector(`[data-id="${domId}"]`);
+    const create = !el;
+    if (create) {
+      el = document.createElement("div");
+      el.className = "chat-msg chat-msg--assistant chat-msg--approval";
+      el.setAttribute("data-id", domId);
+      el.setAttribute("data-approval-id", payload.id);
+      this._el.messages.appendChild(el);
+    }
+    el.innerHTML = this._buildApprovalCardHtml(payload);
+    this._bindApprovalCard(el, payload);
+    // 用户消息后或用户在底部 → 滚动跟随
+    if (create && (this._atBottom || document.activeElement === this._el.input)) {
+      this._el.messages.scrollTop = this._el.messages.scrollHeight;
+    } else if (this._atBottom) {
+      this._el.messages.scrollTop = this._el.messages.scrollHeight;
+    }
+  }
+
+  _buildApprovalCardHtml(payload) {
+    const esc = (v) => this._escapeHtml(v == null ? "" : String(v));
+    const actionNames = {
+      screenshot: "屏幕截图",
+      mouse_move: "移动鼠标",
+      mouse_click: "鼠标点击",
+      mouse_scroll: "滚轮滚动",
+      key_press: "键盘按键",
+      key_type: "输入文本",
+      shell_cmd: "执行命令",
+      window_info: "获取窗口列表",
+      window_focus: "切换窗口",
+      uia_action: "UI 自动化",
+    };
+    const riskMap = {
+      safe: { label: "安全", cls: "safe" },
+      low: { label: "低风险", cls: "low" },
+      medium: { label: "中风险", cls: "medium" },
+      high: { label: "高风险", cls: "high" },
+      critical: { label: "危险", cls: "critical" },
+    };
+    const action = payload.action || "unknown";
+    const actionLabel = actionNames[action] || action;
+    const risk = riskMap[payload.risk_level] || riskMap.medium;
+    const params = payload.params || {};
+
+    // 参数详情行
+    let rows = "";
+    if (action === "shell_cmd" && params.command) {
+      rows += `<div class="cc-card__row"><span>命令</span><code>${esc(params.command)}</code></div>`;
+    } else if (action === "mouse_click" && (params.x != null || params.y != null)) {
+      rows += `<div class="cc-card__row"><span>位置</span><code>(${esc(params.x)}, ${esc(params.y)}) · ${esc(params.button || "left")}</code></div>`;
+    } else if (action === "key_type" && params.text_length != null) {
+      rows += `<div class="cc-card__row"><span>长度</span><code>${esc(params.text_length)} 字符</code></div>`;
+    } else if (action === "key_press" && params.key) {
+      rows += `<div class="cc-card__row"><span>按键</span><code>${esc(params.key)}</code></div>`;
+    } else if (action === "uia_action" && params.action_type) {
+      rows += `<div class="cc-card__row"><span>操作</span><code>${esc(params.action_type)}</code></div>`;
+    } else {
+      const keys = Object.keys(params).slice(0, 3);
+      if (keys.length) {
+        const brief = keys.map((k) => `${k}: ${JSON.stringify(params[k])}`).join(" · ");
+        rows += `<div class="cc-card__row"><span>参数</span><code>${esc(brief)}</code></div>`;
+      }
+    }
+
+    return `
+      <div class="chat-msg__avatar-wrap">
+        <span class="chat-msg__avatar chat-msg__avatar--placeholder">伊</span>
+      </div>
+      <div class="chat-msg__body">
+        <div class="chat-msg__name">伊塔</div>
+        <div class="chat-bubble cc-card">
+          <div class="cc-card__head">
+            <span class="cc-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </span>
+            <div class="cc-card__titles">
+              <div class="cc-card__title">操作授权请求</div>
+              <div class="cc-card__sub">${esc(actionLabel)}</div>
+            </div>
+            <span class="cc-card__risk cc-card__risk--${risk.cls}">${risk.label}</span>
+          </div>
+          ${rows ? `<div class="cc-card__rows">${rows}</div>` : ""}
+          ${payload.description ? `<div class="cc-card__reason">${esc(payload.description)}</div>` : ""}
+          <div class="cc-card__actions">
+            <button type="button" class="cc-card__btn cc-card__btn--approve" data-cc-act="approve">放行</button>
+            <button type="button" class="cc-card__btn cc-card__btn--approve-wl" data-cc-act="approve_wl">放行并入白名单</button>
+            <button type="button" class="cc-card__btn cc-card__btn--reject" data-cc-act="reject">拒绝</button>
+            <button type="button" class="cc-card__btn cc-card__btn--reject-bl" data-cc-act="reject_bl">拒绝并入黑名单</button>
+          </div>
+          <div class="cc-card__status" data-cc-status="pending">等待你的确认…</div>
+        </div>
+      </div>
+    `;
+  }
+
+  _bindApprovalCard(el, payload) {
+    const id = payload.id;
+
+    el.querySelectorAll("[data-cc-act]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const act = btn.dataset.ccAct;
+        let body = {};
+        let path = "approve";
+        if (act === "approve") {
+          body = {};
+          path = "approve";
+        } else if (act === "approve_wl") {
+          body = { whitelist: true };
+          path = "approve";
+        } else if (act === "reject") {
+          body = {};
+          path = "reject";
+        } else if (act === "reject_bl") {
+          body = { blacklist: true };
+          path = "reject";
+        }
+        const disabled = el.querySelectorAll(".cc-card__btn");
+        disabled.forEach((b) => (b.disabled = true));
+        try {
+          const r = window.aerie && window.aerie.api
+            ? await window.aerie.api.request({
+                method: "POST",
+                path: `/api/computer_control/approvals/${encodeURIComponent(id)}/${path}`,
+                body,
+              })
+            : { data: { error: "api unavailable" } };
+          const statusEl = el.querySelector("[data-cc-status]");
+          if (statusEl) {
+            const ok = r && r.data && r.data.status === "ok";
+            if (ok) {
+              if (act === "approve_wl") {
+                statusEl.textContent = "✓ 已放行并加入白名单，下次自动放行";
+                statusEl.className = "cc-card__status cc-card__status--ok";
+              } else if (act === "approve") {
+                statusEl.textContent = "✓ 已放行";
+                statusEl.className = "cc-card__status cc-card__status--ok";
+              } else if (act === "reject_bl") {
+                statusEl.textContent = "✕ 已拒绝并加入黑名单，下次直接拦截";
+                statusEl.className = "cc-card__status cc-card__status--reject";
+              } else {
+                statusEl.textContent = "✕ 已拒绝";
+                statusEl.className = "cc-card__status cc-card__status--reject";
+              }
+            } else {
+              statusEl.textContent = "操作失败，请稍后重试";
+              statusEl.className = "cc-card__status cc-card__status--error";
+              disabled.forEach((b) => (b.disabled = false));
+            }
+          }
+          // 更新 pending 队列的计数显示
+          this._updateApprovalPendingCount();
+        } catch (e) {
+          console.warn("[chat] approval action failed", e);
+          const statusEl = el.querySelector("[data-cc-status]");
+          if (statusEl) {
+            statusEl.textContent = "操作失败，请稍后重试";
+            statusEl.className = "cc-card__status cc-card__status--error";
+          }
+          disabled.forEach((b) => (b.disabled = false));
+        }
+      });
+    });
+  }
+
+  _markApprovalCard(payload) {
+    const domId = "cc_approval_" + payload.id;
+    const el = this._el.messages && this._el.messages.querySelector(`[data-id="${domId}"]`);
+    if (!el) return;
+    const statusEl = el.querySelector("[data-cc-status]");
+    if (!statusEl) return;
+    if (payload.status === "approved") {
+      statusEl.textContent = payload.whitelist ? "✓ 已放行并加入白名单，下次自动放行" : "✓ 已放行";
+      statusEl.className = "cc-card__status cc-card__status--ok";
+    } else if (payload.status === "rejected") {
+      statusEl.textContent = payload.blacklist ? "✕ 已拒绝并加入黑名单，下次直接拦截" : "✕ 已拒绝";
+      statusEl.className = "cc-card__status cc-card__status--reject";
+    }
+    el.querySelectorAll(".cc-card__btn").forEach((b) => (b.disabled = true));
+    this._updateApprovalPendingCount();
+  }
+
+  async _updateApprovalPendingCount() {
+    try {
+      const r = await this._request({ method: "GET", path: "/api/computer_control/approvals/pending" });
+      const pending = (r.data && r.data.approvals) || [];
+      // 标记仍在等待的卡片（可选）：这里仅同步状态，不强制清理历史卡片
+    } catch (_) {}
   }
 
   // Block-2 T1 bridge: tray "设置" click → switch to settings tab
@@ -364,25 +618,46 @@ class ChatManager {
     try {
       const r = await this._request({ method: "GET", path: "/api/persona" });
       if (r && r.data && !r.data.error && typeof r.data === "object") {
+        // 角色级隔离：记录当前激活角色 id，头像缓存按它分区
+        const pid = r.data.persona_id || this._personaId;
+        const samePersona = Boolean(pid && pid === this._personaId);
+        if (r.data.persona_id) this._personaId = r.data.persona_id;
         this._personaCache = {
           name: r.data.name || this._personaCache.name,
           english_name: r.data.english_name || this._personaCache.english_name,
-          avatar_url: r.data.avatar_url || this._personaCache.avatar_url,
+          avatar_url: r.data.avatar_url || (samePersona ? this._personaCache.avatar_url : ""),
           // R7.5: prefer the inline dataURL form. The backend always
           // returns one when an avatar file exists, and using it
           // bypasses the file:// + relative-path resolution issue.
-          avatar_dataurl: r.data.avatar_dataurl || this._personaCache.avatar_dataurl,
+          // 角色级隔离：新角色没头像时清空，绝不沿用旧角色的头像。
+          avatar_dataurl: r.data.avatar_dataurl || (samePersona ? this._personaCache.avatar_dataurl : ""),
         };
         // Persist into localStorage so a fresh launch has the image
         // immediately, before the first /api/persona round-trip.
         if (this._personaCache.avatar_dataurl) {
-          this._writeLocalAvatar("persona", this._personaCache.avatar_dataurl);
+          this._writeLocalAvatar("persona", this._personaCache.avatar_dataurl, this._personaId || undefined);
         }
         // R6.6: refresh avatar src on every rendered assistant message
         // so a freshly uploaded avatar shows up without a window reload.
         this._refreshAvatarsInDom();
       }
     } catch (_) { /* fail-soft: keep defaults */ }
+  }
+
+  // 角色级隔离：切换 persona 时清空旧角色渲染的消息 DOM。
+  // store 已整体 clear，这里同步清 DOM 节点，避免新历史混排在旧消息里。
+  _clearMessagesDom() {
+    if (!this._el || !this._el.messages) return;
+    const el = this._el.messages;
+    Array.from(el.children).forEach((node) => {
+      if (node.classList && (
+        node.classList.contains("chat-msg")
+        || node.classList.contains("chat-history-control")
+        || node.classList.contains("chat-empty")
+      )) {
+        node.remove();
+      }
+    });
   }
 
   // R6.6: re-render every assistant / user avatar in the current
@@ -444,10 +719,28 @@ class ChatManager {
     try { window.localStorage.setItem(this._LS_KEY(side, field), String(value)); }
     catch (_) { /* quota / private mode — non-fatal */ }
   }
-  _readLocalAvatar(side) {
+  _readLocalAvatar(side, personaId) {
+    if (side === "persona" && personaId) {
+      const scoped = this._readLocalKey("persona." + personaId, "avatar");
+      if (scoped) return scoped;
+      // 一次性迁移：旧全局 key 归属第一个读到的角色，避免切换后读串。
+      const legacy = this._readLocalKey("persona", "avatar");
+      if (legacy) {
+        this._writeLocalKey("persona." + personaId, "avatar", legacy);
+        try { window.localStorage.removeItem(this._LS_KEY("persona", "avatar")); } catch (_) {}
+        return legacy;
+      }
+      return "";
+    }
     return this._readLocalKey(side, "avatar");
   }
-  _writeLocalAvatar(side, dataurl) {
+  _writeLocalAvatar(side, dataurl, personaId) {
+    if (side === "persona" && personaId) {
+      // 角色级隔离：头像按角色分区落缓存，并清理旧全局 key 防串。
+      this._writeLocalKey("persona." + personaId, "avatar", dataurl);
+      try { window.localStorage.removeItem(this._LS_KEY("persona", "avatar")); } catch (_) {}
+      return;
+    }
     this._writeLocalKey(side, "avatar", dataurl);
   }
   // R7.5: allow settings.js (or anywhere) to push a new user avatar
@@ -708,13 +1001,31 @@ class ChatManager {
     html += `<div class="chat-msg__name">${this._escapeHtml(displayName)}</div>`;
     const tsRaw = msg.ts ?? msg.created_at;
     const tsText = this._formatTime(tsRaw);
-    if (!typing && msg.reply_to_id && msg.reply_to_content) {
+    if (!typing && msg.reply_to_id && (msg.reply_to_content || (msg.reply_to_attachments && msg.reply_to_attachments.length))) {
       const role = msg.reply_to_role === "user" ? "你" : "伊塔";
+      const previewText = msg.reply_to_content
+        ? this._escapeHtml((msg.reply_to_content || "").slice(0, 60))
+        : "";
+      const quotedAtts = msg.reply_to_attachments || [];
+      let quotedAttHtml = "";
+      if (previewText) {
+        quotedAttHtml += `<span class="chat-quote-overlay__preview">${previewText}</span>`;
+      }
+      for (const att of quotedAtts) {
+        if (att.category === "image" && att.url) {
+          quotedAttHtml += `<img class="chat-quote-overlay__img" src="${this._escapeHtml(att.url)}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+        } else if (att.name) {
+          quotedAttHtml += `<span class="chat-quote-overlay__file">${this._escapeHtml(att.name)}</span>`;
+        }
+      }
+      if (!previewText && !quotedAttHtml) {
+        quotedAttHtml = `<span class="chat-quote-overlay__preview">[图片/文件]</span>`;
+      }
       html += `<div class="chat-quote-overlay" data-reply-to="${msg.reply_to_id}">
         <span class="chat-quote-overlay__bar"></span>
         <div class="chat-quote-overlay__text">
           <span class="chat-quote-overlay__author">引用 ${role}</span>
-          <span class="chat-quote-overlay__preview">${this._escapeHtml((msg.reply_to_content || "").slice(0, 60))}</span>
+          ${quotedAttHtml}
         </div>
       </div>`;
     }
@@ -1403,6 +1714,7 @@ class ChatManager {
       reply_to_id: replyToId,
       reply_to_content: this._quotedMsg?.content || "",
       reply_to_role: this._quotedMsg?.role || "",
+      reply_to_attachments: this._quotedMsg?.attachments || [],
       attachments,
     })) {
       this._applyIntent(intent);
@@ -1693,16 +2005,18 @@ class ChatManager {
     // 1) [图片内容] <描述>：吃掉本行剩余内容作为描述
     cleaned = cleaned.replace(/\[图片内容\][ \t]*([^\n]*)/g, (_m, info) => {
       const token = this._markerToken(decorations.length);
-      decorations.push({ kind: "info", info: String(info || "").trim() });
+      decorations.push({ token, kind: "info", info: String(info || "").trim() });
       return token;
     });
     // 2) [图片:描述] / [表情包:描述] / [表情:描述] / [图片] / [表情包] / [表情]
+    //    负向后顾/前视排除 markdown 图片(![...](url))与链接([...](url))语法，
+    //    避免把真实图片的 alt 文本误判成占位符。
     cleaned = cleaned.replace(
-      /\[(图片|表情包|表情)(?::([^\]]*))?\]/g,
+      /(?<!\!)\[(图片|表情包|表情)(?::([^\]]*))?\](?!\()/g,
       (_m, kind, desc) => {
         const token = this._markerToken(decorations.length);
         const isSticker = kind === "表情包" || kind === "表情";
-        decorations.push({ kind: isSticker ? "sticker" : "image", info: String(desc || "").trim() });
+        decorations.push({ token, kind: isSticker ? "sticker" : "image", info: String(desc || "").trim() });
         return token;
       },
     );

@@ -24,6 +24,7 @@ from communication.message import (
     CancellationTooLate,
     IncomingMessage,
     OutgoingReply,
+    QuoteContext,
 )
 from communication.splitter import SemanticMessageSplitter
 from core._hist_utils import channel_short
@@ -31,6 +32,7 @@ from core.attachment_handler import extract_markdown
 from core.chat_events import emit
 from core.chat_request_repository import RequestContext
 from core.cognition import CognitionEngine
+from core.conversation_repository import active_persona_id
 from core.feature_flags import FeatureFlags
 from core.ids import generate_id
 from core.office_mode import get_office_mode_manager, OfficeMode
@@ -385,23 +387,15 @@ class Pipeline:
         self.cognition.record(trace, "threshold", (emotion_info or {}).get("thresholds"))
 
         # ══════════════════════════════════════════════
-        # 4.5 Phase 4: Resolve reply_to context
+        # 4.5 Phase 4: Resolve reply_to context (Quote V2, unified)
         # ══════════════════════════════════════════════
         reply_to_data = None
-        if msg.reply_to_id:
-            try:
-                quoted = self.db.query_one(
-                    "SELECT id, role, content FROM chat_log WHERE id = ?",
-                    (msg.reply_to_id,),
-                )
-                if quoted:
-                    reply_to_data = {
-                        "id": quoted["id"],
-                        "role": quoted["role"],
-                        "content": quoted["content"],
-                    }
-            except Exception:
-                pass
+        try:
+            msg.reply_to = await self._resolve_reply_to(msg)
+            if msg.reply_to is not None:
+                reply_to_data = msg.reply_to.to_prompt_dict()
+        except Exception:
+            logger.debug("reply_to resolve failed", exc_info=True)
 
         # ══════════════════════════════════════════════
         # 5. Build context for LLM (stage 4)
@@ -717,10 +711,17 @@ class Pipeline:
                 "reply_to_id": reply_to_data["id"] if reply_to_data else None,
                 "reply_to_content": reply_to_data["content"] if reply_to_data else None,
                 "reply_to_role": reply_to_data["role"] if reply_to_data else None,
+                "reply_to_attachments": (
+                    json.dumps(reply_to_data.get("attachments") or [], ensure_ascii=False)
+                    if reply_to_data and reply_to_data.get("attachments")
+                    else None
+                ),
+                "qq_message_id": self._inbound_qq_message_id(msg),
                 "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
                 "actor_id": msg.actor_id,
                 "channel": msg.channel,
                 "channel_account_id": msg.channel_account_id,
+                "persona_id": active_persona_id(),  # 角色隔离
             })
             if user_row_id:
                 request_state.terminal_side_effect_committed = True
@@ -740,6 +741,7 @@ class Pipeline:
                     content=msg.content,
                     source=msg.source,
                     attachments=msg.attachments if msg.attachments else None,
+                    **self._reply_to_emit_fields(msg),
                 )
             except Exception:
                 pass
@@ -763,6 +765,7 @@ class Pipeline:
                     "actor_id": msg.actor_id,
                     "channel": msg.channel,
                     "channel_account_id": msg.channel_account_id,
+                    "persona_id": active_persona_id(),  # 角色隔离
                 })
                 ai_row_ids.append(rid)
                 if rid:
@@ -880,6 +883,7 @@ class Pipeline:
                     content=msg.content,
                     source=msg.source,
                     attachments=msg.attachments if msg.attachments else None,
+                    **self._reply_to_emit_fields(msg),
                     **self._event_contract(
                         request_state,
                         message_id=user_row_id,
@@ -1014,17 +1018,7 @@ class Pipeline:
         # 13. QQ messages → SendQueue; local → skip
         # ══════════════════════════════════════════════
         if msg.source == "qq":
-            reply_to_qq_mid = 0
-            if msg.reply_to_id:
-                try:
-                    q = self.db.query_one(
-                        "SELECT qq_message_id FROM chat_log WHERE id = ?",
-                        (msg.reply_to_id,),
-                    )
-                    if q and q.get("qq_message_id"):
-                        reply_to_qq_mid = int(q["qq_message_id"])
-                except Exception:
-                    pass
+            reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
 
             reply = OutgoingReply(
                 user_id=msg.user_id,
@@ -1149,6 +1143,8 @@ class Pipeline:
             # 让模块化解析器能从真实意图中提取主体/姿态/机位/场景，而不是只用死板的
             # intent 关键字。缺省给空串，避免下游因 None 中断（缺值即停防护）。
             "user_raw": str(msg.content or "").strip(),
+            # 角色级隔离：图片归属当前激活角色，投递端按此写 chat_log persona_id
+            "persona_id": active_persona_id(),
         }
         try:
             result = await asyncio.wait_for(publisher(candidate), timeout=120)
@@ -1663,6 +1659,230 @@ class Pipeline:
         )
         return bool(request_state.canonical_completed and token.cancelled)
 
+    async def _resolve_reply_to(self, msg: IncomingMessage) -> QuoteContext | None:
+        """Unified quoted-message resolution across all channels (Quote V2).
+
+        Addressing rule: ``chat_log_id`` is the system-wide key. Desktop and
+        mobile send ``chat_log.id`` directly; QQ inbound quotes carry the QQ
+        platform message_id which is mapped to ``chat_log.id`` via
+        ``chat_log.qq_message_id``. When the quoted message is unknown
+        locally, fall back to OneBot ``get_msg`` to fetch its raw content so
+        quotes of old / never-persisted messages still reach the LLM.
+
+        Fool-proof guards:
+        - malformed reply ids are coerced to 0 instead of raising;
+        - desktop/mobile lookups are scoped to ``user_id`` so a user can
+          never resolve another user's messages;
+        - all lookups are scoped to the active persona (legacy rows with
+          ``persona_id IS NULL`` stay resolvable), matching history
+          visibility so a quote can never surface a message the user cannot
+          see in their history;
+        - QQ inbound quotes always resolve via the platform-id mapping so a
+          platform message_id can never collide with an unrelated
+          ``chat_log.id``.
+        """
+        qid = 0
+        pmid = 0
+        try:
+            qid = int(msg.reply_to_id or 0)
+        except (TypeError, ValueError):
+            qid = 0
+        try:
+            pmid = int(getattr(msg, "platform_message_id", 0) or 0)
+        except (TypeError, ValueError):
+            pmid = 0
+        if not qid and not pmid:
+            return None
+
+        active_pid = active_persona_id()
+        persona_scope = "AND (persona_id = ? OR persona_id IS NULL)"
+        row = None
+        try:
+            if msg.source == "qq":
+                # Inbound QQ quotes carry the platform message_id; always map
+                # through qq_message_id instead of the raw id lookup.
+                if pmid:
+                    row = self.db.query_one(
+                        "SELECT id, role, content, msg_type, attachments, "
+                        "qq_message_id, persona_id FROM chat_log "
+                        "WHERE qq_message_id = ? "
+                        "AND (channel = 'qq' OR channel IS NULL)"
+                        + persona_scope,
+                        (pmid, active_pid or ""),
+                    )
+            elif qid:
+                row = self.db.query_one(
+                    "SELECT id, role, content, msg_type, attachments, "
+                    "qq_message_id, persona_id FROM chat_log "
+                    "WHERE id = ? AND user_id = ?" + persona_scope,
+                    (qid, msg.user_id, active_pid or ""),
+                )
+            elif pmid:
+                row = self.db.query_one(
+                    "SELECT id, role, content, msg_type, attachments, "
+                    "qq_message_id, persona_id FROM chat_log "
+                    "WHERE qq_message_id = ? "
+                    "AND (channel = 'qq' OR channel IS NULL)"
+                    + persona_scope,
+                    (pmid, active_pid or ""),
+                )
+        except Exception:
+            row = None
+        if row:
+            quoted_atts: list[dict] = []
+            try:
+                if row.get("attachments"):
+                    parsed = json.loads(row["attachments"])
+                    quoted_atts = parsed if isinstance(parsed, list) else []
+            except Exception:
+                quoted_atts = []
+            return QuoteContext(
+                chat_log_id=int(row["id"]),
+                platform_message_id=pmid or int(row["qq_message_id"] or 0),
+                role=str(row["role"] or ""),
+                content=str(row["content"] or ""),
+                msg_type=str(row["msg_type"] or "private"),
+                attachments=quoted_atts,
+                persona_id=str(row["persona_id"] or ""),
+            )
+
+        # QQ fallback: pull the quoted message content from the platform so
+        # the LLM can see what was quoted even when it was never persisted.
+        # The speaker role is unknown to get_msg (platform limitation), so
+        # fallback quotes are attributed to the user.
+        if msg.source == "qq" and pmid:
+            fetcher = getattr(self, "qq_get_msg", None)
+            if callable(fetcher):
+                try:
+                    resp = await fetcher(int(pmid))
+                    segments = ((resp or {}).get("data") or {}).get("message")
+                    if segments:
+                        content, atts = self._segments_to_quote_content(segments)
+                        if content:
+                            return QuoteContext(
+                                chat_log_id=0,
+                                platform_message_id=pmid,
+                                role="user",
+                                content=content,
+                                msg_type="private",
+                                attachments=atts,
+                            )
+                except Exception:
+                    logger.debug(
+                        "QQ get_msg fallback failed for %s", pmid, exc_info=True
+                    )
+        return None
+
+    @staticmethod
+    def _segments_to_quote_content(segments: Any) -> tuple[str, list[dict]]:
+        """Convert OneBot11 message segments into quote text + attachments.
+
+        Lets the LLM see what was quoted (text), and lets the frontend render
+        quoted images/files (attachments metadata).
+        """
+        text_parts: list[str] = []
+        attachments: list[dict] = []
+        for seg in segments or []:
+            if not isinstance(seg, dict):
+                continue
+            stype = seg.get("type")
+            sdata = seg.get("data") or {}
+            if stype == "text":
+                txt = str(sdata.get("text") or "").strip()
+                if txt:
+                    text_parts.append(txt)
+            elif stype == "image":
+                text_parts.append("[图片]")
+                attachments.append({
+                    "category": "image",
+                    "name": "图片",
+                    "url": sdata.get("url") or "",
+                })
+            elif stype == "file":
+                fname = str(sdata.get("name") or "文件")
+                text_parts.append(f"[文件:{fname}]")
+                attachments.append({
+                    "category": "file",
+                    "name": fname,
+                    "size": int(sdata.get("size") or 0),
+                    "url": sdata.get("url") or "",
+                })
+            elif stype == "face":
+                text_parts.append("[表情]")
+            elif stype == "record":
+                text_parts.append("[语音]")
+        return " ".join(text_parts).strip(), attachments
+
+    @staticmethod
+    def _inbound_qq_message_id(msg: IncomingMessage) -> int | None:
+        """Backfill ``chat_log.qq_message_id`` for inbound QQ messages.
+
+        OneBot11 message events carry the platform ``message_id``; persisting
+        it builds the QQ message_id <-> chat_log.id mapping that Quote V2
+        resolution depends on.
+        """
+        if msg.source != "qq":
+            return None
+        try:
+            mid = (msg.raw_event or {}).get("message_id")
+            if mid:
+                return int(mid)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _reply_to_emit_fields(msg: IncomingMessage) -> dict:
+        """Quote V2: reference fields forwarded to the frontend on events.
+
+        Includes attachments of the quoted message so the UI can render
+        quoted images/files (not only text).
+        """
+        rt = msg.reply_to
+        if rt is not None:
+            return {
+                "reply_to_id": rt.chat_log_id or (msg.reply_to_id or None),
+                "reply_to_content": rt.content or None,
+                "reply_to_role": rt.role or None,
+                "reply_to_attachments": rt.attachments or None,
+            }
+        if msg.reply_to_id:
+            return {"reply_to_id": msg.reply_to_id}
+        return {}
+
+    def _resolve_outbound_qq_reply_id(self, msg: IncomingMessage) -> int:
+        """Outbound reply segment id: platform message_id of the quoted msg.
+
+        Prefers the already-resolved QuoteContext (works even for quotes
+        resolved via get_msg with no chat_log row); falls back to
+        chat_log.qq_message_id lookups.
+        """
+        reply_to_qq_mid = 0
+        rt = msg.reply_to
+        if rt is not None:
+            reply_to_qq_mid = rt.platform_message_id
+            if not reply_to_qq_mid and rt.chat_log_id:
+                try:
+                    q = self.db.query_one(
+                        "SELECT qq_message_id FROM chat_log WHERE id = ?",
+                        (rt.chat_log_id,),
+                    )
+                    if q and q.get("qq_message_id"):
+                        reply_to_qq_mid = int(q["qq_message_id"])
+                except Exception:
+                    pass
+        elif msg.reply_to_id:
+            try:
+                q = self.db.query_one(
+                    "SELECT qq_message_id FROM chat_log WHERE id = ?",
+                    (msg.reply_to_id,),
+                )
+                if q and q.get("qq_message_id"):
+                    reply_to_qq_mid = int(q["qq_message_id"])
+            except Exception:
+                pass
+        return reply_to_qq_mid
+
     def _event_contract(
         self,
         request_state: _RequestRunState,
@@ -1896,6 +2116,15 @@ class Pipeline:
         # 2. 获取历史（精简：最近 10 条）
         history = self._load_history(msg, legacy_limit=10)
 
+        # 2.5 统一引用解析（Quote V2：BASIC 同样解析，供落库与出站引用）
+        reply_to_data = None
+        try:
+            msg.reply_to = await self._resolve_reply_to(msg)
+            if msg.reply_to is not None:
+                reply_to_data = msg.reply_to.to_prompt_dict()
+        except Exception:
+            logger.debug("lightweight reply_to resolve failed", exc_info=True)
+
         # 3. 构建上下文（BASIC 精简系统提示词）
         context_budget_enabled = self._context_budget_enabled()
         context_budget_kwargs = (
@@ -1910,7 +2139,7 @@ class Pipeline:
             history_msgs=history,
             emotion_info=emotion_info,
             eruption_info=None,
-            reply_to=None,
+            reply_to=reply_to_data,
             attachments=context_attachments if context_attachments else None,
             **context_budget_kwargs,
         )
@@ -2056,10 +2285,20 @@ class Pipeline:
                 "content": msg.content,
                 "msg_type": msg.msg_type,
                 "route_mode": route_mode,
+                "reply_to_id": reply_to_data["id"] if reply_to_data else None,
+                "reply_to_content": reply_to_data["content"] if reply_to_data else None,
+                "reply_to_role": reply_to_data["role"] if reply_to_data else None,
+                "reply_to_attachments": (
+                    json.dumps(reply_to_data.get("attachments") or [], ensure_ascii=False)
+                    if reply_to_data and reply_to_data.get("attachments")
+                    else None
+                ),
+                "qq_message_id": self._inbound_qq_message_id(msg),
                 "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
                 "actor_id": msg.actor_id,
                 "channel": msg.channel,
                 "channel_account_id": msg.channel_account_id,
+                "persona_id": active_persona_id(),  # 角色隔离
             })
             if user_row_id:
                 request_state.terminal_side_effect_committed = True
@@ -2086,6 +2325,7 @@ class Pipeline:
                     "actor_id": msg.actor_id,
                     "channel": msg.channel,
                     "channel_account_id": msg.channel_account_id,
+                    "persona_id": active_persona_id(),  # 角色隔离
                 })
                 ai_row_ids.append(rid)
                 if rid:
@@ -2205,11 +2445,12 @@ class Pipeline:
 
         # 10. QQ 消息入队
         if msg.source == "qq" and ai_row_ids:
+            reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
             reply = OutgoingReply(
                 user_id=msg.user_id,
                 content=reply_text,
                 msg_id=ai_row_ids[0],
-                reply_to_qq_message_id=0,
+                reply_to_qq_message_id=reply_to_qq_mid,
                 cognition_id=int(trace.get("id") or 0),
             )
             if self._checkpoint_cancel(request_state, "before_qq_enqueue"):
@@ -2246,6 +2487,7 @@ class Pipeline:
                     channel=msg.channel,
                     channel_account_id=msg.channel_account_id,
                     user_id=msg.user_id,
+                    persona_id=active_persona_id(),  # 角色隔离兜底
                 )
             except Exception:
                 logger.debug(
@@ -2450,19 +2692,38 @@ class Pipeline:
             except Exception:
                 logger.exception("canonical history read failed; using legacy history")
         try:
+            persona = active_persona_id()  # 角色隔离；None 时跳过过滤保持现状
             if msg.actor_id and msg.channel:
-                history = self.db.query(
-                    "SELECT role, content, created_at FROM chat_log "
-                    "WHERE actor_id = ? AND channel = ? "
-                    f"ORDER BY id DESC LIMIT {legacy_limit}",
-                    (msg.actor_id, msg.channel),
-                )
+                if persona:
+                    history = self.db.query(
+                        "SELECT role, content, created_at FROM chat_log "
+                        "WHERE actor_id = ? AND channel = ? "
+                        "AND (persona_id = ? OR persona_id IS NULL) "
+                        f"ORDER BY id DESC LIMIT {legacy_limit}",
+                        (msg.actor_id, msg.channel, persona),
+                    )
+                else:
+                    history = self.db.query(
+                        "SELECT role, content, created_at FROM chat_log "
+                        "WHERE actor_id = ? AND channel = ? "
+                        f"ORDER BY id DESC LIMIT {legacy_limit}",
+                        (msg.actor_id, msg.channel),
+                    )
             else:
-                history = self.db.query(
-                    "SELECT role, content, created_at FROM chat_log WHERE user_id = ? "
-                    f"ORDER BY id DESC LIMIT {legacy_limit}",
-                    (msg.user_id,),
-                )
+                if persona:
+                    history = self.db.query(
+                        "SELECT role, content, created_at FROM chat_log "
+                        "WHERE user_id = ? "
+                        "AND (persona_id = ? OR persona_id IS NULL) "
+                        f"ORDER BY id DESC LIMIT {legacy_limit}",
+                        (msg.user_id, persona),
+                    )
+                else:
+                    history = self.db.query(
+                        "SELECT role, content, created_at FROM chat_log WHERE user_id = ? "
+                        f"ORDER BY id DESC LIMIT {legacy_limit}",
+                        (msg.user_id,),
+                    )
             history.reverse()
             return history
         except Exception:
@@ -2612,6 +2873,8 @@ class Pipeline:
                 layer="long_term",
                 limit=50,
                 memory_type="event",
+                # 角色级隔离：只召回本角色的 EVENT 记忆，伊塔的发图事件不串给塞纳
+                persona_id=active_persona_id(),
             ) or []
             scored: list[tuple[float, dict]] = []
             for item in items:
@@ -2710,6 +2973,7 @@ class Pipeline:
                 assistant_segments=segments,
                 user_legacy_chat_log_id=user_legacy_chat_log_id,
                 assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
+                persona_id=active_persona_id(),  # 角色隔离
                 conversation_id=(
                     request_context.conversation_id
                     if request_context is not None
@@ -2719,6 +2983,9 @@ class Pipeline:
                     request_context.turn_id
                     if request_context is not None
                     else None
+                ),
+                user_reply_to=(
+                    msg.reply_to.to_prompt_dict() if msg.reply_to is not None else None
                 ),
             )
         except Exception:
@@ -3238,6 +3505,14 @@ class Pipeline:
 
         for seq_idx, (msg, reply_text_raw_single) in enumerate(zip(messages, parsed_replies)):
             try:
+                # Quote V2: resolve per-message quote context for persist + outbound.
+                try:
+                    msg.reply_to = await self._resolve_reply_to(msg)
+                except Exception:
+                    logger.debug(
+                        "[Batch %s] reply_to resolve failed seq=%d",
+                        batch_id, seq_idx,
+                    )
                 # Gate 2: 批内逐条解析 <recall>, 执行撤回 (按该条 msg 的 channel), 并从正文剔除
                 reply_text_raw_single, _recall_actual = await self._handle_recall_instruction(
                     reply_text_raw_single, msg
@@ -3321,12 +3596,21 @@ class Pipeline:
                         msg_type=msg.msg_type,
                         route_mode=route_mode,
                         reply_to_id=msg.reply_to_id,
+                        reply_to_content=msg.reply_to.content if msg.reply_to else None,
+                        reply_to_role=msg.reply_to.role if msg.reply_to else None,
+                        reply_to_attachments=(
+                            json.dumps(msg.reply_to.attachments or [], ensure_ascii=False)
+                            if msg.reply_to and msg.reply_to.attachments
+                            else None
+                        ),
+                        qq_message_id=self._inbound_qq_message_id(msg),
                         attachments=json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
                         actor_id=msg.actor_id,
                         channel=msg.channel,
                         channel_account_id=msg.channel_account_id,
                         batch_id=batch_id,
                         sequence_index=seq_idx,
+                        persona_id=active_persona_id(),  # 角色隔离
                     )
                     if user_row_id:
                         request_state.terminal_side_effect_committed = True
@@ -3350,6 +3634,7 @@ class Pipeline:
                             channel_account_id=msg.channel_account_id,
                             batch_id=batch_id,
                             sequence_index=seq_idx,
+                            persona_id=active_persona_id(),  # 角色隔离
                         )
                         ai_row_ids.append(rid)
                         all_ai_row_ids.append(rid)
@@ -3403,6 +3688,7 @@ class Pipeline:
                         "content": msg.content,
                         "source": source,
                         "attachments": msg.attachments if msg.attachments else None,
+                        **self._reply_to_emit_fields(msg),
                     }
                 }
                 local_emit_items.append({
@@ -3442,17 +3728,7 @@ class Pipeline:
                     })
 
                 if source == "qq" and ai_row_ids:
-                    reply_to_qq_mid = 0
-                    if msg.reply_to_id:
-                        try:
-                            q = self.db.query_one(
-                                "SELECT qq_message_id FROM chat_log WHERE id = ?",
-                                (msg.reply_to_id,),
-                            )
-                            if q and q.get("qq_message_id"):
-                                reply_to_qq_mid = int(q["qq_message_id"])
-                        except Exception:
-                            pass
+                    reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
                     outgoing = OutgoingReply(
                         user_id=msg.user_id,
                         content=reply_text,

@@ -301,6 +301,23 @@ function createChatStore({ maxMessages = 500 } = {}) {
     return [{ action: "recall", id: domId || id }];
   }
 
+  // 角色级隔离：切换 persona 后旧角色的消息不再属于当前会话，
+  // 必须整体清空（含去重表/请求态），避免新历史与旧消息混排。
+  function clear() {
+    messages.length = 0;
+    byDomId.clear();
+    byKey.clear();
+    realIdToDomId.clear();
+    requestIdToDomId.clear();
+    clientIdToDomId.clear();
+    seenEventIds.clear();
+    seenRealIds.clear();
+    requestSequences.clear();
+    requestSegments.clear();
+    requests.clear();
+    return { action: "clear" };
+  }
+
   const api = {
     ingestSignal,
     messages: () => messages.slice(),
@@ -312,6 +329,7 @@ function createChatStore({ maxMessages = 500 } = {}) {
     requestSequences,
     requests,
     markRecalled,
+    clear,
   };
 
   return api;

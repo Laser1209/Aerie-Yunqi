@@ -51,6 +51,7 @@ class MemoryItem:
     layer: MemoryLayer = MemoryLayer.LONG_TERM
     memory_type: MemoryType = MemoryType.FACT
     content: str = ""
+    persona_id: Optional[str] = None  # 角色隔离维度：None=共享（存量数据兼容）
     metadata: Dict[str, Any] = field(default_factory=dict)
     importance: float = 5.0      # 0-10 重要度
     access_count: int = 0
@@ -104,7 +105,7 @@ class BaseMemoryLayer:
 
     layer: MemoryLayer = MemoryLayer.LONG_TERM
 
-    async def store(self, item: MemoryItem) -> str:
+    async def store(self, item: MemoryItem, persona_id: Optional[str] = None) -> str:
         """存储一条记忆，返回记忆 ID."""
         raise NotImplementedError
 
@@ -114,8 +115,9 @@ class BaseMemoryLayer:
         query: str = "",
         limit: int = 5,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemorySearchResult]:
-        """检索相关记忆."""
+        """检索相关记忆（persona 隔离仅对长期层生效，各层透传签名保持一致）."""
         raise NotImplementedError
 
     async def get(self, memory_id: str) -> Optional[MemoryItem]:
@@ -135,6 +137,7 @@ class BaseMemoryLayer:
         user_id: int,
         limit: int = 50,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemoryItem]:
         """列出用户的记忆."""
         raise NotImplementedError

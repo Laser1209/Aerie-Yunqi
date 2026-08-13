@@ -6,6 +6,11 @@ brief_subscriptions:
     github_trending:
       enabled: true
       min_stars: 1000
+computer_control:
+  blacklist: []
+  custom_rules: {}
+  mode: manual
+  whitelist: []
 douyin:
   api_base_url: https://api.justoneapi.com
   api_token: hTyHR6DVMd4jjZlN
@@ -21,9 +26,10 @@ feature_flags:
   migration_framework_v1: true
   mobile_gateway_v1: false
   multi_channel_identity_v1: true
-  persona_hub_source_v1: false
+  persona_hub_source_v1: true
   proactive_delivery_v2: true
   recall_llm_instruction_v1: true
+  self_evolve_l4_enabled: false
   thinking_trace_injection_v1: false
   world_image_candidates_v1: true
   world_inprocess_v1: true
@@ -51,8 +57,8 @@ qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0
 startup:
-  auto_start: false
-  start_minimized: false
+  auto_start: true
+  start_minimized: true
 theme:
   current: yita-pink
 verify_batch4:

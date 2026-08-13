@@ -1,5 +1,30 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Phase 4 Quote tests."""
-from communication.message import IncomingMessage, OutgoingReply
+"""Aerie · 云栖 — Quote V2 unified quote context tests (QQ/desktop/mobile)."""
+from communication.message import IncomingMessage, OutgoingReply, QuoteContext
+
+
+class TestQuoteContext:
+    def test_is_valid_by_chat_log_id(self):
+        assert QuoteContext(chat_log_id=7).is_valid is True
+
+    def test_is_valid_by_content(self):
+        assert QuoteContext(content="hello").is_valid is True
+
+    def test_invalid_when_empty(self):
+        assert QuoteContext().is_valid is False
+
+    def test_to_prompt_dict(self):
+        rt = QuoteContext(
+            chat_log_id=7,
+            platform_message_id=888,
+            role="assistant",
+            content="在忙呢",
+            attachments=[{"category": "image", "name": "图片"}],
+        )
+        d = rt.to_prompt_dict()
+        assert d["id"] == 7
+        assert d["role"] == "assistant"
+        assert d["content"] == "在忙呢"
+        assert d["attachments"][0]["category"] == "image"
 
 
 class TestIncomingMessageQuote:
@@ -7,6 +32,7 @@ class TestIncomingMessageQuote:
         msg = IncomingMessage.from_local("hi", 1, reply_to_id=42)
         assert msg.reply_to_id == 42
         assert msg.user_id == 1
+        assert msg.platform_message_id == 0
 
     def test_from_local_no_reply_to_default(self):
         msg = IncomingMessage.from_local("hi", 1)
@@ -24,6 +50,8 @@ class TestIncomingMessageQuote:
         }
         msg = IncomingMessage.from_onebot_event(event)
         assert msg.reply_to_id == 67890
+        # Quote V2: the OneBot reply segment id is the QQ platform message_id
+        assert msg.platform_message_id == 67890
         assert msg.user_id == 12345
 
     def test_from_onebot_no_reply_segment(self):
@@ -35,6 +63,7 @@ class TestIncomingMessageQuote:
         }
         msg = IncomingMessage.from_onebot_event(event)
         assert msg.reply_to_id == 0
+        assert msg.platform_message_id == 0
 
     def test_from_local_with_attachments(self):
         atts = [{"name": "x.png", "type": "image", "size": 1024, "url": "/uploads/x.png"}]

@@ -136,7 +136,7 @@ class BriefDrawer {
       <div class="brief-drawer__footer">
         <span class="brief-drawer__footer-text">有什么需要我帮忙的吗？</span>
         <div class="brief-drawer__footer-actions">
-          <a href="#" class="brief-drawer__footer-link" id="brief-drawer-chat">${_ICONS.chat} <span>和她聊聊</span></a>
+          <a href="#" class="brief-drawer__footer-link" id="brief-drawer-chat">${_ICONS.chat} <span>和 TA 聊聊</span></a>
           <a href="#" class="brief-drawer__footer-link" id="brief-drawer-expand">${_ICONS.expand} <span id="brief-drawer-expand-label">展开完整</span></a>
         </div>
       </div>

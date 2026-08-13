@@ -156,8 +156,9 @@ TEST_CHECKLIST = [
         "category": "16. 电脑操控能力（认知-电脑操控）",
         "tests": [
             {"id": "CC-01", "name": "电脑操控统计", "scope": "GET /api/computer_control/stats"},
-            {"id": "CC-02", "name": "当前允许级别", "scope": "GET /api/computer_control/level"},
+            {"id": "CC-02", "name": "当前权限模式", "scope": "GET /api/computer_control/mode"},
             {"id": "CC-03", "name": "待审批操作列表", "scope": "GET /api/computer_control/approvals/pending"},
+            {"id": "CC-04", "name": "策略快照（黑白名单）", "scope": "GET /api/computer_control/policy"},
         ],
     },
 ]
@@ -379,8 +380,9 @@ async def run_api_tests() -> dict:
 
         # ---------- 16. COMPUTER CONTROL ----------
         results["CC-01"] = await _t(ac.get, "/api/computer_control/stats")
-        results["CC-02"] = await _t(ac.get, "/api/computer_control/level")
+        results["CC-02"] = await _t(ac.get, "/api/computer_control/mode")
         results["CC-03"] = await _t(ac.get, "/api/computer_control/approvals/pending")
+        results["CC-04"] = await _t(ac.get, "/api/computer_control/policy")
 
     return results
 

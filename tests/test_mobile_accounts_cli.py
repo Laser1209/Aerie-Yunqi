@@ -118,3 +118,132 @@ def test_local_account_cli_creates_actor_binding(tmp_path, monkeypatch, capsys):
     ]
     assert message_actor == "actor-primary"
     assert request_identity == ("actor-primary", 1001)
+
+
+def test_directory_grant_cli_lifecycle(tmp_path, monkeypatch, capsys):
+    auth_db = tmp_path / "mobile.db"
+    main_db = tmp_path / "aerie.db"
+    files_root = tmp_path / "mobile-files"
+    authorized_dir = tmp_path / "granted"
+    conn = sqlite3.connect(main_db)
+    conn.executescript(
+        """CREATE TABLE actors (
+               actor_id TEXT PRIMARY KEY,
+               created_at TEXT DEFAULT CURRENT_TIMESTAMP
+           );
+           CREATE TABLE channel_accounts (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               channel TEXT NOT NULL,
+               channel_account_id TEXT NOT NULL,
+               actor_id TEXT NOT NULL REFERENCES actors(actor_id),
+               created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+               UNIQUE(channel, channel_account_id)
+           );
+           CREATE TABLE chat_log (
+               id INTEGER PRIMARY KEY, user_id INTEGER, actor_id TEXT
+           );
+           CREATE TABLE long_term_memory (
+               id INTEGER PRIMARY KEY, user_id INTEGER, actor_id TEXT
+           );
+           CREATE TABLE emotion_state_snapshot (
+               id INTEGER PRIMARY KEY, user_id INTEGER, actor_id TEXT
+           );
+           CREATE TABLE conversations (
+               conversation_id TEXT PRIMARY KEY, actor_id TEXT
+           );
+           CREATE TABLE messages (
+               message_id TEXT PRIMARY KEY, conversation_id TEXT,
+               legacy_chat_log_id INTEGER, actor_id TEXT
+           );
+           CREATE TABLE requests (
+               request_id TEXT PRIMARY KEY, conversation_id TEXT,
+               user_id INTEGER, actor_id TEXT
+           );"""
+    )
+    conn.close()
+    monkeypatch.setenv(
+        "AERIE_MOBILE_TOKEN_PEPPER",
+        "test-only-pepper-with-at-least-32-bytes",
+    )
+    monkeypatch.setenv("AERIE_MOBILE_AUTH_DB", str(auth_db))
+    monkeypatch.setenv("AERIE_DB_PATH", str(main_db))
+    monkeypatch.setenv("AERIE_MOBILE_FILES_ROOT", str(files_root))
+    passwords = iter(
+        ["correct-horse-battery-staple", "correct-horse-battery-staple"]
+    )
+    monkeypatch.setattr(mobile_accounts.getpass, "getpass", lambda _: next(passwords))
+
+    assert (
+        mobile_accounts.main(
+            [
+                "create-owner",
+                "owner",
+                "--actor-id",
+                "actor-primary",
+                "--user-id",
+                "1001",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    # grant-directory
+    result = mobile_accounts.main(
+        [
+            "grant-directory",
+            "owner",
+            "--path",
+            str(authorized_dir),
+            "--read",
+            "--upload",
+            "--download",
+        ]
+    )
+    assert result == 0
+    grant = json.loads(capsys.readouterr().out)
+    assert grant["status"] == "ok"
+    assert grant["grantId"].startswith("grant_")
+
+    # list-directory-grants
+    result = mobile_accounts.main(["list-directory-grants", "owner"])
+    assert result == 0
+    grants = json.loads(capsys.readouterr().out)
+    assert len(grants) == 1
+    assert grants[0]["directory"] == str(authorized_dir.resolve())
+    assert grants[0]["allowRead"] is True
+    assert grants[0]["enabled"] is True
+
+    # disable-directory-grant
+    result = mobile_accounts.main(
+        [
+            "disable-directory-grant",
+            "owner",
+            "--path",
+            str(authorized_dir),
+        ]
+    )
+    assert result == 0
+    disabled = json.loads(capsys.readouterr().out)
+    assert disabled["status"] == "disabled"
+
+    result = mobile_accounts.main(["list-directory-grants", "owner"])
+    grants = json.loads(capsys.readouterr().out)
+    assert grants[0]["enabled"] is False
+
+    # enable-directory-grant
+    result = mobile_accounts.main(
+        [
+            "enable-directory-grant",
+            "owner",
+            "--path",
+            str(authorized_dir),
+        ]
+    )
+    assert result == 0
+    enabled = json.loads(capsys.readouterr().out)
+    assert enabled["status"] == "enabled"
+
+    result = mobile_accounts.main(["list-directory-grants", "owner"])
+    grants = json.loads(capsys.readouterr().out)
+    assert grants[0]["enabled"] is True

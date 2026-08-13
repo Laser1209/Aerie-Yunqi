@@ -43,16 +43,54 @@ class CancellationToken:
 
 
 @dataclass
+class QuoteContext:
+    """Unified quote/reply context across QQ / desktop / mobile / WeChat.
+
+    ``chat_log_id`` is the single system-wide addressing key. On inbound
+    QQ quotes the platform id arrives in ``platform_message_id`` (OneBot11
+    message_id) and is mapped to ``chat_log_id`` via ``chat_log.qq_message_id``
+    when the direct id lookup misses.
+    """
+
+    chat_log_id: int = 0
+    platform_message_id: int = 0
+    role: str = ""
+    content: str = ""
+    msg_type: str = "private"
+    attachments: list[dict] = field(default_factory=list)
+    # which AI persona produced the quoted message (empty = legacy/unknown);
+    # lets multi-persona setups attribute quotes to the right speaker.
+    persona_id: str = ""
+
+    @property
+    def is_valid(self) -> bool:
+        return bool(self.chat_log_id or self.content)
+
+    def to_prompt_dict(self) -> dict:
+        return {
+            "id": self.chat_log_id,
+            "role": self.role,
+            "content": self.content,
+            "attachments": self.attachments,
+            "persona_id": self.persona_id,
+        }
+
+
+@dataclass
 class IncomingMessage:
     user_id: int
     content: str
     msg_type: str = "private"    # private | group
     source: str = "qq"           # qq | local
     raw_event: dict = field(default_factory=dict)
-    # Phase 4: quote / reply context
-    reply_to_id: int = 0                    # chat_log.id being replied to
-    reply_to_content: str = ""
-    reply_to_role: str = ""
+    # Phase 4: quote / reply context.
+    # reply_to_id: id of the quoted message — chat_log.id on desktop/mobile,
+    #              QQ message_id on inbound QQ quotes (resolved in pipeline).
+    reply_to_id: int = 0
+    # platform-native id of the quoted message (OneBot11 message_id on QQ).
+    platform_message_id: int = 0
+    # resolved quoted context (pipeline fills; unified across channels).
+    reply_to: QuoteContext | None = None
     # Phase 4: attachments (Phase 5 will fill these)
     attachments: list[dict] = field(default_factory=list)
     # Phase 2: normalized identity contract (legacy fields remain above)
@@ -68,14 +106,19 @@ class IncomingMessage:
         raw = str(event.get("raw_message", ""))
         content = raw.strip()
 
-        # Phase 4: extract OneBot11 reply segment if present
+        # Phase 4: extract OneBot11 reply segment if present.
+        # OneBot11 reply segments carry the QQ platform message_id; keep it
+        # in both reply_to_id (as the raw quoted id) and platform_message_id
+        # so pipeline can resolve chat_log.id via the id mapping.
         reply_to_id = 0
+        platform_message_id = 0
         msg_array = event.get("message", [])
         if isinstance(msg_array, list):
             for seg in msg_array:
                 if isinstance(seg, dict) and seg.get("type") == "reply":
-                    reply_to_id = int(seg.get("data", {}).get("id", 0))
+                    platform_message_id = int(seg.get("data", {}).get("id", 0))
                     break
+        reply_to_id = platform_message_id
 
         return IncomingMessage(
             user_id=user_id,
@@ -84,6 +127,7 @@ class IncomingMessage:
             source="qq",
             raw_event=event,
             reply_to_id=reply_to_id,
+            platform_message_id=platform_message_id,
             channel="qq",
             channel_account_id=str(user_id),
         )
@@ -94,6 +138,7 @@ class IncomingMessage:
         user_id: int,
         reply_to_id: int = 0,
         attachments: list[dict] | None = None,
+        platform_message_id: int = 0,
     ) -> "IncomingMessage":
         return IncomingMessage(
             user_id=user_id,
@@ -101,6 +146,7 @@ class IncomingMessage:
             msg_type="private",
             source="local",
             reply_to_id=reply_to_id,
+            platform_message_id=platform_message_id,
             attachments=attachments or [],
             channel="desktop",
             channel_account_id="local",

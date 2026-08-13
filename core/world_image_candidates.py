@@ -624,6 +624,9 @@ class WorldImageCandidateConsumer:
             "event_id": _safe_value(getattr(event, "event_id", "") or ""),
             "sequence": _event_sequence(event),
             "payload_keys": sorted(str(key) for key in payload.keys()),
+            # 角色级隔离：图片产出归属创建时的激活角色（伊塔/塞纳…）。
+            # 没有归属的空串意味着投递端回退到投递时刻的激活角色。
+            "persona_id": _safe_value(payload.get("persona_id") or ""),
         }
 
     def _is_expired(self, candidate: dict[str, Any]) -> bool:
@@ -879,10 +882,13 @@ class WorldImageCandidateConsumer:
             return False
         # 把候选的语义字段注入 delivery plan，供 sender 生成图片事件描述（P3）：
         # 聊天要图 / 主动发图两条路径都汇聚到 consumer，发送端据此知道"发了张什么图"。
+        # persona_id 一并注入：chat_log 补写时按产出归属角色落 persona_id，
+        # 避免图片消息变成 NULL 共享行被两个角色同时看到。
         if isinstance(candidate, dict):
             plan.setdefault("reason_code", str(candidate.get("reason_code") or ""))
             plan.setdefault("prompt_key", str(candidate.get("prompt_key") or ""))
             plan.setdefault("scene", str(candidate.get("scene") or ""))
+            plan.setdefault("persona_id", str(candidate.get("persona_id") or ""))
         try:
             result = self.sender(plan, workflow_result)
             if hasattr(result, "__await__"):

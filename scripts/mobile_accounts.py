@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.mobile_files import MobileFileService
 from core.mobile_identity import MobileIdentityStore
 
 
@@ -26,6 +27,13 @@ def _store() -> MobileIdentityStore:
         raise SystemExit("AERIE_MOBILE_TOKEN_PEPPER is required")
     path = Path(os.getenv("AERIE_MOBILE_AUTH_DB", "data/mobile_gateway.db"))
     return MobileIdentityStore(path, pepper=pepper)
+
+
+def _file_service(identity_store: MobileIdentityStore) -> MobileFileService:
+    return MobileFileService(
+        identity_store.db_path,
+        storage_root=Path(os.getenv("AERIE_MOBILE_FILES_ROOT", "data/mobile_files")),
+    )
 
 
 def _password(prompt: str) -> str:
@@ -135,6 +143,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     disable = commands.add_parser("disable-account")
     disable.add_argument("username")
+
+    grant = commands.add_parser("grant-directory")
+    grant.add_argument("username")
+    grant.add_argument("--path", required=True)
+    grant.add_argument("--read", action="store_true", default=False)
+    grant.add_argument("--upload", action="store_true", default=False)
+    grant.add_argument("--download", action="store_true", default=False)
+
+    list_grants = commands.add_parser("list-directory-grants")
+    list_grants.add_argument("username", nargs="?")
+
+    disable_grant = commands.add_parser("disable-directory-grant")
+    disable_grant.add_argument("username")
+    disable_grant.add_argument("--path", required=True)
+
+    enable_grant = commands.add_parser("enable-directory-grant")
+    enable_grant.add_argument("username")
+    enable_grant.add_argument("--path", required=True)
     return parser
 
 
@@ -177,6 +203,38 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "disable-account":
         store.set_account_enabled(args.username, False)
         _print({"status": "ok"})
+    elif args.command == "grant-directory":
+        account = store._fetch_account(args.username)
+        if account is None:
+            raise SystemExit("account is not available")
+        files = _file_service(store)
+        grant_id = files.register_directory_grant(
+            account_id=account["account_id"],
+            directory=args.path,
+            allow_read=args.read,
+            allow_upload=args.upload,
+            allow_download=args.download,
+        )
+        _print({"grantId": grant_id, "status": "ok"})
+    elif args.command == "list-directory-grants":
+        files = _file_service(store)
+        _print(files.list_directory_grants(username=args.username))
+    elif args.command == "disable-directory-grant":
+        files = _file_service(store)
+        grant_id = files.set_directory_grant_enabled(
+            username=args.username,
+            directory=args.path,
+            enabled=False,
+        )
+        _print({"grantId": grant_id, "status": "disabled"})
+    elif args.command == "enable-directory-grant":
+        files = _file_service(store)
+        grant_id = files.set_directory_grant_enabled(
+            username=args.username,
+            directory=args.path,
+            enabled=True,
+        )
+        _print({"grantId": grant_id, "status": "enabled"})
     return 0
 
 

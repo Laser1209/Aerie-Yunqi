@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v0.2.0 — Message recall manager (三端解耦版).
+"""Aerie · 云栖 v0.3.1-Beta.1 — Message recall manager (三端解耦版).
 
 Gate 1 重构: 撤回能力按 channel 分派, 不再与单一 user_id 绑定。
 - QQ     : 通过 RecallAdapter(QQ) → NapCat delete_msg 真实撤回

@@ -11,6 +11,18 @@ from typing import Any, Iterator
 from core.ids import generate_id
 
 
+def active_persona_id() -> str | None:
+    """Return the currently-active persona id, or None on any failure.
+
+    Role dimension for dialogue/memory isolation; NULL keeps legacy shared rows.
+    """
+    try:
+        from core.persona_hub.persona_manager import get_persona_manager
+        return get_persona_manager().get_active_id()
+    except Exception:
+        return None
+
+
 class RequestConflict(RuntimeError):
     pass
 
@@ -51,6 +63,7 @@ def resolve_conversation_id(
     channel: str | None,
     channel_account_id: str | None,
     user_id: int,
+    persona_id: str | None = None,
 ) -> str:
     payload = "\x1f".join(
         (
@@ -58,6 +71,7 @@ def resolve_conversation_id(
             channel or "",
             channel_account_id or "",
             str(user_id),
+            persona_id or "",  # NULL == 共享（存量会话）
         )
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -69,6 +83,7 @@ def _legacy_conversation_id(
     channel: str | None,
     channel_account_id: str | None,
     user_id: int,
+    persona_id: str | None = None,
 ) -> str:
     payload = "\x1f".join(
         (
@@ -77,6 +92,7 @@ def _legacy_conversation_id(
             channel or "",
             channel_account_id or "",
             str(user_id),
+            persona_id or "",  # 角色隔离：NULL == 共享（存量会话）
         )
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -89,6 +105,7 @@ def _resolve_related_conversation_ids(
     channel: str | None,
     channel_account_id: str | None,
     user_id: int,
+    persona_id: str | None = None,
 ) -> list[str]:
     primary = resolve_conversation_id(
         actor_id=actor_id,
@@ -103,6 +120,20 @@ def _resolve_related_conversation_ids(
         _legacy_conversation_id(actor_id, None, None, user_id),
         _legacy_conversation_id(None, None, None, user_id),
     ]
+    # 角色隔离：追加 persona 相关候选（NULL persona 的 legacy 候选已在上面）
+    if persona_id:
+        candidates.append(
+            resolve_conversation_id(
+                actor_id=actor_id,
+                channel=channel,
+                channel_account_id=channel_account_id,
+                user_id=user_id,
+                persona_id=persona_id,
+            )
+        )
+        candidates.append(
+            _legacy_conversation_id(actor_id, channel, channel_account_id, user_id, persona_id)
+        )
     seen = set()
     result = []
     for cid in candidates:
@@ -117,6 +148,39 @@ class ConversationRepository:
         self.database = database
         self.enabled = enabled
         self._soft_delete = None  # None=未知；True/False=已缓存列检测结果
+        self._persona_columns: dict[str, bool] = {}  # 表名 → 是否含 persona_id 列（角色隔离）
+        self._reply_to_columns: dict[str, bool] = {}  # "表:reply_to" → 是否含 Quote V2 列
+
+    def _has_reply_to_columns(self, conn: sqlite3.Connection, table: str) -> bool:
+        """表是否已带 Quote V2 reply_to 列（迁移 015）。旧库/裸连接无该列时跳过。"""
+        key = f"{table}:reply_to"
+        if key not in self._reply_to_columns:
+            try:
+                cols = {
+                    row["name"]
+                    for row in conn.execute(
+                        f"PRAGMA table_info({table})"
+                    ).fetchall()
+                }
+                self._reply_to_columns[key] = "reply_to_id" in cols
+            except Exception:
+                self._reply_to_columns[key] = False
+        return self._reply_to_columns[key]
+
+    def _has_persona_column(self, conn: sqlite3.Connection, table: str) -> bool:
+        """表是否已带 persona_id 列（迁移 013）。旧库无该列时跳过 persona 写入。"""
+        if table not in self._persona_columns:
+            try:
+                cols = {
+                    row["name"]
+                    for row in conn.execute(
+                        f"PRAGMA table_info({table})"
+                    ).fetchall()
+                }
+                self._persona_columns[table] = "persona_id" in cols
+            except Exception:
+                self._persona_columns[table] = False
+        return self._persona_columns[table]
 
     def _has_soft_delete(self, conn: sqlite3.Connection) -> bool:
         """messages 是否已带 deleted_at（迁移 011）。旧库无该列时跳过过滤。"""
@@ -139,6 +203,7 @@ class ConversationRepository:
         channel: str | None,
         channel_account_id: str | None,
         user_id: int,
+        persona_id: str | None = None,
     ) -> list[str]:
         ids: list[str] = []
         seen: set[str] = set()
@@ -147,6 +212,10 @@ class ConversationRepository:
             if cid and cid not in seen:
                 seen.add(cid)
                 ids.append(cid)
+
+        # 角色隔离：显式 persona 优先，否则取 active persona；
+        # 仍为 None（无激活角色或异常）则退化为不过滤（保持现状全量）
+        persona = persona_id if persona_id is not None else active_persona_id()
 
         primary = resolve_conversation_id(
             actor_id=actor_id,
@@ -157,13 +226,26 @@ class ConversationRepository:
         add(primary)
 
         if self._table_exists(conn, "chat_log"):
-            linked_rows = conn.execute(
-                """SELECT DISTINCT m.conversation_id
-                   FROM messages m
-                   JOIN chat_log cl ON cl.id = m.legacy_chat_log_id
-                   WHERE cl.user_id = ?""",
-                (int(user_id),),
-            ).fetchall()
+            chat_log_persona = persona is not None and self._has_persona_column(
+                conn, "chat_log"
+            )
+            if chat_log_persona:
+                linked_rows = conn.execute(
+                    """SELECT DISTINCT m.conversation_id
+                       FROM messages m
+                       JOIN chat_log cl ON cl.id = m.legacy_chat_log_id
+                       WHERE cl.user_id = ?
+                         AND (cl.persona_id = ? OR cl.persona_id IS NULL)""",
+                    (int(user_id), persona),
+                ).fetchall()
+            else:
+                linked_rows = conn.execute(
+                    """SELECT DISTINCT m.conversation_id
+                       FROM messages m
+                       JOIN chat_log cl ON cl.id = m.legacy_chat_log_id
+                       WHERE cl.user_id = ?""",
+                    (int(user_id),),
+                ).fetchall()
             for row in linked_rows:
                 add(row["conversation_id"])
 
@@ -172,15 +254,27 @@ class ConversationRepository:
             channel=channel,
             channel_account_id=channel_account_id,
             user_id=user_id,
+            persona_id=persona,
         ):
             add(cid)
 
         existing: list[str] = []
+        conversations_persona = persona is not None and self._has_persona_column(
+            conn, "conversations"
+        )
         for cid in ids:
-            if conn.execute(
-                "SELECT 1 FROM conversations WHERE conversation_id = ? LIMIT 1",
-                (cid,),
-            ).fetchone():
+            if conversations_persona:
+                hit = conn.execute(
+                    "SELECT 1 FROM conversations WHERE conversation_id = ? "
+                    "AND (persona_id = ? OR persona_id IS NULL) LIMIT 1",
+                    (cid, persona),
+                ).fetchone()
+            else:
+                hit = conn.execute(
+                    "SELECT 1 FROM conversations WHERE conversation_id = ? LIMIT 1",
+                    (cid,),
+                ).fetchone()
+            if hit:
                 existing.append(cid)
         if not existing:
             existing = [primary]
@@ -202,7 +296,24 @@ class ConversationRepository:
         actor_id: str | None,
         channel: str | None,
         channel_account_id: str | None,
+        persona_id: str | None = None,
     ) -> None:
+        if self._has_persona_column(conn, "conversations"):
+            # 角色隔离：conversations 行记录 persona_id
+            conn.execute(
+                """INSERT OR IGNORE INTO conversations
+                   (conversation_id, actor_id, channel, channel_account_id,
+                    status, persona_id)
+                   VALUES (?, ?, ?, ?, 'active', ?)""",
+                (
+                    conversation_id,
+                    actor_id,
+                    channel,
+                    channel_account_id,
+                    persona_id,
+                ),
+            )
+            return
         conn.execute(
             """INSERT OR IGNORE INTO conversations
                (conversation_id, actor_id, channel, channel_account_id, status)
@@ -230,6 +341,8 @@ class ConversationRepository:
         turn_id: str | None = None,
         user_legacy_chat_log_id: int | None = None,
         assistant_legacy_chat_log_ids: list[int] | None = None,
+        persona_id: str | None = None,
+        user_reply_to: dict[str, Any] | None = None,
     ) -> dict[str, str] | None:
         if not self.enabled:
             return None
@@ -239,6 +352,7 @@ class ConversationRepository:
             channel=channel,
             channel_account_id=channel_account_id,
             user_id=user_id,
+            persona_id=persona_id,
         )
         attachments = (
             json.dumps(user_attachments, ensure_ascii=False)
@@ -268,6 +382,8 @@ class ConversationRepository:
                         assistant_segments=assistant_segments,
                         user_legacy_chat_log_id=user_legacy_chat_log_id,
                         assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
+                        persona_id=persona_id,
+                        user_reply_to=user_reply_to,
                     )
                 else:
                     result = self._persist_legacy_turn(
@@ -283,6 +399,8 @@ class ConversationRepository:
                         assistant_segments=assistant_segments,
                         user_legacy_chat_log_id=user_legacy_chat_log_id,
                         assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
+                        persona_id=persona_id,
+                        user_reply_to=user_reply_to,
                     )
             except Exception:
                 conn.execute("ROLLBACK TO SAVEPOINT persist_conversation_turn")
@@ -308,6 +426,8 @@ class ConversationRepository:
         assistant_segments: list[str],
         user_legacy_chat_log_id: int | None = None,
         assistant_legacy_chat_log_ids: list[int] | None = None,
+        persona_id: str | None = None,
+        user_reply_to: dict[str, Any] | None = None,
     ) -> dict[str, str]:
         existing_turn_id = request["turn_id"]
         if (
@@ -359,6 +479,7 @@ class ConversationRepository:
             actor_id=actor_id,
             channel=channel,
             channel_account_id=channel_account_id,
+            persona_id=persona_id,
         )
         self._insert_turn_messages(
             conn,
@@ -373,6 +494,8 @@ class ConversationRepository:
             response_group_id=response_group_id,
             user_legacy_chat_log_id=user_legacy_chat_log_id,
             assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
+            persona_id=persona_id,
+            user_reply_to=user_reply_to,
         )
         completed_at = datetime.now(timezone.utc).isoformat()
         request_updated = conn.execute(
@@ -538,6 +661,8 @@ class ConversationRepository:
         assistant_segments: list[str],
         user_legacy_chat_log_id: int | None = None,
         assistant_legacy_chat_log_ids: list[int] | None = None,
+        persona_id: str | None = None,
+        user_reply_to: dict[str, Any] | None = None,
     ) -> dict[str, str]:
         response_group_id = generate_id("group")
         self.ensure_conversation(
@@ -546,20 +671,38 @@ class ConversationRepository:
             actor_id=actor_id,
             channel=channel,
             channel_account_id=channel_account_id,
+            persona_id=persona_id,
         )
-        conn.execute(
-            """INSERT INTO turns
-               (turn_id, conversation_id, status, completed_at)
-               VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
-            (turn_id, conversation_id),
-        )
-        conn.execute(
-            """INSERT INTO requests
-               (request_id, conversation_id, turn_id, status,
-                completed_at)
-               VALUES (?, ?, ?, 'completed', datetime('now', 'localtime'))""",
-            (request_id, conversation_id, turn_id),
-        )
+        if self._has_persona_column(conn, "turns"):
+            conn.execute(
+                """INSERT INTO turns
+                   (turn_id, conversation_id, status, completed_at, persona_id)
+                   VALUES (?, ?, 'completed', datetime('now', 'localtime'), ?)""",
+                (turn_id, conversation_id, persona_id),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO turns
+                   (turn_id, conversation_id, status, completed_at)
+                   VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
+                (turn_id, conversation_id),
+            )
+        if self._has_persona_column(conn, "requests"):
+            conn.execute(
+                """INSERT INTO requests
+                   (request_id, conversation_id, turn_id, status,
+                    completed_at, persona_id)
+                   VALUES (?, ?, ?, 'completed', datetime('now', 'localtime'), ?)""",
+                (request_id, conversation_id, turn_id, persona_id),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO requests
+                   (request_id, conversation_id, turn_id, status,
+                    completed_at)
+                   VALUES (?, ?, ?, 'completed', datetime('now', 'localtime'))""",
+                (request_id, conversation_id, turn_id),
+            )
         self._insert_turn_messages(
             conn,
             conversation_id=conversation_id,
@@ -573,6 +716,8 @@ class ConversationRepository:
             response_group_id=response_group_id,
             user_legacy_chat_log_id=user_legacy_chat_log_id,
             assistant_legacy_chat_log_ids=assistant_legacy_chat_log_ids,
+            persona_id=persona_id,
+            user_reply_to=user_reply_to,
         )
         return {
             "conversation_id": conversation_id,
@@ -596,6 +741,8 @@ class ConversationRepository:
         response_group_id: str,
         user_legacy_chat_log_id: int | None,
         assistant_legacy_chat_log_ids: list[int] | None,
+        persona_id: str | None = None,
+        user_reply_to: dict[str, Any] | None = None,
     ) -> None:
         self._insert_message(
             conn,
@@ -610,6 +757,24 @@ class ConversationRepository:
             channel_account_id=channel_account_id,
             actor_id=actor_id,
             legacy_chat_log_id=user_legacy_chat_log_id,
+            persona_id=persona_id,
+            reply_to_id=(
+                int(user_reply_to.get("id") or 0) if user_reply_to else None
+            ),
+            reply_to_content=(
+                user_reply_to.get("content") if user_reply_to else None
+            ),
+            reply_to_role=(
+                user_reply_to.get("role") if user_reply_to else None
+            ),
+            reply_to_attachments=(
+                json.dumps(
+                    user_reply_to.get("attachments") or [],
+                    ensure_ascii=False,
+                )
+                if user_reply_to and user_reply_to.get("attachments")
+                else None
+            ),
         )
         legacy_ids = assistant_legacy_chat_log_ids or []
         for sequence, content in enumerate(assistant_segments, start=1):
@@ -631,6 +796,7 @@ class ConversationRepository:
                 channel_account_id=channel_account_id,
                 actor_id=actor_id,
                 legacy_chat_log_id=legacy_chat_log_id,
+                persona_id=persona_id,
             )
 
     def recent_turn_history(
@@ -641,6 +807,7 @@ class ConversationRepository:
         channel_account_id: str | None,
         user_id: int,
         limit: int = 20,
+        persona_id: str | None = None,
     ) -> list[dict[str, Any]]:
         if not self.enabled:
             return []
@@ -651,6 +818,7 @@ class ConversationRepository:
                 channel=channel,
                 channel_account_id=channel_account_id,
                 user_id=user_id,
+                persona_id=persona_id,
             )
             ex_ph = ",".join("?" * len(conversation_ids))
             deleted_filter = " AND m.deleted_at IS NULL" if self._has_soft_delete(conn) else ""
@@ -682,6 +850,7 @@ class ConversationRepository:
         cursor: str | None = None,
         direction: str = "older",
         limit: int = 50,
+        persona_id: str | None = None,
     ) -> dict[str, Any]:
         """Read a stable cursor page without imposing a history ceiling.
 
@@ -722,11 +891,23 @@ class ConversationRepository:
                     channel=channel,
                     channel_account_id=channel_account_id,
                     user_id=user_id,
+                    persona_id=persona_id,
                 )
                 if len(related_ids) <= 1:
+                    # 角色隔离：related_ids 已按 persona 过滤（可能只有 persona 专属会话，
+                    # 无 NULL 共享会话），此时必须跟随该会话 ID，而不是无 persona 维度的
+                    # resolved_conversation_id，否则纯 persona 会话读链返回空。
+                    # 但调用方显式传入 conversation_id 时保持原语义（存量桌面/连续性路径
+                    # 依赖显式会话 ID，不能被子查询 fallback 的 primary 覆盖）。
+                    if conversation_id is not None:
+                        page_conversation_id = conversation_id
+                    else:
+                        page_conversation_id = (
+                            related_ids[0] if related_ids else resolved_conversation_id
+                        )
                     return self._normalized_history_page(
                         conn,
-                        conversation_id=resolved_conversation_id,
+                        conversation_id=page_conversation_id,
                         anchor=anchor,
                         direction=direction,
                         limit=limit,
@@ -770,11 +951,16 @@ class ConversationRepository:
             params.append(anchor)
         params.append(limit + 1)
         deleted_filter = " AND deleted_at IS NULL" if self._has_soft_delete(conn) else ""
+        reply_to_cols = (
+            ", reply_to_id, reply_to_content, reply_to_role, reply_to_attachments"
+            if self._has_reply_to_columns(conn, "messages")
+            else ""
+        )
         rows = conn.execute(
             f"""SELECT rowid AS history_rowid, message_id, conversation_id,
                        turn_id, role, content, attachments,
                        response_group_id, sequence, channel,
-                       channel_account_id, actor_id, created_at
+                       channel_account_id, actor_id, created_at{reply_to_cols}
                 FROM messages
                 WHERE conversation_id = ?{anchor_sql}{deleted_filter}
                 ORDER BY rowid {order}
@@ -803,11 +989,16 @@ class ConversationRepository:
     ) -> dict[str, Any]:
         placeholders = ",".join("?" * len(conversation_ids))
         deleted_filter = " AND deleted_at IS NULL" if self._has_soft_delete(conn) else ""
+        reply_to_cols = (
+            ", reply_to_id, reply_to_content, reply_to_role, reply_to_attachments"
+            if self._has_reply_to_columns(conn, "messages")
+            else ""
+        )
         rows = conn.execute(
             f"""SELECT rowid AS history_rowid, message_id, conversation_id,
                        turn_id, role, content, attachments,
                        response_group_id, sequence, channel,
-                       channel_account_id, actor_id, created_at
+                       channel_account_id, actor_id, created_at{reply_to_cols}
                 FROM messages
                 WHERE conversation_id IN ({placeholders}){deleted_filter}
                 ORDER BY rowid DESC
@@ -834,6 +1025,9 @@ class ConversationRepository:
             item["ts"] = item.get("created_at")
             item["attachments"] = self._decode_attachments(
                 item.get("attachments")
+            )
+            item["reply_to_attachments"] = self._decode_attachments(
+                item.get("reply_to_attachments")
             )
             items.append(item)
         older_cursor = _encode_history_cursor(oldest_rowid) if has_older else None
@@ -868,9 +1062,14 @@ class ConversationRepository:
             anchor_sql = f" AND id {comparator} ?"
             params.append(anchor)
         params.append(limit + 1)
+        reply_to_cols = (
+            ", reply_to_id, reply_to_content, reply_to_role, reply_to_attachments"
+            if self._has_reply_to_columns(conn, "chat_log")
+            else ""
+        )
         rows = conn.execute(
             f"""SELECT id AS history_rowid, id, role, content,
-                       attachments, created_at
+                       attachments, created_at{reply_to_cols}
                 FROM chat_log
                 WHERE user_id = ?{anchor_sql}{deleted_sql}
                 ORDER BY id {order}
@@ -928,8 +1127,10 @@ class ConversationRepository:
             item["attachments"] = self._decode_attachments(
                 item.get("attachments")
             )
+            item["reply_to_attachments"] = self._decode_attachments(
+                item.get("reply_to_attachments")
+            )
             items.append(item)
-
         older_cursor = _encode_history_cursor(oldest) if has_older else None
         newer_cursor = _encode_history_cursor(newest) if has_newer else None
         next_cursor = older_cursor if direction == "older" else newer_cursor
@@ -985,13 +1186,56 @@ class ConversationRepository:
         channel_account_id: str | None,
         actor_id: str | None,
         legacy_chat_log_id: int | None,
+        persona_id: str | None = None,
+        reply_to_id: int | None = None,
+        reply_to_content: str | None = None,
+        reply_to_role: str | None = None,
+        reply_to_attachments: str | None = None,
     ) -> None:
+        reply_to_cols = (
+            ", reply_to_id, reply_to_content, reply_to_role, reply_to_attachments"
+            if self._has_reply_to_columns(conn, "messages")
+            else ""
+        )
+        reply_to_vals = ", ?, ?, ?, ?" if reply_to_cols else ""
+        reply_to_params = (
+            (reply_to_id, reply_to_content, reply_to_role, reply_to_attachments)
+            if reply_to_cols
+            else ()
+        )
+        if self._has_persona_column(conn, "messages"):
+            # 角色隔离：messages 行记录 persona_id
+            conn.execute(
+                f"""INSERT INTO messages
+                   (message_id, conversation_id, turn_id, role, content,
+                    attachments, response_group_id, sequence, channel,
+                    channel_account_id, actor_id, legacy_chat_log_id,
+                    persona_id{reply_to_cols})
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{reply_to_vals})""",
+                (
+                    generate_id("msg"),
+                    conversation_id,
+                    turn_id,
+                    role,
+                    content,
+                    attachments,
+                    response_group_id,
+                    sequence,
+                    channel,
+                    channel_account_id,
+                    actor_id,
+                    legacy_chat_log_id,
+                    persona_id,
+                    *reply_to_params,
+                ),
+            )
+            return
         conn.execute(
-            """INSERT INTO messages
+            f"""INSERT INTO messages
                (message_id, conversation_id, turn_id, role, content,
                 attachments, response_group_id, sequence, channel,
-                channel_account_id, actor_id, legacy_chat_log_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                channel_account_id, actor_id, legacy_chat_log_id{reply_to_cols})
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{reply_to_vals})""",
             (
                 generate_id("msg"),
                 conversation_id,
@@ -1005,5 +1249,6 @@ class ConversationRepository:
                 channel_account_id,
                 actor_id,
                 legacy_chat_log_id,
+                *reply_to_params,
             ),
         )

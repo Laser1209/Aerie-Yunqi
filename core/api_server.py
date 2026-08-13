@@ -64,8 +64,13 @@ from core.feature_flags import FeatureFlags
 from core.token_tracker import get_token_tracker
 from core.cognition import CognitionEngine
 from core.event_stream import stream as event_stream_generator
+from core.self_evolve_l4 import L4SelfEvolution
 from core.self_evolver import SelfEvolver
-from core.computer_control import ComputerController, PermissionLevel
+from core.computer_control import (
+    ComputerController,
+    ControlMode,
+    PolicyEntryType,
+)
 from core.file_organizer import FileOrganizer
 from core.doc_writer import DocWriter, DocType, ExportFormat
 from core.calendar_manager import CalendarManager
@@ -77,7 +82,7 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(main.PROJECT_ROOT).resolve()
 
-app = FastAPI(title="Aerie · 云栖", version="0.2.0-beta.1")
+app = FastAPI(title="Aerie · 云栖", version="0.3.1-Beta.1")
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -1041,7 +1046,7 @@ async def health(request: Request) -> dict:
     return {
         "status": overall,
         "app": "Aerie · 云栖",
-        "version": "0.2.0-beta.1",
+        "version": "0.3.1-Beta.1",
         "uptime_seconds": uptime,
         "qq_connected": qq_ws_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
@@ -1560,6 +1565,10 @@ async def chat_history_page(
 
     identity = companion.identity_resolver.resolve("desktop", "local")
     try:
+        # 角色级隔离：历史分页同样按激活角色过滤（persona_id 未传时
+        # history_page 内部退化为不过滤，此处显式传入保持全链一致）
+        from core.conversation_repository import active_persona_id
+
         page_result = companion.conversation_repository.history_page(
             actor_id=identity.actor_id,
             channel="desktop",
@@ -1569,6 +1578,7 @@ async def chat_history_page(
             cursor=cursor,
             direction=direction,
             limit=limit,
+            persona_id=active_persona_id(),
         )
     except Exception as exc:
         from core.conversation_repository import InvalidHistoryCursor
@@ -1596,6 +1606,13 @@ async def chat_history(
             else " WHERE deleted_at IS NULL"
         )
         params = (user_id,) if user_id is not None else ()
+        # 角色隔离：active persona 非 None 时只看 persona + NULL 共享行
+        from core.conversation_repository import active_persona_id
+
+        persona = active_persona_id()
+        if user_id is not None and persona:
+            where += " AND (persona_id = ? OR persona_id IS NULL)"
+            params += (persona,)
         count = _db.query_one(f"SELECT COUNT(*) AS cnt FROM chat_log{where}", params)
         rows = _db.query(
             f"SELECT * FROM chat_log{where} ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -1641,11 +1658,23 @@ async def chat_poll(
     if user_id <= 0:
         return JSONResponse({"error": "invalid_user_id"}, status_code=400)
     try:
-        rows = _db.query(
-            "SELECT * FROM chat_log WHERE user_id = ? AND id > ? "
-            "AND deleted_at IS NULL ORDER BY id",
-            (user_id, since_id),
-        )
+        # 角色隔离：active persona 非 None 时只看 persona + NULL 共享行
+        from core.conversation_repository import active_persona_id
+
+        persona = active_persona_id()
+        if persona:
+            rows = _db.query(
+                "SELECT * FROM chat_log WHERE user_id = ? AND id > ? "
+                "AND deleted_at IS NULL "
+                "AND (persona_id = ? OR persona_id IS NULL) ORDER BY id",
+                (user_id, since_id, persona),
+            )
+        else:
+            rows = _db.query(
+                "SELECT * FROM chat_log WHERE user_id = ? AND id > ? "
+                "AND deleted_at IS NULL ORDER BY id",
+                (user_id, since_id),
+            )
         import json as _json
         for row in rows:
             if row.get("attachments"):
@@ -3591,6 +3620,96 @@ async def self_evolve_stats() -> dict:
         return {"error": str(e)}
 
 
+# ── L4 自进化（内测）：代码自修改 提案/闸门/审批/回滚 ──────────
+
+def _get_l4_evolution() -> L4SelfEvolution | None:
+    """Look up the L4 self-evolution engine on the live companion."""
+    comp = get_companion()
+    if not comp:
+        return None
+    return getattr(comp, "l4_evolution", None)
+
+
+@app.get("/api/self_evolve/l4/stats")
+async def self_evolve_l4_stats() -> dict:
+    """L4 code self-modification statistics."""
+    l4 = _get_l4_evolution()
+    if l4 is None:
+        return {"status": "ok", "enabled": False, "total": 0, "applied": 0}
+    try:
+        comp = get_companion()
+        enabled = bool(
+            getattr(getattr(comp, "self_evolver", None), "enabled", False)
+        )
+        return {"status": "ok", "enabled": enabled, **l4.get_stats()}
+    except Exception as e:
+        logger.exception("self_evolve_l4_stats error")
+        return {"error": str(e)}
+
+
+@app.get("/api/self_evolve/l4/list")
+async def self_evolve_l4_list(
+    status: str = Query(default="", pattern="^$|^(proposed|gate1_passed|gate2_passed|gate3_passed|gate4_passed|approved|applied|rejected|rolled_back|pending_review)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict:
+    """List L4 evolution proposals (newest first)."""
+    l4 = _get_l4_evolution()
+    if l4 is None:
+        return JSONResponse({"error": "l4 not ready"}, status_code=503)
+    try:
+        return {
+            "proposals": l4.archive.list_proposals(
+                status=status or None,
+                limit=limit,
+            ),
+        }
+    except Exception as e:
+        logger.exception("self_evolve_l4_list error")
+        return {"error": str(e)}
+
+
+@app.post("/api/self_evolve/l4/{proposal_id}/approve")
+async def self_evolve_l4_approve(proposal_id: str) -> dict:
+    """人工审批并应用一个 L4 提案（核心/高风险提案必走此步）。"""
+    l4 = _get_l4_evolution()
+    if l4 is None:
+        return JSONResponse({"error": "l4 not ready"}, status_code=503)
+    try:
+        ok, msg = l4.approve_and_apply(proposal_id)
+        return {"ok": ok, "message": msg}
+    except Exception as e:
+        logger.exception("self_evolve_l4_approve error")
+        return {"error": str(e)}
+
+
+@app.post("/api/self_evolve/l4/{proposal_id}/reject")
+async def self_evolve_l4_reject(proposal_id: str) -> dict:
+    """拒绝一个 L4 提案。"""
+    l4 = _get_l4_evolution()
+    if l4 is None:
+        return JSONResponse({"error": "l4 not ready"}, status_code=503)
+    try:
+        ok, msg = l4.reject_proposal(proposal_id, reason="rejected via settings panel")
+        return {"ok": ok, "message": msg}
+    except Exception as e:
+        logger.exception("self_evolve_l4_reject error")
+        return {"error": str(e)}
+
+
+@app.post("/api/self_evolve/l4/{proposal_id}/rollback")
+async def self_evolve_l4_rollback(proposal_id: str) -> dict:
+    """回滚一个已应用的 L4 提案（24h 窗口内）。"""
+    l4 = _get_l4_evolution()
+    if l4 is None:
+        return JSONResponse({"error": "l4 not ready"}, status_code=503)
+    try:
+        ok, msg = l4.rollback(proposal_id)
+        return {"ok": ok, "message": msg}
+    except Exception as e:
+        logger.exception("self_evolve_l4_rollback error")
+        return {"error": str(e)}
+
+
 # ── Computer Control ────────────────────────────────
 
 @app.get("/api/computer_control/stats")
@@ -3603,7 +3722,7 @@ async def computer_control_stats() -> dict:
         today_ops = sum(1 for l in logs if l.get("ts", 0) >= today_start and l.get("status") == "success")
         blocked_ops = sum(1 for l in logs if l.get("status") == "blocked")
         return {
-            "permission_level": ctrl.permission_level.value,
+            "mode": ctrl.mode.value,
             "today_operations": today_ops,
             "blocked_operations": blocked_ops,
             "total_operations": len(logs),
@@ -3613,35 +3732,132 @@ async def computer_control_stats() -> dict:
         return {"error": str(e)}
 
 
-@app.get("/api/computer_control/level")
-async def computer_control_get_level() -> dict:
-    """Get current permission level."""
+@app.get("/api/computer_control/mode")
+async def computer_control_get_mode() -> dict:
+    """Get current permission mode: manual / auto / full / custom."""
     try:
         ctrl = _get_computer_controller()
-        return {"level": ctrl.permission_level.value}
+        return {"mode": ctrl.mode.value}
     except Exception as e:
         return {"error": str(e)}
 
 
-@app.put("/api/computer_control/level")
-async def computer_control_set_level(request: Request) -> dict:
-    """Set permission level: view_only / standard / full."""
+@app.put("/api/computer_control/mode")
+async def computer_control_set_mode(request: Request) -> dict:
+    """Set permission mode: manual / auto / full / custom."""
     try:
         body = await request.json()
-        level_str = (body.get("level") or "").lower()
-        level_map = {
-            "view_only": PermissionLevel.VIEW_ONLY,
-            "standard": PermissionLevel.STANDARD,
-            "full": PermissionLevel.FULL,
-        }
-        if level_str not in level_map:
-            return JSONResponse({"error": "invalid level"}, status_code=400)
+        mode_str = (body.get("mode") or "").lower()
+        valid = {m.value for m in ControlMode}
+        if mode_str not in valid:
+            return JSONResponse(
+                {"error": f"invalid mode, must be one of: {sorted(valid)}"},
+                status_code=400,
+            )
         ctrl = _get_computer_controller()
-        ctrl.set_permission(level_map[level_str])
-        emit("computer_control_level_changed", level=level_str)
-        return {"status": "ok", "level": level_str}
+        ctrl.set_mode(ControlMode(mode_str))
+        emit("computer_control_mode_changed", mode=mode_str)
+        return {"status": "ok", "mode": mode_str}
     except Exception as e:
-        logger.exception("computer_control_set_level error")
+        logger.exception("computer_control_set_mode error")
+        return {"error": str(e)}
+
+
+@app.get("/api/computer_control/policy")
+async def computer_control_policy() -> dict:
+    """Get current policy: mode + whitelist + blacklist + custom rules."""
+    try:
+        ctrl = _get_computer_controller()
+        return {"policy": ctrl.policy.to_dict()}
+    except Exception as e:
+        logger.exception("computer_control_policy error")
+        return {"error": str(e)}
+
+
+def _validate_list_body(body: dict) -> tuple[str, str, str]:
+    """校验黑白名单请求体，返回 (entry_type, value, note)。"""
+    entry_type = str(body.get("type") or "").lower()
+    value = str(body.get("value") or "").strip()
+    note = str(body.get("note") or "")
+    valid_types = {t.value for t in PolicyEntryType}
+    if entry_type not in valid_types:
+        raise ValueError(f"invalid type, must be one of: {sorted(valid_types)}")
+    if not value:
+        raise ValueError("value is required")
+    return entry_type, value, note
+
+
+@app.post("/api/computer_control/whitelist")
+async def computer_control_whitelist_add(request: Request) -> dict:
+    """Add a whitelist entry.
+
+    body: {"type": "action|command|pattern", "value": "...", "note": ""}
+    """
+    try:
+        body = await request.json()
+        entry_type, value, note = _validate_list_body(body)
+        ctrl = _get_computer_controller()
+        entry = ctrl.policy.add_whitelist(entry_type, value, note)
+        emit("computer_control_policy_changed", list_name="whitelist",
+             action="add", entry=entry.to_dict())
+        return {"status": "ok", "entry": entry.to_dict(), "policy": ctrl.policy.to_dict()}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        logger.exception("whitelist_add error")
+        return {"error": str(e)}
+
+
+@app.delete("/api/computer_control/whitelist/{entry_id}")
+async def computer_control_whitelist_remove(entry_id: str) -> dict:
+    """Remove a whitelist entry."""
+    try:
+        ctrl = _get_computer_controller()
+        ok = ctrl.policy.remove_whitelist(entry_id)
+        if not ok:
+            return JSONResponse({"error": "entry not found"}, status_code=404)
+        emit("computer_control_policy_changed", list_name="whitelist",
+             action="remove", id=entry_id)
+        return {"status": "ok", "removed": True, "policy": ctrl.policy.to_dict()}
+    except Exception as e:
+        logger.exception("whitelist_remove error")
+        return {"error": str(e)}
+
+
+@app.post("/api/computer_control/blacklist")
+async def computer_control_blacklist_add(request: Request) -> dict:
+    """Add a blacklist entry.
+
+    body: {"type": "action|command|pattern", "value": "...", "note": ""}
+    """
+    try:
+        body = await request.json()
+        entry_type, value, note = _validate_list_body(body)
+        ctrl = _get_computer_controller()
+        entry = ctrl.policy.add_blacklist(entry_type, value, note)
+        emit("computer_control_policy_changed", list_name="blacklist",
+             action="add", entry=entry.to_dict())
+        return {"status": "ok", "entry": entry.to_dict(), "policy": ctrl.policy.to_dict()}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        logger.exception("blacklist_add error")
+        return {"error": str(e)}
+
+
+@app.delete("/api/computer_control/blacklist/{entry_id}")
+async def computer_control_blacklist_remove(entry_id: str) -> dict:
+    """Remove a blacklist entry."""
+    try:
+        ctrl = _get_computer_controller()
+        ok = ctrl.policy.remove_blacklist(entry_id)
+        if not ok:
+            return JSONResponse({"error": "entry not found"}, status_code=404)
+        emit("computer_control_policy_changed", list_name="blacklist",
+             action="remove", id=entry_id)
+        return {"status": "ok", "removed": True, "policy": ctrl.policy.to_dict()}
+    except Exception as e:
+        logger.exception("blacklist_remove error")
         return {"error": str(e)}
 
 
@@ -3672,17 +3888,22 @@ async def computer_control_approvals_pending() -> dict:
 
 
 @app.post("/api/computer_control/approvals/{approval_id}/approve")
-async def computer_control_approve(approval_id: str) -> dict:
-    """Approve a pending action."""
+async def computer_control_approve(approval_id: str, request: Request) -> dict:
+    """Approve a pending action.
+
+    body: {"whitelist": true} — 放行并加入白名单（后续同类操作自动放行）。
+    """
     try:
+        body = {}
+        try:
+            body = await request.json() or {}
+        except Exception:
+            body = {}
+        whitelist = bool(body.get("whitelist", False))
         ctrl = _get_computer_controller()
-        result = ctrl.approve_action(approval_id)
+        result = ctrl.approve_action(approval_id, whitelist=whitelist)
         if result:
-            emit("computer_control_approval_updated",
-                id=approval_id,
-                status="approved",
-            )
-            return {"status": "ok", "approved": True}
+            return {"status": "ok", "approved": True, "whitelist": whitelist}
         return JSONResponse({"error": "approval not found"}, status_code=404)
     except Exception as e:
         logger.exception("approve error")
@@ -3690,17 +3911,22 @@ async def computer_control_approve(approval_id: str) -> dict:
 
 
 @app.post("/api/computer_control/approvals/{approval_id}/reject")
-async def computer_control_reject(approval_id: str) -> dict:
-    """Reject a pending action."""
+async def computer_control_reject(approval_id: str, request: Request) -> dict:
+    """Reject a pending action.
+
+    body: {"blacklist": true} — 拒绝并加入黑名单（后续同类操作直接拦截）。
+    """
     try:
+        body = {}
+        try:
+            body = await request.json() or {}
+        except Exception:
+            body = {}
+        blacklist = bool(body.get("blacklist", False))
         ctrl = _get_computer_controller()
-        result = ctrl.reject_action(approval_id)
+        result = ctrl.reject_action(approval_id, blacklist=blacklist)
         if result:
-            emit("computer_control_approval_updated",
-                id=approval_id,
-                status="rejected",
-            )
-            return {"status": "ok", "rejected": True}
+            return {"status": "ok", "rejected": True, "blacklist": blacklist}
         return JSONResponse({"error": "approval not found"}, status_code=404)
     except Exception as e:
         logger.exception("reject error")
@@ -5092,6 +5318,24 @@ async def settings_put(request: Request) -> dict:
                         _budget.set_limit("proactive", int(_p["image_max_per_day"]))
             except Exception:
                 logger.warning("settings_put: hot-apply proactive frequency failed", exc_info=True)
+        # 热更新：L4 自进化内测开关 → 立即作用于运行中的 SelfEvolver（无需重启）。
+        if (
+            isinstance(body, dict)
+            and isinstance(body.get("feature_flags"), dict)
+            and "self_evolve_l4_enabled" in body["feature_flags"]
+        ):
+            try:
+                from core.companion import get_companion
+                _comp = get_companion()
+                _ev = getattr(_comp, "self_evolver", None)
+                if _ev is not None and hasattr(_ev, "enabled"):
+                    _ev.enabled = bool(body["feature_flags"]["self_evolve_l4_enabled"])
+                    logger.info(
+                        "settings_put: self_evolve_l4_enabled hot-applied -> %s",
+                        _ev.enabled,
+                    )
+            except Exception:
+                logger.warning("settings_put: hot-apply l4 toggle failed", exc_info=True)
         return {"status": "ok", "saved": list(body.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -5865,6 +6109,11 @@ async def persona_get() -> dict:
             "persona_9_10": extraversion >= 0.7,
             "archetype": profile.get("personality_archetype", ""),
             "extraversion": extraversion,
+            # gender drives pronoun-aware UI labels (她/他/TA)
+            "gender": (
+                (_persona_mgr.get_active().get("basic") or {}).get("gender", "")
+                or profile.get("gender", "")
+            ),
         }
     except Exception as e:
         return {"error": str(e)}
@@ -5887,8 +6136,15 @@ async def persona_put(request: Request) -> dict:
 
 
 @app.post("/api/persona/avatar")
-async def persona_avatar_upload(file: UploadFile = File(...)) -> dict:
-    """Upload persona avatar. PNG/JPG only, ≤2 MB. Auto-backs up previous."""
+async def persona_avatar_upload(
+    file: UploadFile = File(...),
+    persona_id: str | None = Query(default=None),
+) -> dict:
+    """Upload persona avatar. PNG/JPG only, ≤2 MB. Auto-backs up previous.
+
+    角色级隔离：默认写入当前激活角色；人设中心编辑器可传 ``persona_id``
+    为任意角色上传（无需先激活）。
+    """
     if file.content_type not in _PERSONA_AVATAR_TYPES:
         return JSONResponse(
             {"error": f"unsupported type: {file.content_type}"},
@@ -5904,24 +6160,22 @@ async def persona_avatar_upload(file: UploadFile = File(...)) -> dict:
         return JSONResponse({"error": "empty file"}, status_code=400)
     ext = "png" if file.content_type == "image/png" else "jpg"
     try:
-        url = save_avatar_bytes(data, ext=ext)
+        url = save_avatar_bytes(data, ext=ext, persona_id=persona_id or None)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-    # R7.5: return the inline dataURL too so the renderer can update
-    # <img src> immediately without a follow-up GET /api/persona round
-    # trip. Saves one network hop and avoids the brief flash of the
-    # broken-image icon while /api/persona is in flight.
     import base64 as _b64
     dataurl = (
         "data:" + file.content_type + ";base64,"
         + _b64.b64encode(data).decode("ascii")
     )
+    effective_pid = persona_id or (_persona_mgr.get_active_id() if _persona_mgr else "") or ""
     return {
         "status": "ok",
         "url": url,
         "size": len(data),
         "content_type": file.content_type,
         "avatar_dataurl": dataurl,
+        "persona_id": effective_pid,
     }
 
 
@@ -5938,6 +6192,7 @@ async def persona_avatar_get() -> Response:
     if not pair:
         return JSONResponse({"error": "not set"}, status_code=404)
     data, ct = pair
+    persona_id = _persona_mgr.get_active_id() if _persona_mgr else ""
     return Response(
         content=data,
         media_type=ct,
@@ -5945,6 +6200,7 @@ async def persona_avatar_get() -> Response:
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Pragma": "no-cache",
             "Expires": "0",
+            "X-Persona-Id": persona_id,
         },
     )
 
@@ -6100,11 +6356,33 @@ async def persona_three_view_delete(persona_id: str, view: str) -> dict:
 # ── v13.0: Persona Hub (人设中心) ──────────────────────
 
 
+def _persona_avatar_dataurl(persona_id: str) -> str:
+    """按 persona 读取头像并转 inline dataURL（无头像返回空串）。
+
+    角色级隔离：头像按 persona_id 分区存储，必须按角色读，
+    绝不能回落到全局缓存。
+    """
+    try:
+        from config.persona_loader import load_avatar_bytes
+        pair = load_avatar_bytes(persona_id)
+        if not pair:
+            return ""
+        import base64 as _b64
+        data, ct = pair
+        mime = "image/jpeg" if ct == "image/jpeg" else "image/png"
+        return "data:" + mime + ";base64," + _b64.b64encode(data).decode("ascii")
+    except Exception:
+        logger.exception("persona avatar dataurl error pid=%s", persona_id)
+        return ""
+
+
 @app.get("/api/persona/hub/list")
 async def persona_hub_list() -> dict:
-    """列出所有人设模板。"""
+    """列出所有人设模板（含各自头像，按角色独立）。"""
     try:
         personas = _persona_mgr.list_personas()
+        for p in personas:
+            p["avatar_dataurl"] = _persona_avatar_dataurl(p.get("id") or "")
         return {"status": "ok", "personas": personas, "active_id": _persona_mgr.get_active_id()}
     except Exception as e:
         logger.exception("persona hub list error")
@@ -6113,11 +6391,13 @@ async def persona_hub_list() -> dict:
 
 @app.get("/api/persona/hub/{persona_id}")
 async def persona_hub_get(persona_id: str) -> dict:
-    """获取指定人设的完整配置。"""
+    """获取指定人设的完整配置（含该角色头像）。"""
     try:
         if not _persona_mgr.has_persona(persona_id):
             return JSONResponse({"error": "persona not found"}, status_code=404)
         persona = _persona_mgr.get_persona(persona_id)
+        persona = dict(persona)
+        persona["avatar_dataurl"] = _persona_avatar_dataurl(persona_id)
         return {"status": "ok", "persona": persona}
     except Exception as e:
         logger.exception("persona hub get error")
@@ -6248,6 +6528,72 @@ async def persona_hub_reset_default() -> dict:
     except Exception as e:
         logger.exception("persona hub reset error")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── v13.x: Persona AI 智能生成 ─────────────────────
+
+
+@app.post("/api/persona/hub/generate/concepts")
+async def persona_hub_generate_concepts(request: Request) -> dict:
+    """Recommend story concepts ("两人故事起因") based on relationship type + seed."""
+    try:
+        body = await request.json()
+    except Exception as e:
+        return JSONResponse({"error": f"invalid json: {e}"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a dict"}, status_code=400)
+    relationship_type = (body.get("relationship_type") or "").strip()
+    story_seed = (body.get("story_seed") or "").strip()
+    description = (body.get("description") or "").strip()
+    try:
+        from core.persona_hub.persona_generator import recommend_story_concepts
+        concepts = await recommend_story_concepts(
+            relationship_type,
+            story_seed,
+            description,
+        )
+    except Exception as e:
+        logger.exception("persona hub generate concepts error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return {"status": "ok", "concepts": concepts}
+
+
+@app.post("/api/persona/hub/generate")
+async def persona_hub_generate(request: Request) -> dict:
+    """Create an AI persona generation task from a free-text description."""
+    try:
+        body = await request.json()
+    except Exception as e:
+        return JSONResponse({"error": f"invalid json: {e}"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a dict"}, status_code=400)
+    description = (body.get("description") or "").strip()
+    if not description:
+        return JSONResponse({"error": "description is required"}, status_code=400)
+    options = body.get("options") or {}
+    if not isinstance(options, dict):
+        options = {}
+    try:
+        from core.persona_hub.persona_generator import create_generation_task
+        task_id = create_generation_task(description, options)
+    except Exception as e:
+        logger.exception("persona hub generate error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return {"status": "ok", "task_id": task_id}
+
+
+@app.get("/api/persona/hub/generate/{task_id}")
+async def persona_hub_generate_status(task_id: str) -> dict:
+    """Poll an AI persona generation task."""
+    try:
+        from core.persona_hub.persona_generator import get_generation_task
+        task = get_generation_task(task_id)
+    except Exception as e:
+        logger.exception("persona hub generate status error")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    if not task:
+        return JSONResponse({"error": "task not found"}, status_code=404)
+    return {"status": "ok", "task": task}
 
 
 # ── Daily Brief (Block-4A R1.4) ────────────────────────

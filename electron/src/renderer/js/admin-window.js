@@ -197,7 +197,13 @@
       main.className = "adw-row-main";
       const title = document.createElement("span");
       title.className = "adw-row-title";
-      title.textContent = (CHANNEL_LABELS[c.channel] || c.channel || "--") + " · " + String(c.conversation_id).slice(0, 20) + "…";
+      // 角色级隔离：会话归属按 persona 标注，不再把塞纳的会话显示成"伊塔"
+      const personaTag = c.persona_name
+        ? "【" + c.persona_name + "】"
+        : (c.persona_id ? "【" + c.persona_id + "】" : "");
+      title.textContent = personaTag
+        + (CHANNEL_LABELS[c.channel] || c.channel || "--") + " · "
+        + String(c.conversation_id).slice(0, 20) + "…";
       const preview = document.createElement("span");
       preview.className = "adw-row-preview";
       preview.textContent = (c.preview && c.preview.content) || "（无内容）";
@@ -245,7 +251,10 @@
       mrow.className = "adw-msg-row" + (m.deleted_at ? " adw-msg-row--trashed" : "");
       const head = document.createElement("span");
       head.className = "adw-msg-head";
-      head.textContent = (m.role === "assistant" ? "伊塔" : "你") + " · " + (m.created_at || "");
+      // 角色级隔离：assistant 消息按消息归属 persona 显示名字，
+      // 不再硬编码"伊塔"（塞纳的消息就标塞纳）
+      const aiName = m.persona_name || "AI";
+      head.textContent = (m.role === "assistant" ? aiName : "你") + " · " + (m.created_at || "");
       const body = document.createElement("span");
       body.className = "adw-msg-body";
       body.textContent = String(m.content || "");
@@ -332,7 +341,9 @@
       main.className = "adw-row-main";
       const title = document.createElement("span");
       title.className = "adw-row-title";
-      title.textContent = "重要度 " + Number(m.importance) + " · " + String(m.memory_type || "fact");
+      // 角色级隔离：记忆归属按 persona 标注（共享/无归属不标）
+      const memPersona = m.persona_name ? "【" + m.persona_name + "】" : "";
+      title.textContent = memPersona + "重要度 " + Number(m.importance) + " · " + String(m.memory_type || "fact");
       const preview = document.createElement("span");
       preview.className = "adw-row-preview";
       preview.textContent = String(m.content || "");

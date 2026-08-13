@@ -205,16 +205,39 @@ class ContextBuilder:
                 f"每次主动撤回后都要追加一句'当我没说'。"
             )
 
-        # 引用上下文 — only FULL mode
+        # 引用上下文 — only FULL mode (Quote V2: include quoted attachments
+        # so the LLM can "see" quoted images/files, not only text).
         if route_mode == "FULL" and reply_to:
             name = persona.get("basic", {}).get("name", "伊塔")
-            quote_role = "你" if reply_to.get("role") == "user" else name
+            quote_role = self._quote_speaker_label(reply_to, name)
             quote_text = (reply_to.get("content") or "")[:200]
-            system += (
+            quote_lines = [
                 f"\n\n**引用上下文**：\n你引用了{name}之前的某条消息：\n"
-                f"「{quote_text}」（来自{quote_role}）\n"
-                f"回复时可在合适处呼应这条消息，让你知道{name}认真听了。"
+                f"「{quote_text}」（来自{quote_role}）",
+            ]
+            quoted_atts = reply_to.get("attachments") or []
+            if quoted_atts:
+                att_desc: list[str] = []
+                for att in quoted_atts:
+                    aname = att.get("name") or "?"
+                    atype = att.get("category") or att.get("type") or "?"
+                    if atype == "image":
+                        att_desc.append(
+                            f"- 图片：{aname}（URL {att.get('url', '?')}）"
+                        )
+                    else:
+                        att_desc.append(
+                            f"- {aname}（{atype}, {att.get('size', 0)} bytes, "
+                            f"URL {att.get('url', '?')}）"
+                        )
+                quote_lines.append(
+                    "被引用的消息还带有附件（图片/文件），结合附件内容理解：\n"
+                    + "\n".join(att_desc)
+                )
+            quote_lines.append(
+                "回复时可在合适处呼应这条消息，让你知道" + name + "认真听了。"
             )
+            system += "\n".join(quote_lines)
 
         # 附件 — only FULL mode
         if route_mode == "FULL" and attachments:
@@ -406,6 +429,10 @@ class ContextBuilder:
         actor_id: str | None,
         limit: int,
     ) -> list[dict[str, Any]]:
+        # P1-D 角色记忆隔离：召回按当前激活角色过滤（actor_id 维度保留透传，
+        # 与 persona_id 正交：多端账户隔离 + 角色隔离双维过滤）。
+        from core.conversation_repository import active_persona_id
+
         if not self.memory:
             return []
         retrieve = getattr(self.memory, "retrieve", None)
@@ -416,6 +443,7 @@ class ContextBuilder:
                     current_msg,
                     limit,
                     actor_id=actor_id,
+                    persona_id=active_persona_id(),
                 )
                 return [dict(row) for row in (hits or [])[:limit]]
             except Exception:
@@ -526,6 +554,35 @@ class ContextBuilder:
         return text[:max_chars] + "…"
 
     # ── 内部构建方法 ──────────────────────────────
+
+    def _quote_speaker_label(self, reply_to: dict, fallback_name: str) -> str:
+        """Resolve who said the quoted message (multi-persona safe).
+
+        ``role == 'user'`` maps to 你; assistant messages produced by a
+        *different* persona get that persona's name instead of the active
+        persona's name, so quotes never get mis-attributed. Legacy messages
+        without a persona fall back to the active persona's name.
+        """
+        if reply_to.get("role") == "user":
+            return "你"
+        quote_pid = str(reply_to.get("persona_id") or "")
+        if quote_pid:
+            active_pid = ""
+            try:
+                active_pid = self._persona_mgr.get_active_id()
+            except Exception:
+                active_pid = ""
+            if quote_pid != active_pid:
+                try:
+                    if self._persona_mgr.has_persona(quote_pid):
+                        other = self._persona_mgr.get_persona(quote_pid)
+                        other_name = (other.get("basic") or {}).get("name")
+                        if other_name:
+                            return str(other_name)
+                except Exception:
+                    pass
+                return quote_pid
+        return fallback_name
 
     def _build_system_prompt(
         self,

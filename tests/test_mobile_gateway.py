@@ -55,6 +55,16 @@ def test_mobile_gateway_exposes_only_the_phase5_route_allowlist():
         ("GET", "/api/mobile/v1/files"),
         ("GET", "/api/mobile/v1/files/{file_id}"),
         ("GET", "/api/mobile/v1/files/{file_id}/content"),
+        ("GET", "/api/mobile/v1/approvals"),
+        ("GET", "/api/mobile/v1/approvals/{approval_id}"),
+        ("POST", "/api/mobile/v1/approvals/{approval_id}/decision"),
+        ("GET", "/api/mobile/v1/owner/guests"),
+        ("GET", "/api/mobile/v1/owner/guests/{account_id}/messages"),
+        ("GET", "/api/mobile/v1/owner/audit"),
+        ("GET", "/api/mobile/v1/readonly/brief"),
+        ("GET", "/api/mobile/v1/readonly/world"),
+        ("GET", "/api/mobile/v1/readonly/memory"),
+        ("GET", "/api/mobile/v1/readonly/weather"),
     }
     assert mobile_app.docs_url is None
     assert mobile_app.redoc_url is None
@@ -81,7 +91,8 @@ def test_mobile_gateway_health_is_minimal_and_public():
         "/api/brain/shell",
         "/api/env/providers",
         "/api/config/yaml",
-        "/api/computer_control/level",
+        "/api/computer_control/mode",
+        "/api/computer_control/policy",
         "/api/chat/send",
         "/uploads/example.txt",
         "/docs",

@@ -113,6 +113,16 @@ def test_gateway_route_allowlist_excludes_desktop_management_api(tmp_path):
         "/api/mobile/v1/files",
         "/api/mobile/v1/files/{file_id}",
         "/api/mobile/v1/files/{file_id}/content",
+        "/api/mobile/v1/approvals",
+        "/api/mobile/v1/approvals/{approval_id}",
+        "/api/mobile/v1/approvals/{approval_id}/decision",
+        "/api/mobile/v1/owner/guests",
+        "/api/mobile/v1/owner/guests/{account_id}/messages",
+        "/api/mobile/v1/owner/audit",
+        "/api/mobile/v1/readonly/brief",
+        "/api/mobile/v1/readonly/world",
+        "/api/mobile/v1/readonly/memory",
+        "/api/mobile/v1/readonly/weather",
     }
     for path in ("/api/system/restart", "/api/brain/shell", "/docs"):
         assert client.get(path).status_code == 404

@@ -22,7 +22,7 @@ from core.qq_media import QQMediaPreprocessor
 from core.qq_sticker import QQStickerSender
 from core.cognition import CognitionEngine
 from core.decision import MultiLayerDecision
-from core.computer_control import ComputerController, PermissionLevel
+from core.computer_control import ComputerController
 from core.conversation_continuity import (
     ContextAssembler,
     ConversationSummaryRepository,
@@ -51,6 +51,8 @@ from core.primary_identity import PrimaryIdentityResolver
 from core.push_event_engine import get_event_engine
 from core.push_scheduler import PushScheduler
 from core.qq_whitelist import QQWhitelistManager
+from core.self_evolve_l4 import L4SelfEvolution
+from core.self_evolve_proposer import SelfEvolveProposer
 from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry
 from core.world_port import build_world_port
@@ -707,10 +709,17 @@ class Companion:
         self._register_async_task_handlers()
 
         # Phase 9 Batch 6: Self-evolution engine (capability-gap detector)
+        # L4 内测链路：代码自修改（proposer 生成 file_changes → 四道闸门）。
+        # 默认关闭，仅当 settings.yaml feature_flags.self_evolve_l4_enabled=true 时激活。
+        self.l4_evolution = L4SelfEvolution(auto_apply=True)
+        self.evolve_proposer = SelfEvolveProposer()
         self.self_evolver = SelfEvolver(
             db=self.db,
             tool_registry=self.tool_registry,
             brain=self.brain,
+            enabled=self.feature_flags.is_enabled("self_evolve_l4_enabled"),
+            proposer=self.evolve_proposer,
+            l4=self.l4_evolution,
         )
 
         # Communication
@@ -766,6 +775,11 @@ class Companion:
         self.pipeline.relationship_snapshot_provider = self._relationship_snapshot_for_context
         self.pipeline.self_model_snapshot_provider = self._self_model_snapshot_for_context
         self.pipeline.internal_snapshot_provider = self._internal_snapshot_for_context
+        # Quote V2: let pipeline pull quoted message content from QQ when the
+        # quoted message was never persisted in chat_log (get_msg fallback).
+        fetcher = getattr(self.qq, "get_msg", None)
+        if callable(fetcher):
+            self.pipeline.qq_get_msg = fetcher
         # 对话移动意图：用户"去X"指令 → MovementManager.move_to()，让她的身体真的移动。
         self.pipeline.movement_intent_provider = self.apply_movement_intent
         # P0 topic system: 给上下文构建器注入话题提供器（L0.5 话题认知层）。
@@ -1367,6 +1381,7 @@ class Companion:
                 return False
             # P3 发图自我认知：QQ 通道补写 chat_log（含中文内容描述）+ 落 EVENT 记忆，
             # 让"我发了张什么图"进入对话历史与记忆召回，用户追问时能接住。
+            # 角色级隔离：chat_log 必须带 persona_id，否则 NULL 共享行会被两个角色同时看到。
             try:
                 desc = _image_event_desc(plan)
                 db = getattr(self, "db", None)
@@ -1379,6 +1394,7 @@ class Companion:
                         "route_mode": "PROACTIVE",
                         "scene": str(plan.get("scene") or "world_image"),
                         "channel": "qq",
+                        "persona_id": str(plan.get("persona_id") or "") or self._active_persona_id(),
                     })
                 try:
                     import os as _os
@@ -1389,6 +1405,7 @@ class Companion:
                     pass
                 await self._persist_image_event(
                     int(target), desc, "qq", image_path=str(image_ref),
+                    persona_id=str(plan.get("persona_id") or "") or None,
                 )
             except Exception:
                 logger.debug("[WorldImage] qq image event record failed", exc_info=True)
@@ -1427,6 +1444,7 @@ class Companion:
                             "msg_type": scene if scene else "world_image",
                             "route_mode": "PROACTIVE",
                             "scene": scene if scene else "world_image",
+                            "persona_id": str(plan.get("persona_id") or "") or self._active_persona_id(),
                         },
                     ) or message_id
             except Exception:
@@ -1453,6 +1471,7 @@ class Companion:
                     desc,
                     "desktop",
                     image_path=str(plan.get("asset_url") or "").lstrip("/"),
+                    persona_id=str(plan.get("persona_id") or "") or None,
                 )
             except Exception:
                 logger.debug("[WorldImage] local chat image event record failed", exc_info=True)
@@ -2676,6 +2695,9 @@ class Companion:
                         user_id=0, content=content, importance=10.0,
                         source="identity_seed",
                         metadata={"channel": "system"},
+                        # 角色级隔离：种子内容为伊塔专属身份事实，归属 yita_default，
+                        # 否则 NULL 共享行会让塞纳等角色在记忆召回时把伊塔的身份当自己的。
+                        persona_id="yita_default",
                     )
                 except Exception:
                     logger.debug("identity memory seed item failed", exc_info=True)
@@ -2811,6 +2833,8 @@ class Companion:
                     "source": "generated",
                     "score": round(float(chosen.score), 2),
                     "size": _image_size_for_prompt_key(prompt_key),
+                    # 角色级隔离：图片归属当前激活角色，投递端按此写 chat_log persona_id
+                    "persona_id": self._active_persona_id(),
                 })
                 publish_result = publish_result if isinstance(publish_result, dict) else {}
                 # 发布动作即记录节奏（无论结果，避免失败后立刻重试刷屏）。
@@ -2899,6 +2923,7 @@ class Companion:
         desc: str,
         channel: str,
         image_path: str = "",
+        persona_id: str | None = None,
     ) -> None:
         """P3 发图自我认知：把一次发图落成 EVENT 类型长期记忆，供后续对话召回。
 
@@ -2907,6 +2932,7 @@ class Companion:
         - metadata 必写 occurred_at（ISO 时间）——召回按它降序过滤；
         - content 只存中文描述 + 相对路径，不存完整 URL（防泄漏 + 避免无效链接刷屏）。
         失败仅降级为 debug（发图链路不因落账失败而中断）。
+        角色级隔离：persona_id 与 chat_log 归属一致（缺省取当前激活角色）。
         """
         layered = getattr(self, "_layered_memory", None)
         if layered is None:
@@ -2927,6 +2953,7 @@ class Companion:
                     "channel": str(channel or ""),
                     "image_path": str(image_path or ""),
                 },
+                persona_id=persona_id or self._active_persona_id(),
             )
         except Exception:
             logger.debug("image event memory store failed", exc_info=True)
@@ -3474,14 +3501,27 @@ class Companion:
         return {"subject": active.subject, "turn_count": active.turn_count}
 
     async def _recent_dialogue_text(self, user_id: int, limit: int = 5) -> str:
-        """取最近非主动消息对话文本（主动消息续接素材，失败返回空串）。"""
+        """取最近非主动消息对话文本（主动消息续接素材，失败返回空串）。
+
+        角色级隔离：只取当前激活角色的对话，避免塞纳的推送拿伊塔的对话当素材。
+        """
         try:
-            rows = self.db.query(
-                "SELECT role, content FROM chat_log "
-                "WHERE user_id = ? AND msg_type != 'proactive' "
-                "ORDER BY id DESC LIMIT ?",
-                (user_id, int(limit)),
-            )
+            persona = self._active_persona_id()
+            if persona:
+                rows = self.db.query(
+                    "SELECT role, content FROM chat_log "
+                    "WHERE user_id = ? AND msg_type != 'proactive' "
+                    "AND (persona_id = ? OR persona_id IS NULL) "
+                    "ORDER BY id DESC LIMIT ?",
+                    (user_id, persona, int(limit)),
+                )
+            else:
+                rows = self.db.query(
+                    "SELECT role, content FROM chat_log "
+                    "WHERE user_id = ? AND msg_type != 'proactive' "
+                    "ORDER BY id DESC LIMIT ?",
+                    (user_id, int(limit)),
+                )
             rows = list(rows or [])
             rows.reverse()
             lines = []
@@ -3633,6 +3673,8 @@ class Companion:
                         "msg_type": "proactive",
                         "route_mode": "PROACTIVE",
                         "scene": scene_name,
+                        # 角色级隔离：主动推送归属当前激活角色，避免 NULL 共享行两个角色都看到
+                        "persona_id": self._active_persona_id(),
                     },
                 )
             except Exception:

@@ -20,12 +20,15 @@ from core.migrations import (
     desktop_chat_continuity_migrations,
     MigrationRunner,
     mobile_gateway_migrations,
+    persona_scoped_dialogue_memory_migrations,
     persona_timeline_migrations,
+    persona_timeline_persona_migrations,
     phase2_identity_migrations,
     phase3_backfill_migrations,
     phase3_conversation_migrations,
     phase4_request_queue_migrations,
     phase5_batch_request_migrations,
+    quote_unification_migrations,
     summary_buckets_migrations,
 )
 
@@ -297,6 +300,8 @@ INDEX_SQL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_chat_reply_to ON chat_log(reply_to_id);",
     "CREATE INDEX IF NOT EXISTS idx_chat_recalled ON chat_log(is_recalled);",
     "CREATE INDEX IF NOT EXISTS idx_chat_batch ON chat_log(batch_id);",
+    # Quote V2: platform message_id <-> chat_log.id mapping
+    "CREATE INDEX IF NOT EXISTS idx_chat_qq_message_id ON chat_log(qq_message_id);",
     # Phase 9: cognition log lookups
     "CREATE INDEX IF NOT EXISTS idx_cognition_user_ts ON cognition_log(user_id, ts DESC);",
     # Phase 9: emotion snapshot lookups
@@ -380,6 +385,9 @@ class Database:
                 runner.run(persona_timeline_migrations())
                 runner.run(admin_management_migrations())
                 runner.run(chat_log_trash_state_migrations())
+                runner.run(persona_scoped_dialogue_memory_migrations())
+                runner.run(persona_timeline_persona_migrations())
+                runner.run(quote_unification_migrations())
             else:
                 # Desktop attachments stay available on legacy installations.
                 # This creates only additive desktop-owned tables and leaves the
@@ -406,6 +414,7 @@ class Database:
             ("reply_to_id", "INTEGER DEFAULT NULL"),
             ("reply_to_content", "TEXT DEFAULT NULL"),
             ("reply_to_role", "TEXT DEFAULT NULL"),
+            ("reply_to_attachments", "TEXT DEFAULT NULL"),
             ("is_recalled", "INTEGER DEFAULT 0"),
             ("recalled_at", "TEXT DEFAULT NULL"),
             ("attachments", "TEXT DEFAULT NULL"),
@@ -415,6 +424,7 @@ class Database:
             ("channel_account_id", "TEXT DEFAULT NULL"),
             ("batch_id", "TEXT DEFAULT NULL"),
             ("qq_message_id", "INTEGER DEFAULT NULL"),
+            ("persona_id", "TEXT DEFAULT NULL"),
             ("deleted_at", "TEXT DEFAULT NULL"),
         ]
         for col, decl in migrations:

@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — 四层记忆统一调度器 (S3 M3.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — 四层记忆统一调度器 (S3 M3.1).
 
 LayeredMemory 统一管理四层记忆，对外提供统一的 API。
 自动处理记忆的流动：
@@ -87,6 +87,7 @@ class LayeredMemory:
         metadata: Optional[Dict[str, Any]] = None,
         source: str = "conversation",
         session_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
     ) -> str:
         """
         存储一条记忆。
@@ -105,6 +106,7 @@ class LayeredMemory:
             importance=importance,
             metadata=metadata or {},
             source=source,
+            persona_id=persona_id,
         )
         if session_id:
             item.metadata["session_id"] = session_id
@@ -122,7 +124,7 @@ class LayeredMemory:
 
         item.layer = target_layer
         layer_obj = self._layers[target_layer]
-        memory_id = await layer_obj.store(item)
+        memory_id = await layer_obj.store(item, persona_id=persona_id)
 
         # 同时在 working 层留个引用（方便当前会话访问）
         if target_layer == MemoryLayer.LONG_TERM and importance >= 5.0:
@@ -142,6 +144,7 @@ class LayeredMemory:
         limit: int = 5,
         layers: Optional[List[MemoryLayer]] = None,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemorySearchResult]:
         """
         多层联合检索。
@@ -178,6 +181,7 @@ class LayeredMemory:
                     query=query,
                     limit=limit,
                     memory_type=memory_type,
+                    persona_id=persona_id,
                 )
                 for r in results:
                     r.score = min(1.0, r.score * weight)
@@ -233,10 +237,13 @@ class LayeredMemory:
         layer: MemoryLayer = MemoryLayer.LONG_TERM,
         limit: int = 50,
         memory_type: Optional[MemoryType] = None,
+        persona_id: Optional[str] = None,
     ) -> List[MemoryItem]:
         """列出指定层中用户的记忆."""
         layer_obj = self._layers[layer]
-        return await layer_obj.list_by_user(user_id, limit, memory_type)
+        return await layer_obj.list_by_user(
+            user_id, limit, memory_type, persona_id=persona_id
+        )
 
     # ── 记忆流动（巩固 + 衰减）─────────────────────
 

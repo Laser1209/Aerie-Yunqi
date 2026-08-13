@@ -9,6 +9,213 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.3.1-Beta.1] - 2026-08-14
+
+> **自 0.3.0-Beta.1 以来的增量迭代 / Incremental iteration since 0.3.0-Beta.1**
+> 核心主题：三端引用机制统一（Quote V2），以及引用解析的防呆与多角色边界加固。
+
+### ✨ Features / 新功能
+
+#### 三端引用统一 / Unified Quote (Quote V2)
+
+- **统一 QuoteContext 数据模型**：`communication/message.py` 新增 `QuoteContext`（`chat_log_id` / `platform_message_id` / `role` / `content` / `msg_type` / `attachments` / `persona_id`），取代桌面/QQ/移动三端各自独立的平铺引用字段
+- **ID 映射地基**：`chat_log.qq_message_id` 全链路打通——入站回填、出站回填、反向索引 `idx_chat_qq_message_id`，QQ 平台 message_id 与内部 chat_log.id 双向可寻址
+- **pipeline 统一解析**：新增 `_resolve_reply_to()`，三条路径（单条 / lightweight / batch）统一引用解析与落库；被引用附件（图片 URL / 文件名 / 类型 / 大小）随引用一起进入 LLM 上下文
+- **存储透传**：canonical 表补 `reply_to_id` / `reply_to_content` / `reply_to_role` / `reply_to_attachments` 列，emit 事件、历史接口、`_event_contract` 全链路带引用字段
+- **移动端支持**：`SubmitRequest` 新增 `replyToId`，透传进入 RequestContext
+- **出站引用恢复**：AI 回复带引用气泡，QQ 出站按 platform message_id 发送 OneBot reply segment
+- **前端展示**：chat.js 引用条支持图片缩略图 + 文件名 + 文本
+
+#### 桌面灵动岛 v2 完善 / Dynamic Island v2 Refinement
+
+- **窗口固定最大尺寸 + 动态鼠标穿透**：灵动岛窗口恒定为最大内容尺寸（740×704，含四周 10px 呼吸边距），hover 拉长 / 点击展开 / 宽屏动画全部在窗口内居中完成，窗口不再随状态 resize，从根源消除「CSS 动画先于窗口 setBounds 反应」导致的瞬时裁切与闪烁；桌面遮挡由动态鼠标穿透解决（鼠标在交互区接收、离开穿透，**按住 ALT 强制穿透**可点到下方窗口）
+- **胶囊动态优先级**：胶囊中间区按「未读消息 > 播放中的媒体 > 系统状态 > 状态文字」动态取最高者显示，与勾选顺序无关；未播放的媒体不再占位显示"未在播放"
+- **毛玻璃防裁切**：窗口四周预留 10px 呼吸边距，规避 Electron 透明窗把 backdrop-filter 模糊硬切在窗口边界的通病
+- **配置持久化**：灵动岛配置（主题 / 触发方式 / 组件勾选）落盘到 `data/island_prefs.json`，重启后原样恢复
+
+#### 消息提醒与系统通知归属 / Notifications
+
+- **消息提醒总开关**：设置页新增「消息提醒 · Notifications」滑块，一个开关统一管住新消息 / 日程 / 主动消息的系统通知；状态持久化到 `data/notif_prefs.json`，重启后保留；在 main 进程 `system:notify` 统一收口拦截，关闭后不弹任何系统通知（应用内对话不受影响）
+- **Windows 通知归属修正**：main 进程调用 `app.setAppUserModelId()`（与 electron-builder `appId` 一致），打包安装后系统通知来源名从 "Electron" 正确显示为 "Aerie · 云栖"
+
+### 🐛 Fixed / 修复
+
+- **灵动岛 hover 晃动闪烁**：hover 拉长的 `mouseenter/mouseleave` 反复触发窗口 `setBounds` 导致窗口宽度反复跳变 + 收缩定时器未取消互相竞争；改为可取消防抖 + 固定窗口尺寸（不再 resize）
+- **灵动岛配置重启重置**：`_islandConfig` 原仅存内存，且 `createMainWindow()` 先于 `_loadIslandPrefs()` 执行导致设置面板首帧读到默认配置；改为配置落盘持久化 + prefs 恢复提前到窗口创建前
+- **引用解析边界守卫**：`_resolve_reply_to` 新增 `user_id` / `persona_id` 维度过滤，杜绝跨用户、跨角色引用泄漏；非法 reply_to_id 归零不抛异常
+- **QQ 平台 ID 串位**：QQ 入站引用强制走 `qq_message_id` 映射，platform message_id 不再撞上本地 chat_log.id
+- **多角色说话人误判**：引用其他角色消息时按 `persona_id` 解析真实角色名，不再统一标成当前角色
+- **兼容迁移列缺失**：`_migrate_chat_log` 兼容迁移补齐 `persona_id` 列
+- **对话框 `[]` 符号过多出戏**：图片/表情占位符（`[图片]` / `[图片:描述]` / `[表情包]` / `[图片内容]`）不再作为纯文本怼进气泡，改为渲染成小角标图标，描述默认隐藏、hover/点击才展开；`[话题：xxx]` 等系统上下文注入防御性剥离，不落到展示层
+- **QQ 消息不同步到桌面端**：批量合批路径（`_handle_batch`）原被 `source == "local"` 门控，QQ/移动消息不产生实时推送事件，且不调用 `_persist_canonical_turn` 落规范化 `messages` 表；改为放行 QQ/移动实时推送 + 批量路径补规范化落库，桌面端实时推送与历史记录均能看到 QQ 对话
+- **清空/回收站后对话框仍显示记录**：回收站与清空只软删规范化 `messages` 表，桌面轮询/历史直读 `chat_log` 未过滤；新增迁移 `012_chat_log_trash_state` 给 `chat_log` 补 `deleted_at` 并镜像软删状态，admin 回收站/恢复/purge 级联标记 `chat_log`，`/api/chat/poll`、`/api/chat/history` 与消息统计统一加 `deleted_at IS NULL` 过滤
+- **图片渲染成链接**：角标净化正则误把 markdown 图片语法 `![图片](url)` 里的 `[图片]` 当成占位符，替换后 marked 不再识别为图片；修复正则负向后顾/前视排除 `![...](...)` 与 `[...](...)`，并补齐 decoration 缺失的 token 字段
+
+### 🧪 Tests / 测试
+
+- 新增 `test_quote_v2.py`（桌面直接解析 / QQ 平台 ID 映射 / get_msg 回退 / 出站 reply id / 移动端透传）
+- 新增 `test_quote_foolproof.py`（非法 ID / 跨用户 / 跨角色 / QQ ID 串位 / 损坏附件 / 多角色说话人归属 / 记忆污染隔离，16 用例）
+- 引用相关组回归 147 passed
+- 灵动岛 v2 CDP 真实窗口回归：窗口 742×704、hover 320 / 展开 340 / 宽屏 720 全无裁切、动态穿透链路（胶囊外穿透 → 胶囊上接收 → ALT 强制穿透）、配置重启恢复
+- 消息/聊天链路修复回归：`test_admin_service` / `test_admin_api` / `test_desktop_shared_api_contract` / `test_desktop_chat_continuity` 44 passed；`test_phase3_conversation_model` / `test_message_batcher` / `test_api` 63 passed
+
+---
+
+## [0.3.0-Beta.1] - 2026-08-13
+
+> **自 0.2.1-beta.1 以来的正式更新 / Formal iteration since 0.2.1-beta.1**
+> 核心主题：上下文记忆系统全面改造（P0-P3）、后台管理平台（P4a/P4b）、世界模拟房间级精确定位与行为调度、生图链路加固、Aerie WS 多 Key 轮询与 ASR 回退、设置与管理界面升级，以及安全加固与稳定性修复。
+
+### ✨ Features / 新功能
+
+#### 上下文记忆系统（P0-P3）/ Context Memory System
+
+- **轮次化热窗口 + Token 弹性兜底**：热窗口按对话轮次计算，超预算自动弹性降级，兼容滚动摘要兜底与轮次窗口共存（`24afd06`）
+- **通道感知注入与跨端来源标记**：上下文注入携带来源通道（QQ/桌面/移动），LLM 可感知消息来自哪个端（`78a79b4`）
+- **记忆来源标注与注入防御**：记忆来源标注 + 系统记忆 channel 补齐，无来源记忆自动降权，注入通道防御加固（`79a4a7e` / `9b36ad0`）
+- **温层分组摘要分桶**：`009_summary_buckets` 迁移落地，按温层分桶滚动摘要，`_hist_label` 抽取公共模块去重（`cb247ec` / `0fcb755`）
+- **决策自省段注入**：`thinking_trace_injection_v1` 将决策推理过程（thinking_trace）注入上下文（`bdc00c9`）
+- **写入一致性校验门**：ConsistencyGate PoC——写入前校验内容一致性，PoC 实测 11 例 100% 一致（`1a31727`）
+- **跨端时间线与多端存在提示**：`multi_channel_identity_v1` 迁移 + 双视图（视图 B 跨端回忆）+ EVENT 事件记忆召回（`e217bd2` / `50a72a2`）
+- **话题追踪·行为调度·寻路感知系统**：话题追踪（TopicTracking）、每日行为调度（DailyBehaviorScheduler）、室内导航（IndoorNavigation）三系统落地（`35b7094`）
+- **话题认知层常驻生效**：删除 `topic_tracking_v1` 发布闸门 flag，话题认知层常驻（`4109f53`）
+- **身份播种精确查重**：identity_seed 记忆播种由 Chroma 检索改为 DB 精确查重，防止重复播种（`2029cab`）
+
+#### 后台管理平台（P4a/P4b）/ Admin Platform
+
+- **统计看板与决策日志**：统计看板服务 + 决策日志展示，世界仪表盘统计页前端渲染（`c1a5c4a` / `b5808e9`）
+- **软删回收站与审计门闩**：管理平台核心能力（`ff5d149`）
+- **状态文件查看 / 重置 / 撤销**：状态文件只读查看端点 + 状态重置与 undo 快照端点 + 管理 API HTTP 集成测试（`16959b1` / `62367e1`）
+- **管理平台窗口懒加载与三路入口**：`ceae6ca` + 设置面板显式入口兜底（`7a8723d`）
+- **聊天记录逐条编辑 + 记忆全量展示 + 概览总 tokens**（`4ffa679`），KPI 数据同步（overview 真实总量端点）（`2a374cb`）
+- **topic 状态文件启动即落盘** + 列表行 grid 右对齐布局（`8be9f3a`）
+
+#### 世界模拟 / World Simulation
+
+- **房间级精确定位**：`core/home_space.py` 房间级空间模型 + 楼层平面图 SVG（一/二楼），世界仪表盘可视化房间内定位，新增 `test_home_space.py` / `test_room_zone_integration.py`（`9a5ef6d`）
+- **对话移动意图 + 世界动作 set_location**：伊塔根据对话语境移动空间位置，世界状态联动（`02d38cb`）
+- **InProcess 世界保护**：免被 supervisor 空绑定覆盖（`e69093d`）
+
+#### 生图与照片链路 / Image Generation & Photo Pipeline
+
+- **生图提示词模块化升级 + 主动发图修复**（`de8a620`）
+- **世界生图情绪链路全量修复与加固**（`70001ba`）
+- **空提示词生图秒拒修复**：`empty_prompt` 兜底非空占位 + QQ 消息渲染修复（`dbb05bf`）
+- **POV 自拍约束与发图自我认知闭环**：POV 自拍约束 + 发图能力认知注入闭环（`63025f6`）
+
+#### 设置与模型接入 / Settings & Model Integration
+
+- **功能 API 配置界面**：搜索/天气/位置 API 配置界面（`0f7fca4`）
+- **API 余额显示 + 模型功能点自定义面板 + 热加载**（`f2df75c`）
+- **Aerie WS 多 Key 轮询**：`core/key_rotator.py` 线程安全 round-robin 多 Key 池，子 Agent / 轻量任务 / ASR 主链路分摊并发（`fcc3e67`）
+- **ASR 主链路与回退**：主链路 SiliconFlow ASR（`SILICONFLOW_ASR_MODEL` 可配置）+ DashScope qwen3-asr-flash 回退（`multimodal_input.py` AudioTranscriber）
+
+#### 自进化 / Self Evolution
+
+- **L4 代码自进化（内测开关）**：`core/self_evolve_l4.py` 代码自修改引擎接入运行时，`feature_flags.self_evolve_l4_enabled` 默认关闭；开启后能力缺口命中即走 LLM 提案生成链路，设置页开启需「危险警告 + 免责声明」两条信息两次确认，保存即热生效
+- **LLM 生成 file_changes 链路**：新增 `core/self_evolve_proposer.py`，调用代码模型（`AERIE_WS_CODE_MODEL`，多 Key 轮询）将缺口转成结构化 `file_changes`，严格校验（相对路径 / 动作枚举 / 内容非空 / JSON 容错解析），校验失败即返回 None 不阻塞主链路
+- **四道闸门全链路**：L4 提案经白名单/黑名单 + 风险分级 + Gate1 安全审查 / Gate2 语法检查 / Gate3 测试验证 / Gate4 回滚备份；白名单低风险自动应用，核心模块（`core/`）待人工审批，24h 一键回滚；新增 `/api/self_evolve/l4/{stats,list,approve,reject,rollback}` 端点，SSE 推送 `self_evolve_l4_proposed`
+- **幻觉防护**：AI 提案注册的占位工具改为显式失败（`success=False, status=not_implemented`），主模型无法将 stub 当作真实能力；被调用即重新触发缺口检测，形成自愈闭环
+- **L4 缺口审计行**：缺口命中先落 `self_evolve_log`（`trigger_kind=capability_gap_l4`）再后台生成提案，全程不阻塞主回复流程
+
+#### 人设中心 / Persona Hub
+
+- **人设 AI 智能生成器**：人设中心「新建人设」输入一句话/一段话角色描述，后端 5 阶段管线（concept / detail / assemble / prompt / finalize）自动生成完整人设并套合成熟骨架，系统级字段（emotion / desire / behavior / cognition 等）保留，system_prompt 强制附加「屏幕隔空铁律 + 消息结构约定」固定规则块
+- **AI 生成向导前端**：渐变进度条 + 5 步清单实时反馈（800ms 轮询、超时/失败可重试），支持「跳过 AI 生成，手动创建」；生成结果只保存不激活，自动进入编辑器逐项完善
+- **两人故事起因 + 概念推荐**：向导可选输入"两人故事起因"，`POST /api/persona/hub/generate/concepts` 结合网文写法动态推荐 4-5 张故事概念卡片，点击选中即融入生成；LLM 不可用时回退预置模板池（恋人/朋友/导师）
+- **用户昵称注入**：向导新增"你的名字"输入（自动带入设置页已存昵称），生成时注入提示词——用户以"你"出现并可用昵称称呼，绝不与角色名混淆
+- **人称体系自洽**：system prompt 全链路统一第一人称（"我"=角色名、"你"=用户），杜绝"你是塞纳。我是店员"式人称断裂；不假设用户性别，禁用他/她指代用户
+- **伊塔身份与隐私隔离**：生成时剥离骨架中伊塔专属数据（顶层 name/id/description、姓名/职业/身高三围/外观/故事/称呼），隐私字段默认留空由用户自行填写，新角色绝不继承"184cm / D杯"等默认
+- **称呼性别动态化**：设置页对 AI 的称呼（她/他/TA）按当前启用的人设性别自动切换，`/api/persona` 返回 `gender`
+- **生成任务 API**：`POST /api/persona/hub/generate` + `GET /api/persona/hub/generate/{task_id}`，asyncio 后台任务 + 内存任务表 TTL 清理
+- **确定性兜底**：LLM 任一环节失败自动降级为确定性生成，流程永不中断，始终产出可用基础框架
+- **修复**：向导视图插入位置导致点击「新建人设」白屏；原生 `alert()` 在 Electron 抢焦点导致确认后无法继续输入（改为页面内轻提示 + 自动聚焦输入框）
+
+#### 角色级对话与记忆隔离 / Persona-Scoped Dialogue & Memory
+
+- **数据库 persona 维度**：迁移 `013_persona_scoped_dialogue_memory` / `014_persona_timeline_persona`——chat_log / conversations / turns / messages / requests / long_term_memory / conversation_summary_buckets / persona_timeline 8 张表加 `persona_id` 列（NULL = 存量共享行），查询语义统一 `persona_id = :active OR persona_id IS NULL`
+- **会话 ID 按角色哈希**：`resolve_conversation_id(..., persona_id)` 将 persona 并入会话 ID，不同角色天然不同会话；写链（pipeline / ChatRequestRepository）与读链（history_page / recent_turn_history / chat_log / poll）全链透传激活角色
+- **记忆四层角色过滤**：MemoryItem 加 persona_id，Chroma `$or`（本角色 + 空串共享）与 SQLite `AND (persona_id = ? OR persona_id IS NULL)` 双路过滤，跨角色零泄漏
+- **记忆召回全链角色隔离**：`list_by_user` 全链（sync 适配器 → layered → 瞬时/工作/长期/永久四层）补 `persona_id` 过滤；显式回忆 EVENT 记忆、发图 EVENT 记忆、identity_seed 播种均带角色归属，伊塔的身份/发图事实不再被塞纳当作自己的
+- **主动推送与续接素材角色隔离**：主动推送文字写 chat_log 补 persona_id；`_recent_dialogue_text` 续接素材按激活角色过滤，塞纳的推送不拿伊塔的对话当素材
+- **admin 记忆视图角色标注**：`/api/admin/memory` 与单条记忆接口返回 `persona_name`，admin 记忆列表按归属角色显示
+- **摘要/时间线角色归属**：conversation_summary_buckets 与 persona_timeline 写入当前角色、读取按角色过滤
+- **前端切换联动**：`aerie:persona-updated` 事件驱动设置页/聊天页跟随切换；`/api/persona` 返回 `persona_id` + 按角色头像
+- **头像按角色分区**：头像从全局 `data/persona/avatar.*` 迁移为 `data/personas/avatars/<persona_id>/avatar.<ext>`（一次性迁移），`/api/persona/avatar` 按激活角色读写 + `X-Persona-Id` 响应头
+- **人设中心头像展示**：`/api/persona/hub/list` 与 `/api/persona/hub/{id}` 返回各角色独立 `avatar_dataurl`，列表/编辑器不再显示首字母占位符
+- **前端头像缓存分区**：localStorage 头像 key 由全局 `aerie.persona.avatar` 改为 `aerie.persona.<pid>.avatar`（旧 key 一次性迁移），切换角色头像不串；新角色无头像时清空展示占位，绝不沿用旧角色头像
+- **切换人设清空旧历史**：chat-store 新增 `clear()`，chat.js 在 persona 切换时先清空旧角色消息 DOM + store + 请求态，再重载当前角色历史，杜绝新旧消息混排
+- **设置页头像显示修复**：`loadPersona` 优先使用 `avatar_dataurl`（Electron file:// 下相对路径 `/api/...` 会 404），上传后缓存写入带 persona 维度
+- **人设中心头像上传 + 方形裁切**：编辑器"更换头像"补齐 change 监听（原点了没反应），新增方形裁切弹窗（拖动定位 / 手柄缩放 / canvas 512×512 输出），按当前编辑角色上传（`/api/persona/avatar?persona_id=` 支持任意角色无需激活），上传即时刷新列表/编辑器/聊天，无需重启应用；无头像角色按角色 id 确定性取色，默认占位不再雷同
+- **图片产出角色归属**：生图候选（主动发图 + 聊天要图）携带 `persona_id`，QQ 与本地聊天两条投递路径 chat_log 补写 `persona_id`——图片只归属产出时的激活角色，不再被两个角色同时看到
+- **admin 后台记录角色标注**：`/api/admin/conversations` 与 `/api/admin/conversations/{id}/messages` 返回 `persona_id`/`persona_name`，admin 前端会话标题与消息发送者按归属角色显示（不再把塞纳的消息硬编码成"伊塔"）
+- **测试**：新增 `test_persona_isolation_*.py` ×6（迁移链/写链/读链/切换语义/记忆隔离/时间线，16 用例全过）；前端 node 测试（chat-store / render / queue）50 全过；全量回归与基线一致零新增失败
+- **admin 记忆详情 KeyError 修复**：admin 记忆详情页报 `'persona_id'` 为旧进程未重启（`_persona_name` 旧版 `info["persona_id"]` 硬取键，新版已改 `.get()` 安全访问）；重启应用后 `GET /api/health` 返回 `stale_code.stale=false` 确认运行最新代码，KeyError 消失
+
+#### 电脑操控权限 v2 / Computer Control Permission v2
+
+- **四模式 + 黑白名单**：`PermissionLevel` 三档（view_only / standard / full）替换为 `ControlMode` 四模式（manual / auto / full / custom），统一裁决链「系统危险命令硬闸 → 用户黑名单 → 用户白名单 → 模式裁决」；默认拦截，白名单命中直接放行，危险命令任何模式不可绕过
+- **对话框内审批卡片**：审批从独立 modal 改为在聊天流内弹出（仿 Trae），支持「放行 / 放行并入白名单 / 拒绝 / 拒绝并入黑名单」，结果回灌对话流；移除 `approval-modal.js/css`
+- **名单管理 UI 与持久化**：设置面板「电脑操控」页新增白/黑名单增删（按操作类型 / 命令前缀 / 正则），持久化到 `settings.yaml` 的 `computer_control` 键，热更新无需重启
+- **API 收敛**：删除 `GET/PUT /api/computer_control/level`，新增 `GET/PUT mode`、`GET policy`、`POST/DELETE whitelist|blacklist`；approve/reject 支持 `{whitelist}` / `{blacklist}` 入账
+- **修复 UIA 运行时 bug**：`uia_action` 改为 list_controls / click 真实分发（原调用了不存在的 `UIAController.execute`），`_find_window_by_title` 改为实例调用
+
+#### 桌面灵动岛 v2 / Dynamic Island v2
+
+- **灵动岛 v2 浮屿全量落地**：动态岛 v2 浮屿形态全量实现，含基准研究与预览（`.design_library`）与后台管理联动（`ddba39d`）
+
+#### 性能与架构 / Performance & Architecture
+
+- **启动性能优化方案 v2.0**：import 懒加载收益实测（U-7 附件 import 懒加载 -6.4s）、架构收敛（B08 architecture_guard、brain→llm_caller 收敛）（`c59c9ac`）
+- **brain → llm_caller 命名收敛**：全链路模块收敛，修正跨分支引用断裂（`14cf306`）
+- **纠错逻辑与工具链重构**：重构纠错逻辑与工具链路，优化体验（`51951a8`）
+
+### 🔧 Changed / 变更
+
+- **上下文注入**：新增通道感知段与跨端来源标记，记忆来源标注落地，决策自省段注入
+- **管理 API**：新增 Origin 守卫阻断跨源解锁攻击，并放行服务端自身 Origin（`3556299` / `5a70199`）
+- **文档链接**：Bocha 申请教程链接更新为官方开放平台，教程改用系统浏览器打开（`b434aea` / `1f286ad`）
+
+### 🐛 Fixed / 修复
+
+- **SSE 重放事件去重**：主窗口聚焦时不弹系统通知（`c833517`）
+- **聊天记录软删过滤**：`chat_history` / `chat_poll` / `system_stats` 查询排除 `deleted_at` 非空记录，软删后不再出现在历史与统计（`ddba39d`）
+- **knowledge 写端点鉴权**：补主进程 token 鉴权（`d9ad40b`）
+- **系统生成记忆 channel 来源**：补传 channel（`3782c31`）
+- **召回触发器执行顺序**：注释与实现顺序一致（审计 F4）（`434ba17`）
+- **管理 API 同源 POST 误拦**：Origin 守卫放行服务端自身 Origin（`5a70199`）
+- **topics 状态文件丢失**：启动即落盘（`8be9f3a`）
+
+### 🛡️ Security / 安全
+
+- 管理 API Origin 守卫（阻断跨源解锁攻击）
+- knowledge 写端点主进程 token 鉴权
+- Agent 安全扫描（TRAE-security-review）：P0-P3 变更无可用利用项（SQL 全参数化 / 鉴权在位 / 无代码执行 / 无密钥硬编码）（`da88fd1`）
+- **L4 Gate3 test_command 白名单净化**：`self_evolve_proposer._sanitize_test_command` 仅放行 `pytest / python -m pytest / python -m unittest` 前缀且无 shell 元字符的命令，杜绝 LLM 生成的 `test_command` 演变为任意命令执行；L4 默认关闭，开启需两次风险确认
+
+### 🧪 Tests / 测试
+
+- 跨通道连续性离线验收扩展至 10 组并复跑达标（`dd5d817`）
+- **自进化回归**：L4 闸门 15/15、L0 全链路 20/20、L1-L3 12/12 复跑通过；新增 proposer 校验 19/19（路径/动作/JSON 容错）、L4 集成链路 9/9（内测门控 + 后台任务 + SSE 事件）、test_command 安全净化 14/14
+- P3 过关点性能微基准：context assembler 视图 B 增量 ≈ 0（`57e9a3d`）
+- 全量回归 1406 passed / 27 failed（与基线一致，均为既有环境性失败）（`4a22460`）
+- 新增测试：`test_home_space.py`、`test_room_zone_integration.py`、`test_topic_system.py`、`test_behavior_planner.py`、`test_navigation.py`、视图 B 预算与写入隔离红线验收测试（`a0f1e10`）
+- 新增测试：`test_persona_generator.py` 人设生成器 21 用例（兜底路径 / LLM 成功路径 / 骨架合并 / 伊塔身份与隐私隔离 / 人称自洽 / 故事概念推荐与注入 / 用户昵称 / ID 清洗 / 任务流转 / API 轮询），数据目录零污染隔离
+- **电脑操控回归**：`e2e_s5_computer_control_verify.py` 重写为四模式 + 黑白名单断言（25/25，含默认拦截 / 名单命中 / 审批闭环），移动网关 27 passed，全量 `tests/` 1460 collected 通过
+
+### 📝 Documentation / 文档
+
+- 05_上下文记忆系统改造方案 P0-P3 实施记录与过关点（`a494216` / `9003a37` / `406343e`）
+- 艾莲审计会签 P0-P3 交付（通过，有条件）（`e45f743`）
+- Agent 安全扫描结论（`da88fd1`）
+- Aerie-Model-X 分支升级执行计划归档（`3d9285c`）
+- Obsidian Vault 新增 TopicTracking / DailyBehaviorScheduler / IndoorNavigation 模块文档（`35b7094`）
+- Obsidian Vault 新增 PersonaGenerator 模块文档，README / CHANGELOG 同步记录人设 AI 智能生成器
+- README / CHANGELOG / .env.example 同步记录 L4 代码自进化内测开关、proposer 链路与 `AERIE_WS_CODE_MODEL` 用途
+- README / CHANGELOG 同步记录电脑操控权限 v2（四模式 + 黑白名单 + 对话框内审批卡片）
+
+---
+
 ## [0.2.1-beta.1]
 
 > **自 0.2.0-beta.1 以来的增量迭代 / Incremental iteration since 0.2.0-beta.1**
@@ -212,7 +419,7 @@ All notable changes to this project will be documented in this file.
 ### 📝 Documentation / 文档
 
 - 同步 README 当前状态（版本、能力、启动流程、验证命令、项目结构、配置与排障）
-- 补充线上官网地址 `https://laser1209.github.io/Aerie_Spotlight/`、World Service、Phase 0-15 测试与发布资源说明
+- 补充线上官网地址 `https://spotlight.etta.top/`、World Service、Phase 0-15 测试与发布资源说明
 
 ---
 

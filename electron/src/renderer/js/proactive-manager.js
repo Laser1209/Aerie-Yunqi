@@ -270,7 +270,7 @@ class ProactiveManager {
               <div class="trigger-icon"><svg class="icon icon--20" style="color: #ec4899;"><use href="#icon-ui-thought"/></svg></div>
               <div class="trigger-info">
                 <div class="trigger-title">情绪触发</div>
-                <div class="trigger-desc">基于思念值、情绪状态的主动推送，她想你了才会发</div>
+                <div class="trigger-desc">基于思念值、情绪状态的主动推送，想你了才会发</div>
               </div>
             </div>
             <div class="trigger-source">

@@ -1,0 +1,14 @@
+name = "aerie-diagnostics-receiver"
+main = "worker.js"
+compatibility_date = "2026-08-14"
+
+# The R2 bucket that stores uploaded diagnostic packages.
+[[r2_buckets]]
+binding = "DIAG_BUCKET"
+bucket_name = "aerie-diagnostics"
+
+# Optional auth token. Do NOT commit the real value here — set it as a secret:
+#   npx wrangler secret put DIAG_UPLOAD_TOKEN
+# Leave it unset to accept uploads without auth (not recommended for public URLs).
+# [vars]
+# DIAG_UPLOAD_TOKEN = ""

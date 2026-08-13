@@ -38,6 +38,14 @@ All notable changes to this project will be documented in this file.
 - **消息提醒总开关**：设置页新增「消息提醒 · Notifications」滑块，一个开关统一管住新消息 / 日程 / 主动消息的系统通知；状态持久化到 `data/notif_prefs.json`，重启后保留；在 main 进程 `system:notify` 统一收口拦截，关闭后不弹任何系统通知（应用内对话不受影响）
 - **Windows 通知归属修正**：main 进程调用 `app.setAppUserModelId()`（与 electron-builder `appId` 一致），打包安装后系统通知来源名从 "Electron" 正确显示为 "Aerie · 云栖"
 
+#### 诊断数据与使用时长追踪 / Diagnostics Telemetry
+
+- **累计运行时长追踪**：`core/telemetry.py` 追踪应用累计运行时长，状态持久化到 `data/telemetry_state.json`（每 60s 落盘，硬杀最多丢 1 分钟）；累计满 1h / 3h / 3d 各自动打包一次，里程碑各触发一次
+- **诊断包采集与打包**：自动/手动打包诊断数据为 zip（`config/*.yaml`、`data/aerie.db`、`data/*.json/jsonl`、`logs/main.log` 等，全量不脱敏），落地 `data/diagnostics/`，排除 `qq_media` / `chroma` 等大二进制
+- **上传与下载接口**：配置 `AERIE_TELEMETRY_UPLOAD_URL` / `AERIE_TELEMETRY_UPLOAD_TOKEN` 后支持上传；新增 `/api/diagnostics/{status,export,upload,list,download}` 端点，打包/上传经 `asyncio.to_thread` 不阻塞事件循环
+- **设置页诊断面板**：设置页新增「诊断数据」分组（免责声明 + 免费说明 + 累计时长 / 里程碑 / 端点状态 + 手动打包 / 上传 / 下载）
+- **Cloudflare 接收端（预留）**：`tools/telemetry-receiver/` 提供 Cloudflare Worker + R2 接收端代码与部署指引，供需要远程回传诊断包时使用
+
 ### 🐛 Fixed / 修复
 
 - **灵动岛 hover 晃动闪烁**：hover 拉长的 `mouseenter/mouseleave` 反复触发窗口 `setBounds` 导致窗口宽度反复跳变 + 收缩定时器未取消互相竞争；改为可取消防抖 + 固定窗口尺寸（不再 resize）

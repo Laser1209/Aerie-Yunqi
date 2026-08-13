@@ -1402,6 +1402,46 @@
               </div>
             </div>
 
+            <!-- 诊断数据 -->
+            <div class="settings-group settings-group--diagnostics">
+              <h3 class="settings-section-title">诊断数据 · Diagnostics</h3>
+              <p class="settings-hint">用于排查 Bug 的本地诊断包（含日志、配置、聊天数据库）/ Diagnostic packages for bug triage</p>
+
+              <div class="diag-disclaimer">
+                <strong>免责声明 · Disclaimer</strong>
+                <p>打包内容包含本地日志、配置文件和聊天/记忆数据库，<b>不做任何脱敏</b>。仅在需要排查 Bug 时由你主动触发上传；应用不会在后台自动上传。诊断数据上传与下载<b>不收取任何费用</b>。</p>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>累计使用时长 · Runtime</label>
+                <p class="settings-hint" id="diag-runtime">读取中…</p>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>自动打包进度 · Milestones</label>
+                <p class="settings-hint" id="diag-milestones">读取中…</p>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>上传端点 · Upload endpoint</label>
+                <p class="settings-hint" id="diag-endpoint">读取中…</p>
+              </div>
+
+              <div class="settings-actions">
+                <button id="diag-export-btn" class="btn btn-primary" type="button">手动打包</button>
+                <button id="diag-upload-btn" class="btn btn-secondary" type="button">上传最新包</button>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>已生成的诊断包 · Packages</label>
+                <div id="diag-package-list" class="diag-package-list">
+                  <span class="settings-hint">读取中…</span>
+                </div>
+              </div>
+
+              <p id="diag-status" class="settings-hint" style="min-height:16px;margin-top:6px;"></p>
+            </div>
+
             <div class="settings-actions">
               <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
               <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>

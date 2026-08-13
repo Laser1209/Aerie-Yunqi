@@ -1131,6 +1131,64 @@ def _check_stale_code() -> dict:
         return {"stale": False, "modified": [], "error": str(e)}
 
 
+# ── Diagnostics telemetry ─────────────────────────────────
+# Cumulative runtime tracking + package/upload, consumed by the settings page.
+# Package/upload work is synchronous and cheap; it is kept out of the event
+# loop via asyncio.to_thread so it never blocks the chat path.
+
+async def _diag_read_json(request: Request) -> dict[str, Any]:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    return body if isinstance(body, dict) else {}
+
+
+@app.get("/api/diagnostics/status")
+async def diagnostics_status() -> dict[str, Any]:
+    from core import telemetry
+    return await asyncio.to_thread(telemetry.get_status)
+
+
+@app.post("/api/diagnostics/export")
+async def diagnostics_export(request: Request) -> dict[str, Any]:
+    from core import telemetry
+    body = await _diag_read_json(request)
+    reason = str(body.get("reason") or "manual")
+    info = await asyncio.to_thread(telemetry.create_package, reason)
+    upload = bool(body.get("upload"))
+    if upload:
+        result = await asyncio.to_thread(telemetry.upload_package, info["filename"])
+        info["upload"] = result
+    return info
+
+
+@app.post("/api/diagnostics/upload")
+async def diagnostics_upload(request: Request) -> dict[str, Any]:
+    from core import telemetry
+    body = await _diag_read_json(request)
+    filename = str(body.get("filename") or "")
+    if not filename:
+        return JSONResponse({"error": "filename_required"}, status_code=400)
+    return await asyncio.to_thread(telemetry.upload_package, filename)
+
+
+@app.get("/api/diagnostics/list")
+async def diagnostics_list() -> dict[str, Any]:
+    from core import telemetry
+    packages = await asyncio.to_thread(telemetry.list_packages)
+    return {"packages": packages}
+
+
+@app.get("/api/diagnostics/download/{filename}")
+async def diagnostics_download(filename: str):
+    from core import telemetry
+    target = telemetry._packages_dir() / filename
+    if not target.exists() or not target.is_file():
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    return FileResponse(str(target), filename=filename, media_type="application/zip")
+
+
 # R6.6: backend self-restart endpoint. Triggers tools/restart_helper.ps1
 # in a detached process so the calling HTTP request can return BEFORE
 # the backend itself gets killed.

@@ -182,6 +182,16 @@ async def _main() -> None:
 
     mobile_runner = await _start_optional_mobile_gateway(logger)
 
+    # Diagnostics telemetry: cumulative runtime tracking + milestone packaging.
+    # Runs independently of chat/QQ; a failure here must not take down the app.
+    telemetry_runner = None
+    try:
+        from core.telemetry import start_telemetry
+        telemetry_runner = start_telemetry()
+        logger.info("[TELEMETRY_READY] diagnostics telemetry scheduler started")
+    except Exception:
+        logger.exception("[TELEMETRY_UNAVAILABLE] diagnostics telemetry did not start")
+
     stop_event = asyncio.Event()
 
     def _on_signal(*_):
@@ -211,6 +221,12 @@ async def _main() -> None:
             logger.info("config hot-reloader stopped")
         except Exception:
             pass
+        if telemetry_runner is not None:
+            try:
+                await telemetry_runner.cleanup()
+                logger.info("diagnostics telemetry stopped")
+            except Exception:
+                logger.exception("diagnostics telemetry shutdown failed")
         await companion.stop()
         await runner.cleanup()
         logger.info("bye")

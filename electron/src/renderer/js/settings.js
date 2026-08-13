@@ -13,6 +13,7 @@ class SettingsPanel {
     this._initIslandSettings();
     this._initNotifSettings();
     this._initOfficeDir();
+    this._initDiagnostics();
     this._initSelfEvolveSwitch();
     // Form view
     document.getElementById("settings-save-btn").addEventListener("click", () => this.save());
@@ -1656,6 +1657,154 @@ class SettingsPanel {
       }
     } catch (_) {
       // 静默失败，保持默认 placeholder
+    }
+  }
+
+  // ── 诊断数据：累计时长 + 手动打包/上传 ──────────────
+
+  _initDiagnostics() {
+    const exportBtn = document.getElementById("diag-export-btn");
+    const uploadBtn = document.getElementById("diag-upload-btn");
+    if (exportBtn) exportBtn.addEventListener("click", () => this._diagExport());
+    if (uploadBtn) uploadBtn.addEventListener("click", () => this._diagUpload());
+    this._refreshDiagnostics();
+  }
+
+  _diagStatus(text, ok = true) {
+    const st = document.getElementById("diag-status");
+    if (!st) return;
+    st.textContent = text || "";
+    st.classList.remove("is-ok", "is-err");
+    if (text && ok) st.classList.add("is-ok");
+    if (text && !ok) st.classList.add("is-err");
+  }
+
+  _formatBytes(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / 1024 / 1024).toFixed(1) + " MB";
+  }
+
+  async _refreshDiagnostics() {
+    try {
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/diagnostics/status" });
+      const d = (r && r.data && !r.data.error) ? r.data : null;
+      if (!d) return;
+
+      const runtimeEl = document.getElementById("diag-runtime");
+      if (runtimeEl) runtimeEl.textContent = d.total_runtime_human + "（" + d.total_runtime_seconds + " 秒）";
+
+      const milestonesEl = document.getElementById("diag-milestones");
+      if (milestonesEl) {
+        const parts = (d.milestones || []).map((m) => {
+          return (m.triggered ? "✓ " : "○ ") + m.key + "（" + (m.seconds / 3600 >= 24 ? (m.seconds / 86400) + "天" : (m.seconds / 3600) + "小时") + "）";
+        });
+        milestonesEl.textContent = parts.length ? parts.join("  ·  ") : "—";
+      }
+
+      const endpointEl = document.getElementById("diag-endpoint");
+      if (endpointEl) {
+        endpointEl.textContent = d.upload_configured
+          ? ("已配置 · " + d.upload_url_masked)
+          : "未配置（仅本地打包，不自动上传）";
+      }
+
+      this._lastDiagPackages = d.packages || [];
+      this._renderDiagPackages();
+    } catch (e) {
+      this._diagStatus("加载诊断状态失败：" + e.message, false);
+    }
+  }
+
+  _renderDiagPackages() {
+    const list = document.getElementById("diag-package-list");
+    if (!list) return;
+    const packages = this._lastDiagPackages || [];
+    list.innerHTML = "";
+    if (!packages.length) {
+      list.innerHTML = '<span class="settings-hint">暂无诊断包，点击「手动打包」生成。</span>';
+      return;
+    }
+    packages.forEach((p) => {
+      const item = document.createElement("div");
+      item.className = "diag-package-item";
+      const meta = document.createElement("span");
+      meta.className = "diag-package-meta";
+      meta.textContent = p.filename;
+      const size = document.createElement("span");
+      size.className = "diag-package-size";
+      size.textContent = this._formatBytes(p.size_bytes);
+      meta.appendChild(size);
+
+      const dl = document.createElement("button");
+      dl.type = "button";
+      dl.className = "diag-download-link";
+      dl.textContent = "下载";
+      dl.addEventListener("click", () => this._diagDownload(p.filename));
+
+      item.appendChild(meta);
+      item.appendChild(dl);
+      list.appendChild(item);
+    });
+  }
+
+  _diagDownload(filename) {
+    const url = "http://127.0.0.1:7890/api/diagnostics/download/" + encodeURIComponent(filename);
+    if (window.aerie?.electron?.shell?.openExternal) {
+      window.aerie.electron.shell.openExternal(url);
+    } else {
+      window.open(url, "_blank", "noopener");
+    }
+  }
+
+  async _diagExport() {
+    const btn = document.getElementById("diag-export-btn");
+    if (btn) btn.disabled = true;
+    this._diagStatus("正在打包…");
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/diagnostics/export",
+        body: { reason: "manual" },
+      });
+      const d = (r && r.data) || {};
+      if (d.error) throw new Error(d.error);
+      this._diagStatus("已打包：" + d.filename + "（" + this._formatBytes(d.size_bytes) + "）", true);
+      await this._refreshDiagnostics();
+    } catch (e) {
+      this._diagStatus("打包失败：" + e.message, false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async _diagUpload() {
+    const packages = this._lastDiagPackages || [];
+    if (!packages.length) {
+      this._diagStatus("暂无诊断包，请先点击「手动打包」。", false);
+      return;
+    }
+    const latest = packages[0].filename;
+    const btn = document.getElementById("diag-upload-btn");
+    if (btn) btn.disabled = true;
+    this._diagStatus("正在上传 " + latest + " …");
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/diagnostics/upload",
+        body: { filename: latest },
+      });
+      const d = (r && r.data) || {};
+      if (d.ok) {
+        this._diagStatus("上传成功 · " + latest, true);
+      } else {
+        this._diagStatus("上传失败：" + (d.error || "unknown"), false);
+      }
+    } catch (e) {
+      this._diagStatus("上传失败：" + e.message, false);
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 

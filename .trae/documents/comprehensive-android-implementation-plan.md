@@ -537,10 +537,10 @@ deadline: 2026-09-01
 **时间节点**：08-20 ~ 08-25（依赖：P-S1）。
 **负责人**：`Agent`（串行主线，任务间强依赖）。
 
-- [ ] **T2.1 聊天核心**
-  - [ ] `chat_repository.dart`：分页 / 发送 / 取消 / 重试 / 待确认队列
-  - [ ] `chat_screen.dart` + `message_bubble.dart`（附件卡 + 任务状态徽章）
-  - [ ] L1 自检：聊天仓库单测 + Widget 测试通过
+- [x] **T2.1 聊天核心**
+  - [x] `chat_message.dart` 领域模型（明文 JSON 一映射）+ `chat_repository.dart`（分页/发送/取消/重试 + drift 按 accountId 缓存 + `watchMessages` 响应式）
+  - [x] `chat_screen.dart`（消息流 + 输入栏 + 附件钮 + 发送胶囊 + 发送态）+ `message_bubble.dart`（左白/右浅粉气泡、附件文件卡、任务状态徽章）
+  - [x] L1 自检：`flutter analyze` 零告警；聊天仓库单测 6 + MessageBubble Widget 4 + ChatScreen Widget 1 全绿
 
 - [ ] **T2.2 SSE 状态机（§3.2.6）**
   - [ ] `SseController`：dio 流式解析 / Last-Event-ID / 指数退避+抖动 / 去重 / connectionHealth

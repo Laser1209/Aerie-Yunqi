@@ -270,7 +270,11 @@ class TopicTracker:
     # ── 持久化 ─────────────────────────────────────────
 
     def _load(self) -> None:
-        if not self._state_path or not self._state_path.exists():
+        if not self._state_path:
+            return
+        if not self._state_path.exists():
+            # 首次启动即落盘空状态，供管理台状态查看，避免出现"文件不存在"
+            self._save()
             return
         try:
             raw = json.loads(self._state_path.read_text(encoding="utf-8"))

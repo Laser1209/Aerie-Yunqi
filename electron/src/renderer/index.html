@@ -297,7 +297,7 @@
   <!-- App Header (titlebar + statusbar merged) -->
   <header id="app-header" class="app-header">
     <div class="app-header-left">
-      <img src="../../../Aerie · 云栖.svg" alt="" class="app-header-logo">
+      <img src="assets/logo.png" alt="" class="app-header-logo">
       <span class="app-header-title">Aerie · 云栖</span>
     </div>
     <div class="app-header-right">
@@ -1490,12 +1490,45 @@
 
           <!-- API Key 视图 -->
           <div id="settings-apikey-view" role="tabpanel" aria-labelledby="tab-settings-apikey" tabindex="0" style="display:none;">
-            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6; display:flex; justify-content:space-between; align-items:center;">
+            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
               <div>
                 <strong style="color: var(--accent, #ff5b9c);">AI 服务配置</strong><br>
-                选择你常用的 AI 服务商，填入 API Key 就能开始对话了。所有密钥只保存在本地，不会上传到任何地方。
+                添加 AI 厂商并填入 API Key 就能开始对话。所有密钥只保存在本地，不会上传到任何地方。
               </div>
-              <button id="custom-api-toggle-btn" class="btn btn-secondary btn-sm" type="button" style="flex:0 0 auto;">自定义 API</button>
+              <div style="display:flex; gap:8px; align-items:center; flex:0 0 auto;">
+                <button id="custom-api-toggle-btn" class="btn btn-secondary btn-sm" type="button">功能点映射</button>
+                <button id="apikey-add-btn" class="btn btn-primary btn-sm" type="button" style="position:relative;">
+                  ＋ 添加模型
+                  <span id="apikey-add-badge" style="display:inline-flex; min-width:18px; height:18px; padding:0 5px; margin-left:6px; border-radius:9px; background:rgba(255,255,255,0.92); color:var(--accent,#ff5b9c); font-size:11px; font-weight:600; align-items:center; justify-content:center; box-sizing:border-box; vertical-align:middle;">0</span>
+                </button>
+              </div>
+            </div>
+            <div id="apikey-add-menu" style="display:none; margin:0 0 16px; padding:12px; border-radius:12px; background:var(--bg-elevated,#ffffff); border:1px solid var(--border,rgba(0,0,0,0.08)); box-shadow:0 10px 34px rgba(0,0,0,0.10);">
+              <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <div id="apikey-menu-tabs" style="display:flex; flex-direction:column; gap:4px; min-width:150px; flex:1 1 150px;">
+                  <!-- JS 动态渲染 -->
+                </div>
+                <div id="apikey-menu-panel" style="flex:1 1 240px; min-width:220px; max-height:340px; overflow-y:auto;">
+                  <!-- JS 动态渲染 -->
+                </div>
+              </div>
+            </div>
+            <div id="apikey-count-reminder" style="display:none;"></div>
+            <div id="custom-provider-panel" class="apikey-provider-card" style="display:none; margin-bottom:16px;">
+              <div class="apikey-provider-header">
+                <div class="apikey-provider-name">
+                  <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
+                  自定义 API · Custom API
+                </div>
+                <div class="apikey-provider-status" style="font-size:11px;color:var(--text-muted,#999);">任意 OpenAI 兼容 API（如 TokenDance）</div>
+              </div>
+              <div id="custom-provider-form" class="apikey-provider-fields" style="display:flex;flex-direction:column;gap:10px;">
+                <!-- JS 动态渲染 -->
+              </div>
+              <div class="apikey-provider-actions">
+                <button type="button" id="custom-provider-save-btn" class="btn btn-primary btn-sm">保存并热加载 · Save</button>
+                <span id="custom-provider-status" style="font-size:11px;color:var(--text-muted,#999);"></span>
+              </div>
             </div>
             <div id="custom-api-panel" class="apikey-provider-card" style="display:none; margin-bottom:16px;">
               <div class="apikey-provider-header">

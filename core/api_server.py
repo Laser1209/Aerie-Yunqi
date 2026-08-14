@@ -5414,28 +5414,36 @@ async def settings_reset() -> dict:
 _PROVIDER_META = [
     {"key": "deepseek", "name": "DeepSeek", "env_key": "DEEPSEEK_API_KEY",
      "env_url": "DEEPSEEK_BASE_URL", "env_model": "DEEPSEEK_MODEL",
-     "default_url": "https://api.deepseek.com/v1", "default_model": "deepseek-chat"},
+     "default_url": "https://api.deepseek.com/v1", "default_model": "deepseek-chat",
+     "models": ["deepseek-chat", "deepseek-reasoner"]},
     {"key": "dashscope", "name": "通义千问 (DashScope)", "env_key": "DASHSCOPE_API_KEY",
      "env_url": "QWEN_BASE_URL", "env_model": "QWEN_MODEL",
-     "default_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "default_model": "qwen-plus"},
+     "default_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "default_model": "qwen-plus",
+     "models": ["qwen-plus", "qwen-max", "qwen-turbo", "qwen-long", "qwen3-max"]},
     {"key": "doubao", "name": "豆包 (Doubao)", "env_key": "DOUBAO_API_KEY",
      "env_url": "DOUBAO_BASE_URL", "env_model": "DOUBAO_MODEL",
-     "default_url": "https://ark.cn-beijing.volces.com/api/v3", "default_model": "doubao-seed-2-1-turbo-260628"},
+     "default_url": "https://ark.cn-beijing.volces.com/api/v3", "default_model": "doubao-seed-2-1-turbo-260628",
+     "models": ["doubao-seed-2-1-turbo-260628", "doubao-1-5-pro-32k", "doubao-1-5-lite-32k"]},
     {"key": "siliconflow", "name": "SiliconFlow", "env_key": "SILICONFLOW_API_KEY",
      "env_url": "SILICONFLOW_BASE_URL", "env_model": "SILICONFLOW_MODEL",
-     "default_url": "https://api.siliconflow.com/v1", "default_model": "google/gemma-4-26B-A4B-it"},
+     "default_url": "https://api.siliconflow.com/v1", "default_model": "google/gemma-4-26B-A4B-it",
+     "models": ["Qwen/Qwen3-235B-A22B", "deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct", "google/gemma-4-26B-A4B-it"]},
     {"key": "openai", "name": "OpenAI / GPT", "env_key": "OPENAI_API_KEY",
      "env_url": "OPENAI_BASE_URL", "env_model": "OPENAI_MODEL",
-     "default_url": "https://api.codexgood.com/v1", "default_model": "gpt-5.5"},
+     "default_url": "https://api.codexgood.com/v1", "default_model": "gpt-5.5",
+     "models": ["gpt-5.5", "gpt-4o", "gpt-4o-mini"]},
     {"key": "gemini", "name": "Gemini", "env_key": "GEMINI_API_KEY",
      "env_url": "GEMINI_BASE_URL", "env_model": "GEMINI_MODEL",
-     "default_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "default_model": "gemini-2.0-flash-exp"},
+     "default_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "default_model": "gemini-2.0-flash-exp",
+     "models": ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"]},
     {"key": "glm", "name": "智谱 GLM", "env_key": "BIGMODEL_API_KEY",
      "env_url": "BIGMODEL_BASE_URL", "env_model": "BIGMODEL_MODEL",
-     "default_url": "https://open.bigmodel.cn/api/paas/v4/", "default_model": "glm-4-plus"},
+     "default_url": "https://open.bigmodel.cn/api/paas/v4/", "default_model": "glm-4-plus",
+     "models": ["glm-4-plus", "glm-4-flash", "glm-4-air"]},
     {"key": "minimax", "name": "MiniMax", "env_key": "MINIMAX_API_KEY",
      "env_url": "MINIMAX_BASE_URL", "env_model": "MINIMAX_MODEL",
-     "default_url": "https://api.minimaxi.com/v1", "default_model": "MiniMax-M3"},
+     "default_url": "https://api.minimaxi.com/v1", "default_model": "MiniMax-M3",
+     "models": ["MiniMax-M3", "MiniMax-Text-01", "abab6.5s-chat"]},
 ]
 
 # 模型功能点（role）→ 环境变量的映射（自定义 API 配置面板）。
@@ -5568,6 +5576,28 @@ def _mask_secret(value: str) -> str:
     return "•" * 8 + value[-4:]
 
 
+_CUSTOM_PROVIDERS_ENV_KEY = "AERIE_CUSTOM_PROVIDERS"
+
+
+def _read_custom_providers() -> list[dict]:
+    """Read user-added custom OpenAI-compatible providers from .env (JSON array)."""
+    raw = _read_env_file().get(_CUSTOM_PROVIDERS_ENV_KEY, "")
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+
+def _write_custom_providers(providers: list[dict]) -> None:
+    """Persist custom providers to .env as a JSON array."""
+    env = _read_env_file()
+    env[_CUSTOM_PROVIDERS_ENV_KEY] = json.dumps(providers, ensure_ascii=False)
+    _write_env_file(env)
+
+
 @app.get("/api/env/providers")
 async def env_providers() -> dict:
     """Return list of AI providers with config status (keys masked) + 余额/健康状态。"""
@@ -5589,11 +5619,15 @@ async def env_providers() -> dict:
             "env_model": meta["env_model"],
             "default_url": meta["default_url"],
             "default_model": meta["default_model"],
+            "models": meta.get("models", [meta["default_model"]]),
             "balance": h.get("balance"),
             "health_status": h.get("status", "unknown"),
             "health_reason": h.get("reason", ""),
         })
-    return {"providers": providers}
+    return {
+        "providers": providers,
+        "configured_count": sum(1 for p in providers if p["configured"]),
+    }
 
 
 @app.post("/api/env/save")
@@ -5622,6 +5656,73 @@ async def env_save(request: Request) -> dict:
 
         _write_env_file(env)
         return {"status": "ok", "provider": provider_key}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/env/custom-providers")
+async def env_custom_providers_get() -> dict:
+    """Return user-added custom API providers (keys masked)."""
+    providers = []
+    for cp in _read_custom_providers():
+        extra_kv = cp.get("extra_kv")
+        if not isinstance(extra_kv, dict):
+            extra_kv = {}
+        providers.append({
+            "id": cp.get("id", ""),
+            "name": cp.get("name", ""),
+            "base_url": cp.get("base_url", ""),
+            "api_key_masked": _mask_secret(cp.get("api_key", "")),
+            "model": cp.get("model", ""),
+            "extra_kv": extra_kv,
+            "max_tool_calls": cp.get("max_tool_calls", 8),
+        })
+    return {"providers": providers}
+
+
+@app.post("/api/env/custom-providers")
+async def env_custom_providers_save(request: Request) -> dict:
+    """Save user-added custom API providers. Body: {"providers": [...]}"""
+    try:
+        body = await request.json()
+        items = body.get("providers")
+        if not isinstance(items, list):
+            return JSONResponse({"error": "invalid_providers"}, status_code=400)
+        clean = []
+        for idx, it in enumerate(items):
+            if not isinstance(it, dict):
+                continue
+            name = str(it.get("name") or "").strip()
+            base_url = str(it.get("base_url") or "").strip()
+            api_key = str(it.get("api_key") or "").strip()
+            model = str(it.get("model") or "").strip()
+            if not name and not base_url:
+                continue
+            extra_kv = it.get("extra_kv")
+            if not isinstance(extra_kv, dict):
+                extra_kv = {}
+            try:
+                max_tool_calls = int(it.get("max_tool_calls") or 8)
+            except (TypeError, ValueError):
+                max_tool_calls = 8
+            clean.append({
+                "id": str(it.get("id") or "").strip() or f"cp_{int(time.time() * 1000)}_{idx}",
+                "name": name,
+                "base_url": base_url,
+                "api_key": api_key,
+                "model": model,
+                "extra_kv": extra_kv,
+                "max_tool_calls": max_tool_calls,
+            })
+        # 保留已有 provider 的 api_key（前端返回的是脱敏值，未修改时留空）
+        existing_by_id = {cp.get("id"): cp for cp in _read_custom_providers() if cp.get("id")}
+        for it in clean:
+            if not it["api_key"]:
+                old = existing_by_id.get(it["id"])
+                if old and old.get("api_key"):
+                    it["api_key"] = old["api_key"]
+        _write_custom_providers(clean)
+        return {"status": "ok", "count": len(clean)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -6502,7 +6603,7 @@ async def persona_hub_update(persona_id: str, request: Request) -> dict:
 
 @app.delete("/api/persona/hub/{persona_id}")
 async def persona_hub_delete(persona_id: str) -> dict:
-    """删除人设（内置人设不可删除）。"""
+    """伪删除人设：隐藏而非真删，全部隐藏后自动恢复伊塔。"""
     try:
         ok, msg = _persona_mgr.delete_persona(persona_id)
         if not ok:

@@ -6,6 +6,9 @@ class SettingsPanel {
     this._currentMode = "form"; // "form" | "apikey" | "yaml"
     this._currentYamlFile = "settings.yaml";
     this._apikeyProviders = [];
+    this._addedProviderKeys = new Set();
+    this._customProviders = [];
+    this._activeMenuTab = null;
   }
 
   init() {
@@ -107,6 +110,10 @@ class SettingsPanel {
     if (customApiToggle) customApiToggle.addEventListener("click", () => this.toggleCustomApi());
     const customApiSave = document.getElementById("custom-api-save-btn");
     if (customApiSave) customApiSave.addEventListener("click", () => this.saveModelRoles());
+    const addBtn = document.getElementById("apikey-add-btn");
+    if (addBtn) addBtn.addEventListener("click", () => this.toggleAddMenu());
+    const customProviderSave = document.getElementById("custom-provider-save-btn");
+    if (customProviderSave) customProviderSave.addEventListener("click", () => this.saveCustomProvider());
     const featureReloadBtn = document.getElementById("feature-api-reload-btn");
     if (featureReloadBtn) featureReloadBtn.addEventListener("click", () => this.loadFeatureApis());
   }
@@ -233,7 +240,12 @@ class SettingsPanel {
       const r = await window.aerie.api.request({ method: "GET", path: "/api/env/providers" });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
       this._apikeyProviders = (r && r.data && r.data.providers) || [];
+      this._apikeyProviders.forEach((p) => {
+        if (p.configured) this._addedProviderKeys.add(p.key);
+      });
+      await this._loadCustomProviders();
       this._renderApiKeyList();
+      this._renderAddBadge();
       if (st) { st.textContent = ""; }
     } catch (e) {
       if (st) { st.textContent = "加载失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
@@ -245,7 +257,9 @@ class SettingsPanel {
     if (!list) return;
     list.innerHTML = "";
 
-    this._apikeyProviders.forEach((p) => {
+    // 只渲染用户已添加的固定厂商（configured 或通过下拉菜单主动添加）
+    const added = this._apikeyProviders.filter((p) => this._addedProviderKeys.has(p.key));
+    added.forEach((p) => {
       let statusText = p.configured ? "已配置" : "未配置";
       let statusCls = "";
       if (p.health_status === "banned") {
@@ -273,8 +287,7 @@ class SettingsPanel {
             <span>API Key</span>
             <div class="apikey-input-row">
               <input type="password" class="apikey-input" data-provider="${p.key}" data-field="api_key"
-                     value="${p.configured ? p.api_key_masked : ''}" placeholder="请输入 API Key"
-                     ${p.configured ? '' : ''}>
+                     value="${p.configured ? p.api_key_masked : ''}" placeholder="请输入 API Key">
               <button type="button" class="apikey-toggle-btn" data-provider="${p.key}" title="显示/隐藏">
                 <svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-eye"/></svg>
               </button>
@@ -298,10 +311,41 @@ class SettingsPanel {
           <button type="button" class="btn btn-secondary btn-sm apikey-default-btn" data-provider="${p.key}">
             恢复默认 URL/模型
           </button>
+          <button type="button" class="btn btn-secondary btn-sm apikey-remove-btn" data-provider="${p.key}">
+            移除
+          </button>
         </div>
       `;
       list.appendChild(card);
     });
+
+    // 渲染自定义 API（用户添加的任意 OpenAI 兼容 API）
+    this._customProviders.forEach((cp) => {
+      const card = document.createElement("div");
+      card.className = "apikey-provider-card configured";
+      card.innerHTML = `
+        <div class="apikey-provider-header">
+          <div class="apikey-provider-name">
+            <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
+            ${cp.name || "自定义 API"}
+          </div>
+          <div class="apikey-provider-status" style="color:var(--success,#2ecc71);">已添加</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted,#999);line-height:1.7;margin:0 0 8px;">
+          Base URL：${cp.base_url || "-"}<br>
+          模型：${cp.model || "-"}<br>
+          工具调用上限：${cp.max_tool_calls || 8}
+        </div>
+        <div class="apikey-provider-actions">
+          <button type="button" class="btn btn-secondary btn-sm custom-provider-remove-btn" data-id="${cp.id}">移除</button>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+
+    if (!added.length && !this._customProviders.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text-muted,#999);padding:12px 0;">尚未添加任何 AI 厂商，点击上方「＋ 添加模型」开始。</div>';
+    }
 
     // Bind events
     list.querySelectorAll(".apikey-save-btn").forEach((btn) => {
@@ -325,6 +369,253 @@ class SettingsPanel {
         }
       });
     });
+    list.querySelectorAll(".apikey-remove-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const provider = e.target.getAttribute("data-provider");
+        this._addedProviderKeys.delete(provider);
+        this._renderApiKeyList();
+      });
+    });
+    list.querySelectorAll(".custom-provider-remove-btn").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        const id = e.target.getAttribute("data-id");
+        this._customProviders = this._customProviders.filter((c) => c.id !== id);
+        await this._saveCustomProviders();
+        this._renderApiKeyList();
+      });
+    });
+
+    this._renderApiKeyCountReminder();
+    this._renderAddBadge();
+  }
+
+  // ── 添加模型下拉菜单 ────────────────────────────────
+  toggleAddMenu() {
+    const menu = document.getElementById("apikey-add-menu");
+    if (!menu) return;
+    const willShow = menu.style.display === "none";
+    if (willShow) {
+      this._renderAddMenu();
+      menu.style.display = "";
+    } else {
+      menu.style.display = "none";
+    }
+  }
+
+  _renderAddMenu() {
+    const tabsEl = document.getElementById("apikey-menu-tabs");
+    const panelEl = document.getElementById("apikey-menu-panel");
+    if (!tabsEl || !panelEl) return;
+    tabsEl.innerHTML = "";
+
+    const tabs = [
+      ...this._apikeyProviders.map((p) => ({ type: "provider", key: p.key, name: p.name })),
+      { type: "custom", key: "__custom__", name: "自定义 API" },
+    ];
+    if (!this._activeMenuTab) this._activeMenuTab = tabs[0].key;
+
+    tabs.forEach((t) => {
+      const active = t.key === this._activeMenuTab;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = t.name;
+      btn.style.cssText =
+        "text-align:left;padding:8px 10px;border-radius:8px;border:none;background:" +
+        (active ? "var(--accent,#ff5b9c)" : "transparent") +
+        ";color:" +
+        (active ? "#fff" : "var(--text,#333)") +
+        ";font-size:13px;cursor:pointer;";
+      btn.addEventListener("click", () => {
+        this._activeMenuTab = t.key;
+        this._renderAddMenu();
+      });
+      tabsEl.appendChild(btn);
+    });
+
+    this._renderMenuPanel(panelEl);
+  }
+
+  _renderMenuPanel(panelEl) {
+    panelEl.innerHTML = "";
+    if (this._activeMenuTab === "__custom__") {
+      this._openCustomProviderPanel();
+      const hint = document.createElement("div");
+      hint.style.cssText = "font-size:12px;color:var(--text-muted,#999);line-height:1.6;";
+      hint.textContent = "已打开下方「自定义 API」配置面板，可添加任意 OpenAI 兼容 API（如 TokenDance）。";
+      panelEl.appendChild(hint);
+      return;
+    }
+    const p = this._apikeyProviders.find((x) => x.key === this._activeMenuTab);
+    if (!p) return;
+    const models = (p.models && p.models.length) ? p.models : [p.default_model];
+    models.forEach((m) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = m;
+      btn.style.cssText =
+        "display:block;width:100%;text-align:left;padding:8px 10px;margin:0 0 6px;border-radius:8px;border:1px solid var(--border,rgba(0,0,0,0.08));background:transparent;color:var(--text,#333);font-size:12px;cursor:pointer;";
+      btn.addEventListener("click", () => this._addProvider(p.key, m));
+      panelEl.appendChild(btn);
+    });
+  }
+
+  _addProvider(key, model) {
+    this._addedProviderKeys.add(key);
+    this._activeMenuTab = null;
+    const menu = document.getElementById("apikey-add-menu");
+    if (menu) menu.style.display = "none";
+    this._renderApiKeyList();
+    if (model) {
+      const input = document.querySelector(`.apikey-input[data-provider="${key}"][data-field="model"]`);
+      if (input) input.value = model;
+    }
+  }
+
+  _renderAddBadge() {
+    const badge = document.getElementById("apikey-add-badge");
+    if (!badge) return;
+    badge.textContent = String(this._addedProviderKeys.size + this._customProviders.length);
+  }
+
+  // ── 自定义 API（添加任意 OpenAI 兼容 API）────────────
+  async _loadCustomProviders() {
+    try {
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/custom-providers" });
+      this._customProviders = (r && r.data && r.data.providers) || [];
+    } catch (e) {
+      this._customProviders = [];
+    }
+  }
+
+  _openCustomProviderPanel() {
+    const panel = document.getElementById("custom-provider-panel");
+    if (!panel) return;
+    panel.style.display = "";
+    this._renderCustomProviderForm();
+  }
+
+  _renderCustomProviderForm() {
+    const form = document.getElementById("custom-provider-form");
+    if (!form) return;
+    form.innerHTML = `
+      <label class="apikey-field">
+        <span>名称 · Name</span>
+        <input type="text" id="custom-provider-name" class="apikey-input" placeholder="例如 TokenDance">
+      </label>
+      <label class="apikey-field">
+        <span>Base URL</span>
+        <input type="text" id="custom-provider-base-url" class="apikey-input" placeholder="例如 https://tokendance.space/v1">
+      </label>
+      <label class="apikey-field">
+        <span>API Key</span>
+        <input type="password" id="custom-provider-api-key" class="apikey-input" placeholder="sk-...">
+      </label>
+      <label class="apikey-field">
+        <span>模型 · Model</span>
+        <input type="text" id="custom-provider-model" class="apikey-input" placeholder="例如 gpt-4o">
+      </label>
+      <label class="apikey-field">
+        <span>上下文 KV 键值对（可选，每行一个 key=value）</span>
+        <textarea id="custom-provider-kv" class="apikey-input" rows="3" placeholder="temperature=0.7&#10;max_tokens=4096" style="resize:vertical;"></textarea>
+      </label>
+      <label class="apikey-field">
+        <span>工具调用次数上限（默认 8）</span>
+        <input type="number" id="custom-provider-max-tool-calls" class="apikey-input" value="8" min="1" max="50">
+      </label>
+    `;
+  }
+
+  async saveCustomProvider() {
+    const st = document.getElementById("custom-provider-status");
+    const btn = document.getElementById("custom-provider-save-btn");
+    const name = (document.getElementById("custom-provider-name") || {}).value || "";
+    const baseUrl = (document.getElementById("custom-provider-base-url") || {}).value || "";
+    const apiKey = (document.getElementById("custom-provider-api-key") || {}).value || "";
+    const model = (document.getElementById("custom-provider-model") || {}).value || "";
+    const kvText = (document.getElementById("custom-provider-kv") || {}).value || "";
+    const maxToolCalls = parseInt((document.getElementById("custom-provider-max-tool-calls") || {}).value || "8", 10);
+
+    if (!name.trim() || !baseUrl.trim()) {
+      if (st) { st.textContent = "请至少填写名称和 Base URL"; st.style.color = "var(--warning,#f39c12)"; }
+      return;
+    }
+    const extraKv = {};
+    kvText.split("\n").forEach((line) => {
+      const s = line.trim();
+      if (!s || s.indexOf("=") < 0) return;
+      const idx = s.indexOf("=");
+      const k = s.slice(0, idx).trim();
+      const v = s.slice(idx + 1).trim();
+      if (k) extraKv[k] = v;
+    });
+
+    const merged = this._customProviders.map((c) => ({
+      id: c.id, name: c.name, base_url: c.base_url, api_key: "",
+      model: c.model, extra_kv: c.extra_kv, max_tool_calls: c.max_tool_calls,
+    }));
+    merged.push({
+      id: "", name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim(),
+      model: model.trim(), extra_kv: extraKv, max_tool_calls: isNaN(maxToolCalls) ? 8 : maxToolCalls,
+    });
+
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "保存中…"; st.style.color = "var(--text-muted,#999)"; }
+    try {
+      const r = await window.aerie.api.request({ method: "POST", path: "/api/env/custom-providers", body: { providers: merged } });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      if (st) { st.textContent = "保存成功 ✓"; st.style.color = "var(--success,#2ecc71)"; }
+      await this._loadCustomProviders();
+      this._renderApiKeyList();
+      const panel = document.getElementById("custom-provider-panel");
+      if (panel) panel.style.display = "none";
+      const menu = document.getElementById("apikey-add-menu");
+      if (menu) menu.style.display = "none";
+    } catch (e) {
+      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
+    } finally {
+      if (btn) btn.disabled = false;
+      setTimeout(() => { if (st) st.textContent = ""; }, 5000);
+    }
+  }
+
+  async _saveCustomProviders() {
+    try {
+      const body = this._customProviders.map((c) => ({
+        id: c.id, name: c.name, base_url: c.base_url, api_key: "",
+        model: c.model, extra_kv: c.extra_kv, max_tool_calls: c.max_tool_calls,
+      }));
+      await window.aerie.api.request({ method: "POST", path: "/api/env/custom-providers", body: { providers: body } });
+    } catch (_) {}
+  }
+
+  // 配置数量提醒：少于 2 个 AI 厂商时提示主备容灾风险；
+  // 达到 2 个及以上时切换为正常状态。loadApiKeys 与 _saveApiKey 保存后
+  // 都会经 _renderApiKeyList 触发本方法，实现实时刷新。
+  _renderApiKeyCountReminder() {
+    const el = document.getElementById("apikey-count-reminder");
+    if (!el) return;
+    const count = this._apikeyProviders.filter((p) => p.configured === true).length;
+    const ok = count >= 2;
+    const accent = ok ? "var(--success, #2ecc71)" : "var(--warning, #f39c12)";
+
+    el.style.display = "flex";
+    el.style.alignItems = "flex-start";
+    el.style.gap = "8px";
+    el.style.margin = "0 0 14px";
+    el.style.padding = "10px 12px";
+    el.style.borderRadius = "10px";
+    el.style.fontSize = "12px";
+    el.style.lineHeight = "1.6";
+    el.style.color = "var(--text-muted, #999)";
+    el.style.background = ok ? "rgba(46, 204, 113, 0.10)" : "rgba(243, 156, 18, 0.12)";
+    el.style.border = "1px solid " + (ok ? "rgba(46, 204, 113, 0.30)" : "rgba(243, 156, 18, 0.35)");
+
+    const dot = '<span style="flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:' + accent + ';margin-top:5px;"></span>';
+    const countHtml = '<span style="color:' + accent + ';font-weight:600;">' + count + '</span>';
+    const text = ok
+      ? "已配置 " + countHtml + " 个 AI 厂商，主备容灾已就绪。"
+      : "当前仅配置了 " + countHtml + " 个 AI 厂商。为保证对话稳定（主模型 + 备用模型容灾），建议至少配置 2 个 AI API。推荐：TokenDance（tokendance.space）或阿里云 DashScope（百炼），两者注册均有免费额度。";
+    el.innerHTML = dot + "<span>" + text + "</span>";
   }
 
   async _saveApiKey(providerKey) {

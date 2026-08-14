@@ -19,6 +19,7 @@ const { backendHealthMatches } = require("./backend-health");
 const { createCapabilityBroker } = require("./capability-broker");
 const { createPluginSupervisor } = require("./plugin-supervisor");
 const { createEnvFeatureFlags, createWorldDashboardHost } = require("./world-dashboard-host");
+const { ensurePythonRuntime, buildManualTutorial } = require("./runtime-bootstrap");
 
 // Windows toast 归属：不设置 AppUserModelID 时，系统通知的来源名会显示
 // "Electron" 而非 "Aerie · 云栖"。需与 package.json build.appId 保持一致
@@ -365,6 +366,23 @@ function startPythonBackend() {
   // the next launch forever (WinError 10048).
   (async () => {
     try { await _evictOrphanBackendIfNeeded(); } catch (_) {}
+    // 环境自举：检测/自动下载 Python 运行时（缺环境时联网补齐）
+    const rt = await ensurePythonRuntime({
+      pythonRoot: PYTHON_ROOT,
+      pythonExe: PYTHON_EXE,
+      log: (m) => console.log("[main]" + m),
+    });
+    if (!rt.ok) {
+      _backendState = "offline";
+      _recomputeBackendState();
+      broadcastHealth();
+      _showRuntimeBootstrapFailure(rt);
+      return;
+    }
+    if (rt.pythonExe && rt.pythonExe !== PYTHON_EXE) {
+      PYTHON_EXE = rt.pythonExe;
+      console.log("[main] switched to runtime python:", PYTHON_EXE);
+    }
     // v2.2 fix: before spawning a fresh Python, probe port 7890. If a
     // healthy backend is already listening (e.g. the user launched
     // `python main.py` manually, or the previous Electron session left
@@ -519,6 +537,48 @@ function _spawnNewPython() {
       if (_backendState === "offline") broadcastHealth();
     }
   }, 1000);
+}
+
+// ── 运行时自举失败兜底 ─────────────────────────────
+// 三个下载源全部失败时：弹窗提示 + 落盘手动安装教程。
+let _runtimeBootstrapDialogShown = false;
+
+function _showRuntimeBootstrapFailure(rt) {
+  const tutorial = rt && rt.tutorial ? rt.tutorial : buildManualTutorial();
+  const tutorialPath = path.join(app.getPath("userData"), "运行环境安装教程.txt");
+  try {
+    fs.writeFileSync(tutorialPath, tutorial, "utf8");
+    console.log("[main] runtime bootstrap tutorial written:", tutorialPath);
+  } catch (err) {
+    console.error("[main] failed to write tutorial:", err.message);
+  }
+
+  if (_runtimeBootstrapDialogShown) return;
+  _runtimeBootstrapDialogShown = true;
+
+  const reason = (rt && rt.reason) || "未知错误";
+  const detail =
+    `Aerie · 云栖 无法自动下载 Python 运行环境。\n\n` +
+    `原因：${reason}\n\n` +
+    `已生成手动安装教程：\n${tutorialPath}\n\n` +
+    `按教程补齐运行环境后，重启应用即可。`;
+
+  let choice = 1;
+  try {
+    choice = dialog.showMessageBoxSync({
+      type: "error",
+      title: "运行环境缺失",
+      message: "无法启动后端服务（Python 运行环境缺失）",
+      detail,
+      buttons: ["打开教程", "稍后处理"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+  } catch (_) {}
+
+  if (choice === 0) {
+    shell.openPath(tutorialPath).catch(() => {});
+  }
 }
 
 /**

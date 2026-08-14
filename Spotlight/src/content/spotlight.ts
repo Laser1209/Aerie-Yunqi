@@ -347,9 +347,9 @@ export const journalEntries: JournalEntryData[] = [
     date: '2026-08-11',
     category: 'Incremental Beta',
     title: 'A sharper eye, a warmer home.',
-    titleZh: '发图体验、伊塔人设与世界迁移重庆落地',
-    summary: '聊天主动触发生图、AI 回复语义触发与图片表达层次认知、同主题去重与 LLM 提示词接力；伊塔人设重写（独立设计师/28 岁）、世界模拟迁移重庆、百度地图接入、对话知识库与身份锚定。',
-    highlights: ['Chat-triggered photos', 'Persona rewrite', 'Chongqing world', 'Identity anchoring'],
+    titleZh: '发图体验与世界迁移重庆落地',
+    summary: '聊天主动触发生图、AI 回复语义触发与图片表达层次认知、同主题去重与 LLM 提示词接力；世界模拟迁移重庆、百度地图接入、对话知识库与身份锚定。',
+    highlights: ['Chat-triggered photos', 'Dialogue knowledge', 'Chongqing world', 'Identity anchoring'],
     status: 'shipped',
   },
   {

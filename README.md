@@ -178,10 +178,17 @@ DAILYHOT_API_BASE=http://127.0.0.1:6688
 
 ### 3. 启动 NapCat（QQ 桥接）
 
+> 推荐在 Electron 桌面端「状态」页的 QQ 桥接面板点「下载 NapCat」：自动下载内置 QQ + Node 的完整包（`NapCat.Shell.Windows.Node.zip`，官方源失败自动回退镜像源）、解压、启动并弹出扫码，无需本机预装 QQ、无需手动配置路径；点「检查更新」可对比 GitHub 最新版本。下载解压后目录位置写入 `data/napcat_dir.json`，后端按「环境变量 `NAPCAT_DIR` / `AERIE_NAPCAT_DIR` → `settings.napcat.dir` → 下载标记 → 项目根默认」自动定位，打包后不会丢路径。
+
+以下为手动方式：
+
 ```powershell
 cd NapCat\NapCat.Shell
 .\launcher-user.bat
 ```
+
+> [!NOTE] QQ 桥接是可选能力 / QQ bridge is optional
+> NapCat 仅用于 QQ 收发消息。**不装 NapCat 也能正常使用**：桌面端聊天、生图、世界模拟、办公、上下文记忆、后台管理等核心能力不受影响；主动消息会自动改走桌面端（气泡 + 系统通知），生图会自动切到本地聊天通道。启动时若检测不到 QQ，后端会等待最多 30 秒（`qq.startup_wait_timeout`）后自动进入「降级模式」照常运行，不会卡住或崩溃。
 
 ### 4. 启动 Python 后端
 
@@ -230,6 +237,24 @@ npm run dev
 ├─ documents/ docs/           # 设计、排障、实施记录
 └─ data/ logs/                # 本地运行数据与日志
 ```
+
+### 嵌套仓库 / Nested Repositories
+
+本仓库（`Agent_reply`）目录内嵌了 **3 个独立 git 仓库**，各有自己的远程、分支与提交历史，**不会随主仓库一起提交**。改动前务必先 `cd` 到对应目录、确认当前分支，再在该仓库内单独提交与推送。
+
+| 路径 / Path                        | 远程 / Remote     | 分支 / Branch                       | 用途 / Purpose                                  |
+| ---------------------------------- | ----------------- | ----------------------------------- | ----------------------------------------------- |
+| `Agent_reply/`（本仓库）           | `Aerie-Yunqi`     | `main`                              | 后端、桌面端、官网源码等主仓库                 |
+| `.codex-deploy-aerie-spotlight/`   | `Aerie_Spotlight` | `codex/deploy-spotlight-mainline`   | Spotlight 官网 GitHub Pages 部署仓库            |
+| `justoneapi-mcp/`                  | `justoneapi-mcp`  | `main`                              | JustOneAPI MCP 独立项目                         |
+| `android-client/`                  | `Aerie-Android`   | `codex/phase4-android-foundation`    | Android 客户端独立项目（已被 `.gitignore` 忽略）|
+
+> [!WARNING] 注意事项 / Notes
+>
+> - **Spotlight 官网是双链路，改完只提交源码不会更新线上**：源码在 `Spotlight/`（随主仓库 `Aerie-Yunqi` 提交），但线上 `spotlight.etta.top` 由 `.codex-deploy-aerie-spotlight/`（`Aerie_Spotlight`）部署。需把改动同步进 `.codex-deploy-aerie-spotlight/` 并推送其 `main`（GitHub Actions 才会构建发布）。`codex/deploy-spotlight-mainline` 是该仓库的本地工作分支。
+> - `.codex-deploy-aerie-spotlight/` 与 `justoneapi-mcp/` 在主仓库 index 里以 gitlink（mode `160000`）记录，但 `.gitmodules` 已缺失（历史遗留）。当子仓库 HEAD 变化时，主仓库 `git status` 会显示 ` M <path>`；**不要**把这些 gitlink 变更当普通文件一起 `git add` / 提交，应进入对应子仓库分别提交（除非确实要更新指针）。
+> - `android-client/` 已被 `.gitignore` 忽略，改动须在 `android-client/` 仓库内单独提交。
+> - 判断方法：不确定某个目录归属时，先 `git rev-parse --show-toplevel` 看它属于哪个仓库根。
 
 ---
 
@@ -427,6 +452,7 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 | T11 | **手机 QQ 发给伊塔的消息，电脑端对话框不实时出现，历史里也看不到**                                            | 批量合批路径`_handle_batch` 的实时事件 emit 被 `source == "local"` 门控（QQ/移动不产生推送），且批量路径不调用 `_persist_canonical_turn` 落规范化 `messages` 表（桌面历史读 messages 表，看不到只进 chat_log 的批量消息）                                                                                                                                                                                                                       | 1. 批量路径放行 QQ/移动实时推送（去掉`source == "local"` 门控）。2. 批量路径补 `_persist_canonical_turn` 规范化落库。**预防**：新增消息来源通道时，实时推送与规范化落库必须在单条与批量两条路径对等实现。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | T12 | **对话框里出现大量 `[]` 符号**（`[图片]` / `[图片:描述]` / `[表情包]` / `[图片内容]` 等），显得出戏 | 多模态占位符是给 LLM 看的上下文元数据，被当普通文本直接渲染进气泡；图片消息本身还带 attachments 缩略图，正文里的占位符纯冗余                                                                                                                                                                                                                                                                                                                            | 1. 渲染层角标净化：图片/表情占位符转小角标图标，描述默认隐藏、hover/点击才展开。2. `[话题：xxx]` 等系统上下文注入防御性剥离，永不落展示层。**预防**：区分"给 LLM 的上下文"与"给用户看的正文"，多模态元数据永不直接进展示层。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | T13 | **最近聊天记录里图片变成链接文本，无法显示**                                                                  | 角标净化正则把 markdown 图片语法`![图片](url)` 里的 `[图片]` 误当占位符，替换后 marked 不再识别为图片；且 decoration 对象漏存 token，角标替换失效                                                                                                                                                                                                                                                                                                   | 1. 正则加负向后顾/前视排除`![...](...)` 与 `[...](...)` 两种 markdown 语法。2. decoration 补齐 token 字段，让角标替换生效。**预防**：净化/改写 Markdown 的规则必须先跑 markdown 语法单测，覆盖图片/链接/占位符三类输入。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| T14 | **删除聊天记录后，主动消息/生图消息删不掉且不显示在聊天记录** | 主动消息与生图消息直接写 `chat_log`、不写 normalized `messages` 层；admin 聊天记录（读 `messages`）看不到它们，级联删除又依赖 `legacy_chat_log_id` 关联而漏掉这些孤儿行 | 1. 新增 `ConversationRepository.persist_proactive_message()`，主动消息/本地生图/QQ 生图在写 `chat_log` 后同步补 `messages` 行，归入对应角色桌面(`desktop`/`local`)或 QQ(`qq`/主用户号)会话，管理平台可见 + 删除随角色会话级联覆盖。2. admin 回收站/恢复/purge 级联兜底软删历史孤儿 `route_mode='PROACTIVE'` 行（按 `persona_id` 匹配）。3. 历史遗留孤儿行用 `tools/cleanup_orphan_proactive.py` 手动物理清理（dry-run 预览 / `--apply` 删除+VACUUM）。**预防**：任何"直接写 chat_log"的旁路消息（主动推送/生图）都必须同步补 normalized 层，禁止单落 legacy 表。 |
 
 ---
 

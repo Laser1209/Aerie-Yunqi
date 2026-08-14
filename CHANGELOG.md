@@ -64,6 +64,13 @@ All notable changes to this project will be documented in this file.
 - **设置页诊断面板**：设置页新增「诊断数据」分组（免责声明 + 免费说明 + 累计时长 / 里程碑 / 端点状态 + 手动打包 / 上传 / 下载）
 - **Cloudflare 接收端（预留）**：`tools/telemetry-receiver/` 提供 Cloudflare Worker + R2 接收端代码与部署指引，供需要远程回传诊断包时使用
 
+#### NapCat 一键下载与检查更新 / NapCat One-Click Install & Update
+
+- **一键下载/解压/启动闭环**：新增 `core/napcat_downloader.py`，从官方 GitHub Release 下载 `NapCat.Shell.Windows.Node.zip`（内置 QQ + Node，解压即用，无需本机预装 QQ），官方源失败自动回退镜像源 `github.moeyy.xyz`；下载/解压为阻塞操作经 `asyncio.to_thread` 后台执行，进度/状态线程安全供前端轮询，解压后写入 `data/napcat_dir.json` 供启动器定位
+- **路径自适应**：`napcat_launcher.py` 新增 `_resolve_napcat_dir()` 多级优先级（环境变量 `NAPCAT_DIR` / `AERIE_NAPCAT_DIR` → `settings.napcat.dir` → 下载标记 `data/napcat_dir.json` → 项目根默认），规避打包后固定路径失效；启动器名由写死 `launcher-user.bat` 改为 `_LAUNCHER_CANDIDATES` 自适应探测（`launcher-user.bat` / `launcher.bat` / `napcat.bat`）
+- **检查更新**：新增 `GET /api/napcat/update/check`，读 GitHub API `releases/latest` 的 `tag_name` 比对已安装目录 `package.json` 版本，返回 `latest` / `current` / `has_update` / `installed`
+- **前端 NapCat 面板**：状态页新增「下载 NapCat」「检查更新」按钮；检测到 `launcher_not_found` 时显示下载按钮，下载解压完成后自动启动 NapCat 扫码登录；版本检查给出未安装 / 有新版 / 已最新 / 失败四种提示
+
 ### 🐛 Fixed / 修复
 
 - **灵动岛 hover 晃动闪烁**：hover 拉长的 `mouseenter/mouseleave` 反复触发窗口 `setBounds` 导致窗口宽度反复跳变 + 收缩定时器未取消互相竞争；改为可取消防抖 + 固定窗口尺寸（不再 resize）
@@ -76,6 +83,7 @@ All notable changes to this project will be documented in this file.
 - **QQ 消息不同步到桌面端**：批量合批路径（`_handle_batch`）原被 `source == "local"` 门控，QQ/移动消息不产生实时推送事件，且不调用 `_persist_canonical_turn` 落规范化 `messages` 表；改为放行 QQ/移动实时推送 + 批量路径补规范化落库，桌面端实时推送与历史记录均能看到 QQ 对话
 - **清空/回收站后对话框仍显示记录**：回收站与清空只软删规范化 `messages` 表，桌面轮询/历史直读 `chat_log` 未过滤；新增迁移 `012_chat_log_trash_state` 给 `chat_log` 补 `deleted_at` 并镜像软删状态，admin 回收站/恢复/purge 级联标记 `chat_log`，`/api/chat/poll`、`/api/chat/history` 与消息统计统一加 `deleted_at IS NULL` 过滤
 - **图片渲染成链接**：角标净化正则误把 markdown 图片语法 `![图片](url)` 里的 `[图片]` 当成占位符，替换后 marked 不再识别为图片；修复正则负向后顾/前视排除 `![...](...)` 与 `[...](...)`，并补齐 decoration 缺失的 token 字段
+- **主动消息/生图消息删除遗漏且不显示**：主动消息与生图消息直接写 `chat_log`、未写入 normalized `messages` 层，导致管理平台聊天记录看不到、级联删除也漏掉它们；新增 `ConversationRepository.persist_proactive_message()` 把主动推送/生图同步补进 `messages` 层（归入对应角色桌面/QQ 会话），admin 回收站/恢复/purge 级联兜底软删历史孤儿 `route_mode='PROACTIVE'` 行，并新增 `tools/cleanup_orphan_proactive.py` 手动物理清理历史孤儿行
 
 ### 🧪 Tests / 测试
 
@@ -84,6 +92,7 @@ All notable changes to this project will be documented in this file.
 - 引用相关组回归 147 passed
 - 灵动岛 v2 CDP 真实窗口回归：窗口 742×704、hover 320 / 展开 340 / 宽屏 720 全无裁切、动态穿透链路（胶囊外穿透 → 胶囊上接收 → ALT 强制穿透）、配置重启恢复
 - 消息/聊天链路修复回归：`test_admin_service` / `test_admin_api` / `test_desktop_shared_api_contract` / `test_desktop_chat_continuity` 44 passed；`test_phase3_conversation_model` / `test_message_batcher` / `test_api` 63 passed
+- NapCat 下载/路径回归：`test_napcat_launcher_lifecycle.py` 更新（路径解析优先级 / 启动器自适应 / 一键下载目录定位），4 passed
 
 ---
 

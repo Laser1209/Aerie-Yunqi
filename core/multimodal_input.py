@@ -301,7 +301,7 @@ class AudioTranscriber:
         import os
 
         explicit_key = api_key or os.getenv("OPENAI_API_KEY", "")
-        explicit_base = api_base or os.getenv("OPENAI_API_BASE", "")
+        explicit_base = api_base or os.getenv("OPENAI_BASE_URL", "")
         if explicit_key and explicit_base:
             self._providers.append({
                 "name": "openai",

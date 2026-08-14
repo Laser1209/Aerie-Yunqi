@@ -98,11 +98,15 @@ async def _main() -> None:
         GIT_COMMIT, PROCESS_START_ISO, os.getpid(),
     )
 
-    # Load .env
+    # Load .env（用户配置优先），再兜底加载预置中转门卡（不覆盖用户值）
     try:
         from dotenv import load_dotenv
         configured_env = os.getenv("AERIE_ENV_FILE", "").strip()
         load_dotenv(configured_env or None)
+        from pathlib import Path
+        preset = Path(__file__).resolve().parent / "config" / "relay_preset.env"
+        if preset.exists():
+            load_dotenv(preset, override=False)
     except Exception:
         pass
 

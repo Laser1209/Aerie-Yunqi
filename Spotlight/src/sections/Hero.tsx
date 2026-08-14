@@ -3,7 +3,7 @@ import { release } from '../config/release'
 import BlurText from '../components/BlurText'
 import { ArrowUpRight, PlayIcon, ClockIcon, GlobeIcon } from '../components/icons'
 
-const stackNames = ['Electron', 'Python', 'NapCat', 'Qwen', 'DeepSeek']
+const stackNames = ['Electron', 'Python', 'NapCat', 'Qwen', 'DeepSeek', 'Gemini', 'Flutter']
 
 const fadeIn = (delay: number) => ({
   initial: { filter: 'blur(10px)', opacity: 0, y: 20 },

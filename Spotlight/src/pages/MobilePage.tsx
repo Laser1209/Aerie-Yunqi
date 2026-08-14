@@ -61,6 +61,24 @@ const foundation: Milestone[] = [
     title: '附件打通 + 集成',
     note: 'fileIds 填入请求、图片懒加载，S2 门禁 PASS。',
   },
+  {
+    code: 'T3.1',
+    done: true,
+    title: '多端会话',
+    note: '移动网关多端会话、账号鉴权与消息顺序保序。',
+  },
+  {
+    code: 'T3.2',
+    done: true,
+    title: '跨端时间线',
+    note: '跨端时间线（视图 B）与多端存在提示，跨设备回忆一致。',
+  },
+  {
+    code: 'T3.3',
+    done: true,
+    title: '文件双向传输增强',
+    note: 'SHA-256 分块上传、Range 下载、断点续传全链路。',
+  },
 ]
 
 const forward: Milestone[] = [
@@ -91,7 +109,7 @@ export default function MobilePage() {
           <PageIntro
             label="Mobile · Android"
             title={'A companion,\nin your pocket.'}
-            description={'Aerie · 云栖的移动端接收端。用 Flutter 双端重写，与桌面端经安全网关一对一配对，把对话与文件同步放进手机。当前处于基础架构里程碑阶段。'}
+            description={'Aerie · 云栖的移动端接收端。用 Flutter 双端重写，与桌面端经安全网关一对一配对，把对话、文件与跨端时间线同步放进手机。基础架构与多端会话已落地，只读能力屏与真机验收持续推进中。'}
           />
           <motion.p
             {...fade}

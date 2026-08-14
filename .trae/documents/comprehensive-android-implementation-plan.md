@@ -552,10 +552,10 @@ deadline: 2026-09-01
   - [x] `file_screen.dart`（上传入口 + 进度卡列表）+ `transfer_card.dart`（进度条 + 状态微章）；传输保活前置：Android 前台服务 `dataSync` 已在 T1.1 清单声明，运行时激活随 P-S4 接通
   - [x] L1 自检：仓库单测（SHA-256/分块续传/Range 下载）6 项 + TransferCard Widget 3 项通过
 
-- [ ] **T2.4 附件打通 + 集成（L2/L3）**
-  - [ ] 上传完成 `fileIds` 填入 requests（文本+附件）
-  - [ ] `cached_network_image` 图片懒加载
-  - [ ] §7 S2 门禁 PASS/FAIL
+- [x] **T2.4 附件打通 + 集成（L2/L3）**
+  - [x] 上传完成 `fileIds` 填入 requests（文本+附件）：`ChatRepository.sendMessage` 已支持 `fileIds`；`MessageBubble` 图片附件用 `CachedNetworkImage` 懒加载（baseUrl 拼接相对 URL）
+  - [x] `cached_network_image` 图片懒加载 + 集成回归（仓库/Widget 层全绿）
+  - [x] §7 S2 门禁 **PASS**：`flutter analyze` 零告警；`flutter test` 全绿；覆盖率 repository 层 **93.33%**（≥80）、chat Widget **100%**（≥60）、auth **84.38%**——S2 各检测项在 T2.1~T2.4 分步通过
 
 ---
 

@@ -9,12 +9,8 @@ from core.napcat_launcher import NapcatLauncher
 
 def test_status_does_not_expose_local_qrcode_path(monkeypatch):
     monkeypatch.setattr(launcher_module, "_port_is_open", lambda **_kwargs: False)
-    monkeypatch.setattr(
-        launcher_module,
-        "_QRCODE_PATH",
-        SimpleNamespace(exists=lambda: True),
-    )
     launcher = NapcatLauncher()
+    launcher.qrcode_path = SimpleNamespace(exists=lambda: True)
 
     status = launcher.get_status()
 
@@ -64,12 +60,13 @@ async def test_stop_does_not_kill_unowned_existing_napcat(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_missing_launcher_error_does_not_leak_absolute_path(monkeypatch):
+async def test_missing_launcher_error_does_not_leak_absolute_path(monkeypatch, tmp_path):
     monkeypatch.setattr(launcher_module, "_port_is_open", lambda **_kwargs: False)
+    # 目录解析指向一个没有 launcher-user.bat 的临时目录，模拟未安装 NapCat
     monkeypatch.setattr(
         launcher_module,
-        "_LAUNCHER_BAT",
-        SimpleNamespace(exists=lambda: False),
+        "_resolve_napcat_dir",
+        lambda _settings: tmp_path,
     )
     launcher = NapcatLauncher()
 

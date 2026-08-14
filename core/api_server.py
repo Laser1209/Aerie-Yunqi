@@ -1785,6 +1785,32 @@ async def napcat_qrcode() -> Response:
     return Response(content=data, media_type="image/png")
 
 
+@app.post("/api/napcat/download")
+async def napcat_download() -> dict:
+    """触发 NapCat 一键下载（后台线程执行，前端轮询 status）。"""
+    from core.napcat_downloader import get_downloader
+
+    downloader = get_downloader()
+    if downloader.is_running():
+        return {"ok": False, "message": "NapCat 正在下载中", "error_code": "already_running"}
+    asyncio.create_task(asyncio.to_thread(downloader.download_and_extract))
+    return {"ok": True, "message": "下载任务已启动"}
+
+
+@app.get("/api/napcat/download/status")
+async def napcat_download_status() -> dict:
+    from core.napcat_downloader import get_downloader
+
+    return get_downloader().status()
+
+
+@app.get("/api/napcat/update/check")
+async def napcat_update_check() -> dict:
+    from core.napcat_downloader import get_downloader
+
+    return await asyncio.to_thread(get_downloader().check_update)
+
+
 # ── Emotion ─────────────────────────────────────────
 
 @app.get("/api/emotion/state")

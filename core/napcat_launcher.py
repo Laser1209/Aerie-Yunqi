@@ -9,7 +9,9 @@ instance (``_owns_process``), never on externally-managed NapCat.
 
 from __future__ import annotations
 import asyncio
+import json
 import logging
+import os
 import socket
 import subprocess
 import sys
@@ -20,9 +22,55 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_NAPCAT_DIR = _PROJECT_ROOT / "NapCat" / "NapCat.Shell"
-_LAUNCHER_BAT = _NAPCAT_DIR / "launcher-user.bat"
-_QRCODE_PATH = _NAPCAT_DIR / "cache" / "qrcode.png"
+_DEFAULT_NAPCAT_DIR = _PROJECT_ROOT / "NapCat" / "NapCat.Shell"
+
+
+def _resolve_napcat_dir(settings: dict | None) -> Path:
+    """Resolve NapCat 目录：环境变量 > settings.napcat.dir > 下载配置 > 项目根默认。
+
+    打包后 ``__file__`` 的父目录不再是仓库根，``_DEFAULT_NAPCAT_DIR`` 会落空；
+    因此必须允许通过环境变量 / settings 显式指定，或读取「一键下载」落盘的
+    ``data/napcat_dir.json``（下载解压后写入，重启后仍能定位）。
+    """
+    env_dir = os.environ.get("NAPCAT_DIR") or os.environ.get("AERIE_NAPCAT_DIR")
+    if env_dir:
+        return Path(env_dir).expanduser()
+    cfg_dir = (settings or {}).get("napcat", {}).get("dir")
+    if cfg_dir:
+        return Path(str(cfg_dir)).expanduser()
+    marker_dir = _read_download_marker()
+    if marker_dir:
+        return marker_dir
+    return _DEFAULT_NAPCAT_DIR
+
+
+def _read_download_marker() -> Path | None:
+    """Read the NapCat directory persisted by the one-click downloader."""
+    try:
+        from core.paths import data_dir
+
+        marker = data_dir() / "napcat_dir.json"
+        if not marker.exists():
+            return None
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+        value = payload.get("dir") if isinstance(payload, dict) else None
+        if not value:
+            return None
+        return Path(str(value)).expanduser()
+    except Exception:
+        return None
+
+
+_LAUNCHER_CANDIDATES = ("launcher-user.bat", "launcher.bat", "napcat.bat")
+
+
+def _find_launcher(napcat_dir: Path) -> Path:
+    """Return the first existing launcher script (Shell 包 / 一键包启动器名不同)。"""
+    for name in _LAUNCHER_CANDIDATES:
+        candidate = napcat_dir / name
+        if candidate.exists():
+            return candidate
+    return napcat_dir / _LAUNCHER_CANDIDATES[0]
 
 # Watchdog tunables: grace period before a started process is judged dead,
 # poll interval, and how long the WS port may stay closed before force-restart.
@@ -67,6 +115,9 @@ class NapcatLauncher:
         self.settings = settings or {}
         napcat_cfg = self.settings.get("napcat", {})
         self.ws_port = int(napcat_cfg.get("ws_port", 3001))
+        self.napcat_dir = _resolve_napcat_dir(self.settings)
+        self.launcher_bat = _find_launcher(self.napcat_dir)
+        self.qrcode_path = self.napcat_dir / "cache" / "qrcode.png"
         self._proc: subprocess.Popen | None = None
         self._owns_process = False
         self._logs: list[str] = []
@@ -77,9 +128,15 @@ class NapcatLauncher:
         self._consecutive_failures = 0
         self._port_stall_since: float | None = None
 
+    def _refresh_paths(self) -> None:
+        """Re-resolve NapCat paths（下载解压后配置可能已更新，启动前刷新）。"""
+        self.napcat_dir = _resolve_napcat_dir(self.settings)
+        self.launcher_bat = _find_launcher(self.napcat_dir)
+        self.qrcode_path = self.napcat_dir / "cache" / "qrcode.png"
+
     def get_status(self) -> dict:
         """Return current NapCat status for API."""
-        qr_exists = _QRCODE_PATH.exists()
+        qr_exists = self.qrcode_path.exists()
         running = self._proc is not None and self._proc.poll() is None
         port_open = _port_is_open(port=self.ws_port)
         if port_open:
@@ -115,6 +172,7 @@ class NapcatLauncher:
 
     async def start(self) -> dict:
         """Launch NapCat via launcher-user.bat."""
+        self._refresh_paths()
         if self._proc and self._proc.poll() is None:
             return {"ok": False, "message": "NapCat already running"}
         if self._proc is not None:
@@ -131,7 +189,7 @@ class NapcatLauncher:
                 "owned": False,
             }
 
-        if not _LAUNCHER_BAT.exists():
+        if not self.launcher_bat.exists():
             self._phase = "error"
             self._error_code = "launcher_not_found"
             return {
@@ -157,7 +215,7 @@ class NapcatLauncher:
                     self._logs.append("[系统] WebSocket 端口已就绪，已连接")
                     return {"ok": True, "port_open": True, "message": "NapCat connected"}
                 # Check for QR code during wait
-                if _QRCODE_PATH.exists():
+                if self.qrcode_path.exists():
                     self._phase = "qr_pending"
                     self._logs.append("[系统] 检测到二维码，请用手机QQ扫码登录")
                     return {
@@ -198,8 +256,8 @@ class NapcatLauncher:
         """Launch the NapCat process via launcher-user.bat (sync)."""
         if sys.platform == "win32":
             self._proc = subprocess.Popen(
-                [str(_LAUNCHER_BAT)],
-                cwd=str(_NAPCAT_DIR),
+                [str(self.launcher_bat)],
+                cwd=str(self.napcat_dir),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=(
@@ -209,8 +267,8 @@ class NapcatLauncher:
             )
         else:
             self._proc = subprocess.Popen(
-                [str(_LAUNCHER_BAT)],
-                cwd=str(_NAPCAT_DIR),
+                [str(self.launcher_bat)],
+                cwd=str(self.napcat_dir),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -349,9 +407,9 @@ class NapcatLauncher:
 
     def read_qrcode(self) -> bytes | None:
         """Read QR code image bytes for display in the UI."""
-        if not _QRCODE_PATH.exists():
+        if not self.qrcode_path.exists():
             return None
-        return _QRCODE_PATH.read_bytes()
+        return self.qrcode_path.read_bytes()
 
 
 _LAUNCHER: NapcatLauncher | None = None

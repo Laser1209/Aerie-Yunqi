@@ -6,6 +6,7 @@ import ArchitecturePage from './pages/ArchitecturePage'
 import CapabilitiesPage from './pages/CapabilitiesPage'
 import JournalPage from './pages/JournalPage'
 import DownloadPage from './pages/DownloadPage'
+import MobilePage from './pages/MobilePage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/capabilities" element={<CapabilitiesPage />} />
         <Route path="/journal" element={<JournalPage />} />
         <Route path="/download" element={<DownloadPage />} />
+        <Route path="/mobile" element={<MobilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

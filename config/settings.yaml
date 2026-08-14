@@ -58,7 +58,7 @@ qq:
   startup_wait_timeout: 1.0
 startup:
   auto_start: true
-  start_minimized: true
+  start_minimized: false
 theme:
   current: yita-pink
 verify_batch4:

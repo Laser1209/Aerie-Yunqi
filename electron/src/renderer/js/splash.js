@@ -125,9 +125,14 @@
     // 读取视频 / LOGO 资产路径并开始播放
     try {
       const cfg = await window.aerie.electron.splash.getConfig();
-      video.src = "file:///" + (cfg.videoPath || "");
       logoImg.src = "file:///" + (cfg.logoPath || "");
-      video.play().catch(onVideoEnded);
+      if (cfg.playVideo) {
+        video.src = "file:///" + (cfg.videoPath || "");
+        video.play().catch(onVideoEnded);
+      } else {
+        // 加载动画模式：跳过视频，直接进入 LOGO + 进度阶段
+        onVideoEnded();
+      }
     } catch (_) {
       // 资产读取失败：直接进入 LOGO + 进度阶段，避免黑屏卡死
       onVideoEnded();

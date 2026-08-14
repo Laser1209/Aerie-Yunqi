@@ -19,20 +19,10 @@ venv/
 env/
 ENV/
 
-# Data & logs (runtime artifacts)
-data/*.db
-data/*.db-journal
-data/**/*.db
-data/**/*.db-journal
-data/**/*.db-shm
-data/**/*.db-wal
-data/world_sidecar/
-data/backups/
-data/audit/
-data/mobile_files/
-data/desktop_attachments/
-data/briefs/*.html
-data/briefs/*.json
+# Data & logs (runtime artifacts) — 整个 data/ 均为运行态数据与用户隐私数据
+# （QQ 语音/图片、用户文档、头像、三视图、向量库、诊断包、决策日志、状态文件），
+# 一律不入库；种子/模板源在 core/persona_hub/preset_templates/ 等代码目录维护。
+data/
 /logs/
 *.log
 
@@ -81,6 +71,7 @@ Thumbs.db
 
 # Standalone Android client repository
 android-client/
+aerie_mobile/
 
 # OS
 *.lnk

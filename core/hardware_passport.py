@@ -204,7 +204,7 @@ def _env_seed(runtime: Any) -> str:
     return (
         "env:" + str(runtime.get("python_version") or "")
         + "|" + str(runtime.get("executable") or "")
-        + "|" + str(runtime.get("env_fingerprint") or "")
+        + "|" + ("packaged" if runtime.get("packaged") else "dev")
     )
 
 
@@ -381,18 +381,11 @@ def _collect_runtime() -> dict[str, Any]:
         executable = sys.executable or ""
     except Exception:
         executable = ""
-    try:
-        env_fingerprint = hashlib.sha256(
-            "\n".join(sorted(os.environ.keys())).encode("utf-8")
-        ).hexdigest()
-    except Exception:
-        env_fingerprint = ""
     return {
         "python_version": platform.python_version(),
         "python_implementation": platform.python_implementation(),
         "executable": executable,
         "packaged": packaged,
-        "env_fingerprint": env_fingerprint,
     }
 
 
@@ -434,7 +427,6 @@ def collect_passport() -> dict[str, Any]:
             "python_implementation": "",
             "executable": "",
             "packaged": False,
-            "env_fingerprint": "",
         },
     )
     try:

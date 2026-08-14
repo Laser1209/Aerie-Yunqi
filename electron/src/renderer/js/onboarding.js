@@ -12,6 +12,7 @@
 window.OnboardingController = class OnboardingController {
   constructor() {
     this.storageKey = "aerie_onboarding_done";
+    this.shownKey = "aerie_onboarding_shown_version";
     this.root = null;
     this.card = null;
     this.wiki = null;
@@ -34,7 +35,6 @@ window.OnboardingController = class OnboardingController {
     this.wikiOpen = false;
 
     this._onKeydown = this._onKeydown.bind(this);
-    this._onDocClick = this._onDocClick.bind(this);
 
     this.steps = [
       {
@@ -44,7 +44,7 @@ window.OnboardingController = class OnboardingController {
         subtitle: "先让 Aerie 学会说话：选择服务商并填入 API Key。",
         nav: () => this._navigateSettings("apikey"),
         body: () =>
-          '<p class="onb-p">已为你打开 <b>设置 → API Key</b>。在下方面板中选择 AI 服务商、填入密钥并保存，然后回来校验。</p>'
+          '<p class="onb-p">已为你打开 <b>设置 → API Key</b>。点击右上角的「添加 API」按钮，选择 AI 服务商并填入你的 API Key，保存后回来校验。</p>'
           + '<p class="onb-hint">密钥只保存在本地，不会上传到任何地方。</p>'
           + '<div class="onb-status" id="onb-api-status"></div>',
         primary: { label: "我已填好 API Key", action: () => this._verifyApiKey() },
@@ -109,8 +109,8 @@ window.OnboardingController = class OnboardingController {
   }
 
   /* 后端就绪后由 app.js 调用，判断是否弹出教程 */
-  async maybeShow() {
-    if (this.visible || this._isDone()) return;
+  async maybeShow(version) {
+    if (this.visible || this._isDone() || this._isShown(version)) return;
 
     let hasKey = false;
     try {
@@ -121,6 +121,7 @@ window.OnboardingController = class OnboardingController {
     }
     this.hasApiKey = hasKey;
     this.skippable = hasKey; // 已配置 API 即可跳过
+    this._markShown(version);
     this.show(0);
   }
 
@@ -158,6 +159,13 @@ window.OnboardingController = class OnboardingController {
     this._hide();
   }
 
+  /* 手动重新打开教程（设置页「开启教程」按钮） */
+  reopen() {
+    if (this.visible) return;
+    this.skippable = true; // 手动打开可随时跳过 / 关闭
+    this.show(0);
+  }
+
   _finish() {
     this._setDone();
     this._hide();
@@ -170,7 +178,6 @@ window.OnboardingController = class OnboardingController {
     if (this.wiki) this.wiki.classList.remove("is-open");
     if (this.root) this.root.classList.remove("is-visible");
     document.removeEventListener("keydown", this._onKeydown);
-    document.removeEventListener("click", this._onDocClick, true);
   }
 
   /* ── DOM 骨架 ─────────────────────────────────────── */
@@ -273,11 +280,6 @@ window.OnboardingController = class OnboardingController {
   _applySkippable() {
     if (this.skipBtn) this.skipBtn.style.display = this.skippable ? "" : "none";
     if (this.closeBtn) this.closeBtn.style.display = this.skippable ? "" : "none";
-    if (this.skippable) {
-      document.addEventListener("click", this._onDocClick, true);
-    } else {
-      document.removeEventListener("click", this._onDocClick, true);
-    }
   }
 
   /* ── 步骤 1：校验 API Key ──────────────────────────── */
@@ -358,16 +360,17 @@ window.OnboardingController = class OnboardingController {
     if (this.skippable) this._hide();
   }
 
-  _onDocClick(e) {
-    if (!this.visible || !this.skippable || this.wikiOpen) return;
-    if (this.card && this.card.contains(e.target)) return;
-    // 点击教程卡片之外的背景区域即关闭（仅 API 配置后）
-    this._hide();
-  }
-
   /* ── 持久化 ───────────────────────────────────────── */
   _isDone() {
     try { return localStorage.getItem(this.storageKey) === "1"; } catch (_) { return false; }
+  }
+
+  _isShown(version) {
+    try { return localStorage.getItem(this.shownKey) === version; } catch (_) { return false; }
+  }
+
+  _markShown(version) {
+    try { localStorage.setItem(this.shownKey, version || ""); } catch (_) {}
   }
 
   _setDone() {

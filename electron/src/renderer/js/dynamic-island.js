@@ -200,7 +200,7 @@
         if (r?.ok && r.data) { uiState.system = r.data; renderCapsule(); }
       }).catch(() => {});
       api.mediaGetState?.().then((r) => {
-        if (r?.ok && r.data) { uiState.media = r.data; renderExpanded(); renderCapsule(); }
+        if (r?.ok && r.data) { uiState.media = r.data; renderExpanded(); renderCapsule(); syncMediaTick(); }
       }).catch(() => {});
     } catch (_) {}
   }
@@ -358,7 +358,7 @@
             <div class="a">${m.artist || "—"}</div>
             <div class="track">
               <span class="now">${fmt(m.progress)}</span>
-              <span class="bar"><i style="width:${prog}%"></i></span>
+              <span class="bar" data-media-seek="1" title="拖动/点击定位"><i style="width:${prog}%"></i></span>
               <span class="tot">${fmt(m.duration)}</span>
             </div>
           </div>
@@ -494,6 +494,14 @@
     expandedBody.querySelectorAll("[data-media-action]").forEach((btn) => {
       btn.addEventListener("click", (e) => { e.stopPropagation(); handleMediaAction(btn.dataset.mediaAction); });
     });
+    expandedBody.querySelectorAll("[data-media-seek]").forEach((bar) => {
+      bar.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const rect = bar.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        handleMediaSeek(Math.round((uiState.media.duration || 0) * ratio));
+      });
+    });
     [briefPane, calendarPane].forEach((pane) => {
       if (!pane) return;
       pane.querySelector("[data-back]")?.addEventListener("click", () => leaveWide());
@@ -508,6 +516,7 @@
     expandedEl.style.display = "";
     capsuleEl.setAttribute("aria-expanded", "true");
     try { api?.setState?.(true)?.catch(() => {}); } catch (_) {}
+    syncMediaTick();
     applyIgnore();
   }
 
@@ -519,6 +528,7 @@
     leaveWide(true);
     capsuleEl.setAttribute("aria-expanded", "false");
     try { api?.setState?.(false)?.catch(() => {}); } catch (_) {}
+    stopMediaTick();
     expandedEl.classList.add("collapsing");
     setTimeout(() => {
       expandedEl.classList.remove("collapsing");
@@ -620,7 +630,7 @@
     try {
       if (action === "toggle") {
         api.mediaPlayPause?.().then((r) => {
-          if (r?.ok && r.data) { uiState.media = r.data; renderExpanded(); renderCapsule(); }
+          if (r?.ok && r.data) { uiState.media = r.data; renderExpanded(); renderCapsule(); syncMediaTick(); }
         }).catch(() => {});
       } else if (action === "next") {
         api.mediaNext?.().catch(() => {});
@@ -628,6 +638,43 @@
         api.mediaPrev?.().catch(() => {});
       }
     } catch (_) {}
+  }
+
+  function handleMediaSeek(targetSec) {
+    if (!api || !Number.isFinite(targetSec) || targetSec < 0) return;
+    // 立即本地更新进度提供即时反馈；SMTC 回包后再同步真实状态。
+    uiState.media.progress = targetSec;
+    updateMediaProgressDom();
+    api.mediaSeek?.(targetSec).then((r) => {
+      if (r?.ok && r.data) { uiState.media = r.data; renderExpanded(); renderCapsule(); syncMediaTick(); }
+    }).catch(() => {});
+  }
+
+  function updateMediaProgressDom() {
+    const m = uiState.media;
+    const bar = expandedBody.querySelector(".media .bar i");
+    const now = expandedBody.querySelector(".media .now");
+    const tot = expandedBody.querySelector(".media .tot");
+    if (bar) bar.style.width = (m.duration > 0 ? Math.min(100, (m.progress / m.duration) * 100) : 0) + "%";
+    if (now) now.textContent = fmt(m.progress);
+    if (tot) tot.textContent = fmt(m.duration);
+  }
+
+  let mediaTickTimer = null;
+  function startMediaTick() {
+    stopMediaTick();
+    mediaTickTimer = setInterval(() => {
+      if (!uiState.media.playing || !diEl.classList.contains("open")) return;
+      uiState.media.progress += 1;
+      updateMediaProgressDom();
+    }, 1000);
+  }
+  function stopMediaTick() {
+    if (mediaTickTimer) { clearInterval(mediaTickTimer); mediaTickTimer = null; }
+  }
+  function syncMediaTick() {
+    if (uiState.media.playing && diEl.classList.contains("open")) startMediaTick();
+    else stopMediaTick();
   }
 
   /* ── IPC & SSE ── */
@@ -657,7 +704,7 @@
       });
 
       api.onMediaUpdate?.((data) => {
-        if (data) { uiState.media = data; if (diEl.classList.contains("open")) renderExpanded(); renderCapsule(); }
+        if (data) { uiState.media = data; if (diEl.classList.contains("open")) renderExpanded(); renderCapsule(); syncMediaTick(); }
       });
 
       api.sseSubscribe?.((payload) => handleSseEvent(payload));

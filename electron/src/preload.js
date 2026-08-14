@@ -209,6 +209,7 @@ contextBridge.exposeInMainWorld("aerie", {
     mediaPlayPause: () => ipcRenderer.invoke("island:media-play-pause"),
     mediaNext: () => ipcRenderer.invoke("island:media-next"),
     mediaPrev: () => ipcRenderer.invoke("island:media-prev"),
+    mediaSeek: (positionSeconds) => ipcRenderer.invoke("island:media-seek", positionSeconds),
     onMediaUpdate: (cb) => {
       ipcRenderer.on("island:media-update", (_event, data) => cb(data || {}));
     },

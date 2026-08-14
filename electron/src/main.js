@@ -120,6 +120,7 @@ let worldDashboardWindow = null;
 let isQuitting = false;
 let mainWindowReady = false;
 let _splashDone = false;
+let _splashMode = "video"; // "video" | "loading" | "none"
 let pendingMainNavigation = null;
 // R7.1: legacy brief popup/detail windows removed. The brief now
 // lives inside the main window as a right-side drawer (see
@@ -823,13 +824,32 @@ function hasBackgroundRecoverySurface() {
 // ── Splash（开场动画）────────────────────────────────
 // 全屏、无边框、置顶、不进任务栏，且不可交互：视频与 LOGO 阶段
 // 都由渲染层设置 pointer-events:none / 禁右键 / 无控制条。
-function createSplashWindow() {
-  if (splashWindow && !splashWindow.isDestroyed()) return splashWindow;
+function determineSplashMode() {
+  const state = _loadLaunchState();
+  const version = app.getVersion();
+  const bootSession = _getBootSessionId();
+  // 本版本第一次开启 → 播放视频
+  if (state.video_played_version !== version) {
+    return "video";
+  }
+  // 新开机会话（系统重启后）→ 只播放加载动画
+  if (state.loading_boot_session !== bootSession) {
+    return "loading";
+  }
+  // 同一开机会话内的应用重启 → 不开屏
+  return "none";
+}
 
+function createSplashWindow(mode = "video") {
+  if (splashWindow && !splashWindow.isDestroyed()) return splashWindow;
+  _splashMode = mode;
+
+  // 开场动画窗口尺寸与主窗口一致：不强制全屏、不置顶，避免干扰其它操作
+  const { width: workW, height: workH } = screen.getPrimaryDisplay().workAreaSize;
   splashWindow = new BrowserWindow({
     frame: false,
-    fullscreen: true,
-    alwaysOnTop: true,
+    width: Math.min(1280, workW),
+    height: Math.min(800, workH),
     skipTaskbar: true,
     resizable: false,
     minimizable: false,
@@ -866,6 +886,11 @@ function createSplashWindow() {
 function finishSplash() {
   if (_splashDone) return;
   _splashDone = true;
+  // 持久化开屏状态：标记本版本视频已播 + 本次开机会话已播加载动画
+  _saveLaunchState({
+    video_played_version: app.getVersion(),
+    loading_boot_session: _getBootSessionId(),
+  });
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.close();
   }
@@ -1093,6 +1118,53 @@ function _saveIslandPrefs() {
   } catch (_e) {
     console.warn("[main] failed to save island_prefs.json:", _e && _e.message);
     return false;
+  }
+}
+
+// ── Launch state (开场动画 / 加载动画的播放状态持久化) ──
+// 记录「本版本视频是否已播」+「加载动画最近一次播放的开机会话」，用于
+// 判断开屏模式：video（本版本首启）→ loading（新开机）→ none（同开机会话内重启）。
+let _launchStatePath = null;
+function _resolveLaunchStatePath() {
+  if (_launchStatePath) return _launchStatePath;
+  const base = BACKEND_DATA_DIR
+    ? path.resolve(BACKEND_DATA_DIR)
+    : (app.getPath ? path.resolve(app.getPath("userData")) : process.cwd());
+  try { fs.mkdirSync(base, { recursive: true }); } catch (_) {}
+  _launchStatePath = path.join(base, "launch_state.json");
+  return _launchStatePath;
+}
+function _loadLaunchState() {
+  const p = _resolveLaunchStatePath();
+  try {
+    if (fs.existsSync(p)) {
+      const obj = JSON.parse(fs.readFileSync(p, "utf8") || "{}");
+      return {
+        video_played_version: obj.video_played_version || "",
+        loading_boot_session: obj.loading_boot_session || 0,
+      };
+    }
+  } catch (_e) {
+    console.warn("[main] failed to read launch_state.json:", _e && _e.message);
+  }
+  return { video_played_version: "", loading_boot_session: 0 };
+}
+function _saveLaunchState(state) {
+  const p = _resolveLaunchStatePath();
+  try {
+    fs.writeFileSync(p, JSON.stringify(state, null, 2), { encoding: "utf8" });
+    return true;
+  } catch (_e) {
+    console.warn("[main] failed to save launch_state.json:", _e && _e.message);
+    return false;
+  }
+}
+// 用系统运行时长推算本次开机会话标识（分钟粒度），系统重启后该值会变化。
+function _getBootSessionId() {
+  try {
+    return Math.floor((Date.now() - os.uptime() * 1000) / 60000);
+  } catch (_) {
+    return 0;
   }
 }
 
@@ -2366,7 +2438,7 @@ function _fetchMediaState() {
   return _mediaQueryPromise;
 }
 
-function _runMediaControlProcess(action) {
+function _runMediaControlProcess(action, positionSeconds = 0) {
   return new Promise((resolve) => {
     if (process.platform !== "win32") {
       resolve();
@@ -2385,7 +2457,7 @@ function _runMediaControlProcess(action) {
       ps = spawn("powershell.exe", [
         "-NoProfile",
         "-ExecutionPolicy", "Bypass",
-        "-Command", _buildMediaControlScript(action),
+        "-Command", _buildMediaControlScript(action, positionSeconds),
       ], { windowsHide: true });
     } catch (_) {
       finish();
@@ -2400,10 +2472,10 @@ function _runMediaControlProcess(action) {
   });
 }
 
-function _runMediaControlAndRefresh(action) {
+function _runMediaControlAndRefresh(action, positionSeconds = 0) {
   const operation = _mediaControlChain.then(async () => {
     if (_mediaQueryPromise) await _mediaQueryPromise;
-    await _runMediaControlProcess(action);
+    await _runMediaControlProcess(action, positionSeconds);
     await new Promise((resolve) => setTimeout(resolve, MEDIA_CONTROL_REFRESH_DELAY_MS));
     return _queryMediaState();
   });
@@ -2430,7 +2502,9 @@ function _applyMediaState(state) {
     state.playing !== _mediaState.playing ||
     state.title !== _mediaState.title ||
     state.artist !== _mediaState.artist ||
-    state.thumbnail !== _mediaState.thumbnail;
+    state.thumbnail !== _mediaState.thumbnail ||
+    state.progress !== _mediaState.progress ||
+    state.duration !== _mediaState.duration;
   if (state.thumbnail !== _mediaState.thumbnail) {
     _cleanupOldThumbnail();
     if (state.thumbnail) _lastThumbnailPath = state.thumbnail;
@@ -2510,7 +2584,17 @@ ipcMain.handle("island:media-prev", async () => {
   return { ok: true, data: _mediaState };
 });
 
-function _buildMediaControlScript(action) {
+ipcMain.handle("island:media-seek", async (_event, positionSeconds) => {
+  const sec = Number(positionSeconds);
+  if (!Number.isFinite(sec) || sec < 0) {
+    return { ok: false, data: _mediaState };
+  }
+  const state = await _runMediaControlAndRefresh("Seek", sec);
+  _applyMediaState(state);
+  return { ok: true, data: _mediaState };
+});
+
+function _buildMediaControlScript(action, positionSeconds = 0) {
   return `
 try {
     $ErrorActionPreference = 'Stop'
@@ -2554,6 +2638,10 @@ try {
             }
             'Next' { Await-WinRtAction $session.TrySkipNextAsync() }
             'Previous' { Await-WinRtAction $session.TrySkipPreviousAsync() }
+            'Seek' {
+                $posTicks = [int64]([double]'${positionSeconds}' * 10000000)
+                Await-WinRtAsync ($session.TryChangePlaybackPositionAsync($posTicks)) ([System.Boolean])
+            }
         }
     }
     'ok'
@@ -2845,6 +2933,7 @@ ipcMain.handle("splash:get-config", () => {
   return {
     videoPath: toFileUriPath(getSplashAssetPath("start-video.mp4")),
     logoPath: toFileUriPath(getSplashAssetPath("Aerie.png")),
+    playVideo: _splashMode === "video",
   };
 });
 
@@ -3058,9 +3147,14 @@ if (gotSingleInstanceLock) {
     configureBackendDataPath();
     configureWorldSupervisor();
     startWorldConnectionMonitor();
-    // 先创建并显示开场动画，再启动后端 / 创建主窗口；
-    // 主窗口保持隐藏，直到 splash 播完且后端就绪。
-    createSplashWindow();
+    // 根据启动状态决定开屏模式：
+    //   video（本版本首启）→ loading（新开机）→ none（同开机会话内重启）
+    _splashMode = determineSplashMode();
+    if (_splashMode === "none") {
+      _splashDone = true; // 不开屏，主窗口直接显示
+    } else {
+      createSplashWindow(_splashMode);
+    }
     startPythonBackend();
     // R8.1: read persistent island/notif prefs *before* creating windows,
     // so the settings panel loads the saved island config (theme / interaction

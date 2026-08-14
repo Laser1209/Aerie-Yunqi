@@ -5,7 +5,7 @@ import PageShell from '../components/PageShell'
 import { ArrowUpRight } from '../components/icons'
 import { publicPath } from '../config/publicPath'
 import { downloadRequirements, localDataNotes } from '../content/spotlight'
-import { release } from '../config/release'
+import { release, historicalReleases } from '../config/release'
 
 export default function DownloadPage() {
   const reduceMotion = useReducedMotion()
@@ -104,6 +104,46 @@ export default function DownloadPage() {
             </ul>
           </div>
         </section>
+
+        {historicalReleases.length > 0 && (
+          <section className="mt-5" aria-labelledby="history-title">
+            <div className="liquid-glass rounded-[1.1rem] p-6 md:p-8">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <div>
+                  <p className="text-xs text-white/50">Historical releases / 历史版本</p>
+                  <h2 id="history-title" className="mt-2 font-heading text-3xl italic leading-none">Older builds, kept for reference.</h2>
+                </div>
+                <p className="text-xs font-light text-white/45">仅作归档保留，建议始终使用当前版本</p>
+              </div>
+              <div className="mt-7 divide-y divide-white/10">
+                {historicalReleases.map((item) => (
+                  <div key={item.version} className="flex flex-wrap items-center justify-between gap-4 py-5 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <p className="font-heading text-2xl italic leading-none">Aerie · 云栖 {item.version}</p>
+                      <p className="mt-2 text-xs font-light text-white/45">{item.date}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <a
+                        href={item.url}
+                        className="liquid-glass flex items-center justify-center gap-2 rounded-full px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                      >
+                        Portable
+                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </a>
+                      <a
+                        href={item.installerUrl}
+                        className="liquid-glass flex items-center justify-center gap-2 rounded-full px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                      >
+                        Windows Setup
+                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </PageShell>
   )

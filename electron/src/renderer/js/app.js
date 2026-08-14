@@ -15,6 +15,16 @@ window.addEventListener("DOMContentLoaded", () => {
     window.onboarding.init();
   }
 
+  // 设置页「开启教程」按钮：手动重新打开新手教程
+  const openOnboardingBtn = document.getElementById("open-onboarding-btn");
+  if (openOnboardingBtn) {
+    openOnboardingBtn.addEventListener("click", () => {
+      if (window.onboarding && typeof window.onboarding.reopen === "function") {
+        window.onboarding.reopen();
+      }
+    });
+  }
+
   // ── Emotion dashboard ──────────────────────────
   const emotionDashboard = new EmotionDashboard();
 
@@ -488,10 +498,11 @@ async function _runFirstRunSelfCheck() {
   try {
     // Wait for backend to be ready
     let ready = false;
+    let version = "";
     for (let i = 0; i < 30; i++) {
       try {
         const h = await window.aerie.api.request({ method: "GET", path: "/api/health" });
-        if (h && !h.error) { ready = true; break; }
+        if (h && !h.error) { ready = true; version = (h.data && h.data.version) || ""; break; }
       } catch (_) { /* ignore */ }
       await new Promise((r) => setTimeout(r, 1000));
     }
@@ -499,7 +510,7 @@ async function _runFirstRunSelfCheck() {
 
     // 主路径：交给新手教程接管（内部自行校验 has_api_key 并决定是否弹出）
     if (window.onboarding && typeof window.onboarding.maybeShow === "function") {
-      window.onboarding.maybeShow();
+      window.onboarding.maybeShow(version);
       return;
     }
 

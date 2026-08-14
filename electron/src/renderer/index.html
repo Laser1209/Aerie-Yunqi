@@ -1029,9 +1029,15 @@
               <h2 class="settings-hero__title">系统设置</h2>
               <p class="settings-hero__subtitle">常用偏好 · API 服务 · 高级配置，一处管理她的所有行为</p>
             </div>
-            <div class="settings-hero__badge" aria-hidden="true">
-              <svg class="icon icon--18" style="color:var(--color-primary,#ff5b9c);vertical-align:-3px;margin-right:4px;"><use href="#icon-ui-flower"/></svg>
-              <span>Aerie</span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button type="button" id="open-onboarding-btn" class="btn btn-secondary btn-sm" style="display:inline-flex;align-items:center;">
+                <svg class="icon icon--14" style="vertical-align:-2px;margin-right:4px;"><use href="#icon-ui-book-open"/></svg>
+                开启教程
+              </button>
+              <div class="settings-hero__badge" aria-hidden="true">
+                <svg class="icon icon--18" style="color:var(--color-primary,#ff5b9c);vertical-align:-3px;margin-right:4px;"><use href="#icon-ui-flower"/></svg>
+                <span>Aerie</span>
+              </div>
             </div>
           </div>
 
@@ -2284,7 +2290,7 @@
 </div>
 
 <!-- 首次使用新手教程（onboarding）根容器，由 js/onboarding.js 填充 -->
-<div id="onboarding-root"></div>
+<div id="onboarding-root" class="onb-root"></div>
 
 <!-- R7.4: Markdown rendering stack for chat (marked + DOMPurify + highlight.js) -->
 <link rel="stylesheet" href="vendor/github.min.css">

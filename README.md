@@ -46,7 +46,7 @@
 | **角色隔离 / Persona Isolation** | 多角色对话/记忆/头像/图片产出按`persona_id` 隔离 · 会话 ID 按角色哈希 · admin 记录角色标注                                               |
 | **24h 持续监听 / 24H Mon**       | 欲望引擎 / 话题追踪 / 情绪触发 24h 轮询 · watchdog 崩溃自动拉起 · 断点续采 (start-24h-monitor.bat)                                         |
 | **验证 / Tests**                 | 127 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、P0-P3 上下文记忆、管理平台、v13.9、E2E) + 17 个 Electron 测试文件                           |
-| **交付 / Release**               | 线上官网下载页指向`v0.1.0-beta.1` 便携版与安装包，`0.3.1-Beta.1` 构建待发布                                                              |
+| **交付 / Release**               | `0.3.1-Beta.1` 安装包与便携版已构建（Setup + Portable），官网下载页已同步；`0.1.0-beta.1` 归档至官网「历史版本」区块                    |
 
 ---
 
@@ -358,12 +358,12 @@ npm run build:win:alt
 
 线上官网：[https://spotlight.etta.top/](https://spotlight.etta.top/)
 
-当前官网下载配置位于 `Spotlight/src/config/release.ts`，仍指向 GitHub Release `v0.1.0-beta.1`：
+当前官网下载配置位于 `Spotlight/src/config/release.ts`，指向 GitHub Release `v0.3.1-Beta.1`：
 
-- `Aerie-Cloud-0.1.0-beta.1-Portable.exe`
-- `Aerie-Cloud-0.1.0-beta.1-Setup.exe`
+- `Aerie-Cloud-0.3.1-Beta.1-portable.exe`
+- `Aerie-Cloud-0.3.1-Beta.1-Setup.exe`
 
-> **说明**：`0.3.1-Beta.1` 代码已合并上述新能力，安装包构建待发布，届时将更新 `release.ts` 指向新版本。
+历史版本 `0.1.0-beta.1` 已归档至官网「历史版本」区块（`historicalReleases`），不再作为默认下载入口。
 
 ---
 

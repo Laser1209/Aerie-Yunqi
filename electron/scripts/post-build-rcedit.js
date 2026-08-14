@@ -17,13 +17,13 @@ const ICON = path.join(ROOT, 'builder', 'icon.ico');
 
 const dirs = ['dist', 'dist-final', 'dist-v9', 'dist-new', 'dist-build2'];
 const found = dirs
-  .map((dir) => path.join(ROOT, dir, 'win-unpacked', 'Aerie · 云栖.exe'))
+  .map((dir) => path.join(ROOT, dir, 'win-unpacked', 'Aerie-Cloud.exe'))
   .filter((p) => fs.existsSync(p));
 found.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
 const exe = found[0];
 
 if (!exe) {
-  console.error('[rcedit] Could not locate Aerie · 云栖.exe under', dirs.map((d) => path.join(ROOT, d)).join(', '));
+  console.error('[rcedit] Could not locate Aerie-Cloud.exe under', dirs.map((d) => path.join(ROOT, d)).join(', '));
   process.exit(1);
 }
 if (!fs.existsSync(ICON)) {

@@ -2,7 +2,7 @@
 # This file is the source of truth for Windows packaging.
 # `package.json` mirrors the same settings under `build` for npm run build:win.
 appId: com.laser.aerie
-productName: Aerie · 云栖
+productName: Aerie-Cloud
 copyright: Copyright © 2026 Laser
 artifactName: ${productName}-${version}-${arch}.${ext}
 
@@ -43,6 +43,11 @@ win:
   signAndEditExecutable: false
   verifyUpdateCodeSignature: false
 
+# Portable (single-file, no installer): distinct artifact name so it does not
+# overwrite the NSIS Setup build under win.artifactName.
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
 # Extra resources: Python runtime, icon, etc. (goes to resources/ in installed dir)
 extraResources:
   - from: "../Aerie · 云栖.png"
@@ -57,7 +62,6 @@ extraResources:
       - "main.py"
       - "core/**"
       - "config/**"
-      - "data/**"
       - "prompts/**"
       - ".env.example"
       - ".venv/**"
@@ -80,7 +84,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Aerie · 云栖
+  shortcutName: Aerie-Cloud
   deleteAppDataOnUninstall: false
   include: builder/installer.nsh
   displayLanguageSelector: false

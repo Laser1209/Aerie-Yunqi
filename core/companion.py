@@ -1385,8 +1385,10 @@ class Companion:
             try:
                 desc = _image_event_desc(plan)
                 db = getattr(self, "db", None)
+                persona_id = str(plan.get("persona_id") or "") or self._active_persona_id()
+                legacy_id: int | None = None
                 if db is not None and hasattr(db, "insert"):
-                    db.insert("chat_log", {
+                    legacy_id = db.insert("chat_log", {
                         "user_id": int(target),
                         "role": "assistant",
                         "content": f"[图片] {desc}",
@@ -1394,8 +1396,20 @@ class Companion:
                         "route_mode": "PROACTIVE",
                         "scene": str(plan.get("scene") or "world_image"),
                         "channel": "qq",
-                        "persona_id": str(plan.get("persona_id") or "") or self._active_persona_id(),
+                        "persona_id": persona_id,
                     })
+                if legacy_id is not None:
+                    # 同步进 normalized messages 层，保证管理平台可见 + 级联删除覆盖
+                    actor_id, channel, account = self._proactive_channel_identity("qq")
+                    self.conversation_repository.persist_proactive_message(
+                        user_id=int(target),
+                        actor_id=actor_id,
+                        channel=channel,
+                        channel_account_id=account,
+                        content=f"[图片] {desc}",
+                        legacy_chat_log_id=int(legacy_id),
+                        persona_id=persona_id,
+                    )
                 try:
                     import os as _os
                     rel = _os.path.relpath(image_ref, (Path.cwd() / "uploads").resolve())
@@ -1435,6 +1449,7 @@ class Companion:
                         user_id_int = int(str(user_id_raw)) if str(user_id_raw or "").isdigit() else 0
                     except (TypeError, ValueError):
                         user_id_int = 0
+                    persona_id = str(plan.get("persona_id") or "") or self._active_persona_id()
                     message_id = db.insert(
                         "chat_log",
                         {
@@ -1444,9 +1459,20 @@ class Companion:
                             "msg_type": scene if scene else "world_image",
                             "route_mode": "PROACTIVE",
                             "scene": scene if scene else "world_image",
-                            "persona_id": str(plan.get("persona_id") or "") or self._active_persona_id(),
+                            "persona_id": persona_id,
                         },
                     ) or message_id
+                    # 同步进 normalized messages 层，保证管理平台可见 + 级联删除覆盖
+                    actor_id, channel, account = self._proactive_channel_identity("desktop")
+                    self.conversation_repository.persist_proactive_message(
+                        user_id=user_id_int,
+                        actor_id=actor_id,
+                        channel=channel,
+                        channel_account_id=account,
+                        content=content,
+                        legacy_chat_log_id=int(message_id),
+                        persona_id=persona_id,
+                    )
             except Exception:
                 logger.warning(
                     "[WorldImage] local chat image persistence failed (emit only)",
@@ -2435,6 +2461,20 @@ class Companion:
                 None,
             ),
         )
+
+    def _proactive_channel_identity(self, channel: str) -> tuple[str | None, str, str]:
+        """解析主动消息/生图消息归入对应通道会话的 (actor_id, channel, channel_account_id)。
+
+        主动消息/本地生图归入桌面会话（channel_account_id=local），QQ 生图归入 QQ 会话
+        （channel_account_id=主用户 QQ 号），与普通消息的 conversation 分组保持一致。
+        """
+        if channel == "qq":
+            primary = self.get_primary_user_selection()
+            account = str(getattr(primary, "user_id", "") or "")
+            identity = self.identity_resolver.resolve("qq", account)
+            return identity.actor_id, "qq", account
+        identity = self.identity_resolver.resolve("desktop", "local")
+        return identity.actor_id, "desktop", "local"
 
     def get_primary_emotion_state(self) -> dict:
         """Return emotion state for the configured primary Actor."""
@@ -3683,6 +3723,25 @@ class Companion:
                     scene_name,
                     exc_info=True,
                 )
+            else:
+                # 同步进 normalized messages 层，让管理平台聊天记录可见 + 级联删除覆盖
+                try:
+                    actor_id, channel, account = self._proactive_channel_identity("desktop")
+                    self.conversation_repository.persist_proactive_message(
+                        user_id=int(master_id),
+                        actor_id=actor_id,
+                        channel=channel,
+                        channel_account_id=account,
+                        content=content,
+                        legacy_chat_log_id=int(message_id),
+                        persona_id=self._active_persona_id(),
+                    )
+                except Exception:
+                    logger.debug(
+                        "[Push] proactive normalized persist failed scene=%s",
+                        scene_name,
+                        exc_info=True,
+                    )
 
             try:
                 chat_events.emit(

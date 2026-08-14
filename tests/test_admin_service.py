@@ -245,6 +245,92 @@ def test_conversation_cascade_trash_restore(tmp_path, admin_db):
     assert admin_db.query_one("SELECT deleted_at FROM messages WHERE message_id='msg-conv-a'")["deleted_at"] is None
 
 
+def test_trash_restore_covers_orphan_proactive_and_image_chat_log(tmp_path, admin_db):
+    """主动消息/生图消息直接写 chat_log、无 messages 行，级联删除不能漏掉它们。"""
+    service = _make_service(tmp_path, admin_db)
+
+    # 一个带角色归属（persona_id）的会话
+    admin_db.insert(
+        "conversations",
+        {"conversation_id": "conv-p1", "actor_id": None, "channel": "desktop"},
+    )
+    admin_db.insert(
+        "turns",
+        {"turn_id": "turn-p1", "conversation_id": "conv-p1", "status": "completed"},
+    )
+    admin_db.insert(
+        "messages",
+        {
+            "message_id": "msg-p1",
+            "conversation_id": "conv-p1",
+            "turn_id": "turn-p1",
+            "role": "user",
+            "content": "你好",
+            "sequence": 1,
+            "channel": "desktop",
+            "persona_id": "p1",
+        },
+    )
+
+    # 主动消息 + 生图消息：直接写 chat_log，route_mode=PROACTIVE，无 legacy 关联
+    admin_db.insert("chat_log", {
+        "user_id": 1, "role": "assistant", "content": "主动想你了",
+        "msg_type": "proactive", "route_mode": "PROACTIVE", "scene": "emotional",
+        "persona_id": "p1",
+    })
+    admin_db.insert("chat_log", {
+        "user_id": 1, "role": "assistant", "content": "[图片] 自拍",
+        "msg_type": "world_image", "route_mode": "PROACTIVE", "scene": "world_image",
+        "persona_id": "p1",
+    })
+
+    result = service.trash_conversations(["conv-p1"])
+    assert result["trashed_chat_log"] == 2
+    orphan = admin_db.query(
+        "SELECT deleted_at FROM chat_log WHERE route_mode='PROACTIVE' AND persona_id='p1'"
+    )
+    assert len(orphan) == 2 and all(r["deleted_at"] for r in orphan)
+
+    restore = service.restore_conversations(["conv-p1"])
+    assert restore["restored_chat_log"] == 2
+    orphan2 = admin_db.query(
+        "SELECT deleted_at FROM chat_log WHERE route_mode='PROACTIVE' AND persona_id='p1'"
+    )
+    assert len(orphan2) == 2 and all(r["deleted_at"] is None for r in orphan2)
+
+
+def test_proactive_message_normalized_visible_and_deletable(tmp_path, admin_db):
+    """主动消息补齐 normalized messages 行后：管理平台可见 + 删除会话级联覆盖。"""
+    from core.conversation_repository import ConversationRepository
+
+    service = _make_service(tmp_path, admin_db)
+    repo = ConversationRepository(admin_db, enabled=True)
+
+    legacy_id = admin_db.insert("chat_log", {
+        "user_id": 1, "role": "assistant", "content": "主动想你了",
+        "msg_type": "proactive", "route_mode": "PROACTIVE", "scene": "emotional",
+        "persona_id": "p1",
+    })
+    repo.persist_proactive_message(
+        user_id=1, actor_id=None, channel="desktop", channel_account_id=None,
+        content="主动想你了", legacy_chat_log_id=legacy_id, persona_id="p1",
+    )
+
+    convs = service.list_conversations()
+    assert convs["total"] == 1
+    conv = convs["items"][0]
+    assert conv["persona_id"] == "p1"
+
+    msgs = service.list_messages(conv["conversation_id"])
+    assert msgs["total"] == 1
+    assert msgs["items"][0]["content"] == "主动想你了"
+
+    result = service.trash_conversations([conv["conversation_id"]])
+    assert result["trashed_chat_log"] == 1
+    row = admin_db.query_one("SELECT deleted_at FROM chat_log WHERE id = ?", (legacy_id,))
+    assert row["deleted_at"] is not None
+
+
 def test_history_page_excludes_trashed(tmp_path, admin_db):
     from core.conversation_repository import ConversationRepository, resolve_conversation_id
 

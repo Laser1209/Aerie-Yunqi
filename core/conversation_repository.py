@@ -409,6 +409,74 @@ class ConversationRepository:
             conn.execute("RELEASE SAVEPOINT persist_conversation_turn")
         return result
 
+    def persist_proactive_message(
+        self,
+        *,
+        user_id: int,
+        actor_id: str | None,
+        channel: str | None,
+        channel_account_id: str | None,
+        content: str,
+        legacy_chat_log_id: int,
+        persona_id: str | None = None,
+    ) -> str | None:
+        """把主动推送（主动消息/生图消息）补齐进 normalized messages 层。
+
+        主动消息/生图消息直接写 chat_log、不经过请求队列，因此没有 messages 行，
+        导致管理平台聊天记录看不到它们、级联删除也漏掉它们。这里为其补一条
+        assistant messages 行，归入对应角色在该通道的会话（conversation_id 与
+        普通消息一致，通过 legacy_chat_log_id 关联回 chat_log）。
+        """
+        if not self.enabled:
+            return None
+        conversation_id = resolve_conversation_id(
+            actor_id=actor_id,
+            channel=channel,
+            channel_account_id=channel_account_id,
+            user_id=user_id,
+            persona_id=persona_id,
+        )
+        turn_id = generate_id("turn")
+        with self._connection() as conn:
+            self.ensure_conversation(
+                conn,
+                conversation_id=conversation_id,
+                actor_id=actor_id,
+                channel=channel,
+                channel_account_id=channel_account_id,
+                persona_id=persona_id,
+            )
+            if self._has_persona_column(conn, "turns"):
+                conn.execute(
+                    """INSERT INTO turns
+                       (turn_id, conversation_id, status, completed_at, persona_id)
+                       VALUES (?, ?, 'completed', datetime('now', 'localtime'), ?)""",
+                    (turn_id, conversation_id, persona_id),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO turns
+                       (turn_id, conversation_id, status, completed_at)
+                       VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
+                    (turn_id, conversation_id),
+                )
+            self._insert_message(
+                conn,
+                conversation_id=conversation_id,
+                turn_id=turn_id,
+                role="assistant",
+                content=content,
+                attachments=None,
+                response_group_id=None,
+                sequence=1,
+                channel=channel,
+                channel_account_id=channel_account_id,
+                actor_id=actor_id,
+                legacy_chat_log_id=legacy_chat_log_id,
+                persona_id=persona_id,
+            )
+        return conversation_id
+
     def _complete_existing_request(
         self,
         conn: sqlite3.Connection,

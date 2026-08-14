@@ -353,6 +353,19 @@ class AdminService:
             return False
 
     # ── 聊天记录：级联软删 / 恢复 / 清空 ─────────────────
+    def _personas_of_conversations(self, conversation_ids: list[str]) -> list[str]:
+        """返回这些会话归属角色的去重 persona_id 列表（空/未归属忽略）。"""
+        if not conversation_ids:
+            return []
+        placeholders = ",".join("?" * len(conversation_ids))
+        rows = self._db.query(
+            f"""SELECT DISTINCT persona_id FROM messages
+                WHERE conversation_id IN ({placeholders})
+                  AND persona_id IS NOT NULL AND persona_id != ''""",
+            tuple(conversation_ids),
+        )
+        return [str(r["persona_id"]) for r in rows if r.get("persona_id")]
+
     def trash_conversations(self, conversation_ids: list[str]) -> dict[str, Any]:
         """级联软删：消息 + 摘要分桶 + 关联 long_term_memory（Chroma purge 期才删）。
         chat_log 同步打标记，保证 /api/chat/poll 与 /api/chat/history 不再露出已清空记录。"""
@@ -377,6 +390,23 @@ class AdminService:
                     )""",
                 (ts, *ids),
             ).rowcount
+            # 主动消息/生图消息直接写 chat_log、不生成 messages 行，上面的级联会漏掉。
+            # 按被删会话的 persona_id 兜底软删这些孤儿 proactive 行。
+            n_orphan = 0
+            orphan_personas = self._personas_of_conversations(ids)
+            if orphan_personas:
+                p_ph = ",".join("?" * len(orphan_personas))
+                n_orphan = self._db.execute(
+                    f"""UPDATE chat_log SET deleted_at = ?
+                        WHERE deleted_at IS NULL
+                          AND route_mode = 'PROACTIVE'
+                          AND persona_id IN ({p_ph})
+                          AND id NOT IN (
+                              SELECT legacy_chat_log_id FROM messages
+                              WHERE legacy_chat_log_id IS NOT NULL
+                          )""",
+                    (ts, *orphan_personas),
+                ).rowcount
             n_bucket = self._db.execute(
                 f"UPDATE conversation_summary_buckets SET deleted_at = ? "
                 f"WHERE conversation_id IN ({placeholders}) AND deleted_at IS NULL",
@@ -401,7 +431,7 @@ class AdminService:
             self.audit("trash", ",".join(ids))
             return {
                 "trashed_messages": int(n_msg or 0),
-                "trashed_chat_log": int(n_log or 0),
+                "trashed_chat_log": int(n_log or 0) + int(n_orphan or 0),
                 "trashed_buckets": int(n_bucket or 0),
                 "trashed_memories": int(n_mem or 0),
             }
@@ -436,6 +466,27 @@ class AdminService:
                 f"WHERE conversation_id IN ({placeholders})",
                 (*ids,),
             ).rowcount
+            # 恢复孤儿 proactive 行（主动消息/生图消息）；仅当该角色已无其它仍在回收站的会话时恢复，
+            # 避免只恢复其中一个会话时把仍属回收站的 proactive 消息一并放出来。
+            n_orphan = 0
+            for persona in self._personas_of_conversations(ids):
+                remaining = self._db.query_one(
+                    "SELECT COUNT(*) AS n FROM messages WHERE persona_id = ? AND deleted_at IS NOT NULL",
+                    (persona,),
+                )
+                if remaining and int(remaining["n"] or 0) > 0:
+                    continue
+                n_orphan += self._db.execute(
+                    """UPDATE chat_log SET deleted_at = NULL
+                       WHERE deleted_at IS NOT NULL
+                         AND route_mode = 'PROACTIVE'
+                         AND persona_id = ?
+                         AND id NOT IN (
+                             SELECT legacy_chat_log_id FROM messages
+                             WHERE legacy_chat_log_id IS NOT NULL
+                         )""",
+                    (persona,),
+                ).rowcount
             mem_rows = self._db.query(
                 f"""SELECT id FROM long_term_memory
                     WHERE deleted_at IS NOT NULL AND source_message_id IN (
@@ -455,7 +506,7 @@ class AdminService:
             self.audit("restore", ",".join(ids))
             return {
                 "restored_messages": int(n_msg or 0),
-                "restored_chat_log": int(n_log or 0),
+                "restored_chat_log": int(n_log or 0) + int(n_orphan or 0),
                 "restored_buckets": int(n_bucket or 0),
                 "restored_memories": int(n_mem or 0),
             }

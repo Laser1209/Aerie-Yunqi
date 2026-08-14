@@ -39,6 +39,9 @@ data/briefs/*.json
 # Temporary files (Block-5D R4) — entire tree is git-ignored
 tmp/
 
+# Codex-side temp (debug scripts, logs, coverage artifacts)
+.codex-temp/
+
 # User data (Electron)
 userData/
 .manual-userdata*/

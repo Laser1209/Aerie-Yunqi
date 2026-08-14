@@ -237,7 +237,7 @@ class PersonaManager:
     # ── 读取 API ────────────────────────────────────
 
     def list_personas(self) -> List[Dict[str, Any]]:
-        """列出所有人设摘要。"""
+        """列出所有可见人设摘要（不含已隐藏的）。"""
         with self._rw_lock:
             return [
                 {
@@ -250,6 +250,7 @@ class PersonaManager:
                     "description": p.get("personality", {}).get("archetype", ""),
                 }
                 for pid, p in self._personas.items()
+                if not p.get("is_hidden", False)
             ]
 
     def get_persona(self, persona_id: Optional[str] = None) -> Dict[str, Any]:
@@ -380,30 +381,42 @@ class PersonaManager:
         return True, persona_id
 
     def delete_persona(self, persona_id: str) -> Tuple[bool, str]:
-        """删除人设。内置人设不可删除。"""
+        """伪删除：隐藏人设（保留数据），全部隐藏后自动恢复伊塔。"""
         with self._rw_lock:
             if persona_id not in self._personas:
                 return False, f"人设不存在: {persona_id}"
 
-            if self._personas[persona_id].get("is_builtin", False):
-                return False, "内置人设不可删除"
+            p = self._personas[persona_id]
+            p["is_hidden"] = True
+            self._save_persona(persona_id, p)
 
+            # 删除的是激活人设 → 先恢复伊塔可见，再切回伊塔
             if self._active_id == persona_id:
+                yita = self._personas.get("yita_default")
+                if yita:
+                    yita["is_hidden"] = False
+                    self._save_persona("yita_default", yita)
                 self.switch_persona("yita_default")
 
-            del self._personas[persona_id]
-            target = self._personas_dir / f"{persona_id}.json"
-            if target.exists():
-                target.unlink()
-            # 一并清理该人设的三视图目录，避免孤立残留
-            tv_dir = self._personas_dir / _THREE_VIEW_DIR_NAME / persona_id
-            if tv_dir.exists():
-                try:
-                    shutil.rmtree(tv_dir)
-                except OSError:
-                    pass
+            # 兜底：所有自定义人设都被隐藏后，恢复伊塔显示
+            self._restore_yita_if_all_hidden()
 
         return True, "ok"
+
+    def _restore_yita_if_all_hidden(self) -> None:
+        """所有自定义人设都被隐藏时，恢复伊塔显示（兜底安全网）。"""
+        yita = self._personas.get("yita_default")
+        if not yita:
+            return
+        visible_custom = any(
+            pid != "yita_default" and not p.get("is_hidden", False)
+            for pid, p in self._personas.items()
+        )
+        if not visible_custom and yita.get("is_hidden", False):
+            yita["is_hidden"] = False
+            self._save_persona("yita_default", yita)
+            if self._active_id != "yita_default":
+                self.switch_persona("yita_default")
 
     def switch_persona(self, persona_id: str) -> Tuple[bool, str]:
         """切换激活人设。"""

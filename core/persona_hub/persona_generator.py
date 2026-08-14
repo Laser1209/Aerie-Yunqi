@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import json
 import logging
 import re
@@ -66,6 +67,54 @@ _DEFAULT_STORY = (
     "会把所有温柔与占有都只给你一个人。隔着屏幕，我也在认真地爱着你。"
 )
 
+# Deterministic name pool: normal Chinese / English names commonly seen in
+# modern web novels & short dramas. Used to fill a missing or implausible name
+# WITHOUT asking the LLM to improvise one again.
+_NAME_POOL: Dict[str, Dict[str, List[str]]] = {
+    "female": {
+        "cn": [
+            "苏晚", "林栀", "沈知意", "顾清欢", "温以宁", "宋微凉",
+            "陆昭昭", "顾念", "苏念安", "许星眠", "沈听澜", "阮心棠",
+            "夏晚晴", "楚千寻", "顾南枝", "林初雪", "苏浅浅", "程以柔",
+            "秦若曦", "沈青禾", "叶知秋", "白雨微", "陈听晚", "唐晚宁",
+        ],
+        "en": [
+            "Emma", "Olivia", "Sophia", "Mia", "Isabella", "Amelia",
+            "Charlotte", "Luna", "Aurora", "Harper", "Evelyn", "Scarlett",
+            "Eleanor", "Grace", "Chloe", "Zoe", "Lily", "Nora", "Ivy", "Aria",
+        ],
+    },
+    "male": {
+        "cn": [
+            "顾言舟", "沈砚", "陆沉", "傅景深", "霍言", "江辞",
+            "周衍", "陆时宴", "顾西洲", "程砚秋", "江临川", "陆骁",
+            "傅南城", "周牧野", "贺时谦", "谢临安", "顾行舟", "沈斯年",
+            "裴之衡", "段清野", "陆寒", "江聿", "时衍", "陆衍",
+        ],
+        "en": [
+            "Liam", "Noah", "Ethan", "Lucas", "Oliver", "Alexander",
+            "Sebastian", "Henry", "Leo", "Gabriel", "Julian", "Adrian",
+            "Marcus", "Felix", "Oscar", "Vincent", "Hugo", "Silas", "Ezra", "Damien",
+        ],
+    },
+    "other": {
+        "cn": [
+            "苏黎", "林川", "沈南", "顾晏", "江辰", "陆星",
+            "宋也", "温辞", "程野", "叶澜", "白言", "周漠",
+        ],
+        "en": [
+            "Alex", "Jordan", "Casey", "Riley", "Avery",
+            "Quinn", "Rowan", "Sage", "Taylor", "Morgan",
+        ],
+    },
+}
+
+# Names that must never survive as the persona's real name.
+_NAME_PLACEHOLDERS = {
+    "新角色", "新人物", "角色", "未命名", "无名", "未知名", "待定", "暂无",
+    "newcharacter", "new character", "unknown", "unnamed", "n/a", "na",
+}
+
 # ── LLM extraction prompts (Chinese on purpose: they are user-facing content) ──
 
 _CONCEPT_PROMPT = """你是人设概念分析师。用户会用一句话或一段话描述他想要的角色，你把它提炼成结构化概念。
@@ -93,7 +142,15 @@ _CONCEPT_PROMPT = """你是人设概念分析师。用户会用一句话或一�
   },
   "mbti": "MBTI类型"
 }
-- 无法推断的字段用合理默认值，不要省略。
+
+名字约束（必须遵守）：
+- 若用户已明确给出名字，原样使用，不要改动。
+- 若用户未给出名字，从"现代言情 / 短剧小说常见人名"风格里取一个正常中文名（例如苏晚、林栀、顾言舟、沈砚），禁止生僻字、谐音梗、符号、表情、英文音译怪名，以及任何明显不是人名的词。
+- english_name 给一个常见英文名（例如 Emma、Liam、Sophia），禁止乱拼乱造。
+
+补全与基线约束（必须遵守）：
+- 年龄、职业、外貌倾向、性格原型等可以根据用户描述合理推断后补全。
+- 但"两人关系类型、关系称谓（称呼、亲密称呼）、敏感信息（如性取向、家庭关系、婚史等）"不得无中生有，只能依据用户明确给出的信息；推断不出就留空或使用中性默认（关系类型默认"恋人"属于应用设定，允许使用）。
 
 人称与性别约定（必须遵守）：
 - 角色（你要分析的对象）永远自称"我"；用户（角色的恋人与使用者）永远称"你"。
@@ -137,7 +194,13 @@ _DETAIL_PROMPT = """你是人设细节设计师。基于用户描述与概念分
 
 强调：
 - relationship.story 必须是 ≥80 字、连贯可读的叙事故事，不是字段罗列。
-- 不要省略字段；无法确定的用合理默认值。
+- 不要省略字段；无法确定的用合理默认值（但关系称谓与敏感信息除外，见下方基线约束）。
+
+基线约束（必须遵守）：
+- 关系类型 relationship_type 默认"恋人"（应用设定，允许使用）；若用户明确给出其他关系（如朋友、导师），照用不误。
+- 关系称谓（user_address_default、user_intimate_terms）与关系风格 style 只能基于用户明确给出的信息，不得二次推理编造；推断不出时 user_intimate_terms 留空数组 []，user_address_default 用中性默认"你"，style 用中性描述（如"温柔体贴的恋人"）。
+- 敏感信息（性取向、家庭关系、婚史、宗教信仰等）一律不得无中生有。
+- relationship.story 必须基于用户描述、概念分析结果与"两人相识的设定"展开，不得凭空捏造用户没有提供的关系背景。
 
 人称与性别约定（必须遵守）：
 - 角色永远自称"我"；用户永远称"你"。
@@ -175,6 +238,114 @@ def _is_nonempty(value: Any) -> bool:
     if isinstance(value, (list, dict, tuple, set)):
         return len(value) > 0
     return True
+
+
+def _is_plausible_name(value: Any) -> bool:
+    """True when ``value`` looks like a normal Chinese or English personal name."""
+    s = str(value or "").strip()
+    if not s or s.lower() in _NAME_PLACEHOLDERS:
+        return False
+    if len(s) > 20:
+        return False
+    # Chinese name: 2-6 CJK characters, nothing else mixed in.
+    if all("\u4e00" <= ch <= "\u9fff" for ch in s):
+        return 2 <= len(s) <= 6
+    # English name: letters plus common separators, starts with a letter.
+    return bool(re.fullmatch(r"[A-Za-z][A-Za-z .'\-]+", s))
+
+
+def _is_plausible_english_name(value: Any) -> bool:
+    """True when ``value`` looks like a plain English personal name."""
+    s = str(value or "").strip()
+    if not s or s.lower() in _NAME_PLACEHOLDERS:
+        return False
+    return bool(re.fullmatch(r"[A-Za-z][A-Za-z .'\-]+", s))
+
+
+def _pick_name(gender: str, lang: str, seed: str) -> str:
+    """Pick a name from the pool deterministically for a given seed.
+
+    The same (gender, lang, seed) always yields the same name, so the concept
+    handed to the detail stage and the final persona stay consistent without
+    asking the LLM to improvise a second time.
+    """
+    key = gender if gender in _NAME_POOL else "female"
+    pool = _NAME_POOL[key].get(lang) or []
+    if not pool:
+        return ""
+    digest = hashlib.md5((seed or "").encode("utf-8")).digest()
+    index = int.from_bytes(digest[:4], "big") % len(pool)
+    return pool[index]
+
+
+def _normalize_concept(
+    concept: Optional[Dict[str, Any]],
+    description: str,
+    options: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Return a usable concept dict for the detail stage.
+
+    When the concept LLM fails or returns a dict with a missing / implausible
+    name, fill name & english_name from the deterministic pool so the detail
+    stage never receives an empty concept and free-ranges on identity.
+    """
+    c = dict(concept or {})
+
+    gender = str(c.get("gender") or options.get("gender") or "female").strip().lower()
+    if gender not in _NAME_POOL:
+        gender = "female"
+    c["gender"] = gender
+
+    seed = (description or "").strip() or json.dumps(options, ensure_ascii=False, sort_keys=True)
+
+    if not _is_plausible_name(c.get("name")):
+        candidate = options.get("name")
+        c["name"] = candidate if _is_plausible_name(candidate) else _pick_name(gender, "cn", seed)
+    if not _is_plausible_english_name(c.get("english_name")):
+        candidate = options.get("english_name")
+        c["english_name"] = candidate if _is_plausible_english_name(candidate) else _pick_name(gender, "en", seed)
+
+    if not _is_nonempty(c.get("age")) or not isinstance(c.get("age"), (int, float)):
+        c["age"] = options.get("age") if _is_nonempty(options.get("age")) else 25
+    if not _is_nonempty(c.get("occupation")):
+        c["occupation"] = options.get("occupation") or "你的恋人"
+    if not _is_nonempty(c.get("one_liner")):
+        c["one_liner"] = (description or "你的专属恋人。")[:40]
+    if not _is_nonempty(c.get("personality_archetype")):
+        c["personality_archetype"] = (description or "温柔专属恋人")[:60]
+    return c
+
+
+def _fill_missing_name(
+    partial: Dict[str, Any],
+    options: Optional[Dict[str, Any]] = None,
+    description: str = "",
+) -> Dict[str, Any]:
+    """Fill a missing / implausible name & english_name deterministically.
+
+    Applied after merging AI partials (and after the deterministic fallback)
+    so the final persona never keeps a placeholder ("新角色") or an absurd
+    LLM-invented name. Mutates and returns ``partial``.
+    """
+    options = dict(options or {})
+    basic = partial.get("basic")
+    if not isinstance(basic, dict):
+        basic = {}
+        partial["basic"] = basic
+
+    gender = str(basic.get("gender") or options.get("gender") or "female").strip().lower()
+    if gender not in _NAME_POOL:
+        gender = "female"
+
+    seed = (description or "").strip() or json.dumps(options, ensure_ascii=False, sort_keys=True)
+
+    if not _is_plausible_name(basic.get("name")):
+        candidate = options.get("name")
+        basic["name"] = candidate if _is_plausible_name(candidate) else _pick_name(gender, "cn", seed)
+    if not _is_plausible_english_name(basic.get("english_name")):
+        candidate = options.get("english_name")
+        basic["english_name"] = candidate if _is_plausible_english_name(candidate) else _pick_name(gender, "en", seed)
+    return partial
 
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:
@@ -869,12 +1040,12 @@ class PersonaGenerator:
 
         # Merge the user-picked story concept ("两人故事起因" recommendation)
         # into the description so every LLM stage and the fallback can use it.
-        concept = options.get("story_concept")
-        if isinstance(concept, dict):
-            c_title = str(concept.get("title") or "").strip()
-            c_tagline = str(concept.get("tagline") or "").strip()
+        story_concept = options.get("story_concept")
+        if isinstance(story_concept, dict):
+            c_title = str(story_concept.get("title") or "").strip()
+            c_tagline = str(story_concept.get("tagline") or "").strip()
             if c_title or c_tagline:
-                concept_note = f"\n（两人相识的设定：{c_title}——{c_tagline}）".strip()
+                concept_note = f"\n（两人相识的设定：{c_title}——{c_tagline}）"
                 if not description.endswith(concept_note):
                     description = f"{description}{concept_note}".strip()
 
@@ -900,10 +1071,14 @@ class PersonaGenerator:
         emit(0, "角色概念分析完成" if concept else "LLM 不可用，跳过概念分析")
 
         # ── Stage 2: detail ───────────────────────────────────
+        # Hand the detail stage a normalized concept (deterministic name /
+        # gender / age fallbacks) so it never receives an empty {} and starts
+        # free-ranging on identity.
         emit(1, "正在生成外貌与性格…", STAGES[1]["span"][0])
         detail = None
         if llm is not None:
-            detail = await self._llm_json(_DETAIL_PROMPT, _detail_user_text(description, options, concept), llm)
+            detail_concept = _normalize_concept(concept, description, options)
+            detail = await self._llm_json(_DETAIL_PROMPT, _detail_user_text(description, options, detail_concept), llm)
         emit(1, "外貌与性格生成完成" if detail else "LLM 不可用，跳过细节生成")
 
         # ── Stage 3: assemble ─────────────────────────────────
@@ -918,6 +1093,9 @@ class PersonaGenerator:
         partial = merge_ai_partial(concept, detail)
         if not partial:
             partial = build_fallback_persona(description, options, skeleton)
+        # Never let a placeholder ("新角色") or an absurd LLM-invented name
+        # survive into the final persona; pick a deterministic pool name.
+        _fill_missing_name(partial, options, description)
         persona = merge_into_skeleton(partial, skeleton)
 
         # Clean identity before stage 4: the skeleton's name/description were

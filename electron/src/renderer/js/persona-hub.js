@@ -636,7 +636,7 @@ class PersonaHubPanel {
       return;
     }
 
-    if (!confirm("确定要删除这个人设吗？")) return;
+    if (!confirm("确定要删除这个人设吗？\n\n删除后会将它隐藏，数据仍保留在本地；当所有角色都被隐藏时，会自动恢复内置「伊塔」。")) return;
 
     try {
       await window.aerie.api.request({

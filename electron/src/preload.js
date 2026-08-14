@@ -67,6 +67,11 @@ contextBridge.exposeInMainWorld("aerie", {
       ipcRenderer.on("backend:ready", (_event, data) => cb(data || {}));
     },
     getHealth: () => ipcRenderer.invoke("get-health"),
+    // 开场动画（splash）：读取资产路径配置，并在视频播完 + 后端就绪后通知主进程关闭
+    splash: {
+      getConfig: () => ipcRenderer.invoke("splash:get-config"),
+      complete: () => ipcRenderer.send("splash:complete"),
+    },
     window: {
       minimize: () => ipcRenderer.invoke("window:minimize"),
       toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),

@@ -6,6 +6,7 @@ Starts logging → config → Companion → API server → event loop.
 
 from __future__ import annotations
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -104,6 +105,25 @@ async def _main() -> None:
         load_dotenv(configured_env or None)
     except Exception:
         pass
+
+    # 硬件指纹护照：生成 64 字符码并写快照，便于后期判断硬件对软件的影响。
+    try:
+        from core.hardware_passport import generate_passport
+        from core.paths import data_dir as _passport_data_dir
+
+        passport = generate_passport()
+        logger.info("[HARDWARE_PASSPORT] code=%s", passport["code"])
+        try:
+            snapshot_path = _passport_data_dir() / "hardware_passport.json"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_text(
+                json.dumps(passport["snapshot"], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            logger.warning("[HARDWARE_PASSPORT] snapshot write failed", exc_info=True)
+    except Exception:
+        logger.warning("[HARDWARE_PASSPORT] generation failed", exc_info=True)
 
     from config.persona_loader import load_settings, get_http_config
     from core.companion import Companion

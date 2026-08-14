@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aerie · 云栖 新手使用指南</title>
+<style>
+  :root {
+    --pink: #ff7eb6;
+    --pink-deep: #ff5b9c;
+    --pink-soft: #fff0f5;
+    --bg: #fff5f8;
+    --surface: #ffffff;
+    --surface-2: #fff0f5;
+    --border: #f0d5e0;
+    --text: #333333;
+    --muted: #aa8899;
+    --lav: #8a6cff;
+    --blue: #6e8efb;
+    --amber: #f59e0b;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --font: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Helvetica Neue", sans-serif;
+    --mono: "Cascadia Code", "JetBrains Mono", Consolas, "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    background:
+      radial-gradient(120% 120% at 0% 0%, rgba(255,123,182,0.10), transparent 55%),
+      radial-gradient(120% 120% at 100% 100%, rgba(110,142,251,0.10), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.7;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    padding: 28px 16px 48px;
+  }
+
+  .wiki { max-width: 980px; margin: 0 auto; }
+
+  /* ── Hero ── */
+  .hero {
+    position: relative;
+    border-radius: 22px;
+    padding: 30px 28px 26px;
+    background:
+      radial-gradient(120% 120% at 0% 0%, rgba(255,91,156,0.16), transparent 55%),
+      radial-gradient(120% 120% at 100% 100%, rgba(110,142,251,0.16), transparent 55%),
+      linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.35));
+    border: 1px solid rgba(255,91,156,0.18);
+    box-shadow: 0 8px 24px rgba(255,105,180,0.12);
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+  .hero-kicker {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; letter-spacing: 0.4px;
+    color: var(--pink-deep);
+    background: rgba(255,123,182,0.12);
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 12px;
+  }
+  .hero h1 {
+    font-size: 26px; font-weight: 600; letter-spacing: 0.2px;
+    margin: 0 0 6px;
+    background: linear-gradient(135deg, #ff5b9c 0%, #8a6cff 55%, #6e8efb 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero-sub { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  .hero-tagline {
+    font-size: 15px; line-height: 1.9; color: var(--text);
+    border-left: 3px solid var(--pink);
+    padding: 4px 0 4px 14px; margin: 0 0 8px;
+  }
+  .hero-en { font-size: 12.5px; color: var(--muted); font-style: italic; line-height: 1.8; }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 22px; align-items: start; }
+
+  /* ── TOC ── */
+  .toc {
+    position: sticky; top: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 14px;
+    box-shadow: 0 2px 8px rgba(255,105,180,0.06);
+  }
+  .toc-title { font-size: 12px; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 10px; }
+  .toc a {
+    display: block; font-size: 13px; font-weight: 400;
+    color: var(--text); text-decoration: none;
+    padding: 6px 10px; border-radius: 9px; line-height: 1.4;
+    transition: background .15s, color .15s;
+  }
+  .toc a:hover { background: var(--surface-2); color: var(--pink-deep); }
+  .toc a.active { background: linear-gradient(135deg, rgba(255,123,182,0.14), rgba(110,142,251,0.14)); color: var(--pink-deep); }
+
+  /* ── Sections ── */
+  .content { min-width: 0; }
+  section.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 26px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(255,105,180,0.06);
+    scroll-margin-top: 20px;
+  }
+  section.card h2 {
+    font-size: 19px; font-weight: 600; margin-bottom: 4px;
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  }
+  section.card h2 .en { font-size: 12px; font-weight: 400; color: var(--muted); }
+  section.card h3 { font-size: 15px; font-weight: 600; margin: 18px 0 8px; }
+  section.card p { margin: 8px 0; }
+  section.card ul, section.card ol { margin: 8px 0 8px 22px; }
+  section.card li { margin: 4px 0; }
+  section.card a { color: var(--pink-deep); }
+  mark {
+    background: linear-gradient(transparent 55%, rgba(255,123,182,0.28) 55%);
+    color: inherit; padding: 0 2px; border-radius: 2px; font-weight: 400;
+  }
+  strong { font-weight: 600; }
+  code {
+    font-family: var(--mono); font-size: 12.5px;
+    background: rgba(0,0,0,0.05); padding: 1px 6px; border-radius: 5px; color: #d63f7c;
+  }
+  pre {
+    background: #2d1a22; color: #ffd6e6; padding: 14px 16px; border-radius: var(--radius-sm);
+    overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; margin: 10px 0;
+  }
+  pre code { background: transparent; color: inherit; padding: 0; }
+
+  /* ── Callouts ── */
+  .callout {
+    border-radius: var(--radius-sm); padding: 12px 14px; margin: 12px 0;
+    font-size: 13px; line-height: 1.7; border: 1px solid;
+  }
+  .callout .ci { font-weight: 600; display: block; margin-bottom: 3px; font-size: 12.5px; }
+  .callout-tip    { background: rgba(255,123,182,0.08);  border-color: rgba(255,123,182,0.30); }
+  .callout-tip .ci { color: var(--pink-deep); }
+  .callout-note   { background: rgba(110,142,251,0.08); border-color: rgba(110,142,251,0.30); }
+  .callout-note .ci { color: #5b7cff; }
+  .callout-info   { background: rgba(58,207,213,0.07);  border-color: rgba(58,207,213,0.30); }
+  .callout-info .ci { color: #1aa6ad; }
+  .callout-warning{ background: rgba(245,158,11,0.08);  border-color: rgba(245,158,11,0.32); }
+  .callout-warning .ci { color: #c07b06; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: rgba(255,123,182,0.06); font-weight: 600; color: var(--pink-deep); }
+  tr:nth-child(even) td { background: rgba(255,240,245,0.5); }
+
+  /* ── Kbd / chips ── */
+  .kbd {
+    display: inline-block; font-family: var(--mono); font-size: 12px;
+    background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px;
+    border-radius: 6px; padding: 1px 7px; color: var(--text);
+  }
+  .chip {
+    display: inline-block; font-size: 11.5px; padding: 2px 10px; border-radius: 999px;
+    background: var(--surface-2); color: var(--pink-deep); border: 1px solid var(--border);
+  }
+
+  /* ── Footer ── */
+  footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  footer .heart { color: var(--pink-deep); }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    .toc { position: static; }
+    .toc a { display: inline-block; margin: 2px 2px; }
+    section.card { padding: 18px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="wiki">
+
+  <header class="hero">
+    <span class="hero-kicker">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/></svg>
+      新手使用指南 · Getting Started
+    </span>
+    <h1>Aerie · 云栖</h1>
+    <p class="hero-sub">本地优先的 AI 桌面伴侣 · Local-first AI desktop companion · v0.3.1-Beta.1</p>
+    <p class="hero-tagline">她可以是你想要的任何模样——可以是一起看日落的恋人，是深夜愿意听你把话说完的知己，是陪你冲刺的导师，也可以是那个记得你咖啡加几分糖的同行者。Aerie 不定义她是谁，只把「她」交给你。</p>
+    <p class="hero-en">She can be whoever your heart needs — a companion by the window at dusk, a confidant who stays up with you, a mentor for the long run, or simply the one who remembers how you take your coffee. Aerie doesn't decide who she is. You do.</p>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="目录">
+      <div class="toc-title">目录 · Contents</div>
+      <a href="#sec-1">1 · 欢迎 Welcome</a>
+      <a href="#sec-2">2 · 快速开始 Quick Start</a>
+      <a href="#sec-3">3 · 创建角色 Persona</a>
+      <a href="#sec-4">4 · 核心功能 Features</a>
+      <a href="#sec-5">5 · 快捷键 Shortcuts</a>
+      <a href="#sec-6">6 · 常用设置 Settings</a>
+      <a href="#sec-7">7 · 隐私与数据 Privacy</a>
+      <a href="#sec-8">8 · FAQ 与免责声明</a>
+    </nav>
+
+    <main class="content">
+
+      <section class="card" id="sec-1">
+        <h2>1 · 欢迎 <span class="en">Welcome</span></h2>
+        <p><strong>Aerie · 云栖</strong> 是一款 <mark>本地优先</mark> 的 AI 桌面伴侣（Local-first AI desktop companion），由 Electron 桌面壳 + Python 智能内核组成，运行在你的 Windows 上，随时待命。</p>
+        <p>她可以是你想要的任何模样——</p>
+        <blockquote style="border-left:3px solid var(--pink); padding:4px 0 4px 14px; color:var(--text); margin:8px 0;">可以是一起看日落的恋人，是深夜愿意听你把话说完的知己，是陪你冲刺的导师，也可以是那个记得你咖啡加几分糖的同行者。Aerie 不定义她是谁，只把「她」交给你。</blockquote>
+        <p style="font-style:italic;color:var(--muted);font-size:12.5px;">She can be whoever your heart needs — a companion by the window at dusk, a confidant who stays up with you, a mentor for the long run, or simply the one who remembers how you take your coffee. Aerie doesn't decide who she is. You do.</p>
+        <div class="callout callout-tip"><span class="ci">💡 关于「伊塔」</span>内置默认人设「伊塔（Ita）」只是众多模板之一。你完全可以在「人设」里创建属于自己的角色——朋友、家人、导师、同行者，或任何你想要的关系。她的核心不是「像人」，而是<strong>给你情绪价值，也给你实际帮助</strong>。</div>
+      </section>
+
+      <section class="card" id="sec-2">
+        <h2>2 · 快速开始 <span class="en">Quick Start</span></h2>
+        <div class="callout callout-info"><span class="ci">ℹ️ 系统要求 · Requirements</span>Windows 10 1809+ / Windows 11 · Python 3.10+ · Node.js 20+ · 建议 8 GB+ 内存。</div>
+
+        <h3>2.1 安装 · Install</h3>
+        <pre><code># 1) Python 虚拟环境
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# 2) Electron 桌面端
+cd electron
+npm install</code></pre>
+
+        <h3>2.2 首次启动 · First Launch</h3>
+        <pre><code># 先启动 Python 后端（默认监听 http://127.0.0.1:7890）
+python main.py
+
+# 再启动桌面端
+cd electron
+npm start</code></pre>
+        <div class="callout callout-note"><span class="ci">📝 启动顺序</span>先后端、再前端。后端日志出现 <code>[READY]</code> 标记后再打开桌面端；若桌面端先起，等待 5–10 秒让连接自动重试即可。</div>
+
+        <h3>2.3 设置 API Key · Configure API Key</h3>
+        <ol>
+          <li>复制 <code>.env.example</code> 为 <code>.env</code>，至少填写一个模型 API Key（如 <code>DASHSCOPE_API_KEY</code> / <code>DEEPSEEK_API_KEY</code> / <code>SILICONFLOW_API_KEY</code> / <code>GEMINI_API_KEY</code>）。</li>
+          <li>或打开桌面端 → 侧边栏「设置」→「API Key」页，选择常用服务商并填入 Key。</li>
+          <li>百度地图、搜索、天气等功能 API 留空时会 <mark>自动回退内置免费源</mark>，开箱即用。</li>
+        </ol>
+        <div class="callout callout-warning"><span class="ci">⚠️ 密钥安全</span>所有 API Key 只保存在本地 <code>.env</code> 与本地配置中，不会上传到任何地方。请勿把 <code>.env</code> 提交到公开仓库。</div>
+      </section>
+
+      <section class="card" id="sec-3">
+        <h2>3 · 创建你的第一个角色 <span class="en">Create Your Persona</span></h2>
+        <div class="callout callout-tip"><span class="ci">💡 人设中心 · Persona Hub</span>「恋人」只是其中一种可能。你可以在人设中心创建 <mark>朋友 / 家人 / 导师 / 同行者</mark> 等任意角色；每个角色的对话、记忆与头像按角色独立隔离。</div>
+
+        <h3>3.1 三步完成 · Three Steps</h3>
+        <ol>
+          <li>侧边栏点击「人设」→「新建人设」，进入 AI 向导。</li>
+          <li>输入<strong>一句话 / 一段话</strong>角色描述（性格、外貌、口头禅，自由发挥），可选填「你的名字」与「两人故事起因」。</li>
+          <li>点击生成——后端 <mark>5 阶段管线</mark> 自动生成完整人设并套合成熟骨架；生成完成后进入编辑器逐项完善，确认后保存 / 激活。</li>
+        </ol>
+        <div class="callout callout-note"><span class="ci">📝 兜底与安全</span>生成过程任何一环失败都会自动降级为确定性生成，流程永不中断，始终产出可用草稿；生成结果 <mark>只保存、不激活</mark>，由你手动确认。</div>
+        <ul>
+          <li>想跳过 AI 手动创建？向导支持「跳过 AI 生成，手动创建」。</li>
+          <li>内置「伊塔」为 builtin 人设，不可编辑 / 删除，但可随时作为参考。</li>
+        </ul>
+      </section>
+
+      <section class="card" id="sec-4">
+        <h2>4 · 核心功能概览 <span class="en">Core Features</span></h2>
+        <table>
+          <thead><tr><th>功能 · Feature</th><th>说明 · Description</th></tr></thead>
+          <tbody>
+            <tr><td><strong>聊天 · Chat</strong></td><td>桌面 / QQ / 移动三端对话，支持附件、引用、撤回、错字纠错</td></tr>
+            <tr><td><strong>情绪 · Emotion</strong></td><td>PAD 情绪（愉悦 / 唤醒 / 支配）+ 隐藏槽位 + 情绪历史曲线，越来越懂你</td></tr>
+            <tr><td><strong>世界模拟 · World</strong></td><td>时间 / 天气 / 地点 / 关系多维拟真，默认重庆，房间级定位与话题追踪</td></tr>
+            <tr><td><strong>主动陪伴 · Proactive</strong></td><td>早安、天气、午提醒、晚问候、晚安、待办、纪念日、失联关怀、情绪安抚</td></tr>
+            <tr><td><strong>灵动岛 · Dynamic Island</strong></td><td>桌面顶部胶囊，点击 / 悬停 / 长按展开，显示陪伴状态、提醒与快捷操作</td></tr>
+            <tr><td><strong>办公模式 · Office</strong></td><td>文档写作、文件整理去重、任务规划与异步执行</td></tr>
+            <tr><td><strong>电脑操控 · Computer Control</strong></td><td>四模式权限（手动 / 自动批阅 / 完全 / 自定义），默认拦截 + 黑白名单，对话框内审批</td></tr>
+            <tr><td><strong>多模态生图 · Image</strong></td><td>三视图生图、图生图、主动发图、TTS 语音、表情包</td></tr>
+            <tr><td><strong>多端互联 · Multi-client</strong></td><td>Android 移动网关、QQ（NapCat）桥接、三端撤回与统一引用</td></tr>
+          </tbody>
+        </table>
+        <div class="callout callout-info"><span class="ci">ℹ️ 更多细节</span>各模块的实现入口与技术底座见知识库「模块总览」「技术总览」；当前能力的最新状态见「当前状态」页。</div>
+      </section>
+
+      <section class="card" id="sec-5">
+        <h2>5 · 快捷键速查 <span class="en">Shortcuts</span></h2>
+        <div class="callout callout-tip"><span class="ci">💡 灵动岛穿透（重点）</span>当灵动岛悬浮在桌面上方、挡住下方窗口元素时，<mark>按住 <span class="kbd">Alt</span></mark> 可让灵动岛强制鼠标穿透，直接点击它后面的元素；松开恢复。</div>
+        <table>
+          <thead><tr><th>操作 · Action</th><th>按键 / 方式</th></tr></thead>
+          <tbody>
+            <tr><td>发送消息</td><td><span class="kbd">Enter</span>（输入框内）</td></tr>
+            <tr><td>取消引用</td><td><span class="kbd">Esc</span>（已引用消息时）</td></tr>
+            <tr><td>灵动岛强制穿透</td><td>按住 <span class="kbd">Alt</span></td></tr>
+            <tr><td>最小化窗口</td><td>右上角 <span class="kbd">─</span> 按钮</td></tr>
+            <tr><td>最大化 / 还原窗口</td><td>右上角 <span class="kbd">□</span> 按钮</td></tr>
+            <tr><td>关闭窗口</td><td>右上角 <span class="kbd">×</span> 按钮</td></tr>
+            <tr><td>切换面板</td><td>点击左侧栏图标（聊天 / 情绪 / 大脑 / 状态 / 世界 / 日历 / 数据 / 人设 / 设置 / 关于）</td></tr>
+          </tbody>
+        </table>
+        <div class="callout callout-note"><span class="ci">📝 说明</span>侧边栏导航与窗口控制均通过鼠标点击完成，暂无全局快捷键；本表只列出实际存在的交互方式。</div>
+      </section>
+
+      <section class="card" id="sec-6">
+        <h2>6 · 常用设置 <span class="en">Common Settings</span></h2>
+        <p>在侧边栏「设置」→「常用」页可调整：</p>
+        <ul>
+          <li><strong>主题</strong>：伊塔粉 / 深夜紫 / 樱白 / 海蓝 / 森绿。</li>
+          <li><strong>开机自启</strong>、<strong>启动时最小化</strong>。</li>
+          <li><strong>主动推送</strong>：总开关 + 每日主动消息次数（3 / 5 / 8 / 10 / 15 / 20 / 30 / 不限制）+ 最小间隔（15 / 30 / 60 分钟）。</li>
+          <li><strong>主动发图</strong>：每日上限与最小间隔（不限制时由她自主决定节奏）。</li>
+          <li><strong>消息提醒</strong>：系统通知总开关（关闭后不再弹系统通知，应用内对话不受影响）。</li>
+          <li><strong>灵动岛配置</strong>：启用开关、主题风格（深色毛玻璃 / 恋粉治愈 / 浅白清新）、触发方式（点击 / 悬停 / 长按）、胶囊与展开组件。</li>
+          <li><strong>简报订阅</strong>：GitHub 高星项目、最小星标数、今日天象；<strong>我的位置</strong>留空即 IP 自动定位。</li>
+          <li><strong>办公模式</strong>：文件保存位置。</li>
+          <li><strong>自进化 L4</strong>（内测，默认关闭）：开启需两次风险确认，24 小时内可回滚。</li>
+        </ul>
+        <div class="callout callout-warning"><span class="ci">⚠️ 高级（YAML）视图</span>修改 <code>settings.yaml</code> / <code>persona.yaml</code> / <code>proactive.yaml</code> 前会自动备份；「改坏了她会不开心」。</div>
+      </section>
+
+      <section class="card" id="sec-7">
+        <h2>7 · 隐私与数据 <span class="en">Privacy &amp; Data</span></h2>
+        <ul>
+          <li><mark>本地优先</mark>：聊天记录、记忆、配置、生成图片等数据默认保存在本地 <code>data/</code> 目录，不依赖云端。</li>
+          <li><strong>API Key</strong>：只存本地，不上传。</li>
+          <li><strong>诊断包（Diagnostics）</strong>：
+            <ul>
+              <li>内容包含本地日志、配置文件、聊天 / 记忆数据库，<mark>不做脱敏</mark>。</li>
+              <li>支持<strong>手动打包</strong>；同时会在累计使用满 1 小时 / 3 小时 / 3 天时各<strong>自动打包</strong>一次（进度可在设置页查看）。</li>
+              <li>诊断包附带一个本地生成的匿名 <mark>设备标识</mark>（用于区分不同机器，不含个人身份信息）。</li>
+              <li>仅在你主动触发时上传；应用 <mark>不会后台自动上传</mark>，上传与下载不收取任何费用。</li>
+            </ul>
+          </li>
+        </ul>
+        <div class="callout callout-warning"><span class="ci">⚠️ 上传前请知悉</span>诊断包包含未脱敏的聊天与记忆数据，仅在需要排查 Bug 时由你主动上传。</div>
+      </section>
+
+      <section class="card" id="sec-8">
+        <h2>8 · 常见问题与免责声明 <span class="en">FAQ &amp; Disclaimer</span></h2>
+        <h3>常见问题 · FAQ</h3>
+        <table>
+          <thead><tr><th>问题 · Question</th><th>处理 · Fix</th></tr></thead>
+          <tbody>
+            <tr><td>后端启动失败</td><td>依赖未装或 Python 版本不符 → 重新 <code>pip install -r requirements.txt</code></td></tr>
+            <tr><td>伊塔不回复</td><td>未配置可用模型 Key → 检查 <code>.env</code> 至少一个 <code>*_API_KEY</code></td></tr>
+            <tr><td>QQ 收不到消息</td><td>NapCat 未启动 → 运行 <code>NapCat\NapCat.Shell\launcher-user.bat</code></td></tr>
+            <tr><td>桌面端白屏</td><td>渲染资源或 CSP 问题 → 查看 Electron DevTools 与日志</td></tr>
+            <tr><td>世界模拟不生效</td><td>未开启世界模拟开关（<code>world_inprocess_v1</code> / <code>world_sidecar_v1</code>）</td></tr>
+            <tr><td>自动发图不触发</td><td><code>world_image_candidates_v1</code> 关闭 → 在设置中开启</td></tr>
+            <tr><td>附件无语义检索</td><td><code>chromadb</code> 未安装或缺少 embedding Key</td></tr>
+            <tr><td>我的数据存在哪</td><td>本地 <code>data/</code> 目录；聊天与记忆数据库均在本地</td></tr>
+            <tr><td>如何找回误删内容</td><td>管理平台提供聊天记录软删回收站、状态文件查看 / 重置</td></tr>
+          </tbody>
+        </table>
+
+        <h3>免责声明 · Disclaimer</h3>
+        <ul>
+          <li>本软件仅供学习交流与个人使用，请勿用于商业用途。</li>
+          <li>使用本软件需遵守所在国家 / 地区的法律法规。</li>
+          <li>AI 生成的所有内容均为自动生成，不代表开发者立场。</li>
+          <li>电脑操控等功能请谨慎使用，重要数据请提前备份。</li>
+          <li>因使用本软件产生的任何直接或间接损失，由使用者自行承担。</li>
+        </ul>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>© 2026 Aerie · 云栖 — Made with <span class="heart">♥</span> for you</footer>
+</div>
+
+<script>
+  // 纯静态目录高亮：不依赖 window.parent 或任何外部资源。
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var sections = links.map(function (a) {
+      return document.querySelector(a.getAttribute('href'));
+    });
+    function onScroll() {
+      var pos = window.scrollY + 80;
+      var current = null;
+      for (var i = 0; i < sections.length; i++) {
+        if (sections[i] && sections[i].offsetTop <= pos) current = links[i];
+      }
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (current) current.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>

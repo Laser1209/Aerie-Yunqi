@@ -184,7 +184,7 @@ def _collect_paths() -> list[tuple[Path, str]]:
     return collected
 
 
-def _manifest(reason: str, files: list[tuple[Path, str]]) -> dict[str, Any]:
+def _manifest(reason: str, files: list[tuple[Path, str]], hardware_code: str = "") -> dict[str, Any]:
     try:
         import main as main_mod
 
@@ -205,6 +205,7 @@ def _manifest(reason: str, files: list[tuple[Path, str]]) -> dict[str, Any]:
         "backend_instance_id": instance_id,
         "device_id": _device_id(),
         "process_started_at": process_started,
+        "hardware_code": hardware_code,
         "total_runtime_seconds": round(float(_load_state().get("total_seconds", 0.0)), 1),
         "platform": {
             "system": platform.system(),
@@ -228,7 +229,20 @@ def create_package(reason: str = "manual") -> dict[str, Any]:
     """
     _packages_dir()
     files = _collect_paths()
-    manifest = _manifest(reason, files)
+
+    # 硬件指纹护照：生成 64 字符码 + 完整快照，码写入 manifest，快照写入 zip 顶层。
+    hardware_code = ""
+    passport_snapshot: dict[str, Any] | None = None
+    try:
+        from core.hardware_passport import generate_passport
+
+        passport = generate_passport()
+        hardware_code = str(passport.get("code") or "")
+        passport_snapshot = passport.get("snapshot")
+    except Exception:
+        logger.exception("hardware passport generation failed, continuing without it")
+
+    manifest = _manifest(reason, files, hardware_code)
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"aerie-diag-{stamp}.zip"
@@ -236,6 +250,11 @@ def create_package(reason: str = "manual") -> dict[str, Any]:
 
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        if passport_snapshot is not None:
+            zf.writestr(
+                "hardware_passport.json",
+                json.dumps(passport_snapshot, ensure_ascii=False, indent=2),
+            )
         for p, arc in files:
             if p.exists() and p.is_file():
                 zf.write(p, arc)

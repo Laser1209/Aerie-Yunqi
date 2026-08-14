@@ -1,0 +1,119 @@
+/* Aerie · 云栖 — 开场动画（splash）样式
+   视频 / LOGO 满屏铺满且不可交互；进度条最上层，柔粉毛玻璃风格。 */
+
+:root {
+  --splash-primary: #ff7eb6;
+  --splash-primary-soft: #ffb3d1;
+  --splash-error: #ff5f7e;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000000;
+}
+
+/* 全屏视频：cover 铺满，静音自动播放，无任何交互 */
+#splash-video {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  background: #000000;
+}
+
+/* 满屏 LOGO：视频结束后显示，铺满全屏 */
+#splash-logo {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  background: radial-gradient(
+    120% 120% at 50% 42%,
+    #ffffff 0%,
+    #ffe3ee 48%,
+    #ffc9dd 100%
+  );
+}
+
+#splash-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 进度条：位于最上层，毛玻璃柔粉风 */
+#splash-progress {
+  position: fixed;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  width: min(460px, 64vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  z-index: 10;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 8px 24px rgba(255, 126, 182, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+#splash-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--splash-primary), var(--splash-primary-soft));
+  box-shadow: 0 0 12px rgba(255, 126, 182, 0.8);
+  transition: width 0.25s ease-out;
+}
+
+#splash-progress-label {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #b33a6b;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.7);
+}
+
+/* 通用隐藏 */
+.hidden {
+  display: none !important;
+}

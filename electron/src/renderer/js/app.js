@@ -7,6 +7,14 @@ window.addEventListener("DOMContentLoaded", () => {
     window.themeSwitcher.init();
   }
 
+  // ── 首次使用新手教程 ────────────────────────────
+  // OnboardingController 由 js/onboarding.js（先于 app.js 加载）提供。
+  // 弹出时机由 _runFirstRunSelfCheck 在后端就绪后统一触发 maybeShow()。
+  if (window.OnboardingController) {
+    window.onboarding = new OnboardingController();
+    window.onboarding.init();
+  }
+
   // ── Emotion dashboard ──────────────────────────
   const emotionDashboard = new EmotionDashboard();
 
@@ -489,6 +497,13 @@ async function _runFirstRunSelfCheck() {
     }
     if (!ready) return;
 
+    // 主路径：交给新手教程接管（内部自行校验 has_api_key 并决定是否弹出）
+    if (window.onboarding && typeof window.onboarding.maybeShow === "function") {
+      window.onboarding.maybeShow();
+      return;
+    }
+
+    // 兜底：教程脚本缺失时，保留旧的自动跳转逻辑
     const r = await window.aerie.api.request({ method: "GET", path: "/api/self-check" });
     if (r && r.data && !r.data.error && r.data.has_api_key === false) {
       // No API key configured — switch to settings → API Key tab

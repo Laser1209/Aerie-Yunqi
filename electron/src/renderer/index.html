@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="styles/office-mode.css">
 <link rel="stylesheet" href="styles/world-dashboard.css">
 <link rel="stylesheet" id="theme-css" href="styles/themes/yita-pink.css">
+<link rel="stylesheet" href="styles/onboarding.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
@@ -2282,6 +2283,9 @@
   </div>
 </div>
 
+<!-- 首次使用新手教程（onboarding）根容器，由 js/onboarding.js 填充 -->
+<div id="onboarding-root"></div>
+
 <!-- R7.4: Markdown rendering stack for chat (marked + DOMPurify + highlight.js) -->
 <link rel="stylesheet" href="vendor/github.min.css">
 <script src="vendor/marked.min.js"></script>
@@ -2308,6 +2312,7 @@
 <!-- R7.1: brief drawer (replaces legacy iframe + popup + detail window) -->
 <link rel="stylesheet" href="styles/brief-drawer.css">
 <script src="js/brief-drawer.js" defer></script>
+<script src="js/onboarding.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

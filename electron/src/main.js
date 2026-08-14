@@ -75,6 +75,21 @@ if (app.isPackaged) {
   ICON_PATH = path.join(PROJECT_ROOT, "Aerie · 云栖.png");
 }
 
+// 开场动画（splash）资产：开发态位于项目根 video/，打包态位于
+// resources/video/（由 electron-builder.yml 的 extraResources 打入）。
+function getSplashAssetPath(filename) {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "video", filename);
+  }
+  return path.join(PROJECT_ROOT, "video", filename);
+}
+
+// 把 Windows 绝对路径转成可直接拼接 file:// 的片段：
+// 统一正斜杠后 encodeURI，中文 / 空格等特殊字符不会破坏 URL。
+function toFileUriPath(absPath) {
+  return encodeURI(absPath.replace(/\\/g, "/"));
+}
+
 // ── State ──────────────────────────────────────────
 // Development launchers can provide an isolated profile when the default
 // Electron user-data directory is locked down or owned by another instance.
@@ -98,11 +113,13 @@ console.log("[main] software rendering:", useSoftwareRendering);
 
 let pythonProc = null;
 let mainWindow = null;
+let splashWindow = null;
 let tray = null;
 let dynamicIsland = null;
 let worldDashboardWindow = null;
 let isQuitting = false;
 let mainWindowReady = false;
+let _splashDone = false;
 let pendingMainNavigation = null;
 // R7.1: legacy brief popup/detail windows removed. The brief now
 // lives inside the main window as a right-side drawer (see
@@ -621,6 +638,11 @@ function broadcastHealth() {
   for (const win of BrowserWindow.getAllWindows()) {
     sendBackendState(win, becameReady);
   }
+  // 开场动画窗口可能晚于首次广播才完成加载，这里显式补发一次，
+  // 确保进度条一定能拿到当前后端状态（ready / booting / offline）。
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    sendBackendState(splashWindow, false);
+  }
   _lastBroadcastBackendReady = _backendReady;
   if (_backendReady) {
     _worldConnectionSignature = "";
@@ -798,6 +820,65 @@ function hasBackgroundRecoverySurface() {
   return hasTray || hasVisibleIsland;
 }
 
+// ── Splash（开场动画）────────────────────────────────
+// 全屏、无边框、置顶、不进任务栏，且不可交互：视频与 LOGO 阶段
+// 都由渲染层设置 pointer-events:none / 禁右键 / 无控制条。
+function createSplashWindow() {
+  if (splashWindow && !splashWindow.isDestroyed()) return splashWindow;
+
+  splashWindow = new BrowserWindow({
+    frame: false,
+    fullscreen: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    show: false,
+    backgroundColor: "#000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  // 主进程侧兜底：禁止右键菜单，保证开场动画不可交互
+  splashWindow.webContents.on("context-menu", (event) => event.preventDefault());
+
+  splashWindow.loadFile(path.join(__dirname, "renderer", "splash.html"));
+
+  splashWindow.once("ready-to-show", () => {
+    if (!splashWindow || splashWindow.isDestroyed()) return;
+    splashWindow.show();
+    splashWindow.moveTop();
+  });
+
+  splashWindow.on("closed", () => {
+    splashWindow = null;
+  });
+
+  return splashWindow;
+}
+
+// 关闭开场动画并显示主窗口。幂等：多次触发只执行一次，避免重复弹窗。
+function finishSplash() {
+  if (_splashDone) return;
+  _splashDone = true;
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+  }
+  if (isStartMinimizedArgPresent()) {
+    // 最小化启动：开场动画播完后主窗口保持隐藏
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.hide();
+    }
+    return;
+  }
+  showMainWindow();
+}
+
 function createMainWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   console.log("[main] creating main window:", { width, height, argv: process.argv });
@@ -845,7 +926,8 @@ function createMainWindow() {
   const readyToShowTimer = setTimeout(() => {
     if (readyToShow || !mainWindow || mainWindow.isDestroyed()) return;
     console.error("[main] main window ready-to-show timeout; forcing visibility");
-    showMainWindow();
+    // 开场动画未结束前不抢着显示主窗口，避免 splash 被提前顶掉
+    if (_splashDone) showMainWindow();
   }, 8000);
 
   mainWindow.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
@@ -877,6 +959,11 @@ function createMainWindow() {
     readyToShow = true;
     clearTimeout(readyToShowTimer);
     console.log("[main] main window ready-to-show");
+    // 开场动画未结束时主窗口保持隐藏，等 splash:complete 再显示
+    if (!_splashDone) {
+      mainWindow.hide();
+      return;
+    }
     if (isStartMinimizedArgPresent()) {
       mainWindow.hide();
     } else {
@@ -2753,6 +2840,19 @@ ipcMain.handle("shell:openExternal", async (_event, url) => {
 // the old implementation awaited apiRequest() on a not-yet-running backend.
 // Stale metadata (stale_code / process_started_at) is fetched best-effort
 // in the background and broadcast via the normal onHealth channel later.
+// 开场动画：返回视频 / LOGO 的绝对路径（已 encodeURI，渲染层拼 file://）
+ipcMain.handle("splash:get-config", () => {
+  return {
+    videoPath: toFileUriPath(getSplashAssetPath("start-video.mp4")),
+    logoPath: toFileUriPath(getSplashAssetPath("Aerie.png")),
+  };
+});
+
+// 开场动画：视频播完且后端就绪后，渲染层通知主进程关闭 splash 并显示主窗口
+ipcMain.on("splash:complete", () => {
+  finishSplash();
+});
+
 ipcMain.handle("get-health", async () => {
   _recomputeBackendState();
   const snap = {
@@ -2958,6 +3058,9 @@ if (gotSingleInstanceLock) {
     configureBackendDataPath();
     configureWorldSupervisor();
     startWorldConnectionMonitor();
+    // 先创建并显示开场动画，再启动后端 / 创建主窗口；
+    // 主窗口保持隐藏，直到 splash 播完且后端就绪。
+    createSplashWindow();
     startPythonBackend();
     // R8.1: read persistent island/notif prefs *before* creating windows,
     // so the settings panel loads the saved island config (theme / interaction
@@ -3037,6 +3140,10 @@ app.on("before-quit", (event) => {
   if (pythonProc) {
     pythonProc.kill();
     pythonProc = null;
+  }
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.destroy();
+    splashWindow = null;
   }
   if (dynamicIsland && !dynamicIsland.isDestroyed()) {
     dynamicIsland.setClosable(true);

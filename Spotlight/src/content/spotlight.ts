@@ -211,6 +211,17 @@ export interface JournalEntryData {
 
 export const journalEntries: JournalEntryData[] = [
   {
+    id: 'beta-031',
+    version: '0.3.1-Beta.1',
+    date: '2026-08-14',
+    category: 'Release Candidate',
+    title: 'A warm first hello, a guided first run.',
+    titleZh: '开场动画、新手教程与硬件诊断落地',
+    summary: '新增不可跳过的开场动画、首次使用新手教程与内嵌使用指南，并接入本地硬件指纹用于诊断打包。',
+    highlights: ['Unskippable splash', 'Guided onboarding', 'Hardware fingerprint'],
+    status: 'shipped',
+  },
+  {
     id: 'beta-baseline',
     version: '0.1.0-beta.1',
     date: '2026-07-19',

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aerie · 云栖</title>
+  <link rel="stylesheet" href="styles/splash.css" />
+</head>
+<body>
+  <!-- 开场视频：静音自动播放，无控制条，不可交互 -->
+  <video id="splash-video" autoplay muted playsinline></video>
+
+  <!-- 视频播完后的满屏 LOGO -->
+  <div id="splash-logo" class="hidden">
+    <img id="splash-logo-img" alt="Aerie · 云栖" draggable="false" />
+  </div>
+
+  <!-- 后端加载进度条：始终位于最上层，不可交互 -->
+  <div id="splash-progress" class="hidden">
+    <div class="progress-track">
+      <div id="splash-progress-fill"></div>
+    </div>
+    <div id="splash-progress-label">正在启动…</div>
+  </div>
+
+  <script src="js/splash.js"></script>
+</body>
+</html>

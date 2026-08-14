@@ -1,4 +1,4 @@
-﻿# Aerie · 云栖 v0.1.0-beta.1 — electron-builder configuration
+# Aerie · 云栖 v0.1.0-beta.1 — electron-builder configuration
 # This file is the source of truth for Windows packaging.
 # `package.json` mirrors the same settings under `build` for npm run build:win.
 appId: com.laser.aerie
@@ -9,7 +9,6 @@ artifactName: ${productName}-${version}-${arch}.${ext}
 directories:
   output: dist
   buildResources: builder
-  outputResources: resources
 
 files:
   - "src/**/*"
@@ -50,6 +49,8 @@ extraResources:
     to: "icon.png"
   - from: "../.env.example"
     to: ".env.example"
+  - from: "../video"
+    to: "video"
   - from: "../"
     to: "python"
     filter:

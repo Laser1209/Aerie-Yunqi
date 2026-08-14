@@ -291,6 +291,10 @@ window.addEventListener("DOMContentLoaded", () => {
                   started_at: r.started_at || "",
                 });
               }
+              // API 连接检查：余额耗尽/禁用的 provider 弹 div 警告
+              if (http.data.components && http.data.components.providers) {
+                _setApiWarningState(http.data.components.providers);
+              }
             }
           } catch (_) {}
         }
@@ -490,6 +494,115 @@ function _hideStaleBanner() {
   _staleBannerEl = null;
 }
 
+// ── API 连接检查 + 警告 div ──────────────────────
+let _apiWarningEl = null;
+let _apiBanned = [];
+let _apiDisabled = [];
+let _apiUnreachable = [];
+
+function _setApiWarningState(providers) {
+  _apiBanned = (providers && providers.banned) || [];
+  _apiDisabled = (providers && providers.disabled_providers) || [];
+  _refreshApiWarning();
+}
+
+function _setApiConnectivity(unreachable) {
+  _apiUnreachable = unreachable || [];
+  _refreshApiWarning();
+}
+
+// 启动时主动探测每个已配置 provider 的连通性（/models 轻量请求）
+async function _checkProviderConnectivity() {
+  try {
+    const r = await window.aerie.api.request({ method: "GET", path: "/api/providers/connectivity" });
+    const items = (r && r.data && r.data.providers) || [];
+    _setApiConnectivity(
+      items.filter((p) => p.configured && p.ok === false).map((p) => p.name)
+    );
+  } catch (_) {
+    _setApiConnectivity([]);
+  }
+}
+
+function _refreshApiWarning() {
+  const problems = [];
+  if (_apiBanned.length) problems.push("余额耗尽：" + _apiBanned.join("、"));
+  if (_apiDisabled.length) problems.push("已禁用：" + _apiDisabled.join("、"));
+  if (_apiUnreachable.length) problems.push("连接失败：" + _apiUnreachable.join("、"));
+  if (problems.length) _showApiWarningBanner(problems);
+  else _hideApiWarningBanner();
+}
+
+function _showApiWarningBanner(problems) {
+  if (_apiWarningEl) {
+    const list = _apiWarningEl.querySelector(".api-warning-list");
+    if (list) list.textContent = problems.join("；");
+    return;
+  }
+  const el = document.createElement("div");
+  el.className = "api-warning-banner";
+  el.innerHTML = (
+    '<div class="api-warning-banner__inner">'
+    + '<span class="api-warning-banner__icon" aria-hidden="true">'
+    + '<svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-warning"/></svg>'
+    + '</span>'
+    + '<span class="api-warning-banner__text">'
+    + '<strong>API 连接异常</strong> · <span class="api-warning-list">'
+    + problems.join("；")
+    + '</span></span>'
+    + '<button class="api-warning-banner__action" id="api-warning-open-settings">去设置</button>'
+    + '<button class="api-warning-banner__close" id="api-warning-close" title="关闭">×</button>'
+    + '</div>'
+  );
+  Object.assign(el.style, {
+    position: "fixed",
+    top: "0", left: "0", right: "0",
+    zIndex: "10001",
+    background: "linear-gradient(180deg, #fdecec 0%, #f9c8c8 100%)",
+    borderBottom: "1px solid #e74c3c",
+    color: "#7a1a1a",
+    fontSize: "13px",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+    fontFamily: "system-ui, sans-serif",
+  });
+  const inner = el.querySelector(".api-warning-banner__inner");
+  Object.assign(inner.style, {
+    display: "flex", alignItems: "center", gap: "10px",
+    padding: "8px 14px", maxWidth: "100%",
+  });
+  const actionBtn = el.querySelector("#api-warning-open-settings");
+  Object.assign(actionBtn.style, {
+    marginLeft: "auto",
+    padding: "4px 10px",
+    background: "#e74c3c", color: "#fff",
+    border: "none", borderRadius: "4px",
+    cursor: "pointer", fontSize: "12px", fontWeight: "600",
+  });
+  const closeBtn = el.querySelector("#api-warning-close");
+  Object.assign(closeBtn.style, {
+    background: "transparent", border: "none",
+    color: "#7a1a1a", fontSize: "18px",
+    cursor: "pointer", padding: "0 4px", lineHeight: "1",
+  });
+  actionBtn.addEventListener("click", () => {
+    const tab = document.querySelector('.sidebar-tab[data-tab="settings"]');
+    if (tab) tab.click();
+    if (window.settingsPanel && typeof window.settingsPanel._switchMode === "function") {
+      window.settingsPanel._switchMode("apikey");
+    }
+  });
+  closeBtn.addEventListener("click", () => _hideApiWarningBanner());
+  document.body.appendChild(el);
+  _apiWarningEl = el;
+}
+
+function _hideApiWarningBanner() {
+  if (_apiWarningEl && _apiWarningEl.parentNode) {
+    _apiWarningEl.parentNode.removeChild(_apiWarningEl);
+  }
+  _apiWarningEl = null;
+}
+
 // ── v13.9.9: First-run self-check ───────────────
 async function _runFirstRunSelfCheck() {
   try {
@@ -504,6 +617,9 @@ async function _runFirstRunSelfCheck() {
       await new Promise((r) => setTimeout(r, 1000));
     }
     if (!ready) return;
+
+    // 启动时主动探测每个 provider 连通性，异常会弹 div 警告
+    _checkProviderConnectivity();
 
     // 主路径：交给新手教程接管（内部自行校验 has_api_key 并决定是否弹出）
     if (window.onboarding && typeof window.onboarding.maybeShow === "function") {

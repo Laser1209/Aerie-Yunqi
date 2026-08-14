@@ -5656,6 +5656,60 @@ async def env_providers() -> dict:
     }
 
 
+@app.get("/api/providers/connectivity")
+async def providers_connectivity() -> dict:
+    """主动探测每个已配置 provider 的连通性（轻量 /models 请求，短超时）。
+
+    并发探测所有 provider，每个最多 5s；2xx/4xx 视为端点可达（401/403 是
+    鉴权问题但网络连通），仅连接失败 / 超时标记为 ok=False。
+    """
+    import httpx
+
+    env = _read_env_file()
+
+    async def _probe(meta: dict) -> dict:
+        key = env.get(meta["env_key"], "")
+        if not key:
+            return {
+                "key": meta["key"],
+                "name": meta["name"],
+                "configured": False,
+                "ok": None,
+                "latency_ms": 0,
+            }
+        base_url = (env.get(meta["env_url"]) or meta["default_url"]).rstrip("/")
+        start = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    base_url + "/models",
+                    headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+                )
+            elapsed = int((time.perf_counter() - start) * 1000)
+            return {
+                "key": meta["key"],
+                "name": meta["name"],
+                "configured": True,
+                "ok": resp.status_code < 400,
+                "http_status": resp.status_code,
+                "latency_ms": elapsed,
+            }
+        except Exception as exc:
+            elapsed = int((time.perf_counter() - start) * 1000)
+            return {
+                "key": meta["key"],
+                "name": meta["name"],
+                "configured": True,
+                "ok": False,
+                "http_status": None,
+                "latency_ms": elapsed,
+                "error": str(exc)[:120],
+            }
+
+    providers = await asyncio.gather(*(_probe(m) for m in _PROVIDER_META))
+    return {"providers": providers}
+
+
 @app.post("/api/env/save")
 async def env_save(request: Request) -> dict:
     """Save provider API key / base_url / model to .env file.

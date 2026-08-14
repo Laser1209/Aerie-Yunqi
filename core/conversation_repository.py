@@ -1028,7 +1028,8 @@ class ConversationRepository:
             f"""SELECT rowid AS history_rowid, message_id, conversation_id,
                        turn_id, role, content, attachments,
                        response_group_id, sequence, channel,
-                       channel_account_id, actor_id, created_at{reply_to_cols}
+                       channel_account_id, actor_id, created_at,
+                       legacy_chat_log_id{reply_to_cols}
                 FROM messages
                 WHERE conversation_id = ?{anchor_sql}{deleted_filter}
                 ORDER BY rowid {order}
@@ -1066,7 +1067,8 @@ class ConversationRepository:
             f"""SELECT rowid AS history_rowid, message_id, conversation_id,
                        turn_id, role, content, attachments,
                        response_group_id, sequence, channel,
-                       channel_account_id, actor_id, created_at{reply_to_cols}
+                       channel_account_id, actor_id, created_at,
+                       legacy_chat_log_id{reply_to_cols}
                 FROM messages
                 WHERE conversation_id IN ({placeholders}){deleted_filter}
                 ORDER BY rowid DESC

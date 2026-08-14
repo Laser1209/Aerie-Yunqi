@@ -48,6 +48,16 @@ function createChatStore({ maxMessages = 500 } = {}) {
     return "";
   }
 
+  // 角色隔离修复：history 用 message_id、poll 用 chat_log.id，两条通道 id 不同
+  // 会导致同一逻辑消息渲染两份。legacy_chat_log_id 关联回 chat_log.id，poll 的
+  // 数字 id 本身也是 chat_log.id，用它做交叉去重，让两条通道互相命中。
+  function legacyDedupKeys(signal) {
+    const keys = [];
+    if (signal.legacy_chat_log_id != null) keys.push("cl:" + signal.legacy_chat_log_id);
+    if (signal.id != null && /^\d+$/.test(String(signal.id))) keys.push("cl:" + signal.id);
+    return keys;
+  }
+
   // 附件补齐：同一条真实消息若已渲染但无附件（实时事件漏附件/先无图后有图），
   // 后续带附件的同 id 消息到达时允许放行一次 upsert 补上图片卡片。
   // 仅当"旧无附件、新有附件"时放行，避免无谓重复渲染。
@@ -219,10 +229,14 @@ function createChatStore({ maxMessages = 500 } = {}) {
           }));
           return intents;
         }
-        if (seenRealIds.has(signal.id)) return intents;
+        const legacyKeys = legacyDedupKeys(signal);
+        if (seenRealIds.has(signal.id) || legacyKeys.some((k) => byKey.has(k))) {
+          return intents;
+        }
         seenRealIds.add(signal.id);
         realIdToDomId.set(signal.id, domId);
         byKey.set("m:" + signal.id, domId);
+        for (const k of legacyKeys) byKey.set(k, domId);
       }
       if (signal.client_id) byKey.set("c:" + signal.client_id, domId);
       intents.push(upsert(domId, {
@@ -234,7 +248,10 @@ function createChatStore({ maxMessages = 500 } = {}) {
     // 普通历史消息(无 request): domId = 真实 id, 消息级去重
     if (signal.id && (signal.role === "user" || signal.role === "assistant")) {
       const key = "m:" + signal.id;
-      if (byKey.has(key) || seenRealIds.has(signal.id)) {
+      const legacyKeys = legacyDedupKeys(signal);
+      const dup = byKey.has(key) || seenRealIds.has(signal.id)
+        || legacyKeys.some((k) => byKey.has(k));
+      if (dup) {
         // 附件补齐：同 id 已渲染但旧无附件、新有附件 → 放行补图，不丢卡片
         const backfillDomId = backfillAttachmentDomId(signal);
         if (backfillDomId) {
@@ -246,6 +263,7 @@ function createChatStore({ maxMessages = 500 } = {}) {
       }
       seenRealIds.add(signal.id);
       byKey.set(key, signal.id);
+      for (const k of legacyKeys) byKey.set(k, signal.id);
       intents.push(upsert(signal.id, { ...signal, id: signal.id, domId: signal.id, msgId: signal.id }));
     }
     return intents;

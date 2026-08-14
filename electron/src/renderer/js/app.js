@@ -207,7 +207,7 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── P4b 管理平台入口（懒加载窗口） ──────────────
-  // 主 logo 连点 5 次 / 关于页版权连点 3 次 / 关于页显式按钮，三路同效。
+  // 主 logo 连点 5 次 / 关于页版权连点 3 次 / 设置页显式按钮，三路同效。
   const adminApi = (window.aerie && window.aerie.admin) || null;
   const openAdmin = () => { if (adminApi && adminApi.show) adminApi.show(); };
 
@@ -242,9 +242,6 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
-
-  const adminBtn = document.getElementById("btn-admin-open");
-  if (adminBtn) adminBtn.addEventListener("click", openAdmin);
 
   const settingsAdminBtn = document.getElementById("settings-admin-btn");
   if (settingsAdminBtn) settingsAdminBtn.addEventListener("click", openAdmin);

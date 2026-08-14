@@ -59,6 +59,8 @@ class CognitionPanel {
     this._currentTrace = null; // last committed trace (used for modal)
     this._searchTimer = null;
     this._pulseTimer = null;
+    // 名字随人设同步：切换/保存人设后即时刷新标题里的角色名
+    window.addEventListener("aerie:persona-updated", () => this._loadPersonaName());
   }
 
   // ── Public lifecycle ─────────────────────────────
@@ -73,12 +75,23 @@ class CognitionPanel {
     this._bindCCModeButtons(); // v2: computer control mode + whitelist/blacklist
     this._bindCCListAdd();
     this._bindDocWriter();      // v13.9: 文档写作模板/样式/导出交互
+    this._loadPersonaName();
     this._loadHistory();
     this._loadStats();
     this._loadPendingProposals();
     this._loadV2DemoData();    // v2: seed demo data for capability tabs
     this._loadQQWhitelist();   // v13.9: load whitelist on init
     setInterval(() => this._loadStats(), 8000);
+  }
+
+  async _loadPersonaName() {
+    try {
+      if (!window.aerie || !window.aerie.api) return;
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/persona" });
+      const name = (r && r.data && r.data.name) || "伊塔";
+      const el = document.getElementById("cognition-persona-name");
+      if (el) el.textContent = name;
+    } catch (_) {}
   }
 
   setVisible(v) {

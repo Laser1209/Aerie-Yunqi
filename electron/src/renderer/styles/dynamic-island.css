@@ -102,7 +102,6 @@ button {
 }
 /* hover 拉长 → 完整展示中间信息 */
 .capsule:not(.open):hover { width: 320px; border-color: var(--di-stroke-strong); }
-.capsule:not(.open):hover .main { max-width: none; }
 .capsule:not(.open):hover .sub { max-width: none; }
 
 /* 展开后胶囊 = 面板头部：拉宽至面板同宽，上圆角保持、下直角无缝连接 */
@@ -157,8 +156,17 @@ button {
 }
 .capsule .main {
   font-size: 12.5px; font-weight: 500; color: var(--di-text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 128px; line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; line-height: 1.15;
   transition: max-width .38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* 超长播放标题轮播（双份文字 + translateX(-50%) 无缝循环） */
+.capsule .main .track { display: inline-flex; white-space: nowrap; will-change: transform; }
+.capsule .main .track .unit { white-space: nowrap; padding-right: 2em; }
+.capsule .main.is-marquee { text-overflow: clip; }
+.capsule .main.is-marquee .track { animation: di-marquee var(--marquee-dur, 8s) linear infinite; }
+@keyframes di-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 .capsule .sub {
   font-size: 9.5px; font-weight: 400; letter-spacing: .06em; color: var(--di-text-low);

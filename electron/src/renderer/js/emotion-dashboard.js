@@ -26,6 +26,8 @@ class EmotionDashboard {
     // R7.5: track the previous tick's PAD so the flow bars can show
     // dP/dt, dA/dt, dD/dt as derivatives of the live state.
     this._prevPad = null;
+    // 名字随人设同步：切换/保存人设后即时刷新标题里的角色名
+    window.addEventListener("aerie:persona-updated", () => this._loadPersonaForDefaults());
   }
 
   init() {
@@ -42,10 +44,16 @@ class EmotionDashboard {
       const r = await window.aerie.api.request({ method: "GET", path: "/api/persona" });
       if (r && r.data && !r.data.error) {
         this._persona = r.data;
+        this._applyPersonaName(r.data.name);
       }
     } catch (_) {
       // Non-fatal — keep using baked-in defaults.
     }
+  }
+
+  _applyPersonaName(name) {
+    const el = document.getElementById("emotion-persona-name");
+    if (el && name) el.textContent = name;
   }
 
   _baselinePad() {

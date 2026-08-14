@@ -253,16 +253,16 @@
     if (!center) center = renderStatusText();
     const plainCenter = center.replace(/<[^>]*>/g, "");
     if (center.includes("cap-media")) {
-      statusMain.textContent = uiState.media.title || "";
+      setMainText(statusMain, uiState.media.title || "", true);
       statusSub.textContent = uiState.media.artist ? `正在播放 · ${uiState.media.artist}` : "";
     } else if (center.includes("cap-notif")) {
-      statusMain.textContent = plainCenter.trim();
+      setMainText(statusMain, plainCenter.trim(), false);
       statusSub.textContent = "";
     } else if (plainCenter.includes("CPU")) {
-      statusMain.textContent = plainCenter.trim();
+      setMainText(statusMain, plainCenter.trim(), false);
       statusSub.textContent = "";
     } else {
-      statusMain.textContent = uiState.statusText;
+      setMainText(statusMain, uiState.statusText, false);
       statusSub.textContent = uiState.statusScene;
     }
   }
@@ -271,6 +271,33 @@
     const moodMap = { joy: "开心", neutral: "平静", sad: "低落", anger: "气鼓鼓", fear: "担心" };
     const mood = moodMap[uiState.companion.mood] || "";
     return `<span class="cap-status">${uiState.statusText}${mood ? ` · ${mood}` : ""}</span>`;
+  }
+
+  function setMainText(el, text, marquee) {
+    el.classList.remove("is-marquee");
+    el.style.removeProperty("--marquee-dur");
+    el.textContent = text || "";
+    if (!marquee || !text) return;
+    // 等布局稳定后检测是否溢出，溢出则用双份文字做无缝轮播（translateX(-50%)）
+    requestAnimationFrame(() => {
+      if (el.scrollWidth > el.clientWidth + 1) {
+        const track = document.createElement("span");
+        track.className = "track";
+        const u1 = document.createElement("span");
+        u1.className = "unit";
+        u1.textContent = text;
+        const u2 = document.createElement("span");
+        u2.className = "unit";
+        u2.textContent = text;
+        track.appendChild(u1);
+        track.appendChild(u2);
+        el.textContent = "";
+        el.appendChild(track);
+        // 时长随标题长度线性放大（约 4~14s），滚动速度大致恒定
+        el.style.setProperty("--marquee-dur", `${Math.max(4, Math.min(14, text.length / 2))}s`);
+        el.classList.add("is-marquee");
+      }
+    });
   }
 
   function renderMediaMini() {

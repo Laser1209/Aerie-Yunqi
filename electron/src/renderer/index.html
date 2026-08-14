@@ -411,7 +411,7 @@
       <!-- Emotion panel -->
       <section id="panel-emotion" class="tab-panel">
         <div class="emotion-dashboard">
-          <h2>伊塔 · 情绪仪表盘</h2>
+          <h2><span id="emotion-persona-name">伊塔</span> · 情绪仪表盘</h2>
 
           <!-- Eruption banner -->
           <div id="emotion-eruption-banner" class="emotion-eruption-banner hidden"></div>
@@ -618,6 +618,8 @@
                 <div class="napcat-actions">
                   <button id="napcat-start-btn" class="btn btn-primary">启动 NapCat</button>
                   <button id="napcat-stop-btn" class="btn btn-secondary">停止</button>
+                  <button id="napcat-download-btn" class="btn btn-secondary hidden">下载 NapCat</button>
+                  <button id="napcat-check-update-btn" class="btn btn-secondary">检查更新</button>
                 </div>
               </div>
               <div id="napcat-qr-zone" class="napcat-qr-zone hidden">
@@ -844,7 +846,6 @@
 
           <div class="about-section about-section--small">
             <p class="about-copyright">© 2026 Aerie · 云栖 — Made with <svg class="icon icon--14 icon--danger" style="vertical-align:-2px;"><use href="#icon-ui-heart"/></svg> for you</p>
-            <button id="btn-admin-open" class="btn btn-ghost about-admin-btn" type="button">管理平台</button>
           </div>
         </div>
       </section>
@@ -1769,7 +1770,7 @@
           <!-- 头部 · header -->
           <div class="cog-header">
             <div class="cog-header-text">
-              <h2>伊塔 · 认知中枢 <small>V2.3 · Cognition Backend</small></h2>
+              <h2><span id="cognition-persona-name">伊塔</span> · 认知中枢 <small>V2.3 · Cognition Backend</small></h2>
               <p class="cog-header-sub">大脑、自进化、操控、整理、写作 — 她的全部内在。</p>
             </div>
             <div class="cog-header-stats">

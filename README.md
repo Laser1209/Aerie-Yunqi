@@ -25,7 +25,7 @@
 
 ## 项目简介 / About
 
-**Aerie · 云栖** 是一个本地优先的 AI 桌面伴侣项目（Local-first AI desktop companion）。她可以是你想要的任何模样——一位能聊到深夜的知己、并肩把事情办成的伙伴，又或者只是那个恰好合拍的「恋人」；不变的是情绪价值，是落在实处的帮助。当前仓库由 **Electron 桌面壳**、**Python 智能内核**、**NapCat QQ 桥接**、**Spotlight 官网**、**World Service 世界模拟侧车** 与 **Android 移动网关** 组成。代码树已完成 P1 陪伴融合、世界模拟、三端撤回、多模态生图、向量知识库与移动端网关等系统性能力实装。
+**Aerie · 云栖** 是一个本地优先的 AI 桌面伴侣项目（Local-first AI desktop companion）。她可以是你想要的任何模样——一位能聊到深夜的知己、并肩把事情办成的伙伴，又或者只是那个恰好合拍的「恋人」；她的目标，是成为一个「像人」的伴侣——情绪价值与落在实处的帮助，是她自然带来的功能。当前仓库由 **Electron 桌面壳**、**Python 智能内核**、**NapCat QQ 桥接**、**Spotlight 官网**、**World Service 世界模拟侧车** 与 **Android 移动网关** 组成。代码树已完成 P1 陪伴融合、世界模拟、三端撤回、多模态生图、向量知识库与移动端网关等系统性能力实装。
 
 ### 当前状态 / Current Status
 
@@ -364,6 +364,41 @@ npm run build:win:alt
 - `Aerie-Cloud-0.3.1-Beta.1-Setup.exe`
 
 历史版本 `0.1.0-beta.1` 已归档至官网「历史版本」区块（`historicalReleases`），不再作为默认下载入口。
+
+---
+
+## API Key 中转网关 / API Relay Gateway
+
+> 语音识别（ASR）与子 Agent 所需的阿里云百炼真实 Key **不打包进安装包**，改用 Cloudflare Worker 中转：真实 Key 只存在 Cloudflare 环境变量，客户端只下发「中转门卡」。
+
+### 架构 / Architecture
+
+```
+Aerie 客户端 ──(Bearer 门卡)──> Cloudflare Worker (api.etta.top) ──(Bearer 真实 Key)──> 阿里云百炼 DashScope
+```
+
+### 关键配置 / Key Config
+
+| 项 / Item              | 值 / Value                                              |
+| ---------------------- | ------------------------------------------------------- |
+| 中转地址 / Base URL    | `https://api.etta.top`                                  |
+| 中转门卡 / Relay Token | `aerie-kFcCr0zyxq4vo50`（泄露可随时在 Cloudflare 更换） |
+| 真实 Key / Real Key    | 仅存 Cloudflare Worker `DASHSCOPE_KEY`（secret），不落地 |
+
+### 打包预设 / Packaged Preset
+
+`config/relay_preset.env`（打包进安装包，仅含门卡、不含真 Key）：
+
+```env
+DASHSCOPE_BASE_URL=https://api.etta.top
+DASHSCOPE_API_KEY=aerie-kFcCr0zyxq4vo50
+AERIE_WS_BASE_URL=https://api.etta.top
+AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
+```
+
+`main.py` 启动时兜底加载该预设（`override=False`，不覆盖用户 `.env` 中已有配置）。`electron-builder.yml` / `package.json` 的 `extraResources` 已显式打包该预设文件。
+
+> 详细原理、Worker 完整代码、环境变量清单、验证结果与注意事项见 Obsidian 模块文档 `AIRelayGateway.md`。
 
 ---
 

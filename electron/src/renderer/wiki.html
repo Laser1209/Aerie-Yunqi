@@ -209,43 +209,40 @@
 
       <section class="card" id="sec-1">
         <h2>1 · 欢迎 <span class="en">Welcome</span></h2>
-        <p><strong>Aerie · 云栖</strong> 是一款 <mark>本地优先</mark> 的 AI 桌面伴侣（Local-first AI desktop companion），由 Electron 桌面壳 + Python 智能内核组成，运行在你的 Windows 上，随时待命。</p>
+        <p><strong>Aerie · 云栖</strong> 是一款 <mark>本地优先</mark> 的 AI 桌面伴侣（Local-first AI desktop companion），运行在你的 Windows 电脑上，随时待命。</p>
         <p>她可以是你想要的任何模样——</p>
         <blockquote style="border-left:3px solid var(--pink); padding:4px 0 4px 14px; color:var(--text); margin:8px 0;">可以是一起看日落的恋人，是深夜愿意听你把话说完的知己，是陪你冲刺的导师，也可以是那个记得你咖啡加几分糖的同行者。Aerie 不定义她是谁，只把「她」交给你。</blockquote>
         <p style="font-style:italic;color:var(--muted);font-size:12.5px;">She can be whoever your heart needs — a companion by the window at dusk, a confidant who stays up with you, a mentor for the long run, or simply the one who remembers how you take your coffee. Aerie doesn't decide who she is. You do.</p>
-        <div class="callout callout-tip"><span class="ci">💡 关于「伊塔」</span>内置默认人设「伊塔（Ita）」只是众多模板之一。你完全可以在「人设」里创建属于自己的角色——朋友、家人、导师、同行者，或任何你想要的关系。她的核心不是「像人」，而是<strong>给你情绪价值，也给你实际帮助</strong>。</div>
+        <div class="callout callout-tip"><span class="ci">💡 关于「伊塔」</span>内置默认人设「伊塔（Ita）」只是众多模板之一。你完全可以在「人设」里创建属于自己的角色——朋友、家人、导师、同行者，或任何你想要的关系。她的核心是<strong>「像人」</strong>——以成为一个懂你、陪你的伴侣为目标；给你情绪价值与实际帮助，是她自然具备的功能。</div>
       </section>
 
       <section class="card" id="sec-2">
         <h2>2 · 快速开始 <span class="en">Quick Start</span></h2>
-        <div class="callout callout-info"><span class="ci">ℹ️ 系统要求 · Requirements</span>Windows 10 1809+ / Windows 11 · Python 3.10+ · Node.js 20+ · 建议 8 GB+ 内存。</div>
+        <div class="callout callout-info"><span class="ci">ℹ️ 运行环境 · Requirements</span>Windows 10 1809+ / Windows 11 · 建议 8 GB+ 内存。无需安装 Python / Node.js，开箱即用。</div>
 
-        <h3>2.1 安装 · Install</h3>
-        <pre><code># 1) Python 虚拟环境
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+        <h3>2.1 下载安装 · Install</h3>
+        <ol>
+          <li>从官网或发布页下载最新的 <mark>安装包</mark>（<code>Aerie-Cloud-…-Setup.exe</code>）。</li>
+          <li>双击运行安装程序，按提示点「下一步」完成安装（也可选「便携版」解压即用）。</li>
+          <li>安装完成后，桌面和开始菜单会出现「Aerie · 云栖」的快捷方式。</li>
+        </ol>
 
-# 2) Electron 桌面端
-cd electron
-npm install</code></pre>
-
-        <h3>2.2 首次启动 · First Launch</h3>
-        <pre><code># 先启动 Python 后端（默认监听 http://127.0.0.1:7890）
-python main.py
-
-# 再启动桌面端
-cd electron
-npm start</code></pre>
-        <div class="callout callout-note"><span class="ci">📝 启动顺序</span>先后端、再前端。后端日志出现 <code>[READY]</code> 标记后再打开桌面端；若桌面端先起，等待 5–10 秒让连接自动重试即可。</div>
+        <h3>2.2 首次打开 · First Launch</h3>
+        <ol>
+          <li>双击桌面上的「Aerie · 云栖」图标，打开软件。</li>
+          <li>首次启动会自动初始化本地内核（加载数据库、准备服务），稍等片刻即可。</li>
+          <li>打开后按引导完成「设置 AI 服务」——填入一个 AI 厂商的 API Key，她就能和你对话了。</li>
+        </ol>
+        <div class="callout callout-note"><span class="ci">📝 小提示</span>软件已内置运行环境，无需你手动安装 Python 或配置依赖；若本机缺少运行环境，软件会自动联网补齐。</div>
 
         <h3>2.3 设置 API Key · Configure API Key</h3>
         <ol>
-          <li>复制 <code>.env.example</code> 为 <code>.env</code>，至少填写一个模型 API Key（如 <code>DASHSCOPE_API_KEY</code> / <code>DEEPSEEK_API_KEY</code> / <code>SILICONFLOW_API_KEY</code> / <code>GEMINI_API_KEY</code>）。</li>
-          <li>或打开桌面端 → 侧边栏「设置」→「API Key」页，选择常用服务商并填入 Key。</li>
+          <li>打开桌面端 → 侧边栏「设置」→「API Key」页。</li>
+          <li>点击「＋ 添加模型」，选择你常用的 AI 服务商，填入它的 API Key 并保存。</li>
           <li>百度地图、搜索、天气等功能 API 留空时会 <mark>自动回退内置免费源</mark>，开箱即用。</li>
         </ol>
-        <div class="callout callout-warning"><span class="ci">⚠️ 密钥安全</span>所有 API Key 只保存在本地 <code>.env</code> 与本地配置中，不会上传到任何地方。请勿把 <code>.env</code> 提交到公开仓库。</div>
+        <div class="callout callout-note"><span class="ci">🖼️ 生图需要单独的 Key</span>想让 Aerie 发图 / 生成图片？生图功能用的是<strong>独立的一份 API Key</strong>，和上面对话用的 Key 不是同一个。没配也不影响聊天，只是发图 / 生成图片暂时用不了。</div>
+        <div class="callout callout-warning"><span class="ci">⚠️ 密钥安全</span>所有 API Key 只保存在你自己的电脑本地，不会上传到任何地方。请勿把密钥泄露给他人或公开分享。</div>
       </section>
 
       <section class="card" id="sec-3">
@@ -256,12 +253,12 @@ npm start</code></pre>
         <ol>
           <li>侧边栏点击「人设」→「新建人设」，进入 AI 向导。</li>
           <li>输入<strong>一句话 / 一段话</strong>角色描述（性格、外貌、口头禅，自由发挥），可选填「你的名字」与「两人故事起因」。</li>
-          <li>点击生成——后端 <mark>5 阶段管线</mark> 自动生成完整人设并套合成熟骨架；生成完成后进入编辑器逐项完善，确认后保存 / 激活。</li>
+          <li>点击生成——AI 会自动生成完整人设（外貌、性格、故事等）；生成完成后进入编辑器逐项完善，确认后保存 / 激活。</li>
         </ol>
-        <div class="callout callout-note"><span class="ci">📝 兜底与安全</span>生成过程任何一环失败都会自动降级为确定性生成，流程永不中断，始终产出可用草稿；生成结果 <mark>只保存、不激活</mark>，由你手动确认。</div>
+        <div class="callout callout-note"><span class="ci">📝 兜底与安全</span>生成过程任何一环失败都会自动降级为内置的确定性生成，流程永不中断，始终产出可用草稿；生成结果 <mark>只保存、不激活</mark>，由你手动确认。</div>
         <ul>
           <li>想跳过 AI 手动创建？向导支持「跳过 AI 生成，手动创建」。</li>
-          <li>内置「伊塔」为 builtin 人设，不可编辑 / 删除，但可随时作为参考。</li>
+          <li>内置「伊塔」是系统自带的默认角色，不可编辑 / 删除，但可随时作为参考。</li>
         </ul>
       </section>
 
@@ -281,7 +278,7 @@ npm start</code></pre>
             <tr><td><strong>多端互联 · Multi-client</strong></td><td>Android 移动网关、QQ（NapCat）桥接、三端撤回与统一引用</td></tr>
           </tbody>
         </table>
-        <div class="callout callout-info"><span class="ci">ℹ️ 更多细节</span>各模块的实现入口与技术底座见知识库「模块总览」「技术总览」；当前能力的最新状态见「当前状态」页。</div>
+        <div class="callout callout-info"><span class="ci">ℹ️ 更多细节</span>想了解某个功能的更多用法？随时翻阅应用内的这份「使用指南」，或在左侧导航跳转到对应章节。</div>
       </section>
 
       <section class="card" id="sec-5">
@@ -316,13 +313,13 @@ npm start</code></pre>
           <li><strong>办公模式</strong>：文件保存位置。</li>
           <li><strong>自进化 L4</strong>（内测，默认关闭）：开启需两次风险确认，24 小时内可回滚。</li>
         </ul>
-        <div class="callout callout-warning"><span class="ci">⚠️ 高级（YAML）视图</span>修改 <code>settings.yaml</code> / <code>persona.yaml</code> / <code>proactive.yaml</code> 前会自动备份；「改坏了她会不开心」。</div>
+        <div class="callout callout-warning"><span class="ci">⚠️ 高级设置</span>修改配置文件前会自动备份；「改坏了她会不开心」。</div>
       </section>
 
       <section class="card" id="sec-7">
         <h2>7 · 隐私与数据 <span class="en">Privacy &amp; Data</span></h2>
         <ul>
-          <li><mark>本地优先</mark>：聊天记录、记忆、配置、生成图片等数据默认保存在本地 <code>data/</code> 目录，不依赖云端。</li>
+          <li><mark>本地优先</mark>：聊天记录、记忆、配置、生成图片等数据默认保存在你自己的电脑本地，不依赖云端。</li>
           <li><strong>API Key</strong>：只存本地，不上传。</li>
           <li><strong>诊断包（Diagnostics）</strong>：
             <ul>
@@ -342,15 +339,14 @@ npm start</code></pre>
         <table>
           <thead><tr><th>问题 · Question</th><th>处理 · Fix</th></tr></thead>
           <tbody>
-            <tr><td>后端启动失败</td><td>依赖未装或 Python 版本不符 → 重新 <code>pip install -r requirements.txt</code></td></tr>
-            <tr><td>伊塔不回复</td><td>未配置可用模型 Key → 检查 <code>.env</code> 至少一个 <code>*_API_KEY</code></td></tr>
-            <tr><td>QQ 收不到消息</td><td>NapCat 未启动 → 运行 <code>NapCat\NapCat.Shell\launcher-user.bat</code></td></tr>
-            <tr><td>桌面端白屏</td><td>渲染资源或 CSP 问题 → 查看 Electron DevTools 与日志</td></tr>
-            <tr><td>世界模拟不生效</td><td>未开启世界模拟开关（<code>world_inprocess_v1</code> / <code>world_sidecar_v1</code>）</td></tr>
-            <tr><td>自动发图不触发</td><td><code>world_image_candidates_v1</code> 关闭 → 在设置中开启</td></tr>
-            <tr><td>附件无语义检索</td><td><code>chromadb</code> 未安装或缺少 embedding Key</td></tr>
-            <tr><td>我的数据存在哪</td><td>本地 <code>data/</code> 目录；聊天与记忆数据库均在本地</td></tr>
-            <tr><td>如何找回误删内容</td><td>管理平台提供聊天记录软删回收站、状态文件查看 / 重置</td></tr>
+            <tr><td>软件打不开 / 卡在启动</td><td>重启软件试试；仍不行就到官网反馈，我们会帮你排查</td></tr>
+            <tr><td>伊塔不回复</td><td>还没有可用的 AI 服务 → 到「设置 → API Key」填好 Key 再试</td></tr>
+            <tr><td>QQ 收不到消息</td><td>QQ 连接未就绪 → 在软件里重新连接 QQ</td></tr>
+            <tr><td>界面显示异常 / 白屏</td><td>重启软件试试</td></tr>
+            <tr><td>世界模拟不生效</td><td>未开启世界模拟 → 在设置里打开</td></tr>
+            <tr><td>主动发图不触发</td><td>未开启主动发图 → 在设置里打开</td></tr>
+            <tr><td>我的数据存在哪</td><td>都保存在你自己的电脑本地，不依赖云端</td></tr>
+            <tr><td>如何找回误删内容</td><td>管理平台提供聊天记录回收站，可查看 / 恢复</td></tr>
           </tbody>
         </table>
 

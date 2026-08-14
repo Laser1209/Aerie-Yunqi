@@ -33,48 +33,39 @@ cssclasses:
 *She can be whoever your heart needs — a companion by the window at dusk, a confidant who stays up with you, a mentor for the long run, or simply the one who remembers how you take your coffee. Aerie doesn't decide who she is. You do.*
 
 > [!tip] 关于「伊塔」
-> 内置默认人设「伊塔（Ita）」只是众多模板之一。你完全可以在「人设」里创建属于自己的角色——朋友、家人、导师、同行者，或任何你想要的关系。她的核心不是「像人」，而是**给你情绪价值，也给你实际帮助**。
+> 内置默认人设「伊塔（Ita）」只是众多模板之一。你完全可以在「人设」里创建属于自己的角色——朋友、家人、导师、同行者，或任何你想要的关系。她的核心是**「像人」**——以成为一个懂你、陪你的伴侣为目标；给你情绪价值与实际帮助，是她自然具备的功能。
 
 ## 2. 快速开始 / Quick Start
 
-> [!info] 系统要求 / Requirements
-> Windows 10 1809+ / Windows 11 · Python 3.10+ · Node.js 20+ · 建议 8 GB+ 内存。
+> [!info] 运行环境 / Requirements
+> Windows 10 1809+ / Windows 11 · 建议 8 GB+ 内存。无需安装 Python / Node.js，开箱即用。
 
-### 2.1 安装 / Install
+### 2.1 下载安装 / Install
 
-```powershell
-# 1) Python 虚拟环境
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+1. 从官网或发布页下载最新的**安装包**（`Aerie-Cloud-…-Setup.exe`）。
+2. 双击运行安装程序，按提示点「下一步」完成安装（也可选「便携版」解压即用）。
+3. 安装完成后，桌面和开始菜单会出现「Aerie · 云栖」的快捷方式。
 
-# 2) Electron 桌面端
-cd electron
-npm install
-```
+### 2.2 首次打开 / First Launch
 
-### 2.2 首次启动 / First Launch
+1. 双击桌面上的「Aerie · 云栖」图标，打开软件。
+2. 首次启动会自动初始化本地内核（加载数据库、准备服务），稍等片刻即可。
+3. 打开后按引导完成「设置 AI 服务」——填入一个 AI 厂商的 API Key，她就能和你对话了。
 
-```powershell
-# 先启动 Python 后端（默认监听 http://127.0.0.1:7890）
-python main.py
-
-# 再启动桌面端
-cd electron
-npm start
-```
-
-> [!note] 启动顺序
-> 先后端、再前端。后端日志出现 `[READY]` 标记后再打开桌面端；若桌面端先起，等待 5–10 秒让连接自动重试即可。
+> [!note] 小提示
+> 软件已内置运行环境，无需你手动安装 Python 或配置依赖；若本机缺少运行环境，软件会自动联网补齐。
 
 ### 2.3 设置 API Key / Configure API Key
 
-1. 复制 `.env.example` 为 `.env`，至少填写一个模型 API Key（如 `DASHSCOPE_API_KEY` / `DEEPSEEK_API_KEY` / `SILICONFLOW_API_KEY` / `GEMINI_API_KEY`）。
-2. 或打开桌面端 → 侧边栏「设置」→「API Key」页，选择常用服务商并填入 Key。
+1. 打开桌面端 → 侧边栏「设置」→「API Key」页。
+2. 点击「＋ 添加模型」，选择你常用的 AI 服务商，填入它的 API Key 并保存。
 3. 百度地图、搜索、天气等功能 API 留空时会 ==自动回退内置免费源==，开箱即用。
 
+> [!note] 生图需要单独的 Key
+> 想让 Aerie 发图 / 生成图片？生图功能用的是**独立的一份 API Key**，和上面对话用的 Key 不是同一个。没配也不影响聊天，只是发图 / 生成图片暂时用不了。
+
 > [!warning] 密钥安全
-> 所有 API Key 只保存在本地 `.env` 与本地配置中，不会上传到任何地方。请勿把 `.env` 提交到公开仓库。
+> 所有 API Key 只保存在你自己的电脑本地，不会上传到任何地方。请勿把密钥泄露给他人或公开分享。
 
 ## 3. 创建你的第一个角色 / Create Your Persona
 
@@ -85,13 +76,13 @@ npm start
 
 1. 侧边栏点击「人设」→「新建人设」，进入 AI 向导。
 2. 输入**一句话/一段话**角色描述（性格、外貌、口头禅，自由发挥），可选填「你的名字」与「两人故事起因」。
-3. 点击生成——后端 ==5 阶段管线== 自动生成完整人设并套合成熟骨架；生成完成后进入编辑器逐项完善，确认后保存/激活。
+3. 点击生成——AI 会自动生成完整人设（外貌、性格、故事等）；生成完成后进入编辑器逐项完善，确认后保存/激活。
 
 > [!note] 兜底与安全
 > 生成过程任何一环失败都会自动降级为确定性生成，流程永不中断，始终产出可用草稿；生成结果 ==只保存、不激活==，由你手动确认。详见 [[modules/PersonaGenerator]]。
 
 - 想跳过 AI 手动创建？向导支持「跳过 AI 生成，手动创建」。
-- 内置「伊塔」为 builtin 人设，不可编辑/删除，但可随时作为参考。
+- 内置「伊塔」是系统自带的默认角色，不可编辑/删除，但可随时作为参考。
 
 ## 4. 核心功能概览 / Core Features
 
@@ -108,7 +99,7 @@ npm start
 | **多端互联 / Multi-client** | Android 移动网关、QQ（NapCat）桥接、三端撤回与统一引用 |
 
 > [!info] 更多细节
-> 想了解每个模块的实现入口与技术底座，参见 [[01_模块总览]] 与 [[02_技术总览]]；当前能力的最新状态见 [[09_当前状态]]。
+> 想了解某个功能的更多用法？随时翻阅应用内的「使用指南」。
 
 ## 5. 快捷键速查 / Shortcuts
 
@@ -162,15 +153,14 @@ npm start
 
 | 问题 / Question | 处理 / Fix |
 | --- | --- |
-| 后端启动失败 | 依赖未装或 Python 版本不符 → 重新 `pip install -r requirements.txt` |
-| 伊塔不回复 | 未配置可用模型 Key → 检查 `.env` 至少一个 `*_API_KEY` |
-| QQ 收不到消息 | NapCat 未启动 → 运行 `NapCat\NapCat.Shell\launcher-user.bat` |
-| 桌面端白屏 | 渲染资源或 CSP 问题 → 查看 Electron DevTools 与日志 |
-| 世界模拟不生效 | 未开启世界模拟开关（`world_inprocess_v1` / `world_sidecar_v1`） |
-| 自动发图不触发 | `world_image_candidates_v1` 关闭 → 在设置中开启 |
-| 附件无语义检索 | `chromadb` 未安装或缺少 embedding Key |
-| 我的数据存在哪 | 本地 `data/` 目录；聊天与记忆数据库均在本地 |
-| 如何找回误删内容 | 管理平台提供聊天记录软删回收站、状态文件查看 / 重置 |
+| 软件打不开 / 卡在启动 | 重启软件试试；仍不行就到官网反馈，我们会帮你排查 |
+| 伊塔不回复 | 还没有可用的 AI 服务 → 到「设置 → API Key」填好 Key 再试 |
+| QQ 收不到消息 | QQ 连接未就绪 → 在软件里重新连接 QQ |
+| 界面显示异常 / 白屏 | 重启软件试试 |
+| 世界模拟不生效 | 未开启世界模拟 → 在设置里打开 |
+| 主动发图不触发 | 未开启主动发图 → 在设置里打开 |
+| 我的数据存在哪 | 都保存在你自己的电脑本地，不依赖云端 |
+| 如何找回误删内容 | 管理平台提供聊天记录回收站，可查看 / 恢复 |
 
 ### 免责声明 / Disclaimer
 

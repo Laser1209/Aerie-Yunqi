@@ -44,8 +44,9 @@ window.OnboardingController = class OnboardingController {
         subtitle: "先让 Aerie 学会说话：选择服务商并填入 API Key。",
         nav: () => this._navigateSettings("apikey"),
         body: () =>
-          '<p class="onb-p">已为你打开 <b>设置 → API Key</b>。点击右上角的「添加 API」按钮，选择 AI 服务商并填入你的 API Key，保存后回来校验。</p>'
+          '<p class="onb-p">已为你打开 <b>设置 → API Key</b>。点击右上角的「＋ 添加模型」按钮，选择 AI 服务商并填入你的 API Key，保存后回来校验。</p>'
           + '<p class="onb-hint">密钥只保存在本地，不会上传到任何地方。</p>'
+          + '<p class="onb-hint">想让她发图 / 生成图片？生图需要单独的专属 API（<code>IMAGE_GEN_*</code>），和对话 AI 的 Key 是分开的。</p>'
           + '<div class="onb-status" id="onb-api-status"></div>',
         primary: { label: "我已填好 API Key", action: () => this._verifyApiKey() },
       },

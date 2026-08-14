@@ -636,8 +636,7 @@ class PersonaHubPanel {
       return;
     }
 
-    if (!confirm("确定要删除这个人设吗？\n\n删除后会将它隐藏，数据仍保留在本地；当所有角色都被隐藏时，会自动恢复内置「伊塔」。")) return;
-
+    // 静默删除：内置伊塔仅隐藏，其它角色物理删除；不弹任何确认框
     try {
       await window.aerie.api.request({
         method: "DELETE",
@@ -647,7 +646,6 @@ class PersonaHubPanel {
       this._showList();
     } catch (e) {
       console.error("delete persona failed:", e);
-      alert("删除失败: " + (e.message || "unknown"));
     }
   }
 

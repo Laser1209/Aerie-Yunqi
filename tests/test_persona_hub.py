@@ -144,11 +144,20 @@ class TestPersonaManager(unittest.TestCase):
         personas = self.mgr.list_personas()
         ids = [p["id"] for p in personas]
         self.assertNotIn("test_persona", ids)
+        # 其它角色物理删除：内存中也一并移除
+        self.assertFalse(self.mgr.has_persona("test_persona"))
 
-    def test_delete_builtin_fails(self):
+    def test_delete_builtin_hides_not_removes(self):
+        # 先切到自定义角色，让伊塔处于非激活态
+        self.mgr.create_persona(json.loads(json.dumps(VALID_PERSONA)))
+        self.mgr.switch_persona("test_persona")
+
+        # 删除伊塔：仅隐藏，数据保留（不物理删除）
         ok, msg = self.mgr.delete_persona("yita_default")
-        self.assertFalse(ok)
-        self.assertIn("不可删除", msg)
+        self.assertTrue(ok, msg)
+        self.assertTrue(self.mgr.has_persona("yita_default"))
+        ids = [p["id"] for p in self.mgr.list_personas()]
+        self.assertNotIn("yita_default", ids)
 
     def test_delete_active_falls_back_to_default(self):
         self.mgr.create_persona(json.loads(json.dumps(VALID_PERSONA)))

@@ -17,10 +17,8 @@ from core.persona_hub.persona_manager import get_persona_manager
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CONFIG_DIR = _PROJECT_ROOT / "config"
 _DATA_DIR = _PROJECT_ROOT / "data"
-# 角色级隔离：头像按 persona_id 分区存储，旧全局路径仅用于一次性迁移
-_PERSONA_AVATAR_DIR = _DATA_DIR / "persona"
+# 角色级隔离：头像按 persona_id 分区存储
 _PERSONA_AVATARS_ROOT = _DATA_DIR / "personas" / "avatars"
-_PERSONA_AVATAR_PATH = _PERSONA_AVATAR_DIR / "avatar.png"
 _AVATAR_BACKUP_RETENTION_DAYS = 28
 
 _DEFAULTS = {
@@ -314,23 +312,11 @@ def get_persona_summary() -> dict[str, Any]:
 
 
 def _avatar_dir(persona_id: str) -> Path:
-    """按 persona 分区返回头像目录（含一次性迁移旧全局头像）。"""
+    """按 persona 分区返回头像目录。"""
     safe = "".join(c for c in str(persona_id or "default") if c.isalnum() or c in "-_")
     if not safe:
         safe = "default"
-    d = _PERSONA_AVATARS_ROOT / safe
-    # 一次性迁移：旧全局头像归属当前 persona（仅当分区无头像时）
-    if not d.exists() and _PERSONA_AVATAR_DIR.exists():
-        for ext in ("png", "jpg", "jpeg"):
-            legacy = _PERSONA_AVATAR_DIR / f"avatar.{ext}"
-            if legacy.exists():
-                d.mkdir(parents=True, exist_ok=True)
-                try:
-                    shutil.copy2(legacy, d / f"avatar.{ext}")
-                except OSError:
-                    pass
-                break
-    return d
+    return _PERSONA_AVATARS_ROOT / safe
 
 
 def save_avatar_bytes(data: bytes, ext: str = "png", persona_id: str | None = None) -> str:

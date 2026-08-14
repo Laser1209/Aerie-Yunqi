@@ -381,24 +381,52 @@ class PersonaManager:
         return True, persona_id
 
     def delete_persona(self, persona_id: str) -> Tuple[bool, str]:
-        """伪删除：隐藏人设（保留数据），全部隐藏后自动恢复伊塔。"""
+        """删除人设：内置伊塔仅隐藏保留数据；其它角色物理删除（文件+三视图）。"""
         with self._rw_lock:
             if persona_id not in self._personas:
                 return False, f"人设不存在: {persona_id}"
 
-            p = self._personas[persona_id]
-            p["is_hidden"] = True
-            self._save_persona(persona_id, p)
+            # 内置伊塔：不可物理删除，仅隐藏（数据保留在本地）
+            if persona_id == "yita_default":
+                p = self._personas[persona_id]
+                p["is_hidden"] = True
+                self._save_persona(persona_id, p)
 
-            # 删除的是激活人设 → 先恢复伊塔可见，再切回伊塔
+                # 隐藏的是激活人设 → 恢复伊塔可见并切回
+                if self._active_id == persona_id:
+                    p["is_hidden"] = False
+                    self._save_persona("yita_default", p)
+                self._restore_yita_if_all_hidden()
+                return True, "ok"
+
+            # 其它角色：物理删除（内存 + JSON 文件 + 三视图目录）
+            self._personas.pop(persona_id, None)
+            try:
+                (self._personas_dir / f"{persona_id}.json").unlink(missing_ok=True)
+            except OSError:
+                pass
+            tv_dir = self._personas_dir / _THREE_VIEW_DIR_NAME / persona_id
+            if tv_dir.exists():
+                try:
+                    shutil.rmtree(tv_dir)
+                except OSError:
+                    pass
+
+            # 删除的是激活人设 → 切回伊塔（确保伊塔可见）
             if self._active_id == persona_id:
                 yita = self._personas.get("yita_default")
                 if yita:
                     yita["is_hidden"] = False
                     self._save_persona("yita_default", yita)
-                self.switch_persona("yita_default")
+                self._active_id = "yita_default"
+                try:
+                    self._write_json_atomic(
+                        self._active_file, {"active_id": "yita_default"}
+                    )
+                except OSError:
+                    pass
 
-            # 兜底：所有自定义人设都被隐藏后，恢复伊塔显示
+            # 兜底：所有可见角色都被移除后，恢复伊塔显示
             self._restore_yita_if_all_hidden()
 
         return True, "ok"

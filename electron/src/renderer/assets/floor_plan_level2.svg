@@ -105,7 +105,7 @@
 <text x="305.6" y="312.0" font-size="7" fill="#64748B" text-anchor="end" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" transform="rotate(-90,305.6,312.0)">资</text>
 <text x="305.6" y="326.4" font-size="7" fill="#64748B" text-anchor="end" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" transform="rotate(-90,305.6,326.4)">料</text>
 <text x="305.6" y="340.8" font-size="7" fill="#64748B" text-anchor="end" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" transform="rotate(-90,305.6,340.8)">柜</text>
-<rect x="356.0" y="481.2" width="288.0" height="28.8" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
+<rect x="226.0" y="525" width="432.0" height="60" fill="#F8FAFC" stroke="#64748B" stroke-width="1" />
 <text x="500.0" y="501.4" font-size="7" fill="#64748B" text-anchor="middle" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >矮柜</text>
 <rect x="647.6" y="207.6" width="7.2" height="122.4" fill="#F8FAFC" stroke="#64748B" stroke-width="1.2" />
 <text x="665.6" y="272.4" font-size="6" fill="#64748B" text-anchor="start" font-weight="normal" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >软木板</text>
@@ -143,8 +143,8 @@
 <text x="485.6" y="376.8" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >18.5㎡</text>
 <text x="802.4" y="243.6" font-size="14" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >主卫</text>
 <text x="802.4" y="268.8" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >5.8㎡</text>
-<text x="442.4" y="474.0" font-size="14" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >桥廊</text>
-<text x="442.4" y="499.2" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >7.2㎡</text>
+<text x="442.4" y="550.0" font-size="14" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >桥廊</text>
+<text x="442.4" y="565" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >7.2㎡</text>
 <text x="752.0" y="582.0" font-size="13" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >衣帽间</text>
 <text x="752.0" y="607.2" font-size="12" fill="#475569" text-anchor="middle" font-weight="400" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >4.5㎡</text>
 <text x="802.4" y="754.8" font-size="18" fill="#111827" text-anchor="middle" font-weight="700" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif" >主卧</text>

@@ -11,17 +11,17 @@ All notable changes to this project will be documented in this file.
 
 ## 版本时间线 / Release Timeline
 
-| 版本 / Version      | 日期 / Date   | 主题 / Theme                                                          |
-| ------------------- | ------------- | --------------------------------------------------------------------- |
-| `0.3.1-Beta.1`    | 2026-08-14    | 三端引用统一（Quote V2）、灵动岛 v2 完善、诊断遥测、发布前收尾          |
-| `0.3.0-Beta.1`    | 2026-08-13    | 上下文记忆系统 P0-P3、后台管理平台、世界精确定位、生图加固、多 Key 轮询 |
-| `0.2.1-beta.1`    | 2026-08-11    | 发图链路、伊塔人设重写、世界迁移重庆、百度地图、身份锚定                |
-| `0.2.0-beta.1`    | 2026-08-10    | 陪伴融合 P1、三端撤回、多模态生图、向量知识库、移动端网关               |
-| `0.1.0-beta.1`    | 2026-07-19    | 内测基线（自 13.9.8 重置版本号）                                       |
-| `13.9.x`          | 2026-07-18/19 | 办公模式、权限体系、任务执行、审计收尾                                  |
-| `13.0.0`          | 2026-07-18    | 办公模式 + 双层回复校验 + 事件驱动推送 + Persona Hub                    |
-| `12.x`            | 2026-07-18    | 桌面灵动岛 + Agent 能力底座                                            |
-| `9.0.0`           | 2026-07-16    | 首个可分发的完整版本（Electron + Python + QQ 桥接）                    |
+| 版本 / Version   | 日期 / Date   | 主题 / Theme                                                            |
+| ---------------- | ------------- | ----------------------------------------------------------------------- |
+| `0.3.1-Beta.1` | 2026-08-14    | 三端引用统一（Quote V2）、灵动岛 v2 完善、诊断遥测、发布前收尾          |
+| `0.3.0-Beta.1` | 2026-08-13    | 上下文记忆系统 P0-P3、后台管理平台、世界精确定位、生图加固、多 Key 轮询 |
+| `0.2.1-beta.1` | 2026-08-11    | 发图链路、伊塔人设重写、世界迁移重庆、百度地图、身份锚定                |
+| `0.2.0-beta.1` | 2026-08-10    | 陪伴融合 P1、三端撤回、多模态生图、向量知识库、移动端网关               |
+| `0.1.0-beta.1` | 2026-07-19    | 内测基线（自 13.9.8 重置版本号）                                        |
+| `13.9.x`       | 2026-07-18/19 | 办公模式、权限体系、任务执行、审计收尾                                  |
+| `13.0.0`       | 2026-07-18    | 办公模式 + 双层回复校验 + 事件驱动推送 + Persona Hub                    |
+| `12.x`         | 2026-07-18    | 桌面灵动岛 + Agent 能力底座                                             |
+| `9.0.0`        | 2026-07-16    | 首个可分发的完整版本（Electron + Python + QQ 桥接）                     |
 
 > 完整变更细节见下方各版本条目。`0.2.1-beta.1` 与 `0.3.1-Beta.1` 的日期为依据相邻版本与提交记录的回填值。
 
@@ -71,6 +71,11 @@ All notable changes to this project will be documented in this file.
 - **检查更新**：新增 `GET /api/napcat/update/check`，读 GitHub API `releases/latest` 的 `tag_name` 比对已安装目录 `package.json` 版本，返回 `latest` / `current` / `has_update` / `installed`
 - **前端 NapCat 面板**：状态页新增「下载 NapCat」「检查更新」按钮；检测到 `launcher_not_found` 时显示下载按钮，下载解压完成后自动启动 NapCat 扫码登录；版本检查给出未安装 / 有新版 / 已最新 / 失败四种提示
 
+#### 启动时 API 连通性探测与警告 / Startup API Connectivity Check
+
+- **连通性探测端点**：新增 `GET /api/providers/connectivity`，并发探测每个已配置 provider 的 `/models` 端点（每源 5s 超时），返回 `ok` / `http_status` / `latency_ms` / `error`；2xx/4xx 视为网络可达（401/403 为鉴权问题但连通），仅连接失败/超时标 `ok=false`
+- **启动即检查**：后端就绪后前端自动调用探测，发现余额耗尽 / 已禁用 / 连接失败三类异常时，顶部弹出红色 div 警告条（非原生窗口），列出异常 provider 并带「去设置」跳转与关闭按钮
+
 ### 🐛 Fixed / 修复
 
 - **灵动岛 hover 晃动闪烁**：hover 拉长的 `mouseenter/mouseleave` 反复触发窗口 `setBounds` 导致窗口宽度反复跳变 + 收缩定时器未取消互相竞争；改为可取消防抖 + 固定窗口尺寸（不再 resize）
@@ -84,6 +89,8 @@ All notable changes to this project will be documented in this file.
 - **清空/回收站后对话框仍显示记录**：回收站与清空只软删规范化 `messages` 表，桌面轮询/历史直读 `chat_log` 未过滤；新增迁移 `012_chat_log_trash_state` 给 `chat_log` 补 `deleted_at` 并镜像软删状态，admin 回收站/恢复/purge 级联标记 `chat_log`，`/api/chat/poll`、`/api/chat/history` 与消息统计统一加 `deleted_at IS NULL` 过滤
 - **图片渲染成链接**：角标净化正则误把 markdown 图片语法 `![图片](url)` 里的 `[图片]` 当成占位符，替换后 marked 不再识别为图片；修复正则负向后顾/前视排除 `![...](...)` 与 `[...](...)`，并补齐 decoration 缺失的 token 字段
 - **主动消息/生图消息删除遗漏且不显示**：主动消息与生图消息直接写 `chat_log`、未写入 normalized `messages` 层，导致管理平台聊天记录看不到、级联删除也漏掉它们；新增 `ConversationRepository.persist_proactive_message()` 把主动推送/生图同步补进 `messages` 层（归入对应角色桌面/QQ 会话），admin 回收站/恢复/purge 级联兜底软删历史孤儿 `route_mode='PROACTIVE'` 行，并新增 `tools/cleanup_orphan_proactive.py` 手动物理清理历史孤儿行
+- **切换人设后消息重复成两份**：`history_page`（normalized `messages` 表，`id=message_id`）与 `poll`（`chat_log` 表，`id=chat_log.id`）返回的消息 id 不一致，前端 store 去重失效导致同一逻辑消息渲染两份；`history_page` 补查 `legacy_chat_log_id`，前端 store 新增 `cl:` + chat_log.id 交叉去重，两条通道互相命中
+- **生图 API 超时**：`_provider_timeout_seconds` 默认 180s 过短，生图中转站响应慢时触发 `ReadTimeout` 导致图片生成失败；默认超时上调至 300s、上限 600s
 
 ### 🧪 Tests / 测试
 
@@ -93,6 +100,7 @@ All notable changes to this project will be documented in this file.
 - 灵动岛 v2 CDP 真实窗口回归：窗口 742×704、hover 320 / 展开 340 / 宽屏 720 全无裁切、动态穿透链路（胶囊外穿透 → 胶囊上接收 → ALT 强制穿透）、配置重启恢复
 - 消息/聊天链路修复回归：`test_admin_service` / `test_admin_api` / `test_desktop_shared_api_contract` / `test_desktop_chat_continuity` 44 passed；`test_phase3_conversation_model` / `test_message_batcher` / `test_api` 63 passed
 - NapCat 下载/路径回归：`test_napcat_launcher_lifecycle.py` 更新（路径解析优先级 / 启动器自适应 / 一键下载目录定位），4 passed
+- 聊天去重回归：`chat-store` 11 用例通过；conversation model / API 契约 / persona 隔离 36 passed
 
 ---
 
@@ -254,7 +262,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.1-beta.1] - 2026-08-11
 
 > **自 0.2.0-beta.1 以来的增量迭代 / Incremental iteration since 0.2.0-beta.1**
-> 聚焦发图体验、伊塔人设重写、世界模拟迁移重庆、百度地图接入、对话知识库、身份锚定与稳定性修复。
+> 聚焦发图体验、人设重写、世界模拟迁、百度地图接入、对话知识库、身份锚定与稳定性修复。
 
 ### ✨ Features / 新功能
 

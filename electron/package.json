@@ -1,7 +1,7 @@
 {
   "name": "aerie-companion",
-  "productName": "Aerie-Cloud",
-  "version": "0.3.1-Beta.1",
+  "productName": "Aerie · 云栖",
+  "version": "0.3.1-BETA.0815A4",
   "description": "Aerie - Local-first AI companion with auto-wake proactive messenger",
   "main": "src/main.js",
   "scripts": {
@@ -28,7 +28,7 @@
   },
   "build": {
     "appId": "com.laser.aerie",
-    "productName": "Aerie-Cloud",
+    "productName": "Aerie · 云栖",
     "directories": {
       "output": "dist",
       "buildResources": "builder"
@@ -104,7 +104,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Aerie-Cloud",
+      "shortcutName": "Aerie · 云栖",
       "include": "builder/installer.nsh"
     }
   }

@@ -2,7 +2,7 @@
 # This file is the source of truth for Windows packaging.
 # `package.json` mirrors the same settings under `build` for npm run build:win.
 appId: com.laser.aerie
-productName: Aerie-Cloud
+productName: Aerie · 云栖
 copyright: Copyright © 2026 Laser
 artifactName: ${productName}-${version}-${arch}.${ext}
 
@@ -90,7 +90,14 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Aerie-Cloud
+  shortcutName: Aerie · 云栖
+  deleteAppDataOnUninstall: false
+  include: builder/installer.nsh
+  displayLanguageSelector: false
+  installerLanguages:
+    - simpchinese
+    - enus
+  language: "2052"
   deleteAppDataOnUninstall: false
   include: builder/installer.nsh
   displayLanguageSelector: false

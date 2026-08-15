@@ -1,4 +1,4 @@
-# Aerie · 云栖 V 0.3.1-Beta.1
+# Aerie · 云栖 V 0.3.1-beta.0815
 
 > **本地优先的 AI 桌面伴侣 / Local-first AI desktop companion**
 > 把陪伴写成你想要的模样——一个随你所想、由你定义的 TA。
@@ -31,7 +31,7 @@
 
 | 项目 / Item                            | 状态 / Status                                                                                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **版本 / Version**               | `0.3.1-Beta.1` 内测基线                                                                                                                    |
+| **版本 / Version**               | `0.3.1-beta.0815` 内测基线                                                                                                                    |
 | **桌面端 / Desktop**             | Electron 28 + 渲染层多面板 UI + 灵动岛                                                                                                       |
 | **后端 / Backend**               | Python 3.10+ aiohttp + asyncio · LLMCaller 统一调用层                                                                                       |
 | **QQ 接入 / QQ Bridge**          | NapCat OneBot11 WebSocket · 三端撤回 (QQ/本地/微信预留)                                                                                     |
@@ -46,7 +46,10 @@
 | **角色隔离 / Persona Isolation** | 多角色对话/记忆/头像/图片产出按`persona_id` 隔离 · 会话 ID 按角色哈希 · admin 记录角色标注                                               |
 | **24h 持续监听 / 24H Mon**       | 欲望引擎 / 话题追踪 / 情绪触发 24h 轮询 · watchdog 崩溃自动拉起 · 断点续采 (start-24h-monitor.bat)                                         |
 | **验证 / Tests**                 | 127 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、P0-P3 上下文记忆、管理平台、v13.9、E2E) + 17 个 Electron 测试文件                           |
-| **交付 / Release**               | `0.3.1-Beta.1` 安装包与便携版已构建（Setup + Portable），官网下载页已同步；`0.1.0-beta.1` 归档至官网「历史版本」区块                    |
+| **交付 / Release**               | `0.3.1-beta.0815` 安装包与便携版已构建（Setup + Portable）；`0.1.0-beta.1` 归档至官网「历史版本」区块                    |
+
+> [!NOTE] 安装耗时说明 / Install time
+> 安装需 **3–5 分钟**：安装包内含完整的本地 Python 运行环境（数百 MB、上万个文件），进度条按文件逐个推进，**前期移动缓慢属正常现象**，请耐心等待，不要强行关闭。装完可在完成页勾选「立即运行」直接启动（会弹 UAC 管理员确认）。
 
 ---
 
@@ -189,6 +192,9 @@ cd NapCat\NapCat.Shell
 
 > [!NOTE] QQ 桥接是可选能力 / QQ bridge is optional
 > NapCat 仅用于 QQ 收发消息。**不装 NapCat 也能正常使用**：桌面端聊天、生图、世界模拟、办公、上下文记忆、后台管理等核心能力不受影响；主动消息会自动改走桌面端（气泡 + 系统通知），生图会自动切到本地聊天通道。启动时若检测不到 QQ，后端会等待最多 30 秒（`qq.startup_wait_timeout`）后自动进入「降级模式」照常运行，不会卡住或崩溃。
+
+> [!IMPORTANT] QQ 聊天需要两个 QQ 号 / Two QQ accounts are required for QQ chat
+> 一个号给 Aerie 当**机器人**（NapCat 扫码登录、常驻运行收发消息），另一个号是**你自己的主身份**（在「设置 → 常用 → 主身份」填写，或后端 `AERIE_PRIMARY_USER_ID` / `runtime_config.json` 的 `primary_user_id`）。用你的号把机器人号加为好友后，聊天区即解锁；不同好友各自独立会话。QQ 不允许同一账号在两台电脑**同时**登录——多端使用时应让机器人常驻一台电脑，其他设备走移动网关（7891）/ Android 客户端访问。
 
 ### 4. 启动 Python 后端
 
@@ -453,6 +459,8 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 | T12 | **对话框里出现大量 `[]` 符号**（`[图片]` / `[图片:描述]` / `[表情包]` / `[图片内容]` 等），显得出戏 | 多模态占位符是给 LLM 看的上下文元数据，被当普通文本直接渲染进气泡；图片消息本身还带 attachments 缩略图，正文里的占位符纯冗余                                                                                                                                                                                                                                                                                                                            | 1. 渲染层角标净化：图片/表情占位符转小角标图标，描述默认隐藏、hover/点击才展开。2. `[话题：xxx]` 等系统上下文注入防御性剥离，永不落展示层。**预防**：区分"给 LLM 的上下文"与"给用户看的正文"，多模态元数据永不直接进展示层。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | T13 | **最近聊天记录里图片变成链接文本，无法显示**                                                                  | 角标净化正则把 markdown 图片语法`![图片](url)` 里的 `[图片]` 误当占位符，替换后 marked 不再识别为图片；且 decoration 对象漏存 token，角标替换失效                                                                                                                                                                                                                                                                                                   | 1. 正则加负向后顾/前视排除`![...](...)` 与 `[...](...)` 两种 markdown 语法。2. decoration 补齐 token 字段，让角标替换生效。**预防**：净化/改写 Markdown 的规则必须先跑 markdown 语法单测，覆盖图片/链接/占位符三类输入。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | T14 | **删除聊天记录后，主动消息/生图消息删不掉且不显示在聊天记录** | 主动消息与生图消息直接写 `chat_log`、不写 normalized `messages` 层；admin 聊天记录（读 `messages`）看不到它们，级联删除又依赖 `legacy_chat_log_id` 关联而漏掉这些孤儿行 | 1. 新增 `ConversationRepository.persist_proactive_message()`，主动消息/本地生图/QQ 生图在写 `chat_log` 后同步补 `messages` 行，归入对应角色桌面(`desktop`/`local`)或 QQ(`qq`/主用户号)会话，管理平台可见 + 删除随角色会话级联覆盖。2. admin 回收站/恢复/purge 级联兜底软删历史孤儿 `route_mode='PROACTIVE'` 行（按 `persona_id` 匹配）。3. 历史遗留孤儿行用 `tools/cleanup_orphan_proactive.py` 手动物理清理（dry-run 预览 / `--apply` 删除+VACUUM）。**预防**：任何"直接写 chat_log"的旁路消息（主动推送/生图）都必须同步补 normalized 层，禁止单落 legacy 表。 |
+| T15 | **切换人设后对话框消息复制成两份**（管理平台聊天记录只有一份，属渲染层重复） | `history_page`（normalized `messages` 表，`id=message_id`）与 `poll`（`chat_log` 表，`id=chat_log.id`）返回的消息 id 不一致，前端 store 去重失效，同一逻辑消息渲染两次 | 1. `history_page` 补查 `legacy_chat_log_id`（关联回 `chat_log.id`）。2. 前端 `chat-store` 新增 `legacyDedupKeys`，用 `cl:` + chat_log.id 做交叉去重，两通道互相命中。3. 回归：`chat-store` 11 用例 + conversation model / API 契约 / persona 隔离 36 passed。**预防**：聊天消息所有通道必须用统一 id 语义做去重，禁止 normalized 与 legacy 两套 id 各自为政 |
+| T16 | **要图片语义已识别，但生图不产出**（日志 `httpcore.ReadTimeout`） | 生图 API 中转站响应慢，provider 超时默认 180s 过短，触发 `ReadTimeout` 导致图片生成失败 | 1. `_provider_timeout_seconds` 默认上调 300s、上限 600s。2. 确认 `.env` 未显式写死 `AERIE_IMAGE_PROVIDER_TIMEOUT_SECONDS`（否则需同步改）。3. 检查 `IMAGE_GEN_BASE_URL` / `IMAGE_GEN_API_KEY` 可用性。**预防**：生图属长耗时外部依赖，超时要给足余量，并保留清晰的 provider 失败日志 |
 
 ---
 
@@ -511,6 +519,8 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 | 深夜/凌晨发"白天照"，时段光线与真实时刻错位 8 小时                                                                                                                                                | 世界模拟时钟与生图时间注入均用 UTC 未转本地（+08:00），凌晨 02:02 被当 UTC 18:02 判成`afternoon`                                                                                                                        | 已统一到`LOCAL_TZ` 并 `astimezone` 归一（详见下方深度排查 14）                                                                                                                                                                                                                                                                                             |
 | 生图提示词为空（empty_prompt）秒拒、无图片产出                                                                                                                                                    | `_image_prompt_for` 世界数据接力异常被 `_resolve_prompt` 的 `except: return ""` 静默吞成空串，generate_image 以 empty_prompt 拒绝                                                                                   | 已实现两层兜底：`_image_prompt_for` 异常退回基础提示词；`_resolve_prompt` 异常/空返回非空占位；吞错日志升 `warning`（详见下方深度排查 19）                                                                                                                                                                                                               |
 | 灵动岛 v2 开启后主窗口聊天输入框点击有选中效果但无光标（caret），Tab 能聚焦，重启恢复 / Main chat input shows focus state but no caret after Dynamic Island v2; Tab works; recovers after restart | 灵动岛 v2 为`alwaysOnTop` + `transparent` + blur + 粒子动画的置顶窗口，持续占用 GPU 合成器；合成器负载抖动或重建时，主窗口渲染进程的 caret 合成偶发失效。事件层完全正常（点击、focus、输入均可达），纯属绘制层异常    | 重启应用即恢复；复发时可先按`Alt` 或切换窗口焦点强制合成器刷新，或 `Ctrl+Shift+I` 开合 DevTools 触发重绘；若频繁出现，考虑为主窗口增加渲染进程 watchdog，或降低灵动岛动画/粒子的 GPU 开销（详见下方深度排查 20）                                                                                                                                           |
+
+| 启动后顶部弹出红色「API 连接异常」警告条 | 启动时后端主动探测每个已配置 provider 的 `/models` 连通性；余额耗尽（banned）/ 已禁用（disabled）/ 连接失败（unreachable）任一类命中即触发 | 警告条列出具体异常 provider，点「去设置」跳 API Key 页补填/更换；探测端点 `GET /api/providers/connectivity`（每源 5s 超时），关闭按钮可临时隐藏 |
 
 ---
 

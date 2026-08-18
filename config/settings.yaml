@@ -53,6 +53,8 @@ proactive:
   image_max_per_day: 0
   max_per_day: 0
   min_interval_min: 15
+  # 白天出门（最小版）：白天按概率随机外出一段时间；0=关闭，1.0=每天必出
+  outdoor_probability: 0.5
   photo_min_interval_sec: 0
   system_notifications: true
 qq:

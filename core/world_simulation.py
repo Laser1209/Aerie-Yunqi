@@ -99,6 +99,10 @@ class WorldSnapshot:
     social: str = "private"
     nearby_objects: list[str] = field(default_factory=list)
     available_visual_topics: list[str] = field(default_factory=list)
+    # 白天出门（最小版）：非房间态标记 + 室外地点名。True 时 zone/floor 仅作兼容，
+    # nearby_objects 改用附近真实地点（重庆 POI），生图/上下文走"室外"分支。
+    outdoor: bool = False
+    outdoor_place: str = ""
     instance_id: str = ""
     timestamp: float = 0.0
     weather: str = ""
@@ -171,6 +175,12 @@ class WorldSimulation:
         self._snapshot: WorldSnapshot | None = None
         self._cached_second: int | None = None  # 秒级缓存键
         self._reality: dict[str, Any] = {}  # 真实世界数据（weather/nearby/events）
+        # 白天出门（最小版）：纯状态机，无 LLM/无 DB。
+        self._outdoor = False
+        self._outdoor_place = ""
+        self._outdoor_until_ts = 0.0
+        self._outdoor_day = ""  # 已出门的日期（幂等同构日；当天只会自动出门一次）
+        self._outdoor_probability = float(self.config.get("outdoor_probability", 0.0) or 0.0)
 
     @staticmethod
     def minute(value: str) -> int:
@@ -350,6 +360,76 @@ class WorldSimulation:
             return []
         return [dict(e) for e in events if isinstance(e, dict)]
 
+    # ── 白天出门（最小版）────────────────────────────────────
+    def _pick_outdoor_place(self) -> str:
+        """从真实附近地点(重庆 POI)或内置池中确定性选一个外出地点。"""
+        pool = list(self._reality_nearby_objects())
+        if not pool:
+            pool = ["人民公园", "商圈步行街", "江边步道", "美术馆", "街角咖啡馆"]
+        try:
+            key = _sha256(
+                json.dumps(
+                    {"seed": self.seed, "day": self._outdoor_day or "today"},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
+            return str(pool[int(key[:16], 16) % len(pool)])
+        except Exception:
+            return str(pool[0])
+
+    def go_out(self, place: str = "", duration_min: int = 0) -> dict:
+        """把角色置为室外（白天出门），duration_min<=0 时给 60~120 分钟的确定性时长。"""
+        try:
+            now = self.clock()
+            place = str(place or "").strip() or self._pick_outdoor_place()
+            if not place:
+                return {"accepted": False, "reason": "no_place"}
+            if duration_min <= 0:
+                key = json.dumps(
+                    {"seed": self.seed, "ts": int(now.timestamp()), "dur": 1},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                duration_min = 60 + (int(_sha256(key)[:16], 16) % 61)  # 60-120 分钟
+            self._outdoor = True
+            self._outdoor_place = str(place)
+            self._outdoor_until_ts = int(now.timestamp()) + max(1, int(duration_min)) * 60
+            self._outdoor_day = now.strftime("%Y-%m-%d")
+            return {"accepted": True, "place": self._outdoor_place, "duration_min": int(duration_min)}
+        except Exception:
+            return {"accepted": False, "reason": "outdoor_go_failed"}
+
+    def go_home(self) -> dict:
+        """结束室外状态，回到房间（下一个 tick 自然回落 home）。"""
+        self._outdoor = False
+        self._outdoor_place = ""
+        self._outdoor_until_ts = 0.0
+        self._snapshot = None  # 强制下一 tick 重建快照
+        return {"accepted": True}
+
+    def _maybe_auto_outdoor(self, now: datetime) -> bool:
+        """白天按 outdoor_probability 确定性触发一次出门（每天至多一次）。返回是否触发。"""
+        if self._outdoor or self._outdoor_probability <= 0.0:
+            return False
+        day = now.strftime("%Y-%m-%d")
+        if self._outdoor_day == day:  # 当天已出门（含手动），不再自动
+            return False
+        if not (9 <= int(now.hour) < 18):  # 白天限定
+            return False
+        digest = _sha256(
+            json.dumps(
+                {"seed": self.seed, "day": day, "outdoor_hit": 1},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        roll = (int(digest[:8], 16) % 10000) / 10000.0
+        if roll < self._outdoor_probability:
+            self.go_out()
+            return True
+        return False
+
     # ── main tick ───────────────────────────────────────────────
     def tick(self, action: WorldAction | None = None) -> WorldSnapshot:
         now = self.clock()
@@ -368,6 +448,11 @@ class WorldSimulation:
             and action is None
         ):
             return self._snapshot
+
+        # 白天出门状态机：到时自动回房；白天按概率自动随机出门（幂等同构日）。
+        if self._outdoor and int(now.timestamp()) >= self._outdoor_until_ts:
+            self.go_home()
+        self._maybe_auto_outdoor(now)
 
         phase_name, phase_data = self.phase_for(now)
         location = str(phase_data.get("location", "home"))
@@ -399,6 +484,14 @@ class WorldSimulation:
         # 兜底：zone 解析异常时退化为旧的 home/study 位置描述（保持兼容）。
         if not position and location:
             position = {"home": "一层·家中", "study": "二层·工作室"}.get(location, location)
+
+        # 白天出门：location 切换到室外地点，房间 zone 失效，位置描述用室外语义。
+        if self._outdoor:
+            location = f"out_{self._outdoor_place}"[:32]
+            zone = ""
+            zone_objects = []
+            floor = 0
+            position = f"室外·{self._outdoor_place}"
 
         action_result = None
         if action is not None:
@@ -443,6 +536,10 @@ class WorldSimulation:
         # zone 定位可用时优先用该区域的实际物件（方向5），否则回退旧 (location, activity) 表。
         room_objects = zone_objects if zone_objects else self._compute_nearby_objects(location, activity)
         real_nearby = self._reality_nearby_objects()
+        # 白天出门：附近素材以室外地点/真实 POI 为主，不再叠加房间家具。
+        if self._outdoor:
+            room_objects = []
+            real_nearby = [self._outdoor_place] + real_nearby
         nearby_objects = list(dict.fromkeys(room_objects + real_nearby))[:6]
         visual_topics = self._derive_visual_topics(activity, nearby_objects)
 
@@ -472,6 +569,8 @@ class WorldSimulation:
             social=social,
             nearby_objects=nearby_objects,
             available_visual_topics=visual_topics,
+            outdoor=bool(self._outdoor),
+            outdoor_place=str(self._outdoor_place) if self._outdoor else "",
             instance_id=instance_id,
             timestamp=float(ts),
             ts=ts,

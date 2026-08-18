@@ -738,6 +738,13 @@ class Companion:
         _settings_world = (self.settings or {}).get("world", {}) or {}
         if isinstance(_settings_world, dict):
             self.world_config.update({k: v for k, v in _settings_world.items() if v is not None})
+        # 白天出门（最小版）：从 settings.proactive 注入室外概率（0=关闭）。
+        try:
+            self.world_config["outdoor_probability"] = float(
+                ((self.settings or {}).get("proactive", {}) or {}).get("outdoor_probability", 0.0) or 0.0
+            )
+        except (TypeError, ValueError):
+            self.world_config["outdoor_probability"] = 0.0
         self.world_port = build_world_port(
             feature_flags=self.feature_flags,
             world_config=self.world_config,
@@ -2712,6 +2719,50 @@ class Companion:
         except Exception:
             logger.debug("daily plan consume failed", exc_info=True)
 
+    def _apply_outdoor_command(self, text: str) -> Optional[dict]:
+        """对话"出门/出去走走/带我去 / 回家"指令 → 世界出门/回房（白天出门最小版）。
+
+        命中出门词且不在外面 → go_out；命中"回家"且在外面 → go_home()。
+        返回移动结果描述（供 pipeline 注入上下文）；无相关指令返回 None。
+        """
+        raw = str(text or "").strip()
+        if not raw:
+            return None
+        world = getattr(getattr(self, "world_port", None), "world", None)
+        go_out = getattr(world, "go_out", None)
+        go_home = getattr(world, "go_home", None)
+        if not callable(go_out):
+            return None
+        snap = self._world_snapshot_for_context() or {}
+        outdoor_now = bool(snap.get("outdoor"))
+        # 回房
+        if any(kw in raw for kw in ("回家", "回屋", "回公寓", "回去了")):
+            if outdoor_now and callable(go_home):
+                go_home()
+                logger.info("[Outdoor] go_home by 指令")
+                return {"moved": True, "outdoor": False, "note": "她应了一声，说要回家了，路上给你带句晚安。"}
+            return {"moved": False, "outdoor": False, "note": "她就在家里，哪里也不用去。"}
+        # 外出
+        outdoor_triggers = (
+            "出去走走", "出去逛逛", "出门散步", "带我去", "陪我去",
+            "出去", "出门", "逛街", "去公园", "去散步", "下楼转转", "出趟门",
+        )
+        if not any(kw in raw for kw in outdoor_triggers):
+            return None
+        if outdoor_now:
+            return {"moved": False, "outdoor": True, "note": f"她已经在外面（{snap.get('outdoor_place')}）了。"}
+        result = go_out()
+        place = str((result or {}).get("place") or "") if isinstance(result, dict) else ""
+        logger.info("[Outdoor] go_out 指令 place=%s", place)
+        wp = getattr(self, "world_port", None)
+        if wp and callable(getattr(wp, "tick", None)):
+            try:
+                wp.tick()
+            except Exception:
+                logger.debug("world tick after go_out failed", exc_info=True)
+        return {"moved": True, "outdoor": True, "place": place,
+                "note": f"她把拖鞋随手一放，背上包出了门，说要去{place or '外面'}走走。"}
+
     def apply_movement_intent(self, text: str) -> Optional[dict]:
         """对话移动意图执行：识别「去X / 走到X / 坐到X」→ MovementManager.move_to()。
 
@@ -2719,6 +2770,10 @@ class Companion:
         返回移动结果描述（供 pipeline 注入上下文）；无指令/失败均返回 None。
         """
         try:
+            # 室外指令优先（出门/回家），再走室内 zone 移动。
+            outdoor_result = self._apply_outdoor_command(text)
+            if outdoor_result is not None:
+                return outdoor_result
             from core.movement_intent import detect_move_intent
 
             intent = detect_move_intent(text)
@@ -3532,6 +3587,8 @@ class Companion:
             "floor": floor,
             "zone": zone,
             "position_desc": position_desc,
+            "outdoor": bool(snapshot.get("outdoor")) if isinstance(snapshot, dict) else False,
+            "outdoor_place": str(snapshot.get("outdoor_place") or "") if isinstance(snapshot, dict) else "",
             "activity": activity,
             "nearby_objects": nearby_objects[:6],
             "visual_topics": visual_topics[:6],
@@ -3578,6 +3635,10 @@ class Companion:
             place_parts.append(city)
         if place_parts:
             lines.append("地点：" + "，".join(place_parts))
+        # 室外状态（白天出门）：明确告知不是在家里，供轻量 LLM 接力正确表达画面。
+        if context.get("outdoor"):
+            place_x = str(context.get("outdoor_place") or "").strip()
+            lines.append("状态：她此刻在室外" + (f"（{place_x}）" if place_x else "") + "，不在家里。")
         if activity and activity != "idle":
             lines.append(f"她此刻在：{activity}")
         if nearby:

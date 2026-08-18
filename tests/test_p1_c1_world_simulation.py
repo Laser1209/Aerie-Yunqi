@@ -200,3 +200,84 @@ def test_get_snapshot_refreshes_when_stale():
     sim.clock = later_clock  # 推进到本地 15 点，但缓存未刷新
     assert sim.get_snapshot().phase == "morning"          # 默认 None 仍返回旧缓存
     assert sim.get_snapshot(max_age_sec=300).phase == "afternoon"  # 过期 → 强制刷新
+
+
+# ── 白天出门（最小版）──────────────────────────────
+def test_go_out_turns_snapshot_outdoor():
+    from core.world_simulation import WorldSimulation
+
+    t = datetime(2026, 7, 28, 14, 0, tzinfo=LOCAL)  # 白天 14:00
+    sim = WorldSimulation(config={"outdoor_probability": 0.0}, clock=lambda: t)
+    result = sim.go_out("商圈步行街", duration_min=30)
+    assert result["accepted"] is True
+    snap = sim.tick()
+    assert snap.outdoor is True
+    assert snap.outdoor_place == "商圈步行街"
+    assert snap.location.startswith("out_")
+    assert "商圈步行街" in snap.nearby_objects  # 室外素材用地点而非家具
+    assert "室外" in snap.position_desc
+
+
+def test_go_out_auto_returns_home_after_duration():
+    from core.world_simulation import WorldSimulation
+
+    t = datetime(2026, 7, 28, 14, 0, tzinfo=LOCAL)
+    sim = WorldSimulation(config={"outdoor_probability": 0.0}, clock=lambda: t)
+    sim.go_out("江边步道", duration_min=1)
+    assert sim.tick().outdoor is True
+    # 超过时长 → 自动回房
+    sim.clock = lambda: t + timedelta(minutes=2)  # type: ignore[assignment]
+    snap = sim.tick()
+    assert snap.outdoor is False
+    assert not snap.location.startswith("out_")
+
+
+def test_auto_outdoor_fires_when_high_probability_daytime():
+    from core.world_simulation import WorldSimulation
+
+    t = datetime(2026, 7, 28, 12, 0, tzinfo=LOCAL)
+    sim = WorldSimulation(config={"outdoor_probability": 1.0}, clock=lambda: t)
+    snap = sim.tick()
+    assert snap.outdoor is True  # 白天概率 1.0 必出门
+    assert snap.outdoor_place
+
+
+def test_auto_outdoor_skipped_at_night():
+    from core.world_simulation import WorldSimulation
+
+    night = datetime(2026, 7, 28, 23, 0, tzinfo=LOCAL)
+    sim = WorldSimulation(config={"outdoor_probability": 1.0}, clock=lambda: night)
+    assert sim.tick().outdoor is False  # 夜里不出门
+
+
+# ── 出门/回家指令（companion 层）────────────────────────
+def test_companion_outdoor_command_goes_out_and_home():
+    from core.companion import Companion
+
+    class _WorldWorld:
+        def go_out(self, place="", duration_min=0):
+            return {"accepted": True, "place": place or "公园", "duration_min": 30}
+
+        def go_home(self):
+            return {"accepted": True}
+
+    class _WorldPort:
+        world = _WorldWorld()
+
+        def tick(self):  # noqa: D401
+            return None
+
+    comp = Companion.__new__(Companion)
+    comp.world_port = _WorldPort()
+    comp._world_snapshot_for_context = lambda: {"outdoor": False}  # type: ignore[method-assign]
+
+    out = comp._apply_outdoor_command("走，出门逛逛")
+    assert out is not None and out["moved"] is True and out["outdoor"] is True
+
+    comp._world_snapshot_for_context = lambda: {"outdoor": True}  # type: ignore[method-assign]
+    home = comp._apply_outdoor_command("回家")
+    assert home is not None and home["outdoor"] is False
+
+    # 无关指令 → None
+    comp._world_snapshot_for_context = lambda: {"outdoor": False}  # type: ignore[method-assign]
+    assert comp._apply_outdoor_command("今天天气不错") is None

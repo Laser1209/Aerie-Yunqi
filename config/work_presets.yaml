@@ -1,0 +1,76 @@
+# Aerie · 云栖 — 工作场景 Preset 预设体系(路径一 L1)
+#
+# 每个工作场景一个专属 Agent = 工具集 + 专业提示词 + 模型 + 安全边界 + 输出协议 的声明式组合。
+# 新增场景 = 加一段 YAML,零代码。热加载机制仿 settings.yaml(L1 先行静态加载,后续接热更新)。
+#
+# 字段说明:
+#   enabled        : false 时该场景不存在,路由回退原 LLMCaller
+#   dsh_cordis     : DSH 侧 Cordis 组合文件(相对 DSH 仓库;L1 暂用默认 cordis,待各 preset 组合落地)
+#   model          : DSH 适配器解析的模型 ID
+#   max_tokens     : 根 agent 单请求输出 token 上限
+#   session_pool   : 常驻会话数(懒启动;L1 先按 1 复用)
+#   safety         : 安全边界(fs_roots 文件系统根限定 / shell / network)
+#   protocol       : 输出协议类型 → WorkProtocolExecutor 分发目标
+#   persona_inject : 是否注入 persona 投影(仅名字/语气/称呼,禁关系史)
+
+presets:
+  file-organizer:
+    label: "文件整理"
+    enabled: true
+    dsh_cordis: "presets/file-organizer.cordis.yml"
+    model: "deepseek-chat"
+    max_tokens: 16000
+    session_pool: 1
+    safety: { fs_roots: ["D:\\T08171634", "E:\\Downloads"], shell: disabled, network: disabled }
+    protocol: "file_organize"
+    persona_inject: true
+    protocol_prompt: |
+      你是文件整理执行器。不要调用任何工具、不要执行命令、不要写 markdown。
+      你的唯一任务是:从用户消息中提取要整理的文件夹绝对路径,然后只输出一个 WorkProtocol JSON。
+      输出格式(protocol_version 固定为 1,plan.source_dir 填提取到的绝对路径,target_dir 填 null):
+      {"protocol_version":1,"task_type":"file_organize","persona_id":"ita","session_id":"dsh-file-organizer","goal":"整理文件夹,按类型归档","plan":{"source_dir":"<提取到的绝对路径>","target_dir":null}}
+      严格只输出上述 JSON 本身,前后不要任何解释文字或代码块。
+
+  computer-control:
+    label: "电脑操控"
+    enabled: true
+    dsh_cordis: "presets/computer-control.cordis.yml"
+    model: "deepseek-chat"
+    max_tokens: 24000
+    session_pool: 1
+    safety: { fs_roots: [], shell: disabled, network: disabled }
+    protocol: "computer_control"
+    persona_inject: true
+
+  doc-writer:
+    label: "文档写作"
+    enabled: true
+    dsh_cordis: "presets/doc-writer.cordis.yml"
+    model: "deepseek-chat"
+    max_tokens: 32000
+    session_pool: 1
+    safety: { fs_roots: ["data\\documents"], shell: disabled, network: disabled }
+    protocol: "doc_write"
+    persona_inject: true
+
+  research:
+    label: "搜索调研"
+    enabled: true
+    dsh_cordis: "presets/research.cordis.yml"
+    model: "deepseek-chat"
+    max_tokens: 24000
+    session_pool: 1
+    safety: { fs_roots: [], shell: disabled, network: enabled }
+    protocol: "doc_write"
+    persona_inject: true
+
+  coder:
+    label: "代码编写"
+    enabled: true
+    dsh_cordis: "presets/coder.cordis.yml"
+    model: "deepseek-chat"
+    max_tokens: 32000
+    session_pool: 1
+    safety: { fs_roots: ["E:\\Agent_reply"], shell: disabled, network: disabled }
+    protocol: "doc_write"
+    persona_inject: true

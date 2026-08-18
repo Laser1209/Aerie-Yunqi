@@ -56,6 +56,11 @@ extraResources:
     to: ".env.example"
   - from: "../video"
     to: "video"
+  # 自包含 Python 运行时（scripts/build_python_runtime.py 的产物）：
+  # 真实可迁移的 python.exe + stdlib + 全部三方依赖，无需 venv 重定向器。
+  - from: "runtime-build"
+    to: "python/runtime"
+  # Python 应用源码（保持 .py 文件形态，兼容 skills 动态 import 与 config 热重载）
   - from: "../"
     to: "python"
     filter:
@@ -69,18 +74,20 @@ extraResources:
       - "tools/**"
       - "voice/**"
       - "world_service/**"
+      - "emotion/**"
+      - "persona/**"
+      - "scheduler/**"
+      - "skills/**"
+      - "NapCat/NapCat.Shell/**"
+      - "ffmpeg/bin/**"
       - ".env.example"
-      - ".venv/**"
       - "!**/__pycache__/**"
       - "!**/*.pyc"
       - "!**/*.pyo"
-      - "!data/aerie.db"
-      - "!data/cache/**"
-      - "!.venv/Lib/site-packages/pip/**"
-      - "!.venv/Lib/site-packages/setuptools/**"
-      - "!.venv/Lib/site-packages/wheel/**"
-      - "!.venv/Scripts/pip*"
-      - "!.venv/Scripts/activate*"
+      - "!data/**"
+      - "!logs/**"
+      - "!NapCat/NapCat.Shell/config/**"
+      - "!NapCat/NapCat.Shell/cache/**"
 
 # NSIS installer options
 nsis:
@@ -91,13 +98,6 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Aerie · 云栖
-  deleteAppDataOnUninstall: false
-  include: builder/installer.nsh
-  displayLanguageSelector: false
-  installerLanguages:
-    - simpchinese
-    - enus
-  language: "2052"
   deleteAppDataOnUninstall: false
   include: builder/installer.nsh
   displayLanguageSelector: false

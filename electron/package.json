@@ -6,8 +6,9 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win --x64 && node scripts/post-build-rcedit.js",
-    "build:win:alt": "electron-builder --win --x64 --config.directories.output=dist-final && node scripts/post-build-rcedit.js",
+    "build:runtime": "python ../scripts/build_python_runtime.py",
+    "build:win": "npm run build:runtime && electron-builder --win --x64 && node scripts/post-build-rcedit.js",
+    "build:win:alt": "npm run build:runtime && electron-builder --win --x64 --config.directories.output=dist-final && node scripts/post-build-rcedit.js",
     "build:icons": "node scripts/build-icon-sprite.js",
     "check:emojis": "node scripts/check-emojis.js",
     "check:forbidden": "python ../tools/check_forbidden.py",
@@ -43,6 +44,7 @@
       { "from": "../Aerie · 云栖.png", "to": "icon.png" },
       { "from": "../.env.example", "to": ".env.example" },
       { "from": "../video", "to": "video" },
+      { "from": "runtime-build", "to": "python/runtime" },
       {
         "from": "../",
         "to": "python",
@@ -57,18 +59,20 @@
           "tools/**",
           "voice/**",
           "world_service/**",
+          "emotion/**",
+          "persona/**",
+          "scheduler/**",
+          "skills/**",
+          "NapCat/NapCat.Shell/**",
+          "ffmpeg/bin/**",
           ".env.example",
-          ".venv/**",
           "!**/__pycache__/**",
           "!**/*.pyc",
           "!**/*.pyo",
-          "!data/aerie.db",
-          "!data/cache/**",
-          "!.venv/Lib/site-packages/pip/**",
-          "!.venv/Lib/site-packages/setuptools/**",
-          "!.venv/Lib/site-packages/wheel/**",
-          "!.venv/Scripts/pip*",
-          "!.venv/Scripts/activate*"
+          "!data/**",
+          "!logs/**",
+          "!NapCat/NapCat.Shell/config/**",
+          "!NapCat/NapCat.Shell/cache/**"
         ]
       }
     ],

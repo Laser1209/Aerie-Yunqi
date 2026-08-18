@@ -15,15 +15,23 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const ICON = path.join(ROOT, 'builder', 'icon.ico');
 
-const dirs = ['dist', 'dist-final', 'dist-v9', 'dist-new', 'dist-build2'];
-const found = dirs
-  .map((dir) => path.join(ROOT, dir, 'win-unpacked', 'Aerie-Cloud.exe'))
-  .filter((p) => fs.existsSync(p));
+// electron-builder 会根据 productName 生成可执行文件名，含中文与「·」等
+// 特殊字符（如 `Aerie · 云栖.exe`），且不同版本命名可能变化。这里改为
+// 扫描 win-unpacked 顶层 *.exe，避免硬编码文件名导致找不到图标注入目标。
+const dirs = ['dist', 'dist-final'];
+const found = [];
+for (const dir of dirs) {
+  const unpacked = path.join(ROOT, dir, 'win-unpacked');
+  if (!fs.existsSync(unpacked)) continue;
+  for (const f of fs.readdirSync(unpacked)) {
+    if (f.toLowerCase().endsWith('.exe')) found.push(path.join(unpacked, f));
+  }
+}
 found.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
 const exe = found[0];
 
 if (!exe) {
-  console.error('[rcedit] Could not locate Aerie-Cloud.exe under', dirs.map((d) => path.join(ROOT, d)).join(', '));
+  console.error('[rcedit] Could not locate main exe under', dirs.map((d) => path.join(ROOT, d)).join(', '));
   process.exit(1);
 }
 if (!fs.existsSync(ICON)) {

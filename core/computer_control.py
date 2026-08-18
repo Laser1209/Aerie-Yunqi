@@ -86,6 +86,8 @@ class ControlAction(str, Enum):
     WINDOW_INFO = "window_info"
     WINDOW_FOCUS = "window_focus"
     UIA_ACTION = "uia_action"
+    # v0.4.2: 工作区文件写操作(移动/删除/改名/生成),与电脑操控共用权限模式
+    FILE_WRITE = "file_write"
 
 
 class RiskLevel(str, Enum):
@@ -122,6 +124,8 @@ ACTION_RISK_MAP = {
     ControlAction.WINDOW_FOCUS: RiskLevel.LOW,
     ControlAction.SHELL_CMD: RiskLevel.HIGH,
     ControlAction.UIA_ACTION: RiskLevel.HIGH,
+    # 工作区文件写操作:中风险(移动/删除/改名/生成文件)
+    ControlAction.FILE_WRITE: RiskLevel.MEDIUM,
 }
 
 
@@ -217,7 +221,8 @@ class AccessPolicy:
         self._custom_rules: dict[str, str] = {}  # action_value -> allow/approve/block
         self._shell: Optional["RestrictedShell"] = None
         self._persist_enabled = persist
-        self._load_persisted()
+        if self._persist_enabled:
+            self._load_persisted()
 
     # ── 模式 ────────────────────────────────────────
 

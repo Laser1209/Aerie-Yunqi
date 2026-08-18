@@ -353,6 +353,50 @@ def _image_orientation_for_size(orientation: str, fallback: str = _IMAGE_SIZE_PO
     size = _PHOTO_ORIENTATION_SIZE.get(str(orientation or "").strip())
     return size if size else fallback
 
+
+# 景别 shot（第 2 条补充）：构图远近/镜头语言。LLM 语义自补或关键词都可产出，
+# 首选中文 tag（远景/中景/近景/特写/大特写）回落；命中后由 _photo_shot_phrase 输出镜头短语。
+# 特写景别使用率最高——LLM 语义按对话上下文决定，缺省时由 _photo_shot_fallback 与 focus 联动推断。
+_PHOTO_SHOT_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("远景", ("远景", "全景", "全身入画", "远处拍")),
+    ("中景", ("中景", "膝上入画", "大半身")),
+    ("近景", ("近景", "胸以上", "手部特写入画")),
+    ("特写", ("特写", "怼脸", "聚焦", "近距")),
+    ("大特写", ("大特写", "细节特写", "离镜头最近")),
+)
+_SHOT_TO_PHRASE: dict[str, str] = {
+    "远景": "机位拉远，把环境或全身收进画面",
+    "中景": "中景构图，人物半身或膝上入画",
+    "近景": "镜头贴近，人物占画面大部",
+    "特写": "镜头贴近特写，背景虚化",
+    "大特写": "镜头顶到大特写，主体充满画面",
+}
+
+
+def _photo_shot_phrase(shot: str) -> str:
+    """把景别转成写进生图 prompt 的镜头语言短语（让生成模型配合景别）。"""
+    return _SHOT_TO_PHRASE.get(str(shot or "").strip())
+
+
+def _photo_shot_fallback(spec: dict[str, str]) -> dict:
+    """景别缺省兜底（方向标注）：与 focus 联动——focus=特写 → 默认特写；focus=全身 → 中景。
+    focus 未给 / 语义未自出时保持无景别（由基础模板自然构图），绝不返空 / 强制猜。"""
+    shot = str(spec.get("shot") or "").strip()
+    if shot:
+        return spec
+    focus = str(spec.get("focus") or "").strip()
+    out = dict(spec)
+    if focus and focus in _CLOSEUP_FOCUS_SET:
+        out["shot"] = "特写"
+    elif focus == "全身":
+        out["shot"] = "中景"
+    return out
+
+
+# 手持自拍硬约束（POV）：所有人物类生图必须以此为前提——照片是伊塔本人手持
+# 手机拍的（前置自拍 / 后置对镜 / 支架定时），绝不出现第三方拍摄者视角。
+# 通过三个闸口保证：①基础 prompt 模板追加；②组合器机位措辞自拍化；
+
 # 手持自拍硬约束（POV）：所有人物类生图必须以此为前提——照片是伊塔本人手持
 # 手机拍的（前置自拍 / 后置对镜 / 支架定时），绝不出现第三方拍摄者视角。
 # 通过三个闸口保证：①基础提示词模板追加；②组合器机位措辞自拍化；
@@ -485,6 +529,7 @@ def _extract_photo_spec(user_raw: str) -> dict[str, str]:
         "scene": _match_photo_spec(user_raw, _PHOTO_SCENE_TABLE),
         "style": _match_photo_spec(user_raw, _PHOTO_STYLE_TABLE),
         "orientation": _match_photo_spec(user_raw, _PHOTO_ORIENTATION_TABLE),
+        "shot": _match_photo_spec(user_raw, _PHOTO_SHOT_TABLE),
     }
 
 
@@ -535,10 +580,15 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     全部缺省时原样返回 base，绝不返回空串。
     """
     spec = _apply_focus_coverage(spec)
+    spec = _photo_shot_fallback(spec)
     parts: list[str] = []
     focus = str(spec.get("focus") or "").strip()
     if focus:
         parts.append(f"画面重点聚焦在{focus}，其余虚化")
+    shot = str(spec.get("shot") or "").strip()
+    shot_phrase = _photo_shot_phrase(shot) if shot else ""
+    if shot_phrase:
+        parts.append(shot_phrase)
     scene = str(spec.get("scene") or "").strip()
     if scene:
         parts.append(f"场景是{scene}")
@@ -557,18 +607,41 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     return f"{base}{'，'.join(parts)}。"
 
 
+# 游玩/出行例外（构图护栏）：提示词里出现这些词时，允许"同行的朋友/路人帮忙拍"的
+# 第三人叙事——用于游乐园/公园/景区合影等特殊场景。由 _ensure_selfie_pov 判定后放开
+# 手持自拍约束（但也绝不出现"其他陌生人拍"之外歧义），避免所有图都死守自拍视角。
+_EXTRA_SHOT_FRIENDLY_KEYWORDS: tuple[str, ...] = (
+    "游乐园", "游乐场", "公园", "景区", "景点", "人带队", "出差", "展厅", "看展",
+    "旅行", "旅游", "露营", "爬山", "海边", "沙滩", "度假", "合影", "你帮我拍",
+    "帮我拍", "合照", "一块儿", "一起玩",
+)
+
+
+def _is_friendly_shot_exception(prompt: str) -> bool:
+    """判定这段提示词是否属于"出游/合影"例外——允许第三方帮忙拍摄，不必死守手持自拍。"""
+    text = str(prompt or "")
+    return any(kw in text for kw in _EXTRA_SHOT_FRIENDLY_KEYWORDS)
+
+
 def _ensure_selfie_pov(prompt: str, prompt_key: str) -> str:
     """POV 出口兜底：人物类提示词若缺手持自拍前提，自动追加 _SELFIE_POV_PHRASE。
 
     幂等：已含手持类关键词（手持手机/自拍/前置摄像头/手机边缘）时不重复追加，
     避免多次接力后约束叠加成噪音。environment_object（环境照）不强制带人物，
     第一人称视角由模板天然保证，跳过追加。
+    例外：出游/合影场景（见 _is_friendly_shot_exception）允许他人帮忙拍，
+    改用游玩同伴视角，而不追加"手持自拍"前提，避免把合影误渲染成她一个人自拍。
     """
     text = str(prompt or "")
     key = str(prompt_key or "default")
     if key == "environment_object":
         return text
     if any(kw in text for kw in ("手持手机", "自拍", "前置摄像头", "手机边缘")):
+        return text
+    if _is_friendly_shot_exception(text):
+        # 出游/合影：以同行者视角拍下，而非手持自拍。加一句互补，避免 POV 冲突。
+        if any(kw in text for kw in ("合影", "一起", "游", "公园", "景区")):
+            return f"{text}这张是出游时同行的人用伊塔的手机替她按下快门的一张出行合影。"
         return text
     return f"{text}{_SELFIE_POV_PHRASE}"
 
@@ -3111,8 +3184,8 @@ class Companion:
         system = (
             "你是伊塔的摄影构图分析器。用户给了一句给恋人的指令（例如'看看腿''在床上躺着拍一张'），"
             "你要理解其隐含语义，把它拆成一张写实生活照的画面规格。\n"
-            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style/orientation，值用中文或空字符串：\n"
-            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒","orientation":"竖"}\n'
+            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style/orientation/shot，值用中文或空字符串：\n"
+            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒","orientation":"竖","shot":"特写"}\n'
             "各键含义与合法取值：\n"
             "- focus（画面主体特写）：双腿/双脚/手/腰/肩颈锁骨/背影/头发/脸庞/眼睛/全身，"
             "可细分到单个部位：脚踝/足背/脚趾/小腿/大腿/膝盖/手指/手腕/掌心/锁骨/脖颈/腰肢/耳廓/嘴唇\n"
@@ -3121,6 +3194,7 @@ class Companion:
             "- scene（场景）：床上/沙发/浴室/厨房/窗前/阳台/工作室/玄关\n"
             "- style（氛围）：诱惑感/慵懒/清新/居家感/氛围感\n"
             "- orientation（画面方向）：竖/横/方，仅当事物明确暗示横/方构图时填，默认竖\n"
+            "- shot（景别·镜头语言）：远景/中景/近景/特写/大特写。特写景别使用率最高，默认倾向特写；focus 为局部特写时取特写/大特写\n"
             "推断规则：\n"
             "1. 指令提到身体部位，focus 填最具体的部位（能细化就细化到 脚踝/大腿/手指 等单部位，不只给大类）。\n"
             "2. 若语义暗示了姿态/机位但未明说，自行补全最合理的（如'看看腿'→pose=坐，angle=特写）。\n"
@@ -3146,6 +3220,7 @@ class Companion:
                 "scene": _normalize_spec_value(obj.get("scene"), _PHOTO_SCENE_TABLE),
                 "style": _normalize_spec_value(obj.get("style"), _PHOTO_STYLE_TABLE),
                 "orientation": _normalize_spec_value(obj.get("orientation"), _PHOTO_ORIENTATION_TABLE),
+                "shot": _normalize_spec_value(obj.get("shot"), _PHOTO_SHOT_TABLE),
             }
             if not any(spec.values()):
                 return None

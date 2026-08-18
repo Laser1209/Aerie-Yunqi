@@ -15,12 +15,16 @@ from core.companion import (
     _extract_photo_spec,
     _image_event_desc,
     _image_orientation_for_size,
+    _is_friendly_shot_exception,
     _normalize_spec_value,
+    _photo_shot_fallback,
+    _photo_shot_phrase,
     _PHOTO_FOCUS_DETAIL_TABLE,
     _PHOTO_FOCUS_TABLE,
     _PHOTO_ORIENTATION_TABLE,
     _PHOTO_ORIENTATION_SIZE,
     _PHOTO_POSE_TABLE,
+    _PHOTO_SHOT_TABLE,
     _IMAGE_SIZE_LANDSCAPE,
     _IMAGE_SIZE_PORTRAIT,
     _prompt_key_for_visual_topic,
@@ -396,3 +400,71 @@ def test_focus_child_is_in_closeup_set():
 
     assert "大腿" in _CLOSEUP_FOCUS_SET
     assert "脚踝" in _CLOSEUP_FOCUS_SET
+
+
+# ── 补充一：景别(shot) 提取 + 归一化 + 镜头短语 + 特写联动 ─────────
+def test_extract_shot_keyword_near():
+    assert _extract_photo_spec("近景拍一张")["shot"] == "近景"
+
+
+def test_extract_shot_keyword_closeup():
+    assert _extract_photo_spec("怼脸特写拍脚")["shot"] == "特写"
+
+
+def test_extract_shot_default_empty():
+    # 未明确景别 → 空串（由 _photo_shot_fallback 视 focus 联动补）
+    assert _extract_photo_spec("拍一张")["shot"] == ""
+
+
+def test_normalize_shot_approximation():
+    assert _normalize_spec_value("大特写", _PHOTO_SHOT_TABLE) == "大特写"
+    assert _normalize_spec_value("全身入画", _PHOTO_SHOT_TABLE) == "远景"
+
+
+def test_shot_phrase_lookup():
+    assert "背景虚化" in (_photo_shot_phrase("特写") or "")
+    assert "机位拉远" in (_photo_shot_phrase("远景") or "")
+
+
+def test_shot_fallback_focus_closeup():
+    # focus 局部特写且未给景别 → 自动默认"特写"（景别使用率最高的兜底）
+    spec = _photo_shot_fallback({"focus": "脚踝"})
+    assert spec["shot"] == "特写"
+
+
+def test_shot_fallback_focus_fullbody():
+    assert _photo_shot_fallback({"focus": "全身"})["shot"] == "中景"
+
+
+def test_shot_fallback_keeps_explicit():
+    assert _photo_shot_fallback({"shot": "远景"})["shot"] == "远景"
+
+
+def test_compose_injects_shot_phrase():
+    # user 指令命中景别 → 组合器注入镜头语言
+    out = _compose_modular_prompt("base", _spec("近景拍脚"))
+    assert "镜头贴近" in out
+
+
+# ── 补充一：外出/合影 POV 例外（护栏，慎用） ─────────────
+def test_is_friendly_shot_exception_outdoor():
+    assert _is_friendly_shot_exception("在游乐园拍一张合影") is True
+    assert _is_friendly_shot_exception("在公园散步时拍的照片") is True
+
+
+def test_is_friendly_shot_exception_room_negative():
+    # 房间/常见场景不算例外，仍走手持自拍护栏
+    assert _is_friendly_shot_exception("在床上躺着拍一张") is False
+
+
+def test_ensure_selfie_pov_outdoor_exception():
+    # 出游/合影场景 → 不再追加"手持自拍"，追加合影叙事
+    out = _ensure_selfie_pov("在游乐园拍一张合影", "role_in_scene")
+    assert "她本人手持手机拍摄" not in out
+    assert "同行的人" in out
+
+
+def test_ensure_selfie_pov_home_premise_kept():
+    # 房间内普通请求 → 仍追加手持自拍前提（防第三方拍摄误读）
+    out = _ensure_selfie_pov("躺在床上拍一张", "role_selfie")
+    assert "她本人手持手机拍摄" in out

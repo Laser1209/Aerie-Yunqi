@@ -14,12 +14,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, ItemsView, Iterable
 
 from core.action_registry import ActionRegistry, WorldAction
 from core.world_phase import DEFAULT_WORLD_PHASES
+
+logger = logging.getLogger(__name__)
 
 # 世界模拟统一使用本地时区（北京时间 UTC+08:00）。
 # 此前误用 UTC 导致时段/光线提示词整体错位 8 小时（凌晨被判定成下午）。
@@ -378,12 +381,19 @@ class WorldSimulation:
         except Exception:
             return str(pool[0])
 
-    def go_out(self, place: str = "", duration_min: int = 0) -> dict:
-        """把角色置为室外（白天出门），duration_min<=0 时给 60~120 分钟的确定性时长。"""
+    def go_out(self, place: str = "", duration_min: int = 0, source: str = "manual") -> dict:
+        """把角色置为室外（白天出门），duration_min<=0 时给 60~120 分钟的确定性时长。
+
+        日志埋点：记录 source(manual/auto)/now/place/duration/until，便于排查误出门。
+        """
         try:
             now = self.clock()
             place = str(place or "").strip() or self._pick_outdoor_place()
             if not place:
+                logger.warning(
+                    "[WorldOutdoor] go_out skipped source=%s: no place available",
+                    source,
+                )
                 return {"accepted": False, "reason": "no_place"}
             if duration_min <= 0:
                 key = json.dumps(
@@ -396,39 +406,79 @@ class WorldSimulation:
             self._outdoor_place = str(place)
             self._outdoor_until_ts = int(now.timestamp()) + max(1, int(duration_min)) * 60
             self._outdoor_day = now.strftime("%Y-%m-%d")
+            logger.info(
+                "[WorldOutdoor] go_out ok source=%s place=%s duration_min=%s now=%s until=%s day=%s",
+                source, self._outdoor_place, int(duration_min),
+                now.isoformat(),
+                datetime.fromtimestamp(self._outdoor_until_ts, tz=LOCAL_TZ).isoformat(),
+                self._outdoor_day,
+            )
             return {"accepted": True, "place": self._outdoor_place, "duration_min": int(duration_min)}
         except Exception:
+            logger.exception("[WorldOutdoor] go_out source=%s failed", source)
             return {"accepted": False, "reason": "outdoor_go_failed"}
 
-    def go_home(self) -> dict:
-        """结束室外状态，回到房间（下一个 tick 自然回落 home）。"""
+    def go_home(self, reason: str = "manual") -> dict:
+        """结束室外状态，回到房间。（reason 仅用于日志：auto_expired / user_command / manual）"""
+        was_outdoor = self._outdoor
+        prev_place = self._outdoor_place
         self._outdoor = False
         self._outdoor_place = ""
         self._outdoor_until_ts = 0.0
         self._snapshot = None  # 强制下一 tick 重建快照
+        logger.info(
+            "[WorldOutdoor] go_home reason=%s was_outdoor=%s prev_place=%s",
+            reason, bool(was_outdoor), prev_place,
+        )
         return {"accepted": True}
 
     def _maybe_auto_outdoor(self, now: datetime) -> bool:
-        """白天按 outdoor_probability 确定性触发一次出门（每天至多一次）。返回是否触发。"""
-        if self._outdoor or self._outdoor_probability <= 0.0:
-            return False
-        day = now.strftime("%Y-%m-%d")
-        if self._outdoor_day == day:  # 当天已出门（含手动），不再自动
-            return False
-        if not (9 <= int(now.hour) < 18):  # 白天限定
-            return False
-        digest = _sha256(
-            json.dumps(
-                {"seed": self.seed, "day": day, "outdoor_hit": 1},
-                sort_keys=True,
-                separators=(",", ":"),
+        """白天按 outdoor_probability 确定性触发一次出门（每天至多一次）。返回是否触发。
+
+        日志埋点：每个分支打印判定原因 + 决定性参数（hour/roll/threshold/day），
+        便于排查"夜间误触发/不触发"。
+        """
+        try:
+            day = now.strftime("%Y-%m-%d")
+            hour = int(now.hour)
+            if self._outdoor:
+                logger.debug(
+                    "[WorldOutdoor] check skip=already_outdoor place=%s now=%s",
+                    self._outdoor_place, now.isoformat(),
+                )
+                return False
+            if self._outdoor_probability <= 0.0:
+                logger.debug("[WorldOutdoor] check skip=prob_off prob=%s now=%s", self._outdoor_probability, now.isoformat())
+                return False
+            if self._outdoor_day == day:
+                logger.debug("[WorldOutdoor] check skip=same_day day=%s now=%s", day, now.isoformat())
+                return False
+            if not (9 <= hour < 18):
+                logger.info(
+                    "[WorldOutdoor] check skip=not_daytime hour=%s day=%s now=%s",
+                    hour, day, now.isoformat(),
+                )
+                return False
+            digest = _sha256(
+                json.dumps(
+                    {"seed": self.seed, "day": day, "outdoor_hit": 1},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
             )
-        )
-        roll = (int(digest[:8], 16) % 10000) / 10000.0
-        if roll < self._outdoor_probability:
-            self.go_out()
-            return True
-        return False
+            roll = (int(digest[:8], 16) % 10000) / 10000.0
+            hit = roll < self._outdoor_probability
+            logger.info(
+                "[WorldOutdoor] check hour=%s day=%s seed=%s prob=%.4f roll=%.4f trig=%s",
+                hour, day, self.seed, self._outdoor_probability, roll, bool(hit),
+            )
+            if hit:
+                self.go_out(source="auto")
+                return True
+            return False
+        except Exception:
+            logger.exception("[WorldOutdoor] check failed")
+            return False
 
     # ── main tick ───────────────────────────────────────────────
     def tick(self, action: WorldAction | None = None) -> WorldSnapshot:
@@ -450,8 +500,19 @@ class WorldSimulation:
             return self._snapshot
 
         # 白天出门状态机：到时自动回房；白天按概率自动随机出门（幂等同构日）。
-        if self._outdoor and int(now.timestamp()) >= self._outdoor_until_ts:
-            self.go_home()
+        if self._outdoor:
+            remaining_min = max(0, int((self._outdoor_until_ts - int(now.timestamp())) / 60))
+            if int(now.timestamp()) >= self._outdoor_until_ts:
+                logger.info(
+                    "[WorldOutdoor] tick expired at %s place=%s remaining_min=%s",
+                    now.isoformat(), self._outdoor_place, remaining_min,
+                )
+                self.go_home(reason="auto_expired")
+            else:
+                logger.debug(
+                    "[WorldOutdoor] still_outside place=%s remaining_min=%s",
+                    self._outdoor_place, remaining_min,
+                )
         self._maybe_auto_outdoor(now)
 
         phase_name, phase_data = self.phase_for(now)

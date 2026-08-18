@@ -2738,7 +2738,7 @@ class Companion:
         # 回房
         if any(kw in raw for kw in ("回家", "回屋", "回公寓", "回去了")):
             if outdoor_now and callable(go_home):
-                go_home()
+                go_home("user_command")
                 logger.info("[Outdoor] go_home by 指令")
                 return {"moved": True, "outdoor": False, "note": "她应了一声，说要回家了，路上给你带句晚安。"}
             return {"moved": False, "outdoor": False, "note": "她就在家里，哪里也不用去。"}
@@ -2751,7 +2751,7 @@ class Companion:
             return None
         if outdoor_now:
             return {"moved": False, "outdoor": True, "note": f"她已经在外面（{snap.get('outdoor_place')}）了。"}
-        result = go_out()
+        result = go_out(source="user_command")
         place = str((result or {}).get("place") or "") if isinstance(result, dict) else ""
         logger.info("[Outdoor] go_out 指令 place=%s", place)
         wp = getattr(self, "world_port", None)

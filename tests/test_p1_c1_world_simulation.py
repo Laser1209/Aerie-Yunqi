@@ -255,10 +255,10 @@ def test_companion_outdoor_command_goes_out_and_home():
     from core.companion import Companion
 
     class _WorldWorld:
-        def go_out(self, place="", duration_min=0):
+        def go_out(self, place="", duration_min=0, source="manual"):
             return {"accepted": True, "place": place or "公园", "duration_min": 30}
 
-        def go_home(self):
+        def go_home(self, reason="manual"):
             return {"accepted": True}
 
     class _WorldPort:

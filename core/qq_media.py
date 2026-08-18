@@ -31,7 +31,8 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # 内置 ffmpeg 目录（与 multimodal_input 保持一致），用于 ffprobe 取语音时长。
-_FFMPEG_DIR = _PROJECT_ROOT / "ffmpeg" / "ffmpeg-7.1-essentials_build" / "bin"
+# 路径与版本解耦：构建流程把 ffmpeg.exe/ffprobe.exe 解压到 ffmpeg/bin/。
+_FFMPEG_DIR = _PROJECT_ROOT / "ffmpeg" / "bin"
 
 # ── QQ 自带表情 face id → 文字含义（常用子集）────────────────
 # 参考社区维护的 QQ 表情对照表；未收录的 id 回退成 "[QQ表情 <id>]"。

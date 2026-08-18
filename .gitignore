@@ -89,7 +89,7 @@ _syn*.txt
 _test1.txt
 tools/diag_out.txt
 tools/diag_report.txt
-tools/diag_weba
+tools/diag_weba.py
 electron/_unit_test_out.txt
 ffmpeg/_checkpath.txt
 .reasonix/

@@ -622,6 +622,24 @@ flowchart LR
 | V17 | **DSH 升级行为漂移**(快照盲区) | 质量 | 🟠 | 快照回归(协议/翻译输出)+ 黄金样本,三绿才发布;4 周升级窗口 |
 | V18 | **循环委托**(用户/DSH 内容触发重复委托) | 成本 | 🟡 | 委托深度上限(≤2)+ `origin=dsh` 标记;DSH 结果不再触发路由 |
 
+**§10.1 增补 · Windows node 模式部署坑(2026-08 PoC 实测)**:
+
+| #   | 漏洞 | 影响 | 等级 | 对策 |
+| --- | --- | --- | --- | --- |
+| V19 | **主仓库 build 产物不能直接跑**:`packaged-bin.js` 以 `import.meta.url` 为基解析裸插件,主仓库 node_modules 无 `dsh-sdk-jsonrpc-server` 等运行时插件,直接跑 `ERR_MODULE_NOT_FOUND` | 部署 | 🔴 | 必须物化 `runtime/node/` deploy 闭包;L1 桥不得指向 `packages/examples` 的 build 产物 |
+| V20 | **build-exe-for-python-sdk.ts 在 Node24/Windows 下 `spawn pnpm.cmd` 报 EINVAL** | 部署 | 🔴 | 手动执行 `pnpm --filter dsh-jsonrpc-agent-pkg deploy` 绕过构建脚本;CI 固化物化流程;或锁 Node 22 跑构建脚本 |
+| V21 | **legacy deploy hoist 缺陷**:缺 15 个 `@deepseek-ai` 包(含 cordis.yml 必需的 `dsh-sdk-jsonrpc-server`/`dsh-agent-spine-demo`/`dsh-llm-deepseek`) | 部署 | 🔴 | 补 `restoreLegacyHoists`(从 `python/sdk-runtime/node_modules` 复制缺失依赖)+ `materializeStagedLinks`(物化 symlink) |
+| V22 | **deploy 下载 codex/claude-agent-sdk win32 二进制网络失败**(npm registry error 23) | 部署 | 🟠 | 配 npm 镜像(npmmirror)或靠 pnpm store 缓存;非核心链路,缺了不影响基础任务 |
+
+**实测数据(同一次 PoC)**:
+
+| 指标 | 实测 | 备注 |
+| --- | --- | --- |
+| initialize 握手 | 冷启动 6.84s / 热启动 0.38s | 纯 boot,无模型 |
+| 真实 prompt(say hi) | 1.37s,`finish_reason=completed` | 回复 `Hi! 👋` |
+| 峰值 RSS | 62.4 MB(纯 boot)→ 89.8 MB(含 LLM 调用) | 低于 §6.1 预估的 +150-300MB |
+| 空闲 CPU | 0% | idle 无泄漏 |
+
 ### 10.2 漏洞审查方法说明
 
 - 结合 Aerie 历史教训(审查报告的 command_injection、吞错禁令、先落库再 emit、镜像状态级联);

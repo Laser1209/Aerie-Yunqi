@@ -15,7 +15,7 @@
 // seenEventIds / requestSequences / requests 的暴露。
 
 function createChatStore({ maxMessages = 500 } = {}) {
-  const messages = [];             // 有序消息描述符(元素顺序)
+  const messages = [];             // 有序消息描述符(按时间排序键升序, 即 DOM 元素顺序)
   const byDomId = new Map();       // domId -> msg
   const byKey = new Map();         // 逻辑消息 key -> domId（消息级去重）
   const realIdToDomId = new Map(); // 真实消息 id -> domId
@@ -26,6 +26,7 @@ function createChatStore({ maxMessages = 500 } = {}) {
   const requestSequences = new Map(); // request_id -> { next, pending:Map }
   const requestSegments = new Set();  // 已产出真实分片的 request_id
   const requests = new Map();      // request_id -> request state
+  let insertCounter = 0;           // 同时间戳消息的稳定 tiebreaker(按到达序)
 
   function trim() {
     while (messages.length > maxMessages) {
@@ -73,16 +74,89 @@ function createChatStore({ maxMessages = 500 } = {}) {
     return domId;
   }
 
-  // 更新已存在元素或创建新元素, 返回 upsert 意图
+  // 解析消息时间戳 → ms 数值(统一到整秒); 无法解析返回 null。
+  // 为什么要整秒: 实时事件信封 ts 带毫秒, 而 DB created_at 只精确到秒。
+  // 若两种源混排比较, 同一秒内 SSE 渲染的消息(带毫秒)会排在 poll 渲染的
+  // 消息(整秒)之后, 造成"她的回复排在你消息上面"这类倒挂。
+  // 整秒化后同秒消息由 tiebreaker(数字 id=插入序)决定先后, 语义一致。
+  function timestampMs(msg) {
+    const raw = msg.ts ?? msg.created_at;
+    if (raw == null || raw === "") return null;
+    let ms;
+    if (typeof raw === "number") {
+      ms = Number.isFinite(raw) ? raw : null;
+    } else {
+      const parsed = Date.parse(String(raw));
+      ms = Number.isFinite(parsed) ? parsed : null;
+    }
+    if (ms == null) return null;
+    return Math.floor(ms / 1000) * 1000;
+  }
+
+  // 计算时间排序键 { t: 时间ms, b: tiebreaker }。
+  // 无时间戳时: 打字中/乐观气泡(有 client_id 且尚无真实 msgId)按当前时刻靠底,
+  // 其余按最早(排最前)。
+  function sortKeyFor(msg) {
+    let t = timestampMs(msg);
+    if (t == null) {
+      const isFresh = msg.typing || (msg.role === "user" && msg.client_id && !msg.msgId);
+      t = isFresh ? Math.floor(Date.now() / 1000) * 1000 : 0;
+    }
+    let b = 0;
+    const numId = Number(msg.msgId ?? msg.id);
+    if (Number.isFinite(numId) && numId >= 0) b = numId;
+    else b = ++insertCounter; // UUID/无 id 用到达序兜底, 保证同刻消息顺序稳定
+    return { t, b };
+  }
+
+  function compareSort(a, b) {
+    const ka = a._sort || { t: 0, b: 0 };
+    const kb = b._sort || { t: 0, b: 0 };
+    if (ka.t !== kb.t) return ka.t < kb.t ? -1 : 1;
+    if (ka.b !== kb.b) return ka.b < kb.b ? -1 : 1;
+    return 0;
+  }
+
+  // 按排序键二分插入, 保证 messages 始终时间正序
+  function insertSorted(msg) {
+    let lo = 0;
+    let hi = messages.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (compareSort(messages[mid], msg) <= 0) lo = mid + 1;
+      else hi = mid;
+    }
+    messages.splice(lo, 0, msg);
+  }
+
+  // 更新已存在元素或创建新元素, 返回 upsert 意图。
+  // 新元素按时间排序键有序插入(不再无脑 push), 乱序到达的历史/轮询/实时信号
+  // 都能落位在正确的时间位置。
   function upsert(domId, patch) {
     let msg = byDomId.get(domId);
     if (msg) {
+      const prevSort = msg._sort;
+      const prevT = prevSort ? prevSort.t : null;
       Object.assign(msg, patch, { id: domId });
+      const newT = timestampMs(msg);
+      // 时间戳变化时(如 typing 占位 → 真实时间)重算排序键并重排。
+      // 仅当时间戳由无到有/数值变化时触发, 避免每次 upsert 都做数组重排。
+      if ((prevT === null && newT !== null) || (prevT !== null && newT !== null && newT !== prevT)) {
+        msg._sort = sortKeyFor(msg);
+        if (!prevSort || prevSort.t !== msg._sort.t || prevSort.b !== msg._sort.b) {
+          const idx = messages.indexOf(msg);
+          if (idx >= 0) {
+            messages.splice(idx, 1);
+            insertSorted(msg);
+          }
+        }
+      }
       return { action: "upsert", msg: { ...msg } };
     }
     msg = { ...patch, id: domId };
+    msg._sort = sortKeyFor(msg);
     byDomId.set(domId, msg);
-    messages.push(msg);
+    insertSorted(msg);
     trim();
     return { action: "upsert", msg: { ...msg } };
   }

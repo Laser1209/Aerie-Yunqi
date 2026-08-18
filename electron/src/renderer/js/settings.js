@@ -655,7 +655,7 @@ class SettingsPanel {
         body,
       });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
-      if (st) { st.textContent = "保存成功，重启后端后生效"; st.style.color = "var(--success, #2ecc71)"; }
+      if (st) { st.textContent = "保存成功，已生效"; st.style.color = "var(--success, #2ecc71)"; }
       await this.loadApiKeys();
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
@@ -933,10 +933,39 @@ class SettingsPanel {
         photoIntervalEl.value = String([0, 10, 30, 60, 120].includes(min) ? min : 0);
       }
 
+      // Companion image probability
+      const companionProbEl = document.getElementById("setting-proactive-companion-image-prob");
+      if (companionProbEl) {
+        const prob = proactive.companion_image_probability != null
+          ? Number(proactive.companion_image_probability) : 0.3;
+        const candidates = [0, 0.1, 0.2, 0.3, 0.5, 0.8, 1];
+        // Snap to nearest option
+        let best = 0.3;
+        let bestDiff = Infinity;
+        for (const c of candidates) {
+          const d = Math.abs(c - prob);
+          if (d < bestDiff) { bestDiff = d; best = c; }
+        }
+        companionProbEl.value = String(best);
+      }
+
       // L4 self-evolution (beta) toggle — read back from feature_flags.
       const l4El = document.getElementById("setting-self-evolve-l4");
       if (l4El) {
         l4El.checked = ((s.feature_flags || {}).self_evolve_l4_enabled) === true;
+      }
+
+      // DSH work-mode delegation toggle — read back from dsh.enabled.
+      const dshEl = document.getElementById("setting-dsh-enabled");
+      if (dshEl) {
+        dshEl.checked = ((s.dsh || {}).enabled) === true;
+      }
+
+      // DSH session window — read back from dsh.session_window_sec.
+      const dshWinEl = document.getElementById("setting-dsh-session-window");
+      if (dshWinEl) {
+        const win = (s.dsh || {}).session_window_sec;
+        if (win != null) dshWinEl.value = String(win);
       }
 
       // R7.1: my-location picker.
@@ -964,9 +993,44 @@ class SettingsPanel {
       const astroEl = document.getElementById("setting-sub-astronomy");
       const astro = subSrcs.astronomy || {};
       if (astroEl) astroEl.checked = astro.enabled !== false;
+      this.startBootProgressPolling();
     } catch (e) {
       console.warn("settings load failed", e);
     }
+  }
+
+  renderBootProgress(progress) {
+    const fill = document.getElementById("boot-progress-fill");
+    const list = document.getElementById("boot-progress-list");
+    if (!fill || !list) return;
+    const steps = (progress && Array.isArray(progress.steps)) ? progress.steps : [];
+    if (steps.length === 0) {
+      list.textContent = "等待后端状态…";
+      fill.style.width = "0%";
+      return;
+    }
+    const done = steps.filter((s) => s.status === "done" || s.status === "skipped").length;
+    const pct = Math.min(100, Math.round((done / steps.length) * 100));
+    fill.style.width = pct + "%";
+    const lines = steps.map((s) => {
+      const icon = s.status === "done" ? "✓" : s.status === "error" ? "✗" : s.status === "running" ? "…" : "·";
+      const ms = s.elapsed_ms != null ? ` ${s.elapsed_ms}ms` : "";
+      return `${icon} ${s.detail || s.name}${ms}`;
+    });
+    list.textContent = lines.join(" · ");
+  }
+
+  startBootProgressPolling() {
+    if (this._bootProgressTimer) return;
+    const tick = async () => {
+      try {
+        const r = await window.aerie.api.request({ method: "GET", path: "/api/health" });
+        const sp = r.data && r.data.startup_progress;
+        if (sp) this.renderBootProgress(sp);
+      } catch (_) {}
+    };
+    tick();
+    this._bootProgressTimer = setInterval(tick, 1000);
   }
 
   async save() {
@@ -985,6 +1049,7 @@ class SettingsPanel {
         min_interval_min: Number(document.getElementById("setting-proactive-min-interval")?.value || 30),
         image_max_per_day: Number(document.getElementById("setting-proactive-image-limit")?.value || 0),
         photo_min_interval_sec: Number(document.getElementById("setting-proactive-photo-interval")?.value || 0) * 60,
+        companion_image_probability: Number(document.getElementById("setting-proactive-companion-image-prob")?.value || 0.3),
       },
       // R7.1: empty string ⇒ resolver falls back to IP auto-detect.
       weather: {
@@ -1006,6 +1071,11 @@ class SettingsPanel {
       // L4 self-evolution (beta) toggle — persists into feature_flags.
       feature_flags: {
         self_evolve_l4_enabled: document.getElementById("setting-self-evolve-l4")?.checked === true,
+      },
+      // DSH work-mode delegation toggle — persists into dsh.enabled + session window.
+      dsh: {
+        enabled: document.getElementById("setting-dsh-enabled")?.checked === true,
+        session_window_sec: parseInt(document.getElementById("setting-dsh-session-window")?.value || "30", 10),
       },
     };
     try {

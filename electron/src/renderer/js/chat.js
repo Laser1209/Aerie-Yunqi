@@ -288,11 +288,13 @@ class ChatManager {
     return this._identityBootstrapPromise;
   }
 
-  _startChatForIdentity() {
+  async _startChatForIdentity() {
     if (this._chatStarted || !this._identityReady) return;
     this._chatStarted = true;
+    // 先落历史再开轮询: 消除首次 poll(since_id=0) 全量拉取与历史页的并发竞态,
+    // 避免旧消息后到导致的时间乱序。
+    await this.loadHistory();
     this._startPoll();
-    this.loadHistory();
   }
 
   _syncSendAvailability() {
@@ -834,8 +836,15 @@ class ChatManager {
             this._applyIntent(intent, { before, autoScroll: false });
           }
         }
+        // _sinceId 供 poll 增量游标使用: 优先取 legacy_chat_log_id(数字),
+        // 仅当为 UUID(message_id) 时回退到 item.id, 避免 _sinceId 永远停在 0
+        // 导致首次 poll 全量拉取历史。
         const numericId = Number(item.id);
-        if (Number.isFinite(numericId) && numericId > this._sinceId) this._sinceId = numericId;
+        const legacyId = Number(item.legacy_chat_log_id);
+        const pollCursor = Number.isFinite(legacyId) && legacyId > 0
+          ? legacyId
+          : (Number.isFinite(numericId) ? numericId : 0);
+        if (pollCursor > this._sinceId) this._sinceId = pollCursor;
       }
       this._history.olderCursor = page.olderCursor || null;
       this._history.newerCursor = page.newerCursor || null;
@@ -1373,7 +1382,10 @@ class ChatManager {
     const wasTyping = el && el.classList.contains("chat-msg--typing");
     if (create) {
       el = document.createElement("div");
-      if (before) this._el.messages.insertBefore(el, before);
+      // 按时间排序键找落位锚点: 乱序到达的实时/轮询/历史消息也落在正确时间位置。
+      // 历史"更早"翻页(before)优先, 保证新内容整体位于视口上方、滚动位置不失真。
+      const anchor = this._findSortAnchor(msg, before);
+      if (anchor) this._el.messages.insertBefore(el, anchor);
       else this._el.messages.appendChild(el);
     }
     el.className = "chat-msg chat-msg--" + msg.role + (msg.typing ? " chat-msg--typing" : "");
@@ -1386,11 +1398,26 @@ class ChatManager {
     el.setAttribute("data-request-status", msg.request_status || msg.status || "");
     if (msg.typing) el.setAttribute("data-chat-typing", "true");
     else el.removeAttribute("data-chat-typing");
+    // 镜像 store 的时间排序键到 DOM, 供落位/重排定位使用
+    const sortKey = (msg && msg._sort) || null;
+    if (sortKey) {
+      el.setAttribute("data-sort-t", String(sortKey.t));
+      el.setAttribute("data-sort-b", String(sortKey.b));
+    } else {
+      el.removeAttribute("data-sort-t");
+      el.removeAttribute("data-sort-b");
+    }
     el.innerHTML = this._buildMessageHtml(msg, { typing: Boolean(msg.typing) });
     this._bindMessageActions(el, msg);
-    if (msg.msgId) {
+    // 时间键变化(如 typing 占位 → 真实时间)时把气泡重排到正确时间位置
+    this._repositionMessageEl(el);
+    if (msg.msgId || msg.legacy_chat_log_id) {
       const numericId = Number(msg.msgId);
-      if (Number.isFinite(numericId) && numericId > this._sinceId) this._sinceId = numericId;
+      const legacyId = Number(msg.legacy_chat_log_id);
+      const pollCursor = Number.isFinite(legacyId) && legacyId > 0
+        ? legacyId
+        : (Number.isFinite(numericId) ? numericId : 0);
+      if (pollCursor > this._sinceId) this._sinceId = pollCursor;
     }
     this._trimMessageWindow("oldest");
 
@@ -1437,6 +1464,61 @@ class ChatManager {
 
     this._updateScrollButton();
     return el;
+  }
+
+  // ── 时间排序辅助: store 产出 msg._sort, DOM 层镜像到 data-sort-* 用于落位 ──
+  _sortKeyOfMsg(msg) {
+    const s = (msg && msg._sort) || null;
+    return s ? { t: s.t, b: s.b } : null;
+  }
+
+  _sortKeyOfEl(el) {
+    if (!el) return null;
+    const t = parseFloat(el.getAttribute("data-sort-t") || "");
+    const b = parseFloat(el.getAttribute("data-sort-b") || "");
+    if (!Number.isFinite(t) || !Number.isFinite(b)) return null;
+    return { t, b };
+  }
+
+  _compareSortKeys(a, b) {
+    if (!a || !b) return 0;
+    if (a.t !== b.t) return a.t < b.t ? -1 : 1;
+    if (a.b !== b.b) return a.b < b.b ? -1 : 1;
+    return 0;
+  }
+
+  // 找到应插到其前的第一个时间更晚的气泡; 历史翻页(before)直接作为锚点
+  _findSortAnchor(msg, before) {
+    const list = this._el.messages;
+    if (!list) return before || null;
+    if (before) return before;
+    const myKey = this._sortKeyOfMsg(msg);
+    if (!myKey) return null;
+    for (const node of Array.from(list.querySelectorAll(".chat-msg"))) {
+      const k = this._sortKeyOfEl(node);
+      if (k && this._compareSortKeys(myKey, k) < 0) return node;
+    }
+    return null;
+  }
+
+  // 时间序重排: 创建/更新后调用, 把元素移到正确时间位置(DOM 始终时间正序)。
+  // 仅扫描 .chat-msg, 忽略历史翻页按钮等控件; maxDomMessages=200, O(n) 可忽略。
+  _repositionMessageEl(el) {
+    const list = this._el.messages;
+    if (!el || !list || el.parentNode !== list) return;
+    const myKey = this._sortKeyOfEl(el);
+    if (!myKey) return;
+    let anchor = null;
+    for (const node of Array.from(list.querySelectorAll(".chat-msg"))) {
+      if (node === el) continue;
+      const k = this._sortKeyOfEl(node);
+      if (k && this._compareSortKeys(myKey, k) < 0) { anchor = node; break; }
+    }
+    if (anchor) {
+      if (el.nextElementSibling !== anchor) list.insertBefore(el, anchor);
+    } else if (el.nextElementSibling && el.nextElementSibling.classList.contains("chat-msg")) {
+      list.appendChild(el);
+    }
   }
 
   // 撤回: 命中已有元素则标记, 否则创建撤回占位。id 为稳定 domId。

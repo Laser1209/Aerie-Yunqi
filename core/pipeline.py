@@ -187,6 +187,321 @@ class Pipeline:
                     self._task_planner = None
                     self._task_planner_enabled = False
 
+        # v0.4: DSH 工作模式委托(路径一 L1,开关控制,默认关闭)
+        self._dsh_enabled = False
+        self._dsh_cli = None
+        self._dsh_router = None
+        self._dsh_executor = None
+        self._dsh_aggregator = None
+        # 会话聚合状态:preset -> {"session_id", "last_activity_at"}
+        self._dsh_session_state: dict[str, dict] = {}
+        # v0.4.1: 工作区管理器 + 工作回复人格化翻译层(惰性初始化,不影响禁用路径)
+        self._dsh_workspace = None
+        self._dsh_persona = None
+        if settings and isinstance(settings, dict):
+            dsh_cfg = settings.get("dsh", {}) or {}
+            self._dsh_enabled = bool(dsh_cfg.get("enabled", False))
+            if self._dsh_enabled:
+                try:
+                    from core.dsh_cli import DshCli
+                    from core.work_mode_router import WorkModeRouter
+                    from core.work_protocol import WorkProtocolExecutor
+                    from core.session_aggregator import SessionAggregator
+                    from core.workspace import get_workspace_manager
+                    from core.work_persona import PersonaTranslator
+
+                    self._dsh_cli = DshCli()
+                    self._dsh_router = WorkModeRouter(self._dsh_cli, self.brain)
+                    self._dsh_executor = WorkProtocolExecutor()
+                    self._dsh_aggregator = SessionAggregator(self.brain)
+                    self._dsh_workspace = get_workspace_manager()
+                    self._dsh_persona = PersonaTranslator(self.brain)
+                    # v0.4.2: 工作区与电脑操控共用权限模式
+                    self._bind_workspace_policy()
+                    logger.info("[pipeline] DSH 工作模式委托已启用(cli+router+executor+aggregator+workspace+persona 就绪)")
+                except Exception:
+                    logger.exception("[pipeline] DSH 委托初始化失败,已禁用")
+                    self._dsh_enabled = False
+                    self._dsh_cli = None
+                    self._dsh_router = None
+                    self._dsh_executor = None
+                    self._dsh_aggregator = None
+                    self._dsh_workspace = None
+                    self._dsh_persona = None
+
+    async def set_dsh_enabled(self, enabled: bool) -> bool:
+        """热切换 DSH 工作模式委托(无需重启后端)。
+
+        enabled=True:懒初始化 DSH 组件(进程懒启动,首次 delegate 才拉起)。
+        enabled=False:优雅关闭 DSH 子进程并清空引用。
+        返回是否切换成功;初始化失败时保持原状态不变并返回 False。
+        并发说明:L1 不做锁保护,假设热切换发生在空闲时(设置页操作)。
+        """
+        if enabled == self._dsh_enabled:
+            return True
+        if enabled:
+            if self._dsh_cli is None:
+                try:
+                    from core.dsh_cli import DshCli
+                    from core.work_mode_router import WorkModeRouter
+                    from core.work_protocol import WorkProtocolExecutor
+                    from core.session_aggregator import SessionAggregator
+                    from core.workspace import get_workspace_manager
+                    from core.work_persona import PersonaTranslator
+
+                    self._dsh_cli = DshCli()
+                    self._dsh_router = WorkModeRouter(self._dsh_cli, self.brain)
+                    self._dsh_executor = WorkProtocolExecutor()
+                    self._dsh_aggregator = SessionAggregator(self.brain)
+                    self._dsh_workspace = get_workspace_manager()
+                    self._dsh_persona = PersonaTranslator(self.brain)
+                    # v0.4.2: 工作区与电脑操控共用权限模式
+                    self._bind_workspace_policy()
+                except Exception:
+                    logger.exception("[pipeline] DSH 委托热启用失败")
+                    self._dsh_cli = None
+                    self._dsh_router = None
+                    self._dsh_executor = None
+                    self._dsh_aggregator = None
+                    self._dsh_workspace = None
+                    self._dsh_persona = None
+                    return False
+            self._dsh_enabled = True
+            logger.info("[pipeline] DSH 委托热启用(enabled=true)")
+        else:
+            if self._dsh_cli is not None:
+                try:
+                    await self._dsh_cli.stop()
+                except Exception:
+                    logger.warning("[pipeline] DSH 热关闭异常", exc_info=True)
+                self._dsh_cli = None
+                self._dsh_router = None
+                self._dsh_executor = None
+                self._dsh_aggregator = None
+                self._dsh_workspace = None
+                self._dsh_persona = None
+            self._dsh_enabled = False
+            logger.info("[pipeline] DSH 委托热关闭(enabled=false)")
+        return True
+
+    def _bind_workspace_policy(self) -> None:
+        """v0.4.2: 工作区与电脑操控共用权限模式。
+
+        从共享 ComputerController 取 AccessPolicy 注入 workspace,
+        并把 workspace 传给 WorkProtocolExecutor 作为写操作门控。
+        """
+        if self._dsh_workspace is None:
+            return
+        try:
+            from core.computer_control import ComputerController
+
+            policy = None
+            try:
+                from core.companion import get_companion
+
+                comp = get_companion()
+                ctrl = getattr(comp, "computer_controller", None)
+                if ctrl is not None:
+                    policy = getattr(ctrl, "permission", None)
+            except Exception:
+                policy = None
+            if policy is None:
+                # 兜底:独立实例(无 companion 时),保证权限状态存在
+                policy = ComputerController().permission
+            self._dsh_workspace.bind_access_policy(policy)
+            if self._dsh_executor is not None:
+                self._dsh_executor._workspace = self._dsh_workspace
+            logger.info("[pipeline] 工作区权限已与电脑操控联动 mode=%s", getattr(policy, "mode", "?"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[pipeline] 工作区权限联动失败: %s", exc)
+
+    def _find_recent_active_session(
+        self, preferred_preset: str,
+    ) -> tuple[str | None, dict | None]:
+        """跨 preset 找最近活跃的 DSH session。
+
+        优先返回 preferred_preset 对应的 session(若存在);否则返回 last_activity_at
+        最大的那个。用于处理"补充指令不含关键词导致路由层判错 preset"的场景。
+
+        Returns: (preset_name, state_dict) 或 (None, None)。
+        """
+        if not self._dsh_session_state:
+            return None, None
+
+        # 优先:路由层判的 preset 本身有 session
+        preferred = self._dsh_session_state.get(preferred_preset)
+        if preferred:
+            return preferred_preset, preferred
+
+        # 兜底:所有 preset 里找最近活跃的
+        best_preset: str | None = None
+        best_state: dict | None = None
+        best_time: float = 0.0
+        for p, s in self._dsh_session_state.items():
+            t = s.get("last_activity_at", 0.0)
+            if t > best_time:
+                best_time = t
+                best_preset = p
+                best_state = s
+        return best_preset, best_state
+
+    async def _try_delegate_to_dsh(self, text: str, msg: Any) -> Any | None:
+        """DSH 工作模式委托:路由判定 → 委托 → 协议执行 → 构造兼容 response。
+
+        关闭开关 / 未命中 / 失败时返回 None,调用方回退原 brain.chat,聊天零阻塞。
+        """
+        if not (self._dsh_enabled and self._dsh_cli and self._dsh_router and self._dsh_executor):
+            return None
+        if not text or not text.strip():
+            return None
+        try:
+            decision = await self._dsh_router.decide(text, user_id=getattr(msg, "user_id", ""))
+            if decision.kind != "delegate":
+                logger.info("[pipeline] DSH 路由未委托 reason=%s", decision.reason)
+                return None
+
+            preset = decision.preset or "default"
+            logger.info("[pipeline] DSH 委托开始 preset=%s text=%s", preset, text[:80])
+
+            # 工作区:从任务文本提取显式路径,注册为临时工作区(供前端面板浏览/打开)。
+            if self._dsh_workspace is not None:
+                for path in _extract_paths(text):
+                    self._dsh_workspace.add_temp_root(path)
+                self._dsh_workspace.add_activity(
+                    kind="info", preset=preset,
+                    detail=f"收到任务: {text[:60]}",
+                )
+
+            # 会话聚合:判定是否续接历史会话(纯判定,无副作用)
+            # 跨 preset 查最近活跃 session:补充指令可能不含关键词,路由层判为新 preset
+            # (如 "顺便删重复" → default),但实际应续接上一轮(file-organizer)的 session。
+            import time as _time
+
+            session_id = None
+            if self._dsh_aggregator is not None:
+                from core.session_aggregator import SessionContext
+
+                # 找最近活跃的 session(跨所有 preset),优先查路由层判的 preset
+                active_preset, active_state = self._find_recent_active_session(preset)
+
+                agg_ctx = SessionContext(
+                    current=msg,
+                    active_session_id=active_state.get("session_id") if active_state else None,
+                    preset=active_preset,
+                    dsh_status="idle",  # L1:delegate 同步阻塞,处理新消息时上一轮必已完成
+                    last_activity_at=active_state.get("last_activity_at") if active_state else None,
+                )
+                agg_decision = await self._dsh_aggregator.decide(agg_ctx)
+                if agg_decision.action == "continue":
+                    session_id = agg_decision.session_id
+                    # 续接:用活跃 session 的 preset(而非路由层新判的 preset)
+                    preset = active_preset or preset
+                    logger.info(
+                        "[pipeline] DSH 会话聚合:续接 session=%s preset=%s reason=%s",
+                        session_id, preset, agg_decision.reason,
+                    )
+                else:
+                    logger.info("[pipeline] DSH 会话聚合:新会话 reason=%s", agg_decision.reason)
+
+            # 组装 DSH system_prompt:协议约束 + 激活工作区上下文(Agent 感知操作范围)
+            system_prompt = self._load_preset_protocol_prompt(preset)
+            active_root = (
+                self._dsh_workspace.active_root() if self._dsh_workspace is not None else None
+            )
+            if active_root:
+                workspace_note = (
+                    "\n\n[当前工作区] 用户已激活的工作目录是: {root}\n"
+                    "处理文件任务时,优先在此目录内操作;用户没给具体路径时,"
+                    "默认把此目录作为操作目标。".format(root=active_root)
+                )
+                system_prompt = (system_prompt + workspace_note) if system_prompt else workspace_note.strip()
+
+            result = await self._dsh_cli.delegate(
+                text,
+                preset=preset,
+                system_prompt=system_prompt,
+                session_id=session_id,
+            )
+
+            # 更新会话状态(记录本轮实际 session + 活动时间)
+            self._dsh_session_state[preset] = {
+                "session_id": getattr(result, "session_id", None) or session_id,
+                "last_activity_at": _time.time(),
+            }
+
+            # 尝试把 DSH 输出解析为 WorkProtocol JSON;解析失败则视为普通文本回复
+            protocol = _parse_work_protocol(result.final_response)
+            if protocol is not None:
+                op_results = await self._dsh_executor.execute(protocol)
+                reply_text = self._render_protocol_results(op_results)
+                logger.info("[pipeline] DSH 协议已执行 op_count=%d", len(op_results))
+                # 工作区:记录协议执行结果到操作日志时间线
+                if self._dsh_workspace is not None:
+                    for r in op_results:
+                        self._dsh_workspace.add_activity(
+                            kind="execute", preset=preset,
+                            detail=f"{r.get('op', '')}: {r.get('status', '')}",
+                            path=r.get("detail", ""),
+                        )
+            else:
+                reply_text = result.final_response
+                logger.info("[pipeline] DSH 返回纯文本,直接作为回复(len=%d)", len(reply_text))
+
+            # 人格化翻译:把机械结果翻译成伊塔口吻(失败降级原样返回)
+            if self._dsh_persona is not None:
+                try:
+                    reply_text = await self._dsh_persona.translate(reply_text)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[pipeline] 人格化翻译异常,保留机械文本: %s", exc)
+
+            usage = result.usage or {}
+            from core.llm_caller import LLMCallerResponse
+
+            return LLMCallerResponse(
+                text=reply_text,
+                provider="dsh",
+                model=f"dsh-{preset}",
+                tokens_prompt=int(usage.get("inputTokens", 0)),
+                tokens_completion=int(usage.get("outputTokens", 0)),
+                tool_results=[{"name": "dsh_delegate", "success": True, "duration_ms": 0}],
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[pipeline] DSH 委托失败,降级 LLMCaller: %s", exc)
+            return None
+
+    @staticmethod
+    def _load_preset_protocol_prompt(preset: str) -> str | None:
+        """从 work_presets.yaml 读 preset 的 protocol_prompt(DSH 输出协议约束)。"""
+        try:
+            import yaml
+            from pathlib import Path
+
+            data = yaml.safe_load(Path("config/work_presets.yaml").read_text(encoding="utf-8"))
+            presets = (data or {}).get("presets", {})
+            cfg = presets.get(preset, {})
+            return cfg.get("protocol_prompt") or None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[pipeline] 读取 preset protocol_prompt 失败 preset=%s: %s", preset, exc)
+            return None
+
+    @staticmethod
+    def _render_protocol_results(op_results: list[dict]) -> str:
+        """把协议执行结果渲染成用户可见文本(L1 简化,翻译层后续接入)。"""
+        lines = []
+        for r in op_results:
+            status = r.get("status", "failed")
+            op = r.get("op", "")
+            detail = str(r.get("detail", "")).strip()
+            if status == "ok":
+                lines.append(f"✓ {op}: {detail}")
+            elif status == "failed":
+                lines.append(f"✗ {op}: {detail}")
+            elif status == "denied":
+                lines.append(f"⛔ {op}: {detail}")
+            else:
+                lines.append(f"… {op}: {detail}")
+        return "\n".join(lines) if lines else "(无执行结果)"
+
     async def handle(
         self,
         msg: IncomingMessage | None = None,
@@ -530,12 +845,19 @@ class Pipeline:
         # ══════════════════════════════════════════════
         preferred_provider = office_mgr.get_preferred_provider() if is_office else None
         self._checkpoint_cancel(request_state, "before_model")
-        response = await self.brain.chat(
-            ctx_messages,
-            tools=tools,
-            tool_registry=self.tool_registry,
-            preferred_provider=preferred_provider,
-        )
+
+        # v0.4: DSH 工作模式委托(开关控制;关闭/未命中/失败时 dsh_response=None,走原 brain)
+        dsh_response = await self._try_delegate_to_dsh(model_content, msg)
+        if dsh_response is not None:
+            response = dsh_response
+            logger.info("[pipeline] DSH 委托命中,跳过 brain.chat(model=%s)", getattr(response, "model", "dsh"))
+        else:
+            response = await self.brain.chat(
+                ctx_messages,
+                tools=tools,
+                tool_registry=self.tool_registry,
+                preferred_provider=preferred_provider,
+            )
         self._checkpoint_cancel(request_state, "after_model")
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None)
@@ -1379,6 +1701,7 @@ class Pipeline:
             actor_id=identity.actor_id,
             channel=identity.channel,
             channel_account_id=identity.channel_account_id,
+            timestamp=msg.timestamp if msg is not None else None,
         )
 
     def _context_attachments(
@@ -3981,3 +4304,38 @@ class Pipeline:
             last_seq_idx = seq_idx
             last_seg_idx = seg_idx
             last_item_type = item_type
+
+
+def _extract_paths(text: str) -> list[str]:
+    """从用户任务文本中提取显式 Windows 路径(如 D:\\xxx、E:\\Downloads)。
+
+    仅匹配"盘符:\\..."形态的绝对路径;相对路径/模糊描述不提取(由工作区预设根覆盖)。
+    返回去重后的路径列表。
+    """
+    if not text:
+        return []
+    found: list[str] = []
+    for match in re.finditer(r"[A-Za-z]:\\[^\s\"',，。;；:]+", text):
+        raw = match.group(0).rstrip("\\/")
+        if raw not in found:
+            found.append(raw)
+    return found
+
+
+def _parse_work_protocol(text: str) -> dict | None:
+    """尝试把 DSH 输出解析为 WorkProtocol JSON;失败返回 None(视为普通文本)。"""
+    if not text:
+        return None
+    candidate = text.strip()
+    # 剥离 markdown 代码块围栏(```json ... ``` / ``` ... ```)
+    if candidate.startswith("```"):
+        candidate = candidate.strip("`")
+        if candidate.lower().startswith("json"):
+            candidate = candidate[4:].strip()
+    try:
+        obj = json.loads(candidate)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if isinstance(obj, dict) and isinstance(obj.get("task_type"), str):
+        return obj
+    return None

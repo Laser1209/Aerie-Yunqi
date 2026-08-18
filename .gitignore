@@ -26,6 +26,10 @@ data/
 /logs/
 *.log
 
+# ffmpeg binaries (large, fetched via scripts/fetch_ffmpeg.py — not committed)
+ffmpeg/bin/
+ffmpeg/*.zip
+
 # Temporary files (Block-5D R4) — entire tree is git-ignored
 tmp/
 
@@ -39,6 +43,7 @@ dist/
 build/
 out/
 electron/dist*/
+electron/runtime-build/
 Spotlight/public/*.exe
 Spotlight/public/*.blockmap
 
@@ -76,3 +81,20 @@ aerie_mobile/
 # OS
 *.lnk
 desktop.ini
+
+# Transient diagnostics & temp artifacts (not for commit)
+_imp*.txt
+_res*.txt
+_syn*.txt
+_test1.txt
+tools/diag_out.txt
+tools/diag_report.txt
+tools/diag_weba
+electron/_unit_test_out.txt
+ffmpeg/_checkpath.txt
+.reasonix/
+.workbuddy/
+.trae/documents/prompt3
+CCPrompt/
+.dbg/
+_tmp_asar_artifacts/

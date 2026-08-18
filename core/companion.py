@@ -271,11 +271,31 @@ _PHOTO_FOCUS_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("全身", ("全身", "全身照", "整个你")),
 )
 
-# 局部特写 focus 集合：派生自 _PHOTO_FOCUS_TABLE，除「全身」外的所有 focus 标签。
-# 命中时走精简 base —— 不写身高/体重/体脂率/杯数/三围/发色/眼色等无关标签，
+# 局部特写 focus 集合：派生自 _PHOTO_FOCUS_FULL_TABLE（细表+主表），除「全身」外的
+# 所有 focus 标签。命中时走精简 base —— 不写身高/体重/体脂/围/发色/眼色等无关标签，
 # 文字层仅用「人物外貌以参考图为准」指代，由 three_view 图生图锁人物一致性。
+#
+# 细表（方案 A）：在父部位之上再拆到单个部位，提取与 LLM 归一化都优先细表，
+# 命中即用更细 label（如「大腿」而非「双腿」），未命中才回退主表父级别。
+_PHOTO_FOCUS_DETAIL_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("脚踝", ("脚踝", "踝部", "纤细脚踝")),
+    ("足背", ("足背", "脚背", "脚面")),
+    ("脚趾", ("脚趾", "脚趾头")),
+    ("小腿", ("小腿", "小腿肚")),
+    ("大腿", ("大腿", "大腿内侧")),
+    ("膝盖", ("膝盖", "膝窝")),
+    ("手指", ("手指", "指节", "指尖", "指骨")),
+    ("手腕", ("手腕", "腕骨", "手踝")),
+    ("掌心", ("掌心", "掌纹", "手掌心")),
+    ("锁骨", ("锁骨", "锁骨窝", "锁骨线条")),
+    ("脖颈", ("脖颈", "颈侧", "脖颈线条")),
+    ("腰肢", ("腰窝", "腰肢", "腰际线")),
+    ("耳廓", ("耳廓", "耳垂", "耳边缘")),
+    ("嘴唇", ("嘴唇", "唇瓣", "唇部", "嘴角")),
+)
+_PHOTO_FOCUS_FULL_TABLE = _PHOTO_FOCUS_DETAIL_TABLE + _PHOTO_FOCUS_TABLE
 _CLOSEUP_FOCUS_SET: frozenset[str] = frozenset(
-    label for label, _ in _PHOTO_FOCUS_TABLE if label != "全身"
+    label for label, _ in _PHOTO_FOCUS_FULL_TABLE if label != "全身"
 )
 _PHOTO_POSE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("侧躺", ("侧躺", "侧卧", "躺床上", "躺下")),
@@ -313,6 +333,25 @@ _PHOTO_STYLE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("居家感", ("居家", "生活感", "日常")),
     ("氛围感", ("氛围", "意境", "情绪")),
 )
+
+# orientation 维度（第 2 条）：生图横竖/方方向。LLM 语义自补或关键词都可产出，
+# 首选中文 tag（竖/横/方）回落；命中后由 _image_orientation_size 做成 3 档尺寸。
+_PHOTO_ORIENTATION_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("横", ("横", "横屏", "横构图", "横拍", "横向")),
+    ("方", ("方", "方形", "方构图", "正方形")),
+    ("竖", ("竖", "竖屏", "竖构图", "竖拍", "纵向")),
+)
+_PHOTO_ORIENTATION_SIZE: dict[str, str] = {
+    "横": _IMAGE_SIZE_LANDSCAPE,
+    "方": "1024x1024",
+    "竖": _IMAGE_SIZE_PORTRAIT,
+}
+
+
+def _image_orientation_for_size(orientation: str, fallback: str = _IMAGE_SIZE_PORTRAIT) -> str:
+    """把 orientation（竖/横/方）映射为具体像素尺寸档，未命中回退 fallback。"""
+    size = _PHOTO_ORIENTATION_SIZE.get(str(orientation or "").strip())
+    return size if size else fallback
 
 # 手持自拍硬约束（POV）：所有人物类生图必须以此为前提——照片是伊塔本人手持
 # 手机拍的（前置自拍 / 后置对镜 / 支架定时），绝不出现第三方拍摄者视角。
@@ -374,6 +413,26 @@ _PHOTO_FOCUS_RULES: dict[str, dict[str, str]] = {
     "全身": {"default_pose": "站立", "default_angle": "全身入镜"},
 }
 
+# 方案A 细分子部位 → 父部位映射：细标签在 _PHOTO_FOCUS_RULES 无默认姿态时，
+# 回退继承父部位（如 大腿→双腿、脚踝→双脚）的协同默认姿态，保证"看看大腿"这类细特写
+# 也能自动补出合理姿态，不落回 base 固定场景而与之冲突。
+_PHOTO_FOCUS_PARENT: dict[str, str] = {
+    "脚踝": "双脚",
+    "足背": "双脚",
+    "脚趾": "双脚",
+    "小腿": "双腿",
+    "大腿": "双腿",
+    "膝盖": "双腿",
+    "手指": "手",
+    "手腕": "手",
+    "掌心": "手",
+    "锁骨": "肩颈锁骨",
+    "脖颈": "肩颈锁骨",
+    "腰肢": "腰",
+    "耳廓": "脸庞",
+    "嘴唇": "脸庞",
+}
+
 
 def _apply_focus_coverage(spec: dict[str, str]) -> dict[str, str]:
     """按 focus 协同覆盖：仅在用户未给姿态/机位时自动补齐缺省值。
@@ -382,6 +441,10 @@ def _apply_focus_coverage(spec: dict[str, str]) -> dict[str, str]:
     """
     focus = str(spec.get("focus") or "").strip()
     rule = _PHOTO_FOCUS_RULES.get(focus)
+    if not rule:
+        # 方案A：细子部位未定义默认姿态 → 回退继承父部位规则（如 大腿→双腿、脚踝→双脚）
+        parent = _PHOTO_FOCUS_PARENT.get(focus)
+        rule = _PHOTO_FOCUS_RULES.get(parent) if parent else None
     if not rule:
         return dict(spec)
     out = dict(spec)
@@ -413,11 +476,15 @@ def _extract_photo_spec(user_raw: str) -> dict[str, str]:
     这是关键词保底：语义自补（_semantic_photo_spec）优先，失败时才回落到这里。
     """
     return {
-        "focus": _match_photo_spec(user_raw, _PHOTO_FOCUS_TABLE),
+        "focus": (
+            _match_photo_spec(user_raw, _PHOTO_FOCUS_DETAIL_TABLE)
+            or _match_photo_spec(user_raw, _PHOTO_FOCUS_TABLE)
+        ),
         "pose": _match_photo_spec(user_raw, _PHOTO_POSE_TABLE),
         "angle": _match_photo_spec(user_raw, _PHOTO_ANGLE_TABLE),
         "scene": _match_photo_spec(user_raw, _PHOTO_SCENE_TABLE),
         "style": _match_photo_spec(user_raw, _PHOTO_STYLE_TABLE),
+        "orientation": _match_photo_spec(user_raw, _PHOTO_ORIENTATION_TABLE),
     }
 
 
@@ -3044,18 +3111,20 @@ class Companion:
         system = (
             "你是伊塔的摄影构图分析器。用户给了一句给恋人的指令（例如'看看腿''在床上躺着拍一张'），"
             "你要理解其隐含语义，把它拆成一张写实生活照的画面规格。\n"
-            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style，值用中文或空字符串：\n"
-            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒"}\n'
+            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style/orientation，值用中文或空字符串：\n"
+            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒","orientation":"竖"}\n'
             "各键含义与合法取值：\n"
-            "- focus（画面主体特写）：双腿/双脚/手/腰/肩颈锁骨/背影/头发/脸庞/眼睛/全身\n"
+            "- focus（画面主体特写）：双腿/双脚/手/腰/肩颈锁骨/背影/头发/脸庞/眼睛/全身，"
+            "可细分到单个部位：脚踝/足背/脚趾/小腿/大腿/膝盖/手指/手腕/掌心/锁骨/脖颈/腰肢/耳廓/嘴唇\n"
             "- pose（人物姿态）：侧躺/平躺/坐/倚靠/跪坐/站立/蹲下/盘腿/跷腿\n"
             "- angle（拍摄机位）：仰视低角度/俯视高角度/平视/第一人称/特写/全身入镜\n"
-            "- scene（环境场景）：床上/沙发/浴室/厨房/窗前/阳台/工作室/玄关\n"
-            "- style（整体氛围）：诱惑感/慵懒/清新/居家感/氛围感\n"
+            "- scene（场景）：床上/沙发/浴室/厨房/窗前/阳台/工作室/玄关\n"
+            "- style（氛围）：诱惑感/慵懒/清新/居家感/氛围感\n"
+            "- orientation（画面方向）：竖/横/方，仅当事物明确暗示横/方构图时填，默认竖\n"
             "推断规则：\n"
-            "1. 指令提到身体部位，focus 填对应部位（腿/脚/手/腰/脸/眼睛/背影/头发/全身）。\n"
+            "1. 指令提到身体部位，focus 填最具体的部位（能细化就细化到 脚踝/大腿/手指 等单部位，不只给大类）。\n"
             "2. 若语义暗示了姿态/机位但未明说，自行补全最合理的（如'看看腿'→pose=坐，angle=特写）。\n"
-            "3. 提到环境填 scene，提到氛围/情绪填 style。\n"
+            "3. 提到环境填 scene，提到情绪/氛围填 style，明确暗示横/方构图才填 orientation。\n"
             "4. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字。\n"
             "硬性前提：这张照片是伊塔本人手持手机拍摄的自拍（前置自拍/后置对镜/支架定时），"
             "所有机位都是她自己的取景，不存在摄影师/他人拍摄。angle 只表达她从哪个方位/距离拍自己。"
@@ -3071,11 +3140,12 @@ class Companion:
             if not obj:
                 return None
             spec = {
-                "focus": _normalize_spec_value(obj.get("focus"), _PHOTO_FOCUS_TABLE),
+                "focus": _normalize_spec_value(obj.get("focus"), _PHOTO_FOCUS_FULL_TABLE),
                 "pose": _normalize_spec_value(obj.get("pose"), _PHOTO_POSE_TABLE),
                 "angle": _normalize_spec_value(obj.get("angle"), _PHOTO_ANGLE_TABLE),
                 "scene": _normalize_spec_value(obj.get("scene"), _PHOTO_SCENE_TABLE),
                 "style": _normalize_spec_value(obj.get("style"), _PHOTO_STYLE_TABLE),
+                "orientation": _normalize_spec_value(obj.get("orientation"), _PHOTO_ORIENTATION_TABLE),
             }
             if not any(spec.values()):
                 return None
@@ -3109,6 +3179,13 @@ class Companion:
                 spec = await self._semantic_photo_spec(user_raw)
                 if not spec:
                     spec = _extract_photo_spec(user_raw)
+        # orientation（第 2 条）：语义自补产出方向时，回填 candidate.size 为三档之一，
+        # 让下游 base 构图方向、workflow metadata、图生图尺寸统一用同一方向。
+        if spec and isinstance(candidate, dict) and str(spec.get("orientation") or "").strip():
+            try:
+                candidate["size"] = _image_orientation_for_size(spec["orientation"])
+            except Exception:
+                logger.debug("orientation size reflow failed", exc_info=True)
         base = self._compose_base_image_prompt(prompt_key, candidate, spec=spec)
         try:
             context = self._image_world_context(candidate)

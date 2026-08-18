@@ -14,9 +14,15 @@ from core.companion import (
     _extract_llm_json,
     _extract_photo_spec,
     _image_event_desc,
+    _image_orientation_for_size,
     _normalize_spec_value,
+    _PHOTO_FOCUS_DETAIL_TABLE,
     _PHOTO_FOCUS_TABLE,
+    _PHOTO_ORIENTATION_TABLE,
+    _PHOTO_ORIENTATION_SIZE,
     _PHOTO_POSE_TABLE,
+    _IMAGE_SIZE_LANDSCAPE,
+    _IMAGE_SIZE_PORTRAIT,
     _prompt_key_for_visual_topic,
     _visual_topic_zh,
 )
@@ -85,7 +91,7 @@ def test_compose_none_base_never_empty():
 def test_focus_legs_auto_fills_pose():
     # 用户只给 focus（未给姿态）→ 自动补默认姿态"坐"，避免落回 base 固定场景
     out = _compose_modular_prompt("base", _spec("看看你的大腿"))
-    assert "画面重点聚焦在双腿" in out
+    assert "画面重点聚焦在大腿" in out
     assert "她坐着" in out
 
 
@@ -341,3 +347,52 @@ def test_persist_image_event_skips_empty_desc():
     import asyncio
     asyncio.run(run())
     assert stub.stores == []
+
+
+# ── 方向2：orientation 横竖方（关键词提取 + 归一化 + 尺寸档映射） ─────────
+def test_extract_orientation_keyword_landscape():
+    # "横着/横构图" → orientation=横
+    assert _extract_photo_spec("横着拍一张")["orientation"] == "横"
+
+
+def test_extract_orientation_keyword_square():
+    assert _extract_photo_spec("方构图来一张")["orientation"] == "方"
+
+
+def test_extract_orientation_default_portrait_empty():
+    # 未明确方向 → 空串（由 base 按意图默认竖）
+    assert _extract_photo_spec("拍一张")["orientation"] == ""
+
+
+def test_normalize_orientation_approximation():
+    # LLM 近似表述（如"横构图"）→ 归一化到"横"
+    assert _normalize_spec_value("横构图", _PHOTO_ORIENTATION_TABLE) == "横"
+    assert _normalize_spec_value("竖向", _PHOTO_ORIENTATION_TABLE) == "竖"
+
+
+def test_orientation_to_size_mapping():
+    from core.companion import _image_orientation_for_size
+
+    assert _image_orientation_for_size("横") == _IMAGE_SIZE_LANDSCAPE
+    assert _image_orientation_for_size("方") == "1024x1024"
+    assert _image_orientation_for_size("竖") == _IMAGE_SIZE_PORTRAIT
+    assert _image_orientation_for_size("未定义", fallback=_IMAGE_SIZE_PORTRAIT) == _IMAGE_SIZE_PORTRAIT
+
+
+# ── 方案A 细分子部位（父部位 → 子部位回退） ──────────────────
+def test_focus_detail_prefers_child_over_parent():
+    # 细表优先：提到"脚踝" → 子标签"脚踝"，而非父"双脚"
+    assert _extract_photo_spec("看看你的脚踝")["focus"] == "脚踝"
+    assert _extract_photo_spec("看看你的大腿")["focus"] == "大腿"
+
+
+def test_focus_detail_falls_back_to_parent():
+    # 未提子部位、只给父类"看看腿" → 回退"双腿"
+    assert _extract_photo_spec("看看腿")["focus"] == "双腿"
+
+
+def test_focus_child_is_in_closeup_set():
+    from core.companion import _CLOSEUP_FOCUS_SET
+
+    assert "大腿" in _CLOSEUP_FOCUS_SET
+    assert "脚踝" in _CLOSEUP_FOCUS_SET

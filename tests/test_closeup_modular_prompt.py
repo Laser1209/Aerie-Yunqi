@@ -59,7 +59,12 @@ def _call(prompt_key: str, candidate: dict | None = None, spec: dict | None = No
 
 class TestCloseupFocusSet:
     def test_contains_expected_labels(self):
-        expected = {"双腿", "双脚", "手", "腰", "肩颈锁骨", "背影", "头发", "脸庞", "眼睛"}
+        expected = {
+            "双腿", "双脚", "手", "腰", "肩颈锁骨", "背影", "头发", "脸庞", "眼睛",
+            # 方案A · 细分子部位
+            "脚踝", "足背", "脚趾", "小腿", "大腿", "膝盖", "手指", "手腕",
+            "掌心", "锁骨", "脖颈", "腰肢", "耳廓", "嘴唇",
+        }
         assert expected == _CLOSEUP_FOCUS_SET
 
     def test_does_not_contain_full_body(self):
@@ -79,7 +84,7 @@ class TestCloseupBasePrompt:
             ("看看手", "手"),
             ("看看腿", "双腿"),
             ("看看脚", "双脚"),
-            ("看看锁骨", "肩颈锁骨"),
+            ("看看锁骨", "锁骨"),
             ("拍个背影", "背影"),
         ],
     )
@@ -281,7 +286,7 @@ class TestExtractAndCloseupIntegration:
             ("看看腿", "双腿"),
             ("看看脚", "双脚"),
             ("看看腰", "腰"),
-            ("看看锁骨", "肩颈锁骨"),
+            ("看看锁骨", "锁骨"),
             ("拍个背影", "背影"),
             ("看看头发", "头发"),
             ("看脸", "脸庞"),

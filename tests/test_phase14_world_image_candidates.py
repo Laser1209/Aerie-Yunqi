@@ -890,7 +890,7 @@ async def test_consume_replay_survives_process_event_exception(tmp_path):
         return {"status": "ok", "sequence": int(getattr(event, "sequence", 0))}
 
     consumer.process_event = _flaky_process  # type: ignore[method-assign]
-    consumer.world_port = WorldPortStub(
+    consumer._world_port_provider = lambda: WorldPortStub(
         [_evt(1, "key-a"), _evt(2, "key-b")]
     )
 
@@ -1154,4 +1154,41 @@ async def test_deliver_without_candidate_keeps_plan_unchanged(tmp_path):
     ok = await consumer._deliver({"delivery_plan": plan})
     assert ok is True
     assert sender.plan == plan
+
+
+@pytest.mark.asyncio
+async def test_world_port_provider_tracks_runtime_replacement(tmp_path):
+    """Scheme-3 回归：consumer 每次消费都取当前 world_port，运行中被替换
+    （如 /api/world/runtime/bind 把 InProcess 换成 sidecar 适配器）后立即读到
+    新适配器的事件，杜绝 publish 与 consume 端口分离导致的生图断链。
+    """
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    holder = {"port": WorldPortStub()}
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=lambda: holder["port"],
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "scheme3-track.json"),
+        clock=_clock,
+    )
+
+    # 端口 A：无事件 → 空消费（修复前 consumer 持有的旧场景）。
+    res_a = await consumer.consume_replay(last_seq=0)
+    assert res_a == []
+
+    # 运行时替换端口（模拟 runtime/bind 注入的适配器），事件落进新端口。
+    port_b = WorldPortStub(events=[_candidate_event()])
+    holder["port"] = port_b
+
+    # 同一 consumer 必须立即读到新端口的事件并 ACK —— 修复前它持有旧端口拿不到。
+    res_b = await consumer.consume_replay(last_seq=0)
+    assert len(res_b) == 1
+    assert res_b[0]["status"] == "completed"
+    assert port_b.acks == [7]
 

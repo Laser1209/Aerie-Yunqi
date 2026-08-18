@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -269,6 +270,13 @@ _PHOTO_FOCUS_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("眼睛", ("眼睛", "双眼", "眼神")),
     ("全身", ("全身", "全身照", "整个你")),
 )
+
+# 局部特写 focus 集合：派生自 _PHOTO_FOCUS_TABLE，除「全身」外的所有 focus 标签。
+# 命中时走精简 base —— 不写身高/体重/体脂率/杯数/三围/发色/眼色等无关标签，
+# 文字层仅用「人物外貌以参考图为准」指代，由 three_view 图生图锁人物一致性。
+_CLOSEUP_FOCUS_SET: frozenset[str] = frozenset(
+    label for label, _ in _PHOTO_FOCUS_TABLE if label != "全身"
+)
 _PHOTO_POSE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("侧躺", ("侧躺", "侧卧", "躺床上", "躺下")),
     ("平躺", ("平躺", "仰躺", "躺着")),
@@ -509,6 +517,10 @@ _IMAGE_LIGHT_RELAY_TIMEOUT = 8.0
 # 同一天内不会在窗口内重复出现，故较长窗口不会误伤正常的新场景。
 _IMAGE_TOPIC_DEDUP_SEC = 14400
 
+# 主动消息配图延迟：文本先到用户端后，图片延迟此秒数再投递，让消息时序更自然。
+# 测试时可 patch 为 0 跳过等待。
+_COMPANION_IMAGE_DELAY_SEC = 2.0
+
 from core.world_phase import (  # P1 单一真源：phase → 中文/光线
     TIME_OF_DAY_CN as _TIME_OF_DAY_CN,
     TIME_OF_DAY_LIGHT_CN as _TIME_OF_DAY_LIGHT_CN,
@@ -659,7 +671,7 @@ class Companion:
         # 用同步适配器桥接旧 LongTermMemory 接口，context_builder/pipeline 无需改动。
         self._layered_memory = LayeredMemory(
             db=self.db,
-            chroma_persist_dir=os.getenv("AERIE_CHROMA_DIR", "data/chroma"),
+            chroma_persist_dir=os.getenv("AERIE_CHROMA_DIR") or str(data_dir() / "chroma"),
             embedding_fn=resolve_embedding_fn(),
         )
         self.memory = LayeredMemorySyncAdapter(self._layered_memory)
@@ -946,7 +958,10 @@ class Companion:
     async def start(self) -> None:
         if self._started:
             return
+        from core.startup_progress import mark_step
+
         self.queue.start()
+        mark_step("queue", "done", "消息发送队列")
         if self.chat_request_worker is not None:
             try:
                 await self.chat_request_worker.start()
@@ -981,6 +996,7 @@ class Companion:
 
         # Start QQ connection in background (it will poll for port open)
         asyncio.create_task(self.qq.connect())
+        mark_step("qq", "running", "连接 NapCat")
 
         # Start daily emotion decay scheduler
         self._daily_decay_task = asyncio.create_task(self._run_daily_decay())
@@ -1040,6 +1056,7 @@ class Companion:
         qq_ready = await self.qq.wait_until_ready(timeout=wait_timeout)
 
         if qq_ready:
+            mark_step("qq", "done", "NapCat 已就绪")
             logger.info("[Startup] QQ ready, proceeding with full startup")
             # ── Phase 2: 通信层就绪（QQ 已就绪） ──
             # (SendQueue / Router / Pipeline 已经在 __init__ 中初始化好，
@@ -1064,6 +1081,7 @@ class Companion:
                     self._boot_greeting_fired = True
                     asyncio.create_task(self._boot_qq_greeting())
         else:
+            mark_step("qq", "error", "NapCat 未就绪(降级模式)")
             logger.warning(
                 "[Startup] QQ not ready after %ss; starting in degraded mode "
                 "(push scheduler paused)",
@@ -1297,6 +1315,16 @@ class Companion:
         """Return the recent internal-state snapshots for the trend chart."""
         return self.internal_state.history(limit=limit)
 
+    def _world_port_provider(self) -> Any | None:
+        """Return the CURRENT world_port for the image candidate consumer (scheme-3).
+
+        Kept as a method/provided-callable so the consumer always reads the
+        up-to-date world port even after a runtime /api/world/runtime/bind
+        replaces ``self.world_port`` (InProcess <-> sidecar <-> null).  This is
+        what keeps publish and consume sharing the same adapter instance.
+        """
+        return getattr(self, "world_port", None)
+
     def _get_world_image_candidate_consumer(self) -> Any:
         existing = getattr(self, "world_image_candidate_consumer", None)
         if existing is not None:
@@ -1507,7 +1535,7 @@ class Companion:
         self.world_image_candidate_consumer = WorldImageCandidateConsumer(
             feature_flags=self.feature_flags,
             image_workflow=workflow,
-            world_port=getattr(self, "world_port", None),
+            world_port=self._world_port_provider,
             push_policy=push_policy,
             proactive_judge=getattr(self, "proactive_judge", None),
             image_budget=image_budget,
@@ -3070,11 +3098,17 @@ class Companion:
         健壮性：世界数据/轻量 LLM 接力是"锦上添花"，任何异常都必须退回基础提示词，
         绝不把异常冒泡成空串——否则 generate_image 会因 empty_prompt 拒绝，生图直接放弃。
         """
-        spec = None
+        # P4 模块化提示词：spec 提前完整解析（语义优先 → 关键词保底），
+        # 让 base 构造器能感知 focus 并分支——局部特写走精简 base，
+        # 全身/非特写保留完整人设。旧实现只做了语义优先，失败后未在这里兜底，
+        # 导致 base 构造阶段拿不到 focus。
+        spec: dict[str, str] | None = None
         if (candidate or {}).get("scene") == "local_send":
             user_raw = str((candidate or {}).get("user_raw") or "").strip()
             if user_raw:
                 spec = await self._semantic_photo_spec(user_raw)
+                if not spec:
+                    spec = _extract_photo_spec(user_raw)
         base = self._compose_base_image_prompt(prompt_key, candidate, spec=spec)
         try:
             context = self._image_world_context(candidate)
@@ -3108,6 +3142,34 @@ class Companion:
             profile = root.get("profile") or {}
         except Exception:
             appearance, profile = {}, {}
+        key = str(prompt_key or "default")
+        # 构图方向：优先用候选自带 size（发布时已由伊塔按场景决断），
+        # 否则按 prompt_key 场景映射 16:9 / 9:16。横竖屏由伊塔自决。
+        image_size = str((candidate or {}).get("size") or "").strip() or _image_size_for_prompt_key(key)
+        orientation = _image_orientation_phrase(image_size)
+        # ── P4 局部特写分支 ──
+        # 用户明确要看某个部位（手/腿/脚/腰/肩颈/背影/头发/脸/眼睛）时，
+        # base 只写「人物外貌以参考图为准」，不写身高/体重/体脂率/杯数/三围/
+        # 发色/眼色等无关标签。由 three_view 图生图 + 参考图锁人物一致性，
+        # 文字层只描述对应部位的构图/姿态/机位。
+        focus = str((spec or {}).get("focus") or "").strip()
+        if focus and focus in _CLOSEUP_FOCUS_SET:
+            base = (
+                "一张写实照片，人物外貌以参考图为准。"
+                "画面风格自然、生活化、暖色调、真实摄影质感，"
+                "不要动漫风，不要文字水印。"
+            )
+            full = f"{base}{orientation}。"
+            full = f"{full}{_SELFIE_POV_PHRASE}"
+            # 局部特写的 modular 叠加（focus/pose/angle/scene/style），
+            # _compose_modular_prompt 会统一追加 "画面重点聚焦在{focus}，其余虚化"。
+            if (candidate or {}).get("scene") == "local_send" and spec:
+                full = _compose_modular_prompt(full, spec)
+            else:
+                # 非 local_send 兜底：手动追加 focus，避免漏掉构图主轴。
+                full = f"{full}画面重点聚焦在{focus}，其余虚化。"
+            return full
+        # ── 全身 / focus 为空 / 主动发图：完整人设 ──
         height = profile.get("height_cm", 184)
         body = str(profile.get("body_type", "身材修长") or "身材修长")
         hair = str(appearance.get("hair", "银灰色长发") or "银灰色长发")
@@ -3139,11 +3201,6 @@ class Companion:
             "五官清冷精致，气质温柔的大姐姐。画面风格自然、生活化、暖色调、真实摄影质感，"
             "不要动漫风，不要文字水印。"
         )
-        key = str(prompt_key or "default")
-        # 构图方向：优先用候选自带 size（发布时已由伊塔按场景决断），
-        # 否则按 prompt_key 场景映射 16:9 / 9:16。横竖屏由伊塔自决。
-        image_size = str((candidate or {}).get("size") or "").strip() or _image_size_for_prompt_key(key)
-        orientation = _image_orientation_phrase(image_size)
         if key == "environment_object":
             # 环境/物件照：第一人称"她拍下的视角"，不强制带人物形象。
             # topic 可能来自世界模拟的公寓物件 ID 或重庆 POI（reason_code: world_visual:<topic>）。
@@ -3797,10 +3854,94 @@ class Companion:
 
             if delivered:
                 logger.info("[Push] Delivered scene=%s", scene_name)
+                # P4 companion image: 文本投递成功后，有概率配一张衔接图片。
+                # fire-and-forget：不阻塞主动消息主流程，失败静默降级。
+                try:
+                    self._maybe_attach_companion_image(
+                        master_id, content, scene_name,
+                    )
+                except Exception:
+                    logger.debug(
+                        "[Push] companion image trigger failed scene=%s",
+                        scene_name, exc_info=True,
+                    )
             return delivered
         except Exception:
             logger.exception("[Push] dispatch error: %s", scene_name)
             return False
+
+    def _maybe_attach_companion_image(
+        self,
+        master_id: int | str,
+        content: str,
+        scene_name: str,
+    ) -> None:
+        """主动消息配图：文本投递成功后，按概率触发一张衔接图片。
+
+        概率由 settings.proactive.companion_image_probability 控制（默认 0.3）。
+        图片复用 local_send 路径——把文本内容当 user_raw，走完整的图片生成工作流
+        （模块化提示词 + three_view 图生图 + 世界上下文接力）。
+        fire-and-forget：create_task 异步执行，不阻塞消息投递，失败仅 debug 日志。
+        """
+        proactive = self.settings.get("proactive", {}) if isinstance(self.settings, dict) else {}
+        probability = float(proactive.get("companion_image_probability", 0.3))
+        if probability <= 0 or random.random() > probability:
+            return
+        # 前置检查：world_port 和 consumer 必须可用
+        world_port = getattr(self, "world_port", None)
+        if not world_port or not getattr(world_port, "publish_image_candidate", None):
+            return
+        content = str(content or "").strip()
+        if not content:
+            return
+
+        async def _fire() -> None:
+            # 延迟让文本先到用户端，图片紧随其后更自然。
+            await asyncio.sleep(_COMPANION_IMAGE_DELAY_SEC)
+            try:
+                result = await self.publish_image_candidate({
+                    "candidate_id": f"proactive-companion-{scene_name}-{int(time.time())}",
+                    "idempotency_key": f"proactive-companion:{scene_name}:{int(time.time())}",
+                    "scene": "local_send",
+                    "user_raw": content,
+                    "owner_id": master_id,
+                    "channel": "local_chat",
+                    "target": master_id,
+                    "prompt_key": "role_in_scene",
+                    "reason_code": f"proactive_companion:{scene_name}",
+                    "source": "generated",
+                    "score": 0.5,
+                    "persona_id": self._active_persona_id(),
+                })
+                status = str((result or {}).get("status", ""))
+                if status in ("published", "delivered", "sent", "ok", "success"):
+                    logger.info(
+                        "[Push] companion image delivered scene=%s status=%s",
+                        scene_name, status,
+                    )
+                    # P3 发图自我认知：记录为 EVENT 长期记忆。
+                    await self._persist_image_event(
+                        user_id=int(master_id),
+                        desc=f"主动消息配图（{scene_name}）：{content[:60]}",
+                        channel="local_chat",
+                        image_path=str((result or {}).get("image_path", "")),
+                    )
+                else:
+                    logger.debug(
+                        "[Push] companion image not consumed scene=%s status=%s",
+                        scene_name, status,
+                    )
+            except Exception:
+                logger.debug(
+                    "[Push] companion image generation failed scene=%s",
+                    scene_name, exc_info=True,
+                )
+
+        try:
+            asyncio.create_task(_fire())
+        except RuntimeError:
+            # 无事件循环时忽略（如单元测试环境）
+            pass
 
     async def check_idle(self, user_id: int, idle_seconds: float) -> bool:
         """Called externally when user is detected idle beyond threshold.

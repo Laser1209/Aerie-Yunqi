@@ -200,7 +200,14 @@ class WorldImageCandidateConsumer:
     ) -> None:
         self.feature_flags = feature_flags
         self.image_workflow = image_workflow
-        self.world_port = world_port
+        # Scheme-3: do NOT pin a world_port instance at construction.  ``world_port``
+        # may be a provider callable (returning the CURRENT world port each call) so
+        # publish and consume always share the same adapter even after a runtime
+        # world_port swap (e.g. /api/world/runtime/bind).  A bare instance is still
+        # accepted and normalized to a constant provider for callers/tests.
+        self._world_port_provider = (
+            world_port if callable(world_port) else (lambda fixed=world_port: fixed)
+        )
         self.push_policy = push_policy
         self.proactive_judge = proactive_judge
         self.image_budget = image_budget
@@ -210,8 +217,16 @@ class WorldImageCandidateConsumer:
         self.prompt_resolver = prompt_resolver or self._default_prompt_for_candidate
         self.sender = sender
 
+    def _world_port(self) -> Any | None:
+        """Resolve the CURRENT world port via the provider (scheme-3)."""
+        try:
+            return self._world_port_provider()
+        except Exception:
+            logger.debug("world image candidate world_port provider failed", exc_info=True)
+            return None
+
     async def consume_replay(self, *, last_seq: int | None = None) -> list[dict[str, Any]]:
-        replay = getattr(self.world_port, "replay_events", None)
+        replay = getattr(self._world_port(), "replay_events", None)
         if not callable(replay):
             return []
         try:
@@ -910,7 +925,7 @@ class WorldImageCandidateConsumer:
         self,
         approval: dict[str, str],
     ) -> tuple[Any, dict[str, Any]] | None:
-        replay = getattr(self.world_port, "replay_events", None)
+        replay = getattr(self._world_port(), "replay_events", None)
         if not callable(replay):
             return None
         try:
@@ -938,10 +953,11 @@ class WorldImageCandidateConsumer:
         return None
 
     async def _ack(self, seq: int) -> bool:
-        if seq <= 0 or self.world_port is None or not hasattr(self.world_port, "ack"):
+        port = self._world_port()
+        if seq <= 0 or port is None or not hasattr(port, "ack"):
             return False
         try:
-            await _maybe_await(self.world_port.ack(seq))
+            await _maybe_await(port.ack(seq))
             return True
         except Exception:
             logger.debug("world image candidate ack failed", exc_info=True)

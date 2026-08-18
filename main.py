@@ -134,6 +134,7 @@ async def _main() -> None:
     from core.api_server import start_api
     from core.paths import data_dir
     from core.runtime_config import RuntimeConfigService
+    from core.startup_progress import mark_step
 
     settings = load_settings()
     http_cfg = get_http_config()
@@ -145,11 +146,14 @@ async def _main() -> None:
     runtime_config_service = RuntimeConfigService(
         state_path=data_dir() / "runtime_config.json",
     )
+    mark_step("bootstrap", "done", "配置与依赖就绪")
+    mark_step("companion", "running", "初始化组件(DB/QQ/世界模拟/DSH)")
     companion = Companion(
         settings=settings,
         runtime_config_service=runtime_config_service,
     )
     await companion.start()
+    mark_step("companion", "done", "组件初始化完成")
 
     # v9.1: config hot-reloader — watches config/ YAML files and
     # pushes changes to interested modules without a full restart.
@@ -202,6 +206,7 @@ async def _main() -> None:
         logger.exception("config hot-reloader init failed, continuing without auto-reload")
 
     runner = await start_api(host=host, port=port)
+    mark_step("api", "done", "HTTP API 7890")
     logger.info("[READY] Aerie ready at http://%s:%d", host, port)
 
     mobile_runner = await _start_optional_mobile_gateway(logger)

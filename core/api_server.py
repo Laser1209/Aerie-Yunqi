@@ -1054,6 +1054,7 @@ async def health(request: Request) -> dict:
         "backend_instance_id": getattr(main, "BACKEND_INSTANCE_ID", ""),
         "data_path_id": str(_db.db_path.resolve()).lower(),
         "stale_code": stale_info,
+        "startup_progress": _startup_progress_payload(),
         "components": {
             "backend": "healthy" if comp else "unhealthy",
             "qq": {
@@ -1070,6 +1071,16 @@ async def health(request: Request) -> dict:
             "providers": _provider_health_payload(comp),
         },
     }
+
+
+def _startup_progress_payload() -> dict:
+    """后端启动进度快照(供前端进度条轮询)。"""
+    try:
+        from core.startup_progress import get_startup_progress
+
+        return get_startup_progress().snapshot()
+    except Exception:  # noqa: BLE001
+        return {"started_at": 0, "finished": True, "elapsed_ms": 0, "steps": []}
 
 
 def _provider_health_payload(comp) -> dict:
@@ -5420,9 +5431,171 @@ async def settings_put(request: Request) -> dict:
                     )
             except Exception:
                 logger.warning("settings_put: hot-apply l4 toggle failed", exc_info=True)
+        # 热更新：DSH 工作模式委托开关 → 立即热切换运行中的 Pipeline(无需重启)。
+        if isinstance(body, dict) and isinstance(body.get("dsh"), dict) and "enabled" in body["dsh"]:
+            try:
+                from core.companion import get_companion
+                _comp = get_companion()
+                _pipeline = getattr(_comp, "pipeline", None)
+                if _pipeline is not None and hasattr(_pipeline, "set_dsh_enabled"):
+                    _ok = await _pipeline.set_dsh_enabled(bool(body["dsh"]["enabled"]))
+                    logger.info(
+                        "settings_put: dsh.enabled hot-applied -> %s (ok=%s)",
+                        body["dsh"]["enabled"], _ok,
+                    )
+            except Exception:
+                logger.warning("settings_put: hot-apply dsh toggle failed", exc_info=True)
         return {"status": "ok", "saved": list(body.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/dsh/status")
+async def dsh_status() -> dict:
+    """返回运行中 Pipeline 的 DSH 委托状态(供测试脚本/设置页验证热加载)。"""
+    from core.companion import get_companion
+
+    comp = get_companion()
+    pipeline = getattr(comp, "pipeline", None)
+    if pipeline is None:
+        return {"enabled": False, "initialized": False, "running": False, "error": "no pipeline"}
+    cli = getattr(pipeline, "_dsh_cli", None)
+    running = False
+    if cli is not None:
+        try:
+            st = await cli.status()
+            running = bool(st.get("running"))
+        except Exception:
+            running = False
+    return {
+        "enabled": bool(getattr(pipeline, "_dsh_enabled", False)),
+        "initialized": cli is not None,
+        "running": running,
+    }
+
+
+# ── v0.4.1: 工作区管理 API(文件树/缩略图/打开/操作日志) ──────────────
+
+
+def _ws() -> Any:
+    """延迟获取工作区管理器单例(避免模块导入时读 YAML)。"""
+    from core.workspace import get_workspace_manager
+
+    return get_workspace_manager()
+
+
+@app.get("/api/workspace/roots")
+async def workspace_roots() -> dict:
+    """列出全部工作区根目录 + 当前激活目录(带来源标记)。"""
+    return {
+        "roots": _ws().roots(),
+        "roots_info": _ws().roots_info(),
+        "active_root": _ws().active_root(),
+        "activities": _ws().activities(limit=10),
+    }
+
+
+@app.post("/api/workspace/active")
+async def workspace_set_active(request: Request) -> dict:
+    """把某已注册目录设为当前激活工作区(Agent 感知的操作范围)。"""
+    body = await request.json()
+    path = str(body.get("path", "")).strip()
+    if not path:
+        return {"ok": False, "error": "path required"}
+    active = _ws().set_active_root(path)
+    return {"ok": True, "active_root": active}
+
+
+@app.get("/api/workspace/permission")
+async def workspace_permission() -> dict:
+    """返回工作区权限状态(与电脑操控共用): mode + 四级语义说明。"""
+    ws = _ws()
+    mode = ""
+    try:
+        from core.computer_control import ControlMode
+
+        if ws._access_policy is not None:
+            mode = getattr(ws._access_policy, "mode", None)
+            mode = mode.value if hasattr(mode, "value") else str(mode)
+        else:
+            mode = ControlMode.MANUAL.value
+    except Exception:
+        mode = "manual"
+    levels = [
+        {"mode": "manual", "label": "手动审批", "desc": "所有写操作需你确认"},
+        {"mode": "auto", "label": "自动批阅", "desc": "低风险放行，中高风险需确认"},
+        {"mode": "full", "label": "完全访问", "desc": "写操作全部放行"},
+        {"mode": "custom", "label": "自定义", "desc": "按名单/规则放行或拦截"},
+    ]
+    return {
+        "mode": mode,
+        "scope": "write",  # 仅写操作(移动/删除/改名/生成)受权限约束;浏览/打开永远放行
+        "levels": levels,
+    }
+
+
+@app.get("/api/workspace/tree")
+async def workspace_tree(path: str = "") -> dict:
+    """扫描某目录返回直接子项(懒加载,不递归)。"""
+    try:
+        return _ws().tree(path)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.get("/api/workspace/thumbnail")
+async def workspace_thumbnail(path: str = "", size: int = 160) -> Response:
+    """返回图片缩略图 PNG;非图片/越界返回 404。"""
+    data = _ws().thumbnail(path, size=size)
+    if data is None:
+        return Response(status_code=404)
+    return Response(content=data, media_type="image/png")
+
+
+@app.post("/api/workspace/open")
+async def workspace_open(request: Request) -> dict:
+    """用系统默认程序打开文件 / 资源管理器打开文件夹(仅限工作区内)。"""
+    body = await request.json()
+    path = str(body.get("path", "")).strip()
+    if not path:
+        return {"ok": False, "error": "path required"}
+    ok, msg = _ws().open_path(path)
+    return {"ok": ok, "message": msg}
+
+
+@app.get("/api/workspace/activities")
+async def workspace_activities(limit: int = 50) -> dict:
+    """工作区操作日志时间线(倒序)。"""
+    return {"activities": _ws().activities(limit=limit)}
+
+
+@app.post("/api/workspace/activities/clear")
+async def workspace_activities_clear() -> dict:
+    """清空工作区操作日志。"""
+    _ws().clear_activities()
+    return {"ok": True}
+
+
+@app.post("/api/workspace/roots/temp")
+async def workspace_add_temp(request: Request) -> dict:
+    """手动把某目录注册为自定义工作区(持久化)。"""
+    body = await request.json()
+    path = str(body.get("path", "")).strip()
+    if not path:
+        return {"ok": False, "error": "path required"}
+    added = _ws().add_temp_root(path)
+    return {"ok": True, "added": added, "roots_info": _ws().roots_info()}
+
+
+@app.post("/api/workspace/roots/remove")
+async def workspace_remove_temp(request: Request) -> dict:
+    """移除一个自定义工作区目录(预设根不可移除)。"""
+    body = await request.json()
+    path = str(body.get("path", "")).strip()
+    if not path:
+        return {"ok": False, "error": "path required"}
+    removed = _ws().remove_temp_root(path)
+    return {"ok": True, "removed": removed, "roots_info": _ws().roots_info()}
 
 
 @app.post("/api/settings/reset")
@@ -5724,18 +5897,33 @@ async def env_save(request: Request) -> dict:
             return JSONResponse({"error": "Unknown provider: " + provider_key}, status_code=400)
 
         env = _read_env_file()
+        changed: dict[str, str] = {}
         api_key = body.get("api_key")
         if api_key is not None:
             env[meta["env_key"]] = api_key
+            changed[meta["env_key"]] = api_key
         base_url = body.get("base_url")
         if base_url is not None:
             env[meta["env_url"]] = base_url
+            changed[meta["env_url"]] = base_url
         model = body.get("model")
         if model is not None:
             env[meta["env_model"]] = model
+            changed[meta["env_model"]] = model
 
         _write_env_file(env)
-        return {"status": "ok", "provider": provider_key}
+        # 热加载：更新进程内环境变量并重建对话 brain，使新 API Key / model / url 立即生效，
+        # 无需重启后端。临时实例化的 LLMCaller / ASR 客户端会读取新 env。
+        if changed:
+            os.environ.update(changed)
+            try:
+                comp = get_companion()
+                if comp and hasattr(comp, "brain"):
+                    from core.llm_caller import LLMCaller
+                    comp.brain = LLMCaller()
+            except Exception:
+                logger.debug("provider env hot-reload failed", exc_info=True)
+        return {"status": "ok", "provider": provider_key, "hot_reloaded": list(changed.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

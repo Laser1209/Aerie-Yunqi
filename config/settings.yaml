@@ -9,11 +9,14 @@ brief_subscriptions:
 computer_control:
   blacklist: []
   custom_rules: {}
-  mode: manual
+  mode: full
   whitelist: []
 douyin:
   api_base_url: https://api.justoneapi.com
   api_token: hTyHR6DVMd4jjZlN
+dsh:
+  enabled: true
+  session_window_sec: 30
 feature_flags:
   chat_request_queue_v1: true
   chat_stream_v1: false
@@ -45,6 +48,7 @@ message_batching:
 office:
   dir: F:\文件\Aerie
 proactive:
+  companion_image_probability: 0.3
   enabled: true
   image_max_per_day: 0
   max_per_day: 0

@@ -184,16 +184,18 @@ class LLMCaller:
                 "supports_tools": False,
             })
 
-        # Tertiary fallback: Qwen (DashScope)
-        qw_key = os.getenv("DASHSCOPE_API_KEY", "")
-        qw_supports_tools = os.getenv("QWEN_SUPPORTS_TOOLS", "false").lower() == "true"
-        if qw_key:
+        # DashScope（通义千问，OpenAI 兼容）：key 存 DASHSCOPE_API_KEY，url/model 与设置页保存的 QWEN_* 对齐
+        dashscope_key = os.getenv("DASHSCOPE_API_KEY", "")
+        dashscope_url = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+        dashscope_model = os.getenv("QWEN_MODEL", "qwen-plus")
+        dashscope_supports_tools = os.getenv("QWEN_SUPPORTS_TOOLS", "false").lower() == "true"
+        if dashscope_key:
             providers.append({
-                "name": "qwen",
-                "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                "key": qw_key,
-                "model": "qwen-plus",
-                "supports_tools": qw_supports_tools,
+                "name": "dashscope",
+                "url": dashscope_url,
+                "key": dashscope_key,
+                "model": dashscope_model,
+                "supports_tools": dashscope_supports_tools,
             })
 
         # v13.0: Doubao / 豆包（火山方舟 Ark）
@@ -208,6 +210,62 @@ class LLMCaller:
                 "key": doubao_key,
                 "model": doubao_model,
                 "supports_tools": doubao_supports_tools,
+            })
+
+        # SiliconFlow（主模型，与设置页 SILICONFLOW_MODEL 对齐）
+        sf_main_key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+        sf_main_url = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.com/v1").strip()
+        sf_main_model = os.getenv("SILICONFLOW_MODEL", "google/gemma-4-26B-A4B-it").strip()
+        sf_main_supports_tools = os.getenv("SF_SUPPORTS_TOOLS", "false").lower() == "true"
+        if sf_main_key:
+            providers.append({
+                "name": "siliconflow",
+                "url": sf_main_url,
+                "key": sf_main_key,
+                "model": sf_main_model,
+                "supports_tools": sf_main_supports_tools,
+            })
+
+        # Gemini（Google，OpenAI 兼容）
+        gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+        gemini_url = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp").strip()
+        gemini_supports_tools = os.getenv("GEMINI_SUPPORTS_TOOLS", "true").lower() == "true"
+        if gemini_key:
+            providers.append({
+                "name": "gemini",
+                "url": gemini_url,
+                "key": gemini_key,
+                "model": gemini_model,
+                "supports_tools": gemini_supports_tools,
+            })
+
+        # 智谱 GLM（设置页 key 为 glm，env 前缀沿用 BIGMODEL）
+        glm_key = os.getenv("BIGMODEL_API_KEY", "").strip()
+        glm_url = os.getenv("BIGMODEL_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/").strip()
+        glm_model = os.getenv("BIGMODEL_MODEL", "glm-4-plus").strip()
+        glm_supports_tools = os.getenv("BIGMODEL_SUPPORTS_TOOLS", "true").lower() == "true"
+        if glm_key:
+            providers.append({
+                "name": "glm",
+                "url": glm_url,
+                "key": glm_key,
+                "model": glm_model,
+                "supports_tools": glm_supports_tools,
+            })
+
+        # MiniMax
+        minimax_key = os.getenv("MINIMAX_API_KEY", "").strip()
+        minimax_url = os.getenv("MINIMAX_BASE_URL", "https://api.minimaxi.com/v1").strip()
+        minimax_model = os.getenv("MINIMAX_MODEL", "MiniMax-M3").strip()
+        minimax_supports_tools = os.getenv("MINIMAX_SUPPORTS_TOOLS", "true").lower() == "true"
+        if minimax_key:
+            providers.append({
+                "name": "minimax",
+                "url": minimax_url,
+                "key": minimax_key,
+                "model": minimax_model,
+                "supports_tools": minimax_supports_tools,
             })
 
         # Light/cheap provider for fast lightweight tasks (e.g. brief greeting
@@ -275,14 +333,6 @@ class LLMCaller:
             "tools_env": "SF_SUPPORTS_TOOLS",
             "tools_default": "true",
         },
-        "qwen": {
-            "base_url_env": "QWEN_BASE_URL",
-            "base_url_default": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model_env": "QWEN_MODEL",
-            "model_default": "qwen-plus",
-            "tools_env": "QWEN_SUPPORTS_TOOLS",
-            "tools_default": "true",
-        },
         "doubao": {
             "base_url_env": "DOUBAO_BASE_URL",
             "base_url_default": "https://ark.cn-beijing.volces.com/api/v3",
@@ -301,13 +351,13 @@ class LLMCaller:
         },
         "minimax": {
             "base_url_env": "MINIMAX_BASE_URL",
-            "base_url_default": "https://api.minimaxicom/v1",
+            "base_url_default": "https://api.minimaxi.com/v1",
             "model_env": "MINIMAX_MODEL",
             "model_default": "MiniMax-M3",
             "tools_env": "MINIMAX_SUPPORTS_TOOLS",
             "tools_default": "true",
         },
-        "bigmodel": {
+        "glm": {
             "base_url_env": "BIGMODEL_BASE_URL",
             "base_url_default": "https://open.bigmodel.cn/api/paas/v4/",
             "model_env": "BIGMODEL_MODEL",
@@ -316,11 +366,11 @@ class LLMCaller:
             "tools_default": "true",
         },
         "dashscope": {
-            "base_url_env": "DASHSCOPE_BASE_URL",
+            "base_url_env": "QWEN_BASE_URL",
             "base_url_default": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model_env": "DASHSCOPE_MODEL",
+            "model_env": "QWEN_MODEL",
             "model_default": "qwen-plus",
-            "tools_env": "DASHSCOPE_SUPPORTS_TOOLS",
+            "tools_env": "QWEN_SUPPORTS_TOOLS",
             "tools_default": "true",
         },
     }
@@ -340,11 +390,10 @@ class LLMCaller:
             "GROK": "grok",
             "OPENAI": "openai",
             "SILICONFLOW": "siliconflow",
-            "QWEN": "qwen",
             "DOUBAO": "doubao",
             "GEMINI": "gemini",
             "MINIMAX": "minimax",
-            "BIGMODEL": "bigmodel",
+            "BIGMODEL": "glm",
             "DASHSCOPE": "dashscope",
         }
 
@@ -659,7 +708,13 @@ class LLMCaller:
 
     def health_summary(self) -> dict:
         """Public view of provider health for dashboards / API."""
-        return self._health.summary()
+        summary = self._health.summary()
+        # 可用模型数 = 已配置且未被余额拉黑 / 未禁用的 provider 数量。
+        # 前端用它来决定余额不足警告何时弹出：少于 2 个才提醒，避免单个欠费就打扰。
+        available = self._health.filter_providers(self._providers)
+        summary["available_count"] = len(available)
+        summary["total_configured"] = len(self._providers)
+        return summary
 
     def _extract_tool_calls(self, text: str) -> list[dict] | None:
         """Extract tool_calls from response text if it's a JSON-encoded list.

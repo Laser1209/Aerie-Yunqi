@@ -97,6 +97,8 @@ class IncomingMessage:
     actor_id: str | None = None
     channel: str | None = None
     channel_account_id: str | None = None
+    # 消息到达时间戳(epoch 秒)。会话聚合层算时间窗口用;None 表示未捕获。
+    timestamp: float | None = None
 
     @staticmethod
     def from_onebot_event(event: dict) -> "IncomingMessage":
@@ -120,6 +122,10 @@ class IncomingMessage:
                     break
         reply_to_id = platform_message_id
 
+        # OneBot11 事件自带 time 字段(epoch 秒);会话聚合层算窗口用。
+        _ts = event.get("time")
+        timestamp = float(_ts) if isinstance(_ts, (int, float)) else None
+
         return IncomingMessage(
             user_id=user_id,
             content=content,
@@ -130,6 +136,7 @@ class IncomingMessage:
             platform_message_id=platform_message_id,
             channel="qq",
             channel_account_id=str(user_id),
+            timestamp=timestamp,
         )
 
     @staticmethod
@@ -140,6 +147,8 @@ class IncomingMessage:
         attachments: list[dict] | None = None,
         platform_message_id: int = 0,
     ) -> "IncomingMessage":
+        import time
+
         return IncomingMessage(
             user_id=user_id,
             content=content.strip(),
@@ -150,6 +159,7 @@ class IncomingMessage:
             attachments=attachments or [],
             channel="desktop",
             channel_account_id="local",
+            timestamp=time.time(),
         )
 
 

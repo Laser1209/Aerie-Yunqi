@@ -343,7 +343,8 @@ class AudioTranscriber:
     def _init_local(self) -> None:
         try:
             import os
-            ffmpeg_dir = Path(__file__).parent.parent / "ffmpeg" / "ffmpeg-7.1-essentials_build" / "bin"
+            # 路径与版本解耦：构建流程把 ffmpeg.exe/ffprobe.exe 解压到 ffmpeg/bin/。
+            ffmpeg_dir = Path(__file__).parent.parent / "ffmpeg" / "bin"
             if ffmpeg_dir.exists():
                 os.environ["PATH"] = str(ffmpeg_dir) + os.pathsep + os.environ.get("PATH", "")
             import whisper

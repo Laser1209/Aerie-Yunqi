@@ -63,7 +63,8 @@ let ICON_PATH;
 if (app.isPackaged) {
   PROJECT_ROOT = path.dirname(process.execPath);
   PYTHON_ROOT = path.join(process.resourcesPath, "python");
-  PYTHON_EXE = path.join(PYTHON_ROOT, ".venv", "Scripts", "python.exe");
+  // 自包含运行时：真实可迁移的 python.exe，非 venv 重定向器，无需运行时下载。
+  PYTHON_EXE = path.join(PYTHON_ROOT, "runtime", "python.exe");
   PY_MAIN = path.join(PYTHON_ROOT, "main.py");
   ICON_PATH = path.join(__dirname, "..", "builder", "icon.ico");
 } else {
@@ -476,6 +477,9 @@ function _spawnNewPython() {
       ...process.env,
       PYTHONIOENCODING: "utf-8",
       PYTHONUNBUFFERED: "1",
+      // 打包态禁用用户站点包，确保后端只用随包分发的自包含依赖，
+      // 不被目标机器上用户全局安装的 Python 包污染（版本冲突/环境漂移）。
+      ...(app.isPackaged ? { PYTHONNOUSERSITE: "1" } : {}),
       AERIE_DATA_DIR: BACKEND_DATA_DIR,
       AERIE_DB_PATH: BACKEND_DB_PATH,
       AERIE_BACKEND_PORT: String(PY_PORT),

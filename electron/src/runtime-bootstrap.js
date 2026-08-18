@@ -3,18 +3,15 @@
 /**
  * Aerie · 云栖 — Python 运行时自举（environment bootstrap）
  *
- * 打包产物里的 `.venv` 是开发机生成的虚拟环境，其 `Scripts/python.exe`
- * 只是"重定向器"，会按 `pyvenv.cfg` 里的 `home` 字段去找基础解释器
- * （例如开发机的 `C:\Python314\python.exe`）。换到一台没装 Python 的机器
- * 上，这个重定向器就起不来，后端直接 `ECONNREFUSED 127.0.0.1:7890`。
+ * 新打包方案（自包含嵌入式运行时）已在构建期把真实可迁移的 CPython 解释器
+ * 与全部三方依赖放进 `resources/python/runtime/`，`python.exe` 不再是 venv
+ * 重定向器，换到没装 Python 的干净机器上也能直接运行。
  *
- * 本模块负责：
- *   1. 检测当前 `python.exe` 能否真正运行；
- *   2. 不能运行时，从官方/国内镜像/第三方源依次下载 Windows embeddable
- *      Python（含 sqlite3.dll / _sqlite3.pyd，满足后端 SQLite 需求）；
- *   3. 解压到 `<pythonRoot>/runtime/`，并改写 `pythonXXX._pth`，让嵌入式
- *      Python 能加载已随包分发的 `.venv/Lib/site-packages` 三方依赖；
- *   4. 三个源全部失败时，返回教程文本，由主进程弹窗并落盘。
+ * 本模块作为最后一道安全网：
+ *   1. 检测打包的 `runtime/python.exe` 能否真正运行（正常应直接成功）；
+ *   2. 仅在运行时目录损坏/缺失时，才从官方/国内镜像依次下载 embeddable
+ *      Python 兜底，并改写 `pythonXXX._pth` 加载已随包分发的 site-packages；
+ *   3. 全部源失败时，返回教程文本，由主进程弹窗并落盘。
  */
 
 const { spawnSync } = require("child_process");
@@ -235,15 +232,16 @@ async function ensurePythonRuntime(opts) {
   const venvExe = opts.pythonExe;
   const runtimeDir = path.join(pythonRoot, "runtime");
   const runtimeExe = path.join(runtimeDir, "python.exe");
-  const venvSitePackages = path.join(pythonRoot, ".venv", "Lib", "site-packages");
+  // 新布局：三方依赖已随 runtime 一起打包在 runtime/Lib/site-packages。
+  const venvSitePackages = path.join(pythonRoot, "runtime", "Lib", "site-packages");
 
-  // 1) 现有 venv 重定向器可用 → 直接用，无需下载。
+  // 1) 现有自包含 runtime python.exe 可用 → 直接用，无需下载。
   const det = detectPythonRuntime(venvExe);
   if (det.ok) {
-    log("[runtime] venv python usable: " + det.version);
+    log("[runtime] runtime python usable: " + det.version);
     return { ok: true, pythonExe: venvExe };
   }
-  log("[runtime] venv python unusable: " + (det.reason || "unknown"));
+  log("[runtime] runtime python unusable: " + (det.reason || "unknown"));
 
   // 2) 若之前已经自举过 runtime，直接复用。
   const det2 = detectPythonRuntime(runtimeExe);

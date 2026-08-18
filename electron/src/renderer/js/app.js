@@ -496,20 +496,14 @@ function _hideStaleBanner() {
 
 // ── API 连接检查 + 警告 div ──────────────────────
 let _apiWarningEl = null;
-let _apiBanned = [];
 let _apiDisabled = [];
-let _apiUnreachable = [];
 
 function _setApiWarningState(providers) {
-  _apiBanned = (providers && providers.banned) || [];
   _apiDisabled = (providers && providers.disabled_providers) || [];
   _refreshApiWarning();
 }
 
-function _setApiConnectivity(unreachable) {
-  _apiUnreachable = unreachable || [];
-  _refreshApiWarning();
-}
+
 
 // 启动时主动探测每个已配置 provider 的连通性（/models 轻量请求）
 async function _checkProviderConnectivity() {
@@ -526,9 +520,7 @@ async function _checkProviderConnectivity() {
 
 function _refreshApiWarning() {
   const problems = [];
-  if (_apiBanned.length) problems.push("余额耗尽：" + _apiBanned.join("、"));
   if (_apiDisabled.length) problems.push("已禁用：" + _apiDisabled.join("、"));
-  if (_apiUnreachable.length) problems.push("连接失败：" + _apiUnreachable.join("、"));
   if (problems.length) _showApiWarningBanner(problems);
   else _hideApiWarningBanner();
 }

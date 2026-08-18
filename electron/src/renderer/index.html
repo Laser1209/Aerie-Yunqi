@@ -392,6 +392,9 @@
               <button id="chat-office-btn" class="chat-input-toolbar__btn" type="button" title="办公模式 / Office Mode" aria-pressed="false">
                 <svg class="icon icon--18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
               </button>
+              <button id="chat-workspace-btn" class="chat-input-toolbar__btn" type="button" title="工作区 / Workspace" aria-pressed="false">
+                <svg class="icon icon--18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"/></svg>
+              </button>
             </div>
             <div class="chat-input-row">
               <input id="chat-input" type="text" placeholder="和伊塔说点什么..." autofocus>
@@ -405,6 +408,62 @@
               <span class="chat-mic-status__net">需联网 / Online required</span>
             </div>
           </div>
+
+          <!-- v0.4.1: 工作区侧边栏(可折叠,默认收起) -->
+          <aside id="workspace-sidebar" class="workspace-sidebar" hidden>
+            <div class="workspace-sidebar__header">
+              <span class="workspace-sidebar__title">工作区</span>
+              <button id="workspace-sidebar-close" class="workspace-sidebar__close" type="button" title="收起工作区" aria-label="收起工作区">×</button>
+            </div>
+            <div class="workspace-sidebar__body">
+              <label class="workspace-sidebar__label" for="workspace-root-select">当前目录</label>
+              <div class="workspace-roots">
+                <select id="workspace-root-select" class="workspace-root-select"></select>
+                <button id="workspace-root-remove" class="workspace-root-remove" type="button" title="移除当前自定义目录" aria-label="移除当前自定义目录">×</button>
+              </div>
+              <div class="workspace-root-add">
+                <input id="workspace-root-input" class="workspace-root-input" type="text" placeholder="点击 ＋ 选择文件夹">
+                <button id="workspace-root-add-btn" class="workspace-root-add-btn" type="button" title="选择文件夹并添加">＋</button>
+              </div>
+              <div class="workspace-sidebar__label">
+                <span>写操作权限</span>
+                <span class="ws-perm-current" id="workspace-perm-current">手动审批</span>
+              </div>
+              <div class="ws-perm-levels" id="workspace-perm-levels" role="radiogroup" aria-label="工作区写操作权限模式">
+                <button class="ws-perm-level" type="button" role="radio" data-level="manual" aria-checked="false">
+                  <span class="ws-perm-level__name">手动审批</span>
+                  <span class="ws-perm-level__desc">所有写操作需你确认</span>
+                </button>
+                <button class="ws-perm-level" type="button" role="radio" data-level="auto" aria-checked="false">
+                  <span class="ws-perm-level__name">自动批阅</span>
+                  <span class="ws-perm-level__desc">低风险放行，中高需确认</span>
+                </button>
+                <button class="ws-perm-level" type="button" role="radio" data-level="full" aria-checked="false">
+                  <span class="ws-perm-level__name">完全访问</span>
+                  <span class="ws-perm-level__desc">写操作全部放行</span>
+                </button>
+                <button class="ws-perm-level" type="button" role="radio" data-level="custom" aria-checked="false">
+                  <span class="ws-perm-level__name">自定义</span>
+                  <span class="ws-perm-level__desc">按名单/规则放行或拦截</span>
+                </button>
+              </div>
+              <div class="ws-perm-hint">与「大脑 → 电脑操控 → 权限模式」共用同一套状态，仅拦文件写操作（移动 / 删除 / 改名 / 生成）；浏览与打开永远放行</div>
+              <div class="workspace-sidebar__tabs">
+                <button class="workspace-tab active" data-wtab="files" type="button">文件</button>
+                <button class="workspace-tab" data-wtab="images" type="button">图片</button>
+                <button class="workspace-tab" data-wtab="log" type="button">日志</button>
+              </div>
+              <div class="workspace-view active" data-wview="files">
+                <div id="workspace-tree" class="workspace-tree"></div>
+              </div>
+              <div class="workspace-view" data-wview="images">
+                <div id="workspace-images" class="workspace-images"></div>
+              </div>
+              <div class="workspace-view" data-wview="log">
+                <div id="workspace-log" class="workspace-log"></div>
+              </div>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -1208,6 +1267,54 @@
                 <option value="120">120 分钟</option>
               </select>
               <span class="settings-hint">不限制时，伊塔会自主决定发图节奏 / Unlimited lets Ita decide on her own</span>
+            </div>
+            <div class="settings-group">
+              <label>主动消息配图概率 / Companion image probability</label>
+              <select id="setting-proactive-companion-image-prob">
+                <option value="0">关闭 / Off</option>
+                <option value="0.1">10%</option>
+                <option value="0.2">20%</option>
+                <option value="0.3" selected>30%</option>
+                <option value="0.5">50%</option>
+                <option value="0.8">80%</option>
+                <option value="1">100%</option>
+              </select>
+              <span class="settings-hint">主动发文本消息时，配一张衔接图片的概率 / Probability of attaching an image to proactive text</span>
+            </div>
+
+            <div class="settings-group settings-group--work-mode">
+              <h3 class="settings-section-title">工作模式 · Work Mode</h3>
+              <p class="settings-hint">把文件整理、电脑操控、文档写作等任务委托给 DeepSeek Harness 后台执行，情感陪伴不受影响 / Delegate work tasks to DSH while keeping companion chat intact</p>
+              <div class="settings-subgroup se-master-switch-row" id="dsh-master-switch-row">
+                <div class="se-master-switch-text">
+                  <label>启用 DSH 工作模式委托</label>
+                  <p class="settings-hint se-master-hint">
+                    开启后，工作型消息（整理 / 操控 / 写文档 / 调研）将路由到 DSH 后台执行；日常陪伴仍走原模型。修改后需重启后端生效。
+                  </p>
+                </div>
+                <label class="di-switch" aria-label="启用 DSH 工作模式委托开关" title="点击切换">
+                  <input type="checkbox" id="setting-dsh-enabled">
+                  <span class="di-switch-slider"></span>
+                </label>
+                <div class="se-master-status" id="dsh-master-status" style="display:none;"></div>
+              </div>
+              <div class="settings-group">
+                <label>会话窗口 / Session window（连续消息视为同一件事的时间间隔）</label>
+                <select id="setting-dsh-session-window">
+                  <option value="15">15 秒</option>
+                  <option value="30" selected>30 秒</option>
+                  <option value="60">60 秒</option>
+                  <option value="90">90 秒</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="settings-group settings-group--boot-progress">
+              <h3 class="settings-section-title">后端启动进度 · Backend Boot</h3>
+              <div class="boot-progress-track" style="height:6px;background:#f0e6ef;border-radius:3px;margin:8px 0;overflow:hidden;">
+                <div id="boot-progress-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#ff7eb6,#ffb3d1);border-radius:3px;transition:width .3s;"></div>
+              </div>
+              <div id="boot-progress-list" style="font-size:12px;color:#8a7f86;line-height:1.7;">等待后端状态…</div>
             </div>
 
             <div class="settings-group settings-group--self-evolution">
@@ -2346,6 +2453,7 @@
 <script src="js/persona-hub.js"></script>
 <script src="js/office-mode.js"></script>
 <script src="js/world-dashboard.js"></script>
+<script src="js/workspace-panel.js"></script>
 <link rel="stylesheet" href="styles/cognition-panel.css">
 <link rel="stylesheet" href="styles/calendar-panel.css">
 <link rel="stylesheet" href="styles/emotion-history.css">

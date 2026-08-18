@@ -67,6 +67,21 @@ _REPLY_PHOTO_HINTS = (
 )
 
 
+def _companion_last_prompt() -> str:
+    """取最近一次经 Companion._image_prompt_for 解析的生图提示词（供 trace 记录）。
+
+    生图提示词由 Companion 侧生成（_image_prompt_for），聊天要图在 pipeline 侧
+    记录 tool（tool_call_log / stage_tools）时读该缓存，保证大脑 trace 能展示
+    本次实际使用的完整中文提示词。失败/未生成时返回空串。
+    """
+    try:
+        from core.companion import get_companion
+
+        return str(getattr(get_companion(), "_last_image_prompt", "") or "")
+    except Exception:
+        return ""
+
+
 @dataclass
 class _RequestRunState:
     context: RequestContext | None
@@ -1514,6 +1529,7 @@ class Pipeline:
                 "channel": candidate.get("channel"),
                 "target": candidate.get("target"),
                 "idempotency_key": candidate.get("idempotency_key"),
+                "prompt": _companion_last_prompt()[:800],
             },
             "result": {
                 "status": result.get("status"),

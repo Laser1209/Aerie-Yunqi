@@ -1022,6 +1022,8 @@ class Companion:
         # invoke process_world_image_candidates_once() so the old chat/push
         # paths stay unchanged while the contract hardens behind a flag.
         self.world_image_candidate_consumer: Any = None
+        # 最近一次生图提示词（供大脑中枢 trace / tool_call 可见）。
+        self._last_image_prompt: str = ""
 
         self._started = False
         self._daily_decay_task: asyncio.Task | None = None
@@ -3093,6 +3095,7 @@ class Companion:
                 "topic": topic_id,
                 "channel": channel,
                 "target": master_id,
+                "prompt": str(getattr(self, "_last_image_prompt", "") or "")[:800],
             },
             "result": {
                 "status": publish_result.get("status"),
@@ -3230,6 +3233,22 @@ class Companion:
             return None
 
     async def _image_prompt_for(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
+        """提示词统一出口：每次生图提示词都写 INFO 日志，并缓存到 _last_image_prompt，供 trace 可见。"""
+        prompt = await self._image_prompt_for_impl(prompt_key, candidate)
+        try:
+            self._last_image_prompt = str(prompt or "")
+            logger.info(
+                "[WorldPrompt] key=%s candidate=%s chars=%d prompt=%r",
+                str(prompt_key or "default"),
+                str((candidate or {}).get("candidate_id") or ""),
+                len(self._last_image_prompt),
+                self._last_image_prompt,
+            )
+        except Exception:
+            logger.debug("world image prompt logging failed", exc_info=True)
+        return prompt
+
+    async def _image_prompt_for_impl(self, prompt_key: str, candidate: dict[str, Any] | None = None) -> str:
         """把 ImageCandidate 的 prompt_key 解析成真实的中文生图提示词。
 
         两步接力：

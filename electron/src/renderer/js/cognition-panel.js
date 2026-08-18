@@ -982,6 +982,10 @@ class CognitionPanel {
       + '<div class="cog-modal-tool-title">' + nameZh + " · " + this._escape(t.name)
       + '<span class="cog-modal-tool-status">' + statusText + "</span></div>"
       + '<div class="cog-modal-tool-meta">' + dur + (bits.length ? " · " + bits.join(" · ") : "") + "</div>"
+      + (args.prompt
+          ? '<details class="cog-modal-tool-prompt"><summary>生图提示词 · Prompt</summary>'
+            + '<pre class="cog-modal-tool-prompt-text">' + this._escape(args.prompt) + "</pre></details>"
+          : "")
       + "</div>"
       + "</div>"
     );

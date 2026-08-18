@@ -49,7 +49,7 @@ class LayeredMemory:
     def __init__(
         self,
         db: Any = None,
-        chroma_persist_dir: str = "data/chroma",
+        chroma_persist_dir: str | None = None,
         permanent_dir: str = "memory/permanent",
         embedding_fn: Any = None,
         max_working_items: int = 50,

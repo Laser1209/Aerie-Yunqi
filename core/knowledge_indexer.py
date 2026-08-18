@@ -12,6 +12,8 @@ import logging
 import os
 from typing import Any, Callable, Optional
 
+from core.paths import data_dir
+
 logger = logging.getLogger(__name__)
 
 _EMBEDDING_DIM = 64
@@ -93,11 +95,11 @@ class KnowledgeIndexer:
     def __init__(
         self,
         *,
-        chroma_dir: str = "data/chroma",
+        chroma_dir: str | None = None,
         collection_name: str = "aerie_knowledge",
         embedding_fn: Optional[Callable[[str], list[float]]] = None,
     ) -> None:
-        self.chroma_dir = chroma_dir
+        self.chroma_dir = chroma_dir or str(data_dir() / "chroma")
         self.collection_name = collection_name
         self.embedding_fn = embedding_fn
         self._collection: Any = None

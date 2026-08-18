@@ -23,6 +23,7 @@ from memory.layers.base import (
     BaseMemoryLayer, MemoryItem, MemoryLayer, MemoryType,
     MemorySearchResult,
 )
+from core.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +47,12 @@ class LongTermMemoryLayer(BaseMemoryLayer):
     def __init__(
         self,
         db: Any = None,
-        chroma_persist_dir: str = "data/chroma",
+        chroma_persist_dir: str | None = None,
         embedding_fn: Any = None,
         collection_name: str = "long_term_memory",
     ) -> None:
         self.db = db
-        self.chroma_persist_dir = chroma_persist_dir
+        self.chroma_persist_dir = chroma_persist_dir or str(data_dir() / "chroma")
         self.embedding_fn = embedding_fn
         self.collection_name = collection_name
 

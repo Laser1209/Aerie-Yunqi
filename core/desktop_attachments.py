@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 from core.attachment_worker_runtime import DEFAULT_ARCHIVE_LIMITS, DEFAULT_ZIP_LIMITS
 from core.ids import generate_id
 from core.knowledge_indexer import KnowledgeIndexer, resolve_embedding_fn
+from core.paths import data_dir
 
 
 ATTACHMENT_STATES = (
@@ -617,9 +618,8 @@ class DesktopAttachmentService:
     def _vector(self) -> KnowledgeIndexer:
         if self._vector_index is None:
             self._vector_index = KnowledgeIndexer(
-                chroma_dir=os.getenv(
-                    "AERIE_CHROMA_ATTACHMENTS_DIR", "data/chroma_attachments"
-                ),
+                chroma_dir=os.getenv("AERIE_CHROMA_ATTACHMENTS_DIR")
+                or str(data_dir() / "chroma_attachments"),
                 collection_name="attachment_chunks",
                 embedding_fn=self._embedding_fn or resolve_embedding_fn(),
             )

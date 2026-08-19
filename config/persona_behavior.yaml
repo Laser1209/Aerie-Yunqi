@@ -121,6 +121,17 @@ world_simulation:
   tick_interval_sec: 300          # 后台真实时间推进间隔（秒）
   reality_refresh_sec: 1800       # 真实天气/附近地点/实时事件刷新间隔（秒）
   random_events_per_day: 3        # 每日随机生活事件条数（0 = 关闭）
+  # 人设作息偏好（人格提示词 → 每日行为规划钩子）：
+  # DailyPlanner 为每个时段采样行为时，命中该时段关键词的行为置顶优先；
+  # 无命中回落同区随机，保留行为多样性。关键词与行为库 behavior_desc 做子串匹配。
+  daily_routine_prefs:
+    dawn: ["拉伸", "晨光"]
+    morning: ["咖啡", "设计", "画稿"]        # 独立设计师：上午开始赶稿
+    noon: ["午饭", "水果", "小蛋糕"]
+    afternoon: ["设计", "画稿", "iMac", "台灯"]  # 下午工作室专注
+    evening: ["晚餐", "沙发"]            # 傍晚放松
+    late_evening: ["泡澡", "被子", "夜景"]  # 深夜主卧放松
+    night: ["睡觉", "充电"]           # 就寝
 
 # ══════════════════════════════════════════════════
 # AI 选项（ai_options）— 顶层 11 provider

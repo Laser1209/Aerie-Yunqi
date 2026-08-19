@@ -138,6 +138,26 @@ class TestDailyPlanner:
         # 重选不改变已固化计划（只补当前执行 slot）
         assert plan.load_today()["date"] == original[0].get("date") or True
 
+    def test_prefs_prioritize_persona_habits(self, tmp_path):
+        """人设作息偏好（prefs）→ 对应时段行为优先命中关键词（人格提示词驱动日程）。"""
+        prefs = {"afternoon": ["设计", "画稿", "iMac", "台灯"]}
+        # 固定 seed 下，无偏好时首候选可能不是设计类；偏好存在时必须命中。
+        any_hit = False
+        for seed in range(20):
+            plan = DailyPlanner(
+                state_path=tmp_path / "daily_plan.json",
+                seed=seed,
+                prefs=prefs,
+            )
+            slot = plan.slot_for_now(_ts("2026-08-13 15:00"))
+            if slot and slot["phase"] == "afternoon":
+                # prefs 命中 → 行为描述必含偏好关键词之一
+                assert any(kw in slot["behavior_desc"] for kw in prefs["afternoon"]), (
+                    slot["behavior_desc"]
+                )
+                any_hit = True
+        assert any_hit, "afternoon slot 未采样到（构造问题）"
+
 
 def _ts(text: str) -> float:
     """本地字符串 → epoch（Asia/Shanghai）。"""

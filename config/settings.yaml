@@ -55,6 +55,9 @@ proactive:
   min_interval_min: 15
   # 白天出门（最小版）：白天按概率随机外出一段时间；0=关闭，1.0=每天必出
   outdoor_probability: 0.5
+  # 人设驱动出门：真实天气（下雪↑/大雨↓）与节假日（节日/周末↑）加权开关
+  outdoor_weather_event: true
+  outdoor_holiday_event: true
   photo_min_interval_sec: 0
   system_notifications: true
 qq:

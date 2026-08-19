@@ -32,11 +32,17 @@ _LOCAL_TZ: timezone = timezone(timedelta(hours=8))
 
 @dataclass
 class DailyPlanner:
-    """每日行为规划生成器（纯同步核心 + 决策日志可选注入）。"""
+    """每日行为规划生成器（纯同步核心 + 决策日志可选注入）。
+
+    ``prefs``(phase → 行为关键词列表) 是"人格提示词→日程"的钩子：
+    采样对应时段行为时优先命中带关键词的行为（人设习惯优先），
+    无命中则回落"同区随机"，保证多样性与人设约束两者兼得。
+    """
 
     state_path: Optional[Path] = None
     seed: int = 0
     decision_log: Any = None  # DecisionLogger 或 None
+    prefs: Optional[dict[str, list[str]]] = None  # phase -> 偏好行为关键词
 
     _slots: list[dict[str, Any]] = field(default_factory=list, repr=False)
     _cached_date: str = ""
@@ -92,9 +98,24 @@ class DailyPlanner:
             if end <= start:  # 跨午夜 slot（如 night 23:30 → 次日 05:00）
                 end += 86400.0
             pool = behavior_pool(zone)
+            # 人设习惯优先（prefs：phase → 关键词），命中则从匹配行为里
+            # 强制候选（不受随机洗牌影响）；无命中回落同区随机保多样性。
+            pool, forced = self._prefer_phase_behavior(phase, pool)
             # 同日不重复：过滤已用行为，空了才放宽
             fresh = [b for b in pool if b.behavior_desc not in used] or list(pool)
             candidates = _sample_candidates(fresh, k=3, rng=rng)
+            if forced:
+                cand_behaviors = [c.obj_id for c in candidates]
+                # 人设首选必须进候选首位：优先用已采中的行为，否则从未用池补首位，
+                # 若首选已被当日用过则顺延下一个偏好（同日不重复）。
+                for fb in forced:
+                    if fb.obj_id in cand_behaviors:
+                        candidates = [fb] + [c for c in candidates if c.obj_id != fb.obj_id][:2]
+                        break
+                    allowed = [b for b in fresh if b.obj_id == fb.obj_id]
+                    if allowed:
+                        candidates = [allowed[0]] + [c for c in candidates if c.obj_id != allowed[0].obj_id][:2]
+                        break
             chosen = candidates[0]
             used.add(chosen.behavior_desc)
             slot = {
@@ -134,6 +155,21 @@ class DailyPlanner:
         }
         self._log_decision("replan", candidates, chosen)
         return slot
+
+    def _prefer_phase_behavior(self, phase: str, pool: list[Behavior]) -> tuple[list[Behavior], list[Behavior]]:
+        """人设偏好：匹配 prefs[phase] 关键词的行为提至池前，并返回强制候选列表。
+
+        返回 (pool, forced)：pool 保留原顺序（避免破坏同日去重的语义），
+        forced 为命中的偏好行为（供调用方强制做首候选）。
+        """
+        try:
+            keywords = (self.prefs or {}).get(phase) or []
+            if not keywords or not pool:
+                return pool, []
+            matched = [b for b in pool if any(kw in b.behavior_desc for kw in keywords)]
+            return pool, matched
+        except Exception:
+            return pool, []
 
     def _log_decision(self, phase: str, candidates: list[Behavior], chosen: Behavior) -> None:
         if self.decision_log is None:

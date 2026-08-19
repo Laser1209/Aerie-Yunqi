@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, ItemsView, Iterable
 
 from core.action_registry import ActionRegistry, WorldAction
+from core.holidays import event_factor, event_preference, holiday_name
 from core.world_phase import DEFAULT_WORLD_PHASES
 
 logger = logging.getLogger(__name__)
@@ -184,6 +185,11 @@ class WorldSimulation:
         self._outdoor_until_ts = 0.0
         self._outdoor_day = ""  # 已出门的日期（幂等同构日；当天只会自动出门一次）
         self._outdoor_probability = float(self.config.get("outdoor_probability", 0.0) or 0.0)
+        # 人设驱动出门（大五因子·companion 从 persona.yaml 算好注入，兜底 1.0 不生效）。
+        self._outdoor_personality = float(self.config.get("outdoor_personality_factor", 1.0) or 1.0)
+        # 特殊事件加权开关（下雪/大雨/节假日）。
+        self._outdoor_weather_event = bool(self.config.get("outdoor_weather_event", True))
+        self._outdoor_holiday_event = bool(self.config.get("outdoor_holiday_event", True))
 
     @staticmethod
     def minute(value: str) -> int:
@@ -364,22 +370,54 @@ class WorldSimulation:
         return [dict(e) for e in events if isinstance(e, dict)]
 
     # ── 白天出门（最小版）────────────────────────────────────
-    def _pick_outdoor_place(self) -> str:
-        """从真实附近地点(重庆 POI)或内置池中确定性选一个外出地点。"""
-        pool = list(self._reality_nearby_objects())
-        if not pool:
-            pool = ["人民公园", "商圈步行街", "江边步道", "美术馆", "街角咖啡馆"]
-        try:
+    def _real_weather_desc(self) -> str:
+        weather = self._reality.get("weather") if isinstance(self._reality, dict) else None
+        return str((weather or {}).get("desc") or "").strip() if isinstance(weather, dict) else ""
+
+    def _event_bonus_places(self, now: datetime) -> list[str]:
+        """按特殊事件（下雪/节日）给出的外出去处优先池；空 = 无事件偏好。"""
+        places: list[str] = []
+        desc = self._real_weather_desc() if self._outdoor_weather_event else ""
+        if "雪" in desc:
+            places += ["江边看雪", "雪中漫步的滨江步道", "街角咖啡馆（窗边看雪）"]
+        if "雨" in desc:
+            places += ["商场", "美术馆（躲雨逛展）", "书店"]
+        pref = event_preference(now.date()) if self._outdoor_holiday_event else ""
+        if pref == "romance":
+            places += ["江景餐厅", "解放碑商圈", "电影院（约会档）"]
+        elif pref == "festival":
+            places += ["商圈步行街", "年货市集", "解放碑中心广场"]
+        if places and not self._outdoor_weather_event and not self._outdoor_holiday_event:
+            return []
+        return places
+
+    def _pick_outdoor_place(self, now: datetime | None = None) -> str:
+        """从真实附近地点(重庆 POI)或内置池中确定性选一个外出地点。
+
+        事件加权：下雪/节日时优先从事件池选（70% 概率），否则回到常规池。
+        """
+        now = now or self.clock()
+        day_key = now.strftime("%Y-%m-%d")
+
+        def _pick(pool: list[str], salt: str) -> str:
             key = _sha256(
                 json.dumps(
-                    {"seed": self.seed, "day": self._outdoor_day or "today"},
+                    {"seed": self.seed, "day": day_key, "salt": salt},
                     sort_keys=True,
                     separators=(",", ":"),
                 )
             )
             return str(pool[int(key[:16], 16) % len(pool)])
-        except Exception:
-            return str(pool[0])
+
+        bonus = self._event_bonus_places(now)
+        if bonus:
+            roll = float(int(_sha256(f"{self.seed}:{day_key}:bonus")[:8], 16) % 10000) / 10000.0
+            if roll < 0.7:
+                return _pick(bonus, "bonus")
+        pool = list(self._reality_nearby_objects())
+        if not pool:
+            pool = ["人民公园", "商圈步行街", "江边步道", "美术馆", "街角咖啡馆"]
+        return _pick(pool, "regular")
 
     def go_out(self, place: str = "", duration_min: int = 0, source: str = "manual") -> dict:
         """把角色置为室外（白天出门），duration_min<=0 时给 60~120 分钟的确定性时长。
@@ -388,7 +426,7 @@ class WorldSimulation:
         """
         try:
             now = self.clock()
-            place = str(place or "").strip() or self._pick_outdoor_place()
+            place = str(place or "").strip() or self._pick_outdoor_place(now)
             if not place:
                 logger.warning(
                     "[WorldOutdoor] go_out skipped source=%s: no place available",
@@ -432,11 +470,45 @@ class WorldSimulation:
         )
         return {"accepted": True}
 
+    def _effective_outdoor_probability(self, now: datetime) -> tuple[float, dict[str, float]]:
+        """分层因子合成出门概率：base × 大五人格 × 天气 × 节日。
+
+        保持确定性：所有因子在相同 (seed/date/weather/date) 下可复现。
+        返回 (有效概率, 因子明细) 供日志/测试断言。
+        """
+        base = self._outdoor_probability
+        factors: dict[str, float] = {"base": base}
+        # 大五人格因子（companion 注入，默认 1.0 不变化）。
+        personality = max(0.6, min(1.5, self._outdoor_personality))
+        factors["personality"] = personality
+        # 天气因子：下雪显著升高、大雨显著降低。
+        weather = 1.0
+        if self._outdoor_weather_event:
+            desc = self._real_weather_desc()
+            if "雪" in desc:
+                weather = 1.8
+            elif "雨" in desc:
+                weather = 0.4
+            elif "晴" in desc:
+                weather = 1.2
+            elif "阴" in desc or "云" in desc:
+                weather = 1.0
+        factors["weather"] = weather
+        # 事件因子：节假日/周末。
+        holiday = 1.0
+        if self._outdoor_holiday_event:
+            holiday = event_factor(now.date())
+        factors["holiday"] = holiday
+        effective = max(0.0, min(1.0, base * personality * weather * holiday))
+        factors["effective"] = effective
+        return effective, factors
+
     def _maybe_auto_outdoor(self, now: datetime) -> bool:
         """白天按 outdoor_probability 确定性触发一次出门（每天至多一次）。返回是否触发。
 
-        日志埋点：每个分支打印判定原因 + 决定性参数（hour/roll/threshold/day），
-        便于排查"夜间误触发/不触发"。
+        出门概率 = 基数 × 大五人格 × 天气 × 节假日（分层合成，见
+        ``_effective_outdoor_probability``）。日志埋点：每个分支打印判定原因 +
+        决定性参数（hour/roll/threshold/day/factors），便于排查夜间误触发。
         """
         try:
             day = now.strftime("%Y-%m-%d")
@@ -459,6 +531,7 @@ class WorldSimulation:
                     hour, day, now.isoformat(),
                 )
                 return False
+            effective, factors = self._effective_outdoor_probability(now)
             digest = _sha256(
                 json.dumps(
                     {"seed": self.seed, "day": day, "outdoor_hit": 1},
@@ -467,13 +540,17 @@ class WorldSimulation:
                 )
             )
             roll = (int(digest[:8], 16) % 10000) / 10000.0
-            hit = roll < self._outdoor_probability
+            hit = roll < effective
             logger.info(
-                "[WorldOutdoor] check hour=%s day=%s seed=%s prob=%.4f roll=%.4f trig=%s",
-                hour, day, self.seed, self._outdoor_probability, roll, bool(hit),
+                "[WorldOutdoor] check hour=%s day=%s seed=%s prob=%.4f pers=%.2f %s=%s %s=%s eff=%.4f roll=%.4f trig=%s",
+                hour, day, self.seed,
+                factors["base"], factors["personality"],
+                "wth", factors["weather"],
+                "hol", factors["holiday"],
+                effective, roll, bool(hit),
             )
             if hit:
-                self.go_out(source="auto")
+                self.go_out(source="auto", duration_min=90 if (factors["weather"] >= 1.5 or factors["holiday"] > 1.2) else 0)
                 return True
             return False
         except Exception:

@@ -58,9 +58,10 @@ from core.self_evolver import SelfEvolver
 from core.tool_registry import ToolRegistry
 from core.world_port import build_world_port
 from core.world_simulation import LOCAL_TZ
+from core.holidays import holiday_name, event_preference
 from core import solar_time
 from core.ephemeris import moon_phase
-from config.persona_loader import load_settings, load_proactive_config
+from config.persona_loader import load_settings, load_proactive_config, load_persona
 from knowledge.kb import KnowledgeBase
 from core.knowledge_indexer import resolve_embedding_fn
 from memory.layers import LayeredMemory
@@ -745,6 +746,21 @@ class Companion:
             )
         except (TypeError, ValueError):
             self.world_config["outdoor_probability"] = 0.0
+        # 人设驱动出门：大五人格 E(外向)+O(开放) → 出门冲动因子（1.0 中性，越大越想往外跑）。
+        # 理论映射：E/O 高于 0.5 基线即放大出门概率；低外向则压低。
+        self.world_config["outdoor_personality_factor"] = self._personality_outdoor_factor()
+        # 特殊事件加权开关（settings.proactive，默认开）。
+        try:
+            pfx = ((self.settings or {}).get("proactive", {}) or {})
+            self.world_config["outdoor_weather_event"] = bool(
+                pfx.get("outdoor_weather_event", True)
+            )
+            self.world_config["outdoor_holiday_event"] = bool(
+                pfx.get("outdoor_holiday_event", True)
+            )
+        except Exception:
+            self.world_config["outdoor_weather_event"] = True
+            self.world_config["outdoor_holiday_event"] = True
         self.world_port = build_world_port(
             feature_flags=self.feature_flags,
             world_config=self.world_config,
@@ -1072,7 +1088,13 @@ class Companion:
         try:
             from core.daily_planner import DailyPlanner
 
-            self.daily_planner = DailyPlanner(decision_log=self.decision_log)
+            prefs = dict(
+                ((self.world_config or {}).get("daily_routine_prefs") or {})
+            )
+            self.daily_planner = DailyPlanner(
+                decision_log=self.decision_log,
+                prefs=prefs or None,
+            )
         except Exception:
             logger.debug("DailyPlanner init failed", exc_info=True)
             self.daily_planner = None
@@ -2719,6 +2741,28 @@ class Companion:
         except Exception:
             logger.debug("daily plan consume failed", exc_info=True)
 
+    def _personality_outdoor_factor(self) -> float:
+        """由 persona 大五人格推出「出门冲动因子」（业界量表思路，确定性）。
+
+        理论依据（大五人格理论，Big Five / OCEAN）：
+        - Extraversion（外向性 E）：与户外活动/社交外出显著正相关（相关 r≈0.3-0.4）。
+        - Openness（开放性 O）：对新体验/探索的渴望，正相关于"想出门走走"。
+        取 E、O 相对 0.5 中位基线的偏离，线性放大到出门概率：
+            factor = 1.0 + (E-0.5)*1.2 + (O-0.5)*0.8
+        高外向+高开放（如伊塔 E=0.78/O=0.70 → 1.496）→ 明显爱往外跑；
+        低外向（如 E=0.2）→ factor<1 更宅家。结果 clamp 到 [0.6, 1.5] 防极端。
+        """
+        try:
+            persona = load_persona() or {}
+            profile = (persona.get("persona") or {}).get("profile") or {}
+            bf = profile.get("big_five") or {}
+            e = float(bf.get("extraversion") or 0.5)
+            o = float(bf.get("openness") or 0.5)
+        except (TypeError, ValueError):
+            e, o = 0.5, 0.5
+        factor = 1.0 + (e - 0.5) * 1.2 + (o - 0.5) * 0.8
+        return max(0.6, min(1.5, round(factor, 3)))
+
     def _apply_outdoor_command(self, text: str) -> Optional[dict]:
         """对话"出门/出去走走/带我去 / 回家"指令 → 世界出门/回房（白天出门最小版）。
 
@@ -3589,6 +3633,7 @@ class Companion:
             "position_desc": position_desc,
             "outdoor": bool(snapshot.get("outdoor")) if isinstance(snapshot, dict) else False,
             "outdoor_place": str(snapshot.get("outdoor_place") or "") if isinstance(snapshot, dict) else "",
+            "holiday": holiday_name(clock_dt.date()),
             "activity": activity,
             "nearby_objects": nearby_objects[:6],
             "visual_topics": visual_topics[:6],
@@ -3624,6 +3669,9 @@ class Companion:
             lines.append(f"天象：{context.get('moon_desc')}")
         if weather_desc:
             lines.append(f"天气：{weather_desc}")
+        holi = str(context.get("holiday") or "").strip()
+        if holi:
+            lines.append(f"特殊日子：今天是{holi}。")
         place_parts = []
         # 优先用细粒度位置描述（"二层·工作室"），缺省退回 location 兼容层。
         position_desc = str(context.get("position_desc") or "").strip()

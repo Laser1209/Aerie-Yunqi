@@ -250,6 +250,80 @@ def test_auto_outdoor_skipped_at_night():
     assert sim.tick().outdoor is False  # 夜里不出门
 
 
+# ── 人设驱动出门 + 特殊事件加权（下雪/节假日）────────────
+def test_effective_probability_combines_personality_weather_holiday():
+    """有效概率 = base × 大五人格 × 天气 × 节日，且 clamp 到 [0,1]。"""
+    from core.world_simulation import WorldSimulation
+
+    def day(y, m, d):
+        return datetime(y, m, d, 10, 0, tzinfo=LOCAL)
+
+    # 高外向人设 + 雪天 + 元旦 → 顶格 1.0（必出门）
+    sim = WorldSimulation(
+        config={"outdoor_probability": 0.5, "outdoor_personality_factor": 1.496}
+    )
+    sim.set_reality({"weather": {"desc": "小雪"}})
+    eff, factors = sim._effective_outdoor_probability(day(2026, 1, 1))
+    assert factors["personality"] == 1.496
+    assert factors["weather"] == 1.8
+    assert factors["holiday"] == 1.6
+    assert eff >= 1.0  # 0.5*1.496*1.8*1.6 被 clamp 到 1.0
+    # 元旦出门地点应有雪景/节日偏好
+    assert sim.go_out("", 0, "auto")["accepted"] is True
+
+    # 大雨平日 → 概率被显著压低
+    sim2 = WorldSimulation(
+        config={"outdoor_probability": 0.5, "outdoor_personality_factor": 1.496}
+    )
+    sim2.set_reality({"weather": {"desc": "大暴雨"}})
+    eff2, f2 = sim2._effective_outdoor_probability(day(2026, 7, 20))  # 周一
+    assert f2["weather"] == 0.4
+    assert f2["holiday"] == 1.0
+    assert 0.0 <= eff2 < 0.5  # 0.5*1.496*0.4 约为 0.299
+
+    # 周末 → 1.2 加成
+    sim3 = WorldSimulation(
+        config={"outdoor_probability": 0.5, "outdoor_personality_factor": 1.496}
+    )
+    sim3.set_reality({"weather": {"desc": ""}})
+    eff3, f3 = sim3._effective_outdoor_probability(day(2026, 7, 18))  # 周六
+    assert f3["holiday"] == 1.2
+
+
+def test_event_bonus_place_used_when_snowing():
+    """下雪天自动出门地点优先来自雪景池。"""
+    from core.world_simulation import WorldSimulation
+
+    t = datetime(2026, 1, 5, 12, 0, tzinfo=LOCAL)
+    sim = WorldSimulation(
+        config={"outdoor_probability": 1.0, "outdoor_personality_factor": 1.496},
+        clock=lambda: t,
+    )
+    sim.set_reality({"weather": {"desc": "小雪"}})
+    # bonus roll 70% 落到雪景池；跑多次确认大概率雪景描述
+    snow_hits = sum(
+        "雪" in sim._pick_outdoor_place(t + timedelta(days=i))
+        for i in range(30)
+    )
+    assert snow_hits >= 15  # 至少一半以上命中雪景
+
+
+def test_holiday_module_flags():
+    """内置公历节假日判定：节日/周末/平日区分与再见日场景。"""
+    from datetime import date
+    from core.holidays import holiday_name, is_holiday, is_weekend, event_factor
+
+    assert holiday_name(date(2026, 1, 1)) == "元旦"
+    assert is_holiday(date(2026, 5, 1))
+    assert holiday_name(date(2026, 10, 1)) == "国庆"
+    assert is_holiday(date(2026, 2, 14))  # 情人节
+    assert is_weekend(date(2026, 7, 18))  # 周六
+    assert not is_holiday(date(2026, 7, 20))  # 周一平日
+    assert event_factor(date(2026, 10, 1)) == 1.6
+    assert event_factor(date(2026, 7, 18)) == 1.2
+    assert event_factor(date(2026, 7, 20)) == 1.0
+
+
 # ── 出门/回家指令（companion 层）────────────────────────
 def test_companion_outdoor_command_goes_out_and_home():
     from core.companion import Companion

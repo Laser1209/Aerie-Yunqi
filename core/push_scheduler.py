@@ -32,6 +32,15 @@ class PushPolicy:
             "morning_brief", "goodnight", "anniversary",
         ])
 
+        # v2 soft budget: max_per_day is a soft target (状态驱动可上可下),
+        # hard_cap is the unconditional fuse. pending_plans carry hourly
+        # PulsePlanner plans (rolling, each new hour replaces the previous).
+        self.soft_budget = float(proactive.get("soft_budget", 0) or 0)
+        self.hard_cap = int(proactive.get("hard_cap", 0) or 0)
+        if self.hard_cap <= 0:
+            self.hard_cap = max(int(self.max_per_day * 1.5), 20)
+        self.pending_plans: list[dict[str, Any]] = []
+
         # Parse quiet period
         self.quiet_start = self._parse_time(self.quiet_start_str)
         self.quiet_end = self._parse_time(self.quiet_end_str)
@@ -328,8 +337,12 @@ class PushPolicy:
             self.today = today
             self.scene_last_sent.clear()
             self._persist()
-        if self.max_per_day > 0 and self.daily_count >= self.max_per_day:
-            return False, "daily_limit"
+        if self.hard_cap > 0 and self.daily_count >= self.hard_cap:
+            return False, "hard_cap"
+        soft_target = self.soft_budget_target()
+        if soft_target > 0 and self.daily_count >= soft_target:
+            # v2: soft budget is advisory only — hard_cap is the real fuse.
+            return True, "soft_budget_over"
         now_time = now_dt.time()
         in_quiet = False
         if self.quiet_start <= self.quiet_end:
@@ -352,6 +365,34 @@ class PushPolicy:
                 return False, f"scene_interval:{scene}"
         return True, "ok"
 
+    def soft_budget_target(self) -> float:
+        """今日软预算目标（0 表示未启用软预算）。"""
+        if self.soft_budget > 0:
+            return self.soft_budget
+        return float(self.max_per_day or 0)
+
+    def set_pending_plans(self, plans: list[dict]) -> None:
+        """整点重算后覆盖 pending 计划（滚动覆盖，不带旧计划）。"""
+        self.pending_plans = [p for p in plans if isinstance(p, dict) and p.get("at")]
+
+    def pop_due_plans(self, now: datetime | None = None) -> list[dict]:
+        """取出已到期的 pending 计划并清空对应项。"""
+        now = now or datetime.now()
+        due: list[dict] = []
+        kept: list[dict] = []
+        for p in self.pending_plans:
+            try:
+                at = p["at"]
+                at_dt = at if isinstance(at, datetime) else datetime.fromisoformat(str(at))
+            except (KeyError, TypeError, ValueError):
+                continue
+            if at_dt <= now:
+                due.append(p)
+            else:
+                kept.append(p)
+        self.pending_plans = kept
+        return due
+
     def record(self, scene: str) -> None:
         now = datetime.now()
         self.daily_count += 1
@@ -370,6 +411,10 @@ class CronScheduler:
         self._tasks: list[asyncio.Task] = []
         self._running = False
         self._dispatcher = None  # type: callable | None
+        # v2: hourly rolling planner + routine anchor shifting (optional)
+        self.pulse_planner: Any = None      # PulsePlanner
+        self.pulse_state_provider: Any = None  # callable() -> snapshot dict
+        self.routine_learner: Any = None  # RoutineLearner
         # R7.5+: optional ProactiveJudge. If bound, _dispatch will consult
         # it before calling the user dispatcher; otherwise falls back to
         # the historical cron-only path.
@@ -413,6 +458,15 @@ class CronScheduler:
         """Set the async dispatcher: dispatcher(scene_name, scene_config)."""
         self._dispatcher = dispatcher
 
+    def set_pulse_planner(self, planner: Any, state_provider: Any = None) -> None:
+        """Bind the hourly PulsePlanner + optional snapshot provider."""
+        self.pulse_planner = planner
+        self.pulse_state_provider = state_provider
+
+    def set_routine_learner(self, learner: Any) -> None:
+        """Bind RoutineLearner for cron anchor shifting (wake/sleep)."""
+        self.routine_learner = learner
+
     async def start(self) -> None:
         self._running = True
         for scene_name, scene_cfg in self.scenes.items():
@@ -435,6 +489,17 @@ class CronScheduler:
                     scene_name, trigger,
                 )
 
+        # v2: hourly rolling planner (整点自检) + pending-pulse processor.
+        if self.pulse_planner is not None:
+            task = asyncio.create_task(
+                self._run_hourly_planner(), name="push-pulse-hourly",
+            )
+            self._tasks.append(task)
+        task = asyncio.create_task(
+            self._run_pending_processor(), name="push-pending",
+        )
+        self._tasks.append(task)
+
         logger.info("[PushScheduler] Started with %d scenes", len(self._tasks))
 
     async def stop(self) -> None:
@@ -444,6 +509,89 @@ class CronScheduler:
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
+
+    def _anchor_next_time(self, scene_name: str, scene_cfg: dict, now: datetime | None = None) -> datetime | None:
+        """作息锚点搬移：wake/sleep 场景跟随 RoutineLearner 作息窗口。
+
+        scene_cfg.get("anchor") in ("wake", "sleep") 且作息有效时，
+        返回下一个锚点时点；否则 None（走原 cron）。
+        """
+        anchor = scene_cfg.get("anchor")
+        if not anchor or self.routine_learner is None:
+            return None
+        try:
+            window = self.routine_learner.window()
+        except Exception:
+            logger.debug("[PushScheduler] learner window unavailable", exc_info=True)
+            return None
+        base = None
+        if anchor == "wake" and window.wake_time:
+            base = window.wake_time
+        elif anchor == "sleep" and window.sleep_time:
+            base = window.sleep_time
+        if base is None:
+            return None
+        now = now or datetime.now()
+        cand = datetime.combine(now.date(), base)
+        if anchor == "sleep":
+            use = cand - timedelta(minutes=45)
+        else:
+            use = cand + timedelta(minutes=15)
+        if use <= now:
+            use += timedelta(days=1)
+        return use
+
+    async def _run_hourly_planner(self) -> None:
+        """整点滚动自检：推算下一小时计划并滚动覆盖 pending_plans。"""
+        while self._running:
+            try:
+                now = datetime.now()
+                wait = 3600 - (now.minute * 60 + now.second + now.microsecond / 1e6)
+                await asyncio.sleep(wait + 1)
+                if not self._running or self._paused:
+                    continue
+                if self.pulse_planner is None:
+                    continue
+                state: dict = {}
+                if self.pulse_state_provider:
+                    try:
+                        state = self.pulse_state_provider()
+                    except Exception:
+                        logger.exception("[PushScheduler] pulse state provider failed")
+                        continue
+                plans = self.pulse_planner.plan_next_hour(state)
+                self.policy.set_pending_plans([p.to_dict() for p in plans])
+                logger.info("[PushScheduler] hourly plan filled: %d", len(plans))
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                logger.exception("[PushScheduler] hourly planner error")
+                await asyncio.sleep(60)
+
+    async def _run_pending_processor(self) -> None:
+        """每分钟检查 pending 计划，到点的经 policy 校验后触发。"""
+        while self._running:
+            try:
+                due = self.policy.pop_due_plans()
+                for plan in due:
+                    scene = str(plan.get("scene") or "idle_care")
+                    scene_cfg = dict(self.scenes.get(scene) or {})
+                    payload = plan.get("payload") or {}
+                    scene_cfg.update(payload if isinstance(payload, dict) else {})
+                    force = bool(scene_cfg.get("force"))
+                    if not force:
+                        ok, reason = self.policy.can_push(scene)
+                        if not ok:
+                            logger.info("[PushScheduler] pending %s skipped: %s", scene, reason)
+                            continue
+                    if self._dispatcher:
+                        logger.info("[PushScheduler] dispatching pending plan scene=%s", scene)
+                        await self._dispatcher(scene, scene_cfg)
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                logger.exception("[PushScheduler] pending processor error")
+            await asyncio.sleep(60)
 
     async def _run_cron_scene(
         self, scene_name: str, scene_cfg: dict, cron_expr: str,
@@ -462,7 +610,8 @@ class CronScheduler:
                         return
                     continue
 
-                next_time = self._next_cron_time(cron_expr)
+                anchored = self._anchor_next_time(scene_name, scene_cfg)
+                next_time = anchored or self._next_cron_time(cron_expr)
                 wait_seconds = (next_time - datetime.now()).total_seconds()
                 if wait_seconds < 0:
                     wait_seconds = 60  # already past, retry in 1 min
@@ -737,6 +886,17 @@ class PushScheduler:
 
     def set_dispatcher(self, dispatcher) -> None:
         self.cron.set_dispatcher(dispatcher)
+
+    def set_pulse_planner(self, planner: Any, state_provider: Any = None) -> None:
+        """v2: 透传整点 PulsePlanner 绑定到底层 CronScheduler。"""
+        self._pulse_planner = planner
+        self._pulse_state_provider = state_provider
+        self.cron.set_pulse_planner(planner, state_provider)
+
+    def set_routine_learner(self, learner: Any) -> None:
+        """v2: 透传作息学习器绑定到底层 CronScheduler。"""
+        self._routine_learner = learner
+        self.cron.set_routine_learner(learner)
 
     def pause(self, reason: str = "manual") -> None:
         """Pause all push scenes (cron + trigger)."""

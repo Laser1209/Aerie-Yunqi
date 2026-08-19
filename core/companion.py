@@ -1026,6 +1026,27 @@ class Companion:
         # override the proactive.yaml defaults (consistent with image budget).
         self._apply_proactive_overlay()
         self.push_scheduler.set_dispatcher(self._dispatch_push)
+        # v2: 整点滚动调度（PulsePlanner）+ 作息学习（RoutineLearner）。
+        # 失败时静默降级为 cron-only，不影响既有链路。
+        try:
+            from core.paths import data_dir
+            from core.proactive_planner import PulsePlanner
+            from core.routine_learner import RoutineLearner
+
+            learner = RoutineLearner(
+                self.db,
+                state_path=data_dir() / "routine_profile.json",
+            )
+            learner.load_state()
+            self.routine_learner = learner
+            self.pulse_planner = PulsePlanner()
+            self.push_scheduler.set_pulse_planner(
+                self.pulse_planner, self._pulse_state_snapshot
+            )
+            self.push_scheduler.set_routine_learner(learner)
+            logger.info("[Push] PulsePlanner & RoutineLearner bound (v2)")
+        except Exception:
+            logger.exception("proactive v2 scheduler bind failed; cron-only mode")
         self.push_event_engine = get_event_engine()
         self.push_event_engine.bind_scheduler(self.push_scheduler)
         # P0 topic system: EventBus 路径（_on_user_message）也走统一沉寂时钟。
@@ -1119,10 +1140,19 @@ class Companion:
             _pol = self.push_scheduler.policy
             _pset = (self.settings or {}).get("proactive", {})
             if isinstance(_pset, dict):
+                explicit_hard = _pset.get("hard_cap") is not None
                 if _pset.get("max_per_day") is not None:
                     _pol.max_per_day = int(_pset["max_per_day"])
+                    if not explicit_hard:
+                        _pol.hard_cap = max(int(_pol.max_per_day * 1.5), 20)
                 if _pset.get("min_interval_min") is not None:
                     _pol.min_interval_min = int(_pset["min_interval_min"])
+                # v2: soft budget / hard-cap fuse hot-update
+                if _pset.get("soft_budget") is not None:
+                    _pol.soft_budget = float(_pset["soft_budget"])
+                if explicit_hard:
+                    cap = int(_pset["hard_cap"])
+                    _pol.hard_cap = cap if cap > 0 else max(int(_pol.max_per_day * 1.5), 20)
         except Exception:
             logger.debug("apply proactive frequency overlay failed", exc_info=True)
 
@@ -3931,6 +3961,140 @@ class Companion:
             candidates.append({"id": "context", "topic": "无历史话题", "score": 0.0})
         return candidates
 
+    def _pulse_state_snapshot(self) -> dict:
+        """PulsePlanner 每整点读取的状态快照（活跃/作息/情绪/欲望/预算）。"""
+        state: dict[str, Any] = {}
+        policy = getattr(getattr(self, "push_scheduler", None), "policy", None)
+        # 用户活跃度与静默
+        try:
+            cs = getattr(self, "companion_state", None)
+            if cs is not None and hasattr(cs, "idle_hours"):
+                idle_h = float(cs.idle_hours() or 0.0)
+                state["user_active"] = idle_h < 0.5
+                state["hours_since_last_interaction"] = idle_h
+        except Exception:
+            pass
+        # 静默时段 & 软预算余额
+        if policy is not None:
+            try:
+                now_time = datetime.now().time()
+                qs, qe = policy.quiet_start, policy.quiet_end
+                if qs <= qe:
+                    in_quiet = qs <= now_time <= qe
+                else:
+                    in_quiet = now_time >= qs or now_time <= qe
+                state["is_quiet_now"] = in_quiet
+                state["soft_remaining_today"] = max(
+                    int(policy.soft_budget_target() - policy.daily_count), 0
+                )
+            except Exception:
+                pass
+        # 作息活跃窗口
+        try:
+            rw = getattr(self, "routine_learner", None)
+            if rw is not None:
+                win = rw.window()
+                if win.enabled and win.wake_time and win.sleep_time:
+                    now_s = datetime.now().time().hour * 3600 \
+                        + datetime.now().time().minute * 60
+                    wake_s = win.wake_time.hour * 3600 + win.wake_time.minute * 60
+                    sleep_s = win.sleep_time.hour * 3600 + win.sleep_time.minute * 60
+                    if wake_s < sleep_s:
+                        state["in_active_window"] = wake_s <= now_s < sleep_s
+                    else:
+                        state["in_active_window"] = now_s >= wake_s or now_s < sleep_s
+        except Exception:
+            pass
+        # 情绪需要度（P 低 / A 高 → need 高）
+        try:
+            est = self.get_primary_emotion_state()
+            sp = est.get("pad") if isinstance(est, dict) else None
+            if isinstance(sp, dict):
+                p = float(sp.get("P", 0.0))
+                a = float(sp.get("A", 0.0))
+                need = max((1.0 - (p + 1.0) / 2.0), (a + 1.0) / 2.0)
+                state["mood_need"] = max(0.0, min(1.0, (need - 0.5) + 0.5))
+        except Exception:
+            pass
+        # desire 引擎分
+        try:
+            dstate = getattr(getattr(self, "desire", None), "get_state", None)
+            if dstate is not None:
+                state["desire"] = min(1.0, float(dstate().get("score") or 0.0) / 100.0)
+        except Exception:
+            pass
+        return state
+
+    def _proactive_world_fragment(self) -> str:
+        """世界快照的一小段意象（≤60 字），注入主动消息作为环境底色。"""
+        try:
+            snap = self._world_snapshot_for_context(max_age_sec=120.0)
+        except Exception:
+            return ""
+        if not isinstance(snap, dict):
+            return ""
+        parts: list[str] = []
+        phase = str(snap.get("phase") or "")
+        phase_cn = {
+            "morning": "上午", "noon": "中午", "afternoon": "下午",
+            "evening": "晚上", "night": "深夜",
+        }.get(phase)
+        if phase_cn:
+            parts.append(phase_cn)
+        location = str(snap.get("zone") or snap.get("location") or "")
+        if location and location != "unknown":
+            parts.append(f"你正待在{location}")
+        pos = str(snap.get("position_desc") or "")
+        if pos:
+            parts.append(f"（{pos}）")
+        activity = str(snap.get("activity") or "")
+        if activity and activity != "idle":
+            parts.append(f"，正{activity}")
+        weather = snap.get("weather")
+        if isinstance(weather, dict):
+            wdesc = str(weather.get("desc") or "").strip()
+            if wdesc:
+                parts.append(f"，{wdesc}")
+        frag = "".join(parts).strip()
+        return frag[:60]
+
+    def _memory_evoke_fragment(self, master_id: int) -> str:
+        """低频旧事召回（规则预筛 + 分层记忆检索）。
+
+        仅在 topic_mode == new 时由 _dispatch_push 调用。冷却 2 小时、当日 ≤2 次
+        （内存态，重启归零；P3 补持久化）。命中返回 ≤120 字片段，否则空串。
+        """
+        now = time.time()
+        last = getattr(self, "_memory_evoke_last_ts", 0)
+        if last and now - last < 2 * 3600:
+            return ""
+        today = datetime.now().strftime("%Y-%m-%d")
+        if getattr(self, "_memory_evoke_day", "") != today:
+            self._memory_evoke_day = today
+            self._memory_evoke_count = 0
+        if getattr(self, "_memory_evoke_count", 0) >= 2:
+            return ""
+        memory = getattr(self, "memory", None)
+        if memory is None or not callable(getattr(memory, "retrieve", None)):
+            return ""
+        try:
+            rows = memory.retrieve(
+                user_id=int(master_id),
+                query="最近想和你聊的事 你的喜好 发生过的事",
+                limit=5,
+            )
+        except Exception:
+            return ""
+        for row in rows or []:
+            content = str(row.get("content") or "").strip()
+            if len(content) < 8:
+                continue
+            self._memory_evoke_last_ts = now
+            self._memory_evoke_count = getattr(self, "_memory_evoke_count", 0) + 1
+            logger.info("[Push] memory evoked (frag_len=%d)", len(content))
+            return content[:120]
+        return ""
+
     async def _dispatch_push(self, scene_name: str, scene_cfg: dict) -> bool:
         """Generate one proactive message and deliver it independently."""
         try:
@@ -3991,6 +4155,28 @@ class Companion:
                 except Exception:
                     logger.debug("[Push] recent dialogue fetch failed", exc_info=True)
 
+            # ---- v2 state-aware inputs: PAD dual-channel ----
+            pad = None
+            try:
+                est = self.get_primary_emotion_state()
+                sp = est.get("pad") if isinstance(est, dict) else None
+                if isinstance(sp, dict):
+                    pad = {
+                        "pleasure": float(sp.get("P", 0.0)),
+                        "arousal": float(sp.get("A", 0.0)),
+                        "dominance": float(sp.get("D", 0.0)),
+                    }
+            except Exception:
+                logger.debug("[Push] PAD snapshot read failed", exc_info=True)
+
+            # ---- v2: world fragment ----
+            world_fragment = self._proactive_world_fragment()
+
+            # ---- v2: memory evoke (旧事唤起，仅 new 模式 + 冷却/额度预筛) ----
+            memory_fragment = ""
+            if topic_mode == "new":
+                memory_fragment = self._memory_evoke_fragment(master_id)
+
             content = await self.brain.generate_push(
                 template=scene_cfg.get("template", ""),
                 mood=mood,
@@ -3999,6 +4185,10 @@ class Companion:
                 knowledge_fragment=knowledge_fragment,
                 dialogue_context=dialogue_context,
                 topic_mode=topic_mode,
+                pad=pad,
+                world_fragment=world_fragment,
+                memory_fragment=memory_fragment,
+                trigger_shape=str(scene_cfg.get("trigger_shape") or "anchor"),
                 date=datetime.now().strftime("%Y年%m月%d日"),
             )
             if not content:
@@ -4013,7 +4203,14 @@ class Companion:
                     self.decision_log.append(
                         kind="topic_motive",
                         candidates=candidates,
-                        chosen={"mode": topic_mode, "scene": scene_name},
+                        chosen={
+                            "mode": topic_mode,
+                            "scene": scene_name,
+                            "trigger": str(scene_cfg.get("trigger_shape") or "anchor"),
+                            "pad": bool(pad),
+                            "memory": bool(memory_fragment),
+                            "world": bool(world_fragment),
+                        },
                         reason=str(scene_cfg.get("template", ""))[:60],
                     )
                 except Exception:

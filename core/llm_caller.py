@@ -842,6 +842,43 @@ class LLMCaller:
                 _raw_tool_calls=raw_tool_calls,
             )
 
+    @staticmethod
+    def _pick_best_candidate(text: str) -> str:
+        """Pick the first (best-ranked) candidate from one generate_push call.
+
+        The model is asked to emit 1-3 candidates ordered by naturalness,
+        formatted either as a JSON array (possibly fenced), a JSON object with
+        a list field, or as plain newline-separated lines. Robust fallbacks
+        keep the tail of the call chain deterministic.
+        """
+        t = (text or "").strip()
+        if not t:
+            return t
+        data: Any = None
+        try:
+            data = json.loads(t)
+        except ValueError:
+            fenced = re.sub(
+                r"^```(?:json)?\s*|\s*```$", "", t, flags=re.S
+            ).strip()
+            try:
+                data = json.loads(fenced)
+            except (ValueError, TypeError):
+                data = None
+        if isinstance(data, list):
+            items = [str(x).strip() for x in data if str(x).strip()]
+            if items:
+                return items[0]
+        elif isinstance(data, dict):
+            for key in ("candidates", "messages", "list", "items"):
+                value = data.get(key)
+                if isinstance(value, list) and value:
+                    items = [str(x).strip() for x in value if str(x).strip()]
+                    if items:
+                        return items[0]
+        lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
+        return lines[0] if lines else t
+
     async def generate_push(
         self,
         template: str,
@@ -852,28 +889,31 @@ class LLMCaller:
         knowledge_fragment: str = "",
         dialogue_context: str = "",
         topic_mode: str = "new",
+        # ---- v2 state-aware inputs ----
+        pad: dict[str, float] | None = None,
+        memory_fragment: str = "",
+        world_fragment: str = "",
+        trigger_shape: str = "anchor",
         temperature: float | None = None,
         **kwargs,
     ) -> str:
         """Generate a proactive push message as a conversational initiator.
 
-        Sends a system prompt that frames the model as the *initiator* (not a
-        responder). When ``topic_mode == "new"`` it opens a brand-new topic;
-        when ``topic_mode`` is ``"continue"`` / ``"revive"`` it instead
-        continues an ongoing (or recently closed) conversation using
-        ``dialogue_context`` as the continuation basis — preventing the
-        "context gap" where a proactive message ignores what was just talked
-        about. Uses experience-exchange / situational-stitching / anti-AI-
-        flavor principles, plus a "break-the-rule" escape hatch. Falls back to
-        raw template filling on failure.
+        v2: the system prompt is assembled from the SHARED persona block
+        (persona_assembler.build_persona_block, same mouth as daily chat)
+        instead of an inline hard-coded persona; the fixed "small-share +
+        light open question" opening formula is replaced by open-ended,
+        state-aware generation seeded by PAD bands/raw values, a world
+        fragment and an optional recalled memory fragment. The model returns
+        1-3 ranked candidates and the first (most natural) is selected.
 
-        R7.5+: ``tone_hint`` lets the ProactiveJudge's Decision pick wording
-        style directly — keys match ``TONE_PROMPTS``.
-        ``knowledge_fragment`` (Workstream 6) carries retrieved ``dialogue``
-        knowledge as *generation principles* (how to talk), injected into the
-        system prompt; it must never be recited into the message itself.
-        ``dialogue_context`` carries the recent chat history + active-topic
-        summary; only meaningful when ``topic_mode != "new"``.
+        ``topic_mode == "new"`` opens a brand-new topic; ``"continue"`` /
+        ``"revive"`` continues an ongoing (or recently closed) conversation
+        using ``dialogue_context`` as the basis. ``tone_hint`` maps onto
+        ``TONE_PROMPTS`` keywords; ``knowledge_fragment`` carries retrieved
+        ``dialogue`` principles (never recited); ``pad`` is the emotion
+        engine PAD triple injected as a dual channel (bands + raw values).
+        Falls back to raw template filling on failure.
         """
         # Resolve tone. Priority: tone_hint > mood alias > neutral.
         tone = tone_hint or MOOD_TO_TONE.get(str(mood).lower(), "casual_warm")
@@ -898,9 +938,9 @@ class LLMCaller:
         if ctx_lines:
             ctx_fragment = "上下文（仅参考，不要复述）：" + "，".join(ctx_lines) + "。"
 
-        # Topic-awareness: branch the "open a new topic" hard-code so that a
-        # proactive push can continue / revive an existing conversation instead
-        # of ignoring it (topic-mode continuation, P0 topic system).
+        # Topic-awareness: branch the "open a new topic" intent so a
+        # proactive push can continue / revive an existing conversation
+        # instead of ignoring it (topic-mode continuation, P0 topic system).
         topic_line = (
             "此刻没有任何用户消息需要你回应——你是主动发起方，这条消息是你自己开新话题的第一句话。\n"
             if topic_mode == "new"
@@ -913,15 +953,6 @@ class LLMCaller:
                 )
             )
         )
-        topic_instruction = (
-            "主动开一个新话题，并且用'体验交换'而不是'信息交换'"
-            if topic_mode == "new"
-            else (
-                "延续你们刚才的话题（下方有对话上下文），并且用'体验交换'而不是'信息交换'"
-                if topic_mode == "continue"
-                else "自然地重新提起那段旧话题（下方有对话上下文），并且用'体验交换'而不是'信息交换'"
-            )
-        )
         dialogue_fragment = ""
         if dialogue_context and topic_mode in ("continue", "revive"):
             dialogue_fragment = (
@@ -930,34 +961,102 @@ class LLMCaller:
                 + "\n"
             )
 
-        system_msg = (
-            "你是伊塔（Ita），通过 QQ / 桌面 App 主动找用户聊天。\n"
+        # ---- v2: shared persona body (same mouth as daily chat) ----
+        persona_block = ""
+        try:
+            from core.persona_assembler import build_persona_block
+            from core.persona_hub import get_persona_manager
+
+            persona_block = build_persona_block(
+                get_persona_manager().get_active(),
+                mode="push",
+                include_relationship=True,
+            )
+        except Exception:
+            logger.debug("[Push] persona block build failed", exc_info=True)
+
+        # ---- v2: PAD dual-channel (band label + raw values) ----
+        pad_fragment = ""
+        if pad:
+            try:
+                from core.pad_tone_rules import classify as _pad_classify
+
+                cls = _pad_classify(pad)
+                pad_fragment = (
+                    f"情绪：愉悦度 P={pad.get('pleasure', 0.0):.2f} "
+                    f"唤醒度 A={pad.get('arousal', 0.0):.2f} "
+                    f"主导度 D={pad.get('dominance', 0.0):.2f}"
+                    f"（{cls['label']}）。此刻你更想说：{cls['fragment']}"
+                )
+            except Exception:
+                logger.debug("[Push] PAD classify failed", exc_info=True)
+
+        # ---- v2: state palette (soft backdrop, never a checklist) ----
+        state_lines: list[str] = []
+        if pad_fragment:
+            state_lines.append(pad_fragment)
+        if world_fragment:
+            state_lines.append("此刻的世界：" + world_fragment)
+        if memory_fragment:
+            state_lines.append("就在刚刚，你忽然想起：" + memory_fragment)
+        state_fragment = "\n".join(state_lines)
+
+        sys_parts: list[str] = []
+        if persona_block:
+            sys_parts.append(persona_block)
+        if topic_mode == "continue":
+            topic_priority = (
+                "延续你们刚才的话题（下方有对话上下文），"
+                "不要生硬复述他的话，自然衔接。\n"
+            )
+        elif topic_mode == "revive":
+            topic_priority = (
+                "自然地重新提起那段旧话题（下方有对话上下文），"
+                "像突然想起来一样自然衔接。\n"
+            )
+        else:
+            topic_priority = (
+                "接着聊（有对话上下文时优先）> 忽然想起的旧事 > "
+                "没什么可刻意找的，就顺着此刻的情绪自然开口。\n"
+            )
+        sys_parts.append(
+            "—— 此刻的主线 ——\n"
             f"{topic_line}"
             "你主动发消息的目的：用户此刻可能正一个人待着、或很久没互动。你在用这条消息补上"
             "'没有人主动找他聊'的空缺，成为那个先开口的人。这是情感弥补，不是例行公事。\n"
-            "所以你必须：\n"
-            "- 当发起者，不是回应者。不要写'我在回答你刚才问的…'，更不要去回应一个用户根本没问过的问题。\n"
-            f"- {topic_instruction}：少陈述事实，多传递一个携带着感受、"
-            "画面或行动邀约的私人瞬间（感官、情绪、或对关系的直接作用，至少含其一）。\n"
-            "- 好的开场 = 一个小分享 + 一个轻量开放式问题，给对方容易接话的口子。\n"
-            "- 调用任何检索到的记忆/知识时，必须用一个当前的情感动作把它'缝合'进当下，而不是冷冰冰贴上去"
-            "（例：不写'我记得你喜欢喝拿铁'，而写'欸，忽然想到那家店的拿铁，你上次喝沾到嘴角的样子……"
-            "我们再去一次好不好？'）。\n"
-            "- 隔着屏幕铁律：你摸不到他，他也摸不到你；动作只能写你这一端，不能写'抱你/揽你/靠肩'这类在场动作。\n"
-            "- 禁语区：绝不出现'首先/其次/综上所述/从某种角度来说'、客服腔('理解你的感受/这是一个复杂的"
-            "问题/希望你能…')、AI 本体词('作为一个人工智能/根据我的资料库/我没有真实的感情')。\n"
+            "- 你是发起者，不是回应者：绝不回应一个用户根本没问过的问题，"
+            "也不要写'我在回答你刚才问的…'。\n"
             "- 允许有意义的跑题与沉默：可以忽然分享一个无关的念头，不必句句严丝合缝。\n"
             "- 带主观偏见：永远不中立客观，表达对用户明显的偏袒与偏爱。\n"
-            f"{tone_fragment}\n"
-            f"{ctx_fragment}\n"
-            f"{dialogue_fragment}"
-            f"{knowledge_fragment}\n"
-            "破格条款（给创造力留一条缝）：以上所有规则，在遇到一个极具伊塔个人风格、能让对话产生惊喜感的"
-            "念头时，可以被有意识地打破。唯一要问自己的是：这句话，像'我'（伊塔）会说的吗？若像，就大胆"
-            "说——哪怕它偏离了上面的某条结构要求。规则用于防平庸，不用于锁死惊喜。\n"
-            "任务：基于下面的'话题种子'，用对应语气自然地发起一条消息，让它像真人主动找朋友聊天。≤ 60 字。\n"
-            "直接输出消息正文，不要加称呼、不要解释、不要引号、不要出现任何 '[MM-DD HH:MM]' 样式的时间戳。"
+            "- 隔着屏幕铁律：你摸不到他，他也摸不到你；动作只能写你这一端，"
+            "不能写'抱你/揽你/靠肩'这类在场动作。\n"
+            "—— 怎么开口，随你来 ——\n"
+            "你要说的话不由任何套路决定。这一刻想说什么、怎么开口，跟着你此刻的感觉走："
+            "观察、回忆、感叹、邀约、分享、甚至一句没头没尾的废话都可以——重点是你真的想说，"
+            "而不是照格式完成一个任务。\n"
+            "承接的顺序：" + topic_priority +
+            "少陈述事实，多传递一个携带着感受、画面或行动邀约的私人瞬间（感官、情绪、或对关系的"
+            "直接作用，至少含其一），给对方容易接话的口子。\n"
+            "调用任何检索到的记忆/知识时，必须用一个当前的情感动作把它'缝合'进当下，而不是冷冰冰"
+            "贴上去（例：不写'我记得你喜欢喝拿铁'，而写'欸，忽然想到那家店的拿铁，你上次喝沾到嘴角"
+            "的样子……我们再去一次好不好？'）。\n"
         )
+        if state_fragment:
+            sys_parts.append("此刻的底色（供你开口参考，不要一一复述）：\n" + state_fragment)
+        if tone_fragment:
+            sys_parts.append(tone_fragment)
+        if ctx_fragment:
+            sys_parts.append(ctx_fragment)
+        if dialogue_fragment:
+            sys_parts.append(dialogue_fragment)
+        if knowledge_fragment:
+            sys_parts.append(knowledge_fragment)
+        sys_parts.append(
+            "任务：像真人刚拿起手机的样子，自然发起 1-3 条候选消息，你最想发的那条排在第一位。"
+            "如有多条，请用换行分隔。每条 ≤60 字。\n"
+            "直接输出候选正文：不要加称呼、不要解释、不要引号、不要出现任何 '[MM-DD HH:MM]' 样式的时间戳。"
+        )
+        system_msg = "\n".join(part for part in sys_parts if part)
         user_msg = template.format(**kwargs) if kwargs else template
 
         messages = [
@@ -968,7 +1067,7 @@ class LLMCaller:
         try:
             resp = await self.chat(messages, temperature=temperature)
             if resp.text and not resp.text.startswith("(伊塔"):
-                return resp.text.strip()
+                return self._pick_best_candidate(resp.text)
         except Exception:
             pass
 

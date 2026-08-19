@@ -207,7 +207,9 @@ class TestFullBodyBasePrompt:
 
         print(f"\n[全身照] => {result}")
 
-        assert "伊塔" in result, "全身照应包含「伊塔」"
+        # 名字不应出现在生图提示词（生图模型不认识"伊塔"），用中性描述
+        assert "伊塔" not in result, "全身照不应包含「伊塔」"
+        assert "独立设计师" in result
         assert "身高" in result, "全身照应包含身高"
         assert "184" in result, "全身照应包含身高数值"
 
@@ -217,7 +219,8 @@ class TestFullBodyBasePrompt:
 
         print(f"\n[默认 role_selfie] => {result}")
 
-        assert "伊塔" in result, "默认 role_selfie 应包含「伊塔」"
+        assert "伊塔" not in result, "默认 role_selfie 不应包含「伊塔」"
+        assert "独立设计师" in result
         assert "身高" in result, "默认 role_selfie 应包含身高"
         assert "银灰色长发" in result, "默认 role_selfie 应包含发色"
         assert "深灰蓝色眼睛" in result, "默认 role_selfie 应包含眼色"
@@ -228,7 +231,8 @@ class TestFullBodyBasePrompt:
 
         print(f"\n[role_in_scene] => {result}")
 
-        assert "伊塔" in result
+        assert "伊塔" not in result
+        assert "独立设计师" in result
         assert "身高" in result
 
     def test_full_body_includes_body_data(self):

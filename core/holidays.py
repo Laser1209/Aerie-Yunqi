@@ -63,7 +63,7 @@ def is_holiday(d: date) -> bool:
 def is_romance_holiday(d: date) -> bool:
     md = (d.month, d.day)
     for name, start, end in _ROMANCE_RANGES:
-        if _in_ranges(md, start, end):
+        if _in_range(md, start, end):
             return True
     return False
 

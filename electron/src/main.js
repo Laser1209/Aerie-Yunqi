@@ -956,6 +956,9 @@ function finishSplash() {
     loading_boot_session: _getBootSessionId(),
   });
   if (splashWindow && !splashWindow.isDestroyed()) {
+    // 窗口以 closable:false 创建，必须先解除关闭限制，否则 close() 失效，
+    // 开场动画窗口会永远盖在主窗口上（与 dynamicIsland 关闭前 setClosable(true) 同理）。
+    splashWindow.setClosable(true);
     splashWindow.close();
   }
   if (isStartMinimizedArgPresent()) {

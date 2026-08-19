@@ -2595,6 +2595,237 @@ body {
   color: var(--color-error, #ff3b30) !important;
 }
 
+/* ── 设置表单：分类折叠卡片 + 右侧快速导航 ─────────────── */
+.settings-form-shell {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+.settings-form-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 分类折叠卡片 */
+.settings-category {
+  margin-bottom: 18px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 16px;
+  background: var(--color-surface, rgba(255, 255, 255, 0.5));
+  box-shadow: 0 1px 4px rgba(18, 18, 22, 0.04);
+  overflow: hidden;
+  scroll-margin-top: 84px;
+}
+.settings-category__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: var(--color-text, #333);
+  transition: background-color 0.2s ease;
+}
+.settings-category__toggle:hover { background: rgba(255, 91, 156, 0.06); }
+.settings-category__toggle:focus-visible {
+  outline: 2px solid var(--color-primary, #ff5b9c);
+  outline-offset: -2px;
+  border-radius: 14px;
+}
+.settings-category__chevron {
+  flex: 0 0 auto;
+  width: 14px; height: 14px;
+  color: var(--color-text-muted, #999);
+  filter: drop-shadow(0 1px 1px rgba(255, 91, 156, 0.2));
+}
+.icon.settings-category__chevron {
+  transform: rotate(90deg);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.settings-category.is-collapsed .settings-category__chevron { transform: rotate(0deg); }
+.settings-category__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 9px;
+  color: var(--color-primary-hover, #ff69b4);
+  background: rgba(255, 91, 156, 0.10);
+}
+.settings-category__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text, #333);
+  white-space: nowrap;
+}
+.settings-category__desc {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--color-text-muted, #999);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 折叠动画：grid-rows 0fr → 1fr，无需 JS 量高 */
+.settings-category__body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.settings-category.is-collapsed .settings-category__body { grid-template-rows: 0fr; }
+.settings-category__inner {
+  overflow: hidden;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* 收起时去掉纵向 padding，避免内容"露头"露出空隙 */
+.settings-category.is-collapsed .settings-category__inner {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+/* 兼容旧样式：原本带“顶部大分隔线”的 group 放进卡片后压平 */
+.settings-category__inner > .settings-group--dynamic-island,
+.settings-category__inner > .settings-group--office {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* 右侧快速导航 */
+.settings-rail {
+  position: sticky;
+  top: 20px;
+  flex: 0 0 184px;
+  width: 184px;
+  box-sizing: border-box;
+  padding: 12px 10px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  background: var(--color-surface, rgba(255, 255, 255, 0.55));
+  box-shadow: 0 2px 10px rgba(18, 18, 22, 0.05);
+  backdrop-filter: blur(12px);
+}
+.settings-rail__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text, #333);
+}
+.settings-rail__head-icon { color: var(--color-primary, #ff5b9c); }
+.settings-rail__tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.settings-rail__tool {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: rgba(255, 91, 156, 0.08);
+  color: var(--color-primary-hover, #d63384);
+  font-size: 11.5px;
+  font-family: inherit;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.settings-rail__tool:hover { background: rgba(255, 91, 156, 0.18); }
+.settings-rail__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-rail__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  color: var(--color-text, #333);
+  font-size: 12.5px;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.settings-rail__link:hover {
+  background: rgba(255, 91, 156, 0.08);
+  color: var(--color-primary-hover, #d63384);
+}
+.settings-rail__link.is-active {
+  background: linear-gradient(135deg, rgba(255, 91, 156, 0.16), rgba(143, 168, 255, 0.16));
+  color: var(--color-primary-hover, #d63384);
+  font-weight: 600;
+}
+.settings-rail__link.is-dimmed { opacity: 0.55; }
+.settings-rail__link .icon { flex: 0 0 auto; opacity: 0.85; }
+.settings-rail__foot {
+  margin: 10px 6px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted, #999);
+}
+
+/* 窄窗口：导航移到顶部并横排 */
+@media (max-width: 980px) {
+  .settings-form-shell { flex-direction: column-reverse; }
+  .settings-rail {
+    position: static;
+    flex: none;
+    width: auto;
+  }
+  .settings-rail__nav { flex-direction: row; flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  .settings-category__desc { display: none; }
+}
+
+/* 全局操作栏：固定在设置面板底部，滚动时始终可见 */
+.settings-actions-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  /* 抵消 .settings-panel 的 24px 内边距，让底栏贴满面板宽度与底边 */
+  margin: 8px -24px -24px;
+  padding: 12px 24px;
+  border-radius: 0 0 16px 16px;
+  border-top: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 92%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 -6px 18px rgba(18, 18, 22, 0.07);
+}
+.settings-actions-bar__status {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-left: 4px;
+  line-height: 1.5;
+}
+.settings-actions-bar__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+@media (max-width: 760px) {
+  .settings-actions-bar { justify-content: flex-start; }
+}
+
 /* ── API Key Settings ─────────────────────── */
 .apikey-provider-list {
   display: flex;

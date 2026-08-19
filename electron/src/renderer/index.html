@@ -1123,7 +1123,66 @@
 
           <!-- 常用 form 视图 -->
           <div id="settings-form-view" role="tabpanel" aria-labelledby="tab-settings-form" tabindex="0">
-            <!-- Block-2 A2: persona 头像 + 中英名 -->
+            <div class="settings-form-shell">
+              <!-- 右侧快速导航 -->
+              <aside class="settings-rail" id="settings-rail" aria-label="设置快速导航">
+                <div class="settings-rail__head">
+                  <svg class="icon icon--14 settings-rail__head-icon" aria-hidden="true"><use href="#icon-ui-menu"/></svg>
+                  <span>快速导航 · Quick Nav</span>
+                </div>
+                <div class="settings-rail__tools">
+                  <button type="button" id="settings-expand-all" class="settings-rail__tool">全部展开</button>
+                  <button type="button" id="settings-collapse-all" class="settings-rail__tool">全部收起</button>
+                </div>
+                <nav class="settings-rail__nav" aria-label="设置分类">
+                  <a href="#setting-cat-appearance" class="settings-rail__link" data-settings-cat="appearance">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-heart"/></svg>
+                    <span>形象与称呼</span>
+                  </a>
+                  <a href="#setting-cat-general" class="settings-rail__link" data-settings-cat="general">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-settings"/></svg>
+                    <span>通用与偏好</span>
+                  </a>
+                  <a href="#setting-cat-proactive" class="settings-rail__link" data-settings-cat="proactive">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-calendar"/></svg>
+                    <span>主动消息</span>
+                  </a>
+                  <a href="#setting-cat-notifications" class="settings-rail__link" data-settings-cat="notifications">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-message"/></svg>
+                    <span>消息与通知</span>
+                  </a>
+                  <a href="#setting-cat-smart" class="settings-rail__link" data-settings-cat="smart">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-brain"/></svg>
+                    <span>智能能力</span>
+                  </a>
+                  <a href="#setting-cat-island" class="settings-rail__link" data-settings-cat="island">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-flower"/></svg>
+                    <span>灵动岛</span>
+                  </a>
+                  <a href="#setting-cat-office" class="settings-rail__link" data-settings-cat="office">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-briefcase"/></svg>
+                    <span>办公模式</span>
+                  </a>
+                  <a href="#setting-cat-system" class="settings-rail__link" data-settings-cat="system">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-microscope"/></svg>
+                    <span>系统与维护</span>
+                  </a>
+                </nav>
+                <p class="settings-rail__foot">点击分类可快速跳转 · 点分类标题收起 / 展开</p>
+              </aside>
+
+              <div class="settings-form-main">
+                <!-- 形象与称呼 -->
+                <section class="settings-category" data-settings-cat="appearance" id="setting-cat-appearance">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-appearance-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-heart"/></svg>
+                    <span class="settings-category__name">形象与称呼</span>
+                    <span class="settings-category__desc">她的样子 · 你的样子</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-appearance-body">
+                    <div class="settings-category__inner">
+            <!-- Block-2 A1: persona + 中英名 -->
             <div class="settings-group settings-group--persona">
               <h3 class="settings-section-title"><span id="persona-pronoun-title">她</span>的样子 · Appearance</h3>
               <p class="settings-hint">这是<span id="persona-pronoun-subj">她</span>在你眼中的样子。改完<span id="persona-pronoun-obj">她</span>就是这个人。/ This is who she is to you.</p>
@@ -1163,6 +1222,20 @@
               </div>
               <div id="user-status" class="settings-status" style="font-size:12px;color:var(--success);margin-top:6px;"></div>
             </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /appearance -->
+
+                <!-- 通用与偏好 -->
+                <section class="settings-category" data-settings-cat="general" id="setting-cat-general">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-general-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-settings"/></svg>
+                    <span class="settings-category__name">通用与偏好</span>
+                    <span class="settings-category__desc">主题 · 位置 · 启动行为 · 简报订阅</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-general-body">
+                    <div class="settings-category__inner">
             <!-- R7.1: my-location picker. Empty input ⇒ IP auto-detect. -->
             <div class="settings-group settings-group--location">
               <label>我的位置 / My Location</label>
@@ -1222,6 +1295,20 @@
               <label>启动时最小化</label>
               <input type="checkbox" id="setting-start-minimized">
             </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /general -->
+
+                <!-- 主动消息 -->
+                <section class="settings-category" data-settings-cat="proactive" id="setting-cat-proactive">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-proactive-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-calendar"/></svg>
+                    <span class="settings-category__name">主动消息</span>
+                    <span class="settings-category__desc">推送频率 · 发图额度 · 配图概率</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-proactive-body">
+                    <div class="settings-category__inner">
             <div class="settings-group">
               <label>主动推送</label>
               <input type="checkbox" id="setting-proactive" checked>
@@ -1281,7 +1368,52 @@
               </select>
               <span class="settings-hint">主动发文本消息时，配一张衔接图片的概率 / Probability of attaching an image to proactive text</span>
             </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /proactive -->
 
+                <!-- 消息与通知 -->
+                <section class="settings-category" data-settings-cat="notifications" id="setting-cat-notifications">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-notifications-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-message"/></svg>
+                    <span class="settings-category__name">消息与通知</span>
+                    <span class="settings-category__desc">系统通知总开关</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-notifications-body">
+                    <div class="settings-category__inner">
+            <!-- 消息提醒设置 -->
+            <div class="settings-group settings-group--notifications">
+              <h3 class="settings-section-title">消息提醒 · Notifications</h3>
+              <p class="settings-hint">新消息 / 日程 / 主动消息的系统通知总开关 / Master switch for system notifications</p>
+              <div class="settings-subgroup notif-master-switch-row" id="notif-master-switch-row">
+                <div class="notif-master-switch-text">
+                  <label>启用消息提醒</label>
+                  <p class="settings-hint notif-master-hint">
+                    关闭后，伊塔的新消息、日程提醒和主动消息都不会再弹出系统通知（应用内对话不受影响）。
+                  </p>
+                </div>
+                <label class="di-switch" aria-label="启用消息提醒开关" title="点击切换">
+                  <input type="checkbox" id="notif-master-enabled" checked>
+                  <span class="di-switch-slider"></span>
+                </label>
+                <div class="notif-master-status" id="notif-master-status" style="display:none;"></div>
+              </div>
+            </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /notifications -->
+
+                <!-- 智能能力 -->
+                <section class="settings-category" data-settings-cat="smart" id="setting-cat-smart">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-smart-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-brain"/></svg>
+                    <span class="settings-category__name">智能能力</span>
+                    <span class="settings-category__desc">DSH 工作模式 · L4 自进化</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-smart-body">
+                    <div class="settings-category__inner">
             <div class="settings-group settings-group--work-mode">
               <h3 class="settings-section-title">工作模式 · Work Mode</h3>
               <p class="settings-hint">把文件整理、电脑操控、文档写作等任务委托给 DeepSeek Harness 后台执行，情感陪伴不受影响 / Delegate work tasks to DSH while keeping companion chat intact</p>
@@ -1309,14 +1441,6 @@
               </div>
             </div>
 
-            <div class="settings-group settings-group--boot-progress">
-              <h3 class="settings-section-title">后端启动进度 · Backend Boot</h3>
-              <div class="boot-progress-track" style="height:6px;background:#f0e6ef;border-radius:3px;margin:8px 0;overflow:hidden;">
-                <div id="boot-progress-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#ff7eb6,#ffb3d1);border-radius:3px;transition:width .3s;"></div>
-              </div>
-              <div id="boot-progress-list" style="font-size:12px;color:#8a7f86;line-height:1.7;">等待后端状态…</div>
-            </div>
-
             <div class="settings-group settings-group--self-evolution">
               <h3 class="settings-section-title">自进化 · Self Evolution</h3>
               <p class="settings-hint">检测到能力缺口时，允许伊塔自动生成代码修改提案（内测） / Beta: let Ita auto-propose code changes when a capability gap is detected</p>
@@ -1334,7 +1458,20 @@
                 <div class="se-master-status" id="se-master-status" style="display:none;"></div>
               </div>
             </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /smart -->
 
+                <!-- 灵动岛 -->
+                <section class="settings-category" data-settings-cat="island" id="setting-cat-island">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-island-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-flower"/></svg>
+                    <span class="settings-category__name">灵动岛</span>
+                    <span class="settings-category__desc">外观 · 交互 · 组件</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-island-body">
+                    <div class="settings-category__inner">
             <div class="settings-group settings-group--dynamic-island">
               <h3 class="settings-section-title">灵动岛 · Dynamic Island</h3>
               <p class="settings-hint">桌面顶部灵动岛的外观、交互和组件配置 / Desktop Dynamic Island appearance & interaction</p>
@@ -1458,26 +1595,20 @@
                 <button id="di-settings-reset" class="btn btn-secondary">恢复默认</button>
               </div>
             </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /island -->
 
-            <!-- 消息提醒设置 -->
-            <div class="settings-group settings-group--notifications">
-              <h3 class="settings-section-title">消息提醒 · Notifications</h3>
-              <p class="settings-hint">新消息 / 日程 / 主动消息的系统通知总开关 / Master switch for system notifications</p>
-              <div class="settings-subgroup notif-master-switch-row" id="notif-master-switch-row">
-                <div class="notif-master-switch-text">
-                  <label>启用消息提醒</label>
-                  <p class="settings-hint notif-master-hint">
-                    关闭后，伊塔的新消息、日程提醒和主动消息都不会再弹出系统通知（应用内对话不受影响）。
-                  </p>
-                </div>
-                <label class="di-switch" aria-label="启用消息提醒开关" title="点击切换">
-                  <input type="checkbox" id="notif-master-enabled" checked>
-                  <span class="di-switch-slider"></span>
-                </label>
-                <div class="notif-master-status" id="notif-master-status" style="display:none;"></div>
-              </div>
-            </div>
-
+                <!-- 办公模式 -->
+                <section class="settings-category" data-settings-cat="office" id="setting-cat-office">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-office-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-briefcase"/></svg>
+                    <span class="settings-category__name">办公模式</span>
+                    <span class="settings-category__desc">文件保存位置</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-office-body">
+                    <div class="settings-category__inner">
             <!-- 办公模式设置 -->
             <div class="settings-group settings-group--office">
               <h3 class="settings-section-title">办公模式 · Office Mode</h3>
@@ -1515,6 +1646,27 @@
                 <button id="office-dir-save" class="btn btn-primary" type="button">保存位置</button>
                 <button id="office-dir-reset" class="btn btn-secondary" type="button">恢复默认</button>
               </div>
+            </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /office -->
+
+                <!-- 系统与维护 -->
+                <section class="settings-category" data-settings-cat="system" id="setting-cat-system">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-system-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-microscope"/></svg>
+                    <span class="settings-category__name">系统与维护</span>
+                    <span class="settings-category__desc">启动进度 · 诊断数据</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-system-body">
+                    <div class="settings-category__inner">
+            <div class="settings-group settings-group--boot-progress">
+              <h3 class="settings-section-title">后端启动进度 · Backend Boot</h3>
+              <div class="boot-progress-track" style="height:6px;background:#f0e6ef;border-radius:3px;margin:8px 0;overflow:hidden;">
+                <div id="boot-progress-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#ff7eb6,#ffb3d1);border-radius:3px;transition:width .3s;"></div>
+              </div>
+              <div id="boot-progress-list" style="font-size:12px;color:#8a7f86;line-height:1.7;">等待后端状态…</div>
             </div>
 
             <!-- 诊断数据 -->
@@ -1556,8 +1708,16 @@
 
               <p id="diag-status" class="settings-hint" style="min-height:16px;margin-top:6px;"></p>
             </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /system -->
 
-            <div class="settings-actions">
+                </div><!-- /settings-form-main -->
+              </div><!-- /settings-form-shell -->
+
+            <div class="settings-actions settings-actions-bar">
+              <span id="settings-status" class="settings-actions-bar__status" style="font-size:12px;color:var(--success);"></span>
+              <div class="settings-actions-bar__btns">
               <button id="settings-save-btn" class="btn btn-primary">保存设置</button>
               <button id="settings-reset-btn" class="btn btn-secondary">恢复默认</button>
               <!-- P4b: 管理平台显式入口（设置面板兜底，另有两处彩蛋入口） -->
@@ -1592,8 +1752,8 @@
                 </svg>
                 <span style="margin-left:4px;">热重载配置</span>
               </button>
+              </div>
             </div>
-            <div id="settings-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
           </div>
 
           <!-- API Key 视图 -->

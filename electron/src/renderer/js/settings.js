@@ -116,6 +116,9 @@ class SettingsPanel {
     if (customProviderSave) customProviderSave.addEventListener("click", () => this.saveCustomProvider());
     const featureReloadBtn = document.getElementById("feature-api-reload-btn");
     if (featureReloadBtn) featureReloadBtn.addEventListener("click", () => this.loadFeatureApis());
+
+    // 常用视图：分类折叠 + 右侧快速导航
+    this._initFormNav();
   }
 
   _syncModePill() {
@@ -131,6 +134,146 @@ class SettingsPanel {
     const leftPad = 5;
     pill.style.width = rectBtn.width + "px";
     pill.style.transform = `translateX(${rectBtn.left - rectTabs.left - leftPad}px)`;
+  }
+
+  // ── 常用视图：分类折叠卡片 + 右侧快速导航 ─────────────────
+  // 纯前端交互，不修改任何表单控件的 id，save() 不受折叠影响。
+
+  _initFormNav() {
+    const formView = document.getElementById("settings-form-view");
+    if (!formView) return;
+    this._cats = Array.from(formView.querySelectorAll(".settings-category"));
+    if (!this._cats.length) return;
+
+    this._collapsedCats = new Set(this._readCollapsedCats());
+
+    this._cats.forEach((sec) => {
+      const key = sec.getAttribute("data-settings-cat");
+      if (this._collapsedCats.has(key)) {
+        sec.classList.add("is-collapsed");
+        const toggle = sec.querySelector(".settings-category__toggle");
+        if (toggle) toggle.setAttribute("aria-expanded", "false");
+      }
+      const toggle = sec.querySelector(".settings-category__toggle");
+      if (toggle) toggle.addEventListener("click", () => this._toggleCat(key));
+    });
+
+    const expandAll = document.getElementById("settings-expand-all");
+    if (expandAll) expandAll.addEventListener("click", () => this._setAllCats(false));
+    const collapseAll = document.getElementById("settings-collapse-all");
+    if (collapseAll) collapseAll.addEventListener("click", () => this._setAllCats(true));
+
+    document.querySelectorAll(".settings-rail__link").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        this._jumpToCat(a.getAttribute("data-settings-cat"));
+      });
+    });
+
+    this._initRailScrollSpy();
+    this._updateRailSpy();
+    this._syncRailState();
+  }
+
+  _toggleCat(key) {
+    const sec = document.getElementById("setting-cat-" + key);
+    if (!sec) return;
+    const willCollapse = !sec.classList.contains("is-collapsed");
+    sec.classList.toggle("is-collapsed", willCollapse);
+    const toggle = sec.querySelector(".settings-category__toggle");
+    if (toggle) toggle.setAttribute("aria-expanded", String(!willCollapse));
+    if (willCollapse) {
+      this._collapsedCats.add(key);
+    } else {
+      this._collapsedCats.delete(key);
+    }
+    this._writeCollapsedCats();
+    this._syncRailState();
+  }
+
+  _setAllCats(collapsed) {
+    this._collapsedCats.clear();
+    this._cats.forEach((sec) => {
+      const key = sec.getAttribute("data-settings-cat");
+      sec.classList.toggle("is-collapsed", collapsed);
+      const toggle = sec.querySelector(".settings-category__toggle");
+      if (toggle) toggle.setAttribute("aria-expanded", String(!collapsed));
+      if (collapsed) this._collapsedCats.add(key);
+    });
+    this._writeCollapsedCats();
+    this._syncRailState();
+  }
+
+  _syncRailState() {
+    document.querySelectorAll(".settings-rail__link").forEach((a) => {
+      const key = a.getAttribute("data-settings-cat");
+      a.classList.toggle("is-dimmed", this._collapsedCats.has(key));
+    });
+  }
+
+  _readCollapsedCats() {
+    try {
+      const raw = localStorage.getItem("aerie.settings.collapsed");
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) { return []; }
+  }
+
+  _writeCollapsedCats() {
+    try {
+      localStorage.setItem("aerie.settings.collapsed", JSON.stringify(Array.from(this._collapsedCats)));
+    } catch (_) {}
+  }
+
+  _jumpToCat(key) {
+    const sec = document.getElementById("setting-cat-" + key);
+    if (!sec) return;
+    // 先展开目标分类，保证跳转后内容可见
+    if (this._collapsedCats.has(key)) this._toggleCat(key);
+    const panel = document.getElementById("panel-settings");
+    if (panel) {
+      const panelRect = panel.getBoundingClientRect();
+      const secRect = sec.getBoundingClientRect();
+      const target = panel.scrollTop + (secRect.top - panelRect.top) - 78;
+      panel.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    }
+    document.querySelectorAll(".settings-rail__link").forEach((a) => {
+      a.classList.toggle("is-active", a.getAttribute("data-settings-cat") === key);
+    });
+  }
+
+  // 滚动跟随：高亮当前可见的分类
+  _initRailScrollSpy() {
+    const panel = document.getElementById("panel-settings");
+    if (!panel) return;
+    this._spyPending = false;
+    panel.addEventListener("scroll", () => {
+      if (this._spyPending) return;
+      this._spyPending = true;
+      requestAnimationFrame(() => {
+        this._spyPending = false;
+        this._updateRailSpy();
+      });
+    });
+  }
+
+  _updateRailSpy() {
+    if (!this._cats || !this._cats.length) return;
+    const panel = document.getElementById("panel-settings");
+    if (!panel || !panel.classList.contains("active")) return;
+    const panelRect = panel.getBoundingClientRect();
+    if (panelRect.height <= 0) return;
+    const marker = panelRect.top + 128;
+    let activeKey = this._cats[0].getAttribute("data-settings-cat");
+    for (const sec of this._cats) {
+      if (sec.offsetParent === null) continue; // 被折叠时不计入
+      const r = sec.getBoundingClientRect();
+      if (r.top <= marker && r.bottom >= panelRect.top + 40) {
+        activeKey = sec.getAttribute("data-settings-cat");
+      }
+    }
+    document.querySelectorAll(".settings-rail__link").forEach((a) => {
+      a.classList.toggle("is-active", a.getAttribute("data-settings-cat") === activeKey);
+    });
   }
 
   _switchMode(mode) {
@@ -150,7 +293,9 @@ class SettingsPanel {
     if (featureView) featureView.style.display = mode === "feature" ? "" : "none";
     if (yamlView) yamlView.style.display = mode === "yaml" ? "" : "none";
     this._syncModePill();
-    if (mode === "yaml") {
+    if (mode === "form") {
+      this._updateRailSpy();
+    } else if (mode === "yaml") {
       this.loadYaml();
     } else if (mode === "apikey") {
       this.loadApiKeys();

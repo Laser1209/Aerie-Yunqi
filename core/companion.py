@@ -3776,7 +3776,11 @@ class Companion:
         if "room" in need and room_objs:
             cn = "、".join(_HER_HOME_OBJECTS_ZH.get(o, o) for o in room_objs)
             if cn:
-                parts.append(f"所在的房间里有：{cn}")
+                # 室外时是"她身边的地点"，不是房间物件（避免"身在室外却说在房间里"）。
+                if context.get("outdoor"):
+                    parts.append(f"她身边是：{cn}")
+                else:
+                    parts.append(f"所在的房间里有：{cn}")
         if "weather" in need and weather_desc:
             parts.append(weather_desc)
         if not parts:

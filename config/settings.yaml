@@ -16,7 +16,7 @@ douyin:
   api_token: hTyHR6DVMd4jjZlN
 dsh:
   enabled: true
-  session_window_sec: 30
+  session_window_sec: 60
 feature_flags:
   chat_request_queue_v1: true
   chat_stream_v1: false
@@ -32,7 +32,7 @@ feature_flags:
   persona_hub_source_v1: true
   proactive_delivery_v2: true
   recall_llm_instruction_v1: true
-  self_evolve_l4_enabled: false
+  self_evolve_l4_enabled: true
   thinking_trace_injection_v1: false
   world_image_candidates_v1: true
   world_inprocess_v1: true
@@ -48,16 +48,14 @@ message_batching:
 office:
   dir: F:\文件\Aerie
 proactive:
-  companion_image_probability: 0.3
+  companion_image_probability: 0.8
   enabled: true
   image_max_per_day: 0
   max_per_day: 0
   min_interval_min: 15
-  # 白天出门（最小版）：白天按概率随机外出一段时间；0=关闭，1.0=每天必出
-  outdoor_probability: 0.5
-  # 人设驱动出门：真实天气（下雪↑/大雨↓）与节假日（节日/周末↑）加权开关
-  outdoor_weather_event: true
   outdoor_holiday_event: true
+  outdoor_probability: 0.5
+  outdoor_weather_event: true
   photo_min_interval_sec: 0
   system_notifications: true
 qq:
@@ -66,7 +64,7 @@ qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0
 startup:
-  auto_start: true
+  auto_start: false
   start_minimized: false
 theme:
   current: yita-pink

@@ -163,6 +163,24 @@ class TestQQSendEndpoint:
         assert resp.json()["message_id"] == 123456
         mock_companion.qq.send_message.assert_awaited_once_with(3489352115, "系统链路测试")
 
+    def test_qq_send_logs_request_and_success(self, caplog):
+        mock_companion.qq.is_connected = True
+        mock_companion.qq.state = "logged_in"
+        mock_companion.qq.self_id = 3998874040
+        mock_companion.qq.send_message = AsyncMock(return_value=123456)
+
+        with caplog.at_level("INFO", logger="core.api_server"):
+            resp = client.post(
+                "/api/qq/send",
+                json={"user_id": 3489352115, "text": "系统链路测试"},
+            )
+
+        assert resp.status_code == 200
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("qq direct send received" in message for message in messages)
+        assert any("qq direct send succeeded" in message for message in messages)
+        assert not any("系统链路测试" in message for message in messages)
+
     def test_qq_send_rejects_when_qq_offline(self):
         mock_companion.qq.is_connected = False
         mock_companion.qq.send_message = AsyncMock(return_value=True)
@@ -175,6 +193,23 @@ class TestQQSendEndpoint:
         assert resp.status_code == 409
         assert resp.json()["error"] == "qq_not_connected"
         mock_companion.qq.send_message.assert_not_awaited()
+
+    def test_qq_send_logs_offline_rejection(self, caplog):
+        mock_companion.qq.is_connected = False
+        mock_companion.qq.state = "disconnected"
+        mock_companion.qq.self_id = 0
+        mock_companion.qq.send_message = AsyncMock(return_value=True)
+
+        with caplog.at_level("WARNING", logger="core.api_server"):
+            resp = client.post(
+                "/api/qq/send",
+                json={"user_id": 3489352115, "text": "系统链路测试"},
+            )
+
+        assert resp.status_code == 409
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("qq direct send rejected" in message for message in messages)
+        assert not any("系统链路测试" in message for message in messages)
 
 
 def test_self_evolve_stats_route_is_not_captured_by_detail(monkeypatch):

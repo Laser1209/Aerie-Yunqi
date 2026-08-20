@@ -4297,29 +4297,86 @@ async def qq_send(request: Request):
     if raw_text is None:
         raw_text = body.get("content")
     text = raw_text.strip() if isinstance(raw_text, str) else ""
+    logger.info(
+        "qq direct send received: has_user_id=%s content_length=%s keys=%s",
+        body.get("user_id") is not None,
+        len(text),
+        sorted(str(key) for key in body.keys()),
+    )
     if not text:
+        logger.warning("qq direct send rejected: reason=empty_message")
         return JSONResponse({"error": "empty_message"}, status_code=400)
     try:
         user_id = int(body.get("user_id") or 0)
     except (TypeError, ValueError):
+        logger.warning(
+            "qq direct send rejected: reason=invalid_user_id raw_type=%s",
+            type(body.get("user_id")).__name__,
+        )
         return JSONResponse({"error": "invalid_user_id"}, status_code=400)
     if user_id <= 0:
+        logger.warning("qq direct send rejected: reason=invalid_user_id user_id=%s", user_id)
         return JSONResponse({"error": "invalid_user_id"}, status_code=400)
 
     comp = get_companion()
     qq = getattr(comp, "qq", None) if comp else None
+    logger.info(
+        "qq direct send context: target=%s companion_ready=%s qq_available=%s qq_connected=%s qq_state=%s self_id=%s",
+        user_id,
+        comp is not None,
+        qq is not None,
+        getattr(qq, "is_connected", None) if qq is not None else None,
+        getattr(qq, "state", "") if qq is not None else "",
+        getattr(qq, "self_id", 0) if qq is not None else 0,
+    )
     if qq is None:
+        logger.error("qq direct send rejected: reason=qq_not_available target=%s", user_id)
         return JSONResponse({"error": "qq_not_available"}, status_code=503)
     if getattr(qq, "is_connected", False) is not True:
+        logger.warning(
+            "qq direct send rejected: reason=qq_not_connected target=%s state=%s self_id=%s",
+            user_id,
+            getattr(qq, "state", ""),
+            getattr(qq, "self_id", 0),
+        )
         return JSONResponse({"error": "qq_not_connected"}, status_code=409)
 
     try:
+        logger.info(
+            "qq direct send dispatching: target=%s content_length=%s state=%s self_id=%s",
+            user_id,
+            len(text),
+            getattr(qq, "state", ""),
+            getattr(qq, "self_id", 0),
+        )
         result = await qq.send_message(user_id, text)
     except Exception:
-        logger.exception("qq direct send error")
+        logger.exception(
+            "qq direct send error: target=%s content_length=%s state=%s self_id=%s",
+            user_id,
+            len(text),
+            getattr(qq, "state", ""),
+            getattr(qq, "self_id", 0),
+        )
         return JSONResponse({"error": "qq_send_failed"}, status_code=502)
     if not result:
+        logger.warning(
+            "qq direct send failed: target=%s content_length=%s state=%s self_id=%s result=%r",
+            user_id,
+            len(text),
+            getattr(qq, "state", ""),
+            getattr(qq, "self_id", 0),
+            result,
+        )
         return JSONResponse({"error": "qq_send_failed"}, status_code=502)
+    logger.info(
+        "qq direct send succeeded: target=%s content_length=%s message_id=%s state=%s self_id=%s",
+        user_id,
+        len(text),
+        result if isinstance(result, int) else None,
+        getattr(qq, "state", ""),
+        getattr(qq, "self_id", 0),
+    )
     return {
         "status": "ok",
         "user_id": user_id,

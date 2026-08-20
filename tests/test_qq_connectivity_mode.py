@@ -15,7 +15,7 @@ async def test_connectivity_mode_discards_private_messages(monkeypatch):
     handler = AsyncMock()
     client.set_message_handler(handler)
 
-    await client._dispatch(
+    await client._on_engine_event(
         {
             "post_type": "message",
             "message_type": "private",
@@ -36,7 +36,7 @@ async def test_connectivity_mode_rejects_all_mutating_qq_actions(monkeypatch):
     monkeypatch.setenv("AERIE_QQ_CONNECTIVITY_TEST", "true")
     monkeypatch.setattr(qq_client_module, "_port_is_open", lambda *_args, **_kwargs: True)
     client = QQClient({"ws_port": 3001})
-    client._connected = True
+    client._engine._connected = True
     client._rpc_call = AsyncMock(side_effect=AssertionError("mutating RPC attempted"))
 
     assert await client.send_message(123, "must not send") is False

@@ -898,7 +898,11 @@ class Companion:
         )
 
         # Communication
-        qq_cfg = self.settings.get("qq", {}) if isinstance(self.settings, dict) else {}
+        qq_cfg = dict(self.settings.get("qq", {}) if isinstance(self.settings, dict) else {})
+        # token 与 QQ 引擎网关共用（网关注入引擎配置、客户端连接鉴权同源）
+        from core.qq_gateway import get_gateway_token
+
+        qq_cfg.setdefault("token", get_gateway_token(self.settings))
         primary_selection = self.get_primary_user_selection()
         self.qq = QQClient(qq_cfg)
         # v13.9: QQ whitelist manager
@@ -1171,11 +1175,11 @@ class Companion:
                 self.chat_request_queue_error = "queue_worker_start_failed"
                 logger.exception("chat request worker start failed")
         self.qq.set_message_handler(self._on_qq_message)
-        # 断连探测：把 QQ 心跳存活日志接到状态页「运行日志」黑框（NapCat launcher 日志缓冲）
+        # 断连探测：把 QQ 心跳存活日志接到状态页「运行日志」黑框（QQ 引擎网关日志缓冲）
         try:
-            from core.napcat_launcher import get_launcher
+            from core.qq_gateway import get_gateway
             self.qq.set_heartbeat_log(
-                lambda text: get_launcher().add_log(f"[QQ] {text}")
+                lambda text: get_gateway().add_log(f"[QQ] {text}")
             )
             logger.info("QQ heartbeat log sink wired to status-page running-log box")
         except Exception:
@@ -1197,7 +1201,7 @@ class Companion:
 
         # Start QQ connection in background (it will poll for port open)
         asyncio.create_task(self.qq.connect())
-        mark_step("qq", "running", "连接 NapCat")
+        mark_step("qq", "running", "连接 QQ 引擎")
 
         # Start daily emotion decay scheduler
         self._daily_decay_task = asyncio.create_task(self._run_daily_decay())
@@ -1257,7 +1261,7 @@ class Companion:
         qq_ready = await self.qq.wait_until_ready(timeout=wait_timeout)
 
         if qq_ready:
-            mark_step("qq", "done", "NapCat 已就绪")
+            mark_step("qq", "done", "QQ 引擎已就绪")
             logger.info("[Startup] QQ ready, proceeding with full startup")
             # ── Phase 2: 通信层就绪（QQ 已就绪） ──
             # (SendQueue / Router / Pipeline 已经在 __init__ 中初始化好，
@@ -1282,7 +1286,7 @@ class Companion:
                     self._boot_greeting_fired = True
                     asyncio.create_task(self._boot_qq_greeting())
         else:
-            mark_step("qq", "error", "NapCat 未就绪(降级模式)")
+            mark_step("qq", "error", "QQ 引擎未就绪(降级模式)")
             logger.warning(
                 "[Startup] QQ not ready after %ss; starting in degraded mode "
                 "(push scheduler paused)",
@@ -2076,7 +2080,7 @@ class Companion:
         """R8.0+: 应用启动后主动给用户 QQ 发一条消息。
 
         行为:
-          1. 等 8s,让 NapCat WS / 后端 / 情绪 / 隐藏槽位就绪
+          1. 等 8s,让引擎 WS / 后端 / 情绪 / 隐藏槽位就绪
           2. idempotency: 距上次发送 < 4h 则跳过(防每次重启都刷屏)
              R8.0+ 变更: 从"当天一次"改为"60s 窗口"(每次启动都欢迎);
              现按需求改为"4 小时内只欢迎一次"(跨重启生效)
@@ -2106,9 +2110,9 @@ class Companion:
 
         try:
             # ── 步骤 2: 等 QQ 真正登录就绪 ──
-            # R8.1+: 之前用固定 sleep(8) 只能保证 WS 层连接 (后端 <-> NapCat),
+            # R8.1+: 之前用固定 sleep(8) 只能保证 WS 层连接 (后端 <-> 引擎),
             # 无法保证 QQ 账号已登录到腾讯服务器, 导致 boot_greeting 被
-            # NapCat "假发送" (WS 返回 ok 但消息实际未投递). 改为等待
+            # 引擎 "假发送" (WS 返回 ok 但消息实际未投递). 改为等待
             # is_logged_in 信号 (lifecycle.connect 事件或 get_login_info 成功).
             # 超时则跳过本次 greeting, 下次重启再试, 不硬发.
             logged_in = await self.qq.wait_for_login(timeout=15.0)
@@ -2118,7 +2122,7 @@ class Companion:
                     "launch (will retry on next restart)",
                 )
                 return
-            # 登录刚就绪时 NapCat 内部可能还在同步消息队列, 给一点缓冲.
+            # 登录刚就绪时引擎内部可能还在同步消息队列, 给一点缓冲.
             await asyncio.sleep(2)
 
             # ── 步骤 3: 再次检查 (防等待期间另一进程已发) ──
@@ -2257,7 +2261,7 @@ class Companion:
     async def recall_message(self, msg_id: int) -> dict[str, Any]:
         """Recall an AI message by chat_log.id (通用, 按 channel 分派).
 
-        - QQ 消息: RecallManager.try_recall → NapCat delete_msg 真实撤回
+        - QQ 消息: RecallManager.try_recall → 引擎 delete_msg 真实撤回
         - 本地消息: DB 标记 is_recalled=1 + 前端事件 (无真实协议撤回)
         """
         try:

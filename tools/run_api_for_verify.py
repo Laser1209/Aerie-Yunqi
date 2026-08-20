@@ -1,8 +1,8 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Lightweight API server bootstrap (Block-5D R5).
+"""Aerie · 云栖 v0.1.0-beta.1 — Lightweight API server bootstrap (Block-5D R5).
 
 Boots the FastAPI app on 7890 in a detached background process, sufficient
 for verify_* suites that only need HTTP endpoints. Avoids spinning up the
-full Companion / QQ / NapCat stack.
+full Companion / QQ stack.
 
 The process is spawned with DETACHED_PROCESS so it survives the parent
 shell (the dev loop reuses terminals, which otherwise kills threads).

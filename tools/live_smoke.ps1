@@ -26,7 +26,7 @@ try {
     }
 
     TryUrl "health"    "http://127.0.0.1:7890/api/health"
-    TryUrl "napcat"    "http://127.0.0.1:7890/api/napcat/status"
+    TryUrl "qq-gateway" "http://127.0.0.1:7890/api/qq/gateway/status"
     TryUrl "emotion"   "http://127.0.0.1:7890/api/emotion/current"
     TryUrl "tools"     "http://127.0.0.1:7890/api/tools"
     TryUrl "history"   "http://127.0.0.1:7890/api/chat/history?limit=3"

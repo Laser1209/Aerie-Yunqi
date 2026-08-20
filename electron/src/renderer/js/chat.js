@@ -349,6 +349,10 @@ class ChatManager {
       });
     }
     window.aerie.api.onMessage((msg) => {
+      if (msg && msg.type === "workflow_step") {
+        this._handleWorkflowStep(msg);
+        return;
+      }
       if (
         !msg ||
         (
@@ -383,6 +387,10 @@ class ChatManager {
           this._handleComputerControlSignal(parsed);
           return;
         }
+        if (parsed && parsed.type === "workflow_step") {
+          this._handleWorkflowStep(parsed);
+          return;
+        }
         this._ingestChatSignal(signal, "sse");
       });
     } catch (_) {
@@ -408,6 +416,60 @@ class ChatManager {
     } else if (payload.type === "computer_control_approval_updated") {
       this._markApprovalCard(payload);
     }
+  }
+
+  // ── 工作模式：工具执行步骤卡（思考链 / 步骤区） ──────────
+  _handleWorkflowStep(payload) {
+    if (!payload || !payload.request_id || !this._el.messages) return;
+    const tool = payload.tool || "task";
+    const domId = "wf_step_" + payload.request_id + "_" + tool;
+    let el = this._el.messages.querySelector(`[data-id="${domId}"]`);
+    const create = !el;
+    if (create) {
+      el = document.createElement("div");
+      el.className = "chat-msg chat-msg--assistant chat-msg--workflow";
+      el.setAttribute("data-id", domId);
+      el.setAttribute("data-request-id", payload.request_id);
+      this._el.messages.appendChild(el);
+    }
+    el.innerHTML = this._buildWorkflowStepHtml(payload);
+    if (create && this._atBottom) {
+      this._el.messages.scrollTop = this._el.messages.scrollHeight;
+    }
+  }
+
+  _buildWorkflowStepHtml(payload) {
+    const esc = (v) => this._escapeHtml(v == null ? "" : String(v));
+    const status = payload.status || "running";
+    const tool = payload.tool || "task";
+    const detail = payload.detail || {};
+    const summary = detail.summary || "";
+    const durationMs = payload.duration_ms || detail.duration_ms || 0;
+    const durText = durationMs ? `${(durationMs / 1000).toFixed(1)}s` : "";
+
+    const statusMap = {
+      running: { icon: "●", cls: "running", label: "进行中" },
+      ok: { icon: "✓", cls: "ok", label: "完成" },
+      fail: { icon: "✕", cls: "fail", label: "卡住" },
+    };
+    const st = statusMap[status] || statusMap.running;
+
+    return `
+      <div class="chat-msg__avatar-wrap">
+        <span class="chat-msg__avatar chat-msg__avatar--placeholder">伊</span>
+      </div>
+      <div class="chat-msg__body">
+        <div class="chat-msg__name">伊塔</div>
+        <div class="chat-bubble wf-step wf-step--${st.cls}" style="display:flex;align-items:center;gap:10px;min-height:38px;padding:10px 14px;">
+          <span class="wf-step__icon" style="flex:none;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff;background:${st.cls === 'ok' ? '#34c759' : st.cls === 'fail' ? '#ff3b30' : '#8e8e93'};">${st.icon}</span>
+          <div class="wf-step__text" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+            <span class="wf-step__tool" style="font-size:13px;font-weight:600;color:var(--ink-a, #e8ecff);">${esc(tool)}</span>
+            ${summary ? `<span class="wf-step__summary" style="font-size:12px;color:var(--ink-b, #a7c0ff);opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(summary)}</span>` : ""}
+          </div>
+          <span class="wf-step__status" style="flex:none;font-size:11px;color:var(--ink-b, #a7c0ff);opacity:.6;">${st.label}${durText}</span>
+        </div>
+      </div>
+    `;
   }
 
   _upsertApprovalCard(payload) {

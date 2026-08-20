@@ -50,13 +50,13 @@ contextBridge.exposeInMainWorld("aerie", {
       };
     },
   },
-  napcat: {
-    getStatus: () => ipcRenderer.invoke("napcat:getStatus"),
-    getQrCode: () => ipcRenderer.invoke("napcat:getQrCode"),
-    start: () => ipcRenderer.invoke("napcat:start"),
-    stop: () => ipcRenderer.invoke("napcat:stop"),
+  qqGateway: {
+    getStatus: () => ipcRenderer.invoke("qqGateway:getStatus"),
+    getQrCode: () => ipcRenderer.invoke("qqGateway:getQrCode"),
+    start: () => ipcRenderer.invoke("qqGateway:start"),
+    stop: () => ipcRenderer.invoke("qqGateway:stop"),
     onEvent: (cb) => {
-      ipcRenderer.on("napcat:event", (_event, data) => cb(data));
+      ipcRenderer.on("qqGateway:event", (_event, data) => cb(data));
     },
   },
   electron: {

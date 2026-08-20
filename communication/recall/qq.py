@@ -1,4 +1,4 @@
-"""QQ 端撤回适配器 (NapCat delete_msg)."""
+"""QQ 端撤回适配器 (delete_msg)."""
 from __future__ import annotations
 
 import logging
@@ -12,7 +12,7 @@ CHANNEL = "qq"
 
 
 class QQRecallAdapter:
-    """通过 qq_client 调 NapCat delete_msg 真实撤回."""
+    """通过 qq_client 调引擎 delete_msg 真实撤回."""
 
     channel: str = CHANNEL
 

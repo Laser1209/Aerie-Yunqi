@@ -824,6 +824,40 @@ class KeyboardController:
             )
 
 
+def _ensure_powershell_bypass(command: str) -> str:
+    """为 PowerShell 调用附加 ``-NoProfile -ExecutionPolicy Bypass``。
+
+    Windows 下 ``shell=True`` 实际走 ``cmd.exe /c``；当命令以 ``powershell``
+    开头时，本地执行策略（默认 Restricted）会拦截脚本导致「权限不够 / 禁止
+    运行脚本」报错。此处兜底：仅当命令显式调用 PowerShell 时注入执行策略
+    开关，不影响 cmd 内置命令（echo/dir/copy 等）。
+
+    已在黑名单中的 ``powershell -command`` 会在进入本函数前被硬闸拦截，
+    因此本函数只作用于能通过危险检查的 PowerShell 调用。
+    """
+    stripped = command.lstrip()
+    lower = stripped.lower()
+
+    prefix = ""
+    rest = stripped
+    if lower.startswith("powershell.exe"):
+        prefix = stripped[: len("powershell.exe")]
+        rest = stripped[len("powershell.exe"):]
+    elif lower.startswith("powershell"):
+        prefix = stripped[: len("powershell")]
+        rest = stripped[len("powershell"):]
+
+    if not prefix:
+        return command
+
+    # 已显式指定执行策略则不重复注入
+    if "-executionpolicy" in lower:
+        return command
+
+    leading = command[: len(command) - len(stripped)]
+    return leading + prefix + " -NoProfile -ExecutionPolicy Bypass" + rest
+
+
 class RestrictedShell:
     """受限 Shell 执行器
 
@@ -903,6 +937,8 @@ class RestrictedShell:
             if is_windows:
                 # Windows: 很多命令是 cmd.exe 内置的（echo/dir/copy 等），
                 # 必须用 shell=True 才能找到。安全由前面的白名单+危险检查保证。
+                # 兜底：PowerShell 调用附加执行策略开关，避免 Restricted 拦截。
+                command = _ensure_powershell_bypass(command)
                 result = subprocess.run(
                     command,
                     shell=True,

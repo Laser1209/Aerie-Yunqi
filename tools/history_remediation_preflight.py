@@ -34,8 +34,8 @@ _HIGH_RISK_HISTORY_PREFIXES = (
     "data/backups/",
     "data/audit/",
     "data/world_sidecar/",
-    "napcat/napcat.shell/config/",
-    "napcat/napcat.shell/cache/",
+    "data/qq_engine/config/",
+    "data/qq_engine/cache/",
 )
 _HIGH_RISK_DATABASE_SUFFIXES = (
     ".db",

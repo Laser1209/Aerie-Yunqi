@@ -1,7 +1,7 @@
 """Aerie · 云栖 v0.3.1-Beta.1 — Message recall manager (三端解耦版).
 
 Gate 1 重构: 撤回能力按 channel 分派, 不再与单一 user_id 绑定。
-- QQ     : 通过 RecallAdapter(QQ) → NapCat delete_msg 真实撤回
+- QQ     : 通过 RecallAdapter(QQ) → delete_msg 真实撤回
 - local  : RecallAdapter(Local) → 仅 DB 标记 + 前端事件
 - clawbot: RecallAdapter(WeChatClawbot) → 预留桩
 
@@ -34,7 +34,7 @@ class SentRecord:
     content: str
     timestamp: float = field(default_factory=time.time)
     msg_id: int = 0                       # local chat_log.id
-    qq_message_id: int | None = None      # NapCat OneBot11 message_id (QQ 专用)
+    qq_message_id: int | None = None      # OneBot11 message_id (QQ 专用)
     segments: list[str] = field(default_factory=list)
     channel: str = "qq"
     channel_account_id: str = ""
@@ -137,7 +137,7 @@ class RecallManager:
         self.record_sent(user_id, content)
 
     def attach_qq_message_id(self, user_id: int, qq_message_id: int) -> None:
-        """Retroactively attach a QQ message_id once NapCat reports it."""
+        """Retroactively attach a QQ message_id once the engine reports it."""
         # 兼容旧签名: 作用于任意 channel 最近记录 (以 qq 为先)
         for key, record in self._last_sent.items():
             if record.user_id == user_id and record.channel == "qq":

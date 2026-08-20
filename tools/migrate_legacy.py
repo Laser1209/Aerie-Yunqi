@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Legacy file organization tool (Block-5D R4).
+"""Aerie · 云栖 v0.1.0-beta.1 — Legacy file organization tool (Block-5D R4).
 
 Idempotent migration that consolidates scattered probes/debug logs/DBs
 into a unified ``tmp/`` and ``logs/`` tree. Safe to re-run: existing
@@ -11,7 +11,7 @@ Mapping (v1):
     scripts/verify_siliconflow_final.py
     logs/_smoke.py            ->  tmp/scripts/_smoke.py
     logs/debug_bat.bat        ->  tmp/scripts/debug_bat.bat
-    logs/debug_napcat.py      ->  tmp/scripts/debug_napcat.py
+    logs/debug_qq_engine.py   ->  tmp/scripts/debug_qq_engine.py
     logs/diag.ps1             ->  tmp/scripts/diag.ps1
     logs/live2.ps1            ->  tmp/scripts/live2.ps1
     logs/live3.ps1            ->  tmp/scripts/live3.ps1
@@ -19,7 +19,7 @@ Mapping (v1):
     logs/live5.ps1            ->  tmp/scripts/live5.ps1
     logs/live_smoke_copy.ps1  ->  tmp/scripts/live_smoke_copy.ps1
     logs/live_with_full.ps1   ->  tmp/scripts/live_with_full.ps1
-    logs/run_napcat_manually.bat
+    logs/run_qq_engine_manually.bat
     logs/verify_bridge.ps1
     logs/yunqi_check.db       ->  tmp/db/yunqi_check.db
     network_probe.log         ->  logs/network_probe.log
@@ -59,7 +59,7 @@ MIGRATION_MAP: list[tuple[str, str]] = [
     # ── Debug scripts (logs/ → tmp/scripts/) ──
     ("logs/_smoke.py",                       "tmp/scripts/_smoke.py"),
     ("logs/debug_bat.bat",                   "tmp/scripts/debug_bat.bat"),
-    ("logs/debug_napcat.py",                 "tmp/scripts/debug_napcat.py"),
+    ("logs/debug_qq_engine.py",              "tmp/scripts/debug_qq_engine.py"),
     ("logs/diag.ps1",                        "tmp/scripts/diag.ps1"),
     ("logs/live2.ps1",                       "tmp/scripts/live2.ps1"),
     ("logs/live3.ps1",                       "tmp/scripts/live3.ps1"),
@@ -67,7 +67,7 @@ MIGRATION_MAP: list[tuple[str, str]] = [
     ("logs/live5.ps1",                       "tmp/scripts/live5.ps1"),
     ("logs/live_smoke_copy.ps1",             "tmp/scripts/live_smoke_copy.ps1"),
     ("logs/live_with_full.ps1",              "tmp/scripts/live_with_full.ps1"),
-    ("logs/run_napcat_manually.bat",         "tmp/scripts/run_napcat_manually.bat"),
+    ("logs/run_qq_engine_manually.bat",      "tmp/scripts/run_qq_engine_manually.bat"),
     ("logs/verify_bridge.ps1",               "tmp/scripts/verify_bridge.ps1"),
 
     # ── Test DB (logs/ → tmp/db/) ──

@@ -88,10 +88,10 @@ TEST_CHECKLIST = [
         ],
     },
     {
-        "category": "8. 系统状态 & NapCat/QQ（第四个+QQ标签）",
+        "category": "8. 系统状态 & QQ（第四个+QQ标签）",
         "tests": [
-            {"id": "QQ-01", "name": "查询 NapCat 运行状态", "scope": "GET /api/napcat/status"},
-            {"id": "QQ-02", "name": "查询 NapCat 最近日志", "scope": "GET /api/napcat/logs"},
+            {"id": "QQ-01", "name": "查询 QQ 引擎运行状态", "scope": "GET /api/qq/gateway/status"},
+            {"id": "QQ-02", "name": "查询 QQ 引擎最近日志", "scope": "GET /api/qq/gateway/logs"},
             {"id": "QQ-03", "name": "QQ 白名单列表", "scope": "GET /api/qq/whitelist"},
         ],
     },
@@ -299,9 +299,9 @@ async def run_api_tests() -> dict:
         results["COG-01"] = await _t(ac.get, "/api/cognition/recent", params={"limit": 10})
         results["COG-02"] = await _t(ac.get, "/api/cognition/stats")
 
-        # ---------- 8. QQ / NAPCAT ----------
-        results["QQ-01"] = await _t(ac.get, "/api/napcat/status")
-        results["QQ-02"] = await _t(ac.get, "/api/napcat/logs", params={"limit": 10})
+        # ---------- 8. QQ ----------
+        results["QQ-01"] = await _t(ac.get, "/api/qq/gateway/status")
+        results["QQ-02"] = await _t(ac.get, "/api/qq/gateway/logs", params={"limit": 10})
         results["QQ-03"] = await _t(ac.get, "/api/qq/whitelist")
 
         # ---------- 9. WORLD DASHBOARD ----------

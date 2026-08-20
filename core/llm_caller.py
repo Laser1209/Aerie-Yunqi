@@ -694,7 +694,238 @@ class LLMCaller:
             tool_results=all_tool_results if all_tool_results else None,
         )
 
+    async def chat_stream(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        tool_registry: Any = None,
+        max_react_rounds: int = 6,
+        preferred_provider: str | None = None,
+        temperature: float | None = None,
+    ):
+        """流式聊天（SSE 增量 + ReAct 工具循环）。
+
+        逐个 yield 事件（dict）：
+          - {"type": "text", "text": str}           模型增量文本（边生成边给调用方渲染）
+          - {"type": "step", "step": dict}             工具执行完成后的实时步骤（开始是 "running"，结束是 "ok"/"fail"）
+          - {"type": "done", "response": LLMCallerResponse}  最终聚合响应
+        失败/非法 provider 全部失败时，yield done 返回回退响应。
+        """
+        if _env_flag("AERIE_DISABLE_MODEL_CALLS"):
+            logger.info("LLM provider calls disabled by AERIE_DISABLE_MODEL_CALLS")
+            yield {
+                "type": "done",
+                "response": LLMCallerResponse(
+                    text=os.getenv(
+                        "AERIE_DISABLE_MODEL_CALLS_RESPONSE",
+                        "【smoke】模型调用已禁用，本地确定性回复。",
+                    ),
+                    provider="disabled",
+                    model="aerie-local-smoke-stub",
+                ),
+            }
+            return
+
+        last_error = ""
+        tracker = get_token_tracker()
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_duration_ms = 0
+        all_tool_results: list[dict] = []
+
+        providers = list(self._providers)
+        providers = self._health.filter_providers(providers)
+        if preferred_provider:
+            pref_idx = None
+            for i, p in enumerate(providers):
+                if p["name"] == preferred_provider:
+                    pref_idx = i
+                    break
+            if pref_idx is not None:
+                pref = providers.pop(pref_idx)
+                providers.insert(0, pref)
+                logger.debug("provider reordered: %s promoted to first", preferred_provider)
+        need_tools = tools is not None and tool_registry is not None and len(tools) > 0
+        if need_tools and not preferred_provider:
+            tool_providers = [p for p in providers if p.get("supports_tools", False)]
+            other_providers = [p for p in providers if not p.get("supports_tools", False)]
+            if tool_providers:
+                providers = tool_providers + other_providers
+                tool_names = [p["name"] for p in tool_providers]
+                logger.debug("tool-use mode: providers reordered, tool-capable first: %s", tool_names)
+
+        for idx, provider in enumerate(providers):
+            try:
+                # keys round-robin
+                keys: list[str] = provider.get("keys") or [provider.get("key", "")]
+                keys = [k for k in keys if k]
+                if not keys:
+                    continue
+                start_key = provider.get("key") or keys[0]
+                try:
+                    start_idx = keys.index(start_key)
+                except ValueError:
+                    start_idx = 0
+                ordered = keys[start_idx:] + keys[:start_idx]
+
+                provider_tool_results: list[dict] = []
+                for key in ordered:
+                    working_msgs = list(messages)
+                    rounds_used = 0
+                    while rounds_used < max_react_rounds:
+                        combined_text = ""
+                        tool_calls_now: list[dict] | None = None
+                        async for ev in self._call_provider_once_stream(
+                            provider, key, working_msgs, tools, temperature
+                        ):
+                            if ev["type"] == "text":
+                                combined_text += ev["text"]
+                                yield {"type": "text", "text": ev["text"]}
+                            elif ev["type"] == "tool_calls":
+                                tool_calls_now = ev["tool_calls"]
+
+                        if not tool_calls_now or tool_registry is None:
+                            final_text = combined_text.strip()
+                            if final_text and not final_text.startswith(("(连接", "(思考")):
+                                logger.info(
+                                    "LLM stream: %s/%s → %d chars, %d tool calls",
+                                    provider["name"], provider["model"],
+                                    len(final_text), len(provider_tool_results),
+                                )
+                                self._health.mark_ok(provider["name"])
+                                yield {
+                                    "type": "done",
+                                    "response": LLMCallerResponse(
+                                        text=final_text,
+                                        provider=provider["name"],
+                                        model=provider["model"],
+                                        duration_ms=total_duration_ms,
+                                        tool_results=provider_tool_results or None,
+                                    ),
+                                }
+                                return
+                            last_error = final_text or "empty"
+                            logger.warning(
+                                "Provider %s returned fallback: %s",
+                                provider["name"], last_error[:60],
+                            )
+                            break
+
+                        # ReAct round: 先广播工具执行步骤，再喂结果回对话
+                        rounds_used += 1
+                        working_msgs.append(
+                            {"role": "assistant", "content": None, "tool_calls": tool_calls_now}
+                        )
+
+                        for tc in tool_calls_now:
+                            tc_id = tc.get("id", "")
+                            tc_name = tc.get("function", {}).get("name", "")
+                            tc_args_raw = tc.get("function", {}).get("arguments", "{}")
+                            try:
+                                tc_args = json.loads(tc_args_raw)
+                            except (json.JSONDecodeError, TypeError):
+                                tc_args = {}
+
+                            # 执行前：running 事件（前端即时渲染“正在做…“）
+                            yield {
+                                "type": "step",
+                                "status": "running",
+                                "tool": tc_name,
+                                "args_text": json.dumps(tc_args, ensure_ascii=False)[:400],
+                            }
+
+                            t_tool = time.monotonic()
+                            try:
+                                result = await tool_registry.execute(tc_name, tc_args)
+                                success = "error" not in result
+                            except Exception as e:
+                                result = {"error": str(e)}
+                                success = False
+                            tool_dur = int((time.monotonic() - t_tool) * 1000)
+
+                            provider_tool_results.append(
+                                {
+                                    "name": tc_name,
+                                    "arguments": tc_args,
+                                    "result": result,
+                                    "success": success,
+                                    "duration_ms": tool_dur,
+                                }
+                            )
+
+                            # 执行后：ok/fail 事件（人设化摘要）
+                            yield {
+                                "type": "step",
+                                "status": "ok" if success else "fail",
+                                "tool": tc_name,
+                                "detail": self._step_detail(
+                                    success, result, tool_dur, tool=tc_name
+                                ),
+                                "duration_ms": tool_dur,
+                            }
+
+                            working_msgs.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tc_id,
+                                    "content": json.dumps(result, ensure_ascii=False),
+                                }
+                            )
+
+                if provider_tool_results:
+                    all_tool_results = provider_tool_results
+
+            except Exception as e:
+                last_error = str(e)
+                self._health.record_failure(provider["name"], last_error)
+                logger.warning(
+                    "Provider %s failed (%d/%d): %s",
+                    provider["name"], idx + 1, len(self._providers), last_error[:80],
+                )
+
+        logger.error("All %d providers failed. Last error: %s", len(providers), last_error)
+
+        # ── fallback 兜底 ──
+        yield {
+            "type": "done",
+            "response": LLMCallerResponse(
+                text="(伊塔暂时无法连接大脑，稍后再试...)",
+                tool_results=all_tool_results or None,
+            ),
+        }
+
+    @staticmethod
+    def _step_detail(
+        success: bool,
+        result: dict,
+        duration_ms: int,
+        tool: str | None = None,
+    ) -> dict:
+        """把工具执行结果压缩成人设化的一句话（伊塔的口吻，恋人视角）。"""
+        if success:
+            head = "搞定"
+            detail = f"（{tool}）" if tool else ""
+        else:
+            err = result.get("error", "未知错误") if isinstance(result, dict) else str(result)
+            head = "卡住了"
+            detail = str(err)[:120]
+        return {
+            "summary": f"{head}{detail}",
+            "duration_ms": duration_ms,
+            "success": success,
+        }
+
     async def probe_balances(self) -> dict:
+        """Probe known balance endpoints and update the health manager.
+
+        Exhausted accounts are banned before their first failed call.
+        Best-effort: probe failures never raise.
+        """
+        try:
+            return await self._health.probe_balances(self._providers)
+        except Exception:
+            logger.debug("provider balance probe failed", exc_info=True)
+            return {}
         """Probe known balance endpoints and update the health manager.
 
         Exhausted accounts are banned and leave the rotation before their
@@ -841,6 +1072,92 @@ class LLMCaller:
                 react_trace=react_trace,
                 _raw_tool_calls=raw_tool_calls,
             )
+
+    async def _call_provider_once_stream(
+        self,
+        provider: dict,
+        key: str,
+        messages: list[dict],
+        tools: list[dict] | None,
+        temperature: float | None,
+    ):
+        """单 provider 流式推理（OpenAI 兼容 SSE）。
+
+        逐个 yield 事件:
+          {"type": "text", "text": str}            增量文本
+          {"type": "tool_calls", "tool_calls": [...]}  整批工具调用（delta 聚合完整后）
+          {"type": "end"}
+        任何 HTTP/解析错误直接抛给调用方做 provider 轮换。
+        """
+        body: dict[str, Any] = {
+            "model": provider["model"],
+            "messages": messages,
+            "temperature": self._temperature if temperature is None else temperature,
+            "max_tokens": self._max_tokens,
+            "stream": True,
+        }
+        if tools:
+            body["tools"] = tools
+            body["tool_choice"] = "auto"
+
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        }
+
+        timeout = httpx.Timeout(30.0, read=120.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{provider['url']}/chat/completions",
+                json=body,
+                headers=headers,
+            ) as resp:
+                if resp.status_code != 200:
+                    raw = (await resp.aread()).decode("utf-8", "replace")
+                    raise RuntimeError(f"HTTP {resp.status_code}: {raw[:200]}")
+                tool_acc: dict[int, dict[Any, Any]] = {}
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        obj = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    choice = (obj.get("choices") or [{}])[0]
+                    delta = choice.get("delta") or {}
+                    content = delta.get("content")
+                    if content:
+                        yield {"type": "text", "text": content}
+                    for tc_delta in delta.get("tool_calls") or []:
+                        try:
+                            idx = int(tc_delta.get("index", 0))
+                        except (TypeError, ValueError):
+                            idx = 0
+                        slot = tool_acc.setdefault(
+                            idx,
+                            {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            },
+                        )
+                        if tc_delta.get("id"):
+                            slot["id"] = tc_delta["id"]
+                        fn = tc_delta.get("function") or {}
+                        if fn.get("name"):
+                            slot["function"]["name"] += fn["name"]
+                        if fn.get("arguments"):
+                            slot["function"]["arguments"] += fn["arguments"]
+                if tool_acc:
+                    yield {
+                        "type": "tool_calls",
+                        "tool_calls": [tool_acc[i] for i in sorted(tool_acc)],
+                    }
+                yield {"type": "end"}
 
     @staticmethod
     def _pick_best_candidate(text: str) -> str:

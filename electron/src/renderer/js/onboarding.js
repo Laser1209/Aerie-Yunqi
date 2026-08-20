@@ -83,7 +83,7 @@ window.OnboardingController = class OnboardingController {
           + '<li><b>开机自启</b>：登录系统后自动启动 Aerie</li>'
           + '<li><b>主动推送</b>：允许 Aerie 主动关心你，可设置每日次数与间隔</li>'
           + '</ul>'
-          + '<p class="onb-hint">QQ（NapCat）是可选能力，不装也能正常使用；主动消息会自动改走桌面端。</p>'
+          + '<p class="onb-hint">QQ 引擎是可选能力，不装也能正常使用；主动消息会自动改走桌面端。</p>'
           + '<p class="onb-hint">「她」的样子（名字 / 头像 / 称呼）也在这里设置。</p>',
         primary: { label: "下一步", action: () => this.next() },
       },

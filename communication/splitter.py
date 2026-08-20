@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Semantic message splitter (atomic-aware, R8.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Semantic message splitter (atomic-aware, R8.1).
 
 Splits long messages at natural boundaries (sentence ends, line breaks)
 so multi-part sends feel human-like. R8.1+ adds atomic-aware splitting:
@@ -173,3 +173,61 @@ def _is_atom(text: str) -> bool:
         or text.startswith("<thought>")
         or (text.startswith("【") and text.endswith("】"))
     )
+
+
+class IncrementalSplitter:
+    """流式增量分句器：边收模型增量边切出“完整句子”。
+
+    面向 SSE 流式输出设计：
+      push(chunk) -> list[str]  返回本轮新“成熟”的句子（可立即落库/emit）；
+      flush()     -> list[str]  流结束时吐出剩余缓冲。
+
+    保护规则（与 SemanticMessageSplitter 一致）：
+      - 原子块（<action>/<thought>/【】）未闭合前一律不切，防止拆断；
+      - 只有落在句子边界（。！？.!?\\n）才算成熟；
+      - 无句子终结符时不输出，继续等下一块。
+    """
+
+    def __init__(self, splitter: SemanticMessageSplitter | None = None) -> None:
+        self.splitter = splitter or SemanticMessageSplitter()
+        self._pending = ""
+
+    def push(self, chunk: str) -> list[str]:
+        if not chunk:
+            return []
+        self._pending += chunk
+        return self._resolve()
+
+    def flush(self) -> list[str]:
+        out = []
+        if self._pending and self._pending.strip():
+            out.append(self._pending)
+        self._pending = ""
+        return out
+
+    def _has_unclosed_atom(self, text: str) -> bool:
+        """原子标签未闭合 → 绝不切分（防止把 <action> 拆断）。"""
+        opens = text.count("<action>") + text.count("<thought>") + text.count("【")
+        closes = text.count("</action>") + text.count("</thought>") + text.count("】")
+        return opens > closes
+
+    def _resolve(self) -> list[str]:
+        text = self._pending
+        if not text.strip():
+            return []
+        if self._has_unclosed_atom(text):
+            return []
+        if not any(ch in "。！？.!?\n" for ch in text):
+            return []
+
+        segments = self.splitter.split(text)
+        cut = 0
+        for seg in segments:
+            if _is_sentence_end(seg) or _is_atom(seg):
+                cut += 1
+            else:
+                break
+        if cut == 0:
+            return []
+        self._pending = "".join(segments[cut:])
+        return segments[:cut]

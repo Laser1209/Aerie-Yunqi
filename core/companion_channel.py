@@ -4,7 +4,7 @@
 以及两个本地桩适配器: QQ 与 ClawBot。
 
 安全边界: 适配器仅为本地桩, 只操作进程内内存 (inbox / outbox),
-绝不调用真实 QQ / NapCat 或任何外部消息服务。
+绝不调用真实 QQ / 引擎或任何外部消息服务。
 """
 
 from __future__ import annotations

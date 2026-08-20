@@ -64,12 +64,12 @@ All notable changes to this project will be documented in this file.
 - **设置页诊断面板**：设置页新增「诊断数据」分组（免责声明 + 免费说明 + 累计时长 / 里程碑 / 端点状态 + 手动打包 / 上传 / 下载）
 - **Cloudflare 接收端（预留）**：`tools/telemetry-receiver/` 提供 Cloudflare Worker + R2 接收端代码与部署指引，供需要远程回传诊断包时使用
 
-#### NapCat 一键下载与检查更新 / NapCat One-Click Install & Update
+#### QQ 引擎一键下载与检查更新 / QQ Engine One-Click Install & Update
 
-- **一键下载/解压/启动闭环**：新增 `core/napcat_downloader.py`，从官方 GitHub Release 下载 `NapCat.Shell.Windows.Node.zip`（内置 QQ + Node，解压即用，无需本机预装 QQ），官方源失败自动回退镜像源 `github.moeyy.xyz`；下载/解压为阻塞操作经 `asyncio.to_thread` 后台执行，进度/状态线程安全供前端轮询，解压后写入 `data/napcat_dir.json` 供启动器定位
-- **路径自适应**：`napcat_launcher.py` 新增 `_resolve_napcat_dir()` 多级优先级（环境变量 `NAPCAT_DIR` / `AERIE_NAPCAT_DIR` → `settings.napcat.dir` → 下载标记 `data/napcat_dir.json` → 项目根默认），规避打包后固定路径失效；启动器名由写死 `launcher-user.bat` 改为 `_LAUNCHER_CANDIDATES` 自适应探测（`launcher-user.bat` / `launcher.bat` / `napcat.bat`）
-- **检查更新**：新增 `GET /api/napcat/update/check`，读 GitHub API `releases/latest` 的 `tag_name` 比对已安装目录 `package.json` 版本，返回 `latest` / `current` / `has_update` / `installed`
-- **前端 NapCat 面板**：状态页新增「下载 NapCat」「检查更新」按钮；检测到 `launcher_not_found` 时显示下载按钮，下载解压完成后自动启动 NapCat 扫码登录；版本检查给出未安装 / 有新版 / 已最新 / 失败四种提示
+- **一键下载/解压/启动闭环**：新增 `core/qq_gateway_downloader.py`，从官方 GitHub Release 下载 QQ 引擎完整包（内置 QQ + Node，解压即用，无需本机预装 QQ），官方源失败自动回退镜像源 `github.moeyy.xyz`；下载/解压为阻塞操作经 `asyncio.to_thread` 后台执行，进度/状态线程安全供前端轮询，解压后写入 `data/engine_dir.json` 供启动器定位
+- **路径自适应**：`qq_gateway.py` 新增 `_resolve_engine_dir()` 多级优先级（环境变量 `AERIE_QQ_ENGINE_DIR` → `settings.qq_engine.dir` → 下载标记 `data/engine_dir.json` → `data/qq_engine` 默认目录），规避打包后固定路径失效；启动器名由写死 `launcher-user.bat` 改为 `_LAUNCHER_CANDIDATES` 自适应探测（`launcher-user.bat` / `launcher.bat` / `napcat.bat`）
+- **检查更新**：新增 `GET /api/qq/gateway/update/check`，读 GitHub API `releases/latest` 的 `tag_name` 比对已安装目录 `package.json` 版本，返回 `latest` / `current` / `has_update` / `installed`
+- **前端 QQ 引擎面板**：状态页新增「下载 QQ 引擎」「检查更新」按钮；检测到 `launcher_not_found` 时显示下载按钮，下载解压完成后自动启动 QQ 引擎扫码登录；版本检查给出未安装 / 有新版 / 已最新 / 失败四种提示
 
 #### 启动时 API 连通性探测与警告 / Startup API Connectivity Check
 
@@ -99,7 +99,7 @@ All notable changes to this project will be documented in this file.
 - 引用相关组回归 147 passed
 - 灵动岛 v2 CDP 真实窗口回归：窗口 742×704、hover 320 / 展开 340 / 宽屏 720 全无裁切、动态穿透链路（胶囊外穿透 → 胶囊上接收 → ALT 强制穿透）、配置重启恢复
 - 消息/聊天链路修复回归：`test_admin_service` / `test_admin_api` / `test_desktop_shared_api_contract` / `test_desktop_chat_continuity` 44 passed；`test_phase3_conversation_model` / `test_message_batcher` / `test_api` 63 passed
-- NapCat 下载/路径回归：`test_napcat_launcher_lifecycle.py` 更新（路径解析优先级 / 启动器自适应 / 一键下载目录定位），4 passed
+- QQ 引擎下载/路径回归：`test_qq_gateway_lifecycle.py` 更新（路径解析优先级 / 启动器自适应 / 一键下载目录定位），4 passed
 - 聊天去重回归：`chat-store` 11 用例通过；conversation model / API 契约 / persona 隔离 36 passed
 
 ---

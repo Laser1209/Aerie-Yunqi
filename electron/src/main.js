@@ -2149,12 +2149,12 @@ async function fetchDesktopAttachment(attachmentId) {
   return { id, name: safeName, bytes };
 }
 
-async function fetchNapcatQrCode() {
+async function fetchGatewayQrCode() {
   const bytes = await new Promise((resolve, reject) => {
-    const req = http.get(PY_BACKEND + "/api/napcat/qrcode", (res) => {
+    const req = http.get(PY_BACKEND + "/api/qq/gateway/qrcode", (res) => {
       if (res.statusCode !== 200) {
         res.resume();
-        reject(new Error("napcat_qrcode_unavailable"));
+        reject(new Error("qq_gateway_qrcode_unavailable"));
         return;
       }
       const chunks = [];
@@ -2162,7 +2162,7 @@ async function fetchNapcatQrCode() {
       res.on("data", (chunk) => {
         size += chunk.length;
         if (size > 2 * 1024 * 1024) {
-          req.destroy(new Error("napcat_qrcode_too_large"));
+          req.destroy(new Error("qq_gateway_qrcode_too_large"));
           return;
         }
         chunks.push(chunk);
@@ -2170,9 +2170,9 @@ async function fetchNapcatQrCode() {
       res.on("end", () => resolve(Buffer.concat(chunks)));
     });
     req.on("error", reject);
-    req.setTimeout(5000, () => req.destroy(new Error("napcat_qrcode_timeout")));
+    req.setTimeout(5000, () => req.destroy(new Error("qq_gateway_qrcode_timeout")));
   });
-  if (!bytes.length) throw new Error("napcat_qrcode_empty");
+  if (!bytes.length) throw new Error("qq_gateway_qrcode_empty");
   return `data:image/png;base64,${bytes.toString("base64")}`;
 }
 
@@ -3035,9 +3035,9 @@ ipcMain.handle("get-health", async () => {
   return snap;
 });
 
-ipcMain.handle("napcat:getStatus", async () => {
+ipcMain.handle("qqGateway:getStatus", async () => {
   try {
-    const r = await apiRequest({ path: "/api/napcat/status" });
+    const r = await apiRequest({ path: "/api/qq/gateway/status" });
     const status = r.data && typeof r.data === "object" ? { ...r.data } : {};
     delete status.qrcode_path;
     return status;
@@ -3046,30 +3046,30 @@ ipcMain.handle("napcat:getStatus", async () => {
   }
 });
 
-ipcMain.handle("napcat:getQrCode", async () => {
+ipcMain.handle("qqGateway:getQrCode", async () => {
   try {
-    return { ok: true, dataUrl: await fetchNapcatQrCode() };
+    return { ok: true, dataUrl: await fetchGatewayQrCode() };
   } catch (error) {
     return {
       ok: false,
       dataUrl: "",
-      errorCode: String(error && error.message || "napcat_qrcode_unavailable"),
+      errorCode: String(error && error.message || "qq_gateway_qrcode_unavailable"),
     };
   }
 });
 
-ipcMain.handle("napcat:start", async () => {
+ipcMain.handle("qqGateway:start", async () => {
   try {
-    const r = await apiRequest({ method: "POST", path: "/api/napcat/start" });
+    const r = await apiRequest({ method: "POST", path: "/api/qq/gateway/start" });
     return r.data;
   } catch (_) {
     return { ok: false, message: "backend unreachable" };
   }
 });
 
-ipcMain.handle("napcat:stop", async () => {
+ipcMain.handle("qqGateway:stop", async () => {
   try {
-    const r = await apiRequest({ method: "POST", path: "/api/napcat/stop" });
+    const r = await apiRequest({ method: "POST", path: "/api/qq/gateway/stop" });
     return r.data;
   } catch (_) {
     return { ok: false, message: "backend unreachable" };

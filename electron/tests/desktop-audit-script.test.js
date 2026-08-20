@@ -20,7 +20,7 @@ function control(selector, text = "") {
 test("dangerous, restart, and QQ controls are classified for explicit safe skipping", () => {
   const close = audit.classifyDedicatedControl(control("#btn-close", "关闭"));
   const restart = audit.classifyDedicatedControl(control("#settings-restart-app-btn", "重启应用"));
-  const qq = audit.classifyDedicatedControl(control("#napcat-start-btn", "启动 NapCat"));
+  const qq = audit.classifyDedicatedControl(control("#qq-gateway-start-btn", "启动 QQ 引擎"));
 
   assert.equal(close.category, "window-close");
   assert.equal(restart.category, "application-restart");

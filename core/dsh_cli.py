@@ -7,7 +7,7 @@ JSON-RPC 帧,把任务委托给场景 Preset 执行并回收结果。
 - 手写 JSON-RPC 桥,绕开 SDK 的 pydantic 依赖冲突(V7)。协议已由 tools/dsh_poc.py
   实测验证:initialize / session/prompt / shutdown 三个方法 + session.event /
   session.status 通知流。
-- 全程 asyncio(Aerie 硬约束),进程生命周期复用 napcat_launcher + 24h watchdog
+- 全程 asyncio(Aerie 硬约束),进程生命周期复用 qq_gateway + 24h watchdog
   的崩溃拉起/熔断经验。
 - 日志分级:DEBUG=帧级收发,INFO=生命周期,WARNING=重启/降级/非致命诊断,
   ERROR=崩溃/超时/熔断。所有日志 key 脱敏。

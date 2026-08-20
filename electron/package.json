@@ -63,16 +63,13 @@
           "persona/**",
           "scheduler/**",
           "skills/**",
-          "NapCat/NapCat.Shell/**",
           "ffmpeg/bin/**",
           ".env.example",
           "!**/__pycache__/**",
           "!**/*.pyc",
           "!**/*.pyo",
           "!data/**",
-          "!logs/**",
-          "!NapCat/NapCat.Shell/config/**",
-          "!NapCat/NapCat.Shell/cache/**"
+          "!logs/**"
         ]
       }
     ],

@@ -55,7 +55,7 @@ const DEDICATED_RULES = [
     reason: "Backend restart would invalidate the current network and DOM evidence window.",
   },
   {
-    pattern: /napcat-|status-qq|\bqq\b|二维码|扫码/i,
+    pattern: /qq-gateway-|status-qq|\bqq\b|二维码|扫码/i,
     category: "qq-connectivity",
     reason: "QQ is disabled for the generic UI audit; connection-only verification has its own redacted stage.",
   },

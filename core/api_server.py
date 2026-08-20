@@ -5,11 +5,11 @@ Routes:
   POST /api/chat/send       — send message (text + user_id)
   GET  /api/chat/history    — chat history (user_id + limit)
   GET  /api/chat/poll       — incremental poll (user_id + since_id)
-  GET  /api/napcat/status   — NapCat status
-  POST /api/napcat/start    — start NapCat
-  POST /api/napcat/stop     — stop NapCat
-  GET  /api/napcat/logs     — NapCat recent logs
-  GET  /api/napcat/qrcode   — QR code PNG
+  GET  /api/qq/gateway/status   — QQ engine gateway status
+  POST /api/qq/gateway/start    — start engine
+  POST /api/qq/gateway/stop     — stop engine
+  GET  /api/qq/gateway/logs     — engine recent logs
+  GET  /api/qq/gateway/qrcode   — QR code PNG
   GET  /api/emotion/state   — emotion engine state
   GET  /api/tools/list      — registered tools
   GET  /api/stats/tokens    — token usage stats
@@ -51,7 +51,7 @@ from config.persona_loader import (
 )
 from core.companion import get_companion
 from core.database import Database
-from core.napcat_launcher import get_launcher
+from core.qq_gateway import get_gateway
 from core.chat_events import emit
 from core.chat_request_service import (
     InvalidChatInput,
@@ -1761,65 +1761,39 @@ async def chat_poll(
         return {"items": [], "error": str(e)}
 
 
-# ── NapCat ─────────────────────────────────────────
+# ── QQ 引擎网关 ─────────────────────────────────────
 
-@app.get("/api/napcat/status")
-async def napcat_status() -> dict:
-    launcher = get_launcher()
+@app.get("/api/qq/gateway/status")
+async def qq_gateway_status() -> dict:
+    launcher = get_gateway()
     return launcher.get_status()
 
 
-@app.post("/api/napcat/start")
-async def napcat_start() -> dict:
-    launcher = get_launcher()
+@app.post("/api/qq/gateway/start")
+async def qq_gateway_start() -> dict:
+    launcher = get_gateway()
     return await launcher.start()
 
 
-@app.post("/api/napcat/stop")
-async def napcat_stop() -> dict:
-    launcher = get_launcher()
+@app.post("/api/qq/gateway/stop")
+async def qq_gateway_stop() -> dict:
+    launcher = get_gateway()
     return await launcher.stop()
 
 
-@app.get("/api/napcat/logs")
-async def napcat_logs(limit: int = Query(default=50)) -> dict:
-    launcher = get_launcher()
+@app.get("/api/qq/gateway/logs")
+async def qq_gateway_logs(limit: int = Query(default=50)) -> dict:
+    launcher = get_gateway()
     return {"logs": launcher.get_logs(limit)}
 
 
-@app.get("/api/napcat/qrcode")
-async def napcat_qrcode() -> Response:
-    launcher = get_launcher()
+@app.get("/api/qq/gateway/qrcode")
+async def qq_gateway_qrcode() -> Response:
+    launcher = get_gateway()
     data = launcher.read_qrcode()
     if data is None:
         return JSONResponse({"error": "no QR code available"}, status_code=404)
     return Response(content=data, media_type="image/png")
-
-
-@app.post("/api/napcat/download")
-async def napcat_download() -> dict:
-    """触发 NapCat 一键下载（后台线程执行，前端轮询 status）。"""
-    from core.napcat_downloader import get_downloader
-
-    downloader = get_downloader()
-    if downloader.is_running():
-        return {"ok": False, "message": "NapCat 正在下载中", "error_code": "already_running"}
-    asyncio.create_task(asyncio.to_thread(downloader.download_and_extract))
-    return {"ok": True, "message": "下载任务已启动"}
-
-
-@app.get("/api/napcat/download/status")
-async def napcat_download_status() -> dict:
-    from core.napcat_downloader import get_downloader
-
-    return get_downloader().status()
-
-
-@app.get("/api/napcat/update/check")
-async def napcat_update_check() -> dict:
-    from core.napcat_downloader import get_downloader
-
-    return await asyncio.to_thread(get_downloader().check_update)
 
 
 # ── Emotion ─────────────────────────────────────────
@@ -2529,7 +2503,7 @@ class _RecallRecord:
 
 @app.post("/api/chat/recall/{msg_id}")
 async def chat_recall(msg_id: int) -> dict:
-    """Recall a chat message. Marks DB + syncs to QQ via NapCat delete_msg.
+    """Recall a chat message. Marks DB + syncs to QQ via delete_msg.
 
     Rules:
       - User can recall own messages within recall window
@@ -2573,7 +2547,7 @@ async def chat_recall(msg_id: int) -> dict:
     # If assistant message and has QQ id, recall via QQ
     qq_recalled = False
     if row["role"] == "assistant":
-        # 按 channel 分派真实撤回 (QQ → NapCat delete_msg, local → 本地标记)
+        # 按 channel 分派真实撤回 (QQ → delete_msg, local → 本地标记)
         channel = row.get("channel") or ("qq" if row.get("qq_message_id") else "local")
         try:
             from communication.recall.factory import get_recall_adapter
@@ -4312,6 +4286,45 @@ async def tasks_progress(task_id: str) -> dict:
     except Exception as e:
         logger.exception("tasks_progress error")
         return {"error": str(e)}
+
+
+# ── QQ Direct Send ───────────────────────────────────
+
+@app.post("/api/qq/send")
+async def qq_send(request: Request):
+    body = await request.json()
+    raw_text = body.get("text")
+    if raw_text is None:
+        raw_text = body.get("content")
+    text = raw_text.strip() if isinstance(raw_text, str) else ""
+    if not text:
+        return JSONResponse({"error": "empty_message"}, status_code=400)
+    try:
+        user_id = int(body.get("user_id") or 0)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "invalid_user_id"}, status_code=400)
+    if user_id <= 0:
+        return JSONResponse({"error": "invalid_user_id"}, status_code=400)
+
+    comp = get_companion()
+    qq = getattr(comp, "qq", None) if comp else None
+    if qq is None:
+        return JSONResponse({"error": "qq_not_available"}, status_code=503)
+    if getattr(qq, "is_connected", False) is not True:
+        return JSONResponse({"error": "qq_not_connected"}, status_code=409)
+
+    try:
+        result = await qq.send_message(user_id, text)
+    except Exception:
+        logger.exception("qq direct send error")
+        return JSONResponse({"error": "qq_send_failed"}, status_code=502)
+    if not result:
+        return JSONResponse({"error": "qq_send_failed"}, status_code=502)
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "message_id": result if isinstance(result, int) else None,
+    }
 
 
 # ── QQ Whitelist (v13.9) ────────────────────────────

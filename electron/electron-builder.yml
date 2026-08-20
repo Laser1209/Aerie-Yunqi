@@ -78,7 +78,6 @@ extraResources:
       - "persona/**"
       - "scheduler/**"
       - "skills/**"
-      - "NapCat/NapCat.Shell/**"
       - "ffmpeg/bin/**"
       - ".env.example"
       - "!**/__pycache__/**"
@@ -86,8 +85,6 @@ extraResources:
       - "!**/*.pyo"
       - "!data/**"
       - "!logs/**"
-      - "!NapCat/NapCat.Shell/config/**"
-      - "!NapCat/NapCat.Shell/cache/**"
 
 # NSIS installer options
 nsis:

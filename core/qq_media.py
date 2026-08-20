@@ -3,8 +3,8 @@
 把 QQ 收到的 ``[CQ:record]`` 语音与 ``[CQ:image]`` / ``[CQ:face]`` 表情包，
 从只能看到 CQ 码 / JSON 的原始状态，转成 AI 能理解 + 前端能好看呈现的内容：
 
-- 语音 (record)  : 调 NapCat ``get_record`` 下载并转 mp3 → ASR 转写文字。
-- 图片 (image)   : 调 NapCat ``get_image`` 拿到本地文件 → 视觉模型先分类（真实照片/表情包）再解析含义 → 落库缩略图。
+- 语音 (record)  : 调 QQ 引擎 ``get_record`` 下载并转 mp3 → ASR 转写文字。
+- 图片 (image)   : 调 QQ 引擎 ``get_image`` 拿到本地文件 → 视觉模型先分类（真实照片/表情包）再解析含义 → 落库缩略图。
 - QQ 自带表情(face): 内置 id → 文字含义映射（无需图像）。
 - 商城表情(mface): 直接用其 summary 字段。
 
@@ -87,7 +87,7 @@ def face_text(face_id: str | int) -> str:
 def _resolve_local_file(data: dict) -> Optional[str]:
     """从 get_record / get_image 返回的 data 中解析出本地文件路径。
 
-    NapCat 在本机运行时 ``data.file`` 是本地绝对路径；远程部署或返回字节时
+    QQ 引擎在本机运行时 ``data.file`` 是本地绝对路径；远程部署或返回字节时
     可能是 ``base64://`` / 纯 base64 / http(s) 链接。本地路径直接返回，
     base64 写盘后返回新路径，http(s) 返回空（交给调用方决定）。
     """
@@ -109,7 +109,7 @@ def _resolve_local_file(data: dict) -> Optional[str]:
     # 可能带路径前缀的相对路径
     if p.exists():
         return str(p)
-    # 路径特征防护：NapCat 某些版本返回"存在但此处未能 stat"的长 Windows 路径
+    # 路径特征防护：QQ 引擎某些版本返回"存在但此处未能 stat"的长 Windows 路径
     # （含盘符冒号/反斜杠/正斜杠），这类字符串绝不可能是 base64，直接判为路径
     # 解析失败返回 None，避免被下方宽松的 base64 解码误判成字节导致后续读不到文件。
     if "\\" in raw or "/" in raw or re.match(r"^[A-Za-z]:", raw):
@@ -418,7 +418,7 @@ class QQMediaPreprocessor:
             except Exception as e:
                 logger.warning("QQ get_record failed for %s: %s", file_ref, e)
 
-        # 也尝试直接从段的 url 下载（NapCat 有时只给 raw silk url）
+    # 也尝试直接从段的 url 下载（引擎有时只给 raw silk url）
         if audio_path is None:
             seg_url = str(data.get("url") or "").strip()
             if seg_url.startswith(("http://", "https://")):

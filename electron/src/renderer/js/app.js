@@ -271,7 +271,7 @@ window.addEventListener("DOMContentLoaded", () => {
         const r = await window.aerie.electron.getHealth();
         if (r) {
           if (statsBackend) statsBackend.textContent = r.ready ? "运行中" : "异常";
-          // QQ status is managed by napcat-panel.js (authoritative source)
+          // QQ status is managed by qq-gateway-panel.js (authoritative source)
           try {
             const http = await window.aerie.api.request({ method: "GET", path: "/api/health" });
             if (http && http.data) {

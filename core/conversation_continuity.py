@@ -798,7 +798,9 @@ class ContextAssembler:
                 break
             if used + group_chars > budget:
                 break
-            history.extend(entries)
+            # reversed(groups) 已从最新 turn 开始，这里对组内反向后再整体
+            # history.reverse()，保证最终组内仍为旧→新（user → assistant 顺序）
+            history.extend(reversed(entries))
             l0_chars += group_chars
             l0_turns_included += 1
             used += group_chars

@@ -237,7 +237,7 @@ e:\Agent_reply/
 │   ├── scripts/                     # 构建脚本（图标生成 / emoji 检查 / 后处理）
 │   └── electron-builder.yml         # 打包配置
 │
-├── NapCat/                          # 🐱 QQ 协议客户端（第三方）
+├── NapCat/                          # 🐱 QQ 协议客户端（历史遗留，待删除）
 │   └── NapCat.Shell/                # OneBot11 实现 + WebUI + 原生模块
 │
 ├── douyin-mcp/                      # 📱 抖音 MCP 子项目（独立 Python 包）
@@ -286,7 +286,7 @@ e:\Agent_reply/
 | [core/permission_manager.py](file:///e:/Agent_reply/core/permission_manager.py)     | Python |    523 | 细粒度权限（5 类操作 × 4 风险等级 × 路径白名单）             |
 | [core/self_evolver.py](file:///e:/Agent_reply/core/self_evolver.py)                 | Python |      - | 自进化 L4 引擎（提案 → 沙箱 → 审批 → 注册）                 |
 | [core/file_organizer.py](file:///e:/Agent_reply/core/file_organizer.py)             | Python |      - | 文件整理（7 天撤销 + 4 个预设模板）                            |
-| [communication/qq_client.py](file:///e:/Agent_reply/communication/qq_client.py)     | Python |      - | NapCat OneBot11 WebSocket 客户端                               |
+| [communication/qq_client.py](file:///e:/Agent_reply/communication/qq_client.py)     | Python |      - | QQ 引擎 OneBot11 WebSocket 客户端                               |
 | [communication/send_queue.py](file:///e:/Agent_reply/communication/send_queue.py)   | Python |      - | 拟人化发送队列（11 节奏风格）                                  |
 | [electron/src/main.js](file:///e:/Agent_reply/electron/src/main.js)                 |     JS |      - | Electron 主进程（窗口管理 + Python spawn + IPC）               |
 | [electron/src/preload.js](file:///e:/Agent_reply/electron/src/preload.js)           |     JS |      - | contextBridge 安全桥                                           |

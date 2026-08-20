@@ -76,15 +76,15 @@ graph TD
 | T=0 | `Companion(settings)` 构造 | [main.py:91](file:///e:/Agent_reply/main.py#L91) |
 | T=ε | 6 个 create_task 几乎同时 schedule | [companion.py:190-204](file:///e:/Agent_reply/core/companion.py#L190-L204) |
 | T=ε+0.5s | `[READY] Aerie ready` | [main.py:145](file:///e:/Agent_reply/main.py#L145) |
-| T=NapCat-port-open | `qq.connect()` 检测到端口 → 建 WS | [qq_client.py:142](file:///e:/Agent_reply/communication/qq_client.py#L142) |
+| T=engine-port-open | `qq.connect()` 检测到端口 → 建 WS | [qq_client.py:142](file:///e:/Agent_reply/communication/qq_client.py#L142) |
 | T=login | `_login_event.set()` → `wait_for_login` 返回 | [qq_client.py:224](file:///e:/Agent_reply/communication/qq_client.py#L224) |
 
-### 2.3 NapCat 启动方式
+### 2.3 QQ 引擎启动方式
 
-> [!info] NapCat 不会被后端自动启动
-> - 后端 `qq.connect()` 只**等待**端口开放，不启动 NapCat
-> - 用户需在 Electron UI 手动点击"启动 NapCat"
-> - 启动链路：UI click → IPC → `/api/napcat/start` → `NapcatLauncher.start()` → `Popen(launcher-user.bat)`
+> [!info] QQ 引擎不由后端自动启动
+> - 后端 `qq.connect()` 只**等待**端口开放，不启动 QQ 引擎
+> - 用户需在 Electron UI 手动点击"启动 QQ 引擎"
+> - 启动链路：UI click → IPC → `/api/qq/gateway/start` → `QQEngineGateway.start()` → `Popen(launcher-user.bat)`
 
 ## 3. QQ 客户端交互逻辑
 
@@ -92,11 +92,11 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "WS 层 (后端 ↔ NapCat)"
+    subgraph "WS 层 (后端 ↔ QQ 引擎)"
         W1[_connected] --> W2[is_connected]
         W2 --> W3["TCP 探活 + 内存标志"]
     end
-    subgraph "登录层 (NapCat ↔ 腾讯)"
+    subgraph "登录层 (QQ 引擎 ↔ 腾讯)"
         L1[_logged_in] --> L2[is_logged_in]
         L2 --> L3["lifecycle.connect 或 get_login_info 成功"]
     end
@@ -104,8 +104,8 @@ graph LR
 ```
 
 > [!important] 两层状态的区分
-> - `is_connected` = WS 层连通（后端能连到 NapCat）
-> - `is_logged_in` = QQ 账号在线（NapCat 能连到腾讯服务器）
+> - `is_connected` = WS 层连通（后端能连到 QQ 引擎）
+> - `is_logged_in` = QQ 账号在线（QQ 引擎能连到腾讯服务器）
 > - **关键**：WS 连上 ≠ QQ 登录。`send_message` 只检查 `is_connected`，不检查 `is_logged_in`
 
 ### 3.2 self_id 学习机制（被动 + 主动）
@@ -118,7 +118,7 @@ graph LR
 ### 3.3 _learn_self_id 的 echo 匹配 bug
 
 > [!bug] 根因：只 recv 一次，没有循环匹配 echo
-> `_learn_self_id` 每次重试都新开 WS 连接，但 NapCat 在新连接建立后会**先推送 `lifecycle.connect` 事件**，然后才处理 API 请求。
+> `_learn_self_id` 每次重试都新开 WS 连接，但 QQ 引擎在新连接建立后会**先推送 `lifecycle.connect` 事件**，然后才处理 API 请求。
 >
 > `_learn_self_id` 只 `recv()` 一次，收到的第一个帧是 lifecycle 事件（没有 `data.user_id`），判断失败。5 次重试每次都这样。
 
@@ -131,7 +131,7 @@ graph LR
 | 遇到 lifecycle 帧 | 跳过继续 recv | **放弃本次重试** |
 | 代码位置 | [qq_client.py:270-290](file:///e:/Agent_reply/communication/qq_client.py#L270-L290) | [qq_client.py:318](file:///e:/Agent_reply/communication/qq_client.py#L318) |
 
-**NapCat lifecycle 事件结构**（没有 `data` 字段）：
+**QQ 引擎 lifecycle 事件结构**（没有 `data` 字段）：
 
 ```json
 {
@@ -219,7 +219,7 @@ async def _rpc_call(
 ) -> dict | None:
     """Send a OneBot11 RPC on a fresh WS, loop recv until echo match.
 
-    NapCat pushes lifecycle/heartbeat events on every new WS connection.
+    QQ 引擎 pushes lifecycle/heartbeat events on every new WS connection.
     We must loop recv() and skip non-matching frames (like send_message does),
     otherwise the first frame received is a lifecycle event, not our RPC reply.
 

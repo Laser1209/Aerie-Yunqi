@@ -98,7 +98,7 @@ card(col[5], y0, cw, ch, "API · 服务层",
 # --- Row 2 ---
 y1 = row[1]
 card(col[0], y1, cw, ch, "QQ CLIENT · 通信",
-     "NapCat OneBot11 WebSocket | 收发·撤回·图片·MarkDown | Poke·声聊 DLC",
+    "QQ 引擎 OneBot11 WebSocket | 收发·撤回·图片·MarkDown | Poke·声聊 DLC",
      "communication/qq_client.py · communication/recall_manager.py")
 card(col[1], y1, cw, ch, "SEND QUEUE · 拟人发送",
      "PriorityQueue · 5 级节奏 | 语义分段 8 模式 · 撤回联动",
@@ -113,7 +113,7 @@ card(col[4], y1, cw, ch, "MEMORY · 记忆层",
      "短期 8 条 · 长期 SQLite | 知识库 4 类目 · 关键词检索",
      "memory/memory_store.py · memory/short_term.py · knowledge/kb.py")
 card(col[5], y1, cw, ch, "VOICE · 声聊模块",
-     "MiniMax TTS · Silk 编码 FFmpeg | NapCat send_record 语音消息",
+    "MiniMax TTS · Silk 编码 FFmpeg | 引擎 send_record 语音消息",
      "voice/tts_engine.py · voice/silk_encoder.py")
 
 # --- Row 3: Infrastructure ---

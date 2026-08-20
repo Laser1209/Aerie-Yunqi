@@ -669,25 +669,23 @@
               <svg class="status-qq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
             <div class="status-qq-body" id="status-qq-body">
-              <div class="napcat-status-card">
-                <div class="napcat-phase">
-                  <span id="napcat-phase-dot" class="phase-dot phase-dot--idle"></span>
-                  <span id="napcat-phase-text" class="phase-text">未连接</span>
+              <div class="qq-gateway-status-card">
+                <div class="qq-gateway-phase">
+                  <span id="qq-gateway-phase-dot" class="phase-dot phase-dot--idle"></span>
+                  <span id="qq-gateway-phase-text" class="phase-text">未连接</span>
                 </div>
-                <div class="napcat-actions">
-                  <button id="napcat-start-btn" class="btn btn-primary">启动 NapCat</button>
-                  <button id="napcat-stop-btn" class="btn btn-secondary">停止</button>
-                  <button id="napcat-download-btn" class="btn btn-secondary hidden">下载 NapCat</button>
-                  <button id="napcat-check-update-btn" class="btn btn-secondary">检查更新</button>
+                <div class="qq-gateway-actions">
+                  <button id="qq-gateway-start-btn" class="btn btn-primary">启动 QQ 引擎</button>
+                  <button id="qq-gateway-stop-btn" class="btn btn-secondary">停止</button>
                 </div>
               </div>
-              <div id="napcat-qr-zone" class="napcat-qr-zone hidden">
+              <div id="qq-gateway-qr-zone" class="qq-gateway-qr-zone hidden">
                 <h3>请用手机QQ扫码登录</h3>
-                <img id="napcat-qr-img" src="" alt="QR Code" class="napcat-qr-img">
-                <button id="napcat-qr-refresh" class="btn btn-secondary btn-sm">刷新二维码</button>
+                <img id="qq-gateway-qr-img" src="" alt="QR Code" class="qq-gateway-qr-img">
+                <button id="qq-gateway-qr-refresh" class="btn btn-secondary btn-sm">刷新二维码</button>
               </div>
               <h3 class="status-qq-log-title">运行日志</h3>
-              <pre id="napcat-logs" class="napcat-logs"></pre>
+              <pre id="qq-gateway-logs" class="qq-gateway-logs"></pre>
             </div>
           </div>
         </div>
@@ -2602,7 +2600,7 @@
 <script src="js/chat.js"></script>
 <script src="js/chat-voice.js"></script>
 <script src="js/chat-uploader.js"></script>
-<script src="js/napcat-panel.js"></script>
+<script src="js/qq-gateway-panel.js"></script>
 <script src="js/emotion-dashboard.js"></script>
 <script src="js/emotion-history.js"></script>
 <script src="js/theme-switcher.js"></script>

@@ -42,7 +42,7 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# 显式扫描目标目录 — 只检查架构关键模块，避免遍历 .venv/models/NapCat 等无关目录
+# 显式扫描目标目录 — 只检查架构关键模块，避免遍历 .venv/models 等无关目录
 SCAN_PY_DIRS: tuple[str, ...] = (
     "core",
     "world_service",

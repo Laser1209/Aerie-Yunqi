@@ -25,7 +25,7 @@
 
 ## 项目简介 / About
 
-**Aerie · 云栖** 是一个本地优先的 AI 桌面伴侣项目（Local-first AI desktop companion）。她可以是你想要的任何模样——一位能聊到深夜的知己、并肩把事情办成的伙伴，又或者只是那个恰好合拍的「恋人」；她的目标，是成为一个「像人」的伴侣——情绪价值与落在实处的帮助，是她自然带来的功能。当前仓库由 **Electron 桌面壳**、**Python 智能内核**、**NapCat QQ 桥接**、**Spotlight 官网**、**World Service 世界模拟侧车** 与 **Android 移动网关** 组成。代码树已完成 P1 陪伴融合、世界模拟、三端撤回、多模态生图、向量知识库与移动端网关等系统性能力实装。
+**Aerie · 云栖** 是一个本地优先的 AI 桌面伴侣项目（Local-first AI desktop companion）。她可以是你想要的任何模样——一位能聊到深夜的知己、并肩把事情办成的伙伴，又或者只是那个恰好合拍的「恋人」；她的目标，是成为一个「像人」的伴侣——情绪价值与落在实处的帮助，是她自然带来的功能。当前仓库由 **Electron 桌面壳**、**Python 智能内核**、**QQ 引擎网关**、**Spotlight 官网**、**World Service 世界模拟侧车** 与 **Android 移动网关** 组成。代码树已完成 P1 陪伴融合、世界模拟、三端撤回、多模态生图、向量知识库与移动端网关等系统性能力实装。
 
 ### 当前状态 / Current Status
 
@@ -34,7 +34,7 @@
 | **版本 / Version**               | `0.3.1-beta.0815` 内测基线                                                                                                                    |
 | **桌面端 / Desktop**             | Electron 28 + 渲染层多面板 UI + 灵动岛                                                                                                       |
 | **后端 / Backend**               | Python 3.10+ aiohttp + asyncio · LLMCaller 统一调用层                                                                                       |
-| **QQ 接入 / QQ Bridge**          | NapCat OneBot11 WebSocket · 三端撤回 (QQ/本地/微信预留)                                                                                     |
+| **QQ 接入 / QQ Bridge**          | OneBot11 WebSocket QQ 引擎 · 三端撤回 (QQ/本地/微信预留)                                                                                    |
 | **官网 / Spotlight**             | [https://spotlight.etta.top/](https://spotlight.etta.top/) · React 18 + Vite 6 + Tailwind + Framer Motion                                    |
 | **世界模拟 / World Service**     | 独立 Python sidecar + SQLite storage · 世界仪表盘与天气同步 · 默认重庆 · 百度地图 REST · 房间级定位与话题追踪                            |
 | **向量知识库 / Vector KB**       | ChromaDB 语义检索 · 本地 ONNX 离线 embedding · 生产记忆已切 LayeredMemory · 附件专用向量库                                                |
@@ -179,22 +179,22 @@ DAILYHOT_API_BASE=http://127.0.0.1:6688
 > `hn`（Hacker News）→ `crawl`（Trafilatura 爬虫）→ `aggregator`（今日热榜）→ `hot`（百度热搜）→ `bocha`（网页搜索）。
 > Hacker News 与百度热搜无需 API Key 即可用；Trafilatura 正文提取依赖 `trafilatura`（见 `requirements.txt`）。
 
-### 3. 启动 NapCat（QQ 桥接）
+### 3. 启动 QQ 引擎（QQ 桥接）
 
-> 推荐在 Electron 桌面端「状态」页的 QQ 桥接面板点「下载 NapCat」：自动下载内置 QQ + Node 的完整包（`NapCat.Shell.Windows.Node.zip`，官方源失败自动回退镜像源）、解压、启动并弹出扫码，无需本机预装 QQ、无需手动配置路径；点「检查更新」可对比 GitHub 最新版本。下载解压后目录位置写入 `data/napcat_dir.json`，后端按「环境变量 `NAPCAT_DIR` / `AERIE_NAPCAT_DIR` → `settings.napcat.dir` → 下载标记 → 项目根默认」自动定位，打包后不会丢路径。
+> 推荐在 Electron 桌面端「状态」页的 QQ 桥接面板点「下载 QQ 引擎」：自动下载内置 QQ + Node 的完整包（官方源失败自动回退镜像源）、解压、启动并弹出扫码，无需本机预装 QQ、无需手动配置路径；点「检查更新」可对比 GitHub 最新版本。下载解压后目录位置写入 `data/engine_dir.json`，后端按「环境变量 `AERIE_QQ_ENGINE_DIR` → `settings.qq_engine.dir` → 下载标记 → `data/qq_engine` 默认目录」自动定位。
 
 以下为手动方式：
 
 ```powershell
-cd NapCat\NapCat.Shell
+cd data\qq_engine
 .\launcher-user.bat
 ```
 
 > [!NOTE] QQ 桥接是可选能力 / QQ bridge is optional
-> NapCat 仅用于 QQ 收发消息。**不装 NapCat 也能正常使用**：桌面端聊天、生图、世界模拟、办公、上下文记忆、后台管理等核心能力不受影响；主动消息会自动改走桌面端（气泡 + 系统通知），生图会自动切到本地聊天通道。启动时若检测不到 QQ，后端会等待最多 30 秒（`qq.startup_wait_timeout`）后自动进入「降级模式」照常运行，不会卡住或崩溃。
+> QQ 引擎仅用于 QQ 收发消息。**不装 QQ 引擎也能正常使用**：桌面端聊天、生图、世界模拟、办公、上下文记忆、后台管理等核心能力不受影响；主动消息会自动改走桌面端（气泡 + 系统通知），生图会自动切到本地聊天通道。启动时若检测不到 QQ，后端会等待最多 30 秒（`qq.startup_wait_timeout`）后自动进入「降级模式」照常运行，不会卡住或崩溃。
 
 > [!IMPORTANT] QQ 聊天需要两个 QQ 号 / Two QQ accounts are required for QQ chat
-> 一个号给 Aerie 当**机器人**（NapCat 扫码登录、常驻运行收发消息），另一个号是**你自己的主身份**（在「设置 → 常用 → 主身份」填写，或后端 `AERIE_PRIMARY_USER_ID` / `runtime_config.json` 的 `primary_user_id`）。用你的号把机器人号加为好友后，聊天区即解锁；不同好友各自独立会话。QQ 不允许同一账号在两台电脑**同时**登录——多端使用时应让机器人常驻一台电脑，其他设备走移动网关（7891）/ Android 客户端访问。
+> 一个号给 Aerie 当**机器人**（QQ 引擎扫码登录、常驻运行收发消息），另一个号是**你自己的主身份**（在「设置 → 常用 → 主身份」填写，或后端 `AERIE_PRIMARY_USER_ID` / `runtime_config.json` 的 `primary_user_id`）。用你的号把机器人号加为好友后，聊天区即解锁；不同好友各自独立会话。QQ 不允许同一账号在两台电脑**同时**登录——多端使用时应让机器人常驻一台电脑，其他设备走移动网关（7891）/ Android 客户端访问。
 
 ### 4. 启动 Python 后端
 
@@ -230,14 +230,14 @@ npm run dev
 .
 ├─ main.py                    # Python 后端入口
 ├─ core/                      # Agent、API、Pipeline、工具、情感、世界模拟适配
-├─ communication/             # QQ/NapCat 通讯层 + 三端撤回 (recall/)
+├─ communication/             # QQ 通讯层 + 三端撤回 (recall/)
 ├─ config/                    # settings/persona/proactive 配置与加载器
 ├─ memory/ knowledge/ voice/  # 分层记忆、知识库、语音输出
 ├─ world_service/             # 世界模拟 sidecar 服务
 ├─ skills/                    # 可扩展技能库 (cloud/ data/ local/)
 ├─ electron/                  # Electron 桌面应用
 ├─ Spotlight/                 # React/Vite 官网与 Remotion 素材工程
-├─ NapCat/                    # NapCat Shell 与 QQ 协议客户端资源
+├─ data/qq_engine/            # QQ 引擎下载与运行目录
 ├─ tests/                     # Python 单测、E2E、Phase 验证
 ├─ tools/ scripts/            # 诊断、迁移、验证、构建辅助脚本（含 24h 监听 watchdog）
 ├─ documents/ docs/           # 设计、排障、实施记录
@@ -484,7 +484,7 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 | 自动发图重复生成相同图片（间隔约 1-2 分钟一张）                                                                                                                                                   | 后端频繁重启，主动发图循环进程内`recent_intents`被清空，重新发布同一视觉主题                                                                                                                                            | 已实现持久化同主题去重（`has_recent_completed`，30 分钟窗口），升级到最新代码并重启；详见下方深度排查 1                                                                                                                                                                                                                                                      |
 | 生图提示词缺少时间/天气，或把世界数据全部堆叠                                                                                                                                                     | 提示词为静态模板，未接入 WorldSnapshot 上下文与按需选择层                                                                                                                                                                 | 已实现"基础提示词 → 轻量 LLM 接力"两步解析 + 确定性兜底，配置`SILICONFLOW_LIGHT_MODEL` 启用；详见下方深度排查 2                                                                                                                                                                                                                                             |
 | 回复带时间戳                                                                                                                                                                                      | LLM 模仿历史格式                                                                                                                                                                                                          | 后端会自动剥离，确保使用最新代码并重启后端                                                                                                                                                                                                                                                                                                                     |
-| QQ 收不到消息                                                                                                                                                                                     | NapCat 未启动或未登录                                                                                                                                                                                                     | 启动`NapCat\NapCat.Shell\launcher-user.bat`                                                                                                                                                                                                                                                                                                                  |
+| QQ 收不到消息                                                                                                                                                                                     | QQ 引擎未启动或未登录                                                                                                                                                                                                     | 启动 QQ 引擎面板或检查 `data/qq_engine/launcher-user.bat`                                                                                                                                                                                                                                                                                                      |
 | 桌面端白屏                                                                                                                                                                                        | Electron 渲染资源或 CSP 问题                                                                                                                                                                                              | 查看 Electron DevTools 与`electron/python-*.log`                                                                                                                                                                                                                                                                                                             |
 | 官网构建失败                                                                                                                                                                                      | Node 依赖未安装                                                                                                                                                                                                           | 在`Spotlight/` 执行 `npm install` 后重试                                                                                                                                                                                                                                                                                                                   |
 | 后端冷启动崩溃、重启后需手动重启后端                                                                                                                                                              | 移动网关端口(7891)被孤儿进程占用，uvicorn 内部`sys.exit(3)` 抛出 `SystemExit` 未被 `except Exception` 捕获，拖垮整个后端进程                                                                                        | 启动前端口预检测、捕获`SystemExit`、Electron 启动前清理 7890/7891 孤儿进程（详见下方深度排查 7）                                                                                                                                                                                                                                                             |
@@ -979,12 +979,12 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 
 1. 消息以 CQ 码原样落库与渲染，从未解析消息段
 2. 缺 ASR（语音转文字）：即使拿到语音文件也未做转写
-3. 语音文件需经 NapCat `get_record` 下载（NapCat 默认返回 silk，需转通用格式），链路未接通
+3. 语音文件需经 QQ 引擎 `get_record` 下载（默认返回 silk，需转通用格式），链路未接通
 
 **排查步骤 / Diagnosis**
 
 1. 查 `chat_log` 该条 `content` 是否含 `[CQ:record`；含则说明走了未解析路径
-2. 确认 NapCat `get_record` 可达：`curl`/日志看 RPC 是否返回 base64/路径
+2. 确认 QQ 引擎 `get_record` 可达：`curl`/日志看 RPC 是否返回 base64/路径
 3. 确认转写能力：Aerie WS（`AERIE_WS_KEYS` + `AERIE_WS_ASR_MODEL`，qwen3-asr-flash）是否配置；无 WS 时回退 DashScope（`DASHSCOPE_ASR_MODEL`）；本地 whisper 兜底
 4. 检查语音时长 `duration` 是否为 0（依赖 `ffprobe`，见 #18）
 
@@ -1017,7 +1017,7 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 **排查步骤 / Diagnosis**
 
 1. 查入站消息段类型：`face`（自带）→ 需 ID 映射；`image`/`mface`（收藏/动图）→ 需下载后视觉解析
-2. 确认 NapCat 扩展接口 `fetch_custom_face` 可调用（获取收藏表情 URL 列表）
+2. 确认 QQ 引擎扩展接口 `fetch_custom_face` 可调用（获取收藏表情 URL 列表）
 3. 确认 `send_image` 支持 URL 直发（无需下载，省资源）
 
 **解决方案 / Fix**
@@ -1167,7 +1167,7 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 | **Node.js**  | 20+                              |
 | **Electron** | 28.x                             |
 | **QQ**       | 9.9.26+                          |
-| **NapCat**   | v4.18.9 级别                     |
+| **QQ 引擎**  | v4.18.9 级别                     |
 | **RAM**      | 建议 8 GB+                       |
 | **Disk**     | 建议 500 MB+，构建产物需更多空间 |
 

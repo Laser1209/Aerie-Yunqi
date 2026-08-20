@@ -645,18 +645,18 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ===== NapCat Panel ===== */
-.napcat-panel { padding: 24px; }
-.napcat-panel h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
-.napcat-panel h3 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
-.napcat-status-card {
+/* ===== QQ Gateway Panel ===== */
+.qq-gateway-panel { padding: 24px; }
+.qq-gateway-panel h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.qq-gateway-panel h3 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
+.qq-gateway-status-card {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px;
   border-radius: var(--radius);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
 }
-.napcat-phase { display: flex; align-items: center; gap: 10px; }
+.qq-gateway-phase { display: flex; align-items: center; gap: 10px; }
 .phase-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 .phase-dot--idle { background: var(--text-400); }
 .phase-dot--starting { background: var(--warning); animation: pulse 1.5s infinite; }
@@ -664,9 +664,9 @@ body {
 .phase-dot--connected { background: var(--success); }
 .phase-dot--error { background: var(--color-danger, #e74c3c); }
 .phase-text { font-size: 14px; font-weight: 500; }
-.napcat-actions { display: flex; gap: 8px; }
+.qq-gateway-actions { display: flex; gap: 8px; }
 
-.napcat-qr-zone {
+.qq-gateway-qr-zone {
   margin-top: 16px;
   padding: 16px;
   border-radius: var(--radius);
@@ -674,14 +674,14 @@ body {
   border: 1px solid var(--color-border);
   text-align: center;
 }
-.napcat-qr-zone.hidden { display: none; }
-.napcat-qr-img {
+.qq-gateway-qr-zone.hidden { display: none; }
+.qq-gateway-qr-img {
   max-width: 200px;
   margin: 12px auto;
   display: block;
   border-radius: 8px;
 }
-.napcat-logs {
+.qq-gateway-logs {
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
@@ -755,6 +755,10 @@ body {
 .status-qq-badge--connected {
   background: rgba(46, 204, 113, 0.15);
   color: var(--color-static-2ecc71, #2ecc71);
+}
+.status-qq-badge--error {
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--color-static-e74c3c, #e74c3c);
 }
 .status-qq-chevron {
   transition: transform .2s;

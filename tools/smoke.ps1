@@ -1,5 +1,5 @@
 # Brings up the backend briefly and smoke-tests /api/health,
-# /api/chat/send with {text}, and /api/napcat/status.
+# /api/chat/send with {text}, and /api/qq/gateway/status.
 param([int]$WaitStart = 6, [int]$WaitEnd = 2)
 
 Set-Location $PSScriptRoot\..
@@ -33,7 +33,7 @@ function try_url($label, $url, $body = $null, $method = 'GET') {
 
 try_url "health"   "http://127.0.0.1:7890/api/health"
 try_url "chat"     "http://127.0.0.1:7890/api/chat/send" @{ user_id = 0; text = "ping" } 'POST'
-try_url "napcat"   "http://127.0.0.1:7890/api/napcat/status"
+try_url "qq-gateway"   "http://127.0.0.1:7890/api/qq/gateway/status"
 
 Write-Host "[smoke] killing backend..." -ForegroundColor Cyan
 Get-Process -Name pythonw -ErrorAction SilentlyContinue | Where-Object {

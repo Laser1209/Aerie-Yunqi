@@ -240,13 +240,18 @@ def register_computer_tools(registry: Any, controller: ComputerController) -> No
 
     registry.register("shell_execute", controller.shell_execute, {
         "name": "shell_execute",
-        "description": """在用户电脑上执行一个简单的 shell 命令。
+        "description": """执行一个简单的 shell 命令（兜底工具，仅在其他专用工具无法完成时使用）。
 
-使用场景：
-- 执行系统内置命令（如 dir, ls, ping, ipconfig 等）
-- 启动可执行程序
-- 查询系统信息
-- 文件操作的简单场景
+优先使用结构化工具，不要为常见任务调用本工具：
+- 列目录 / 读文件 / 搜索 → directory_list、document_read、file_search
+- 复制 / 移动 / 改名 / 建目录 → file_copy、file_move、file_rename、directory_create
+- 创建文档 → document_create、doc_write
+- 查系统信息 / 进程 → system_info、process_list
+- 启动程序 → app_open
+
+使用场景（仅在专用工具覆盖不了时才用）：
+- 执行系统内置命令（如 ping、ipconfig 等）
+- 其他专用工具没有的简单命令
 
 参数说明：
 - command: 要执行的命令字符串
@@ -254,11 +259,11 @@ def register_computer_tools(registry: Any, controller: ComputerController) -> No
 
 注意事项：
 - 不支持管道 |、重定向 >、命令链 && / ; 等复杂语法
-- 复杂任务请分步调用，或使用专用的文件操作工具
+- 禁止生成 PowerShell 脚本，禁止调用 powershell（会被本地执行策略拦截导致失败）
 - 执行前请确认命令安全，禁止执行高危系统命令
 - 禁止访问或修改系统敏感目录和文件
 
-相关工具：app_open, system_info, process_list""",
+相关工具：app_open, system_info, process_list, directory_list, file_copy""",
         "parameters": {
             "type": "object",
             "properties": {

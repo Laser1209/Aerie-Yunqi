@@ -451,11 +451,6 @@ def get_friends_qq() -> list[int]:
     return list(qq_cfg.get("friends_qq", []))
 
 
-def get_napcat_config() -> dict[str, Any]:
-    settings = load_settings()
-    return dict(settings.get("napcat", {}))
-
-
 def get_http_config() -> dict[str, Any]:
     settings = load_settings()
     return dict(settings.get("http_api", {}))

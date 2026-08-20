@@ -26,7 +26,7 @@ from communication.message import (
     OutgoingReply,
     QuoteContext,
 )
-from communication.splitter import SemanticMessageSplitter
+from communication.splitter import SemanticMessageSplitter, IncrementalSplitter
 from core._hist_utils import channel_short
 from core.attachment_handler import extract_markdown
 from core.chat_events import emit
@@ -369,6 +369,12 @@ class Pipeline:
             return None
         if not text or not text.strip():
             return None
+        # 快速闸门：L1 关键词未命中（普通闲聊）→ 直接不委托，跳过 L2 轻量模型。
+        # L2 轻量分类是 ~1.8s 的 LLM 调用，对"晚上吃什么"这类日常消息纯属浪费；
+        # L1 关键词已覆盖主要任务类型（整理文件/操控电脑/写文档/搜索），
+        # 未命中的边缘任务走 LLMCaller 文字回复即可，不影响正确性。
+        if self._dsh_router._match_keyword(text) is None:
+            return None
         try:
             decision = await self._dsh_router.decide(text, user_id=getattr(msg, "user_id", ""))
             if decision.kind != "delegate":
@@ -567,15 +573,8 @@ class Pipeline:
             else msg.content
         )
 
-        # 错别字订正：进入理解前，先用轻量模型（硅基流动 · 小米）订正明显
-        # 错别字/同音字，避免主模型因一个错字误解（如 "换好了美呀" → "换好了没呀"）。
-        # 订正只影响理解，不写回聊天记录（原文仍持久化）；任何失败都回退原文。
-        if model_content:
-            try:
-                from core.typo_corrector import correct_typos
-                model_content = await correct_typos(self.brain, model_content)
-            except Exception:
-                logger.exception("typo correction failed, fallback to original")
+        # 已移除“错别字订正”（correct_typos）：一次串行 LLM 探测耗时 ~5s，
+        # 对首句延迟贡献过大；同音字消歧交给主模型的基线能力兜底。
 
         # 对话移动意图：用户"去X / 走到X / 坐到X"指令 → 世界移动。
         # 执行结果注入系统提示，让 LLM 在回复中自然体现"她真的在动"。
@@ -667,19 +666,25 @@ class Pipeline:
                 logger.exception("handle_user_negative error")
 
         # ══════════════════════════════════════════════
-        # 2. Emotion: LLM-driven PAD analysis + cumulative threshold scan
-        #    (stages 2 + 3). R7.0: switched from sync keyword-only
-        #    update_trajectory to async update_trajectory_async, which
-        #    additionally calls the LLM and blends the LLM PAD with
-        #    the keyword path. Falls back to keyword-only if the LLM
-        #    call fails or no brain is wired.
+        # 2. Emotion: keyword PAD 立即生效 + LLM PAD 后台异步补
+        #    R7.0 的 update_trajectory_async 里 LLM PAD 是 ~2s 的串行
+        #    调用，会拖慢首句。改为：keyword 同步落地（~0ms，不阻塞），
+        #    LLM 增强放后台 task 完成后覆盖，情绪精度不丢、首句不卡。
         # ══════════════════════════════════════════════
         try:
-            await self.emotion.update_trajectory_async(
+            self.emotion.update_trajectory(
                 msg.user_id,
                 model_content,
                 actor_id=msg.actor_id,
             )
+            if getattr(self.emotion, "brain", None):
+                asyncio.create_task(
+                    self.emotion.update_trajectory_async(
+                        msg.user_id,
+                        model_content,
+                        actor_id=msg.actor_id,
+                    )
+                )
         except Exception:
             logger.exception("emotion update error")
 
@@ -788,7 +793,19 @@ class Pipeline:
             if note:
                 sys_content = ctx_messages[0].get("content", "")
                 ctx_messages[0]["content"] = sys_content + "\n\n[世界事件] " + note
-        tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
+
+        # v13.0: Office Mode 检测提前——只有办公模式才启用工具。
+        # 普通对话不传 tools，走快模型（deepseek 首 token ~1.3s），
+        # 把首句延迟压到 5 秒内；办公任务才传 tools（走 doubao）。
+        office_mgr = get_office_mode_manager()
+        office_ctx = office_mgr.detect(model_content, history)
+        is_office = office_ctx.is_office_mode()
+
+        tools = (
+            self.tool_registry.get_openai_schema()
+            if (route_mode == "FULL" and is_office)
+            else None
+        )
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
         history_chars = sum(len(m.get("content", "")) for m in ctx_messages[1:])
@@ -810,11 +827,8 @@ class Pipeline:
         self.cognition.record(trace, "context", context_record)
 
         # ══════════════════════════════════════════════
-        # v13.0: Office Mode 办公模式检测与增强
+        # v13.0: Office Mode 办公模式增强（检测已提前到 tools 定义处）
         # ══════════════════════════════════════════════
-        office_mgr = get_office_mode_manager()
-        office_ctx = office_mgr.detect(model_content, history)
-        is_office = office_ctx.is_office_mode()
         # 同步办公模式判定到前端：auto 模式下按当前消息识别结果更新
         # detected_mode，前端据此决定是否显示"已完成"徽标（仅工作消息显示）。
         # 事件统一在事件发射阶段 emit（见下方 office_mode_changed），
@@ -863,16 +877,24 @@ class Pipeline:
 
         # v0.4: DSH 工作模式委托(开关控制;关闭/未命中/失败时 dsh_response=None,走原 brain)
         dsh_response = await self._try_delegate_to_dsh(model_content, msg)
-        if dsh_response is not None:
-            response = dsh_response
-            logger.info("[pipeline] DSH 委托命中,跳过 brain.chat(model=%s)", getattr(response, "model", "dsh"))
-        else:
-            response = await self.brain.chat(
-                ctx_messages,
+        if dsh_response is None:
+            # 流式快路径：边生成边分句边 emit，首句不等全文，实时渲染。
+            return await self._handle_streaming_reply(
+                msg=msg,
+                trace=trace,
+                request_state=request_state,
+                ctx_messages=ctx_messages,
                 tools=tools,
-                tool_registry=self.tool_registry,
                 preferred_provider=preferred_provider,
+                emotion_info=emotion_info,
+                eruption_info=eruption_info,
+                route_mode=route_mode,
+                attachment_ids=attachment_ids,
+                context_attachments=context_attachments,
+                reply_to_data=reply_to_data,
             )
+        response = dsh_response
+        logger.info("[pipeline] DSH 委托命中,跳过 brain.chat(model=%s)", getattr(response, "model", "dsh"))
         self._checkpoint_cancel(request_state, "after_model")
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None)
@@ -1378,6 +1400,292 @@ class Pipeline:
             self.send_queue.enqueue(reply)
 
         result["event_sequence"] = request_state.sequence
+        return result
+
+    async def _handle_streaming_reply(
+        self,
+        *,
+        msg: IncomingMessage,
+        trace: dict,
+        request_state: _RequestRunState,
+        ctx_messages: list[dict],
+        tools: list[dict] | None,
+        preferred_provider: str | None,
+        emotion_info: dict | None,
+        eruption_info: dict | None,
+        route_mode: str,
+        attachment_ids: list[str],
+        context_attachments: list | None,
+        reply_to_data: dict | None,
+    ) -> dict:
+        """流式快路径：边生成边分句边落库边 emit，首句不等全文。
+
+        与 `handle` 主链路相比，此处跳过 LLM 级验证
+        （content_validator / response_validator），本地后处理仅保留
+        时间戳剥离 + 屏幕动作净化（安全必需），换取首句即时渲染。
+        """
+        import re as _re
+
+        from core.screen_action_sanitizer import sanitize as _sanitize_action
+
+        _THINK_RE = _re.compile(r"<think>.*?</think>", _re.DOTALL)
+
+        def _visible(raw: str) -> str:
+            """剥离 <think> 块后的可见文本（未闭合块截断到其前）。"""
+            s = _THINK_RE.sub("", raw)
+            idx = s.find("<think>")
+            if idx >= 0:
+                s = s[:idx]
+            return s
+
+        # 1) 落库用户消息
+        user_row_id = 0
+        persist_errors: list[str] = []
+        try:
+            user_row_id = self.db.insert("chat_log", {
+                "user_id": msg.user_id,
+                "role": "user",
+                "content": msg.content,
+                "msg_type": msg.msg_type,
+                "route_mode": route_mode,
+                "reply_to_id": reply_to_data["id"] if reply_to_data else None,
+                "reply_to_content": reply_to_data["content"] if reply_to_data else None,
+                "reply_to_role": reply_to_data["role"] if reply_to_data else None,
+                "reply_to_attachments": (
+                    json.dumps(reply_to_data.get("attachments") or [], ensure_ascii=False)
+                    if reply_to_data and reply_to_data.get("attachments")
+                    else None
+                ),
+                "qq_message_id": self._inbound_qq_message_id(msg),
+                "attachments": json.dumps(msg.attachments, ensure_ascii=False) if msg.attachments else None,
+                "actor_id": msg.actor_id,
+                "channel": msg.channel,
+                "channel_account_id": msg.channel_account_id,
+                "persona_id": active_persona_id(),
+            })
+            if user_row_id:
+                request_state.terminal_side_effect_committed = True
+        except Exception as e:
+            persist_errors.append(f"user message: {e}")
+            logger.exception("db insert user msg error (stream)")
+
+        # 2) emit 用户回显
+        try:
+            emit(
+                "user",
+                role="user",
+                id=user_row_id,
+                user_id=msg.user_id,
+                content=msg.content,
+                source=msg.source,
+                attachments=msg.attachments if msg.attachments else None,
+                **self._reply_to_emit_fields(msg),
+                **self._event_contract(request_state, message_id=user_row_id),
+            )
+        except Exception:
+            pass
+
+        # 3) 流式生成 + 边分句边落库边 emit
+        segments: list[str] = []
+        ai_row_ids: list[int] = []
+        raw_acc = ""
+        visible_buf = ""
+        splitter = IncrementalSplitter(self._splitter)
+        model_name = "unknown"
+        stream_start = time.monotonic()
+
+        def _emit_segment(seg: str, is_first: bool) -> None:
+            seg = (seg or "").strip()
+            if not seg:
+                return
+            try:
+                seg = _sanitize_action(seg)
+            except Exception:
+                pass
+            seg = self._strip_leading_timestamp(seg).strip()
+            if not seg:
+                return
+            rid = 0
+            try:
+                rid = self.db.insert("chat_log", {
+                    "user_id": msg.user_id,
+                    "role": "assistant",
+                    "content": seg,
+                    "msg_type": msg.msg_type,
+                    "route_mode": route_mode,
+                    "actor_id": msg.actor_id,
+                    "channel": msg.channel,
+                    "channel_account_id": msg.channel_account_id,
+                    "persona_id": active_persona_id(),
+                })
+            except Exception as e:
+                persist_errors.append(f"assistant message: {e}")
+                logger.exception("db insert ai msg error (stream)")
+            if rid:
+                request_state.terminal_side_effect_committed = True
+            segments.append(seg)
+            ai_row_ids.append(rid)
+
+            emit_kwargs = {
+                "role": "assistant",
+                "id": rid,
+                "user_id": msg.user_id,
+                "content": seg,
+                "source": msg.source,
+                **self._event_contract(
+                    request_state,
+                    message_id=rid,
+                    response_group_id=request_state.response_group_id,
+                ),
+            }
+            if is_first:
+                if emotion_info:
+                    emit_kwargs["emotion"] = emotion_info.get("label")
+                if eruption_info:
+                    emit_kwargs["eruption"] = eruption_info.get("mode")
+            try:
+                emit("assistant", **emit_kwargs)
+            except Exception:
+                pass
+
+        try:
+            async for ev in self.brain.chat_stream(
+                ctx_messages,
+                tools=tools,
+                tool_registry=self.tool_registry,
+                preferred_provider=preferred_provider,
+            ):
+                etype = ev.get("type")
+                if etype == "text":
+                    raw_acc += ev["text"]
+                    new_visible = _visible(raw_acc)
+                    if len(new_visible) > len(visible_buf):
+                        delta = new_visible[len(visible_buf):]
+                        visible_buf = new_visible
+                        for seg in splitter.push(delta):
+                            _emit_segment(seg, is_first=(len(ai_row_ids) == 0))
+                elif etype == "step":
+                    # 工作模式：工具执行步骤同步推送到前端（思考链 / 步骤区）
+                    try:
+                        emit(
+                            "workflow_step",
+                            status=ev.get("status"),
+                            tool=ev.get("tool"),
+                            detail=ev.get("detail"),
+                            duration_ms=ev.get("duration_ms"),
+                            **self._event_contract(
+                                request_state,
+                                message_id=user_row_id,
+                            ),
+                        )
+                    except Exception:
+                        pass
+                elif etype == "done":
+                    resp = ev.get("response")
+                    if resp is not None:
+                        model_name = getattr(resp, "model", "unknown")
+            for seg in splitter.flush():
+                _emit_segment(seg, is_first=(len(ai_row_ids) == 0))
+        except Exception as e:
+            persist_errors.append(f"streaming: {e}")
+            logger.exception("streaming reply failed")
+
+        stream_dur = int((time.monotonic() - stream_start) * 1000)
+
+        # 流式完全无产出 → 兜底一句，保证用户永远有反馈
+        if not ai_row_ids:
+            _emit_segment("（伊塔暂时无法连接大脑，稍后再试...）", is_first=True)
+
+        # 4) canonical turn + attachment 绑定
+        canonical_result = None
+        if user_row_id and len(ai_row_ids) == len(segments):
+            canonical_result = self._persist_canonical_turn(
+                msg,
+                segments,
+                request_context=request_state.context,
+                user_legacy_chat_log_id=user_row_id or None,
+                assistant_legacy_chat_log_ids=ai_row_ids,
+            )
+            if canonical_result is not None:
+                request_state.canonical_completed = True
+                request_state.response_group_id = canonical_result.get(
+                    "response_group_id"
+                )
+
+        attachment_bind_error = self._after_message_persisted(
+            attachment_ids=attachment_ids,
+            canonical_result=canonical_result,
+            user_legacy_chat_log_id=user_row_id,
+            msg=msg,
+            request_context=request_state.context,
+        )
+
+        # 5) cognition 记录
+        self.cognition.record(trace, "brain", {
+            "model": model_name,
+            "raw_chars": len(raw_acc),
+            "streamed": True,
+        })
+        self.cognition.record(trace, "split", {
+            "segments": segments,
+            "count": len(segments),
+        })
+        self.cognition.record(trace, "output", {
+            "ai_msg_ids": ai_row_ids,
+            "user_msg_id": user_row_id,
+            "source": msg.source,
+            "segment_count": len(ai_row_ids),
+            "stream_duration_ms": stream_dur,
+        })
+        self.cognition.commit(trace, route_mode)
+
+        # 6) 组装结果
+        result = {
+            "reply": "".join(segments),
+            "user_msg_id": user_row_id,
+            "ai_msg_id": ai_row_ids[0] if ai_row_ids else 0,
+            "ai_msg_ids": ai_row_ids,
+            "segments": segments,
+            "route_mode": route_mode,
+            "emotion": emotion_info.get("label") if emotion_info else "unknown",
+            "cognition_id": trace.get("id", 0),
+            "persisted": not persist_errors,
+            "canonical_completed": request_state.canonical_completed,
+        }
+        if request_state.context is not None:
+            result.update({
+                "request_id": request_state.context.request_id,
+                "conversation_id": request_state.context.conversation_id,
+                "turn_id": request_state.context.turn_id,
+            })
+        if canonical_result:
+            result["canonical"] = canonical_result
+            result["response_group_id"] = canonical_result.get(
+                "response_group_id"
+            )
+        if persist_errors:
+            result["persist_error"] = "; ".join(persist_errors)
+        if attachment_bind_error:
+            result["attachment_bind_error"] = attachment_bind_error
+        result["event_sequence"] = request_state.sequence
+
+        # QQ 消息入 SendQueue（本地消息跳过）
+        if msg.source == "qq":
+            reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
+            reply = OutgoingReply(
+                user_id=msg.user_id,
+                content="".join(segments),
+                msg_id=ai_row_ids[0] if ai_row_ids else 0,
+                reply_to_qq_message_id=reply_to_qq_mid,
+                cognition_id=int(trace.get("id") or 0),
+            )
+            if eruption_info and eruption_info.get("mode"):
+                try:
+                    setattr(reply, "eruption_mode", eruption_info["mode"])
+                except Exception:
+                    pass
+            self.send_queue.enqueue(reply)
+
         return result
 
     async def _resolve_chat_photo_intent(
@@ -2376,7 +2684,7 @@ class Pipeline:
 
         与 Companion.recall_message 保持一致的标记/事件契约: 前端收到
         recall 事件后把对应气泡替换为居中的"<人设名> 撤回了一条消息"。
-        QQ 平台侧由 NapCat 原生显示撤回提示, 这里仅同步本地聊天记录。
+        QQ 平台侧由引擎原生显示撤回提示, 这里仅同步本地聊天记录。
         """
         msg_id = result.get("msg_id")
         if msg_id:

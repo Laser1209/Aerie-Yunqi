@@ -7,7 +7,7 @@
   4. judge_override 强制放行
   5. 失败不写 flag(下次启动可重试)
 
-Pure local — 不依赖 LLM / DB / NapCat。
+Pure local — 不依赖 LLM / DB / QQ 引擎。
 """
 from __future__ import annotations
 

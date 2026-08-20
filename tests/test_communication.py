@@ -1,10 +1,13 @@
 """Tests for communication layer: router, splitter, recall manager."""
 
 import time
+from contextlib import asynccontextmanager
 
 import pytest
 
 from communication import qq_client as qq_client_module
+from communication.onebot11 import client as onebot_client_module
+from communication.onebot11.client import OneBot11Client
 from communication.qq_client import QQClient
 from communication.qq_client import STATE_DISCONNECTED
 from communication.router import RouteMode
@@ -17,7 +20,7 @@ FRIEND_QQ = 12345678
 
 
 class TestQQClient:
-    """Test QQ lifecycle behavior without touching NapCat or the network."""
+    """Test QQ lifecycle behavior without touching QQ 引擎 or the network."""
 
     @pytest.mark.asyncio
     async def test_connect_returns_cleanly_when_disabled(self, monkeypatch):
@@ -31,8 +34,48 @@ class TestQQClient:
 
         await client.connect()
 
-        assert client._running is False
+        assert client._engine._running is False
         assert client.state == STATE_DISCONNECTED
+
+
+class TestOneBot11Client:
+    @pytest.mark.asyncio
+    async def test_open_ws_uses_additional_headers_first(self, monkeypatch):
+        calls = []
+
+        @asynccontextmanager
+        async def fake_connect(url, **kwargs):
+            calls.append({"url": url, "kwargs": kwargs})
+            yield object()
+
+        monkeypatch.setattr(onebot_client_module.websockets, "connect", fake_connect)
+        client = OneBot11Client(token="token-a")
+
+        async with client._open_ws("ws://127.0.0.1:3001"):
+            pass
+
+        assert calls[0]["kwargs"]["additional_headers"] == {"Authorization": "Bearer token-a"}
+        assert "extra_headers" not in calls[0]["kwargs"]
+
+    @pytest.mark.asyncio
+    async def test_open_ws_falls_back_to_extra_headers(self, monkeypatch):
+        calls = []
+
+        @asynccontextmanager
+        async def fake_connect(url, **kwargs):
+            calls.append({"url": url, "kwargs": kwargs})
+            if "additional_headers" in kwargs:
+                raise TypeError("unexpected keyword argument 'additional_headers'")
+            yield object()
+
+        monkeypatch.setattr(onebot_client_module.websockets, "connect", fake_connect)
+        client = OneBot11Client(token="token-b")
+
+        async with client._open_ws("ws://127.0.0.1:3001"):
+            pass
+
+        assert calls[0]["kwargs"]["additional_headers"] == {"Authorization": "Bearer token-b"}
+        assert calls[1]["kwargs"]["extra_headers"] == {"Authorization": "Bearer token-b"}
 
 
 class TestRouter:
@@ -179,7 +222,7 @@ async def test_send_message_with_segments_strips_fake_markdown(monkeypatch):
     monkeypatch.setattr(qq_client_module, "_port_is_open", lambda *a, **k: True)
     client = QQClient({"ws_port": 3001})
     client._disabled = False
-    client._connected = True
+    client._engine._connected = True
     spy = _RpcSpy({"status": "ok"})
     client._rpc_call = spy
 
@@ -204,7 +247,7 @@ async def test_send_message_with_segments_keeps_real_image(monkeypatch):
     monkeypatch.setattr(qq_client_module, "_port_is_open", lambda *a, **k: True)
     client = QQClient({"ws_port": 3001})
     client._disabled = False
-    client._connected = True
+    client._engine._connected = True
     spy = _RpcSpy({"status": "ok"})
     client._rpc_call = spy
 

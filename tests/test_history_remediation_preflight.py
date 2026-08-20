@@ -87,7 +87,7 @@ def test_high_risk_history_path_classifier():
         "data/aerie.db-wal",
         "data/world.sqlite3-shm",
         "data/backups/snapshot.json",
-        "NapCat/NapCat.Shell/config/napcat.json",
+        "data/qq_engine/config/engine.json",
         "electron/dist-win-unpacked/Aerie.exe",
         "Spotlight/public/Aerie Setup.exe",
         ".env",

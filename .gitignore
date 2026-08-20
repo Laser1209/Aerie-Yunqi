@@ -48,8 +48,6 @@ Spotlight/public/*.exe
 Spotlight/public/*.blockmap
 
 # Local account state and uploads
-NapCat/NapCat.Shell/config/
-NapCat/NapCat.Shell/cache/
 uploads/
 
 # Environment & secrets

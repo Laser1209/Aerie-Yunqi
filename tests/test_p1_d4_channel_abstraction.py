@@ -4,7 +4,7 @@
   - CompanionChannel Protocol 契约 (health / echo / send / receive)
   - QQ 适配器本地桩: 健康检查、回显、发送入队、接收
   - ClawBot 适配器本地桩: 健康检查、回显、发送入队、接收
-  - 安全边界: 本地桩绝不触发真实 QQ/NapCat 消息动作
+    - 安全边界: 本地桩绝不触发真实 QQ 引擎消息动作
 """
 
 from __future__ import annotations
@@ -134,7 +134,7 @@ def test_clawbot_receive_returns_seeded_messages():
 
 # ── 安全边界: 绝不触发真实消息动作 ─────────────────
 def test_stubs_never_touch_real_network_actions(monkeypatch):
-    """send/echo 只操作本地内存, 不导入或调用 QQClient/NapCat."""
+    """send/echo 只操作本地内存, 不导入或调用 QQClient/QQ 引擎."""
     import sys
 
     import core.companion_channel as module

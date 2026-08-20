@@ -146,6 +146,37 @@ class TestToolsListEndpoint:
         assert "count" in data
 
 
+class TestQQSendEndpoint:
+    """Test direct QQ send endpoint for Agent/system dispatch."""
+
+    def test_qq_send_uses_qq_client(self):
+        mock_companion.qq.is_connected = True
+        mock_companion.qq.send_message = AsyncMock(return_value=123456)
+
+        resp = client.post(
+            "/api/qq/send",
+            json={"user_id": 3489352115, "text": "系统链路测试"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+        assert resp.json()["message_id"] == 123456
+        mock_companion.qq.send_message.assert_awaited_once_with(3489352115, "系统链路测试")
+
+    def test_qq_send_rejects_when_qq_offline(self):
+        mock_companion.qq.is_connected = False
+        mock_companion.qq.send_message = AsyncMock(return_value=True)
+
+        resp = client.post(
+            "/api/qq/send",
+            json={"user_id": 3489352115, "text": "系统链路测试"},
+        )
+
+        assert resp.status_code == 409
+        assert resp.json()["error"] == "qq_not_connected"
+        mock_companion.qq.send_message.assert_not_awaited()
+
+
 def test_self_evolve_stats_route_is_not_captured_by_detail(monkeypatch):
     expected = {"total": 4, "pending": 1, "approved": 2, "rejected": 1, "rolled_back": 0}
     evolver = MagicMock()

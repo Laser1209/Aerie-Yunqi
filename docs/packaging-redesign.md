@@ -14,7 +14,7 @@
 |---|---|---|
 | 1 | **`.venv/Scripts/python.exe` 是重定向器**，按 `pyvenv.cfg` 的 `home` 字段去找开发机的 `C:\Python314\python.exe`。干净机器无此解释器 → 后端 `ECONNREFUSED 127.0.0.1:7890` | 整个后端无法启动（致命） |
 | 2 | 旧方案只能靠 [runtime-bootstrap.js](file:///e:/Agent_reply/electron/src/runtime-bootstrap.js) 在用户**首次启动时联网下载** embeddable Python，并改写 `._pth` 指向随包 site-packages | 依赖网络 + ABI 版本匹配，属于不可靠临时方案 |
-| 3 | `extraResources` filter **回退丢失** `skills/**`、`NapCat/**`、`emotion/**`、`persona/**`、`scheduler/**`（对照 [debug-packaged-backend-resources.md](file:///e:/Agent_reply/docs/debug-packaged-backend-resources.md) 曾修复过） | 技能路由失效、QQ 登录失效 |
+| 3 | `extraResources` filter **回退丢失** `skills/**`、`emotion/**`、`persona/**`、`scheduler/**`（对照 [debug-packaged-backend-resources.md](file:///e:/Agent_reply/docs/debug-packaged-backend-resources.md) 曾修复过） | 技能路由失效、QQ 登录失效 |
 | 4 | 开发机 `.venv` **本身不完整**：`pywin32`、`pywinauto`、`pyautogui`、`weasyprint`、`apscheduler`、`sounddevice`、`soundfile` 等声明依赖实际装在用户全局 `%APPDATA%\Python\Python314\site-packages`，未进 venv | 打包时漏掉这些依赖，干净机器上 `import win32api` 等直接失败 |
 | 5 | `post-build-rcedit.js` 硬编码 `Aerie-Cloud.exe`，但 electron-builder 实际产物为 `Aerie · 云栖.exe` | EXE 图标注入失败 |
 
@@ -40,7 +40,7 @@ resources/
 1. **构建期生成运行时**：`scripts/build_python_runtime.py` 从 `.venv/pyvenv.cfg` 读取基础解释器 `C:\Python314`，整目录拷贝为 `electron/runtime-build/`，再用 `.venv/Lib/site-packages` 覆盖三方依赖（剔除 pip/setuptools/wheel/pytest）。
 2. **Electron 直接 spawn 真实解释器**：`PYTHON_EXE = resources/python/runtime/python.exe`，无重定向、无运行时下载。
 3. **打包态禁用用户站点包**：spawn 环境加 `PYTHONNOUSERSITE=1`，确保后端只用随包依赖，不被目标机器全局 Python 包污染。
-4. **补全 filter**：重新加入 `skills/**`、`NapCat/**`、`emotion/**`、`persona/**`、`scheduler/**`，移除 `.venv`。
+4. **补全 filter**：重新加入 `skills/**`、`emotion/**`、`persona/**`、`scheduler/**`，移除 `.venv`。
 5. **rcedit 改为扫描 exe**：不再硬编码文件名，扫描 `win-unpacked/*.exe`。
 
 ## 三、实现步骤
@@ -54,7 +54,7 @@ resources/
 
 | 文件 | 改动 |
 |---|---|
-| [electron/electron-builder.yml](file:///e:/Agent_reply/electron/electron-builder.yml) | extraResources 新增 `runtime-build` → `python/runtime`；filter 补全缺失模块、移除 `.venv`、排除 `data/logs/NapCat config+cache`；清理重复 nsis 块 |
+| [electron/electron-builder.yml](file:///e:/Agent_reply/electron/electron-builder.yml) | extraResources 新增 `runtime-build` → `python/runtime`；filter 补全缺失模块、移除 `.venv`；清理重复 nsis 块 |
 | [electron/package.json](file:///e:/Agent_reply/electron/package.json) | `build:win` 前置 `build:runtime`；`build.extraResources` 同步 yml |
 | [electron/src/main.js](file:///e:/Agent_reply/electron/src/main.js) | `PYTHON_EXE` → `runtime/python.exe`；spawn env 打包态加 `PYTHONNOUSERSITE=1` |
 | [electron/src/runtime-bootstrap.js](file:///e:/Agent_reply/electron/src/runtime-bootstrap.js) | 站点包路径指向 `runtime/Lib/site-packages`；注释更新为「安全网」语义 |
@@ -93,7 +93,7 @@ runtime-build/python.exe -s -c "import core.companion, core.api_server,
 
 - `runtime/python.exe` ✅
 - `skills/local/*/run.py`（13+ 技能）✅
-- `NapCat/NapCat.Shell/NapCatWinBootMain.exe` ✅
+- QQ 引擎启动器 ✅
 - `emotion/`、`persona/`、`scheduler/` ✅
 - `.venv` 已移除 ✅
 

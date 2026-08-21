@@ -219,16 +219,17 @@ def fine_time_descriptor(
     room = _ROOM_KEY.get(prompt_key, "living_room")
     room_cfg = APARTMENT_LAYOUT.get(room, APARTMENT_LAYOUT["living_room"])
     outside = str(room_cfg.get("window_view") or "")
+    outside_view = outside.removeprefix("窗下是").removeprefix("窗外是")
     if alt < 0.0:
-        light_cn = f"屋内暖灯亮着，窗外是{outside}的夜色"
+        light_cn = f"屋内暖灯亮着，窗外可见{outside_view}的夜色；太阳已在地平线下，没有直射阳光"
     elif alt < 20.0 and not rising:
-        light_cn = f"暖橘色的夕阳余晖洒进{room_cfg['window']}的落地窗，窗外是{outside}的江上日落"
+        light_cn = f"暖橘色的夕阳余晖洒进{room_cfg['window']}的落地窗，窗外可见{outside_view}的江上日落"
     elif 150.0 <= az <= 290.0 and alt >= 20.0:
-        light_cn = f"午后的阳光直直洒进{room_cfg['window']}的落地窗，窗外是{outside}"
+        light_cn = f"午后的阳光直直洒进{room_cfg['window']}的落地窗，窗外可见{outside_view}"
     elif 60.0 <= az < 150.0 and alt >= 5.0:
-        light_cn = f"柔和的晨光斜斜照进{room_cfg['window']}的窗外，窗外是{outside}"
+        light_cn = f"柔和的晨光斜斜照进{room_cfg['window']}的窗外，窗外可见{outside_view}"
     else:
-        light_cn = f"明亮的自然光从{room_cfg['window']}的窗外照进来，窗外是{outside}"
+        light_cn = f"明亮的自然光从{room_cfg['window']}的窗外照进来，窗外可见{outside_view}"
 
     return {
         "time_cn": time_cn,

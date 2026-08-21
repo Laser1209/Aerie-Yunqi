@@ -417,6 +417,7 @@ class ConversationRepository:
         channel: str | None,
         channel_account_id: str | None,
         content: str,
+        attachments: list[dict[str, Any]] | None = None,
         legacy_chat_log_id: int,
         persona_id: str | None = None,
     ) -> str | None:
@@ -466,7 +467,11 @@ class ConversationRepository:
                 turn_id=turn_id,
                 role="assistant",
                 content=content,
-                attachments=None,
+                attachments=(
+                    json.dumps(attachments, ensure_ascii=False)
+                    if attachments
+                    else None
+                ),
                 response_group_id=None,
                 sequence=1,
                 channel=channel,

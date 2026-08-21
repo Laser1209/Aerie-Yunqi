@@ -355,6 +355,8 @@ class WorldImageCandidateConsumer:
             target=candidate.get("target"),
             prompt_key=candidate.get("prompt_key"),
             reason_code=candidate.get("reason_code"),
+            user_raw_in_payload=bool(payload_user_raw := getattr(event, "payload", {}).get("user_raw")),
+            user_raw_in_candidate=bool(candidate.get("user_raw")),
         )
 
         existing = self.store.get(candidate["idempotency_key"])
@@ -661,6 +663,8 @@ class WorldImageCandidateConsumer:
             "source": _safe_value(payload.get("source") or "generated"),
             "score": _safe_float(payload.get("score"), 0.0),
             "size": _safe_value(payload.get("size") or ""),
+            "user_raw": _safe_value(payload.get("user_raw") or ""),
+            "conversation_context": _safe_value(payload.get("conversation_context") or ""),
             "expires_at": _safe_value(payload.get("expires_at") or ""),
             "created_at": _safe_value(payload.get("created_at") or getattr(event, "occurred_at", "") or ""),
             "event_id": _safe_value(getattr(event, "event_id", "") or ""),

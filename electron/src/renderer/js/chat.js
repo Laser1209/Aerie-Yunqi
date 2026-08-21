@@ -1216,6 +1216,7 @@ class ChatManager {
       let src = att.thumbnailUrl || att.thumbnail_url || "";
       if (!src && att.downloadUrl) src = att.downloadUrl;
       if (!src && att.download_url) src = att.download_url;
+      if (!src && att.url) src = att.url;
       if (src) {
         // Rewrite to absolute backend URL for Electron's file:// protocol
         const absSrc = /^https?:|^data:/i.test(src)

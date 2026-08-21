@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import os
+import json
 import time
 from datetime import datetime, timedelta
 
@@ -329,6 +330,49 @@ def test_proactive_message_normalized_visible_and_deletable(tmp_path, admin_db):
     assert result["trashed_chat_log"] == 1
     row = admin_db.query_one("SELECT deleted_at FROM chat_log WHERE id = ?", (legacy_id,))
     assert row["deleted_at"] is not None
+
+
+def test_proactive_image_persists_attachments_for_history(tmp_path, admin_db):
+    from core.conversation_repository import ConversationRepository
+
+    repo = ConversationRepository(admin_db, enabled=True)
+    attachment = {
+        "category": "image",
+        "name": "selfie.png",
+        "url": "/uploads/selfie.png",
+    }
+    legacy_id = admin_db.insert("chat_log", {
+        "user_id": 1,
+        "role": "assistant",
+        "content": "[图片] 她的一张自拍",
+        "attachments": json.dumps([attachment], ensure_ascii=False),
+        "msg_type": "world_image",
+        "route_mode": "PROACTIVE",
+        "scene": "local_send",
+        "channel": "qq",
+        "persona_id": "p1",
+    })
+
+    repo.persist_proactive_message(
+        user_id=1,
+        actor_id=None,
+        channel="qq",
+        channel_account_id="1",
+        content="[图片] 她的一张自拍",
+        attachments=[attachment],
+        legacy_chat_log_id=legacy_id,
+        persona_id="p1",
+    )
+
+    page = repo.history_page(
+        actor_id=None,
+        channel="qq",
+        channel_account_id="1",
+        user_id=1,
+        limit=10,
+        persona_id="p1",
+    )
+    assert page["items"][0]["attachments"] == [attachment]
 
 
 def test_history_page_excludes_trashed(tmp_path, admin_db):

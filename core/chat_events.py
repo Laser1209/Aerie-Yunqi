@@ -11,10 +11,24 @@ brain-center UI as a real-time secondary channel).
 from __future__ import annotations
 import json
 import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from core.event_contracts import EventEnvelope
 
 PREFIX = "[CHAT_EVENT]"
+BEIJING_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _beijing_log_envelope(envelope: dict[str, object]) -> dict[str, object]:
+    result = dict(envelope)
+    raw = str(result.get("ts") or "").strip()
+    if raw:
+        try:
+            result["ts"] = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(BEIJING_TZ).isoformat()
+        except ValueError:
+            pass
+    return result
 
 
 def emit(event_type: str, **payload: object) -> None:
@@ -24,7 +38,7 @@ def emit(event_type: str, **payload: object) -> None:
     CognitionEngine for every stage trace.
     """
     envelope = EventEnvelope.create(event_type, **payload).to_dict()
-    line = PREFIX + json.dumps(envelope, ensure_ascii=False)
+    line = PREFIX + json.dumps(_beijing_log_envelope(envelope), ensure_ascii=False)
     print(line, file=sys.stderr, flush=True)
 
     # Phase 9: also publish to the in-process event bus so SSE clients

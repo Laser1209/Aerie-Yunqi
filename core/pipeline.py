@@ -61,6 +61,16 @@ _FUZZY_IMAGE_HINTS = (
     # 英文
     "photo", "pic", "picture", "image", "selfie",
 )
+
+
+def _photo_conversation_context(messages: list[dict[str, Any]] | None) -> str:
+    recent = []
+    for message in (messages or [])[-6:]:
+        role = str(message.get("role") or "").strip()
+        content = str(message.get("content") or "").strip()
+        if role in {"user", "assistant"} and content:
+            recent.append(f"{role}: {content[:500]}")
+    return "\n".join(recent)[-2400:]
 # 回复判断的触发信号（更窄）：只有回复在叙述"发图/发送"这类动作才值得判断。
 _REPLY_PHOTO_HINTS = (
     "拍", "照片", "自拍", "发送", "发你", "发过去", "发给你", "发过来",
@@ -1344,7 +1354,13 @@ class Pipeline:
         # 2) 出图并等送达（失败/超时不阻塞后续文本）
         if photo_intent:
             try:
-                await self._deliver_chat_photo(msg, request_context, photo_intent, trace)
+                await self._deliver_chat_photo(
+                    msg,
+                    request_context,
+                    photo_intent,
+                    trace,
+                    conversation_context=_photo_conversation_context(ctx_messages),
+                )
             except Exception:
                 logger.debug("chat photo deliver failed", exc_info=True)
         # 3) 再发剩余文本
@@ -1726,6 +1742,7 @@ class Pipeline:
                     request_state.context,
                     photo_intent,
                     trace,
+                    conversation_context=_photo_conversation_context(ctx_messages),
                 )
             except Exception:
                 logger.debug("streaming chat photo deliver failed", exc_info=True)
@@ -1786,6 +1803,7 @@ class Pipeline:
         request_context: RequestContext | None,
         intent: str,
         trace: dict | None = None,
+        conversation_context: str = "",
     ) -> dict:
         """触发一次真实生图并等待送达（文本等图：图先落地，再放行后续文本）。
 
@@ -1832,6 +1850,7 @@ class Pipeline:
             # 让模块化解析器能从真实意图中提取主体/姿态/机位/场景，而不是只用死板的
             # intent 关键字。缺省给空串，避免下游因 None 中断（缺值即停防护）。
             "user_raw": str(msg.content or "").strip(),
+            "conversation_context": str(conversation_context or "").strip(),
             # 角色级隔离：图片归属当前激活角色，投递端按此写 chat_log persona_id
             "persona_id": active_persona_id(),
         }

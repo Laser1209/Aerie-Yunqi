@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -572,6 +573,28 @@ def _extract_llm_json(text: str) -> dict | None:
         return None
 
 
+_PHOTOREALISM_CONSTRAINTS = (
+    "手机实拍质感，自然皮肤纹理与细小瑕疵，真实布料纹理和自然褶皱，"
+    "符合现场光源方向与强弱的阴影和反射，透视与重力符合现实，人体结构符合现实。"
+    "身体比例、骨架与肌肉线条以参考图为准，长期健身形成自然紧致但不过度夸张的线条；"
+    "髋、膝、踝连接连续，关节弯曲和自拍持机动作处于真实活动范围，"
+    "左右肢体数量、长度和透视比例一致，"
+    "保留轻微镜头噪点和自然景深；避免塑料皮肤、过度磨皮、过度锐化、悬浮物体、"
+    "错误肢体、额外手指和互相矛盾的光源。"
+)
+
+
+def _extract_outfit_context(text: str) -> str:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    clothing_words = ("穿着", "穿了", "穿的", "衣服", "上衣", "T恤", "衬衫", "毛衣", "外套", "短裤", "长裤", "裙", "袜", "鞋", "拖鞋")
+    for line in reversed(lines):
+        if any(word in line for word in clothing_words):
+            content = line.split(":", 1)[-1].strip()
+            content = re.sub(r"^(?:我|她)(?:现在)?(?:正)?(?:穿着|穿了|穿的是|穿的)", "", content)
+            return content.rstrip("。；;，,")[:180]
+    return ""
+
+
 def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     """把模块化规格组合进基础提示词：focus 为主轴协同覆盖 scene/pose/angle。
 
@@ -587,6 +610,14 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     focus = str(spec.get("focus") or "").strip()
     if focus:
         parts.append(f"画面重点聚焦在{focus}，其余虚化")
+        focus_parent = _PHOTO_FOCUS_PARENT.get(focus, focus)
+        if focus_parent in {"双腿", "双脚", "腰"}:
+            parts.append(
+                f"她本人自然地拿着手机，使用后置摄像头朝向自己的{focus}拍摄，"
+                "无需脸部入镜，持机手臂、躯干和被拍部位保持自然姿态"
+            )
+        elif focus_parent in {"脸庞", "头发", "肩颈锁骨"}:
+            parts.append("她本人使用手机前置摄像头自然自拍")
     shot = str(spec.get("shot") or "").strip()
     shot_phrase = _photo_shot_phrase(shot) if shot else ""
     if shot_phrase:
@@ -604,6 +635,10 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     style = str(spec.get("style") or "").strip()
     if style:
         parts.append(f"整体氛围{style}")
+    outfit = str(spec.get("outfit") or "").strip()
+    if outfit:
+        outfit = re.sub(r"^(?:我|她)(?:现在)?(?:正)?(?:穿着|穿了|穿的是|穿的)", "", outfit).rstrip("。；;，,")
+        parts.append(f"服装与当前对话保持一致：{outfit}")
     if not parts:
         return base
     return f"{base}{'，'.join(parts)}。"
@@ -1637,6 +1672,16 @@ class Companion:
                 desc = _image_event_desc(plan)
                 db = getattr(self, "db", None)
                 persona_id = str(plan.get("persona_id") or "") or self._active_persona_id()
+                asset = workflow_result.get("asset") if isinstance(workflow_result, dict) else {}
+                asset_url = str(asset.get("url") or "") if isinstance(asset, dict) else ""
+                attachment = {
+                    "category": "image",
+                    "name": str(asset.get("saved_as") or Path(image_ref).name),
+                    "url": asset_url,
+                    "thumbnail_url": str(asset.get("thumbnail_url") or ""),
+                    "content_type": str(asset.get("mime_type") or "image/png"),
+                }
+                attachments = [attachment]
                 legacy_id: int | None = None
                 if db is not None and hasattr(db, "insert"):
                     legacy_id = db.insert("chat_log", {
@@ -1648,6 +1693,7 @@ class Companion:
                         "scene": str(plan.get("scene") or "world_image"),
                         "channel": "qq",
                         "persona_id": persona_id,
+                        "attachments": json.dumps(attachments, ensure_ascii=False),
                     })
                 if legacy_id is not None:
                     # 同步进 normalized messages 层，保证管理平台可见 + 级联删除覆盖
@@ -1658,8 +1704,21 @@ class Companion:
                         channel=channel,
                         channel_account_id=account,
                         content=f"[图片] {desc}",
+                        attachments=attachments,
                         legacy_chat_log_id=int(legacy_id),
                         persona_id=persona_id,
+                    )
+                    from core import chat_events
+                    chat_events.emit(
+                        "assistant",
+                        role="assistant",
+                        id=legacy_id,
+                        user_id=int(target),
+                        content=f"[图片] {desc}",
+                        attachments=attachments,
+                        source="qq",
+                        scene=str(plan.get("scene") or "world_image"),
+                        channel="qq",
                     )
                 try:
                     import os as _os
@@ -3320,7 +3379,7 @@ class Companion:
         except Exception:
             logger.debug("image event memory store failed", exc_info=True)
 
-    async def _semantic_photo_spec(self, user_raw: str) -> dict[str, str] | None:
+    async def _semantic_photo_spec(self, user_raw: str, conversation_context: str = "") -> dict[str, str] | None:
         """轻量 LLM 语义自补：从用户指令推断画面维度 focus/pose/angle/scene/style。
 
         关键词表只能命中显式词语（"看看腿"能命中 focus=双腿，但推断不出"坐着/腿部
@@ -3338,8 +3397,8 @@ class Companion:
         system = (
             "你是摄影构图分析器。用户给了一句给恋人的拍照指令（例如'看看腿''在床上躺着拍一张'），"
             "你要理解其隐含语义，把它拆成一张写实生活照的画面规格。\n"
-            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style/orientation/shot，值用中文或空字符串：\n"
-            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒","orientation":"竖","shot":"特写"}\n'
+            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style/orientation/shot/outfit，值用中文或空字符串：\n"
+            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒","orientation":"竖","shot":"特写","outfit":"灰色运动短裤和白色中筒袜"}\n'
             "各键含义与合法取值：\n"
             "- focus（画面主体特写）：双腿/双脚/手/腰/肩颈锁骨/背影/头发/脸庞/眼睛/全身，"
             "可细分到单个部位：脚踝/足背/脚趾/小腿/大腿/膝盖/手指/手腕/掌心/锁骨/脖颈/腰肢/耳廓/嘴唇\n"
@@ -3349,18 +3408,20 @@ class Companion:
             "- style（氛围）：诱惑感/慵懒/清新/居家感/氛围感\n"
             "- orientation（画面方向）：竖/横/方，仅当事物明确暗示横/方构图时填，默认竖\n"
             "- shot（景别·镜头语言）：远景/中景/近景/特写/大特写。特写景别使用率最高，默认倾向特写；focus 为局部特写时取特写/大特写\n"
+            "- outfit（当前服装）：只从最近对话明确出现的穿着、裤子、裙子、袜子、鞋子中提取，不得自行编造\n"
             "推断规则：\n"
             "1. 指令提到身体部位，focus 填最具体的部位（能细化就细化到 脚踝/大腿/手指 等单部位，不只给大类）。\n"
             "2. 若语义暗示了姿态/机位但未明说，自行补全最合理的（如'看看腿'→pose=坐，angle=特写）。\n"
             "3. 提到环境填 scene，提到情绪/氛围填 style，明确暗示横/方构图才填 orientation。\n"
-            "4. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字；不要出现任何人的名字（如'伊塔'）。\n"
+            "4. 服装以最近对话为准；有明确描述就原样概括到 outfit，没有就留空，不得用默认服装覆盖。\n"
+            "5. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字；不要出现任何人的名字（如'伊塔'）。\n"
             "硬性前提：这张照片由画中的女性本人手持手机拍摄的自拍（前置自拍/后置对镜/支架定时），"
             "所有机位都是她自己的取景，不存在摄影师/他人拍摄。angle 只表达她从哪个方位/距离拍自己。"
         )
         try:
             messages = [
                 {"role": "system", "content": system},
-                {"role": "user", "content": f"指令：{raw[:120]}"},
+                {"role": "user", "content": f"最近对话：\n{str(conversation_context or '')[-2000:]}\n\n拍照指令：{raw[:120]}"},
             ]
             call = chat(messages, preferred_provider=_IMAGE_LIGHT_PROVIDER, temperature=0.2)
             resp = await asyncio.wait_for(call, timeout=_IMAGE_LIGHT_RELAY_TIMEOUT)
@@ -3375,6 +3436,7 @@ class Companion:
                 "style": _normalize_spec_value(obj.get("style"), _PHOTO_STYLE_TABLE),
                 "orientation": _normalize_spec_value(obj.get("orientation"), _PHOTO_ORIENTATION_TABLE),
                 "shot": _normalize_spec_value(obj.get("shot"), _PHOTO_SHOT_TABLE),
+                "outfit": str(obj.get("outfit") or "").strip()[:180],
             }
             if not any(spec.values()):
                 return None
@@ -3432,9 +3494,14 @@ class Companion:
         if (candidate or {}).get("scene") == "local_send":
             user_raw = str((candidate or {}).get("user_raw") or "").strip()
             if user_raw:
-                spec = await self._semantic_photo_spec(user_raw)
+                conversation_context = str((candidate or {}).get("conversation_context") or "").strip()
+                spec = await self._semantic_photo_spec(user_raw, conversation_context)
                 if not spec:
                     spec = _extract_photo_spec(user_raw)
+                if spec is not None and not spec.get("outfit"):
+                    outfit = _extract_outfit_context(conversation_context)
+                    if outfit:
+                        spec["outfit"] = outfit
         record_image_stage(
             trace_id,
             "prompt.spec",
@@ -3442,6 +3509,9 @@ class Companion:
             prompt_key=str(prompt_key or "default"),
             spec=spec or {},
             source="semantic_or_keyword" if spec else "default",
+            candidate_keys=sorted(str(key) for key in (candidate or {}).keys()),
+            user_raw_chars=len(str((candidate or {}).get("user_raw") or "")),
+            conversation_context_chars=len(str((candidate or {}).get("conversation_context") or "")),
         )
         # orientation（第 2 条）：语义自补产出方向时，回填 candidate.size 为三档之一，
         # 让下游 base 构图方向、workflow metadata、图生图尺寸统一用同一方向。
@@ -3528,8 +3598,7 @@ class Companion:
         if focus and focus in _CLOSEUP_FOCUS_SET:
             base = (
                 "一张写实照片，人物外貌以参考图为准。"
-                "画面风格自然、生活化、暖色调、真实摄影质感，"
-                "不要动漫风，不要文字水印。"
+                f"{_PHOTOREALISM_CONSTRAINTS}不要动漫风，不要文字水印。"
             )
             full = f"{base}{orientation}。"
             full = f"{full}{_SELFIE_POV_PHRASE}"
@@ -3570,7 +3639,7 @@ class Companion:
         if body_data_parts:
             base += "身体数据：" + "，".join(body_data_parts) + "。"
         base += (
-            "五官清冷精致，气质温柔的大姐姐。画面风格自然、生活化、暖色调、真实摄影质感，"
+            f"五官清冷精致，气质温柔的大姐姐。{_PHOTOREALISM_CONSTRAINTS}"
             "不要动漫风，不要文字水印。"
         )
         if key == "environment_object":

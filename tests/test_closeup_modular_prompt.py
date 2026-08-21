@@ -18,6 +18,8 @@ from core.companion import (
     _compose_modular_prompt,
     Companion,
 )
+from core.pipeline import _photo_conversation_context
+from core.solar_time import fine_time_descriptor
 
 # ── 测试用 persona fixture ──────────────────────────
 
@@ -136,8 +138,47 @@ class TestCloseupBasePrompt:
         print(f"\n[详细-看看腿] => {result}")
 
         assert "画面重点聚焦在双腿" in result
+        assert "后置摄像头" in result
+        assert "朝向自己的双腿" in result
+        assert "前置摄像头" not in result
         for kw in _FORBIDDEN_CLOSEUP_KEYWORDS:
             assert kw not in result
+
+    def test_closeup_uses_executable_photorealism_constraints(self):
+        spec = {"focus": "双腿", "pose": "坐", "angle": "第一人称", "scene": "沙发", "style": "居家感"}
+        candidate = {"scene": "local_send", "user_raw": "看看腿"}
+        result = _call("role_selfie", candidate=candidate, spec=spec)
+
+        assert "手机实拍" in result
+        assert "自然皮肤纹理" in result
+        assert "真实布料纹理" in result
+        assert "人体结构符合现实" in result
+        assert "身体比例、骨架与肌肉线条以参考图为准" in result
+        assert "髋、膝、踝" in result
+        assert "真实活动范围" in result
+        assert "塑料皮肤" in result
+
+    def test_conversation_outfit_overrides_default_clothing(self):
+        spec = {
+            "focus": "双腿",
+            "pose": "坐",
+            "angle": "第一人称",
+            "scene": "沙发",
+            "style": "居家感",
+            "outfit": "灰色运动短裤和白色中筒袜，脚上穿奶白色居家拖鞋",
+        }
+        candidate = {
+            "scene": "local_send",
+            "user_raw": "看看腿",
+            "conversation_context": "assistant: 我穿着灰色运动短裤和白色中筒袜，脚上是奶白色居家拖鞋。\nuser: 看看腿",
+        }
+        result = _call("role_selfie", candidate=candidate, spec=spec)
+
+        assert "灰色运动短裤和白色中筒袜" in result
+        assert "奶白色居家拖鞋" in result
+        assert "宽松的家居T恤" not in result
+        assert "我穿着" not in result
+        assert "。。" not in result
 
     def test_closeup_feet_detail(self):
         """看看脚 → 详细验证。"""
@@ -148,8 +189,18 @@ class TestCloseupBasePrompt:
         print(f"\n[详细-看看脚] => {result}")
 
         assert "画面重点聚焦在双脚" in result
+        assert "后置摄像头" in result
+        assert "朝向自己的双脚" in result
         for kw in _FORBIDDEN_CLOSEUP_KEYWORDS:
             assert kw not in result
+
+    def test_face_closeup_keeps_front_camera(self):
+        spec = {"focus": "脸庞", "pose": "坐", "angle": "特写", "scene": "沙发", "style": "居家感"}
+        candidate = {"scene": "local_send", "user_raw": "看看脸"}
+        result = _call("role_selfie", candidate=candidate, spec=spec)
+
+        assert "前置摄像头" in result
+        assert "后置摄像头朝向自己的脸庞" not in result
 
     def test_closeup_collarbone_detail(self):
         """看看锁骨 → 详细验证。"""
@@ -247,6 +298,30 @@ class TestFullBodyBasePrompt:
         assert "C杯" in result
         assert "体重" in result
         assert "体脂率" in result
+
+
+def test_photo_conversation_context_keeps_recent_clothing_turns():
+    messages = [
+        {"role": "system", "content": "system prompt"},
+        {"role": "assistant", "content": "我穿着灰色运动短裤和白色中筒袜，脚上是奶白色拖鞋。"},
+        {"role": "user", "content": "看看腿"},
+    ]
+
+    result = _photo_conversation_context(messages)
+
+    assert "system prompt" not in result
+    assert "灰色运动短裤" in result
+    assert "看看腿" in result
+
+
+def test_night_window_description_has_no_duplicate_prefix():
+    from datetime import datetime
+    from core.world_simulation import LOCAL_TZ
+
+    result = fine_time_descriptor(datetime(2026, 8, 21, 19, 36, tzinfo=LOCAL_TZ), "role_selfie")
+
+    assert "窗外是窗下是" not in result["light_cn"]
+    assert "太阳光照进" not in result["light_cn"]
 
 
 # ══════════════════════════════════════════════════════

@@ -318,7 +318,17 @@ function _ensureRawStderrLogger() {
   try {
     fs.mkdirSync(BACKEND_LOG_DIR, { recursive: true });
     const stamp = new Date();
-    const stampStr = stamp.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const parts = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).formatToParts(stamp).reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+    const localIso = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+    const stampStr = localIso.replace(/:/g, "-");
     _rawStderrLogPath = path.join(BACKEND_LOG_DIR, "backend.stderr." + stampStr + ".raw.log");
     const summaryPath = path.join(BACKEND_LOG_DIR, "backend.stderr.LATEST.raw.log");
     try { fs.rmSync(summaryPath, { force: true }); } catch (_) {}
@@ -326,7 +336,7 @@ function _ensureRawStderrLogger() {
       try { fs.copyFileSync(_rawStderrLogPath, summaryPath); } catch (_2) {}
     }
     fs.appendFileSync(_rawStderrLogPath,
-      "\n# ===== backend stderr session start " + stamp.toISOString() + " =====\n",
+      "\n# ===== backend stderr session start " + localIso + "+08:00 =====\n",
       "utf8");
   } catch (_err) {
     console.warn("[main] failed to open raw stderr log:", _err && _err.message);

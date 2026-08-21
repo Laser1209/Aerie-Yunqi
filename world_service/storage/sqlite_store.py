@@ -341,6 +341,8 @@ def _image_candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
         "expires_at": _safe_text(payload.get("expires_at") or ""),
         "created_at": _safe_text(payload.get("created_at") or ""),
     }
+    public["user_raw"] = _safe_text(payload.get("user_raw") or "")
+    public["conversation_context"] = _safe_text(payload.get("conversation_context") or "")
     if sensitive:
         public["sensitive_keys"] = sorted(str(key) for key in sensitive.keys())
         public["sensitive_sha256"] = hashlib.sha256(

@@ -117,6 +117,18 @@ test("attachment card for image category renders thumbnail when thumbnailUrl is 
   assert.ok(card.hasOpenButton(), "ready image should have open button");
 });
 
+test("attachment card for generated image renders original url without thumbnail", () => {
+  const { chat } = loadChatManager();
+  const card = parseCard(chat._buildAttachmentCard({
+    category: "image",
+    name: "selfie.png",
+    state: "ready",
+    url: "/uploads/selfie.png",
+  }));
+  assert.ok(card.hasThumbnailImg(), "generated image should render its original url");
+  assert.ok(card.html.includes('src="http://127.0.0.1:7890/uploads/selfie.png"'));
+});
+
 test("attachment card for document category shows document icon and open button", () => {
   const { chat } = loadChatManager();
   const card = parseCard(chat._buildAttachmentCard({

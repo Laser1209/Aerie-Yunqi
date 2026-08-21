@@ -5,6 +5,16 @@ import pytest
 import yaml
 
 
+def test_chat_event_log_view_uses_beijing_time_without_mutating_event():
+    from core.chat_events import _beijing_log_envelope
+
+    event = {"type": "user", "ts": "2026-08-21T12:34:33.619673+00:00"}
+    result = _beijing_log_envelope(event)
+
+    assert result["ts"] == "2026-08-21T20:34:33.619673+08:00"
+    assert event["ts"] == "2026-08-21T12:34:33.619673+00:00"
+
+
 def _migration(version, checksum, table_name="phase0_probe"):
     from core.migrations import Migration
 

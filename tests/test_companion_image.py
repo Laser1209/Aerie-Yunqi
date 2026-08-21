@@ -14,6 +14,8 @@ def _make_companion(probability: float = 0.3, world_port_available: bool = True)
     """Build a minimal mock companion with _maybe_attach_companion_image bound."""
     comp = MagicMock(spec=Companion)
     comp.settings = {"proactive": {"companion_image_probability": probability}}
+    comp.qq = MagicMock()
+    comp.qq.is_logged_in = False
     comp._active_persona_id = MagicMock(return_value="ita-default")
     comp.publish_image_candidate = AsyncMock(return_value={"status": "published"})
     comp._persist_image_event = AsyncMock()
@@ -86,6 +88,23 @@ class TestCompanionImagePayload:
         assert "proactive_companion:afternoon_care" in call_args["reason_code"]
         assert call_args["owner_id"] == 12345
         assert call_args["channel"] == "local_chat"
+
+    @pytest.mark.asyncio
+    async def test_logged_in_qq_master_uses_qq_channel(self):
+        comp = _make_companion(probability=1.0)
+        comp.qq.is_logged_in = True
+
+        with patch("core.companion.random") as mock_random, \
+             patch("core.companion._COMPANION_IMAGE_DELAY_SEC", 0):
+            mock_random.random.return_value = 0.0
+            comp._maybe_attach_companion_image(3489352115, "午安", "afternoon_care")
+            await asyncio.sleep(0.01)
+
+        call_args = comp.publish_image_candidate.call_args[0][0]
+        assert call_args["channel"] == "qq"
+        assert call_args["target"] == 3489352115
+        persist_args = comp._persist_image_event.call_args.kwargs
+        assert persist_args["channel"] == "qq"
 
     @pytest.mark.asyncio
     async def test_successful_publish_records_image_event(self):

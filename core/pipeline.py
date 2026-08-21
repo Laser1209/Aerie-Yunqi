@@ -35,6 +35,7 @@ from core.cognition import CognitionEngine
 from core.conversation_repository import active_persona_id
 from core.feature_flags import FeatureFlags
 from core.ids import generate_id
+from core.image_production_log import record_image_stage
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
 from core.content_validator import ContentValidator
@@ -1276,6 +1277,18 @@ class Pipeline:
             photo_intent = await self._resolve_chat_photo_intent(msg, reply_text, route_mode)
         except Exception:
             logger.debug("chat photo intent resolve failed", exc_info=True)
+        if photo_intent:
+            turn_key = str(getattr(request_context, "turn_id", "") or "") if request_context else ""
+            if not turn_key:
+                turn_key = hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
+            record_image_stage(
+                f"chat-photo:{msg.user_id}:{turn_key}",
+                "intent.resolved",
+                status="matched",
+                intent=photo_intent,
+                route_mode=route_mode,
+                channel=str(msg.channel or msg.source or "local"),
+            )
         lead_in_count = 1 if (photo_intent and len(segments) > 1) else 0
 
         async def _emit_segments(start: int, end: int) -> bool:
@@ -1669,6 +1682,26 @@ class Pipeline:
             result["attachment_bind_error"] = attachment_bind_error
         result["event_sequence"] = request_state.sequence
 
+        reply_text = "".join(segments)
+        photo_intent = ""
+        try:
+            photo_intent = await self._resolve_chat_photo_intent(msg, reply_text, route_mode)
+        except Exception:
+            logger.debug("streaming chat photo intent resolve failed", exc_info=True)
+        if photo_intent:
+            turn_key = str(getattr(request_state.context, "turn_id", "") or "") if request_state.context else ""
+            if not turn_key:
+                turn_key = hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
+            record_image_stage(
+                f"chat-photo:{msg.user_id}:{turn_key}",
+                "intent.resolved",
+                status="matched",
+                intent=photo_intent,
+                route_mode=route_mode,
+                channel=str(msg.channel or msg.source or "local"),
+                streaming=True,
+            )
+
         # QQ 消息入 SendQueue（本地消息跳过）
         if msg.source == "qq":
             reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
@@ -1685,6 +1718,17 @@ class Pipeline:
                 except Exception:
                     pass
             self.send_queue.enqueue(reply)
+
+        if photo_intent:
+            try:
+                await self._deliver_chat_photo(
+                    msg,
+                    request_state.context,
+                    photo_intent,
+                    trace,
+                )
+            except Exception:
+                logger.debug("streaming chat photo deliver failed", exc_info=True)
 
         return result
 

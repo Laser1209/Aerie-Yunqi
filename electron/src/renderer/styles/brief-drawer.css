@@ -962,6 +962,209 @@
   opacity: 0.8;
 }
 
+.brief-drawer__activity {
+  margin: 0 2px 14px;
+  padding: 14px 14px 16px;
+  background: color-mix(in srgb, var(--glass-bg-3) 86%, var(--color-primary) 8%);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--glass-border));
+  border-radius: 18px;
+  box-shadow: var(--glass-shadow);
+}
+.brief-drawer__activity-head,
+.brief-drawer__activity-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.brief-drawer__activity-kicker {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+.brief-drawer__activity-range,
+.brief-drawer__activity-stats,
+.brief-drawer__activity-footer {
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+}
+.brief-drawer__activity-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.brief-drawer__activity-stats strong {
+  color: var(--color-text);
+  font-weight: 700;
+}
+.brief-drawer__activity-scroll {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 14px 0 8px;
+}
+.brief-drawer__activity-weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, 9px);
+  gap: 3px;
+  padding-top: 19px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  text-align: right;
+}
+.brief-drawer__activity-map { min-width: 660px; }
+.brief-drawer__activity-months,
+.brief-drawer__activity-grid {
+  display: grid;
+  grid-template-columns: repeat(53, 9px);
+  gap: 3px;
+}
+.brief-drawer__activity-months {
+  height: 16px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+.brief-drawer__activity-grid {
+  grid-template-rows: repeat(7, 9px);
+  grid-auto-flow: column;
+}
+.brief-drawer__activity-cell {
+  width: 9px;
+  height: 9px;
+  appearance: none;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  cursor: pointer;
+}
+.brief-drawer__activity-cell:hover,
+.brief-drawer__activity-cell.is-selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 58%, transparent);
+}
+.brief-drawer__activity-cell--1 { background: color-mix(in srgb, var(--color-primary) 24%, transparent); }
+.brief-drawer__activity-cell--2 { background: color-mix(in srgb, var(--color-primary) 42%, transparent); }
+.brief-drawer__activity-cell--3 { background: color-mix(in srgb, var(--color-primary) 68%, transparent); }
+.brief-drawer__activity-cell--4 { background: var(--color-primary); }
+.brief-drawer__activity-legend {
+  display: inline-grid;
+  grid-template-columns: repeat(5, 20px);
+  gap: 4px;
+}
+.brief-drawer__activity-legend i {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+.brief-drawer__activity-legend i:nth-child(2) { background: color-mix(in srgb, var(--color-primary) 24%, transparent); }
+.brief-drawer__activity-legend i:nth-child(3) { background: color-mix(in srgb, var(--color-primary) 42%, transparent); }
+.brief-drawer__activity-legend i:nth-child(4) { background: color-mix(in srgb, var(--color-primary) 68%, transparent); }
+.brief-drawer__activity-legend i:nth-child(5) { background: var(--color-primary); }
+.brief-drawer__activity-detail {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--glass-border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--glass-bg-1) 72%, var(--color-primary) 8%);
+}
+.brief-drawer__activity-detail-date,
+.brief-drawer__activity-detail-summary,
+.brief-drawer__activity-detail-item em,
+.brief-drawer__activity-detail-item b {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+}
+.brief-drawer__activity-detail-title {
+  margin-top: 4px;
+  color: var(--color-text);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.brief-drawer__activity-detail-summary { margin-top: 7px; line-height: 1.6; }
+.brief-drawer__activity-detail-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+.brief-drawer__activity-detail-pills span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 13%, transparent);
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+}
+.brief-drawer__activity-detail-list { display: grid; gap: 8px; }
+.brief-drawer__activity-detail-item {
+  display: grid;
+  grid-template-columns: 6px 1fr auto;
+  gap: 9px;
+  align-items: center;
+}
+.brief-drawer__activity-detail-item > span {
+  width: 6px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+.brief-drawer__activity-detail-item strong {
+  display: block;
+  color: var(--color-text);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.brief-drawer__activity-tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  min-width: 190px;
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-bg) 92%, var(--color-primary) 8%);
+  color: var(--color-text);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.42);
+  opacity: 0;
+  transform: scale(0.96);
+  transform-origin: left top;
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 10000;
+}
+.brief-drawer__activity-tooltip.is-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+.brief-drawer__activity-tooltip-date {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-bottom: 7px;
+}
+.brief-drawer__activity-tooltip-main {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.brief-drawer__activity-tooltip-main strong {
+  color: var(--color-primary);
+  font-weight: 760;
+}
+.brief-drawer__activity-tooltip-sub {
+  margin-top: 6px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
 /* ── Section Base ──────────────────────────────── */
 .brief-drawer__section {
   margin: 0 2px 14px;

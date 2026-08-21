@@ -14,6 +14,15 @@ def _fake_db(rows):
     return SimpleNamespace(query=lambda sql, params=(): list(rows))
 
 
+def _fake_db_by_query(message_rows=None, token_rows=None):
+    def query(sql, params=()):
+        if "FROM messages" in sql:
+            return list(message_rows or [])
+        return list(token_rows or [])
+
+    return SimpleNamespace(query=query)
+
+
 class TestStatsService:
     def test_daily_token_series(self):
         db = _fake_db(
@@ -38,6 +47,20 @@ class TestStatsService:
         svc = StatsService(db=db)
         by = svc.token_by_provider(days=7)
         assert by[0]["provider"] == "deepseek"
+
+    def test_daily_message_series_counts_user_ai_and_total_messages(self):
+        db = _fake_db_by_query(
+            message_rows=[
+                {"d": "2026-08-12", "user_messages": 4, "ai_messages": 6, "total_messages": 10},
+                {"d": "2026-08-13", "user_messages": 2, "ai_messages": 3, "total_messages": 5},
+            ]
+        )
+        svc = StatsService(db=db)
+        series = svc.daily_message_series(days=365)
+        assert series == [
+            {"date": "2026-08-12", "user_messages": 4, "ai_messages": 6, "total_messages": 10},
+            {"date": "2026-08-13", "user_messages": 2, "ai_messages": 3, "total_messages": 5},
+        ]
 
     def test_top_topics_matches_categories(self):
         db = _fake_db(
@@ -77,10 +100,12 @@ class TestStatsService:
         svc = StatsService(db=db, decision_log_dir=log_dir)
         dash = svc.dashboard(window="7d")
         assert "tokens" in dash and "topics" in dash and "decisions" in dash
+        assert "messages" in dash
         assert dash["decisions"]["total"] == 0
 
     def test_empty_db_safe(self):
         svc = StatsService(db=None)
         assert svc.daily_token_series() == []
+        assert svc.daily_message_series() == []
         assert svc.top_topics() == []
         assert svc.decision_stats()["total"] == 0

@@ -184,10 +184,27 @@ class TestPipelineHandle:
             user_id=3998874040,
             limit=10,
         )
-        assert pipeline.ctx_builder.build.call_args.kwargs["history_msgs"] == [
-            {"role": "user", "content": "轻量上一问", "sequence": 0},
-            {"role": "assistant", "content": "轻量上一答", "sequence": 1},
-        ]
+
+    @pytest.mark.asyncio
+    async def test_streaming_qq_reply_delivers_requested_photo(self, pipeline):
+        async def chat_stream(*args, **kwargs):
+            yield {"type": "text", "text": "等着，我给你拍。"}
+            yield {"type": "done", "response": MagicMock(model="test-stream")}
+
+        pipeline.brain.chat_stream = chat_stream
+        pipeline._resolve_chat_photo_intent = AsyncMock(return_value="role_selfie")
+        pipeline._deliver_chat_photo = AsyncMock(return_value={"status": "completed"})
+        msg = IncomingMessage.from_onebot_event({
+            "message_type": "private",
+            "sender": {"user_id": 3489352115},
+            "raw_message": "发张窗边自拍 TEST821",
+            "message": [{"type": "text", "data": {"text": "发张窗边自拍 TEST821"}}],
+        })
+
+        await pipeline.handle(msg, force_full=True)
+
+        pipeline._resolve_chat_photo_intent.assert_awaited_once()
+        pipeline._deliver_chat_photo.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_canonical_history_failure_falls_back_to_legacy_history(

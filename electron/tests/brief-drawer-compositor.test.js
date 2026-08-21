@@ -13,6 +13,10 @@ const mainCss = fs.readFileSync(
   path.join(__dirname, "..", "src", "renderer", "styles", "main.css"),
   "utf8",
 );
+const drawerJs = fs.readFileSync(
+  path.join(__dirname, "..", "src", "renderer", "js", "brief-drawer.js"),
+  "utf8",
+);
 
 function rule(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -47,4 +51,15 @@ test("daily brief card hover does not move composited content", () => {
   ]) {
     assert.doesNotMatch(rule(selector), /transform\s*:/, selector);
   }
+});
+
+test("expanded daily brief includes theme-aware activity heatmap with custom tooltip", () => {
+  assert.match(drawerJs, /_renderActivityHeatmapSection\(data\)/);
+  assert.match(drawerJs, /_bindActivityHeatmap\(section,\s*days\)/);
+  assert.match(drawerJs, /_renderActivityDayDetail\(day,\s*detailEl\)/);
+  assert.match(drawerJs, /\/api\/calendar\/timeline/);
+  assert.match(drawerJs, /aerie:persona-updated/);
+  assert.match(css, /\.brief-drawer__activity-cell\s*\{/);
+  assert.match(css, /\.brief-drawer__activity-tooltip\s*\{/);
+  assert.doesNotMatch(css, /\.brief-drawer__activity-tooltip::after/);
 });

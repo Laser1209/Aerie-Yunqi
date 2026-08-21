@@ -108,8 +108,9 @@ def test_generate_image_uses_explicit_openai_compatible_provider(monkeypatch):
         def json(self):
             return {"data": [{"b64_json": _png_b64()}]}
 
-    def fake_post(url, *, headers, json, timeout):
+    def fake_post(url, *, headers, json, timeout, trust_env):
         calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        assert trust_env is False
         return Response()
 
     monkeypatch.setattr("core.llm_caller.httpx.post", fake_post)
@@ -162,8 +163,9 @@ def test_generate_image_uses_image_gen_env_fallback(monkeypatch):
         def json(self):
             return {"data": [{"b64_json": _png_b64()}]}
 
-    def fake_post(url, *, headers, json, timeout):
+    def fake_post(url, *, headers, json, timeout, trust_env):
         calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        assert trust_env is False
         return Response()
 
     monkeypatch.setattr("core.llm_caller.httpx.post", fake_post)
@@ -181,6 +183,67 @@ def test_generate_image_uses_image_gen_env_fallback(monkeypatch):
     assert calls[0]["headers"]["Idempotency-Key"] == "chat-photo:123:turn_abc"
     assert calls[0]["json"]["model"] == "gpt-image-2"
     assert calls[0]["json"]["response_format"] == "b64_json"
+
+
+def test_generate_image_retries_transient_disconnect_with_same_idempotency_key(monkeypatch):
+    import httpx
+
+    monkeypatch.setenv("IMAGE_GEN_API_KEY", "relay-key")
+    monkeypatch.setenv("IMAGE_GEN_BASE_URL", "https://image2.inian.one/v1")
+    monkeypatch.setenv("IMAGE_GEN_MODEL", "gpt-image-2")
+    brain = LLMCaller()
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"b64_json": _png_b64()}]}
+
+    def flaky_post(url, *, headers, json, timeout, trust_env):
+        assert trust_env is False
+        calls.append(headers["Idempotency-Key"])
+        if len(calls) == 1:
+            raise httpx.RemoteProtocolError("server disconnected")
+        return Response()
+
+    monkeypatch.setattr("core.llm_caller.httpx.post", flaky_post)
+    monkeypatch.setattr("core.llm_caller.time.sleep", lambda _: None)
+
+    result = brain.generate_image(
+        "draw a calm lake",
+        metadata={"idempotency_key": "chat-photo:123:turn_retry"},
+    )
+
+    assert result["status"] == "ok"
+    assert calls == ["chat-photo:123:turn_retry", "chat-photo:123:turn_retry"]
+
+
+def test_generate_image_bypasses_environment_proxy(monkeypatch):
+    monkeypatch.setenv("IMAGE_GEN_API_KEY", "relay-key")
+    monkeypatch.setenv("IMAGE_GEN_BASE_URL", "https://image2.inian.one/v1")
+    monkeypatch.setenv("IMAGE_GEN_MODEL", "gpt-image-2")
+    brain = LLMCaller()
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"b64_json": _png_b64()}]}
+
+    def fake_post(url, *, headers, json, timeout, trust_env=True):
+        calls.append(trust_env)
+        return Response()
+
+    monkeypatch.setattr("core.llm_caller.httpx.post", fake_post)
+
+    result = brain.generate_image("draw a calm lake")
+
+    assert result["status"] == "ok"
+    assert calls == [False]
 
 
 def test_speak_text_uses_explicit_openai_compatible_tts_provider(monkeypatch):

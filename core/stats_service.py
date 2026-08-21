@@ -75,6 +75,32 @@ class StatsService:
             logger.debug("token by provider failed", exc_info=True)
             return []
 
+    def daily_message_series(self, days: int = 365) -> list[dict[str, Any]]:
+        if self._db is None:
+            return []
+        try:
+            rows = self._db.query(
+                "SELECT date(created_at) AS d, "
+                "SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS user_messages, "
+                "SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END) AS ai_messages, "
+                "COUNT(*) AS total_messages FROM messages "
+                "WHERE deleted_at IS NULL AND created_at >= date('now', ?) "
+                "GROUP BY date(created_at) ORDER BY d",
+                (f"-{int(days)} days",),
+            )
+            return [
+                {
+                    "date": str(r.get("d") or ""),
+                    "user_messages": int(r.get("user_messages") or 0),
+                    "ai_messages": int(r.get("ai_messages") or 0),
+                    "total_messages": int(r.get("total_messages") or 0),
+                }
+                for r in (rows or [])
+            ]
+        except Exception:
+            logger.debug("message daily series failed", exc_info=True)
+            return []
+
     # ── 高频话题（类目词表匹配）─────────────────────────────
     def top_topics(self, limit: int = 5) -> list[dict[str, Any]]:
         if self._db is None:
@@ -143,6 +169,7 @@ class StatsService:
                 "daily_series": self.daily_token_series(days=days),
                 "by_provider": self.token_by_provider(days=days),
             },
+            "messages": {"daily_series": self.daily_message_series(days=days)},
             "topics": {"top": self.top_topics(limit=5)},
             "decisions": self.decision_stats(),
         }

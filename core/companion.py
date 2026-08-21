@@ -45,6 +45,7 @@ from core.emotion_threshold import get_threshold_engine
 from core.internal_state import InternalStateEngine
 from core.feature_flags import FeatureFlags
 from core.ids import generate_id
+from core.image_production_log import record_image_stage
 from core.identity import IdentityRepository, IdentityResolver
 from core.pipeline import Pipeline
 from core.paths import data_dir
@@ -1609,7 +1610,24 @@ class Companion:
             if not image_ref:
                 logger.warning("[WorldImage] generated asset missing for delivery")
                 return False
+            trace_id = str(workflow_result.get("idempotency_key") or workflow_result.get("request_id") or "unknown")
+            if trace_id.startswith("world-image:"):
+                trace_id = trace_id[len("world-image:"):]
+            record_image_stage(
+                trace_id,
+                "delivery.qq_requested",
+                status="started",
+                target=target,
+                image_path=image_ref,
+            )
             sent = await self.qq.send_image(int(target), image_ref)
+            record_image_stage(
+                trace_id,
+                "delivery.qq_result",
+                status="success" if sent else "failed",
+                target=target,
+                sent=bool(sent),
+            )
             if not sent:
                 return False
             # P3 发图自我认知：QQ 通道补写 chat_log（含中文内容描述）+ 落 EVENT 记忆，
@@ -3370,6 +3388,16 @@ class Companion:
         prompt = await self._image_prompt_for_impl(prompt_key, candidate)
         try:
             self._last_image_prompt = str(prompt or "")
+            trace_id = str((candidate or {}).get("idempotency_key") or (candidate or {}).get("candidate_id") or "unknown")
+            record_image_stage(
+                trace_id,
+                "prompt.final",
+                status="completed",
+                prompt_key=str(prompt_key or "default"),
+                prompt=self._last_image_prompt,
+                prompt_chars=len(self._last_image_prompt),
+                channel=str((candidate or {}).get("channel") or ""),
+            )
             logger.info(
                 "[WorldPrompt] key=%s candidate=%s chars=%d prompt=%r",
                 str(prompt_key or "default"),
@@ -3400,12 +3428,21 @@ class Companion:
         # 全身/非特写保留完整人设。旧实现只做了语义优先，失败后未在这里兜底，
         # 导致 base 构造阶段拿不到 focus。
         spec: dict[str, str] | None = None
+        trace_id = str((candidate or {}).get("idempotency_key") or (candidate or {}).get("candidate_id") or "unknown")
         if (candidate or {}).get("scene") == "local_send":
             user_raw = str((candidate or {}).get("user_raw") or "").strip()
             if user_raw:
                 spec = await self._semantic_photo_spec(user_raw)
                 if not spec:
                     spec = _extract_photo_spec(user_raw)
+        record_image_stage(
+            trace_id,
+            "prompt.spec",
+            status="completed",
+            prompt_key=str(prompt_key or "default"),
+            spec=spec or {},
+            source="semantic_or_keyword" if spec else "default",
+        )
         # orientation（第 2 条）：语义自补产出方向时，回填 candidate.size 为三档之一，
         # 让下游 base 构图方向、workflow metadata、图生图尺寸统一用同一方向。
         if spec and isinstance(candidate, dict) and str(spec.get("orientation") or "").strip():
@@ -3414,18 +3451,49 @@ class Companion:
             except Exception:
                 logger.debug("orientation size reflow failed", exc_info=True)
         base = self._compose_base_image_prompt(prompt_key, candidate, spec=spec)
+        record_image_stage(
+            trace_id,
+            "prompt.base",
+            status="completed",
+            prompt=base,
+            prompt_chars=len(base),
+        )
         try:
             context = self._image_world_context(candidate)
+            record_image_stage(
+                trace_id,
+                "prompt.world_context",
+                status="completed" if context else "empty",
+                context=context or {},
+            )
             if not context:
                 return _ensure_selfie_pov(base, prompt_key)
             refined = await self._light_relay_refine_prompt(base, context, candidate)
             if refined:
+                record_image_stage(
+                    trace_id,
+                    "prompt.world_refined",
+                    status="completed",
+                    prompt=refined,
+                    prompt_chars=len(refined),
+                )
                 return _ensure_selfie_pov(refined, prompt_key)
-            return _ensure_selfie_pov(
-                self._inject_world_context_fallback(base, context, candidate),
-                prompt_key,
+            fallback = self._inject_world_context_fallback(base, context, candidate)
+            record_image_stage(
+                trace_id,
+                "prompt.world_fallback",
+                status="completed",
+                prompt=fallback,
+                prompt_chars=len(fallback),
             )
+            return _ensure_selfie_pov(fallback, prompt_key)
         except Exception:
+            record_image_stage(
+                trace_id,
+                "prompt.world_context",
+                status="failed",
+                fallback="base_prompt",
+            )
             # 世界数据接力失败不影响生图：退回基础提示词（base 恒非空）。
             # warning 而非 debug：历史空提示词问题曾因 debug 级吞错无法事后复盘，
             # 这里必须让异常体落盘，便于下次出现时直接定位。
@@ -4385,13 +4453,20 @@ class Companion:
             # 延迟让文本先到用户端，图片紧随其后更自然。
             await asyncio.sleep(_COMPANION_IMAGE_DELAY_SEC)
             try:
+                qq_client = getattr(self, "qq", None)
+                channel = (
+                    "qq"
+                    if str(master_id or "").isdigit()
+                    and getattr(qq_client, "is_logged_in", False)
+                    else "local_chat"
+                )
                 result = await self.publish_image_candidate({
                     "candidate_id": f"proactive-companion-{scene_name}-{int(time.time())}",
                     "idempotency_key": f"proactive-companion:{scene_name}:{int(time.time())}",
                     "scene": "local_send",
                     "user_raw": content,
                     "owner_id": master_id,
-                    "channel": "local_chat",
+                    "channel": channel,
                     "target": master_id,
                     "prompt_key": "role_in_scene",
                     "reason_code": f"proactive_companion:{scene_name}",
@@ -4409,7 +4484,7 @@ class Companion:
                     await self._persist_image_event(
                         user_id=int(master_id),
                         desc=f"主动消息配图（{scene_name}）：{content[:60]}",
-                        channel="local_chat",
+                        channel=channel,
                         image_path=str((result or {}).get("image_path", "")),
                     )
                 else:
@@ -4424,10 +4499,11 @@ class Companion:
                 )
 
         try:
-            asyncio.create_task(_fire())
+            loop = asyncio.get_running_loop()
         except RuntimeError:
             # 无事件循环时忽略（如单元测试环境）
-            pass
+            return
+        loop.create_task(_fire())
 
     async def check_idle(self, user_id: int, idle_seconds: float) -> bool:
         """Called externally when user is detected idle beyond threshold.

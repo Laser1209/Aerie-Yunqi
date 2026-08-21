@@ -1,0 +1,595 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="12" skipped="0" tests="192" time="9.933" timestamp="2026-08-20T17:45:44.767011+08:00" hostname="Laserの电脑"><testcase classname="tests.test_strip_thought_action" name="test_basic" time="0.003" /><testcase classname="tests.test_strip_thought_action" name="test_multiline" time="0.001" /><testcase classname="tests.test_strip_thought_action" name="test_no_tags" time="0.001" /><testcase classname="tests.test_strip_thought_action" name="test_only_thought" time="0.001" /><testcase classname="tests.test_strip_thought_action" name="test_case_insensitive" time="0.001" /><testcase classname="tests.test_strip_thought_action" name="test_empty_input" time="0.001" /><testcase classname="tests.test_strip_thought_action" name="test_multiple_tags" time="0.001" /><testcase classname="tests.test_communication.TestQQClient" name="test_connect_returns_cleanly_when_disabled" time="0.003" /><testcase classname="tests.test_communication.TestOneBot11Client" name="test_open_ws_uses_additional_headers_first" time="0.002" /><testcase classname="tests.test_communication.TestOneBot11Client" name="test_open_ws_falls_back_to_extra_headers" time="0.002" /><testcase classname="tests.test_communication.TestRouter" name="test_master_routes_full" time="0.001" /><testcase classname="tests.test_communication.TestRouter" name="test_friend_routes_auto" time="0.001" /><testcase classname="tests.test_communication.TestRouter" name="test_stranger_routes_basic" time="0.001" /><testcase classname="tests.test_communication.TestRouter" name="test_is_master" time="0.001" /><testcase classname="tests.test_communication.TestRouter" name="test_is_friend" time="0.001" /><testcase classname="tests.test_communication.TestSplitter" name="test_short_text_single_segment" time="0.001" /><testcase classname="tests.test_communication.TestSplitter" name="test_long_text_multiple_segments" time="0.001" /><testcase classname="tests.test_communication.TestSplitter" name="test_returns_list_of_strings" time="0.001" /><testcase classname="tests.test_communication.TestRecallManager" name="test_handle_negative_within_window" time="0.016" /><testcase classname="tests.test_communication.TestRecallManager" name="test_handle_negative_outside_window" time="0.013" /><testcase classname="tests.test_communication.TestRecallManager" name="test_non_negative_no_trigger" time="0.015" /><testcase classname="tests.test_communication.TestRecallManager" name="test_no_last_sent_no_recall" time="0.015" /><testcase classname="tests.test_communication.TestRecallManager" name="test_maybe_poke_on_silence_triggers" time="0.015" /><testcase classname="tests.test_communication.TestRecallManager" name="test_maybe_poke_no_last_sent" time="0.012" /><testcase classname="tests.test_communication" name="test_strip_fake_image_markdown_removes_prompt_text" time="0.001" /><testcase classname="tests.test_communication" name="test_strip_fake_image_markdown_removes_bang_variant" time="0.001" /><testcase classname="tests.test_communication" name="test_strip_fake_image_markdown_keeps_real_url_image" time="0.001" /><testcase classname="tests.test_communication" name="test_strip_fake_image_markdown_keeps_plain_word" time="0.001" /><testcase classname="tests.test_communication" name="test_strip_fake_image_markdown_empty" time="0.001" /><testcase classname="tests.test_communication" name="test_send_message_with_segments_strips_fake_markdown" time="0.003" /><testcase classname="tests.test_communication" name="test_send_message_with_segments_keeps_real_image" time="0.002" /><testcase classname="tests.test_recall.TestRecallManagerBasics" name="test_record_and_can_recall" time="0.000" /><testcase classname="tests.test_recall.TestRecallManagerBasics" name="test_cannot_recall_when_disabled" time="0.001" /><testcase classname="tests.test_recall.TestRecallManagerBasics" name="test_cannot_recall_no_message" time="0.001" /><testcase classname="tests.test_recall.TestRecallManagerBasics" name="test_cannot_recall_outside_window" time="0.051" /><testcase classname="tests.test_recall.TestRecallManagerBasics" name="test_session_limit_enforced" time="0.001" /><testcase classname="tests.test_recall.TestRecallManagerBasics" name="test_min_gap_cooldown" time="0.001" /><testcase classname="tests.test_recall.TestRecallManagerBasics" name="test_reset_session_clears_count" time="0.001" /><testcase classname="tests.test_recall.TestRecallManagerAsync" name="test_try_recall_skipped_no_message" time="0.002" /><testcase classname="tests.test_recall.TestRecallManagerAsync" name="test_try_recall_ok" time="0.002" /><testcase classname="tests.test_recall.TestRecallManagerAsync" name="test_handle_user_negative_keywords" time="0.002" /><testcase classname="tests.test_recall.TestRecallManagerAsync" name="test_handle_user_negative_no_match" time="0.002" /><testcase classname="tests.test_recall.TestRecallManagerAsync" name="test_attach_qq_message_id" time="0.001" /><testcase classname="tests.test_recall.TestRecallManagerAsync" name="test_record_sent_with_segments" time="0.001" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_extract_present" time="0.001" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_extract_absent" time="0.001" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_extract_empty" time="0.001" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_extract_case_insensitive" time="0.001" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_strip_removes_tag" time="0.001" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_strip_none" time="0.000" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_execute_no_manager" time="0.001" /><testcase classname="tests.test_recall_instruction.TestRecallInstructionUnit" name="test_execute_calls_try_recall" time="0.001" /><testcase classname="tests.test_recall_instruction.TestPipelineRecallInstructionIntegration" name="test_recall_instruction_executes_and_strips" time="0.016"><failure message="KeyError: ('qq', '3998874040')">self = &lt;tests.test_recall_instruction.TestPipelineRecallInstructionIntegration object at 0x000001E4B0C174D0&gt;
+pipeline = &lt;core.pipeline.Pipeline object at 0x000001E4B503E900&gt;
+recall_manager = &lt;communication.recall_manager.RecallManager object at 0x000001E4B504A210&gt;
+
+    @pytest.mark.asyncio
+    async def test_recall_instruction_executes_and_strips(self, pipeline, recall_manager):
+        msg = IncomingMessage.from_onebot_event(
+            {"sender": {"user_id": 3998874040}, "message_type": "private",
+             "raw_message": "hi", "message": []}
+        )
+        result = await pipeline.handle(msg, force_full=True)
+    
+        # 撤回被触发: 该 channel 最近记录已 no_recent_message (被撤回/清空语义)
+        # 由于 try_recall 只改预算不清记录, 校验预算计数 +1 且回复正文无标签。
+&gt;       assert recall_manager._session_recall_count[("qq", "3998874040")] == 1
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: ('qq', '3998874040')
+
+tests\test_recall_instruction.py:136: KeyError</failure></testcase><testcase classname="tests.test_recall_adapters" name="test_qq_adapter_recall_ok" time="0.002" /><testcase classname="tests.test_recall_adapters" name="test_qq_adapter_no_msg_id" time="0.013" /><testcase classname="tests.test_recall_adapters" name="test_local_adapter_local_mark" time="0.001" /><testcase classname="tests.test_recall_adapters" name="test_wechat_adapter_unsupported" time="0.001" /><testcase classname="tests.test_recall_adapters" name="test_unknown_channel_falls_back_to_local" time="0.001" /><testcase classname="tests.test_recall_adapters" name="test_recall_manager_channel_isolation" time="0.013" /><testcase classname="tests.test_recall_adapters" name="test_recall_manager_local_outcome" time="0.015" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_desire_engine_uses_public_scheduler_trigger" time="0.004" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_push_event_engine_uses_public_scheduler_trigger" time="0.003" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_proactive_judge_reads_companion_desire_attribute" time="0.007" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_companion_manages_push_event_engine_lifecycle" time="0.003" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_inbound_message_records_event_engine_activity" time="0.005" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_idle_and_threshold_hooks_await_public_trigger" time="0.003" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_proactive_config_keeps_single_idle_care_definition" time="0.002" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_v2_delivery_attempts_qq_bubble_and_notification" time="0.004"><failure message="AssertionError: expected call not found.&#10;Expected: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care'})&#10;  Actual: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care', 'persona_id': 'yita_default'})&#10;&#10;pytest introspection follows:&#10;&#10;Args:&#10;assert ('chat_log', ...active', ...}) == ('chat_log', ...active', ...})&#10;  &#10;  At index 1 diff: {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care', 'persona_id': 'yita_default'} != {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care'}&#10;  Use -v to get more diff">self = &lt;MagicMock id='2081802994080'&gt;
+args = ('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', ...})
+kwargs = {}
+
+    def assert_called_with(self, /, *args, **kwargs):
+        """assert that the last call was made with the specified arguments.
+    
+        Raises an AssertionError if the args and keyword args passed in are
+        different to the last call to the mock."""
+        if self.call_args is None:
+            expected = self._format_mock_call_signature(args, kwargs)
+            actual = 'not called.'
+            error_message = ('expected call not found.\nExpected: %s\n  Actual: %s'
+                    % (expected, actual))
+            raise AssertionError(error_message)
+    
+        def _error_message():
+            msg = self._format_mock_failure_message(args, kwargs)
+            return msg
+        expected = self._call_matcher(_Call((args, kwargs), two=True))
+        actual = self._call_matcher(self.call_args)
+        if actual != expected:
+            cause = expected if isinstance(expected, Exception) else None
+&gt;           raise AssertionError(_error_message()) from cause
+E           AssertionError: expected call not found.
+E           Expected: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care'})
+E             Actual: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care', 'persona_id': 'yita_default'})
+
+C:\Python314\Lib\unittest\mock.py:985: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = &lt;MagicMock id='2081802994080'&gt;
+args = ('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', ...})
+kwargs = {}
+
+    def assert_called_once_with(self, /, *args, **kwargs):
+        """assert that the mock was called exactly once and that that call was
+        with the specified arguments."""
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to be called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+            raise AssertionError(msg)
+&gt;       return self.assert_called_with(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: expected call not found.
+E       Expected: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care'})
+E         Actual: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care', 'persona_id': 'yita_default'})
+E       
+E       pytest introspection follows:
+E       
+E       Args:
+E       assert ('chat_log', ...active', ...}) == ('chat_log', ...active', ...})
+E         
+E         At index 1 diff: {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care', 'persona_id': 'yita_default'} != {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care'}
+E         Use -v to get more diff
+
+C:\Python314\Lib\unittest\mock.py:997: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000001E4B0CD8280&gt;
+
+    @pytest.mark.asyncio
+    async def test_v2_delivery_attempts_qq_bubble_and_notification(monkeypatch):
+        from core import chat_events
+    
+        companion = _make_push_companion(flag_enabled=True)
+        emitted = MagicMock()
+        monkeypatch.setattr(chat_events, "emit", emitted)
+    
+        result = await companion._dispatch_push(
+            "idle_care",
+            {"template": "在干嘛。", "tone_hint": "warm"},
+        )
+    
+        assert result is True
+        companion.qq.send_message.assert_awaited_once_with(7, "记得休息。")
+&gt;       companion.db.insert.assert_called_once_with(
+            "chat_log",
+            {
+                "user_id": 7,
+                "role": "assistant",
+                "content": "记得休息。",
+                "msg_type": "proactive",
+                "route_mode": "PROACTIVE",
+                "scene": "idle_care",
+            },
+        )
+E       AssertionError: expected call not found.
+E       Expected: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care'})
+E         Actual: mock('chat_log', {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care', 'persona_id': 'yita_default'})
+E       
+E       pytest introspection follows:
+E       
+E       Args:
+E       assert ('chat_log', ...active', ...}) == ('chat_log', ...active', ...})
+E         
+E         At index 1 diff: {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care', 'persona_id': 'yita_default'} != {'user_id': 7, 'role': 'assistant', 'content': '记得休息。', 'msg_type': 'proactive', 'route_mode': 'PROACTIVE', 'scene': 'idle_care'}
+E         Use -v to get more diff
+
+tests\test_phase1_proactive_baseline.py:173: AssertionError</failure></testcase><testcase classname="tests.test_phase1_proactive_baseline" name="test_v2_delivery_succeeds_locally_when_qq_is_offline" time="0.003" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_v2_system_notification_can_be_disabled" time="0.025" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_flag_off_restores_legacy_qq_only_delivery" time="0.003" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_v2_qq_disconnect_does_not_pause_local_delivery" time="0.001" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_chat_renderer_ignores_events_without_a_chat_role" time="0.002" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_dynamic_island_consumes_flat_proactive_event_and_notifies_system" time="0.002" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_push_policy_blocks_quiet_non_exempt_scene" time="0.001" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_force_scene_bypasses_policy_and_judge" time="0.003" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_push_scheduler_exposes_status_contract_for_proactive_api" time="0.001" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_proactive_api_uses_public_scheduler_contract" time="0.003" /><testcase classname="tests.test_phase1_proactive_baseline" name="test_flag_off_qq_disconnect_keeps_legacy_pause_behavior" time="0.001" /><testcase classname="tests.test_phase8_proactive_feedback" name="test_push_policy_persists_frequency_state_across_restart" time="0.033" /><testcase classname="tests.test_phase8_proactive_feedback" name="test_negative_feedback_persists_scene_cooldown_across_restart" time="0.020" /><testcase classname="tests.test_phase8_proactive_feedback" name="test_mute_postpone_and_enabled_settings_persist" time="0.040" /><testcase classname="tests.test_phase8_proactive_feedback" name="test_flag_off_legacy_pause_preserves_persistent_policy_state" time="0.020" /><testcase classname="tests.test_phase8_proactive_feedback" name="test_proactive_policy_api_exposes_feedback_and_user_controls" time="0.017" /><testcase classname="tests.test_p1_c2_proactive_candidates" name="test_generates_all_deterministic_proactive_intent_types_without_model_calls" time="0.001" /><testcase classname="tests.test_p1_c2_proactive_candidates" name="test_due_care_followup_and_user_preference_rank_above_life_share" time="0.001" /><testcase classname="tests.test_p1_c2_proactive_candidates" name="test_recent_repetition_is_penalized_and_low_scores_are_filtered" time="0.001" /><testcase classname="tests.test_p1_c3_proactive_care_governance" name="test_due_care_followup_is_selected_and_marked_done" time="0.003" /><testcase classname="tests.test_p1_c3_proactive_care_governance" name="test_pending_topic_is_resumed_after_it_has_waited_long_enough" time="0.001" /><testcase classname="tests.test_p1_c3_proactive_care_governance" name="test_silence_greeting_uses_world_snapshot_context_without_external_calls" time="0.001"><failure message="AssertionError: assert 'dawn' == 'evening'&#10;  &#10;  - evening&#10;  + dawn">def test_silence_greeting_uses_world_snapshot_context_without_external_calls():
+        from core.companion_state import CompanionState
+        from core.proactive_care_governor import ProactiveCareGovernor
+        from core.world_simulation import WorldSimulation
+    
+        state = CompanionState()
+        world = WorldSimulation(clock=lambda: datetime(2026, 7, 28, 21, 30, tzinfo=timezone.utc))
+        snapshot = world.tick()
+    
+        governor = ProactiveCareGovernor(now=lambda: 10000.0, silence_after_seconds=3600.0)
+        decision = governor.plan_next(state, last_user_interaction_at=5000.0, world_snapshot=snapshot)
+    
+        assert decision is not None
+        assert decision.kind == "silence_greeting"
+        assert decision.topic == "quiet_check_in"
+&gt;       assert decision.metadata["world_phase"] == "evening"
+E       AssertionError: assert 'dawn' == 'evening'
+E         
+E         - evening
+E         + dawn
+
+tests\test_p1_c3_proactive_care_governance.py:54: AssertionError</failure></testcase><testcase classname="tests.test_p1_c3_proactive_care_governance" name="test_daily_limit_and_min_interval_block_extra_care" time="0.001" /><testcase classname="tests.test_p1_c3_proactive_care_governance" name="test_user_ignore_creates_backoff_before_next_attempt" time="0.001" /><testcase classname="tests.test_p1_c4_proactive_visual_scheduler" name="test_plan_generates_message_and_visual_request_for_visual_candidate" time="0.001" /><testcase classname="tests.test_p1_c4_proactive_visual_scheduler" name="test_plan_returns_text_only_when_candidate_is_non_visual" time="0.001" /><testcase classname="tests.test_p1_c4_proactive_visual_scheduler" name="test_same_world_snapshot_id_is_idempotent" time="0.001" /><testcase classname="tests.test_p1_c4_proactive_visual_scheduler" name="test_different_snapshot_allows_new_plan" time="0.001" /><testcase classname="tests.test_p1_c4_proactive_visual_scheduler" name="test_environment_object_never_mounts_reference_assets" time="0.001" /><testcase classname="tests.test_p1_c4_proactive_visual_scheduler" name="test_low_confidence_visual_intent_returns_text_without_provider" time="0.001" /><testcase classname="tests.test_p1_c4_proactive_visual_scheduler" name="test_user_ignore_backoff_suppresses_same_snapshot_replan" time="0.001" /><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_uses_effective_content_for_model_but_visible_content_for_persistence[FULL]" time="0.015" /><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_uses_effective_content_for_model_but_visible_content_for_persistence[BASIC]" time="0.014" /><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_uses_existing_request_turn_and_conversation_for_canonical_mirror" time="0.014" /><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_cancellation_stops_before_named_side_effect[before_model]" time="0.013" /><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_cancellation_stops_before_named_side_effect[after_model]" time="0.013"><failure message="Failed: DID NOT RAISE CancelledError">pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B51EEB90&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+boundary = 'after_model'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "boundary",
+        [
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+            "before_legacy_assistant",
+            "before_canonical",
+            "before_event",
+            "before_qq_enqueue",
+        ],
+    )
+    async def test_pipeline_cancellation_stops_before_named_side_effect(
+        pipeline_factory,
+        request_context,
+        boundary,
+    ):
+        deps = pipeline_factory("FULL")
+        token = _BoundaryToken(boundary)
+        qq_context = RequestContext(
+            request_id=request_context.request_id,
+            conversation_id=request_context.conversation_id,
+            turn_id=request_context.turn_id,
+            identity=RequestIdentity(
+                actor_id="actor_phase4",
+                channel="qq",
+                channel_account_id="3998874040",
+                user_id=3998874040,
+            ),
+            input_content=request_context.input_content,
+            effective_content=request_context.effective_content,
+            attachments=request_context.attachments,
+        )
+    
+        if boundary in {
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+        }:
+&gt;           with pytest.raises(asyncio.CancelledError):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE CancelledError
+
+tests\test_phase4_pipeline.py:294: Failed</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_cancellation_stops_before_named_side_effect[before_legacy_user]" time="0.039"><failure message="Failed: DID NOT RAISE CancelledError">pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B51EEF00&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+boundary = 'before_legacy_user'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "boundary",
+        [
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+            "before_legacy_assistant",
+            "before_canonical",
+            "before_event",
+            "before_qq_enqueue",
+        ],
+    )
+    async def test_pipeline_cancellation_stops_before_named_side_effect(
+        pipeline_factory,
+        request_context,
+        boundary,
+    ):
+        deps = pipeline_factory("FULL")
+        token = _BoundaryToken(boundary)
+        qq_context = RequestContext(
+            request_id=request_context.request_id,
+            conversation_id=request_context.conversation_id,
+            turn_id=request_context.turn_id,
+            identity=RequestIdentity(
+                actor_id="actor_phase4",
+                channel="qq",
+                channel_account_id="3998874040",
+                user_id=3998874040,
+            ),
+            input_content=request_context.input_content,
+            effective_content=request_context.effective_content,
+            attachments=request_context.attachments,
+        )
+    
+        if boundary in {
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+        }:
+&gt;           with pytest.raises(asyncio.CancelledError):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE CancelledError
+
+tests\test_phase4_pipeline.py:294: Failed</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_cancellation_stops_before_named_side_effect[before_legacy_assistant]" time="0.013"><failure message="Failed: DID NOT RAISE CancellationTooLate">pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B51EE8D0&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+boundary = 'before_legacy_assistant'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "boundary",
+        [
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+            "before_legacy_assistant",
+            "before_canonical",
+            "before_event",
+            "before_qq_enqueue",
+        ],
+    )
+    async def test_pipeline_cancellation_stops_before_named_side_effect(
+        pipeline_factory,
+        request_context,
+        boundary,
+    ):
+        deps = pipeline_factory("FULL")
+        token = _BoundaryToken(boundary)
+        qq_context = RequestContext(
+            request_id=request_context.request_id,
+            conversation_id=request_context.conversation_id,
+            turn_id=request_context.turn_id,
+            identity=RequestIdentity(
+                actor_id="actor_phase4",
+                channel="qq",
+                channel_account_id="3998874040",
+                user_id=3998874040,
+            ),
+            input_content=request_context.input_content,
+            effective_content=request_context.effective_content,
+            attachments=request_context.attachments,
+        )
+    
+        if boundary in {
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+        }:
+            with pytest.raises(asyncio.CancelledError):
+                await deps.pipeline.handle(
+                    request_context=qq_context,
+                    cancellation_token=token,
+                )
+        elif boundary in {"before_legacy_assistant", "before_canonical"}:
+&gt;           with pytest.raises(CancellationTooLate) as exc_info:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE CancellationTooLate
+
+tests\test_phase4_pipeline.py:300: Failed</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_cancellation_stops_before_named_side_effect[before_canonical]" time="0.011"><failure message="Failed: DID NOT RAISE CancellationTooLate">pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B5654BF0&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+boundary = 'before_canonical'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "boundary",
+        [
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+            "before_legacy_assistant",
+            "before_canonical",
+            "before_event",
+            "before_qq_enqueue",
+        ],
+    )
+    async def test_pipeline_cancellation_stops_before_named_side_effect(
+        pipeline_factory,
+        request_context,
+        boundary,
+    ):
+        deps = pipeline_factory("FULL")
+        token = _BoundaryToken(boundary)
+        qq_context = RequestContext(
+            request_id=request_context.request_id,
+            conversation_id=request_context.conversation_id,
+            turn_id=request_context.turn_id,
+            identity=RequestIdentity(
+                actor_id="actor_phase4",
+                channel="qq",
+                channel_account_id="3998874040",
+                user_id=3998874040,
+            ),
+            input_content=request_context.input_content,
+            effective_content=request_context.effective_content,
+            attachments=request_context.attachments,
+        )
+    
+        if boundary in {
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+        }:
+            with pytest.raises(asyncio.CancelledError):
+                await deps.pipeline.handle(
+                    request_context=qq_context,
+                    cancellation_token=token,
+                )
+        elif boundary in {"before_legacy_assistant", "before_canonical"}:
+&gt;           with pytest.raises(CancellationTooLate) as exc_info:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE CancellationTooLate
+
+tests\test_phase4_pipeline.py:300: Failed</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_cancellation_stops_before_named_side_effect[before_event]" time="0.013"><failure message="AssertionError: assert [('user', {'r...试...）', ...})] == []&#10;  &#10;  Left contains 2 more items, first extra item: ('user', {'role': 'user', 'id': 101, 'user_id': 3998874040, 'content': '用户可见文本', ...})&#10;  Use -v to get more diff">pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B56549E0&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+boundary = 'before_event'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "boundary",
+        [
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+            "before_legacy_assistant",
+            "before_canonical",
+            "before_event",
+            "before_qq_enqueue",
+        ],
+    )
+    async def test_pipeline_cancellation_stops_before_named_side_effect(
+        pipeline_factory,
+        request_context,
+        boundary,
+    ):
+        deps = pipeline_factory("FULL")
+        token = _BoundaryToken(boundary)
+        qq_context = RequestContext(
+            request_id=request_context.request_id,
+            conversation_id=request_context.conversation_id,
+            turn_id=request_context.turn_id,
+            identity=RequestIdentity(
+                actor_id="actor_phase4",
+                channel="qq",
+                channel_account_id="3998874040",
+                user_id=3998874040,
+            ),
+            input_content=request_context.input_content,
+            effective_content=request_context.effective_content,
+            attachments=request_context.attachments,
+        )
+    
+        if boundary in {
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+        }:
+            with pytest.raises(asyncio.CancelledError):
+                await deps.pipeline.handle(
+                    request_context=qq_context,
+                    cancellation_token=token,
+                )
+        elif boundary in {"before_legacy_assistant", "before_canonical"}:
+            with pytest.raises(CancellationTooLate) as exc_info:
+                await deps.pipeline.handle(
+                    request_context=qq_context,
+                    cancellation_token=token,
+                )
+            assert exc_info.value.reason == "terminal_side_effect_committed"
+        else:
+            result = await deps.pipeline.handle(
+                request_context=qq_context,
+                cancellation_token=token,
+            )
+            assert result["canonical_completed"] is True
+    
+        chat_rows = [row for table, row in deps.db.rows if table == "chat_log"]
+        if boundary in {"before_model", "after_model", "before_legacy_user"}:
+            assert chat_rows == []
+        if boundary == "before_legacy_assistant":
+            assert [row["role"] for row in chat_rows] == ["user"]
+        if boundary == "before_canonical":
+            assert [row["role"] for row in chat_rows] == [
+                "user",
+                "assistant",
+                "assistant",
+            ]
+            assert deps.conversation_repository.persisted == []
+        if boundary == "before_event":
+            assert deps.conversation_repository.persisted
+&gt;           assert deps.events == []
+E           AssertionError: assert [('user', {'r...试...）', ...})] == []
+E             
+E             Left contains 2 more items, first extra item: ('user', {'role': 'user', 'id': 101, 'user_id': 3998874040, 'content': '用户可见文本', ...})
+E             Use -v to get more diff
+
+tests\test_phase4_pipeline.py:327: AssertionError</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_pipeline_cancellation_stops_before_named_side_effect[before_qq_enqueue]" time="0.011"><failure message="AssertionError: Expected 'enqueue' to not have been called. Called 1 times.&#10;Calls: [call(OutgoingReply(user_id=3998874040, content='（伊塔暂时无法连接大脑，稍后再试...）', render_mode='plain', msg_id=102, reply_to_qq_message_id=0, attachments=[], cognition_id=1, batch_id=None, sequence_index=0))].&#10;&#10;pytest introspection follows:&#10;&#10;Args:&#10;assert (OutgoingRepl...nce_index=0),) == ()&#10;  &#10;  Left contains one more item: OutgoingReply(user_id=3998874040, content='（伊塔暂时无法连接大脑，稍后再试...）', render_mode='plain', msg_id=102, reply_to_qq_message_id=0, attachments=[], cognition_id=1, batch_id=None, sequence_index=0)&#10;  Use -v to get more diff">self = &lt;MagicMock name='mock.enqueue' id='2081804157680'&gt;
+
+    def assert_not_called(self):
+        """assert that the mock was never called.
+        """
+        if self.call_count != 0:
+            msg = ("Expected '%s' to not have been called. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+&gt;           raise AssertionError(msg)
+E           AssertionError: Expected 'enqueue' to not have been called. Called 1 times.
+E           Calls: [call(OutgoingReply(user_id=3998874040, content='（伊塔暂时无法连接大脑，稍后再试...）', render_mode='plain', msg_id=102, reply_to_qq_message_id=0, attachments=[], cognition_id=1, batch_id=None, sequence_index=0))].
+
+C:\Python314\Lib\unittest\mock.py:946: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B5655640&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+boundary = 'before_qq_enqueue'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "boundary",
+        [
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+            "before_legacy_assistant",
+            "before_canonical",
+            "before_event",
+            "before_qq_enqueue",
+        ],
+    )
+    async def test_pipeline_cancellation_stops_before_named_side_effect(
+        pipeline_factory,
+        request_context,
+        boundary,
+    ):
+        deps = pipeline_factory("FULL")
+        token = _BoundaryToken(boundary)
+        qq_context = RequestContext(
+            request_id=request_context.request_id,
+            conversation_id=request_context.conversation_id,
+            turn_id=request_context.turn_id,
+            identity=RequestIdentity(
+                actor_id="actor_phase4",
+                channel="qq",
+                channel_account_id="3998874040",
+                user_id=3998874040,
+            ),
+            input_content=request_context.input_content,
+            effective_content=request_context.effective_content,
+            attachments=request_context.attachments,
+        )
+    
+        if boundary in {
+            "before_model",
+            "after_model",
+            "before_legacy_user",
+        }:
+            with pytest.raises(asyncio.CancelledError):
+                await deps.pipeline.handle(
+                    request_context=qq_context,
+                    cancellation_token=token,
+                )
+        elif boundary in {"before_legacy_assistant", "before_canonical"}:
+            with pytest.raises(CancellationTooLate) as exc_info:
+                await deps.pipeline.handle(
+                    request_context=qq_context,
+                    cancellation_token=token,
+                )
+            assert exc_info.value.reason == "terminal_side_effect_committed"
+        else:
+            result = await deps.pipeline.handle(
+                request_context=qq_context,
+                cancellation_token=token,
+            )
+            assert result["canonical_completed"] is True
+    
+        chat_rows = [row for table, row in deps.db.rows if table == "chat_log"]
+        if boundary in {"before_model", "after_model", "before_legacy_user"}:
+            assert chat_rows == []
+        if boundary == "before_legacy_assistant":
+            assert [row["role"] for row in chat_rows] == ["user"]
+        if boundary == "before_canonical":
+            assert [row["role"] for row in chat_rows] == [
+                "user",
+                "assistant",
+                "assistant",
+            ]
+            assert deps.conversation_repository.persisted == []
+        if boundary == "before_event":
+            assert deps.conversation_repository.persisted
+            assert deps.events == []
+        if boundary == "before_qq_enqueue":
+            assert deps.events
+&gt;           deps.send_queue.enqueue.assert_not_called()
+E           AssertionError: Expected 'enqueue' to not have been called. Called 1 times.
+E           Calls: [call(OutgoingReply(user_id=3998874040, content='（伊塔暂时无法连接大脑，稍后再试...）', render_mode='plain', msg_id=102, reply_to_qq_message_id=0, attachments=[], cognition_id=1, batch_id=None, sequence_index=0))].
+E           
+E           pytest introspection follows:
+E           
+E           Args:
+E           assert (OutgoingRepl...nce_index=0),) == ()
+E             
+E             Left contains one more item: OutgoingReply(user_id=3998874040, content='（伊塔暂时无法连接大脑，稍后再试...）', render_mode='plain', msg_id=102, reply_to_qq_message_id=0, attachments=[], cognition_id=1, batch_id=None, sequence_index=0)
+E             Use -v to get more diff
+
+tests\test_phase4_pipeline.py:330: AssertionError</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_irreversible_terminal_side_effect_prevents_fake_cancelled" time="0.012"><failure message="Failed: DID NOT RAISE CancellationTooLate">pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B5656090&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+
+    @pytest.mark.asyncio
+    async def test_irreversible_terminal_side_effect_prevents_fake_cancelled(
+        pipeline_factory,
+        request_context,
+    ):
+        deps = pipeline_factory("FULL")
+    
+&gt;       with pytest.raises(CancellationTooLate) as exc_info:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CancellationTooLate
+
+tests\test_phase4_pipeline.py:340: Failed</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_request_events_include_complete_envelope_ids_and_monotonic_sequence" time="0.013"><failure message="AssertionError: assert {None} == {'group_phase4_pipeline'}&#10;  &#10;  Extra items in the left set:&#10;  None&#10;  Extra items in the right set:&#10;  'group_phase4_pipeline'&#10;  Use -v to get more diff">pipeline_factory = &lt;function pipeline_factory.&lt;locals&gt;.build at 0x000001E4B5657A00&gt;
+request_context = RequestContext(request_id='req_phase4_pipeline', conversation_id='conv_phase4_pipeline', turn_id='turn_phase4_pipeline...loads/phase4.txt', 'state': 'ready', 'size': 12, 'type': 'text/plain'}], reply_to_id=0, batch_id=None, persona_id=None)
+
+    @pytest.mark.asyncio
+    async def test_request_events_include_complete_envelope_ids_and_monotonic_sequence(
+        pipeline_factory,
+        request_context,
+    ):
+        deps = pipeline_factory("FULL")
+    
+        await deps.pipeline.handle(request_context=request_context)
+    
+        sequences = [payload["sequence"] for _event, payload in deps.events]
+        assert sequences == sorted(sequences)
+        assert sequences == list(range(1, len(sequences) + 1))
+        for _event, payload in deps.events:
+            assert payload["event_id"].startswith("event_")
+            assert payload["request_id"] == request_context.request_id
+            assert payload["conversation_id"] == request_context.conversation_id
+            assert payload["turn_id"] == request_context.turn_id
+            assert payload["message_id"]
+        assistant_payloads = [
+            payload for event, payload in deps.events if event == "assistant"
+        ]
+&gt;       assert {
+            payload["response_group_id"] for payload in assistant_payloads
+        } == {"group_phase4_pipeline"}
+E       AssertionError: assert {None} == {'group_phase4_pipeline'}
+E         
+E         Extra items in the left set:
+E         None
+E         Extra items in the right set:
+E         'group_phase4_pipeline'
+E         Use -v to get more diff
+
+tests\test_phase4_pipeline.py:375: AssertionError</failure></testcase><testcase classname="tests.test_phase4_pipeline" name="test_document_markdown_is_reextracted_from_trusted_upload_url" time="0.023" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_load_providers_puts_grok_before_openai" time="0.001" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_compose_brief_keeps_openai_for_article_generation" time="0.002" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_disable_model_calls_returns_local_stub_without_provider_call" time="0.003" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_summarize_news_batch_keeps_openai_for_article_generation" time="0.002" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_generate_image_uses_explicit_openai_compatible_provider" time="0.036" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_generate_image_without_explicit_provider_keeps_stub" time="0.016" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_generate_image_uses_image_gen_env_fallback" time="0.015" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_speak_text_uses_explicit_openai_compatible_tts_provider" time="0.012" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_speak_text_without_explicit_provider_keeps_stub" time="0.014" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_see_image_uses_explicit_openai_compatible_vision_provider" time="0.116" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_bge_embed_uses_explicit_openai_compatible_embedding_provider" time="0.015" /><testcase classname="tests.test_llm_caller_provider_routing" name="test_bge_embed_without_explicit_provider_keeps_stub" time="0.017" /><testcase classname="tests.test_persona_generator" name="test_extract_json_pure_dict" time="0.006" /><testcase classname="tests.test_persona_generator" name="test_extract_json_wrapped_in_prose" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_extract_json_garbage_returns_none" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_extract_json_empty_returns_none" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_sanitize_id_chinese_falls_back" time="0.007" /><testcase classname="tests.test_persona_generator" name="test_sanitize_id_cleans_special_chars" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_sanitize_id_short_kept" time="0.003" /><testcase classname="tests.test_persona_generator" name="test_sanitize_id_empty_uses_fallback" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_build_skeleton_has_system_level_fields" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_build_minimal_skeleton_has_recall_and_fields" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_merge_into_skeleton_overlays_partial_only" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_neutralize_skeleton_strips_yita_identity" time="0.005" /><testcase classname="tests.test_persona_generator" name="test_fallback_story_concepts_returns_pool" time="0.006" /><testcase classname="tests.test_persona_generator" name="test_generate_injects_selected_story_concept" time="0.030" /><testcase classname="tests.test_persona_generator" name="test_recommend_story_concepts_fallback_without_llm" time="0.007" /><testcase classname="tests.test_persona_generator" name="test_fallback_path_when_llm_disabled" time="0.025" /><testcase classname="tests.test_persona_generator" name="test_llm_success_path_builds_full_persona" time="0.028" /><testcase classname="tests.test_persona_generator" name="test_generate_never_leaks_yita_identity" time="0.027" /><testcase classname="tests.test_persona_generator" name="test_prompt_user_text_injects_user_name" time="0.003" /><testcase classname="tests.test_persona_generator" name="test_generation_task_end_to_end" time="0.056" /><testcase classname="tests.test_persona_generator" name="test_api_generate_endpoint" time="0.041" /><testcase classname="tests.test_persona_hub.TestPersonaValidator" name="test_invalid_id_format_fails" time="0.001" /><testcase classname="tests.test_persona_hub.TestPersonaValidator" name="test_invalid_permission_level_fails" time="0.001" /><testcase classname="tests.test_persona_hub.TestPersonaValidator" name="test_invalid_pleasure_range_fails" time="0.001" /><testcase classname="tests.test_persona_hub.TestPersonaValidator" name="test_missing_required_field_fails" time="0.001" /><testcase classname="tests.test_persona_hub.TestPersonaValidator" name="test_proactivity_out_of_range_fails" time="0.001" /><testcase classname="tests.test_persona_hub.TestPersonaValidator" name="test_valid_persona_passes" time="0.001" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_create_duplicate_fails" time="0.022" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_create_persona" time="0.028" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_default_persona_exists" time="0.020" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_delete_active_falls_back_to_default" time="0.031" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_delete_builtin_hides_not_removes" time="0.028" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_delete_persona" time="0.030" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_export_nonexistent_returns_none" time="0.021" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_export_persona" time="0.023" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_get_active_is_default" time="0.020" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_get_default_permission_level" time="0.026" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_get_emotion_baseline" time="0.021" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_get_emotion_thresholds" time="0.026" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_get_english_name_default" time="0.017" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_get_name_default" time="0.019" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_get_proactivity_level" time="0.019" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_persistence" time="0.033" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_switch_nonexistent_fails" time="0.019" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_switch_persona" time="0.025" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_update_nonexistent_fails" time="0.021" /><testcase classname="tests.test_persona_hub.TestPersonaManager" name="test_update_persona" time="0.027" /><testcase classname="tests.test_context_builder_internal.TestContextBuilderInternalState" name="test_full_mode_injects_internal_state" time="0.016" /><testcase classname="tests.test_context_builder_internal.TestContextBuilderInternalState" name="test_full_mode_skips_missing_need_type" time="0.012" /><testcase classname="tests.test_context_builder_internal.TestContextBuilderInternalState" name="test_none_snapshot_skips_injection" time="0.011" /><testcase classname="tests.test_context_builder_internal.TestContextBuilderInternalState" name="test_non_full_mode_skips_injection" time="0.006" /><testcase classname="tests.test_context_builder_internal.TestContextBuilderInternalState" name="test_basic_mode_skips_injection" time="0.001" /><testcase classname="tests.test_message_batcher.TestMessageBatcherSingleton" name="test_get_instance_returns_same_object" time="0.009" /><testcase classname="tests.test_message_batcher.TestMessageBatcherSingleton" name="test_synchronous_getter_returns_same_object" time="0.004" /><testcase classname="tests.test_message_batcher.TestMessageBatcherSingleton" name="test_reset_instance_creates_new_singleton" time="0.013" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_disabled_batching_sends_immediately" time="0.061" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_first_message_dispatches_immediately" time="0.062" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_buffer_flushed_on_batch_completed" time="0.120" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_conversation_isolation" time="0.123" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_flush_all_dispatches_all_buffered" time="0.125" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_batch_after_flush_starts_new_batch" time="0.636" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_callback_exception_does_not_break_other_callbacks" time="0.062" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_get_conversation_id_uses_channel_when_available" time="0.010" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_get_conversation_id_falls_back_to_source_user_id" time="0.009" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_active_batch_count_and_conversations" time="0.056" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_unregister_callback_removes_it" time="0.063" /><testcase classname="tests.test_message_batcher.TestMessageBatcherCore" name="test_max_size_then_next_message_starts_new_batch" time="0.248" /><testcase classname="tests.test_message_batcher_simple" name="test_all" time="0.001"><failure message="Failed: async def functions are not natively supported.&#10;You need to install a suitable plugin for your async framework, for example:&#10;  - anyio&#10;  - pytest-asyncio&#10;  - pytest-tornasync&#10;  - pytest-trio&#10;  - pytest-twisted">async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted</failure></testcase></testsuite></testsuites>

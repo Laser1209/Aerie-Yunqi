@@ -21,11 +21,14 @@ import json
 import logging
 import re
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+
+from core.image_production_log import record_image_stage
 
 logger = logging.getLogger(__name__)
 
@@ -308,15 +311,21 @@ class LLMCallerImageGenerationProvider:
         owner_id: str,
         metadata: dict[str, Any],
     ) -> ImageGenerationResult:
+        trace_id = str(metadata.get("idempotency_key") or metadata.get("candidate_id") or request_id)
         if self.brain is None or not hasattr(self.brain, "generate_image"):
+            record_image_stage(trace_id, "provider.completed", status="unavailable", operation="generate", error_code="brain_unavailable")
             return ImageGenerationResult(
                 status="unavailable",
                 provider_id=self.provider_id,
                 model=self.model,
                 error_code="brain_unavailable",
             )
+        started = time.perf_counter()
+        record_image_stage(trace_id, "provider.requested", status="started", operation="generate", provider=self.provider_id, model=self.model, prompt_chars=len(prompt))
         raw = self.brain.generate_image(prompt, metadata=metadata)
+        duration_ms = int((time.perf_counter() - started) * 1000)
         if not isinstance(raw, dict):
+            record_image_stage(trace_id, "provider.completed", status="failed", operation="generate", duration_ms=duration_ms, error_code="invalid_provider_response")
             return ImageGenerationResult(
                 status="failed",
                 provider_id=self.provider_id,
@@ -325,6 +334,7 @@ class LLMCallerImageGenerationProvider:
             )
         provider_id = str(raw.get("provider") or self.provider_id)
         model = str(raw.get("model") or self.model)
+        record_image_stage(trace_id, "provider.completed", status=str(raw.get("status") or "unknown"), operation="generate", duration_ms=duration_ms, provider=provider_id, model=model)
         output_path = raw.get("output_path") or raw.get("path")
         if output_path:
             path = Path(str(output_path))
@@ -377,7 +387,9 @@ class LLMCallerImageGenerationProvider:
         Best-effort: if the LLMCaller lacks an edit path or the provider cannot
         serve edits, we return ``unavailable`` (never raise).
         """
+        trace_id = str(metadata.get("idempotency_key") or metadata.get("candidate_id") or request_id)
         if self.brain is None or not hasattr(self.brain, "generate_image_edit"):
+            record_image_stage(trace_id, "provider.completed", status="unavailable", operation="edit", error_code="image_edit_unsupported")
             return ImageGenerationResult(
                 status="unavailable",
                 provider_id=self.provider_id,
@@ -385,6 +397,8 @@ class LLMCallerImageGenerationProvider:
                 error_code="image_edit_unsupported",
             )
         try:
+            started = time.perf_counter()
+            record_image_stage(trace_id, "provider.requested", status="started", operation="edit", provider=self.provider_id, model=self.model, prompt_chars=len(prompt), reference_bytes=len(image_bytes))
             raw = self.brain.generate_image_edit(
                 prompt,
                 image_bytes,
@@ -392,6 +406,7 @@ class LLMCallerImageGenerationProvider:
                 metadata=metadata,
             )
         except Exception:
+            record_image_stage(trace_id, "provider.completed", status="failed", operation="edit", duration_ms=int((time.perf_counter() - started) * 1000), error_code="image_edit_unsupported")
             return ImageGenerationResult(
                 status="unavailable",
                 provider_id=self.provider_id,
@@ -407,6 +422,7 @@ class LLMCallerImageGenerationProvider:
             )
         provider_id = str(raw.get("provider") or self.provider_id)
         model = str(raw.get("model") or self.model)
+        record_image_stage(trace_id, "provider.completed", status=str(raw.get("status") or "unknown"), operation="edit", duration_ms=int((time.perf_counter() - started) * 1000), provider=provider_id, model=model)
         image_bytes_b64 = raw.get("image_bytes_b64")
         if image_bytes_b64:
             try:
@@ -605,6 +621,14 @@ class ImageWorkflow:
 
         request_id = self.id_factory("imggen")
         safety = self.safety_policy.review_generation_prompt(prompt_text)
+        record_image_stage(
+            str(idem),
+            "safety.reviewed",
+            status=safety.status,
+            operation=operation,
+            reason_code=safety.reason_code,
+            categories=list(safety.categories),
+        )
         if not safety.allowed:
             result = self._base_result(
                 operation=operation,
@@ -720,6 +744,16 @@ class ImageWorkflow:
                 image_bytes=image_bytes,
                 mime_type=generated.mime_type or "image/png",
             )
+            record_image_stage(
+                str(metadata_payload.get("idempotency_key") or metadata_payload.get("candidate_id") or request_id),
+                "asset.persisted",
+                status="completed",
+                request_id=request_id,
+                asset_id=asset.get("asset_id"),
+                url=asset.get("url"),
+                sha256=asset.get("sha256"),
+                size_bytes=asset.get("size_bytes"),
+            )
         except Exception:
             logger.warning("generated image asset persistence failed", exc_info=True)
             result = self._base_result(
@@ -806,6 +840,14 @@ class ImageWorkflow:
             return result
 
         safety = self.safety_policy.review_generation_prompt(prompt_text)
+        record_image_stage(
+            str(idem),
+            "safety.reviewed",
+            status=safety.status,
+            operation=operation,
+            reason_code=safety.reason_code,
+            categories=list(safety.categories),
+        )
         if not safety.allowed:
             result = self._base_result(
                 operation=operation,
@@ -1195,6 +1237,24 @@ class ImageWorkflow:
                 "updated_at": result["updated_at"],
                 "result": result,
             }
+        )
+        metadata = result.get("delivery_plan") or {}
+        trace_id = str(idempotency_key or result.get("request_id") or "unknown")
+        if trace_id.startswith("world-image:"):
+            trace_id = trace_id[len("world-image:"):]
+        record_image_stage(
+            trace_id,
+            "workflow.completed",
+            status=str(result.get("status") or "unknown"),
+            operation=operation,
+            request_id=result.get("request_id"),
+            idempotency_key=idempotency_key,
+            provider=result.get("provider") or {},
+            safety=result.get("safety") or {},
+            asset=result.get("asset") or {},
+            delivery_plan=result.get("delivery_plan") or {},
+            side_effects=result.get("side_effects") or {},
+            error_code=result.get("error_code") or "",
         )
 
     def _build_image_observation(

@@ -73,6 +73,7 @@ class BriefDrawer {
     this._expandedData = null;
     this._displayName = "伊塔";
     this._nameLoaded = false;
+    this._activityTooltip = null;
     this._render();
     this._bindEsc();
     this._bindBus();
@@ -215,6 +216,10 @@ class BriefDrawer {
     bus.on("brief:open",  () => this.open());
     bus.on("brief:close", () => this.close());
     bus.on("brief:refresh", () => this.refresh());
+    window.addEventListener("aerie:persona-updated", () => {
+      this._nameLoaded = false;
+      this._ensureDisplayName(true);
+    });
   }
 
   /* lifecycle */
@@ -301,8 +306,8 @@ class BriefDrawer {
     btn.disabled = !!on;
   }
 
-  async _ensureDisplayName() {
-    if (this._nameLoaded) return;
+  async _ensureDisplayName(force) {
+    if (this._nameLoaded && !force) return;
     this._nameLoaded = true;
     try {
       const api = (window.aerie && window.aerie.api && window.aerie.api.request);
@@ -456,6 +461,10 @@ class BriefDrawer {
     /* 1. Greeting + date */
     fragment.appendChild(this._renderHeroGreeting(data));
 
+    if (this._expanded) {
+      fragment.appendChild(this._renderActivityHeatmapSection(data));
+    }
+
     /* 2. Todos (core section) */
     fragment.appendChild(this._renderTodoSection(data));
 
@@ -531,6 +540,203 @@ class BriefDrawer {
     `;
     return hero;
   }
+
+  _renderActivityHeatmapSection(data) {
+    const days = this._buildActivityDays(data);
+    const section = _el("section", { class: "brief-drawer__activity", "aria-label": "年度活跃热力图" });
+    const activeDays = days.filter((day) => day.value > 0).length;
+    const totalMessages = days.reduce((sum, day) => sum + day.totalMessages, 0);
+    const totalChats = days.reduce((sum, day) => sum + day.aiMessages, 0);
+    section.innerHTML = `
+      <div class="brief-drawer__activity-head">
+        <div>
+          <div class="brief-drawer__activity-kicker">ACTIVITY HEATMAP</div>
+          <div class="brief-drawer__activity-range">${_esc(days[0].date)} – ${_esc(days[days.length - 1].date)}</div>
+        </div>
+        <div class="brief-drawer__activity-stats">
+          <span><strong>${totalMessages.toLocaleString()}</strong> 消息</span>
+          <span><strong>${activeDays}</strong> 活跃天</span>
+          <span><strong>${totalChats}</strong> 次和 ${_esc(this._displayName)} 聊天</span>
+        </div>
+      </div>
+      <div class="brief-drawer__activity-scroll">
+        <div class="brief-drawer__activity-weekdays"><span>周一</span><span></span><span>周三</span><span></span><span>周五</span><span></span><span>周日</span></div>
+        <div class="brief-drawer__activity-map">
+          <div class="brief-drawer__activity-months">${this._renderActivityMonths(days)}</div>
+          <div class="brief-drawer__activity-grid"></div>
+        </div>
+      </div>
+      <div class="brief-drawer__activity-footer">
+        <span>少</span><span class="brief-drawer__activity-legend"><i></i><i></i><i></i><i></i><i></i></span><span>多</span>
+      </div>
+      <div class="brief-drawer__activity-detail" aria-live="polite"></div>
+    `;
+    const grid = section.querySelector(".brief-drawer__activity-grid");
+    days.forEach((day, index) => {
+      const cell = _el("button", {
+        class: `brief-drawer__activity-cell brief-drawer__activity-cell--${day.level}`,
+        type: "button",
+        "aria-label": `${day.date}，和 ${this._displayName} 聊了 ${day.aiMessages} 次，消息 ${day.totalMessages} 条`,
+        "data-index": String(index),
+      });
+      grid.appendChild(cell);
+    });
+    this._bindActivityHeatmap(section, days);
+    this._renderActivityDayDetail(days[days.length - 1], section.querySelector(".brief-drawer__activity-detail"));
+    return section;
+  }
+
+  _buildActivityDays(data) {
+    const byDate = new Map();
+    const messageSeries = (((data || {}).messages || {}).daily_series) || [];
+    for (const row of messageSeries) {
+      const date = String(row.date || "").slice(0, 10);
+      if (!date) continue;
+      byDate.set(date, {
+        userMessages: Number(row.user_messages || 0),
+        aiMessages: Number(row.ai_messages || 0),
+        totalMessages: Number(row.total_messages || 0),
+        events: [],
+      });
+    }
+    const timeline = (((data || {}).calendar || {}).items) || [];
+    for (const item of timeline) {
+      const date = String(item.start_time || "").slice(0, 10);
+      if (!date) continue;
+      const current = byDate.get(date) || { userMessages: 0, aiMessages: 0, totalMessages: 0, events: [] };
+      current.events.push(item);
+      byDate.set(date, current);
+    }
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(end.getDate() - 370);
+    const days = [];
+    for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+      const key = this._dateKey(date);
+      const found = byDate.get(key) || { userMessages: 0, aiMessages: 0, totalMessages: 0, events: [] };
+      const value = found.totalMessages + found.events.length * 12;
+      days.push(Object.assign({ date: key, value, level: this._activityLevel(value) }, found));
+    }
+    return days;
+  }
+
+  _renderActivityMonths(days) {
+    let last = "";
+    return days.map((day) => {
+      const month = day.date.slice(5, 7);
+      if (month === last) return "<span></span>";
+      last = month;
+      return `<span>${Number(month)}月</span>`;
+    }).join("");
+  }
+
+  _activityLevel(value) {
+    if (value >= 90) return 4;
+    if (value >= 55) return 3;
+    if (value >= 20) return 2;
+    if (value > 0) return 1;
+    return 0;
+  }
+
+  _dateKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  _bindActivityHeatmap(section, days) {
+    const detailEl = section.querySelector(".brief-drawer__activity-detail");
+    const cells = section.querySelectorAll(".brief-drawer__activity-cell");
+    const tooltip = this._ensureActivityTooltip();
+    cells.forEach((cell) => {
+      const day = days[Number(cell.dataset.index) || 0];
+      cell.addEventListener("mouseenter", (event) => this._showActivityTooltip(event, day, tooltip));
+      cell.addEventListener("mousemove", (event) => this._positionActivityTooltip(event, tooltip));
+      cell.addEventListener("mouseleave", () => this._hideActivityTooltip(tooltip));
+      cell.addEventListener("focus", () => this._showActivityTooltipForCell(cell, day, tooltip));
+      cell.addEventListener("blur", () => this._hideActivityTooltip(tooltip));
+      cell.addEventListener("click", () => {
+        cells.forEach((item) => item.classList.remove("is-selected"));
+        cell.classList.add("is-selected");
+        this._renderActivityDayDetail(day, detailEl);
+      });
+    });
+    const lastCell = cells[cells.length - 1];
+    if (lastCell) lastCell.classList.add("is-selected");
+  }
+
+  _ensureActivityTooltip() {
+    if (this._activityTooltip && document.body.contains(this._activityTooltip)) return this._activityTooltip;
+    this._activityTooltip = _el("div", { class: "brief-drawer__activity-tooltip", role: "tooltip", "aria-hidden": "true" });
+    document.body.appendChild(this._activityTooltip);
+    return this._activityTooltip;
+  }
+
+  _showActivityTooltip(event, day, tooltip) {
+    tooltip.innerHTML = `<div class="brief-drawer__activity-tooltip-date">${_esc(day.date.slice(5).replace("-", " 月 "))} 日</div><div class="brief-drawer__activity-tooltip-main">和 ${_esc(this._displayName)} 聊了 <strong>${day.aiMessages}</strong> 次</div><div class="brief-drawer__activity-tooltip-sub">会议 ${this._countMeetingEvents(day)} 场 · 学习 ${this._countLearningEvents(day)} 条 · 消息 ${day.totalMessages} 条</div>`;
+    tooltip.classList.add("is-visible");
+    tooltip.setAttribute("aria-hidden", "false");
+    this._positionActivityTooltip(event, tooltip);
+  }
+
+  _showActivityTooltipForCell(cell, day, tooltip) {
+    const rect = cell.getBoundingClientRect();
+    this._showActivityTooltip({ clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }, day, tooltip);
+  }
+
+  _positionActivityTooltip(event, tooltip) {
+    const rect = tooltip.getBoundingClientRect();
+    const pad = 12;
+    const offset = 16;
+    const maxLeft = window.innerWidth - rect.width - pad;
+    const maxTop = window.innerHeight - rect.height - pad;
+    const left = Math.min(Math.max(event.clientX - rect.width - offset, pad), maxLeft);
+    const top = Math.min(Math.max(event.clientY - rect.height - offset, pad), maxTop);
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
+  _hideActivityTooltip(tooltip) {
+    tooltip.classList.remove("is-visible");
+    tooltip.setAttribute("aria-hidden", "true");
+  }
+
+  _renderActivityDayDetail(day, detailEl) {
+    if (!detailEl || !day) return;
+    const meetings = day.events.filter((item) => this._isMeetingEvent(item));
+    const learnings = day.events.filter((item) => this._isLearningEvent(item));
+    const meetingText = meetings.length ? `开了 ${meetings.map((item) => item.title).slice(0, 2).join("、")}` : "没有会议记录";
+    const learningText = learnings.length ? `学了 ${learnings.map((item) => item.title).slice(0, 2).join("、")}` : "没有学习记录";
+    detailEl.innerHTML = `
+      <div class="brief-drawer__activity-detail-main">
+        <div class="brief-drawer__activity-detail-date">${_esc(day.date)}</div>
+        <div class="brief-drawer__activity-detail-title">和 ${_esc(this._displayName)} 聊了 ${day.aiMessages} 次</div>
+        <div class="brief-drawer__activity-detail-summary">${_esc(meetingText)}，${_esc(learningText)}。</div>
+        <div class="brief-drawer__activity-detail-pills">
+          <span>会议 ${meetings.length}</span><span>学习 ${learnings.length}</span><span>消息 ${day.totalMessages}</span><span>人设 ${_esc(this._displayName)}</span>
+        </div>
+      </div>
+      <div class="brief-drawer__activity-detail-list">
+        ${this._renderActivityDetailItems(day, meetings, learnings)}
+      </div>
+    `;
+  }
+
+  _renderActivityDetailItems(day, meetings, learnings) {
+    const items = [
+      { title: meetings.length ? `开了 ${meetings[0].title}` : "没有会议记录", note: meetings.length ? (meetings[0].description || "来自日历时间线") : "这天日历里没有会议类事件", time: meetings[0] ? this._timeOf(meetings[0]) : "—" },
+      { title: learnings.length ? `学了 ${learnings[0].title}` : "没有学习记录", note: learnings.length ? (learnings[0].description || "来自学习/阅读类日程") : "可在日历里记录学习事项", time: learnings[0] ? this._timeOf(learnings[0]) : "—" },
+      { title: `和 ${this._displayName} 聊了 ${day.aiMessages} 次`, note: `当天消息 ${day.totalMessages} 条`, time: "全天" },
+    ];
+    return items.map((item) => `<div class="brief-drawer__activity-detail-item"><span></span><div><strong>${_esc(item.title)}</strong><em>${_esc(item.note)}</em></div><b>${_esc(item.time)}</b></div>`).join("");
+  }
+
+  _countMeetingEvents(day) { return day.events.filter((item) => this._isMeetingEvent(item)).length; }
+  _countLearningEvents(day) { return day.events.filter((item) => this._isLearningEvent(item)).length; }
+  _isMeetingEvent(item) { return /会议|会|meeting|评审|同步|复盘/i.test(`${item.title || ""} ${item.description || ""}`); }
+  _isLearningEvent(item) { return /学习|学|阅读|读书|课程|研究|笔记|learn|study|read/i.test(`${item.title || ""} ${item.description || ""}`); }
+  _timeOf(item) { return item && item.all_day ? "全天" : String((item && item.start_time) || "").split("T")[1]?.slice(0, 5) || "全天"; }
 
   /* ── Section 2: Todos (core) ──────────────────────── */
   _renderTodoSection(data) {
@@ -1048,6 +1254,9 @@ class BriefDrawer {
       const data = (r && r.data && r.data.brief) ? r.data.brief
                   : (r && r.data) ? r.data
                   : {};
+      const activity = await this._fetchActivityData();
+      data.calendar = activity.calendar;
+      data.messages = activity.messages;
       this._expandedData = Object.assign({}, data, { _ts: Date.now() });
       this._expandedData._limit = 8;
       this._renderData(this._expandedData);
@@ -1055,6 +1264,30 @@ class BriefDrawer {
       console.warn("brief-drawer: expand failed", e);
       this._renderError("展开失败 / Expand failed: " + (e.message || String(e)));
       this._setExpanded(false, false);
+    }
+  }
+
+  async _fetchActivityData() {
+    const api = this._api();
+    if (!api) return { calendar: { items: [] }, messages: { daily_series: [] } };
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(end.getDate() - 370);
+    const startParam = `${this._dateKey(start)}T00:00:00`;
+    const endParam = `${this._dateKey(end)}T23:59:59`;
+    const empty = { calendar: { items: [] }, messages: { daily_series: [] } };
+    try {
+      const [calendarRes, messageRes] = await Promise.all([
+        api({ method: "GET", path: `/api/calendar/timeline?start=${encodeURIComponent(startParam)}&end=${encodeURIComponent(endParam)}` }),
+        api({ method: "GET", path: "/api/stats/messages/daily?days=366" }),
+      ]);
+      return {
+        calendar: (calendarRes && calendarRes.data) || empty.calendar,
+        messages: (messageRes && messageRes.data) || empty.messages,
+      };
+    } catch (e) {
+      console.warn("brief-drawer: activity fetch failed", e);
+      return empty;
     }
   }
 

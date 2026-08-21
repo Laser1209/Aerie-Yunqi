@@ -2216,22 +2216,39 @@ def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
         if not (8 <= len(idempotency_key) <= 128):
             idempotency_key = f"aerie-{uuid.uuid4().hex}"
         try:
-            response = httpx.post(
-                _openai_compatible_url(base_url, "images/generations"),
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "Idempotency-Key": idempotency_key,
-                },
-                json={
-                    "model": model,
-                    "prompt": prompt or "",
-                    "n": 1,
-                    "size": size,
-                    "response_format": "b64_json",
-                },
-                timeout=_provider_timeout_seconds(),
-            )
+            response = None
+            for attempt in range(2):
+                try:
+                    response = httpx.post(
+                        _openai_compatible_url(base_url, "images/generations"),
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                            "Idempotency-Key": idempotency_key,
+                        },
+                        json={
+                            "model": model,
+                            "prompt": prompt or "",
+                            "n": 1,
+                            "size": size,
+                            "response_format": "b64_json",
+                        },
+                        timeout=_provider_timeout_seconds(),
+                        trust_env=False,
+                    )
+                    break
+                except (
+                    httpx.ConnectError,
+                    httpx.ReadError,
+                    httpx.RemoteProtocolError,
+                    httpx.TimeoutException,
+                ):
+                    if attempt >= 1:
+                        raise
+                    logger.warning("image provider transient failure; retrying once", exc_info=True)
+                    time.sleep(1.0)
+            if response is None:
+                raise RuntimeError("image provider returned no response")
             response.raise_for_status()
             payload = response.json()
             data = payload.get("data") if isinstance(payload, dict) else None

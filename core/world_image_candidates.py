@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from core.paths import data_dir
+from core.image_production_log import record_image_stage
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +344,19 @@ class WorldImageCandidateConsumer:
                 acked=False,
             )
 
+        trace_id = str(candidate.get("idempotency_key") or candidate.get("candidate_id") or "unknown")
+        record_image_stage(
+            trace_id,
+            "candidate.created",
+            status="accepted",
+            candidate_id=candidate.get("candidate_id"),
+            scene=candidate.get("scene"),
+            channel=candidate.get("channel"),
+            target=candidate.get("target"),
+            prompt_key=candidate.get("prompt_key"),
+            reason_code=candidate.get("reason_code"),
+        )
+
         existing = self.store.get(candidate["idempotency_key"])
         if existing:
             acked = await self._ack(_event_sequence(event))
@@ -491,10 +505,23 @@ class WorldImageCandidateConsumer:
             workflow_result=workflow_result,
         )
         if completed:
-            await self._deliver(workflow_result, candidate)
+            delivered = await self._deliver(workflow_result, candidate)
             self._record_push(candidate["scene"])
             self._record_budget("proactive", candidate)
+        else:
+            delivered = False
         acked = await self._ack(_event_sequence(event))
+        record_image_stage(
+            trace_id,
+            "delivery.completed",
+            status="success" if delivered else "failed",
+            channel=candidate.get("channel"),
+            target=candidate.get("target"),
+            workflow_status=workflow_status,
+            delivered=delivered,
+            acked=acked,
+            delivery_plan_id=(workflow_result.get("delivery_plan") or {}).get("delivery_plan_id"),
+        )
         return self._result(
             status=status,
             event=event,
@@ -821,11 +848,28 @@ class WorldImageCandidateConsumer:
         """
         prompt_key = str(candidate.get("prompt_key") or "")
         use_edit = self._image_edit_enabled() and prompt_key in _ROLE_EDIT_PROMPT_KEYS
+        trace_id = str(candidate.get("idempotency_key") or candidate.get("candidate_id") or "unknown")
+        record_image_stage(
+            trace_id,
+            "workflow.path_selected",
+            status="completed",
+            operation="image_edit" if use_edit else "image_generation",
+            prompt_key=prompt_key,
+            reference_assets=candidate.get("reference_assets") or [],
+        )
         if not use_edit:
             return self._call_generate_image(prompt, candidate)
         reference_assets = candidate.get("reference_assets") or list(_DEFAULT_EDIT_REFERENCE)
         edit = self._call_generate_image_edit(prompt, candidate, reference_assets)
         if edit.get("status") != "completed":
+            record_image_stage(
+                trace_id,
+                "workflow.edit_fallback",
+                status="fallback",
+                from_operation="image_edit",
+                to_operation="image_generation",
+                error_code=edit.get("error_code") or edit.get("status"),
+            )
             logger.info(
                 "[WorldImage] role edit fell back to txt2img prompt_key=%s code=%s",
                 prompt_key, edit.get("error_code") or edit.get("status"),

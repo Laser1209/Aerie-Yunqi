@@ -37,5 +37,5 @@ test("NapCat panel renders stable error states and only stops owned processes", 
   assert.match(panel, /status\.owned\s*!==\s*true/);
   assert.match(panel, /Aerie 不会停止外部启动的 NapCat/);
   assert.match(css, /\.phase-dot--error/);
-  assert.match(css, /\.status-qq-badge--error/);
+  assert.match(css, /\.external-status-badge--error/);
 });

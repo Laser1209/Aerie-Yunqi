@@ -10,7 +10,7 @@
 | `communication/` | 源码 | QQ 客户端、消息路由、发送队列、消息分割、撤回 | ✅ |
 | `config/` | 配置 | persona / behavior / settings / proactive / loader | ✅ |
 | `electron/` | 子工程 | Electron 主/渲染进程、构建脚本、theme | ✅ |
-| `NapCat/` | 子工程 | 第三方 QQ 协议外壳，由 launcher-user.bat 启动 | ❌ 子模块 / .gitignore |
+| `data/qq_engine/` | 运行资源 | QQ 引擎下载与解压落位目录 | ❌ 运行态 |
 | `skills/` | 技能 | `local/` + `data/` + `cloud/` 三类 skill 骨架 | ✅ |
 | `data/` | 运行时 | SQLite、`backups/`（仅 config 备份 zip） | ❌ *.db / *.zip |
 | `logs/` | 运行时 | 启动 / 验证 / batch 验证 / brief 抓取日志 | ❌ *.log |
@@ -55,7 +55,7 @@
 | `documents/Ita/` | 伊塔人格设计、6.0/8.0/9.0 演变 |
 | `documents/Agent_v/` | 第三方模型与 API 资料 |
 | `documents/ERROR/` | 错误排查记录 |
-| `documents/NapCat_history/` | NapCat 历史会话 |
+| `documents/NapCat_history/` | 旧 QQ 引擎历史会话 |
 | `.trae/documents/` | Trae IDE 内部 plan / spec / report / self-review |
 | `.trae/specs/` | Trae IDE 内部 spec 模板产物 |
 | `.trae/rules/` | 工作区级 AI 规则（如 git-commit-message） |
@@ -109,7 +109,7 @@
 | `core/brain.py` | LLM 多 provider 路由 |
 | `core/skill_loader.py` + `core/skill_router.py` | 技能注册与路由 |
 | `electron/src/main.js` + `preload.js` | 渲染进程安全边界 |
-| `NapCat/launcher-user.bat` | 必须经此启动以保留环境变量 |
+| `data/qq_engine/` | QQ 引擎下载与解压落位目录 |
 | `skills/{local,data,cloud}/*/SKILL.md` | 技能元数据，frontmatter 不可改 |
 
 ## 7. 变更记录

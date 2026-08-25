@@ -150,7 +150,6 @@ window.addEventListener("DOMContentLoaded", () => {
   const statusText = document.getElementById("status-text");
   const statusDot = document.getElementById("status-dot");
   const statsBackend = document.getElementById("stats-backend");
-  const statsQQ = document.getElementById("stats-qq");
   const statsTokens = document.getElementById("stats-tokens");
   const statsCalls = document.getElementById("stats-calls");
 

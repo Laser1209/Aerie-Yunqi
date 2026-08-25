@@ -20,10 +20,10 @@ Status: [OPEN]
 
 ## Evidence Log
 - Pre-fix evidence: manually starting packaged Python backend from `dist-v1/win-unpacked/resources/python` failed with `ModuleNotFoundError: No module named 'communication'`, proving hypothesis 1.
-- Fix applied: package runtime source now includes `communication/**`, `knowledge/**`, `memory/**`, `emotion/**`, `persona/**`, `scheduler/**`, selected `tools/*`, `skills/local`, `skills/data`, `douyin-mcp/src/douyin_creator_mcp/**`, and `NapCat/NapCat.Shell/**`.
-- Data hygiene: package filters continue excluding `data/**`, `logs/**`, `NapCat/NapCat.Shell/cache/**`, `NapCat/NapCat.Shell/config/**`, `douyin-mcp/data/**`, and `douyin-mcp/.env`.
+- Fix applied: package runtime source now includes `communication/**`, `knowledge/**`, `memory/**`, `emotion/**`, `persona/**`, `scheduler/**`, selected `tools/*`, `skills/local`, `skills/data`, and `douyin-mcp/src/douyin_creator_mcp/**`.
+- Data hygiene: package filters continue excluding `data/**`, `logs/**`, `douyin-mcp/data/**`, and `douyin-mcp/.env`.
 - Post-fix resource evidence: final artifacts exist at `electron/dist-final/Aerie · 云栖-0.1.0-beta.1-Setup.exe` (187.4 MB) and `electron/dist-final/Aerie · 云栖-0.1.0-beta.1-portable.exe` (187.2 MB).
-- Post-fix resource probes: `.venv/Scripts/python.exe`, `communication/message.py`, `knowledge/kb.py`, `memory/memory_store.py`, and `NapCat/NapCat.Shell/NapCatWinBootMain.exe` all exist in `dist-final/win-unpacked/resources/python`.
+- Post-fix resource probes: `.venv/Scripts/python.exe`, `communication/message.py`, `knowledge/kb.py`, and `memory/memory_store.py` all exist in `dist-final/win-unpacked/resources/python`.
 - Post-fix backend evidence: `GET http://127.0.0.1:7890/api/health` returned HTTP 200 with `status: healthy` and backend component healthy.
 - Post-fix Electron evidence: launched packaged app with `--remote-debugging-port=9222`; CDP tab list showed `Aerie · 云栖` and renderer text included `后端已连接`.
 

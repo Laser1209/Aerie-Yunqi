@@ -328,6 +328,25 @@ class TestPipelineHandle:
         pipeline.send_queue.enqueue.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_handle_ilink_message_does_not_copy_context_token(self, pipeline):
+        msg = IncomingMessage(
+            user_id=3998874040,
+            content="你好",
+            source="ilink",
+            channel="ilink",
+            channel_account_id="wx-owner",
+            context={"token": "context-1"},
+        )
+
+        await pipeline.handle(msg)
+
+        pipeline.send_queue.enqueue.assert_called_once()
+        reply = pipeline.send_queue.enqueue.call_args.args[0]
+        assert reply.channel == "ilink"
+        assert reply.channel_account_id == "wx-owner"
+        assert reply.context == {}
+
+    @pytest.mark.asyncio
     async def test_basic_path_scopes_history_and_persistence_to_channel_identity(
         self,
         pipeline,
@@ -406,6 +425,56 @@ class TestPipelineHandle:
         pipeline.brain.chat.assert_awaited_once()
         assert pipeline.brain.chat.await_args.kwargs["tools"] is None
         pipeline.send_queue.enqueue.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_basic_ilink_reply_does_not_copy_context_token(self, pipeline):
+        pipeline.router.route.return_value = "BASIC"
+        msg = IncomingMessage(
+            user_id=3998874040,
+            content="微信轻量消息",
+            source="ilink",
+            channel="ilink",
+            channel_account_id="wx-owner",
+            context={"token": "context-1"},
+        )
+
+        await pipeline.handle(msg)
+
+        reply = pipeline.send_queue.enqueue.call_args.args[0]
+        assert reply.channel == "ilink"
+        assert reply.channel_account_id == "wx-owner"
+        assert reply.context == {}
+
+    @pytest.mark.asyncio
+    async def test_batch_ilink_replies_do_not_copy_context_token(self, pipeline):
+        pipeline.brain.chat = AsyncMock(return_value=MagicMock(
+            text="=== 回复 1 ===\n回复一\n=== 回复 2 ===\n回复二",
+            provider="test",
+            model="test",
+            tokens_prompt=10,
+            tokens_completion=5,
+            total_tokens=15,
+            duration_ms=1,
+        ))
+        messages = [
+            IncomingMessage(
+                user_id=3998874040,
+                content=content,
+                source="ilink",
+                channel="ilink",
+                channel_account_id="wx-owner",
+                context={"token": token},
+            )
+            for content, token in (("消息一", "context-1"), ("消息二", "context-2"))
+        ]
+
+        await pipeline.handle(messages=messages, batch_id="batch-ilink")
+
+        replies = pipeline.send_queue.enqueue_batch.call_args.args[0]
+        assert len(replies) == 2
+        assert all(reply.channel == "ilink" for reply in replies)
+        assert all(reply.channel_account_id == "wx-owner" for reply in replies)
+        assert all(reply.context == {} for reply in replies)
 
     @pytest.mark.asyncio
     async def test_handle_saves_to_db(self, pipeline):

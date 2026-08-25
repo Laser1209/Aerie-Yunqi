@@ -14,24 +14,12 @@ class NapcatPanel {
       qrZone: document.getElementById("napcat-qr-zone"),
       qrImg: document.getElementById("napcat-qr-img"),
       qrRefresh: document.getElementById("napcat-qr-refresh"),
-      statsQQ: document.getElementById("stats-qq"),
       qqBadge: document.getElementById("status-qq-badge"),
     };
     this._interval = null;
     this._qrLoading = false;
     this._bindEvents();
-    this._bindQQToggle();
     this._startPoll();
-  }
-
-  _bindQQToggle() {
-    const toggle = document.getElementById("status-qq-toggle");
-    const section = document.getElementById("panel-status")?.querySelector(".status-qq-section");
-    if (toggle && section) {
-      toggle.addEventListener("click", () => {
-        section.classList.toggle("collapsed");
-      });
-    }
   }
 
   _bindEvents() {
@@ -110,11 +98,8 @@ class NapcatPanel {
       this._el.phaseText.textContent = phaseText;
     }
 
-    if (this._el.statsQQ) {
-      this._el.statsQQ.textContent = phase === "connected" ? "已连接" : phaseText;
-    }
     if (this._el.qqBadge) {
-      this._el.qqBadge.className = "status-qq-badge status-qq-badge--" + phase;
+      this._el.qqBadge.className = "external-status-badge external-status-badge--" + phase;
       this._el.qqBadge.textContent = phaseText;
     }
 

@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld("aerie", {
       ipcRenderer.on("napcat:event", (_event, data) => cb(data));
     },
   },
+  ilinkGateway: {
+    getStatus: () => ipcRenderer.invoke("ilinkGateway:getStatus"),
+    start: () => ipcRenderer.invoke("ilinkGateway:start"),
+    stop: () => ipcRenderer.invoke("ilinkGateway:stop"),
+  },
   electron: {
     onHealth: (cb) => {
       ipcRenderer.on("backend:health", (_event, data) => cb(data));

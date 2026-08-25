@@ -44,6 +44,9 @@ from core.emotion_engine import EmotionEngine
 from core.emotion_state_store import EmotionStateStore
 from core.emotion_threshold import get_threshold_engine
 from core.internal_state import InternalStateEngine
+from core.ilink_credentials import ILinkCredentialsStore
+from core.ilink_gateway import ILinkGateway
+from core.ilink_state import ILinkStateStore
 from core.feature_flags import FeatureFlags
 from core.ids import generate_id
 from core.image_production_log import record_image_stage
@@ -941,6 +944,13 @@ class Companion:
         qq_cfg.setdefault("token", get_gateway_token(self.settings))
         primary_selection = self.get_primary_user_selection()
         self.qq = QQClient(qq_cfg)
+        self.ilink_state_store = ILinkStateStore()
+        self.ilink_gateway = ILinkGateway(
+            ILinkCredentialsStore(),
+            self.ilink_state_store,
+            primary_selection.user_id if primary_selection else -1,
+            self._on_ilink_message,
+        )
         # v13.9: QQ whitelist manager
         self.qq_whitelist = QQWhitelistManager(self.db)
         self.qq.set_whitelist(self.qq_whitelist)
@@ -963,6 +973,7 @@ class Companion:
             # pacing_decisions back to the originating trace.
             cognition=self.cognition,
             on_reply_sent=self._on_qq_reply_sent,
+            channel_senders={"ilink": self._send_to_ilink},
         )
 
         # Pipeline
@@ -1203,6 +1214,7 @@ class Companion:
 
         self.queue.start()
         mark_step("queue", "done", "消息发送队列")
+        await self._start_ilink_gateway()
         if self.chat_request_worker is not None:
             try:
                 await self.chat_request_worker.start()
@@ -2104,6 +2116,7 @@ class Companion:
             await self.queue.stop()
         except Exception:
             pass
+        await self._stop_ilink_gateway()
         try:
             await self.qq.stop()
         except Exception:
@@ -2325,6 +2338,27 @@ class Companion:
     async def _send_to_qq(self, reply: OutgoingReply) -> bool:
         return await self.qq.send_message(reply.user_id, reply.content)
 
+    async def _send_to_ilink(self, reply: OutgoingReply) -> bool:
+        return await self.ilink_gateway.send_text(
+            reply.channel_account_id,
+            reply.content,
+        )
+
+    async def _start_ilink_gateway(self) -> None:
+        if not bool((self.settings.get("ilink", {}) or {}).get("enabled", False)):
+            return
+        if not self.ilink_gateway.is_configured():
+            logger.info("iLink credentials are not configured; gateway disabled")
+            return
+        await self.ilink_gateway.start()
+
+    async def _stop_ilink_gateway(self) -> None:
+        if getattr(self, "_ilink_stopped", False):
+            return
+        self._ilink_stopped = True
+        await self.ilink_gateway.stop()
+        self.ilink_state_store.close()
+
     async def _send_qq_with_reply(
         self, user_id: int, content: str, reply_to_qq_message_id: int
     ) -> bool:
@@ -2535,6 +2569,9 @@ class Companion:
         except Exception:
             logger.debug("push event activity record failed", exc_info=True)
 
+        await self._submit_incoming_message(msg)
+
+    async def _on_ilink_message(self, msg: IncomingMessage) -> None:
         await self._submit_incoming_message(msg)
 
     async def _submit_incoming_message(self, msg: IncomingMessage) -> None:

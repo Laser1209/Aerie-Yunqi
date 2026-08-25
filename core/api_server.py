@@ -1796,6 +1796,43 @@ async def qq_gateway_qrcode() -> Response:
     return Response(content=data, media_type="image/png")
 
 
+@app.get("/api/ilink/status")
+async def ilink_status() -> dict:
+    comp = get_companion()
+    gateway = getattr(comp, "ilink_gateway", None) if comp else None
+    if gateway is None:
+        return {
+            "phase": "disabled",
+            "configured": False,
+            "connected": False,
+            "error_code": "backend_not_ready",
+        }
+    return gateway.get_status()
+
+
+@app.post("/api/ilink/start")
+async def ilink_start() -> dict:
+    comp = get_companion()
+    gateway = getattr(comp, "ilink_gateway", None) if comp else None
+    if gateway is None:
+        return await ilink_status()
+    try:
+        await gateway.start()
+    except RuntimeError:
+        return gateway.get_status()
+    return gateway.get_status()
+
+
+@app.post("/api/ilink/stop")
+async def ilink_stop() -> dict:
+    comp = get_companion()
+    gateway = getattr(comp, "ilink_gateway", None) if comp else None
+    if gateway is None:
+        return await ilink_status()
+    await gateway.stop()
+    return gateway.get_status()
+
+
 # ── Emotion ─────────────────────────────────────────
 
 @app.get("/api/emotion/state")

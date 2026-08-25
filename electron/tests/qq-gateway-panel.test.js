@@ -37,7 +37,7 @@ test("QQ gateway panel renders stable error states and only stops owned processe
   assert.match(panel, /status\.owned\s*!==\s*true/);
   assert.match(panel, /Aerie 不会停止外部启动的 QQ 引擎/);
   assert.match(css, /\.phase-dot--error/);
-  assert.match(css, /\.status-qq-badge--error/);
+  assert.match(css, /\.external-status-badge--error/);
 });
 
 test("QQ gateway panel does not expose engine download entry points", () => {

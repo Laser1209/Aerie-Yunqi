@@ -58,8 +58,10 @@ class SendQueue:
         pacing: PacingFn | None = None,
         cognition: Any = None,  # Phase 9 Batch 7 (B7.2): used to persist pacing_decisions
         on_reply_sent: Any = None,  # async/sync callback fired after a reply is delivered
+        channel_senders: dict[str, SenderFn] | None = None,
     ) -> None:
         self._sender = sender
+        self._channel_senders = {"qq": sender, **(channel_senders or {})}
         self._splitter = splitter or SemanticMessageSplitter()
         self._min_interval = min_interval  # legacy field, ignored when pacing is provided
         self._recall_manager = recall_manager
@@ -71,6 +73,9 @@ class SendQueue:
         self._queue: deque[OutgoingReply] = deque()
         self._task: asyncio.Task | None = None
         self._running = False
+
+    def _sender_for(self, reply: OutgoingReply) -> SenderFn:
+        return self._channel_senders[reply.channel]
 
     def enqueue(self, reply: OutgoingReply) -> None:
         """Add a single reply to the send queue (QQ messages only)."""
@@ -288,6 +293,8 @@ class SendQueue:
         segments = self._splitter.split(reply.content)
         first_in_batch = True
         use_segments_sender = (
+            reply.channel == "qq"
+            and
             reply.reply_to_qq_message_id
             and self._qq_segments is not None
         )
@@ -309,12 +316,12 @@ class SendQueue:
                         reply.reply_to_qq_message_id,
                     )
                 else:
-                    ok = await self._sender(reply)
+                    ok = await self._sender_for(reply)(reply)
                 if not ok:
                     logger.warning("QQ send failed for user %s", reply.user_id)
                 else:
                     self._backfill_qq_message_id(reply, ok)
-                if first_in_batch and ok and self._recall_manager:
+                if first_in_batch and ok and reply.channel == "qq" and self._recall_manager:
                     try:
                         self._recall_manager.record_sent(
                             user_id=reply.user_id,
@@ -339,7 +346,7 @@ class SendQueue:
                 "seg_idx": idx,
                 "style": style,
                 "interval_ms": int(interval_sec * 1000),
-                "source": "qq",
+                "source": reply.channel,
             })
             if interval_sec > 0:
                 await asyncio.sleep(interval_sec)
@@ -361,7 +368,8 @@ class SendQueue:
                         cognition_id,
                     )
 
-        self._fire_on_reply_sent(reply)
+        if reply.channel == "qq":
+            self._fire_on_reply_sent(reply)
 
     async def _send_batch_reply(self, reply: OutgoingReply, batch_id: str) -> None:
         """Send a single reply that is part of a batch (Task 6).
@@ -374,6 +382,8 @@ class SendQueue:
         """
         seq = getattr(reply, "sequence_index", 0)
         use_segments_sender = (
+            reply.channel == "qq"
+            and
             reply.reply_to_qq_message_id
             and self._qq_segments is not None
         )
@@ -415,7 +425,7 @@ class SendQueue:
                     reply.reply_to_qq_message_id,
                 )
             else:
-                ok = await self._sender(reply)
+                ok = await self._sender_for(reply)(reply)
             if not ok:
                 logger.warning(
                     "batch send failed: batch_id=%s seq=%s user=%s",
@@ -423,7 +433,7 @@ class SendQueue:
                 )
             else:
                 self._backfill_qq_message_id(reply, ok)
-            if seq == 0 and ok and self._recall_manager:
+            if seq == 0 and ok and reply.channel == "qq" and self._recall_manager:
                 try:
                     self._recall_manager.record_sent(
                         user_id=reply.user_id,
@@ -463,7 +473,8 @@ class SendQueue:
                     cognition_id, batch_id,
                 )
 
-        self._fire_on_reply_sent(reply)
+        if reply.channel == "qq":
+            self._fire_on_reply_sent(reply)
 
     async def stop(self) -> None:
         self._running = False

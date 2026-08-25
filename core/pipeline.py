@@ -1405,12 +1405,14 @@ class Pipeline:
         # ══════════════════════════════════════════════
         # 13. QQ messages → SendQueue; local → skip
         # ══════════════════════════════════════════════
-        if msg.source == "qq":
+        if msg.source in {"qq", "ilink"}:
             reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
 
             reply = OutgoingReply(
                 user_id=msg.user_id,
                 content=reply_text,
+                channel=str(msg.channel or msg.source),
+                channel_account_id=str(msg.channel_account_id or ""),
                 msg_id=ai_row_ids[0] if ai_row_ids else 0,
                 reply_to_qq_message_id=reply_to_qq_mid,
                 # Phase 9 Batch 7 (B7.2): let SendQueue write the
@@ -1719,11 +1721,13 @@ class Pipeline:
             )
 
         # QQ 消息入 SendQueue（本地消息跳过）
-        if msg.source == "qq":
+        if msg.source in {"qq", "ilink"}:
             reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
             reply = OutgoingReply(
                 user_id=msg.user_id,
                 content="".join(segments),
+                channel=str(msg.channel or msg.source),
+                channel_account_id=str(msg.channel_account_id or ""),
                 msg_id=ai_row_ids[0] if ai_row_ids else 0,
                 reply_to_qq_message_id=reply_to_qq_mid,
                 cognition_id=int(trace.get("id") or 0),
@@ -3154,11 +3158,13 @@ class Pipeline:
                 pass
 
         # 10. QQ 消息入队
-        if msg.source == "qq" and ai_row_ids:
+        if msg.source in {"qq", "ilink"} and ai_row_ids:
             reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
             reply = OutgoingReply(
                 user_id=msg.user_id,
                 content=reply_text,
+                channel=str(msg.channel or msg.source),
+                channel_account_id=str(msg.channel_account_id or ""),
                 msg_id=ai_row_ids[0],
                 reply_to_qq_message_id=reply_to_qq_mid,
                 cognition_id=int(trace.get("id") or 0),
@@ -4437,11 +4443,13 @@ class Pipeline:
                         "is_last_in_message": seg_idx == len(segments) - 1,
                     })
 
-                if source == "qq" and ai_row_ids:
+                if source in {"qq", "ilink"} and ai_row_ids:
                     reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
                     outgoing = OutgoingReply(
                         user_id=msg.user_id,
                         content=reply_text,
+                        channel=str(msg.channel or msg.source),
+                        channel_account_id=str(msg.channel_account_id or ""),
                         msg_id=ai_row_ids[0],
                         reply_to_qq_message_id=reply_to_qq_mid,
                         cognition_id=int(trace.get("id") or 0),

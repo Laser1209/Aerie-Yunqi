@@ -97,6 +97,7 @@ class IncomingMessage:
     actor_id: str | None = None
     channel: str | None = None
     channel_account_id: str | None = None
+    context: dict = field(default_factory=dict)
     # 消息到达时间戳(epoch 秒)。会话聚合层算时间窗口用;None 表示未捕获。
     timestamp: float | None = None
 
@@ -167,6 +168,9 @@ class IncomingMessage:
 class OutgoingReply:
     user_id: int
     content: str
+    channel: str = "qq"
+    channel_account_id: str = ""
+    context: dict = field(default_factory=dict)
     render_mode: str = "plain"   # plain | markdown
     msg_id: int = 0              # chat_log DB id
     # Phase 4: quote context for sending (OneBot11 reply segment)

@@ -3086,6 +3086,33 @@ ipcMain.handle("qqGateway:stop", async () => {
   }
 });
 
+ipcMain.handle("ilinkGateway:getStatus", async () => {
+  try {
+    const r = await apiRequest({ path: "/api/ilink/status" });
+    return r.data && typeof r.data === "object" ? r.data : { phase: "disabled", configured: false };
+  } catch (_) {
+    return { phase: "disabled", configured: false, connected: false, error_code: "backend_unreachable" };
+  }
+});
+
+ipcMain.handle("ilinkGateway:start", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/ilink/start" });
+    return r.data;
+  } catch (_) {
+    return { phase: "disabled", configured: false, connected: false, error_code: "backend_unreachable" };
+  }
+});
+
+ipcMain.handle("ilinkGateway:stop", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/ilink/stop" });
+    return r.data;
+  } catch (_) {
+    return { phase: "disabled", configured: false, connected: false, error_code: "backend_unreachable" };
+  }
+});
+
 ipcMain.handle("settings:get", async () => {
   try {
     const r = await apiRequest({ path: "/api/settings" });

@@ -708,77 +708,147 @@ body {
 .status-card-label { font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
 .status-card-value { font-size: 24px; font-weight: 600; }
 
-.status-qq-section {
+.external-connections-section {
   margin-top: 24px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   overflow: hidden;
 }
-.status-qq-header {
+.external-connections-header,
+.external-channel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: background .15s;
 }
-.status-qq-header:hover {
+.external-connections-header:hover,
+.external-channel-header:hover {
   background: var(--color-surface-hover);
 }
-.status-qq-title {
+.external-connections-header:focus-visible,
+.external-channel-header:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.external-connections-title,
+.external-channel-title {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
 }
-.status-qq-badge {
+.external-status-badge {
   padding: 2px 10px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
   margin-left: 4px;
 }
-.status-qq-badge--idle {
+.external-status-badge--idle,
+.external-status-badge--disabled {
   background: rgba(149, 165, 166, 0.15);
   color: var(--color-static-95a5a6, #95a5a6);
 }
-.status-qq-badge--starting {
+.external-status-badge--starting,
+.external-status-badge--partial {
   background: rgba(243, 156, 18, 0.15);
   color: var(--color-static-f39c12, #f39c12);
 }
-.status-qq-badge--qr_pending {
+.external-status-badge--qr_pending,
+.external-status-badge--scanned,
+.external-status-badge--pairing_required {
   background: rgba(52, 152, 219, 0.15);
   color: var(--color-static-3498db, #3498db);
 }
-.status-qq-badge--connected {
+.external-status-badge--connected {
   background: rgba(46, 204, 113, 0.15);
   color: var(--color-static-2ecc71, #2ecc71);
 }
-.status-qq-badge--error {
+.external-status-badge--error,
+.external-status-badge--session_expired {
   background: rgba(231, 76, 60, 0.15);
   color: var(--color-static-e74c3c, #e74c3c);
 }
-.status-qq-chevron {
+.external-connections-chevron,
+.external-channel-chevron {
   transition: transform .2s;
   color: var(--color-text-muted);
+  flex-shrink: 0;
 }
-.status-qq-section.collapsed .status-qq-chevron {
+.external-connections-section.collapsed > .external-connections-header .external-connections-chevron,
+.external-channel.collapsed > .external-channel-header .external-channel-chevron {
   transform: rotate(-90deg);
 }
-.status-qq-body {
+.external-connections-body {
   padding: 0 18px 18px;
   display: block;
 }
-.status-qq-section.collapsed .status-qq-body {
+.external-connections-section.collapsed > .external-connections-body,
+.external-channel.collapsed > .external-channel-body {
   display: none;
 }
-.status-qq-log-title {
+.external-channel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  overflow: hidden;
+}
+.external-channel-body {
+  padding: 0 14px 14px;
+}
+.external-channel-log-title {
   font-size: 13px;
   font-weight: 600;
   margin: 16px 0 8px;
   color: var(--color-text);
+}
+.ilink-placeholder-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+}
+.external-channel-actions,
+.primary-channel-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.external-channel-hint {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ilink-gateway-qr-zone.hidden { display: none; }
+.ilink-gateway-qr-zone img { display: block; max-width: 200px; margin: 12px auto; }
+.primary-channel-selector {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.primary-channel-selector legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.primary-channel-selector label { font-size: 13px; cursor: pointer; }
+
+@media (max-width: 640px) {
+  .qq-gateway-status-card,
+  .ilink-placeholder-state { align-items: flex-start; flex-direction: column; }
+  .qq-gateway-actions,
+  .external-channel-actions { width: 100%; flex-wrap: wrap; }
 }
 
 /* ===== About Panel ===== */

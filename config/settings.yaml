@@ -9,7 +9,7 @@ brief_subscriptions:
 computer_control:
   blacklist: []
   custom_rules: {}
-  mode: manual
+  mode: full
   whitelist: []
 douyin:
   api_base_url: https://api.justoneapi.com
@@ -57,6 +57,7 @@ proactive:
   outdoor_probability: 0.5
   outdoor_weather_event: true
   photo_min_interval_sec: 0
+  primary_channel: desktop
   system_notifications: true
 qq:
   heartbeat_interval: 30

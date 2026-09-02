@@ -26,6 +26,18 @@ test("dynamic island system status never fabricates network traffic", () => {
   assert.match(islandSource, /Number\.isFinite\(s\.net\)/);
 });
 
+test("dynamic island uses persona data before requesting a custom avatar", () => {
+  assert.match(islandSource, /avatar_dataurl/);
+  assert.match(
+    islandSource,
+    /api\.api\?\.\(\{ method: "GET", path: "\/api\/persona" \}\)/,
+  );
+  assert.match(
+    islandSource,
+    /avatar endpoint intentionally returns 404 when no custom avatar is/,
+  );
+});
+
 test("backend health supports isolated port and instance identity", () => {
   assert.match(mainSource, /AERIE_BACKEND_PORT/);
   assert.match(mainSource, /AERIE_BACKEND_INSTANCE_ID/);

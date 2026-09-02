@@ -187,9 +187,19 @@
         avatarImg.src = fallbackLogo;
       }
     };
+    // The avatar endpoint intentionally returns 404 when no custom avatar is
+    // configured. Read the persona summary first so the default logo does not
+    // create a recurring failed network request and console error.
     try {
-      api?.getAvatarUrl?.().then((r) => {
-        if (r?.ok && r.url) avatarImg.src = r.url;
+      api?.api?.({ method: "GET", path: "/api/persona" }).then((r) => {
+        const data = r?.data || {};
+        if (data.avatar_dataurl) {
+          avatarImg.src = data.avatar_dataurl;
+          return;
+        }
+        if (data.avatar_url) {
+          avatarImg.src = data.avatar_url;
+        }
       }).catch(() => {});
     } catch (_) {}
   }
@@ -205,6 +215,7 @@
           if (companionNameEl) companionNameEl.textContent = name;
           if (diEl.classList.contains("open")) renderExpanded();
         }
+        if (avatarImg && data.avatar_dataurl) avatarImg.src = data.avatar_dataurl;
       }).catch(() => {});
       api.getSystemStatus?.().then((r) => {
         if (r?.ok && r.data) { uiState.system = r.data; renderCapsule(); }

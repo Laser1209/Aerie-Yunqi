@@ -1678,7 +1678,7 @@ class SettingsPanel {
     try {
       const form = new FormData();
       form.append("file", file);
-      const resp = await fetch("http://127.0.0.1:7890/api/persona/avatar", {
+      const resp = await fetch((window.__API_BASE__ || "http://127.0.0.1:7890") + "/api/persona/avatar", {
         method: "POST",
         body: form,
       });
@@ -2256,7 +2256,8 @@ class SettingsPanel {
   }
 
   _diagDownload(filename) {
-    const url = "http://127.0.0.1:7890/api/diagnostics/download/" + encodeURIComponent(filename);
+    const url = (window.__API_BASE__ || "http://127.0.0.1:7890")
+      + "/api/diagnostics/download/" + encodeURIComponent(filename);
     if (window.aerie?.electron?.shell?.openExternal) {
       window.aerie.electron.shell.openExternal(url);
     } else {

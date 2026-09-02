@@ -1953,8 +1953,8 @@ async function runAudit() {
     await auditAuxiliaryWindows(app, page, context);
     catalogResults = reconcileCatalog(context);
     pageIdentity = {
-      title: await page.title().catch(() => ""),
-      url: sanitizeUrl(await page.url().catch(() => "")),
+      title: await Promise.resolve(page.title()).catch(() => ""),
+      url: sanitizeUrl(await Promise.resolve(page.url()).catch(() => "")),
     };
   } catch (error) {
     fatal = error && error.stack ? error.stack : String(error);

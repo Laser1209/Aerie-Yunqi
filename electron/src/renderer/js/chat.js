@@ -1,6 +1,8 @@
 "use strict";
 /* Chat manager: Phase 4 — recall + quote + attachment support */
 
+const API_BASE = window.__API_BASE__ || "http://127.0.0.1:7890";
+
 function attachmentPublicUrl(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -1163,7 +1165,7 @@ class ChatManager {
         // Rewrite to absolute backend URL for Electron's file:// protocol
         const absSrc = /^https?:|^data:/i.test(src)
           ? src
-          : ("http://127.0.0.1:7890" + (src.startsWith("/") ? "" : "/") + src);
+          : (API_BASE + (src.startsWith("/") ? "" : "/") + src);
         return `<div class="chat-attach-card chat-attach-card--image"
                      data-type="image" data-attachment-id="${this._escapeHtml(id)}" data-state="${this._escapeHtml(state)}">
           <div class="chat-attach-card__image-wrap">
@@ -1231,7 +1233,7 @@ class ChatManager {
     }
     if (typeof window.open === "function") {
       window.open(
-        "http://127.0.0.1:7890/api/attachments/"
+        API_BASE + "/api/attachments/"
           + encodeURIComponent(attachmentId) + "/download",
         "_blank",
       );
@@ -2238,7 +2240,7 @@ class ChatManager {
         /(<img[^>]+src=["'])(\/?(?:uploads|api)[^"']*["'])/gi,
         (_m, prefix, path) => {
           const normalized = path.startsWith("/") ? path : "/" + path;
-          return prefix + "http://127.0.0.1:7890" + normalized;
+          return prefix + API_BASE + normalized;
         },
       );
       // Also rewrite pure Markdown ![alt](relative_url) in escaped HTML,
@@ -2247,7 +2249,7 @@ class ChatManager {
         /(<a[^>]+href=["'])(\/?(?:uploads|api)[^"']*["'])/gi,
         (_m, prefix, path) => {
           const normalized = path.startsWith("/") ? path : "/" + path;
-          return prefix + "http://127.0.0.1:7890" + normalized;
+          return prefix + API_BASE + normalized;
         },
       );
       return rewritten;
@@ -2293,7 +2295,7 @@ class ChatManager {
         return await window.aerie.api.request(opts);
       } catch (_) {}
     }
-    const url = "http://127.0.0.1:7890" + opts.path;
+    const url = API_BASE + opts.path;
     const init = {
       method: opts.method || "GET",
       headers: { "Content-Type": "application/json" },

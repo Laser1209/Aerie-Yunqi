@@ -10,7 +10,7 @@
 (function () {
   "use strict";
 
-  const API = "http://127.0.0.1:7890";
+  const API = window.__API_BASE__ || "http://127.0.0.1:7890";
 
   const state = {
     root: "",            // 当前根目录

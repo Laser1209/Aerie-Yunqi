@@ -4,7 +4,8 @@
 function attachmentApiUrl(path) {
   const value = String(path || "");
   if (/^https?:\/\//i.test(value)) return value;
-  return "http://127.0.0.1:7890" + (value.startsWith("/") ? value : "/" + value);
+  return (window.__API_BASE__ || "http://127.0.0.1:7890")
+    + (value.startsWith("/") ? value : "/" + value);
 }
 
 function fillAttachmentTemplate(template, attachmentId) {

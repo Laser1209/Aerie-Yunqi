@@ -1,6 +1,16 @@
 "use strict";
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Keep every renderer surface on the same backend port, including isolated
+// QA instances and packaged launches configured through the environment.
+const BACKEND_PORT = Number.parseInt(process.env.AERIE_BACKEND_PORT || "7890", 10);
+const API_BASE = `http://127.0.0.1:${Number.isFinite(BACKEND_PORT) ? BACKEND_PORT : 7890}`;
+Object.defineProperty(window, "__API_BASE__", {
+  configurable: false,
+  enumerable: false,
+  value: API_BASE,
+});
+
 // 后端就绪等待：应用冷启动/重启后端时，渲染进程的请求会先于后端
 // 监听 7890 到达，主进程 http.request 立即返回 ECONNREFUSED，各面板
 // 会把该错误作为永久横幅展示（即使后端随后恢复也不消失）。这里在

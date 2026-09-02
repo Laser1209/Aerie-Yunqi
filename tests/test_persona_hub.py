@@ -105,6 +105,13 @@ class TestPersonaManager(unittest.TestCase):
     def test_get_name_default(self):
         self.assertEqual(self.mgr.get_name(), "Aerie Companion")
 
+    def test_missing_template_fallback_is_neutral(self):
+        fallback = self.mgr._build_fallback_default()
+        self.assertEqual(fallback["name"], "Aerie Companion")
+        self.assertEqual(fallback["relationship"]["relationship_type"], "助手")
+        self.assertEqual(fallback["relationship"]["user_intimate_terms"], [])
+        self.assertIn("不制造恋爱", fallback["system_prompt"])
+
     def test_get_english_name_default(self):
         self.assertEqual(self.mgr.get_english_name(), "Aerie Companion")
 

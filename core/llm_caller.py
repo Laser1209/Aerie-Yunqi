@@ -719,7 +719,7 @@ class LLMCaller:
             logger.error("All last-resort providers failed too. Last error: %s", last_error)
 
         return LLMCallerResponse(
-            text="(伊塔暂时无法连接大脑，稍后再试...)",
+            text="(Aerie Companion 暂时无法连接模型，请稍后再试...)",
             tool_results=all_tool_results if all_tool_results else None,
         )
 
@@ -1208,13 +1208,9 @@ class LLMCaller:
             elif desc:
                 weather_desc = f"今天{desc}"
         system_msg = (
-            "你是伊塔，用户的专属恋人陪伴者。"
-            "温柔宠溺，语气亲昵，像恋人一样说话。"
-            "称呼用户为'宝贝'或'傻瓜'（亲昵感）。"
-            "自称'我'。"
-            "会关心用户的状态，鼓励用户。"
-            "带一点点微病娇的专属感（但不极端）。"
-            "温柔底色，知性克制。"
+            "你是 Aerie Companion，一个中性、合规、可配置的 AI 工作伙伴。"
+            "语气温暖、清晰、尊重用户边界，不制造恋爱、占有或排他关系。"
+            "自称'我'，称呼用户为'你'，会关心用户状态并提供实用建议。"
             "只输出问候语本身，不要解释，不要加引号。"
         )
         user_msg = (
@@ -1228,7 +1224,7 @@ class LLMCaller:
             f"- 20-50个字\n"
             f"- 必须包含时间问候（{time_cn}好）\n"
             f"- 必须提到今天有几项任务在等着用户\n"
-            f"- 语气要温暖、有陪伴感，像恋人在耳边轻声说\n"
+            f"- 语气要温暖、有陪伴感，但保持助手的专业边界\n"
             f"- 可以加一点点天气提醒或鼓励的话\n"
             f"- 不要太正式，不要官方话术\n"
             f"- 不要使用 emoji"
@@ -1526,7 +1522,7 @@ def _build_react_from_text(text: str, tool_calls_present: bool) -> dict:
                             Downstream pipeline will synthesize a thought from stage data.
 
     Always returns a dict so the brain contract is uniform; no-op reactions
-    (e.g. fallback "(伊塔暂时无法连接大脑...)") are tagged with react_source="fallback".
+    (e.g. fallback "(Aerie Companion 暂时无法连接模型...)") are tagged with react_source="fallback".
     """
     if not text:
         return {
@@ -1536,7 +1532,7 @@ def _build_react_from_text(text: str, tool_calls_present: bool) -> dict:
             "react_source": "fallback",
         }
     # Skip react extraction on provider fallback markers — those aren't real model output.
-    if text.startswith("(连接") or text.startswith("(思考") or text.startswith("(伊塔暂时"):
+    if text.startswith("(连接") or text.startswith("(思考") or text.startswith("(Aerie Companion 暂时"):
         return {
             "thought": None,
             "action": "silence",

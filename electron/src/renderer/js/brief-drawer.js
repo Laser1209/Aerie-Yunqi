@@ -71,7 +71,7 @@ class BriefDrawer {
     this._cached = null;
     this._expanded = false;
     this._expandedData = null;
-    this._displayName = "伊塔";
+    this._displayName = "Aerie Companion";
     this._nameLoaded = false;
     this._render();
     this._bindEsc();
@@ -93,7 +93,7 @@ class BriefDrawer {
         <div class="brief-drawer__bar-left">
           <img class="brief-drawer__logo" src="assets/logo.png" alt="Aerie"
                onerror="this.onerror=null;this.style.visibility='hidden'">
-          <span class="brief-drawer__title">Aerie · 云栖</span>
+          <span class="brief-drawer__title">Aerie Companion</span>
           <span class="brief-drawer__sub">每日简报 · Daily Brief</span>
         </div>
         <div class="brief-drawer__bar-right">
@@ -868,7 +868,7 @@ class BriefDrawer {
     const header = _el("div", { class: "brief-drawer__section-header" });
     header.innerHTML = `
       <div class="brief-drawer__section-title">
-        ${_ICONS.star || "★"} <span>GitHub 高星新项目</span>
+        ${_ICONS.star || '<svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-star"/></svg>'} <span>GitHub 高星新项目</span>
         <span class="brief-drawer__section-badge">${items.length} 个</span>
       </div>
     `;
@@ -890,7 +890,7 @@ class BriefDrawer {
     a.innerHTML = `
       <div class="brief-drawer__github-top">
         <span class="brief-drawer__github-name">${_esc(item.title || "")}</span>
-        <span class="brief-drawer__github-stars">${stars ? `⭐ ${_esc(String(stars))}` : ""}</span>
+        <span class="brief-drawer__github-stars">${stars ? `<svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-star"/></svg> ${_esc(String(stars))}` : ""}</span>
       </div>
       ${lang ? `<span class="brief-drawer__github-lang">${_esc(lang)}</span>` : ""}
       ${item.summary ? `<div class="brief-drawer__github-summary">${_esc(item.summary)}</div>` : ""}

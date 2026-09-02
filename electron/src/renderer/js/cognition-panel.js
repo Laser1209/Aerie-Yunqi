@@ -88,7 +88,7 @@ class CognitionPanel {
     try {
       if (!window.aerie || !window.aerie.api) return;
       const r = await window.aerie.api.request({ method: "GET", path: "/api/persona" });
-      const name = (r && r.data && r.data.name) || "伊塔";
+      const name = (r && r.data && r.data.name) || "Aerie Companion";
       const el = document.getElementById("cognition-persona-name");
       if (el) el.textContent = name;
     } catch (_) {}
@@ -1409,7 +1409,7 @@ class CognitionPanel {
             const title = u.description || u.undo_id || "文件整理";
             return `
               <div class="cog-fo-item">
-                <span class="cog-fo-item-icon">↩️</span>
+                <span class="cog-fo-item-icon"><svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-undo"/></svg></span>
                 <div class="cog-fo-item-body">
                   <div class="cog-fo-item-title">${this._escape(title)}</div>
                   <div class="cog-fo-item-meta">${this._escape(ts)}</div>

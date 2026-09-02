@@ -18,10 +18,15 @@ const ICON = path.join(ROOT, 'builder', 'icon.ico');
 // electron-builder 会根据 productName 生成可执行文件名，含中文与「·」等
 // 特殊字符（如 `Aerie · 云栖.exe`），且不同版本命名可能变化。这里改为
 // 扫描 win-unpacked 顶层 *.exe，避免硬编码文件名导致找不到图标注入目标。
-const dirs = ['dist', 'dist-final'];
+// 支持 electron-builder 的 --config.directories.output 自定义目录；默认
+// 仍扫描项目内的标准输出目录，避免发布脚本因目录切换产生假失败。
+const configuredOutput = process.env.AERIE_BUILD_OUTPUT_DIR;
+const dirs = configuredOutput
+  ? [path.resolve(configuredOutput)]
+  : ['dist', 'dist-final'].map((dir) => path.join(ROOT, dir));
 const found = [];
 for (const dir of dirs) {
-  const unpacked = path.join(ROOT, dir, 'win-unpacked');
+  const unpacked = path.join(path.isAbsolute(dir) ? dir : path.join(ROOT, dir), 'win-unpacked');
   if (!fs.existsSync(unpacked)) continue;
   for (const f of fs.readdirSync(unpacked)) {
     if (f.toLowerCase().endsWith('.exe')) found.push(path.join(unpacked, f));
@@ -31,7 +36,7 @@ found.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
 const exe = found[0];
 
 if (!exe) {
-  console.error('[rcedit] Could not locate main exe under', dirs.map((d) => path.join(ROOT, d)).join(', '));
+  console.error('[rcedit] Could not locate main exe under', dirs.join(', '));
   process.exit(1);
 }
 if (!fs.existsSync(ICON)) {

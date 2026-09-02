@@ -194,10 +194,10 @@ def test_timeline_line_truncates_to_80_chars():
     assert len(lines[0]) <= 80 + len("- 08-12 22:10 [QQ] ")
 
 
-def test_multi_channel_flag_default_off():
+def test_multi_channel_flag_default_on():
     from core.feature_flags import FeatureFlags
 
-    assert FeatureFlags().is_enabled("multi_channel_identity_v1") is False
+    assert FeatureFlags().is_enabled("multi_channel_identity_v1") is True
 
 
 def test_view_b_budget_within_500_chars():

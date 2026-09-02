@@ -44,6 +44,8 @@ build/
 out/
 electron/dist*/
 electron/runtime-build/
+electron/runtime-build-*/
+build-manifest.json
 Spotlight/public/*.exe
 Spotlight/public/*.blockmap
 

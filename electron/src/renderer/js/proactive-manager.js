@@ -41,8 +41,8 @@ class ProactiveManager {
 
   async loadStatus() {
     try {
-      const res = await fetch('/api/proactive/status');
-      this.status = await res.json();
+      const res = await window.aerie.api.request({ method: 'GET', path: '/api/proactive/status' });
+      this.status = (res && res.data) || {};
       this.updateStatusUI();
     } catch (e) {
       console.warn('load proactive status failed:', e);
@@ -51,8 +51,8 @@ class ProactiveManager {
 
   async loadScenes() {
     try {
-      const res = await fetch('/api/proactive/scenes');
-      const data = await res.json();
+      const res = await window.aerie.api.request({ method: 'GET', path: '/api/proactive/scenes' });
+      const data = (res && res.data) || {};
       this.scenes = data.scenes || {};
       this.updateScenesUI();
     } catch (e) {
@@ -62,8 +62,8 @@ class ProactiveManager {
 
   async loadEvents() {
     try {
-      const res = await fetch('/api/proactive/events?limit=20');
-      const data = await res.json();
+      const res = await window.aerie.api.request({ method: 'GET', path: '/api/proactive/events?limit=20' });
+      const data = (res && res.data) || {};
       this.events = data.events || [];
       this.updateEventsUI();
     } catch (e) {
@@ -73,11 +73,9 @@ class ProactiveManager {
 
   async toggleEnabled(enabled) {
     try {
-      await fetch('/api/proactive/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      });
+      await window.aerie.api.request({ method: 'POST', path: '/api/proactive/toggle', body: {
+        enabled
+      }});
       await this.loadStatus();
     } catch (e) {
       console.warn('toggle proactive failed:', e);
@@ -86,12 +84,10 @@ class ProactiveManager {
 
   async triggerScene(sceneName) {
     try {
-      const res = await fetch('/api/proactive/trigger', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scene: sceneName })
-      });
-      const data = await res.json();
+      const res = await window.aerie.api.request({ method: 'POST', path: '/api/proactive/trigger', body: {
+        scene: sceneName
+      }});
+      const data = (res && res.data) || {};
       if (data.success) {
         this.showToast(`已触发：${sceneName}`);
       } else {

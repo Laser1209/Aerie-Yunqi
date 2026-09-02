@@ -3081,7 +3081,7 @@ class Pipeline:
 
     @staticmethod
     def _thinking_trace_injection_enabled() -> bool:
-        """P2 决策自省段注入开关（§3.6-2 / §4 #9），默认关闭防 token 膨胀。"""
+        """P2 决策自省段注入开关（§3.6-2 / §4 #9），商业测试版本默认开启。"""
         try:
             return FeatureFlags().is_enabled("thinking_trace_injection_v1")
         except Exception:
@@ -3089,7 +3089,7 @@ class Pipeline:
 
     @staticmethod
     def _multi_channel_identity_enabled() -> bool:
-        """P3 多端存在提示 + 视图 B 注入开关（附录 A.3.2），默认关闭。"""
+        """P3 多端存在提示 + 视图 B 注入开关（附录 A.3.2），商业测试版本默认开启。"""
         try:
             return FeatureFlags().is_enabled("multi_channel_identity_v1")
         except Exception:

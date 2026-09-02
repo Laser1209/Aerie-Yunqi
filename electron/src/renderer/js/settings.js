@@ -708,7 +708,7 @@ class SettingsPanel {
     try {
       const r = await window.aerie.api.request({ method: "POST", path: "/api/env/custom-providers", body: { providers: merged } });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
-      if (st) { st.textContent = "保存成功 ✓"; st.style.color = "var(--success,#2ecc71)"; }
+      if (st) { st.textContent = "保存成功"; st.style.color = "var(--success,#2ecc71)"; }
       await this._loadCustomProviders();
       this._renderApiKeyList();
       const panel = document.getElementById("custom-provider-panel");
@@ -918,7 +918,7 @@ class SettingsPanel {
       if (window.aerie && window.aerie.electron && window.aerie.electron.system && window.aerie.electron.system.reloadConfig) {
         try { await window.aerie.electron.system.reloadConfig(); } catch (_) {}
       }
-      if (st) { st.textContent = "已保存并热加载 ✓"; st.style.color = "var(--success,#2ecc71)"; }
+      if (st) { st.textContent = "已保存并热加载"; st.style.color = "var(--success,#2ecc71)"; }
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
     } finally {
@@ -1014,7 +1014,7 @@ class SettingsPanel {
       const r = await window.aerie.api.request({ method: "POST", path: "/api/env/feature-apis", body: { feature_key: featureKey, fields } });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
       await this.loadFeatureApis();
-      if (st) { st.textContent = "已保存并热加载 ✓"; st.style.color = "var(--success, #2ecc71)"; }
+      if (st) { st.textContent = "已保存并热加载"; st.style.color = "var(--success, #2ecc71)"; }
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     } finally {
@@ -1158,7 +1158,7 @@ class SettingsPanel {
     const pct = Math.min(100, Math.round((done / steps.length) * 100));
     fill.style.width = pct + "%";
     const lines = steps.map((s) => {
-      const icon = s.status === "done" ? "✓" : s.status === "error" ? "✗" : s.status === "running" ? "…" : "·";
+      const icon = s.status === "done" ? "完成" : s.status === "error" ? "失败" : s.status === "running" ? "处理中" : "等待";
       const ms = s.elapsed_ms != null ? ` ${s.elapsed_ms}ms` : "";
       return `${icon} ${s.detail || s.name}${ms}`;
     });
@@ -1296,7 +1296,7 @@ class SettingsPanel {
           if (window.aerie && window.aerie.electron && window.aerie.electron.system && window.aerie.electron.system.reloadConfig) {
             try { await window.aerie.electron.system.reloadConfig(); } catch (_) {}
           }
-          showStatus(checked ? "已开启 L4 代码自进化 ✓" : "已关闭 L4 代码自进化 ✓", true);
+          showStatus(checked ? "已开启 L4 代码自进化" : "已关闭 L4 代码自进化", true);
         } else {
           showStatus("保存失败: " + (r.data?.error || "unknown"), false);
         }
@@ -1558,8 +1558,8 @@ class SettingsPanel {
       const s = (r.data && !r.data.error) ? r.data : {};
       const nameEl = document.getElementById("persona-name");
       const enEl = document.getElementById("persona-english-name");
-      if (nameEl) nameEl.value = s.name || "伊塔";
-      if (enEl) enEl.value = s.english_name || "Ita";
+      if (nameEl) nameEl.value = s.name || "Aerie Companion";
+      if (enEl) enEl.value = s.english_name || "Aerie";
       this._applyPersonaPronoun(s.gender || "");
       const img = document.getElementById("persona-avatar-preview");
       if (img) {
@@ -1726,8 +1726,8 @@ class SettingsPanel {
     const nameEl = document.getElementById("persona-name");
     const enEl = document.getElementById("persona-english-name");
     const body = {
-      name: (nameEl && nameEl.value || "").trim() || "伊塔",
-      english_name: (enEl && enEl.value || "").trim() || "Ita",
+      name: (nameEl && nameEl.value || "").trim() || "Aerie Companion",
+      english_name: (enEl && enEl.value || "").trim() || "Aerie",
     };
     this._setPersonaStatus("保存中… / Saving…", true);
     try {
@@ -2204,7 +2204,7 @@ class SettingsPanel {
       const milestonesEl = document.getElementById("diag-milestones");
       if (milestonesEl) {
         const parts = (d.milestones || []).map((m) => {
-          return (m.triggered ? "✓ " : "○ ") + m.key + "（" + (m.seconds / 3600 >= 24 ? (m.seconds / 86400) + "天" : (m.seconds / 3600) + "小时") + "）";
+          return (m.triggered ? "已触发 " : "未触发 ") + m.key + "（" + (m.seconds / 3600 >= 24 ? (m.seconds / 86400) + "天" : (m.seconds / 3600) + "小时") + "）";
         });
         milestonesEl.textContent = parts.length ? parts.join("  ·  ") : "—";
       }

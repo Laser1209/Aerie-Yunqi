@@ -283,8 +283,8 @@
     const full = joinPath(parentPath, e.name);
     const open = state.openDirs.has(full);
     return `<div class="ws-tree-dir ${open ? "open" : ""}" data-path="${esc(full)}">
-      <span class="ws-tree-dir__arrow">▶</span>
-      <span class="ws-tree-dir__icon">📁</span>
+      <span class="ws-tree-dir__arrow"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-play"/></svg></span>
+      <span class="ws-tree-dir__icon"><svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-folder"/></svg></span>
       <span class="ws-tree-dir__name">${esc(e.name)}</span>
     </div>
     <div class="ws-tree-children" ${open ? "" : "hidden"} data-path="${esc(full)}">
@@ -294,7 +294,7 @@
 
   function renderFile(parentPath, e) {
     const full = joinPath(parentPath, e.name);
-    const icon = e.is_image ? "🖼️" : "📄";
+    const icon = e.is_image ? "image" : "file";
     return `<div class="ws-tree-file" data-path="${esc(full)}" data-open="1">
       <span class="ws-tree-file__icon">${icon}</span>
       <span class="ws-tree-file__name">${esc(e.name)}</span>

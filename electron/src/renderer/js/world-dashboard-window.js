@@ -733,7 +733,7 @@
           const temp = str(w.temp);
           const desc = str(w.desc);
           btn.textContent = temp && desc && temp !== "—"
-            ? `已保存 · ${city} ${temp}° ${desc}` : "已保存 ✓";
+            ? `已保存 · ${city} ${temp}° ${desc}` : "已保存";
           refresh();
         } else {
           btn.textContent = "保存失败";

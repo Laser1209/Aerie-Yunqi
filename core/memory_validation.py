@@ -4,7 +4,7 @@
 快速判断「该事实是否由用户明确表达」：模糊/推断内容降级为 low_confidence，
 不直接提升为事实，防止记忆污染。
 
-默认由 feature flag ``memory_write_validation_v1`` 控制（PoC 阶段默认关闭）。
+默认由 feature flag ``memory_write_validation_v1`` 控制（商业测试版本默认开启）。
 """
 from __future__ import annotations
 
@@ -205,7 +205,7 @@ async def validate_fact(
 
 
 def validation_enabled() -> bool:
-    """读取 feature flag memory_write_validation_v1（PoC 阶段默认关闭）。"""
+    """读取 feature flag memory_write_validation_v1（商业测试版本默认开启）。"""
     try:
         from core.feature_flags import FeatureFlags
 

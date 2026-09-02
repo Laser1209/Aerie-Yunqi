@@ -1,8 +1,8 @@
-# Aerie · 云栖 v0.1.0-beta.1 — electron-builder configuration
+# Aerie Companion v0.3.2-beta.0903-A12 — electron-builder configuration
 # This file is the source of truth for Windows packaging.
 # `package.json` mirrors the same settings under `build` for npm run build:win.
 appId: com.laser.aerie
-productName: Aerie · 云栖
+productName: Aerie Companion
 copyright: Copyright © 2026 Laser
 artifactName: ${productName}-${version}-${arch}.${ext}
 
@@ -37,7 +37,7 @@ win:
     - target: portable
       arch:
         - x64
-  requestedExecutionLevel: requireAdministrator
+  requestedExecutionLevel: asInvoker
   artifactName: ${productName}-${version}-Setup.${ext}
   publisherName: Laser
   signAndEditExecutable: false
@@ -50,6 +50,8 @@ portable:
 
 # Extra resources: Python runtime, icon, etc. (goes to resources/ in installed dir)
 extraResources:
+  - from: "../build-manifest.json"
+    to: "build-manifest.json"
   - from: "../Aerie · 云栖.png"
     to: "icon.png"
   - from: "../.env.example"
@@ -58,7 +60,7 @@ extraResources:
     to: "video"
   # 自包含 Python 运行时（scripts/build_python_runtime.py 的产物）：
   # 真实可迁移的 python.exe + stdlib + 全部三方依赖，无需 venv 重定向器。
-  - from: "runtime-build"
+  - from: "runtime-build-vfix"
     to: "python/runtime"
   # Python 应用源码（保持 .py 文件形态，兼容 skills 动态 import 与 config 热重载）
   - from: "../"
@@ -97,13 +99,13 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Aerie · 云栖
+  shortcutName: Aerie Companion
   deleteAppDataOnUninstall: false
   include: builder/installer.nsh
   displayLanguageSelector: false
   installerLanguages:
-    - simpchinese
-    - enus
+    - zh_CN
+    - en_US
   language: "2052"
 
 # Additional metadata

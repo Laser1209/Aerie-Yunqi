@@ -1,4 +1,4 @@
-# Aerie · 云栖 V 0.3.1-beta.0815
+# Aerie Companion V 0.3.2-beta.0903-A12
 
 > **本地优先的 AI 桌面伴侣 / Local-first AI desktop companion**
 > 把陪伴写成你想要的模样——一个随你所想、由你定义的 TA。
@@ -25,13 +25,13 @@
 
 ## 项目简介 / About
 
-**Aerie · 云栖** 是一个本地优先的 AI 桌面伴侣项目（Local-first AI desktop companion）。她可以是你想要的任何模样——一位能聊到深夜的知己、并肩把事情办成的伙伴，又或者只是那个恰好合拍的「恋人」；她的目标，是成为一个「像人」的伴侣——情绪价值与落在实处的帮助，是她自然带来的功能。当前仓库由 **Electron 桌面壳**、**Python 智能内核**、**QQ 引擎网关**、**Spotlight 官网**、**World Service 世界模拟侧车** 与 **Android 移动网关** 组成。代码树已完成 P1 陪伴融合、世界模拟、三端撤回、多模态生图、向量知识库与移动端网关等系统性能力实装。
+**Aerie Companion** 是一个本地优先的 AI 工作伙伴项目（Local-first AI desktop companion）。它把对话、长期记忆、工作区工具、主动提醒和可选语音放在你的设备上，角色、模型和数据边界均由用户决定。当前仓库由 **Electron 桌面壳**、**Python 智能内核**、**QQ 引擎网关**、**Spotlight 官网**、**World Service 世界模拟侧车** 与 **Android 移动网关** 组成。代码树已完成 P1 陪伴融合、世界模拟、三端撤回、多模态生图、向量知识库与移动端网关等系统性能力实装。
 
 ### 当前状态 / Current Status
 
 | 项目 / Item                            | 状态 / Status                                                                                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **版本 / Version**               | `0.3.1-beta.0815` 内测基线                                                                                                                    |
+| **版本 / Version**               | `0.3.2-beta.0903-A12` 商业化投放测试基线                                                                                                      |
 | **桌面端 / Desktop**             | Electron 28 + 渲染层多面板 UI + 灵动岛                                                                                                       |
 | **后端 / Backend**               | Python 3.10+ aiohttp + asyncio · LLMCaller 统一调用层                                                                                       |
 | **QQ 接入 / QQ Bridge**          | OneBot11 WebSocket QQ 引擎 · 三端撤回 (QQ/本地/微信预留)                                                                                    |
@@ -46,7 +46,7 @@
 | **角色隔离 / Persona Isolation** | 多角色对话/记忆/头像/图片产出按`persona_id` 隔离 · 会话 ID 按角色哈希 · admin 记录角色标注                                               |
 | **24h 持续监听 / 24H Mon**       | 欲望引擎 / 话题追踪 / 情绪触发 24h 轮询 · watchdog 崩溃自动拉起 · 断点续采 (start-24h-monitor.bat)                                         |
 | **验证 / Tests**                 | 127 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、P0-P3 上下文记忆、管理平台、v13.9、E2E) + 17 个 Electron 测试文件                           |
-| **交付 / Release**               | `0.3.1-beta.0815` 安装包与便携版已构建（Setup + Portable）；`0.1.0-beta.1` 归档至官网「历史版本」区块                    |
+| **交付 / Release**               | `0.3.2-beta.0903-A12` 安装包与便携版用于商业化投放测试；旧版本归档至官网「历史版本」区块                    |
 
 > [!NOTE] 安装耗时说明 / Install time
 > 安装需 **3–5 分钟**：安装包内含完整的本地 Python 运行环境（数百 MB、上万个文件），进度条按文件逐个推进，**前期移动缓慢属正常现象**，请耐心等待，不要强行关闭。装完可在完成页勾选「立即运行」直接启动（会弹 UAC 管理员确认）。
@@ -86,7 +86,7 @@
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `concept` 分析角色概念  | LLM 抽取姓名/年龄/职业/一句话介绍/人格原型/大五人格/标签（5-25%）                                                                                                       |
 | `detail` 生成外貌与性格 | LLM 抽取外貌、性格内核、说话风格、关系与背景故事（25-55%）                                                                                                              |
-| `assemble` 构建人设框架 | 与`preset_templates/yita_default.json` 骨架合并，**剥离伊塔专属数据**（身高三围/外观/故事/称呼），保留 emotion/desire/behavior/cognition 等系统级字段（55-65%） |
+| `assemble` 构建人设框架 | 与`preset_templates/yita_default.json` 骨架合并，保留 emotion/desire/behavior/cognition 等系统级字段（55-65%） |
 | `prompt` 组装系统提示词 | LLM 以**第一人称自洽**撰写人设专属叙事（角色=名字、用户=你），后端强制附加「屏幕隔空铁律 + 消息结构约定」固定规则块（65-90%）                                     |
 | `finalize` 校验并保存   | PersonaValidator 校验，落盘为草稿（不激活），前端自动进入编辑器（90-100%）                                                                                              |
 
@@ -305,8 +305,8 @@ npm run dev
 | `conversation_model_v1`       | 会话模型（独立对话建模/摘要分桶）                                                                                                                                           | 开   |
 | `proactive_delivery_v2`       | 主动消息投放 v2                                                                                                                                                             | 开   |
 | `multi_channel_identity_v1`   | 多端存在时间线（跨端回忆 / 视图 B）                                                                                                                                         | 开   |
-| `thinking_trace_injection_v1` | 决策自省段注入（thinking_trace）                                                                                                                                            | 关   |
-| `memory_write_validation_v1`  | 记忆写入一致性校验门（ConsistencyGate）                                                                                                                                     | 关   |
+| `thinking_trace_injection_v1` | 决策自省段注入（thinking_trace）                                                                                                                                            | 开   |
+| `memory_write_validation_v1`  | 记忆写入一致性校验门（ConsistencyGate）                                                                                                                                     | 开   |
 | `self_evolve_l4_enabled`      | L4 代码自进化（内测）：能力缺口 → LLM 生成 file_changes → 四道安全闸门 → 自动应用/审批/24h 回滚。设置页开启需两次风险确认（危险警告 + 免责声明），开启后即时生效无需重启 | 关   |
 
 > **自进化 / Self Evolution 说明**：L0（能力缺口检测）每次回复后静默运行，命中"模型自述无法 + 工具失败"双信号才提议。L4（代码自修改）默认关闭，开启后由代码模型（`AERIE_WS_CODE_MODEL`）将缺口转成具体 `file_changes`，经白名单/黑名单 + 风险分级 + Gate1 安全审查 / Gate2 语法检查 / Gate3 测试验证（`test_command` 白名单净化）/ Gate4 回滚备份四道闸门：白名单低风险自动应用，核心模块（`core/`）等待人工审批，24 小时内可经 `/api/self_evolve/l4/*` 一键回滚。幻觉防护：AI 提案注册的占位工具一律显式失败（`success=False`），主模型无法把 stub 当作真实能力。变更审计台账存于 `data/evolution_backups/` 与 journal。
@@ -389,10 +389,10 @@ npm run build:win:alt
 
 线上官网：[https://spotlight.etta.top/](https://spotlight.etta.top/)
 
-当前官网下载配置位于 `Spotlight/src/config/release.ts`，指向 GitHub Release `v0.3.1-Beta.1`：
+当前官网下载配置位于 `Spotlight/src/config/release.ts`，指向 GitHub Release `v0.3.2-beta.0903-A12`：
 
-- `Aerie-Cloud-0.3.1-Beta.1-portable.exe`
-- `Aerie-Cloud-0.3.1-Beta.1-Setup.exe`
+- `Aerie Companion-0.3.2-beta.0903-A12-portable.exe`
+- `Aerie Companion-0.3.2-beta.0903-A12-Setup.exe`
 
 历史版本 `0.1.0-beta.1` 已归档至官网「历史版本」区块（`historicalReleases`），不再作为默认下载入口。
 
@@ -1199,7 +1199,7 @@ AERIE_WS_KEYS=aerie-kFcCr0zyxq4vo50
 - **禁止**：未经书面授权复制、修改、再分发、反编译、出售、集成进商业产品或用于任何商业目的
 - 商业用途须先与作者签订**书面商业许可**，否则视为侵权
 
-**Aerie · 云栖** — 你的本地 AI 桌面伴侣，把陪伴写成你想要的模样。
+**Aerie Companion** — 本地优先的 AI 工作伙伴，让对话、记忆和工作流由你掌控。
 
 ---
 

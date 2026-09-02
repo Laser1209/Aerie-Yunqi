@@ -1,8 +1,8 @@
 {
   "name": "aerie-spotlight",
   "private": true,
-  "version": "0.1.0-beta.1",
-  "description": "GitHub Pages showcase site for Aerie · 云栖.",
+  "version": "0.3.2-beta.0903-A12",
+  "description": "GitHub Pages showcase site for Aerie Companion.",
   "homepage": "https://spotlight.etta.top/",
   "repository": {
     "type": "git",

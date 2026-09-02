@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { release } from '../config/release'
 import BlurText from '../components/BlurText'
 import { ArrowUpRight, PlayIcon, ClockIcon, GlobeIcon } from '../components/icons'
+import { measureOpenAIAds } from '../analytics/openaiAds'
 
 const stackNames = ['Electron', 'Python', 'NapCat', 'Qwen', 'DeepSeek', 'Gemini', 'Flutter']
 
@@ -36,14 +37,14 @@ export default function Hero() {
           {...fadeIn(0.8)}
           className="mt-4 max-w-2xl text-sm font-light leading-tight text-white md:text-base"
         >
-          把陪伴写成你想要的模样——Aerie · 云栖由 Electron 桌面壳与 Python
-          智能内核组成，办公学习、情感陪伴、电脑操控、主动关怀，一个就够了。
+          Aerie Companion 将 Electron 桌面壳与 Python 智能内核结合，把本地对话、长期记忆、工作流和可选语音放在你的设备上，按你的边界运行。
         </motion.p>
 
         <motion.div {...fadeIn(1.1)} className="mt-6 flex items-center gap-6">
           <a
             href={release.url}
             download={release.filename}
+            onClick={() => measureOpenAIAds('contents_viewed')}
             className="liquid-glass-strong flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-white"
           >
             获取便携版

@@ -125,7 +125,7 @@ class DataViewer {
         const attachmentHtml = attachments.length && window._chat
           ? `<div class="chat-attachments">${attachments.map((item) => window._chat._buildAttachmentCard(item)).join("")}</div>`
           : "";
-        return `<div class="chat-log-item"><span class="log-role">${this.esc(m.role === "user" ? "你" : "伊塔")}</span><span class="log-content">${this.esc(m.content || "").slice(0, 160)}${attachmentHtml}</span><span class="log-time">${this.esc(m.created_at ? m.created_at.slice(0, 19) : "")}</span></div>`;
+        return `<div class="chat-log-item"><span class="log-role">${this.esc(m.role === "user" ? "你" : "Aerie Companion")}</span><span class="log-content">${this.esc(m.content || "").slice(0, 160)}${attachmentHtml}</span><span class="log-time">${this.esc(m.created_at ? m.created_at.slice(0, 19) : "")}</span></div>`;
       }).join("");
       this.updatePagination("chat");
     } catch (e) { el.innerHTML = `<p class="data-error">加载失败：${this.esc(e.message || "请求错误")}</p>`; }

@@ -85,6 +85,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // These controllers are global, but neither needs to block first paint.
   scheduleAfterFirstPaint(() => {
+    if (window.ApprovalModal) {
+      initOnce("approval-modal", () => {
+        window.approvalModal = new ApprovalModal();
+        window.approvalModal.init?.();
+      });
+    }
     if (window.OfficeModeController) {
       initOnce("office-mode", () => {
         window.officeMode = new OfficeModeController();
@@ -499,6 +505,13 @@ let _apiDisabled = [];
 
 function _setApiWarningState(providers) {
   _apiDisabled = (providers && providers.disabled_providers) || [];
+  _refreshApiWarning();
+}
+
+// Connectivity probes return a flat list of unavailable provider names,
+// while health snapshots return {disabled_providers}. Keep one warning path.
+function _setApiConnectivity(providerNames) {
+  _apiDisabled = Array.isArray(providerNames) ? providerNames : [];
   _refreshApiWarning();
 }
 

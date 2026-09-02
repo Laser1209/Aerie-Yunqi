@@ -26,7 +26,7 @@ async function withBackendWait(invoke, opts) {
 
 contextBridge.exposeInMainWorld("aerie", {
   api: {
-    request: (opts) => withBackendWait((o) => ipcRenderer.invoke("api:request", o), opts),
+    request: (opts) => withBackendWait((opts) => ipcRenderer.invoke("api:request", opts), opts),
     // R7.0: multipart upload IPC. Renderer passes raw bytes (as Array)
     // + filename/contentType; the main process builds the multipart body
     // and forwards to the Python backend. This is the only path that

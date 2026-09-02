@@ -169,7 +169,7 @@ def test_assembler_skips_thinking_trace_when_absent():
     assert result.audit["thinking_trace_chars"] == 0
 
 
-def test_thinking_trace_flag_default_off():
+def test_thinking_trace_flag_default_on():
     from core.feature_flags import FeatureFlags
 
-    assert FeatureFlags().is_enabled("thinking_trace_injection_v1") is False
+    assert FeatureFlags().is_enabled("thinking_trace_injection_v1") is True

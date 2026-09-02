@@ -113,7 +113,7 @@ class PersonaHubPanel {
                 <h3 class="persona-section__title">基础信息</h3>
                 <div class="persona-form-row">
                   <label class="persona-form-label">人设名称 *</label>
-                  <input type="text" class="persona-form-input" id="persona-field-name" placeholder="例如：伊塔">
+                  <input type="text" class="persona-form-input" id="persona-field-name" placeholder="例如：Aerie Companion">
                 </div>
                 <div class="persona-form-row">
                   <label class="persona-form-label">英文名</label>
@@ -285,7 +285,7 @@ class PersonaHubPanel {
             <div class="persona-wizard__body">
               <label class="persona-wizard__label">角色描述 *</label>
               <textarea id="persona-wizard-desc" class="persona-wizard__desc" rows="5"
-                placeholder="例如：银发红瞳的温柔御姐设计师，28岁，是我的恋人，表面从容克制、私下占有欲极强，会用最轻的声音说最笃定的情话…"></textarea>
+                placeholder="例如：一位帮助我整理信息、拆解任务并保持清晰表达的学习搭档，尊重隐私边界，不代替我做重要决定"></textarea>
               <div class="persona-wizard__options">
                 <label class="persona-wizard__opt">名字 <input id="persona-wizard-name" class="persona-form-input" placeholder="可选"></label>
                 <label class="persona-wizard__opt">英文名 <input id="persona-wizard-english_name" class="persona-form-input" placeholder="可选"></label>
@@ -295,14 +295,14 @@ class PersonaHubPanel {
                   </select>
                 </label>
                 <label class="persona-wizard__opt">年龄 <input id="persona-wizard-age" class="persona-form-input" type="number" min="0" max="200" placeholder="可选"></label>
-                <label class="persona-wizard__opt">关系类型 <input id="persona-wizard-relationship" class="persona-form-input" placeholder="恋人 / 朋友 / 导师…"></label>
+                <label class="persona-wizard__opt">关系类型 <input id="persona-wizard-relationship" class="persona-form-input" placeholder="学习搭档 / 朋友 / 导师…"></label>
                 <label class="persona-wizard__opt">你的名字 <input id="persona-wizard-user-name" class="persona-form-input" placeholder="你的昵称，可选"></label>
               </div>
 
               <div class="persona-wizard__story">
                 <label class="persona-wizard__label">两人故事起因（可选）</label>
                 <textarea id="persona-wizard-story" class="persona-wizard__desc persona-wizard__desc--short" rows="3"
-                  placeholder="例如：TA 是我的秘书，想先从工作关系慢慢靠近我…"></textarea>
+                  placeholder="例如：TA 是我的项目助理，我们从一次任务规划开始合作…"></textarea>
                 <div class="persona-wizard__story-actions">
                   <button type="button" class="persona-btn persona-btn--ghost persona-btn--sm" id="persona-wizard-recommend-btn">
                     为我推荐故事概念
@@ -636,7 +636,7 @@ class PersonaHubPanel {
       return;
     }
 
-    // 静默删除：内置伊塔仅隐藏，其它角色物理删除；不弹任何确认框
+    // 静默删除：内置默认角色仅隐藏，其它角色物理删除；不弹任何确认框
     try {
       await window.aerie.api.request({
         method: "DELETE",
@@ -714,7 +714,7 @@ class PersonaHubPanel {
         name: data.name || "",
         english_name: data.english_name || "",
         age: data.age ?? 0,
-        product_name: "Aerie · 云栖",
+        product_name: "Aerie Companion",
       },
       personality: {
         cores: traits,
@@ -1239,7 +1239,7 @@ class PersonaHubPanel {
         method: "POST",
         path: "/api/persona/hub/generate/concepts",
         body: JSON.stringify({
-          relationship_type: relEl && relEl.value.trim() ? relEl.value.trim() : "恋人",
+          relationship_type: relEl && relEl.value.trim() ? relEl.value.trim() : "学习搭档",
           story_seed: storySeed,
           description: descEl ? descEl.value.trim() : "",
         }),

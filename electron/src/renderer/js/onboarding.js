@@ -79,7 +79,7 @@ window.OnboardingController = class OnboardingController {
         body: () =>
           '<p class="onb-p">已为你打开 <b>设置 → 常用</b>，这里可以调整：</p>'
           + '<ul class="onb-list">'
-          + '<li><b>主题</b>：伊塔粉 / 深夜紫 / 樱白 / 海蓝 / 森绿</li>'
+          + '<li><b>主题</b>：珊瑚粉 / 深夜紫 / 樱白 / 海蓝 / 森绿</li>'
           + '<li><b>开机自启</b>：登录系统后自动启动 Aerie</li>'
           + '<li><b>主动推送</b>：允许 Aerie 主动关心你，可设置每日次数与间隔</li>'
           + '</ul>'
@@ -94,7 +94,7 @@ window.OnboardingController = class OnboardingController {
         subtitle: "完整的功能说明都收在 WIKI 里。",
         nav: null,
         body: () =>
-          '<p class="onb-p">打开完整的《Aerie · 云栖使用指南》，从对话、记忆到灵动岛一网打尽。</p>'
+          '<p class="onb-p">打开完整的《Aerie Companion 使用指南》，从对话、记忆到灵动岛一网打尽。</p>'
           + '<div class="onb-wiki-actions">'
           + '<button type="button" class="btn btn-secondary" id="onb-open-wiki">'
           + '<svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-book-open"/></svg>打开完整指南'

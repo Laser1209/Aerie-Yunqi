@@ -486,9 +486,6 @@ function _spawnNewPython() {
       AERIE_BACKEND_INSTANCE_ID: EXPECTED_BACKEND_INSTANCE_ID,
       AERIE_MAIN_PROCESS_TOKEN: MAIN_PROCESS_TOKEN,
       LOG_DIR: BACKEND_LOG_DIR,
-      AERIE_BUILD_MANIFEST: app.isPackaged
-        ? path.join(process.resourcesPath, "build-manifest.json")
-        : path.join(PROJECT_ROOT, "build-manifest.json"),
     },
   });
 
@@ -565,7 +562,7 @@ function _showRuntimeBootstrapFailure(rt) {
 
   const reason = (rt && rt.reason) || "未知错误";
   const detail =
-    `Aerie Companion 无法自动下载 Python 运行环境。\n\n` +
+    `Aerie · 云栖 无法自动下载 Python 运行环境。\n\n` +
     `原因：${reason}\n\n` +
     `已生成手动安装教程：\n${tutorialPath}\n\n` +
     `按教程补齐运行环境后，重启应用即可。`;
@@ -959,9 +956,6 @@ function finishSplash() {
     loading_boot_session: _getBootSessionId(),
   });
   if (splashWindow && !splashWindow.isDestroyed()) {
-    // 窗口以 closable:false 创建，必须先解除关闭限制，否则 close() 失效，
-    // 开场动画窗口会永远盖在主窗口上（与 dynamicIsland 关闭前 setClosable(true) 同理）。
-    splashWindow.setClosable(true);
     splashWindow.close();
   }
   if (isStartMinimizedArgPresent()) {
@@ -1484,9 +1478,6 @@ let _islandExpanded = false;
 
 function setIslandExpanded(expanded) {
   _islandExpanded = Boolean(expanded);
-  if (dynamicIsland && !dynamicIsland.isDestroyed()) {
-    dynamicIsland.setIgnoreMouseEvents(false);
-  }
   setIslandIgnoreMouse(false);
   if (_mediaPollingActive) _scheduleMediaPoll(0);
 }
@@ -1519,7 +1510,7 @@ function createTray() {
     return;
   }
   tray = new Tray(icon);
-  tray.setToolTip("Aerie Companion");
+  tray.setToolTip("Aerie · 云栖");
   // Block-2 T1: right-click context menu
   const menu = Menu.buildFromTemplate([
     {
@@ -1583,10 +1574,10 @@ function createTray() {
       click: () => {
         dialog.showMessageBox({
           type: "info",
-          title: "Aerie Companion",
-          message: "Aerie Companion",
+          title: "Aerie · 云栖",
+          message: "Aerie · 云栖",
           detail:
-            "Aerie Companion v" + app.getVersion() + "\n" +
+            "Aerie · 云栖 v" + app.getVersion() + "\n" +
             "A girl who walks with you through every step.\n" +
             "© 2026",
           buttons: ["好 / OK"],
@@ -1858,7 +1849,7 @@ ipcMain.handle("system:notify", async (_event, data) => {
     }
     if (!Notification.isSupported()) return { ok: false, error: "notification_not_supported" };
     const notification = new Notification({
-      title: String(data?.title || "Aerie Companion"),
+      title: String(data?.title || "Aerie · 云栖"),
       body: String(data?.body || data?.desc || ""),
       icon: fs.existsSync(ICON_PATH) ? ICON_PATH : undefined,
       silent: Boolean(data?.silent),
@@ -3079,33 +3070,6 @@ ipcMain.handle("napcat:stop", async () => {
     return r.data;
   } catch (_) {
     return { ok: false, message: "backend unreachable" };
-  }
-});
-
-ipcMain.handle("ilinkGateway:getStatus", async () => {
-  try {
-    const r = await apiRequest({ path: "/api/ilink/status" });
-    return r.data && typeof r.data === "object" ? r.data : { phase: "disabled", configured: false };
-  } catch (_) {
-    return { phase: "disabled", configured: false, connected: false, error_code: "backend_unreachable" };
-  }
-});
-
-ipcMain.handle("ilinkGateway:start", async () => {
-  try {
-    const r = await apiRequest({ method: "POST", path: "/api/ilink/start" });
-    return r.data;
-  } catch (_) {
-    return { phase: "disabled", configured: false, connected: false, error_code: "backend_unreachable" };
-  }
-});
-
-ipcMain.handle("ilinkGateway:stop", async () => {
-  try {
-    const r = await apiRequest({ method: "POST", path: "/api/ilink/stop" });
-    return r.data;
-  } catch (_) {
-    return { phase: "disabled", configured: false, connected: false, error_code: "backend_unreachable" };
   }
 });
 

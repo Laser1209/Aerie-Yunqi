@@ -56,7 +56,7 @@ class ChatManager {
     // R7.5: avatar_dataurl is the base64 inline form. The renderer
     // never goes through `<img src="/api/...">` because Electron's
     // file:// protocol would resolve that to file:///api/... (a 404).
-    this._personaCache = { name: "伊塔", english_name: "Ita", avatar_url: "", avatar_dataurl: "" };
+    this._personaCache = { name: "Aerie Companion", english_name: "Aerie Companion", avatar_url: "", avatar_dataurl: "" };
     // 角色级隔离：当前激活角色 id。头像的 localStorage 缓存按它分区
     // （aerie.persona.<pid>.avatar），保证切换角色后头像不串。
     this._personaId = "";
@@ -238,7 +238,7 @@ class ChatManager {
     }
     // 窗口未聚焦时发系统通知
     if (!this._windowFocused) {
-      const name = (this._personaCache && this._personaCache.name) || "伊塔";
+      const name = (this._personaCache && this._personaCache.name) || "Aerie Companion";
       const preview = (msgContent || "").replace(/<[^>]*>/g, "").slice(0, 80);
       this._notifySystem(name, preview || "发来一条新消息");
     }
@@ -291,10 +291,13 @@ class ChatManager {
   async _startChatForIdentity() {
     if (this._chatStarted || !this._identityReady) return;
     this._chatStarted = true;
+    // Register the guarded poll loop synchronously. The callback skips while
+    // history is loading, preserving history-first ordering without a startup
+    // race or a missing recovery loop.
+    this._startPoll();
     // 先落历史再开轮询: 消除首次 poll(since_id=0) 全量拉取与历史页的并发竞态,
     // 避免旧消息后到导致的时间乱序。
     await this.loadHistory();
-    this._startPoll();
   }
 
   _syncSendAvailability() {
@@ -483,7 +486,7 @@ class ChatManager {
         <span class="chat-msg__avatar chat-msg__avatar--placeholder">伊</span>
       </div>
       <div class="chat-msg__body">
-        <div class="chat-msg__name">伊塔</div>
+        <div class="chat-msg__name">Aerie Companion</div>
         <div class="chat-bubble cc-card">
           <div class="cc-card__head">
             <span class="cc-card__icon">
@@ -547,16 +550,16 @@ class ChatManager {
             const ok = r && r.data && r.data.status === "ok";
             if (ok) {
               if (act === "approve_wl") {
-                statusEl.textContent = "✓ 已放行并加入白名单，下次自动放行";
+                statusEl.textContent = "已放行并加入白名单，下次自动放行";
                 statusEl.className = "cc-card__status cc-card__status--ok";
               } else if (act === "approve") {
-                statusEl.textContent = "✓ 已放行";
+                statusEl.textContent = "已放行";
                 statusEl.className = "cc-card__status cc-card__status--ok";
               } else if (act === "reject_bl") {
-                statusEl.textContent = "✕ 已拒绝并加入黑名单，下次直接拦截";
+                statusEl.textContent = "已拒绝并加入黑名单，下次直接拦截";
                 statusEl.className = "cc-card__status cc-card__status--reject";
               } else {
-                statusEl.textContent = "✕ 已拒绝";
+                statusEl.textContent = "已拒绝";
                 statusEl.className = "cc-card__status cc-card__status--reject";
               }
             } else {
@@ -587,10 +590,10 @@ class ChatManager {
     const statusEl = el.querySelector("[data-cc-status]");
     if (!statusEl) return;
     if (payload.status === "approved") {
-      statusEl.textContent = payload.whitelist ? "✓ 已放行并加入白名单，下次自动放行" : "✓ 已放行";
+      statusEl.textContent = payload.whitelist ? "已放行并加入白名单，下次自动放行" : "已放行";
       statusEl.className = "cc-card__status cc-card__status--ok";
     } else if (payload.status === "rejected") {
-      statusEl.textContent = payload.blacklist ? "✕ 已拒绝并加入黑名单，下次直接拦截" : "✕ 已拒绝";
+      statusEl.textContent = payload.blacklist ? "已拒绝并加入黑名单，下次直接拦截" : "已拒绝";
       statusEl.className = "cc-card__status cc-card__status--reject";
     }
     el.querySelectorAll(".cc-card__btn").forEach((b) => (b.disabled = true));
@@ -672,7 +675,7 @@ class ChatManager {
     if (!this._el || !this._el.messages) return;
     const ai = this._personaCache.avatar_dataurl || this._personaCache.avatar_url || "";
     const user = this._userDataurl || this._masterAvatar || "";
-    const aiName = this._personaCache.name || "伊塔";
+    const aiName = this._personaCache.name || "Aerie Companion";
     const userName = this._userName || "你";
     const aiPlaceholder = (aiName || "伊").slice(0, 1);
     const userPlaceholder = (userName || "你").slice(0, 1);
@@ -763,7 +766,7 @@ class ChatManager {
     try {
       const r = await this._request({
         method: "GET",
-        path: "/api/qq/avatar?user_id=" + this._masterQQ,
+        path: "/api/persona/avatar?user_id=" + this._masterQQ,
       });
       if (r && r.data && !r.data.error && typeof r.data.url === "string") {
         this._masterAvatar = r.data.url;
@@ -772,7 +775,7 @@ class ChatManager {
   }
 
   _recallNoticeHtml() {
-    const name = (this._personaCache && this._personaCache.name) || "伊塔";
+    const name = (this._personaCache && this._personaCache.name) || "Aerie Companion";
     return `<div class="chat-msg__recall-notice">${this._escapeHtml(name)} 撤回了一条消息</div>`;
   }
 
@@ -784,6 +787,8 @@ class ChatManager {
   }
 
   _startPoll() {
+    if (this._pollStarted) return;
+    this._pollStarted = true;
     setInterval(async () => {
       try {
         const resp = await this._request({
@@ -993,7 +998,7 @@ class ChatManager {
   _buildMessageHtml(msg, { typing = false } = {}) {
     const isAssistant = msg.role === "assistant";
     const displayName = isAssistant
-      ? (this._personaCache && this._personaCache.name) || "伊塔"
+      ? (this._personaCache && this._personaCache.name) || "Aerie Companion"
       : this._userName || "你";
     const aiAvatar = (this._personaCache && this._personaCache.avatar_dataurl)
       || (this._personaCache && this._personaCache.avatar_url)
@@ -1011,7 +1016,7 @@ class ChatManager {
     const tsRaw = msg.ts ?? msg.created_at;
     const tsText = this._formatTime(tsRaw);
     if (!typing && msg.reply_to_id && (msg.reply_to_content || (msg.reply_to_attachments && msg.reply_to_attachments.length))) {
-      const role = msg.reply_to_role === "user" ? "你" : "伊塔";
+    const role = msg.reply_to_role === "user" ? "你" : (this._personaCache.name || "Aerie Companion");
       const previewText = msg.reply_to_content
         ? this._escapeHtml((msg.reply_to_content || "").slice(0, 60))
         : "";
@@ -1193,6 +1198,7 @@ class ChatManager {
         ${transcript ? `<div class="chat-audio-transcript">${transcript}</div>` : ""}
         ${notice ? `<div class="chat-attach-card__notice-row">${notice}</div>` : ""}
         ${error ? `<div class="chat-attach-card__error-row" title="${error}">${error}</div>` : ""}
+        ${(open || retry) ? `<div class="chat-attach-card__actions">${open}${retry}</div>` : ""}
       </div>`;
     }
 
@@ -1255,6 +1261,14 @@ class ChatManager {
     const domId = "req_" + requestId;
     const bubble = this._el.messages.querySelector(`[data-id="${domId}"]`);
     const active = ["running", "cancelling"].includes(state.status);
+    // A later status signal can arrive after a real assistant segment. Do
+    // not recreate a typing placeholder beside that completed segment.
+    const hasRealAssistant = Array.from(this._el.messages.children || []).some((node) =>
+      node.getAttribute && node.getAttribute("data-request-id") === requestId
+      && node.getAttribute("data-chat-typing") !== "true"
+      && node.className.includes("chat-msg--assistant"),
+    );
+    if (hasRealAssistant) return bubble || null;
     if (!active) {
       // 仅在仍是输入中气泡时移除; 已升级为真实内容则保留。
       if (bubble && bubble.getAttribute("data-chat-typing") === "true") {
@@ -1378,6 +1392,18 @@ class ChatManager {
     if (empty) empty.remove();
     const domId = msg.id;
     let el = this._el.messages.querySelector(`[data-id="${domId}"]`);
+    // A status update can create a typing node just before the first real
+    // segment arrives. Reuse that node even if a transport supplied a
+    // different DOM id, and collapse any duplicate placeholders for the same
+    // request before rendering the real assistant message.
+    if (!el && !msg.typing && msg.role === "assistant" && msg.request_id) {
+      const candidates = Array.from(this._el.messages.children || []).filter((node) =>
+        node.getAttribute && node.getAttribute("data-request-id") === String(msg.request_id)
+        && node.getAttribute("data-chat-typing") === "true",
+      );
+      el = candidates.shift() || null;
+      for (const duplicate of candidates) duplicate.remove?.();
+    }
     const create = !el;
     const wasTyping = el && el.classList.contains("chat-msg--typing");
     if (create) {
@@ -1515,8 +1541,15 @@ class ChatManager {
       if (k && this._compareSortKeys(myKey, k) < 0) { anchor = node; break; }
     }
     if (anchor) {
-      if (el.nextElementSibling !== anchor) list.insertBefore(el, anchor);
+      if (el.nextElementSibling !== anchor) {
+        // Native DOM moves an existing node automatically; the explicit
+        // remove also keeps lightweight test/fallback DOMs from duplicating
+        // the same message reference during reordering.
+        el.remove?.();
+        list.insertBefore(el, anchor);
+      }
     } else if (el.nextElementSibling && el.nextElementSibling.classList.contains("chat-msg")) {
+      el.remove?.();
       list.appendChild(el);
     }
   }
@@ -1613,7 +1646,11 @@ class ChatManager {
       this._clientToRequest.set(next.client_id, requestId);
     }
     this._renderRequestStatus(next);
-    this._syncRequestTypingBubble(next);
+    // Message-bearing signals are rendered by chat-store and must not cause
+    // the status owner to manufacture another typing bubble.
+    if (!(view.role === "assistant" && view.content)) {
+      this._syncRequestTypingBubble(next);
+    }
     this._persistPendingRequestState();
     return next;
   }
@@ -1882,7 +1919,7 @@ class ChatManager {
     bar.innerHTML = `
       <span class="chat-quote-bar__icon"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-reply"/></svg></span>
       <div class="chat-quote-bar__text">
-        引用 ${this._quotedMsg.role === "user" ? "你" : "伊塔"}：
+        引用 ${this._quotedMsg.role === "user" ? "你" : (this._personaCache.name || "Aerie Companion")}：
         <span class="chat-quote-bar__preview">${this._escapeHtml((this._quotedMsg.content || "").slice(0, 60))}</span>
       </div>
       <button class="chat-quote-bar__cancel" id="chat-quote-cancel" title="取消引用"><svg class="icon icon--12" aria-hidden="true"><use href="#icon-ui-close"/></svg></button>

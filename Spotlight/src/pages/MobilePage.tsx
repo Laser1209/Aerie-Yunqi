@@ -109,7 +109,7 @@ export default function MobilePage() {
           <PageIntro
             label="Mobile · Android"
             title={'A companion,\nin your pocket.'}
-            description={'Aerie · 云栖的移动端接收端。用 Flutter 双端重写，与桌面端经安全网关一对一配对，把对话、文件与跨端时间线同步放进手机。基础架构与多端会话已落地，只读能力屏与真机验收持续推进中。'}
+            description={'Aerie Companion 的移动端接收端。用 Flutter 双端重写，与桌面端经安全网关一对一配对，把对话、文件与跨端时间线同步放进手机。基础架构与多端会话已落地，只读能力屏与真机验收持续推进中。'}
           />
           <motion.p
             {...fade}
@@ -133,10 +133,10 @@ export default function MobilePage() {
               <p className="text-xs text-white/50">Baseline / 基础里程碑</p>
               <div className="mt-6 flex flex-wrap items-center gap-4">
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-white">
-                  P-S1 <span className="text-emerald-300">✓ PASS</span>
+                  P-S1 <span className="text-emerald-300">PASS</span>
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-white">
-                  P-S2 <span className="text-emerald-300">✓ PASS</span>
+                  P-S2 <span className="text-emerald-300">PASS</span>
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1 text-sm font-medium text-white/60">
                   P-S3 … P-S7 <span className="text-white/40">—</span>

@@ -34,7 +34,7 @@ export default function SiteHeader() {
       >
         <img
           src={logoSrc}
-          alt="Aerie · 云栖"
+          alt="Aerie Companion"
           className="h-full w-full rounded-full object-cover"
           width="36"
           height="36"

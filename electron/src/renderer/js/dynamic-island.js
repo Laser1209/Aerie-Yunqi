@@ -72,7 +72,7 @@
 
   let uiState = {
     companion: { mood: "joy", status: "online" },
-    statusText: "云栖在你身边",
+    statusText: "Aerie Companion 就绪",
     statusScene: "",
     notifications: { count: 0, items: [] },
     system: { cpu: 0, mem: 0, net: null },
@@ -360,9 +360,9 @@
     const moodText = { joy: "开心陪伴中", neutral: "静静陪着你", sad: "有点低落中", anger: "气鼓鼓", fear: "担心你呢" }[uiState.companion.mood] || "陪伴中";
     return `
       <section class="card companion">
-        <span class="av"><img src="${avatarImg ? avatarImg.src : fallbackLogo}" alt="云栖头像"></span>
+        <span class="av"><img src="${avatarImg ? avatarImg.src : fallbackLogo}" alt="Aerie Companion 头像"></span>
         <div class="info">
-          <div class="nm">云栖 <span class="mood">· ${moodText}</span></div>
+          <div class="nm">Aerie Companion <span class="mood">· ${moodText}</span></div>
           <div class="line">${uiState.companion.line || "想和你说说话。"}</div>
           <div class="since">已陪伴 ${formatDuration(Date.now() - uiState.companionStartTime)} · 此刻${uiState.statusScene ? " " + uiState.statusScene : ""}</div>
         </div>
@@ -475,7 +475,7 @@
     const b = data?.brief || {};
     const wx = b.weather && (b.weather.temperature !== undefined || b.weather.description)
       ? `<div class="wx">
-          <span class="wx-emoji">${b.weather.icon || "☀️"}</span>
+          <span class="wx-emoji">${b.weather.icon || "天气"}</span>
           <div>
             <div class="tm">${b.weather.temperature !== undefined ? `${b.weather.temperature}°` : "--"}</div>
             <div class="ds">${escapeHtml(String(b.weather.description || "天气未知"))}${b.weather.city ? ` · ${escapeHtml(b.weather.city)}` : ""}</div>
@@ -690,14 +690,16 @@
   let mediaTickTimer = null;
   function startMediaTick() {
     stopMediaTick();
-    mediaTickTimer = setInterval(() => {
+    const tick = () => {
       if (!uiState.media.playing || !diEl.classList.contains("open")) return;
       uiState.media.progress += 1;
       updateMediaProgressDom();
-    }, 1000);
+      mediaTickTimer = setTimeout(tick, 1000);
+    };
+    mediaTickTimer = setTimeout(tick, 1000);
   }
   function stopMediaTick() {
-    if (mediaTickTimer) { clearInterval(mediaTickTimer); mediaTickTimer = null; }
+    if (mediaTickTimer) { clearTimeout(mediaTickTimer); mediaTickTimer = null; }
   }
   function syncMediaTick() {
     if (uiState.media.playing && diEl.classList.contains("open")) startMediaTick();
@@ -769,9 +771,9 @@
             seenNotifyEventIds.add(eid);
             if (seenNotifyEventIds.size > 800) seenNotifyEventIds.delete(seenNotifyEventIds.values().next().value);
           }
-          addNotification(data.title || "云栖", data.text, data.icon || "ui-bell", payload.type);
+          addNotification(data.title || "Aerie Companion", data.text, data.icon || "ui-bell", payload.type);
           if (payload.type === "proactive_message" && data.notify_system) {
-            api?.systemNotify?.({ title: data.title || "Aerie · 云栖", body: data.text, scene: data.scene })?.catch?.(() => {});
+            api?.systemNotify?.({ title: data.title || "Aerie Companion", body: data.text, scene: data.scene })?.catch?.(() => {});
           }
         }
         break;

@@ -1,14 +1,15 @@
 {
   "name": "aerie-companion",
-  "productName": "Aerie · 云栖",
-  "version": "0.3.1-BETA.0815A4",
+  "productName": "Aerie Companion",
+  "version": "0.3.2-beta.0903-A12",
   "description": "Aerie - Local-first AI companion with auto-wake proactive messenger",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build:runtime": "python ../scripts/build_python_runtime.py",
-    "build:win": "npm run build:runtime && electron-builder --win --x64 && node scripts/post-build-rcedit.js",
-    "build:win:alt": "npm run build:runtime && electron-builder --win --x64 --config.directories.output=dist-final && node scripts/post-build-rcedit.js",
+    "build:runtime": "python ../scripts/build_python_runtime.py --out runtime-build-vfix",
+    "build:win": "npm run build:runtime && python ../scripts/write_build_manifest.py && electron-builder --win --x64 && node scripts/post-build-rcedit.js",
+    "build:win:alt": "npm run build:runtime && python ../scripts/write_build_manifest.py && electron-builder --win --x64 --config.directories.output=dist-final && node scripts/post-build-rcedit.js",
+    "build:win:d": "python ../scripts/write_build_manifest.py && node scripts/build-win-d.js",
     "build:icons": "node scripts/build-icon-sprite.js",
     "check:emojis": "node scripts/check-emojis.js",
     "check:forbidden": "python ../tools/check_forbidden.py",
@@ -29,7 +30,7 @@
   },
   "build": {
     "appId": "com.laser.aerie",
-    "productName": "Aerie · 云栖",
+    "productName": "Aerie Companion",
     "directories": {
       "output": "dist",
       "buildResources": "builder"
@@ -43,8 +44,9 @@
     "extraResources": [
       { "from": "../Aerie · 云栖.png", "to": "icon.png" },
       { "from": "../.env.example", "to": ".env.example" },
+      { "from": "../build-manifest.json", "to": "build-manifest.json" },
       { "from": "../video", "to": "video" },
-      { "from": "runtime-build", "to": "python/runtime" },
+      { "from": "runtime-build-vfix", "to": "python/runtime" },
       {
         "from": "../",
         "to": "python",
@@ -92,7 +94,7 @@
           ]
         }
       ],
-      "requestedExecutionLevel": "requireAdministrator",
+      "requestedExecutionLevel": "asInvoker",
       "artifactName": "${productName}-${version}-Setup.${ext}",
       "publisherName": "Laser",
       "signAndEditExecutable": false,
@@ -108,7 +110,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Aerie · 云栖",
+      "shortcutName": "Aerie Companion",
       "include": "builder/installer.nsh"
     }
   }

@@ -315,7 +315,7 @@ function buildManualTutorial(version) {
   const ver = version || DEFAULT_PYTHON_VERSION;
   const zipName = `python-${ver}-embed-amd64.zip`;
   return [
-    `Aerie · 云栖 运行环境安装教程`,
+    `Aerie Companion 运行环境安装教程`,
     ``,
     `自动下载失败，请手动补齐 Python 运行环境（${ver} / Windows 64 位）：`,
     ``,

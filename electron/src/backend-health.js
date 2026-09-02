@@ -28,7 +28,7 @@ function backendHealthMatches({
   const expected = canonicalPathForComparison(expectedDbPath);
   const advertised = canonicalPathForComparison(data.data_path_id);
   const legacy = canonicalPathForComparison(legacyDbPath);
-  const isAerie = data.app === "Aerie · 云栖";
+  const isAerie = data.app === "Aerie Companion" || data.app === "Aerie · 云栖";
   const pathMatches = !expected
     || (advertised ? advertised === expected : isAerie && legacy === expected);
   if (!pathMatches) return false;

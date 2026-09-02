@@ -108,7 +108,7 @@ def test_parse_raw_json_variants():
     assert MemoryFactValidator._parse_response("garbage")["explicit"] is None
 
 
-def test_validation_flag_default_off():
+def test_validation_flag_default_on():
     from core.feature_flags import FeatureFlags
 
-    assert FeatureFlags().is_enabled("memory_write_validation_v1") is False
+    assert FeatureFlags().is_enabled("memory_write_validation_v1") is True

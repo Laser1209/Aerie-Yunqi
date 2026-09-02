@@ -19,14 +19,14 @@
         <span class="halo" aria-hidden="true"></span>
         <span class="cap-side cap-side--left" id="di-capsule-left"></span>
         <span class="cap-txt">
-          <span id="di-status-main" class="main">云栖在你身边</span>
+          <span id="di-status-main" class="main">Aerie Companion 就绪</span>
           <span id="di-status-sub" class="sub"></span>
         </span>
         <span class="cap-side cap-side--right" id="di-capsule-right"></span>
         <span class="cap-bar">
           <span class="who">
-            <span class="name">云栖 · 浮屿</span>
-            <span class="live"><i aria-hidden="true"></i>在线陪伴中</span>
+            <span class="name" id="di-companion-name">Aerie Companion</span>
+            <span class="live"><i aria-hidden="true"></i>工作伙伴在线</span>
           </span>
           <button type="button" id="di-close" class="close" aria-label="收起">
             <svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-close"/></svg>
@@ -35,7 +35,7 @@
       </div>
 
       <!-- 展开面板：顶部与胶囊无缝相接，窄屏 340 / 宽屏 720 -->
-      <section id="di-expanded" class="expanded" aria-label="云栖灵动岛面板">
+      <section id="di-expanded" class="expanded" aria-label="Aerie Companion 灵动岛面板">
         <div class="wide-body">
           <div class="narrow-col" id="di-expanded-body"></div>
           <section class="wide-pane card" data-pane="brief" aria-label="今日简报" hidden></section>
@@ -46,7 +46,7 @@
   </main>
 
   <!-- 头像源（同步设置页 AI 头像，供胶囊/陪伴卡引用；隐藏不可见） -->
-  <img id="di-avatar" src="assets/logo.png" alt="云栖头像"
+  <img id="di-avatar" src="assets/logo.png" alt="Aerie Companion 头像"
        style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;" aria-hidden="true">
 
   <!-- 内联图标库（自包含，渲染零网络依赖） -->

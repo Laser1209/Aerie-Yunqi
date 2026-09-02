@@ -5,6 +5,7 @@
   const capsuleEl = document.getElementById("di-capsule");
   const statusMain = document.getElementById("di-status-main");
   const statusSub = document.getElementById("di-status-sub");
+  const companionNameEl = document.getElementById("di-companion-name");
   const avatarImg = document.getElementById("di-avatar");
   const closeBtn = document.getElementById("di-close");
   const expandedEl = document.getElementById("di-expanded");
@@ -71,7 +72,7 @@
   };
 
   let uiState = {
-    companion: { mood: "joy", status: "online" },
+    companion: { name: "Aerie Companion", mood: "joy", status: "online" },
     statusText: "Aerie Companion 就绪",
     statusScene: "",
     notifications: { count: 0, items: [] },
@@ -196,6 +197,15 @@
   function fetchInitialData() {
     if (!api) return;
     try {
+      api.api?.({ method: "GET", path: "/api/persona" }).then((r) => {
+        const data = r?.data || {};
+        const name = String(data.name || data.english_name || "").trim();
+        if (name) {
+          uiState.companion.name = name;
+          if (companionNameEl) companionNameEl.textContent = name;
+          if (diEl.classList.contains("open")) renderExpanded();
+        }
+      }).catch(() => {});
       api.getSystemStatus?.().then((r) => {
         if (r?.ok && r.data) { uiState.system = r.data; renderCapsule(); }
       }).catch(() => {});
@@ -228,6 +238,7 @@
     }
     if (leftEl) leftEl.innerHTML = left;
     if (rightEl) rightEl.innerHTML = right;
+    if (companionNameEl) companionNameEl.textContent = uiState.companion.name || "Aerie Companion";
     // 快捷对话：点击直接唤起主窗口聊天（v2 修复：不再是无响应的死图标）
     rightEl?.querySelector(".cap-quick")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -360,9 +371,9 @@
     const moodText = { joy: "开心陪伴中", neutral: "静静陪着你", sad: "有点低落中", anger: "气鼓鼓", fear: "担心你呢" }[uiState.companion.mood] || "陪伴中";
     return `
       <section class="card companion">
-        <span class="av"><img src="${avatarImg ? avatarImg.src : fallbackLogo}" alt="Aerie Companion 头像"></span>
+        <span class="av"><img src="${avatarImg ? avatarImg.src : fallbackLogo}" alt="${escapeHtml(uiState.companion.name || "Aerie Companion")} 头像"></span>
         <div class="info">
-          <div class="nm">Aerie Companion <span class="mood">· ${moodText}</span></div>
+          <div class="nm">${escapeHtml(uiState.companion.name || "Aerie Companion")} <span class="mood">· ${moodText}</span></div>
           <div class="line">${uiState.companion.line || "想和你说说话。"}</div>
           <div class="since">已陪伴 ${formatDuration(Date.now() - uiState.companionStartTime)} · 此刻${uiState.statusScene ? " " + uiState.statusScene : ""}</div>
         </div>
@@ -439,7 +450,7 @@
           <button type="button" class="back" data-back>回窄屏</button>
         </div>
         <div class="pane-body" data-pane-body="brief">
-          <div class="tx">简报由云栖按今天的世界与日程生成，稍后就在这里出现。</div>
+          <div class="tx">Aerie Companion 正在整理今天的世界与日程，稍后就在这里出现。</div>
         </div>`;
     } else {
       pane.innerHTML = `
@@ -795,6 +806,20 @@
           Object.assign(uiState.companion, payload.data);
           renderCapsule();
         }
+        break;
+      case "persona:changed":
+      case "persona_changed":
+        try {
+          api?.api?.({ method: "GET", path: "/api/persona" }).then((r) => {
+            const data = r?.data || {};
+            const name = String(data.name || data.english_name || "").trim();
+            if (name) {
+              uiState.companion.name = name;
+              renderCapsule();
+              if (diEl.classList.contains("open")) renderExpanded();
+            }
+          }).catch(() => {});
+        } catch (_) {}
         break;
       case "status_update":
         if (payload.data?.text) {

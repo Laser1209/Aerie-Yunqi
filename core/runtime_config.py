@@ -84,6 +84,12 @@ DEFAULT_RUNTIME_CONFIG_SPECS: tuple[RuntimeConfigSpec, ...] = (
         env_name="AERIE_FEATURE_WORLD_SIDECAR_V1",
     ),
     RuntimeConfigSpec(
+        key="world_inprocess_v1",
+        default=True,
+        value_type="bool",
+        env_name="AERIE_FEATURE_WORLD_INPROCESS_V1",
+    ),
+    RuntimeConfigSpec(
         key="world_process_supervision_v1",
         default=False,
         value_type="bool",

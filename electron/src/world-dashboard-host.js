@@ -4,6 +4,7 @@ const crypto = require("crypto");
 
 const WORLD_PLUGIN_ID = "aerie.world";
 const WORLD_SIDECAR_FLAG = "world_sidecar_v1";
+const WORLD_INPROCESS_FLAG = "world_inprocess_v1";
 
 function createEnvFeatureFlags(env = process.env) {
   return {
@@ -28,7 +29,14 @@ function createWorldDashboardHost({
   function isEnabled() {
     if (typeof runtimeEnabledOverride === "boolean") return runtimeEnabledOverride;
     try {
-      return !!(featureFlags && featureFlags.isEnabled && featureFlags.isEnabled(WORLD_SIDECAR_FLAG));
+      return !!(
+        featureFlags
+        && featureFlags.isEnabled
+        && (
+          featureFlags.isEnabled(WORLD_SIDECAR_FLAG)
+          || featureFlags.isEnabled(WORLD_INPROCESS_FLAG)
+        )
+      );
     } catch (_) {
       return false;
     }
@@ -253,12 +261,19 @@ function createWorldDashboardHost({
       ? source.values
       : {};
     const sidecar = values.world_sidecar_v1;
-    if (sidecar && typeof sidecar === "object") {
-      runtimeEnabledOverride = sidecar.effectiveValue === true;
-    }
+    const inprocess = values.world_inprocess_v1;
+    const sidecarEnabled = sidecar && typeof sidecar === "object"
+      ? sidecar.effectiveValue === true
+      : false;
+    const inprocessEnabled = inprocess && typeof inprocess === "object"
+      ? inprocess.effectiveValue === true
+      : false;
+    if (sidecar || inprocess) runtimeEnabledOverride = sidecarEnabled || inprocessEnabled;
     runtimeConfigRevision = Number(source.revision || runtimeConfigRevision || 0);
     return {
       enabled: isEnabled(),
+      sidecarEnabled,
+      inprocessEnabled,
       revision: runtimeConfigRevision,
       desired: safeText(
         values.world_desired && values.world_desired.effectiveValue || "stopped",

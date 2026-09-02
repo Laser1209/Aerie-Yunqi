@@ -48,6 +48,30 @@ const { createWorldDashboardHost } = require("./electron/src/world-dashboard-hos
     _run_node(script)
 
 
+def test_world_dashboard_defaults_to_inprocess_capability_without_sidecar():
+    script = r"""
+const { createWorldDashboardHost } = require("./electron/src/world-dashboard-host");
+(async () => {
+  const host = createWorldDashboardHost({
+    featureFlags: { isEnabled: (name) => name === "world_inprocess_v1" },
+    apiRequest: async () => ({ status: 200, data: { status: "healthy" } }),
+  });
+  const status = await host.getStatus();
+  if (status.status !== "hidden") throw new Error("in-process dashboard should be visible-capable");
+  if (status.chatPublishAvailable !== true) throw new Error("chat publish should stay available");
+  const effective = host.applyRuntimeSnapshot({ values: {
+    world_sidecar_v1: { effectiveValue: false },
+    world_inprocess_v1: { effectiveValue: true },
+    world_desired: { effectiveValue: "stopped" },
+  }});
+  if (effective.enabled !== true) throw new Error("in-process world should enable dashboard");
+  if (effective.sidecarEnabled !== false) throw new Error("sidecar should remain off");
+  if (effective.inprocessEnabled !== true) throw new Error("in-process flag missing");
+})().catch((err) => { console.error(err); process.exit(1); });
+"""
+    _run_node(script)
+
+
 def test_world_dashboard_hide_preserves_chat_publish_and_plugin_health():
     script = r"""
 const { createWorldDashboardHost } = require("./electron/src/world-dashboard-host");

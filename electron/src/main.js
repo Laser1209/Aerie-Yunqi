@@ -2262,6 +2262,18 @@ async function reconcileWorldRuntime() {
     await bindWorldConnectionToBackend(true);
     return;
   }
+  // The in-process world is the safe default. Only supervise a child sidecar
+  // when that specific adapter is enabled; the dashboard remains available
+  // for the in-process world without spawning a second service.
+  if (effective.sidecarEnabled !== true) {
+    if (plugin.enabled) {
+      await worldPluginSupervisor.disable("aerie.world", {
+        expectedRevision: plugin.revision,
+      });
+    }
+    await bindWorldConnectionToBackend(true);
+    return;
+  }
   if (!plugin.enabled) {
     await worldPluginSupervisor.enable("aerie.world", {
       expectedRevision: plugin.revision,

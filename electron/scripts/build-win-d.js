@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const outputDir = 'D:/aerie-dist-v046';
+const outputDir = 'D:/aerie-dist-v048';
 const cacheDir = 'D:/aerie-cache/electron-builder';
 const tempDir = 'D:/aerie-cache/tmp';
 for (const dir of [outputDir, cacheDir, tempDir]) fs.mkdirSync(dir, { recursive: true });

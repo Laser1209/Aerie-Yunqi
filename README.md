@@ -1,4 +1,4 @@
-# Aerie Companion V 0.3.2-beta.0903-A07
+# Aerie Companion V 0.3.2-beta.0903-A08
 
 > **本地优先的 AI 桌面伴侣 / Local-first AI desktop companion**
 > 把陪伴写成你想要的模样——一个随你所想、由你定义的 TA。
@@ -31,7 +31,7 @@
 
 | 项目 / Item                            | 状态 / Status                                                                                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **版本 / Version**               | `0.3.2-beta.0903-A07` 商业化投放测试基线                                                                                                      |
+| **版本 / Version**               | `0.3.2-beta.0903-A08` 商业化投放测试基线                                                                                                      |
 | **桌面端 / Desktop**             | Electron 28 + 渲染层多面板 UI + 灵动岛                                                                                                       |
 | **后端 / Backend**               | Python 3.10+ aiohttp + asyncio · LLMCaller 统一调用层                                                                                       |
 | **QQ 接入 / QQ Bridge**          | OneBot11 WebSocket QQ 引擎 · 三端撤回 (QQ/本地/微信预留)                                                                                    |
@@ -46,7 +46,7 @@
 | **角色隔离 / Persona Isolation** | 多角色对话/记忆/头像/图片产出按`persona_id` 隔离 · 会话 ID 按角色哈希 · admin 记录角色标注                                               |
 | **24h 持续监听 / 24H Mon**       | 欲望引擎 / 话题追踪 / 情绪触发 24h 轮询 · watchdog 崩溃自动拉起 · 断点续采 (start-24h-monitor.bat)                                         |
 | **验证 / Tests**                 | 127 个 Python 测试文件 (Phase 0-15、P1 陪伴融合、P0-P3 上下文记忆、管理平台、v13.9、E2E) + 17 个 Electron 测试文件                           |
-| **交付 / Release**               | `0.3.2-beta.0903-A07` 安装包与便携版用于商业化投放测试；旧版本归档至官网「历史版本」区块                    |
+| **交付 / Release**               | `0.3.2-beta.0903-A08` 安装包与便携版用于商业化投放测试；旧版本归档至官网「历史版本」区块                    |
 
 > [!NOTE] 安装耗时说明 / Install time
 > 安装需 **3–5 分钟**：安装包内含完整的本地 Python 运行环境（数百 MB、上万个文件），进度条按文件逐个推进，**前期移动缓慢属正常现象**，请耐心等待，不要强行关闭。装完可在完成页勾选「立即运行」直接启动（会弹 UAC 管理员确认）。
@@ -389,10 +389,10 @@ npm run build:win:alt
 
 线上官网：[https://spotlight.etta.top/](https://spotlight.etta.top/)
 
-当前官网下载配置位于 `Spotlight/src/config/release.ts`，指向 GitHub Release `v0.3.2-beta.0903-A07`：
+当前官网下载配置位于 `Spotlight/src/config/release.ts`，指向 GitHub Release `v0.3.2-beta.0903-A08`：
 
-- `Aerie Companion-0.3.2-beta.0903-A07-portable.exe`
-- `Aerie Companion-0.3.2-beta.0903-A07-Setup.exe`
+- `Aerie Companion-0.3.2-beta.0903-A08-portable.exe`
+- `Aerie Companion-0.3.2-beta.0903-A08-Setup.exe`
 
 历史版本 `0.1.0-beta.1` 已归档至官网「历史版本」区块（`historicalReleases`），不再作为默认下载入口。
 

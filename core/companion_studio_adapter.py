@@ -12,11 +12,13 @@ from typing import Any
 
 import httpx
 
+DEFAULT_COMPANION_STUDIO_URL = "http://127.0.0.1:8899"
+
 
 class CompanionStudioAdapter:
     def __init__(self, base_url: str | None = None, timeout: float = 8.0) -> None:
         configured = base_url if base_url is not None else os.getenv(
-            "AERIE_COMPANION_STUDIO_URL", ""
+            "AERIE_COMPANION_STUDIO_URL", DEFAULT_COMPANION_STUDIO_URL
         )
         self.base_url = configured.strip().rstrip("/")
         self.timeout = max(1.0, float(timeout))
@@ -65,4 +67,3 @@ class CompanionStudioAdapter:
             "/api/asr",
             {"audioBase64": audio_base64, "format": audio_format},
         )
-

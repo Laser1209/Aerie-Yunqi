@@ -18,6 +18,13 @@ async def test_disabled_adapter_is_explicit_and_side_effect_free() -> None:
     }
 
 
+def test_adapter_uses_local_studio_default_when_env_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AERIE_COMPANION_STUDIO_URL", raising=False)
+    adapter = CompanionStudioAdapter()
+    assert adapter.base_url == "http://127.0.0.1:8899"
+    assert adapter.enabled is True
+
+
 @pytest.mark.asyncio
 async def test_adapter_normalizes_studio_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeResponse:

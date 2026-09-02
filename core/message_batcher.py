@@ -1,4 +1,4 @@
-"""Aerie Companion v0.3.2-beta.0903-A04 - Message batcher (首条立即 + 动态缓冲).
+"""Aerie Companion v0.3.2-beta.0903-A05 - Message batcher (首条立即 + 动态缓冲).
 
 Gate 4 重构: 修复 D5 (首条也要等窗口)。
 新语义 per conversation:

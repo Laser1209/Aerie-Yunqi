@@ -1,4 +1,4 @@
-# Aerie Companion v0.3.2-beta.0903-A04 - electron-builder configuration
+# Aerie Companion v0.3.2-beta.0903-A05 - electron-builder configuration
 # This file is the source of truth for Windows packaging.
 # `package.json` mirrors the same settings under `build` for npm run build:win.
 appId: com.laser.aerie

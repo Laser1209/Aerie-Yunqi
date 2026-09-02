@@ -21,10 +21,10 @@
 ## 本轮实现与验证
 
 - 新增 `Spotlight/src/analytics/openaiAds.ts`，单点初始化、无 Pixel ID 或未显式开启时完全 no-op。
-- `Spotlight/src/main.tsx` 发送营销页 `page_viewed`；首页和下载页的 A05 下载入口发送 `contents_viewed`。
+- `Spotlight/src/main.tsx` 发送营销页 `page_viewed`；首页和下载页的 A04 下载入口发送 `contents_viewed`。
 - 未发送用户标识、聊天内容、音频、屏幕内容、Persona 字段、`oppref` 或 CAPI 请求；当前没有 CAPI 事件。
 - `Spotlight` 生产构建成功；CAPI secret 暴露扫描无发现；Ads 静态检查通过。
-- 浏览器实测默认关闭状态：A05 下载链接可见，`window.oaiq` 不存在，Ads 脚本注入数量为 0，页面无 console error/warn。
+- 浏览器实测默认关闭状态：A04 下载链接可见，`window.oaiq` 不存在，Ads 脚本注入数量为 0，页面无 console error/warn。
 
 启用前仍需由运营/法务确认真实 Pixel ID、营销页 consent/opt-out 规则和 canonical origin。配置完成后应重新运行 Ads 静态检查，并确认只在同意后加载脚本。
 

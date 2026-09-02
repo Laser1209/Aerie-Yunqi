@@ -4,11 +4,11 @@
 
 Aerie 是一款 **本地优先、可替换人格、能执行实际任务的 AI 陪伴桌面应用**。它把聊天、长期记忆、情绪状态、桌面工作区、主动提醒和可选语音/Live2D 放在同一个本地运行边界内。默认产品角色不再绑定“伊塔”或“云栖”：商业版本使用中性模板 **Aerie Companion**，用户可以选择“专注助手、学习搭档、生活管家、创作伙伴”等合规角色；“伊塔”只作为用户自己的私有 persona 数据，不进入发行包默认内容、宣传素材、种子记忆或默认提示词。
 
-## 首发版本（A03）
+## 当前发布基线（A04）
 
-当前投放测试构建为 `0.3.2-beta.0903-A04`。Windows 安装器和 portable 位于 `D:\aerie-dist-v046`；GitHub Release 上传完成前，官网的下载链接不可视为已上线。
+当前投放测试构建为 `0.3.2-beta.0903-A05`。Windows 安装器和 portable 位于 `D:\aerie-dist-v046`；GitHub Release 上传完成前，官网的下载链接不可视为已上线。
 
-> **许可前置条件：** 当前 `LICENSE` 仅允许非商业学习、研究和内部评估。A03 可用于技术
+> **许可前置条件：** 当前 `LICENSE` 仅允许非商业学习、研究和内部评估。A04 可用于技术
 > 封闭测试，但在终端用户商业 EULA、书面授权和退款条款确定前，不应向公众收取软件费，
 > 也不应把下载页写成已授予商业使用权。
 
@@ -26,7 +26,7 @@ Aerie 是一款 **本地优先、可替换人格、能执行实际任务的 AI �
 
 1. 已将运行时默认人格切换为 `aerie_default` 中性合规模板；默认名称和系统提示词为可配置的 `Aerie Companion`。已有 profile 的 `yita_default` 记录仍保留并可显式切换。
 2. 保留 persona 导入/导出和用户本地私有角色目录；禁止把用户自定义 persona 写入产品默认资源或遥测。
-3. A05 品牌版 NSIS 安装器已在 `C:\aerie-dist-v045` 生成，资源中写入 commit、版本、runtime SHA-256 和构建时间 manifest，并通过 `/api/health` 暴露非敏感摘要；解包 Electron 已实际拉起后端。Portable 单文件在当前机器上自解压时间过长且受构建盘空间限制，首发测试建议使用 NSIS，Portable 需另做性能/杀毒兼容优化；干净 Windows profile 安装/升级仍需单独验收。
+3. A04 品牌版 NSIS 安装器和 Portable 已在 `D:\aerie-dist-v046` 生成，资源中写入 commit、版本、runtime SHA-256 和构建时间 manifest；源码级打包后端验证通过。Portable 单文件仍需另做性能/杀毒兼容优化；干净 Windows profile 安装/升级仍需单独验收。
 4. Electron 单测已达到 `156 passed / 0 failed`；仍需完成 Windows 干净 profile 冒烟：安装、首次启动、无模型降级、配置保存、发送消息、退出重启。
 5. 增加最小产品遥测（仅同意后）：`app_installed`、`onboarding_completed`、`first_message_completed`、`persona_created`、`subscription_started`。默认不采集聊天正文、原始音频、屏幕内容或 persona 私密字段。
 6. 明确付费成功边界后再接 OpenAI Ads Pixel/CAPI；Pixel 只放浏览器营销页，CAPI 只在服务端发送 `subscription_created` 或 `trial_started`，使用同一 `event_id` 去重，失败不得阻塞注册/支付。
@@ -74,4 +74,4 @@ Aerie 是一款 **本地优先、可替换人格、能执行实际任务的 AI �
 
 当前代码已经足够进行 **内部/封闭可用性测试**，还不适合公开大规模投放。完成默认人格脱敏、Electron 可复现构建、剩余测试失败和隐私/支付边界后，可以开始小预算阶段 C 测试。
 
-构建空间注意：A05 安装器及解包目录现存放于 `D:\aerie-dist-v045`，避免占用空间紧张的 C/E 盘。
+构建空间注意：A04 安装器及 Portable 现存放于 `D:\aerie-dist-v046`，避免占用空间紧张的 C/E 盘。

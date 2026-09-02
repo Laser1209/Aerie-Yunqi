@@ -278,16 +278,26 @@ class LongTermMemoryLayer(BaseMemoryLayer):
             try:
                 query_embedding = self._get_embedding(query)
                 if query_embedding:
-                    where = {"user_id": user_id}
+                    # Chroma requires a filter to contain exactly one top-level
+                    # operator.  Combining scalar predicates with a sibling
+                    # ``$or`` silently raises and forces every semantic query
+                    # onto the slower SQLite fallback.
+                    clauses: list[dict[str, Any]] = [{"user_id": user_id}]
                     if memory_type:
-                        where["memory_type"] = memory_type.value
+                        clauses.append({"memory_type": memory_type.value})
                     # ChromaDB 无法表达 `= NULL OR = x`；NULL 写入时空串占位，
                     # 显式 $or 匹配「当前角色 + 共享空串」，SQLite 侧再做权威过滤。
                     if persona_id:
-                        where["$or"] = [
+                        clauses.append({"$or": [
                             {"persona_id": persona_id},
                             {"persona_id": ""},
-                        ]
+                        ]})
+
+                    where: dict[str, Any]
+                    if len(clauses) == 1:
+                        where = clauses[0]
+                    else:
+                        where = {"$and": clauses}
 
                     chroma_result = self._collection.query(
                         query_embeddings=[query_embedding],

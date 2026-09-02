@@ -1,4 +1,4 @@
-"""Aerie Companion v0.3.2-beta.0903-A04 - Persona Manager
+"""Aerie Companion v0.3.2-beta.0903-A05 - Persona Manager
 人设中心管理器：CRUD、切换、持久化、默认模板加载。
 
 设计原则：

@@ -3,10 +3,10 @@ const historicalReleaseAssetBase = 'https://github.com/Laser1209/Aerie_Spotlight
 
 export const release = {
   version: '0.3.2-beta.0903-A05',
-  url: `${releaseAssetBase}/v0.3.2-beta.0903-A05/Aerie%20Companion-0.3.2-beta.0903-A05-portable.exe`,
-  filename: 'Aerie Companion-0.3.2-beta.0903-A05-portable.exe',
-  installerUrl: `${releaseAssetBase}/v0.3.2-beta.0903-A05/Aerie%20Companion-0.3.2-beta.0903-A05-Setup.exe`,
-  installerFilename: 'Aerie Companion-0.3.2-beta.0903-A05-Setup.exe',
+  url: `${releaseAssetBase}/v0.3.2-beta.0903-A05/Aerie.Companion-0.3.2-beta.0903-A05-portable.exe`,
+  filename: 'Aerie.Companion-0.3.2-beta.0903-A05-portable.exe',
+  installerUrl: `${releaseAssetBase}/v0.3.2-beta.0903-A05/Aerie.Companion-0.3.2-beta.0903-A05-Setup.exe`,
+  installerFilename: 'Aerie.Companion-0.3.2-beta.0903-A05-Setup.exe',
   date: '2026-09-02',
 } as const
 

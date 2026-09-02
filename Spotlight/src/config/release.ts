@@ -2,11 +2,11 @@ const releaseAssetBase = 'https://github.com/Laser1209/Aerie-Yunqi/releases/down
 const historicalReleaseAssetBase = 'https://github.com/Laser1209/Aerie_Spotlight/releases/download'
 
 export const release = {
-  version: '0.3.2-beta.0903-A03',
-  url: `${releaseAssetBase}/v0.3.2-beta.0903-A03/Aerie%20Companion-0.3.2-beta.0903-A03-portable.exe`,
-  filename: 'Aerie Companion-0.3.2-beta.0903-A03-portable.exe',
-  installerUrl: `${releaseAssetBase}/v0.3.2-beta.0903-A03/Aerie%20Companion-0.3.2-beta.0903-A03-Setup.exe`,
-  installerFilename: 'Aerie Companion-0.3.2-beta.0903-A03-Setup.exe',
+  version: '0.3.2-beta.0903-A04',
+  url: `${releaseAssetBase}/v0.3.2-beta.0903-A04/Aerie%20Companion-0.3.2-beta.0903-A04-portable.exe`,
+  filename: 'Aerie Companion-0.3.2-beta.0903-A04-portable.exe',
+  installerUrl: `${releaseAssetBase}/v0.3.2-beta.0903-A04/Aerie%20Companion-0.3.2-beta.0903-A04-Setup.exe`,
+  installerFilename: 'Aerie Companion-0.3.2-beta.0903-A04-Setup.exe',
   date: '2026-09-02',
 } as const
 

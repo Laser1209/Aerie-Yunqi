@@ -1,4 +1,4 @@
-"""Aerie Companion v0.3.2-beta.0903-A03 - Python backend entry point.
+"""Aerie Companion v0.3.2-beta.0903-A04 - Python backend entry point.
 
 Launched by Electron via `python main.py`.
 Starts logging → config → Companion → API server → event loop.

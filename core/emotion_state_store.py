@@ -32,6 +32,8 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_STALE_AFTER_MS = 30_000
+
 
 class EmotionStateStore:
     """Persist + query emotion state snapshots."""
@@ -143,17 +145,22 @@ class EmotionStateStore:
         actor_id: str | None = None,
         sampled_at: int | None = None,
         now_ms: int | None = None,
-        stale_after_ms: int = 10_000,
+        stale_after_ms: int = DEFAULT_STALE_AFTER_MS,
     ) -> dict[str, int | bool | None]:
         """Build additive API metadata for live-state freshness."""
         now = int(now_ms if now_ms is not None else time.time() * 1000)
         sampled = int(sampled_at) if sampled_at is not None else None
         latest = self.latest(user_id, actor_id=actor_id)
         persisted = int((latest or {}).get("ts") or 0) or None
+        # A persisted snapshot can be newer than the in-memory sampling mark
+        # (for example after a restart or a bulk import).  Use the newest
+        # trustworthy timestamp as the freshness basis so slow API startup
+        # does not report a recently persisted history as stale.
+        candidates = [value for value in (sampled, persisted) if value and value > 0]
+        freshness_basis = max(candidates) if candidates else None
         stale = (
-            sampled is None
-            or sampled <= 0
-            or now - sampled > max(1, int(stale_after_ms))
+            freshness_basis is None
+            or now - freshness_basis > max(1, int(stale_after_ms))
         )
         return {
             "sampledAt": sampled,

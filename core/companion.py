@@ -2784,7 +2784,9 @@ class Companion:
                 "sampledAt": sampled_at,
                 "latestPersistedAt": None,
                 "serverNow": now,
-                "stale": sampled_at is None or now - sampled_at > 10_000,
+                # Keep this fallback aligned with EmotionStateStore's
+                # 30-second default so cold starts do not create false alarms.
+                "stale": sampled_at is None or now - sampled_at > 30_000,
             })
         return state
 

@@ -81,13 +81,24 @@ def main() -> int:
         "LOG_DIR": log_dir,
     }
 
+    stderr_path = Path(data_dir) / "backend-stderr.log"
+    stderr_handle = stderr_path.open("wb")
     proc = subprocess.Popen(
         [str(runtime_exe), str(main_py)],
         cwd=str(py_dir),
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        # A PIPE can deadlock a cold-starting backend when its diagnostics
+        # exceed the unread pipe buffer. Use the isolated temp directory.
+        stderr=stderr_handle,
     )
+
+    def read_stderr() -> str:
+        try:
+            stderr_handle.flush()
+            return stderr_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return ""
 
     base = f"http://127.0.0.1:{args.port}"
     try:
@@ -95,7 +106,7 @@ def main() -> int:
         deadline = time.time() + 180
         while time.time() < deadline:
             if proc.poll() is not None:
-                stderr = proc.stderr.read().decode("utf-8", "ignore")
+                stderr = read_stderr()
                 _emit(f"FAIL: backend exited early (code={proc.returncode})", result_file)
                 _emit(stderr[-4000:], result_file)
                 return 1
@@ -107,7 +118,7 @@ def main() -> int:
                 time.sleep(2)
 
         if health_status != 200:
-            stderr = proc.stderr.read().decode("utf-8", "ignore")
+            stderr = read_stderr()
             _emit(f"FAIL: /api/health did not return 200 (got {health_status})", result_file)
             _emit(stderr[-4000:], result_file)
             return 1
@@ -131,6 +142,7 @@ def main() -> int:
             proc.wait(timeout=10)
         except Exception:
             proc.kill()
+        stderr_handle.close()
         shutil.rmtree(data_dir, ignore_errors=True)
 
 

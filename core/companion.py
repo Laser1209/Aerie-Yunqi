@@ -4472,11 +4472,12 @@ class Companion:
                     scene_name, exc_info=True,
                 )
 
+        fire_coro = _fire()
         try:
-            asyncio.create_task(_fire())
+            asyncio.create_task(fire_coro)
         except RuntimeError:
-            # 无事件循环时忽略（如单元测试环境）
-            pass
+            # 无事件循环时关闭已创建的 coroutine，避免资源警告。
+            fire_coro.close()
 
     async def check_idle(self, user_id: int, idle_seconds: float) -> bool:
         """Called externally when user is detected idle beyond threshold.

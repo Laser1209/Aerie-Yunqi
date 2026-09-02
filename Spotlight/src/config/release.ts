@@ -1,4 +1,5 @@
-const releaseAssetBase = 'https://github.com/Laser1209/Aerie_Spotlight/releases/download'
+const releaseAssetBase = 'https://github.com/Laser1209/Aerie-Yunqi/releases/download'
+const historicalReleaseAssetBase = 'https://github.com/Laser1209/Aerie_Spotlight/releases/download'
 
 export const release = {
   version: '0.3.2-beta.0903-A03',
@@ -21,7 +22,7 @@ export const historicalReleases: HistoricalRelease[] = [
   {
     version: '0.1.0-beta.1',
     date: '2026-07-19',
-    url: `${releaseAssetBase}/v0.1.0-beta.1/Aerie-Cloud-0.1.0-beta.1-Portable.exe`,
-    installerUrl: `${releaseAssetBase}/v0.1.0-beta.1/Aerie-Cloud-0.1.0-beta.1-Setup.exe`,
+    url: `${historicalReleaseAssetBase}/v0.1.0-beta.1/Aerie-Cloud-0.1.0-beta.1-Portable.exe`,
+    installerUrl: `${historicalReleaseAssetBase}/v0.1.0-beta.1/Aerie-Cloud-0.1.0-beta.1-Setup.exe`,
   },
 ]

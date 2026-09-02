@@ -34,7 +34,7 @@ from typing import Any, Optional, Tuple
 
 import uvicorn
 import yaml
-from fastapi import FastAPI, Query, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, FileResponse, StreamingResponse
 

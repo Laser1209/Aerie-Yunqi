@@ -145,7 +145,7 @@ Aerie 不应把自己包装成单纯聊天机器人，也不应把“恋人”�
 - [x] Companion Studio 本地 HTTP 适配层和结构化降级状态。
 - [x] Free/Pro entitlement 本地计量骨架，不伪造支付成功。
 - [x] 营销页 OpenAI Ads Pixel 默认关闭的安全骨架。
-- [x] A12 NSIS/portable 构建和 GitHub Release 草稿。
+- [x] A12 NSIS/portable 构建和 GitHub prerelease：<https://github.com/Laser1209/Aerie-Yunqi/releases/tag/v0.3.2-beta.0903-A12>。
 - [x] 核心 Python 全量回归：`1754 passed`。
 - [ ] 接入真实支付供应商、webhook、退款和发票。
 - [ ] 在干净 Windows profile 完成安装/升级/卸载验收。

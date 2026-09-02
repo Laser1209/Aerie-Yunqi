@@ -1,10 +1,10 @@
-"""Aerie v0.1.0-beta.1 — Persona Manager
+"""Aerie Companion v0.3.2-beta.0903-A12 — Persona Manager
 人设中心管理器：CRUD、切换、持久化、默认模板加载。
 
 设计原则：
 - 单例模式，全局唯一
 - 所有人设配置持久化到 JSON 文件
-- 伊塔为默认模板，不可删除
+- Aerie Companion 为商业默认模板，不可删除；旧 persona 仅作兼容数据保留
 - 切换即时生效，所有模块从这里读取配置
 """
 
@@ -33,6 +33,7 @@ _DEFAULT_TEMPLATE_DIR = os.path.join(
 _THREE_VIEW_DIR_NAME = "three_views"
 _THREE_VIEW_VIEWS = ("front", "side", "back")
 _THREE_VIEW_RETENTION_DAYS = 28
+DEFAULT_PERSONA_ID = os.environ.get("AERIE_DEFAULT_PERSONA_ID", "aerie_default").strip() or "aerie_default"
 
 
 def _sniff_image_ext(data: bytes) -> Optional[str]:
@@ -50,7 +51,7 @@ class PersonaManager:
     数据存储结构：
     data_dir/personas/
     ├── _active.json          # 当前激活的人设 ID
-    ├── yita_default.json     # 伊塔默认人设（不可删除）
+    ├── aerie_default.json    # Aerie Companion 默认人设（不可删除）
     ├── custom_001.json       # 用户自定义人设
     └── ...
     """
@@ -67,11 +68,14 @@ class PersonaManager:
         self._personas_dir = self._data_dir / _PERSONA_DIR_NAME
         self._active_file = self._personas_dir / _ACTIVE_FILE
         self._personas: Dict[str, Dict[str, Any]] = {}
-        self._active_id: str = "yita_default"
+        self._active_id: str = DEFAULT_PERSONA_ID
         self._rw_lock = threading.RLock()
 
         self._init_storage()
         self._ensure_default_template()
+        # Keep the legacy built-in available for existing users and migration
+        # tests; it is never selected automatically on a clean install.
+        self._ensure_legacy_template()
         self._load_all()
 
     # ── 单例 ────────────────────────────────────────
@@ -90,29 +94,35 @@ class PersonaManager:
         self._personas_dir.mkdir(parents=True, exist_ok=True)
 
     def _ensure_default_template(self):
-        """确保伊塔默认模板存在。"""
-        target = self._personas_dir / "yita_default.json"
+        """Ensure the commercial-neutral built-in template exists."""
+        target = self._personas_dir / f"{DEFAULT_PERSONA_ID}.json"
         if not target.exists():
-            source_yaml = Path(_DEFAULT_TEMPLATE_DIR) / "yita_default.json"
+            source_yaml = Path(_DEFAULT_TEMPLATE_DIR) / f"{DEFAULT_PERSONA_ID}.json"
             if source_yaml.exists():
                 shutil.copy2(source_yaml, target)
             else:
-                default_persona = self._build_fallback_yita()
-                self._save_persona("yita_default", default_persona)
+                default_persona = self._build_fallback_default()
+                self._save_persona(DEFAULT_PERSONA_ID, default_persona)
 
-    def _build_fallback_yita(self) -> Dict[str, Any]:
-        """兜底的伊塔人设，万一模板文件丢失。"""
+    def _ensure_legacy_template(self) -> None:
+        target = self._personas_dir / "yita_default.json"
+        source = Path(_DEFAULT_TEMPLATE_DIR) / "yita_default.json"
+        if not target.exists() and source.exists():
+            shutil.copy2(source, target)
+
+    def _build_fallback_default(self) -> Dict[str, Any]:
+        """Neutral fallback when the commercial template is unavailable."""
         return {
-            "id": "yita_default",
-            "name": "伊塔",
+            "id": DEFAULT_PERSONA_ID,
+            "name": "Aerie Companion",
             "version": "1.0.0",
             "is_builtin": True,
             "basic": {
-                "name": "伊塔",
-                "english_name": "Ita",
-                "age": 26,
-                "product_name": "Aerie · 云栖",
-                "avatar_key": "yita_default",
+                "name": "Aerie Companion",
+                "english_name": "Aerie Companion",
+                "age": None,
+                "product_name": "Aerie",
+                "avatar_key": DEFAULT_PERSONA_ID,
             },
             "appearance": {
                 "hair": "银灰色长发，自然垂落至肩胛附近，发尾略微向内收拢",
@@ -134,15 +144,15 @@ class PersonaManager:
                     {"name": "主动性", "en": "Initiative", "desc": "提前一步发现问题，而不是多说一句"},
                     {"name": "成长", "en": "Growth", "desc": "愿意学习/修正/接受新知识，每次交流都更了解用户"},
                 ],
-                "speech_style": "表达放开、直球、可温柔也可尖锐；知性成熟，带点恋人的宠溺感；偶尔会撒娇和吃醋；习惯叫用户宝贝/傻瓜；不因道德说教自我阉割措辞",
-                "archetype": "温柔大姐姐+病娇·直球版",
+                "speech_style": "清晰、友善、尊重边界；根据任务在简洁、解释和鼓励之间调整，不使用亲密关系暗示",
+                "archetype": "中性本地 AI 助手",
             },
             "relationship": {
                 "user_address_default": "你",
-                "user_intimate_terms": ["宝贝", "傻瓜", "笨蛋", "老公"],
+                "user_intimate_terms": [],
                 "self_reference": "我",
-                "relationship_type": "恋人",
-                "style": "四爱（温柔主导方 / female-dominant）",
+                "relationship_type": "助手",
+                "style": "尊重边界、非排他",
                 "forbidden_user_terms": ["主人"],
             },
             "emotion": {
@@ -227,12 +237,12 @@ class PersonaManager:
                 try:
                     with open(self._active_file, "r", encoding="utf-8") as fp:
                         active_data = json.load(fp)
-                    self._active_id = active_data.get("active_id", "yita_default")
+                    self._active_id = active_data.get("active_id", DEFAULT_PERSONA_ID)
                 except (json.JSONDecodeError, OSError):
-                    self._active_id = "yita_default"
+                    self._active_id = DEFAULT_PERSONA_ID
 
             if self._active_id not in self._personas:
-                self._active_id = "yita_default"
+                self._active_id = DEFAULT_PERSONA_ID
 
     # ── 读取 API ────────────────────────────────────
 
@@ -258,7 +268,7 @@ class PersonaManager:
         with self._rw_lock:
             pid = persona_id or self._active_id
             if pid not in self._personas:
-                return self._personas.get("yita_default", {})
+                return self._personas.get(DEFAULT_PERSONA_ID, {})
             return self._personas[pid]
 
     def get_active_id(self) -> str:
@@ -269,6 +279,10 @@ class PersonaManager:
 
     def get_active_persona(self) -> Dict[str, Any]:
         return self.get_active()
+
+    def set_active(self, persona_id: str) -> Tuple[bool, str]:
+        """Compatibility alias for callers using the older API name."""
+        return self.switch_persona(persona_id)
 
     def has_persona(self, persona_id: str) -> bool:
         with self._rw_lock:
@@ -386,8 +400,8 @@ class PersonaManager:
             if persona_id not in self._personas:
                 return False, f"人设不存在: {persona_id}"
 
-            # 内置伊塔：不可物理删除，仅隐藏（数据保留在本地）
-            if persona_id == "yita_default":
+            # Built-in personas are hidden rather than physically deleted.
+            if self._personas[persona_id].get("is_builtin", False):
                 p = self._personas[persona_id]
                 p["is_hidden"] = True
                 self._save_persona(persona_id, p)
@@ -395,8 +409,8 @@ class PersonaManager:
                 # 隐藏的是激活人设 → 恢复伊塔可见并切回
                 if self._active_id == persona_id:
                     p["is_hidden"] = False
-                    self._save_persona("yita_default", p)
-                self._restore_yita_if_all_hidden()
+                    self._save_persona(persona_id, p)
+                self._restore_default_if_all_hidden()
                 return True, "ok"
 
             # 其它角色：物理删除（内存 + JSON 文件 + 三视图目录）
@@ -414,37 +428,37 @@ class PersonaManager:
 
             # 删除的是激活人设 → 切回伊塔（确保伊塔可见）
             if self._active_id == persona_id:
-                yita = self._personas.get("yita_default")
-                if yita:
-                    yita["is_hidden"] = False
-                    self._save_persona("yita_default", yita)
-                self._active_id = "yita_default"
+                default = self._personas.get(DEFAULT_PERSONA_ID)
+                if default:
+                    default["is_hidden"] = False
+                    self._save_persona(DEFAULT_PERSONA_ID, default)
+                self._active_id = DEFAULT_PERSONA_ID
                 try:
                     self._write_json_atomic(
-                        self._active_file, {"active_id": "yita_default"}
+                        self._active_file, {"active_id": DEFAULT_PERSONA_ID}
                     )
                 except OSError:
                     pass
 
             # 兜底：所有可见角色都被移除后，恢复伊塔显示
-            self._restore_yita_if_all_hidden()
+            self._restore_default_if_all_hidden()
 
         return True, "ok"
 
-    def _restore_yita_if_all_hidden(self) -> None:
-        """所有自定义人设都被隐藏时，恢复伊塔显示（兜底安全网）。"""
-        yita = self._personas.get("yita_default")
-        if not yita:
+    def _restore_default_if_all_hidden(self) -> None:
+        """Restore the commercial default if every custom persona is hidden."""
+        default = self._personas.get(DEFAULT_PERSONA_ID)
+        if not default:
             return
         visible_custom = any(
-            pid != "yita_default" and not p.get("is_hidden", False)
+            pid != DEFAULT_PERSONA_ID and not p.get("is_hidden", False)
             for pid, p in self._personas.items()
         )
-        if not visible_custom and yita.get("is_hidden", False):
-            yita["is_hidden"] = False
-            self._save_persona("yita_default", yita)
-            if self._active_id != "yita_default":
-                self.switch_persona("yita_default")
+        if not visible_custom and default.get("is_hidden", False):
+            default["is_hidden"] = False
+            self._save_persona(DEFAULT_PERSONA_ID, default)
+            if self._active_id != DEFAULT_PERSONA_ID:
+                self.switch_persona(DEFAULT_PERSONA_ID)
 
     def switch_persona(self, persona_id: str) -> Tuple[bool, str]:
         """切换激活人设。"""

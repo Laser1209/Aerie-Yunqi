@@ -19,6 +19,8 @@ import httpx
 from core.key_rotator import KeyRotator
 from core.provider_health import ProviderHealthManager
 from core.token_tracker import get_token_tracker
+from core.model_gate import model_calls_disabled
+from core.entitlements import EntitlementStore
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,8 @@ _TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
 def _env_flag(name: str) -> bool:
+    if name == "AERIE_DISABLE_MODEL_CALLS":
+        return model_calls_disabled()
     return os.environ.get(name, "").strip().lower() in _TRUE_ENV_VALUES
 
 
@@ -126,6 +130,15 @@ class LLMCaller:
         self._ws_rotator = KeyRotator.from_env("AERIE_WS_KEYS", "AERIE_WS_API_KEY")
         self._providers = self._load_providers()
         self._health = ProviderHealthManager()
+        self._entitlements = EntitlementStore()
+
+    @staticmethod
+    def _entitlements_enforced() -> bool:
+        return os.getenv("AERIE_ENFORCE_ENTITLEMENTS", "").strip().lower() in _TRUE_ENV_VALUES
+
+    def _entitlement_estimate(self, messages: list[dict]) -> int:
+        text = " ".join(str(m.get("content") or "") for m in messages)
+        return max(1, len(text) // 4) + max(1, self._max_tokens)
 
     def _load_providers(self) -> list[dict]:
         """Load provider configs from env vars."""
@@ -469,6 +482,17 @@ class LLMCaller:
                 model="aerie-local-smoke-stub",
             )
 
+        estimated_tokens = self._entitlement_estimate(messages)
+        if self._entitlements_enforced():
+            allowance = self._entitlements.check(cloud_calls=1, cloud_tokens=estimated_tokens)
+            if not allowance["allowed"]:
+                logger.warning("Cloud entitlement blocked request: %s", allowance["reasons"])
+                return LLMCallerResponse(
+                    text="本月云端额度已用尽。你可以切换到本地模型、填写自己的 API Key，或在设置中查看用量。",
+                    provider="entitlement",
+                    model="local-limit-guard",
+                )
+
         last_error = ""
         tracker = get_token_tracker()
         total_prompt_tokens = 0
@@ -539,6 +563,11 @@ class LLMCaller:
                                     prompt_tokens=final_resp.tokens_prompt,
                                     completion_tokens=final_resp.tokens_completion,
                                     user_id=0,
+                                )
+                            if self._entitlements_enforced():
+                                self._entitlements.record_usage(
+                                    cloud_calls=1,
+                                    cloud_tokens=final_resp.tokens_prompt + final_resp.tokens_completion,
                                 )
                             logger.info(
                                 "LLM: %s/%s → %d+%d tokens, %dms, %d tool calls",
@@ -700,6 +729,9 @@ class LLMCaller:
         Exhausted accounts are banned and leave the rotation before their
         first failed call. Best-effort: probe failures never raise.
         """
+        if model_calls_disabled():
+            logger.info("provider balance probes disabled by AERIE_DISABLE_MODEL_CALLS")
+            return {"disabled": True}
         try:
             return await self._health.probe_balances(self._providers)
         except Exception:

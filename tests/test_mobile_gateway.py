@@ -153,11 +153,20 @@ def test_mobile_gateway_explicit_environment_flag_takes_precedence(
     assert is_mobile_gateway_enabled() is expected
 
 
-def test_mobile_gateway_feature_flag_is_disabled_by_default(
+def test_mobile_gateway_feature_flag_is_enabled_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.delenv("AERIE_MOBILE_GATEWAY_ENABLED", raising=False)
     monkeypatch.delenv("AERIE_FEATURE_MOBILE_GATEWAY_V1", raising=False)
+
+    assert is_mobile_gateway_enabled() is True
+
+
+def test_mobile_gateway_feature_flag_supports_explicit_disable(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("AERIE_MOBILE_GATEWAY_ENABLED", raising=False)
+    monkeypatch.setenv("AERIE_FEATURE_MOBILE_GATEWAY_V1", "false")
 
     assert is_mobile_gateway_enabled() is False
 

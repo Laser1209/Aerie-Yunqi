@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v0.1.0-beta.1 — Python backend entry point.
+"""Aerie Companion v0.3.2-beta.0903-A12 — Python backend entry point.
 
 Launched by Electron via `python main.py`.
 Starts logging → config → Companion → API server → event loop.
@@ -109,6 +109,11 @@ async def _main() -> None:
             load_dotenv(preset, override=False)
     except Exception:
         pass
+
+    # Commercial/runtime entry points use a neutral built-in persona. Existing
+    # user profiles keep their active legacy persona (including private Ita)
+    # through data/personas/_active.json and can switch explicitly.
+    os.environ.setdefault("AERIE_DEFAULT_PERSONA_ID", "aerie_default")
 
     # 硬件指纹护照：生成 64 字符码并写快照，便于后期判断硬件对软件的影响。
     try:

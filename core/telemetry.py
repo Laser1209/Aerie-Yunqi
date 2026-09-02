@@ -32,10 +32,10 @@ from pathlib import Path
 from typing import Any
 
 from core.paths import data_dir, project_root
+from core.version import APP_VERSION
 
 logger = logging.getLogger("aerie.telemetry")
 
-APP_VERSION = "0.3.1-Beta.1"
 FLUSH_INTERVAL_SECONDS = 60
 
 # Cumulative milestones: (key, seconds). Triggered once each, in order.

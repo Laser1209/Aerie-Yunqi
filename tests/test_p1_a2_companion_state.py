@@ -120,6 +120,13 @@ def test_persistence_uses_aerie_data_dir(tmp_path, monkeypatch):
     isolated = tmp_path / "runtime-data"
     monkeypatch.setenv("AERIE_DATA_DIR", str(isolated))
 
+    repo_state = (
+        __import__("pathlib").Path(__file__).resolve().parent.parent
+        / "data"
+        / "companion_state.json"
+    )
+    repo_before = repo_state.read_bytes() if repo_state.exists() else None
+
     state = CompanionState()
     state.add_pain_point("隔离测试")
     state.save()
@@ -127,13 +134,8 @@ def test_persistence_uses_aerie_data_dir(tmp_path, monkeypatch):
     expected = isolated / "companion_state.json"
     assert data_dir() == isolated
     assert expected.is_file()
-    # 不应写入仓库默认 data 目录
-    repo_state = (
-        __import__("pathlib").Path(__file__).resolve().parent.parent
-        / "data"
-        / "companion_state.json"
-    )
-    assert not repo_state.exists()
+    # 不应写入或改变仓库默认 data 目录；既有用户文件必须保留。
+    assert (repo_state.read_bytes() if repo_state.exists() else None) == repo_before
 
 
 # ── relationship_stage 转换 ───────────────────────

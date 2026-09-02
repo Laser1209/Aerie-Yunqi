@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.feature_flags import FeatureFlags
+from core.paths import data_dir
 from core.mobile_approvals import (
     MobileApprovalError,
     decide_approval as mobile_approval_decide,
@@ -213,7 +214,7 @@ def _default_identity_store() -> MobileIdentityStore:
 def _default_file_service(identity_store: MobileIdentityStore) -> MobileFileService:
     return MobileFileService(
         identity_store.db_path,
-        storage_root=Path("data/mobile_files"),
+        storage_root=data_dir() / "mobile_files",
     )
 
 

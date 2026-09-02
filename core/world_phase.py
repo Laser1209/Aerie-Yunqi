@@ -51,14 +51,15 @@ DEFAULT_WORLD_PHASES: dict[str, dict[str, Any]] = {
     },
     "evening": {
         "start": "18:00",
-        "end": "21:30",
+        "end": "22:00",
         "location": "home",
         "activity": "relaxing",
         "energy": 0.42,
         "social": "private",
     },
     "late_evening": {
-        "start": "21:30",
+        # 21:30 仍归入 evening，避免边界时刻把晚间关怀过早切换为夜深。
+        "start": "22:00",
         "end": "23:30",
         "location": "home",
         "activity": "winding_down",

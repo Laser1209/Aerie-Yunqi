@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import unittest
 
-from core.persona_hub.persona_manager import PersonaManager
+from core.persona_hub.persona_manager import DEFAULT_PERSONA_ID, PersonaManager
 from core.persona_hub.persona_validator import PersonaValidator
 
 
@@ -97,16 +97,16 @@ class TestPersonaManager(unittest.TestCase):
         personas = self.mgr.list_personas()
         self.assertTrue(len(personas) >= 1)
         ids = [p["id"] for p in personas]
-        self.assertIn("yita_default", ids)
+        self.assertIn(DEFAULT_PERSONA_ID, ids)
 
     def test_get_active_is_default(self):
-        self.assertEqual(self.mgr.get_active_id(), "yita_default")
+        self.assertEqual(self.mgr.get_active_id(), DEFAULT_PERSONA_ID)
 
     def test_get_name_default(self):
-        self.assertEqual(self.mgr.get_name(), "伊塔")
+        self.assertEqual(self.mgr.get_name(), "Aerie Companion")
 
     def test_get_english_name_default(self):
-        self.assertEqual(self.mgr.get_english_name(), "Ita")
+        self.assertEqual(self.mgr.get_english_name(), "Aerie Companion")
 
     def test_create_persona(self):
         ok, pid = self.mgr.create_persona(json.loads(json.dumps(VALID_PERSONA)))
@@ -148,23 +148,23 @@ class TestPersonaManager(unittest.TestCase):
         self.assertFalse(self.mgr.has_persona("test_persona"))
 
     def test_delete_builtin_hides_not_removes(self):
-        # 先切到自定义角色，让伊塔处于非激活态
+        # 先切到自定义角色，让内置默认角色处于非激活态
         self.mgr.create_persona(json.loads(json.dumps(VALID_PERSONA)))
         self.mgr.switch_persona("test_persona")
 
-        # 删除伊塔：仅隐藏，数据保留（不物理删除）
-        ok, msg = self.mgr.delete_persona("yita_default")
+        # 删除内置默认角色：仅隐藏，数据保留（不物理删除）
+        ok, msg = self.mgr.delete_persona(DEFAULT_PERSONA_ID)
         self.assertTrue(ok, msg)
-        self.assertTrue(self.mgr.has_persona("yita_default"))
+        self.assertTrue(self.mgr.has_persona(DEFAULT_PERSONA_ID))
         ids = [p["id"] for p in self.mgr.list_personas()]
-        self.assertNotIn("yita_default", ids)
+        self.assertNotIn(DEFAULT_PERSONA_ID, ids)
 
     def test_delete_active_falls_back_to_default(self):
         self.mgr.create_persona(json.loads(json.dumps(VALID_PERSONA)))
         self.mgr.switch_persona("test_persona")
         self.assertEqual(self.mgr.get_active_id(), "test_persona")
         self.mgr.delete_persona("test_persona")
-        self.assertEqual(self.mgr.get_active_id(), "yita_default")
+        self.assertEqual(self.mgr.get_active_id(), DEFAULT_PERSONA_ID)
 
     def test_switch_persona(self):
         self.mgr.create_persona(json.loads(json.dumps(VALID_PERSONA)))
@@ -201,7 +201,7 @@ class TestPersonaManager(unittest.TestCase):
         self.assertIn(perm, ("VIEW_ONLY", "STANDARD", "FULL"))
 
     def test_export_persona(self):
-        data = self.mgr.export_persona("yita_default")
+        data = self.mgr.export_persona(DEFAULT_PERSONA_ID)
         self.assertIsNotNone(data)
         self.assertIn("basic", data)
         self.assertNotIn("is_builtin", data)  # 导出时移除内置标记

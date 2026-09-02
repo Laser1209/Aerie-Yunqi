@@ -560,12 +560,11 @@ class WorldSimulation:
     # ── main tick ───────────────────────────────────────────────
     def tick(self, action: WorldAction | None = None) -> WorldSnapshot:
         now = self.clock()
-        # 无论时钟返回 naive 还是 aware（含 UTC），一律归一化到本地时区，
-        # 否则 phase/energy/iso_time 会用 UTC 小时（如 10:26Z 被误判成 morning）。
+        # 显式注入的时钟按“墙上时间”解释：调用方常用带 UTC tzinfo 的
+        # 固定时间做确定性回放，phase 应依据其 hour 字段而不是再次换算时区。
+        # 默认时钟本身使用 LOCAL_TZ，因此真实运行仍按北京时间工作。
         if now.tzinfo is None:
             now = now.replace(tzinfo=LOCAL_TZ)
-        else:
-            now = now.astimezone(LOCAL_TZ)
         ts = int(now.timestamp())
 
         # 秒级幂等: 同一秒内再次 tick 直接返回缓存
@@ -678,7 +677,11 @@ class WorldSimulation:
         if self._outdoor:
             room_objects = []
             real_nearby = [self._outdoor_place] + real_nearby
-        nearby_objects = list(dict.fromkeys(room_objects + real_nearby))[:6]
+        # Preserve explicit real-world places and the legacy semantic objects
+        # used by prompt consumers, then add the finer zone objects. This keeps
+        # both city context and backward-compatible furniture labels visible.
+        legacy_objects = self._compute_nearby_objects(location, activity)
+        nearby_objects = list(dict.fromkeys(real_nearby + legacy_objects + room_objects))[:8]
         visual_topics = self._derive_visual_topics(activity, nearby_objects)
 
         instance_id = _sha256(

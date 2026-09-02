@@ -147,7 +147,9 @@ def test_soft_budget_target():
 def test_can_push_blocks_at_hard_cap():
     p = _policy(hard_cap=3)
     p.daily_count = 2
-    assert p.can_push("idle_care")[0] is True
+    # Use an exempt scene so this contract test is independent of wall-clock
+    # quiet hours on the machine running the suite.
+    assert p.can_push("morning_brief")[0] is True
     p.daily_count = 3
     assert p.can_push("idle_care") == (False, "hard_cap")
 

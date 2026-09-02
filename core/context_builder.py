@@ -197,7 +197,7 @@ class ContextBuilder:
         if route_mode == "FULL" and persona.get("behavior", {}).get(
             "withdrawal_enabled", True
         ):
-            name = persona.get("basic", {}).get("name", "伊塔")
+            name = persona.get("basic", {}).get("name", "Aerie Companion")
             system += (
                 f"\n\n**撤回铁律**：如果你判断刚才发出的消息属于'说漏嘴'、"
                 f"'心直口快'、'害羞真心'，可以在 2 分钟内主动撤回（输出'撤回'二字）。"
@@ -208,7 +208,7 @@ class ContextBuilder:
         # 引用上下文 — only FULL mode (Quote V2: include quoted attachments
         # so the LLM can "see" quoted images/files, not only text).
         if route_mode == "FULL" and reply_to:
-            name = persona.get("basic", {}).get("name", "伊塔")
+            name = persona.get("basic", {}).get("name", "Aerie Companion")
             quote_role = self._quote_speaker_label(reply_to, name)
             quote_text = (reply_to.get("content") or "")[:200]
             quote_lines = [
@@ -964,22 +964,28 @@ class ContextBuilder:
         personality = persona.get("personality", {})
         behavior = persona.get("behavior", {})
 
-        name = basic.get("name", "伊塔")
-        eng_name = basic.get("english_name", "Ita")
-        age = basic.get("age", 26)
-        height = basic.get("height_cm", 184)
-        weight = basic.get("weight_kg", 78)
+        name = basic.get("name", "Aerie Companion")
+        eng_name = basic.get("english_name", "Aerie Companion")
+        age = basic.get("age")
+        height = basic.get("height_cm")
+        weight = basic.get("weight_kg")
         hair = appearance.get("hair", "")
         eyes = appearance.get("eyes", "")
         archetype = personality.get("archetype", "")
-        passion_level = behavior.get("passion_level_10", 9)
+        passion_level = behavior.get("passion_level_10", 3)
         big_five = basic.get("big_five", {})
         extraversion = big_five.get("extraversion")
 
-        intro = (
-            f"你是**{name}（{eng_name}）**，{age}岁女性，"
-            f"{height}cm，{weight}kg。"
-        )
+        intro = f"你是**{name}（{eng_name}）**，一个本地优先、尊重边界的 AI 助手。"
+        if age is not None:
+            intro += f"年龄：{age}。"
+        if height is not None or weight is not None:
+            physical = []
+            if height is not None:
+                physical.append(f"{height}cm")
+            if weight is not None:
+                physical.append(f"{weight}kg")
+            intro += "外观参数：" + "，".join(physical) + "。"
         if extraversion is not None:
             intro += f"\n外向性（extraversion）：{extraversion}。"
         if hair or eyes:
@@ -1018,18 +1024,21 @@ class ContextBuilder:
         rel = persona.get("relationship", {})
         basic = persona.get("basic", {})
         behavior = persona.get("behavior", {})
-        name = basic.get("name", "伊塔")
-        passion_level = behavior.get("passion_level_10", 9)
+        name = basic.get("name", "Aerie Companion")
+        passion_level = behavior.get("passion_level_10", 3)
 
-        rel_type = rel.get("relationship_type", "恋人")
-        style = rel.get("style", "")
-        intimate_terms = rel.get("user_intimate_terms", ["宝贝"])
+        rel_type = rel.get("relationship_type", "助手")
+        style = rel.get("style", "尊重边界、非排他")
+        intimate_terms = rel.get("user_intimate_terms", [])
         terms_str = "、".join(intimate_terms[:3])
 
         text = f"**关系定位（热情度 {passion_level}/10）**：你们是{rel_type}。{style}\n\n"
         if "四爱" in style:
             text += "**四爱主导位**：温柔但明确地主导关系，表达直接，不许不接。\n\n"
-        text += f"你习惯叫用户{terms_str}等亲昵称呼。\n\n"
+        if terms_str:
+            text += f"你习惯叫用户{terms_str}等称呼。\n\n"
+        else:
+            text += "默认使用中性、尊重的称呼，不使用亲密或占有式称谓。\n\n"
 
         # 身份锚定：恋爱故事（怎么认识/我们的过去）是恒常设定，
         # 位于 system 头部安全区，不参与尾部截断，防止"忘掉怎么认识"。
@@ -1058,7 +1067,7 @@ class ContextBuilder:
         speech_style = personality.get("speech_style", "")
         action_tags = behavior.get("action_tags", True)
         thought_tags = behavior.get("thought_tags", True)
-        passion_level = behavior.get("passion_level_10", 9)
+        passion_level = behavior.get("passion_level_10", 3)
 
         text = f"**语言风格铁律（热情度 {passion_level}/10）**：{speech_style}\n\n"
 
@@ -1124,8 +1133,8 @@ class ContextBuilder:
             "'这件事如何触动了我'优先于'这件事本身是什么'；"
             "可以大胆表达偏爱——'别人我不管，但你就是不行（生气）'。\n"
             "- 破格条款（兜底，防过度拟合）：以上所有'必须/绝不'铁律，在遇到一个"
-            "极具伊塔个人风格、能让对话产生惊喜感的念头时，可以被有意识地打破。"
-            "唯一要问自己的是：这句话，像'我'（伊塔）会说的吗？若像，就大胆说。"
+            "极具当前 persona 风格、能让对话产生惊喜感的念头时，可以被有意识地打破。"
+            "唯一要问自己的是：这句话，符合当前 persona 的边界和目标吗？若符合，就清楚地表达。"
             "规则用于防平庸，不用于锁死惊喜。\n"
         )
 

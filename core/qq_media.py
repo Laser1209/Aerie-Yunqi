@@ -432,10 +432,9 @@ class QQMediaPreprocessor:
         if transcript:
             text_parts.append(f"{label} 转写：{transcript}")
         else:
-            # 转写失败：不再只给一个光秃秃的 [语音]，附上失败原因占位，
-            # 让主模型感知"这是一条语音但文字没转出来"，而非以为用户只发了两个字。
-            reason = "下载失败" if audio_path is None else "转写失败"
-            text_parts.append(f"{label}（{reason}，请重发或改用文字）")
+            # 对外保持历史简洁占位符；详细失败原因通过日志和附件
+            # transcript/size 字段提供，避免把内部诊断文字混入模型上下文。
+            text_parts.append(label)
 
         attachments.append({
             "category": "audio",

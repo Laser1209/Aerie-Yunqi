@@ -22,7 +22,7 @@ _PERSONA_AVATARS_ROOT = _DATA_DIR / "personas" / "avatars"
 _AVATAR_BACKUP_RETENTION_DAYS = 28
 
 _DEFAULTS = {
-    "theme": {"current": "yita-pink", "available": ["yita-pink", "midnight-purple", "sakura-white", "ocean-blue", "forest-green"]},
+    "theme": {"current": "ocean-blue", "available": ["ocean-blue", "sakura-white", "midnight-purple", "forest-green", "yita-pink"]},
     "startup": {"auto_start": False, "start_minimized": False},
     "proactive": {"enabled": True},
 }
@@ -297,8 +297,8 @@ def get_persona_summary() -> dict[str, Any]:
         dataurl = ""
     return {
         "persona_id": persona_id,
-        "name": persona.get("name") or "伊塔",
-        "english_name": persona.get("english_name") or "Ita",
+        "name": persona.get("name") or "Aerie Companion",
+        "english_name": persona.get("english_name") or "Aerie Companion",
         # Inline dataURL is the primary form. Renderer must prefer this
         # over the http URL (file:// in Electron can't load relative
         # HTTP paths so /api/... would 404 into a broken-image icon).

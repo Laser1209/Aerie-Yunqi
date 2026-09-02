@@ -46,8 +46,9 @@ WHITELIST_FILES = {
 # Format: { "path/relative": [line_numbers_allowed_to_contain_term] }
 # Lines that DECLARE the rule itself are exempt — they are not user-facing.
 WHITELIST_LINES: dict[str, list[int]] = {
-    "config/persona.yaml": [4, 91, 105, 127, 130, 131, 132, 133, 134],  # rule declarations (forbidden_user_terms / taboo_phrases lists)
-    "core/persona_hub/persona_manager.py": [129],  # rule declaration for forbidden_user_terms
+    "config/persona.yaml": [4, 91, 105, 127, 130, 131, 132, 133, 134, 140],  # rule declarations (forbidden_user_terms / taboo_phrases lists)
+    "core/persona_hub/persona_manager.py": [129, 147],  # rule declaration for forbidden_user_terms
+    "core/persona_hub/persona_generator.py": [577, 578, 786],  # generated schema defaults, not user-facing copy
 }
 
 
@@ -83,6 +84,10 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
     rel = str(path.resolve().relative_to(ROOT)).replace("\\", "/")
     for i, line in enumerate(text.splitlines(), 1):
         if is_whitelisted(rel, i):
+            continue
+        # Rule declarations may move as schemas evolve; do not rely solely on
+        # brittle line numbers for the forbidden-term list itself.
+        if "forbidden_user_terms" in line or "taboo_phrases" in line:
             continue
         for term in FORBIDDEN_TERMS:
             if term in line:

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from core.feature_flags import FeatureFlags
+from core.paths import data_dir
 from core.migrations import (
     admin_management_migrations,
     chat_log_trash_state_migrations,
@@ -335,7 +336,7 @@ class Database:
         if hasattr(self, "_initialized") and self._initialized:
             return
         self._initialized = True
-        configured_path = db_path or os.environ.get("AERIE_DB_PATH") or "data/aerie.db"
+        configured_path = db_path or os.environ.get("AERIE_DB_PATH") or (data_dir() / "aerie.db")
         self.db_path = Path(configured_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn_lock = threading.Lock()
@@ -468,11 +469,12 @@ class Database:
 
     def _rebuild_long_term_memory(self, conn: sqlite3.Connection) -> None:
         """把 long_term_memory 从 INTEGER 主键重建为 TEXT 主键（数据迁移保留）。"""
-        columns = (
-            "id, user_id, memory_type, content, importance, created_at, accessed_at, "
-            "actor_id, source_message_id, confidence, user_confirmed, expires_at, "
-            "deleted_at, metadata, access_count, updated_at, source, has_embedding"
-        )
+        target_columns = [
+            "id", "user_id", "memory_type", "content", "importance", "created_at",
+            "accessed_at", "actor_id", "source_message_id", "confidence",
+            "user_confirmed", "expires_at", "deleted_at", "metadata", "access_count",
+            "updated_at", "source", "has_embedding",
+        ]
         conn.execute("ALTER TABLE long_term_memory RENAME TO long_term_memory_old")
         conn.execute(
             "CREATE TABLE long_term_memory ("
@@ -496,9 +498,30 @@ class Database:
             " has_embedding INTEGER DEFAULT 0"
             ")"
         )
+        old_columns = {
+            row["name"] for row in conn.execute(
+                "PRAGMA table_info(long_term_memory_old)"
+            ).fetchall()
+        }
+        # Older releases had only the five core fields.  Build the SELECT from
+        # the actual schema and supply NULL/defaults for columns introduced by
+        # later migrations, instead of referencing missing names directly.
+        expressions = []
+        for column in target_columns:
+            if column in old_columns:
+                expressions.append(f'"{column}"')
+            elif column == "id":
+                expressions.append("CAST(id AS TEXT)")
+            elif column in {"importance", "access_count", "has_embedding", "user_confirmed"}:
+                expressions.append("0")
+            elif column == "confidence":
+                expressions.append("0.5")
+            else:
+                expressions.append("NULL")
+        quoted_columns = ", ".join(target_columns)
         conn.execute(
-            f"INSERT INTO long_term_memory ({columns}) "
-            f"SELECT {columns} FROM long_term_memory_old"
+            f"INSERT INTO long_term_memory ({quoted_columns}) "
+            f"SELECT {', '.join(expressions)} FROM long_term_memory_old"
         )
         conn.execute("DROP TABLE long_term_memory_old")
 

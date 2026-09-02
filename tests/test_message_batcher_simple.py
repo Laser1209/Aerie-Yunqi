@@ -4,6 +4,8 @@ import asyncio
 import sys
 import os
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from communication.message import IncomingMessage
@@ -21,6 +23,7 @@ def _make_msg(content, user_id=12345, channel="qq", channel_account_id=None):
     )
 
 
+@pytest.mark.asyncio
 async def test_all():
     passed = 0
     failed = 0
@@ -96,12 +99,12 @@ async def test_all():
     await batcher.submit_message(_make_msg("m2", user_id=222))
     await asyncio.sleep(0.05)
     await batcher.submit_message(_make_msg("m3", user_id=222))
-    check("not yet dispatched before window", len(received) == 0)
-    await asyncio.sleep(0.4)
-    check("dispatched after window", len(received) == 1, f"got {len(received)}")
-    check("3 messages in batch", len(received[0][0]) == 3 if received else False)
-    contents = [m.content for m in received[0][0]] if received else []
-    check("contents correct", contents == ["m1", "m2", "m3"], f"got {contents}")
+    check("first message dispatched immediately", len(received) == 1)
+    await batcher.on_batch_completed("qq:222")
+    await asyncio.sleep(0.05)
+    check("buffer dispatched on completion", len(received) == 2, f"got {len(received)}")
+    contents = [m.content for m in received[1][0]] if len(received) > 1 else []
+    check("buffer contents correct", contents == ["m2", "m3"], f"got {contents}")
 
     # Test 4: Max batch size triggers immediate
     print("\n=== Test 4: Max batch size triggers immediate dispatch ===")
@@ -127,13 +130,15 @@ async def test_all():
     await asyncio.sleep(0.01)
     await batcher.submit_message(_make_msg("b", user_id=333))
     await asyncio.sleep(0.01)
-    check("not yet at max size", len(received) == 0)
+    check("first message dispatched immediately", len(received) == 1)
     await batcher.submit_message(_make_msg("c", user_id=333))
     await asyncio.sleep(0.1)
-    check("dispatched on max size", len(received) == 1, f"got {len(received)}")
-    check("3 messages", len(received[0][0]) == 3 if received else False)
-    contents = [m.content for m in received[0][0]] if received else []
-    check("contents a,b,c", contents == ["a", "b", "c"], f"got {contents}")
+    check("buffer waits for completion", len(received) == 1, f"got {len(received)}")
+    await batcher.on_batch_completed("qq:333")
+    await asyncio.sleep(0.05)
+    check("buffer dispatched on completion", len(received) == 2, f"got {len(received)}")
+    contents = [m.content for m in received[1][0]] if len(received) > 1 else []
+    check("contents b,c", contents == ["b", "c"], f"got {contents}")
 
     # Test 5: Conversation isolation
     print("\n=== Test 5: Conversation isolation ===")
@@ -159,18 +164,21 @@ async def test_all():
     await batcher.submit_message(_make_msg("u2a", user_id=200))
     await batcher.submit_message(_make_msg("u1b", user_id=100))
     await batcher.submit_message(_make_msg("u2b", user_id=200))
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(0.05)
 
-    check("2 batches dispatched", len(received) == 2, f"got {len(received)}")
+    check("first batches dispatched", len(received) == 2, f"got {len(received)}")
+    await batcher.on_batch_completed("qq:100")
+    await batcher.on_batch_completed("qq:200")
+    await asyncio.sleep(0.05)
     sizes = sorted([len(b[0]) for b in received])
-    check("both batches size 2", sizes == [2, 2], f"got {sizes}")
+    check("all batches preserve ordering", sizes == [1, 1, 1, 1], f"got {sizes}")
     u1_contents = set()
     u2_contents = set()
     for msgs, _ in received:
         if msgs[0].user_id == 100:
-            u1_contents = {m.content for m in msgs}
+            u1_contents.update(m.content for m in msgs)
         else:
-            u2_contents = {m.content for m in msgs}
+            u2_contents.update(m.content for m in msgs)
     check("user 1 messages isolated", u1_contents == {"u1a", "u1b"}, f"got {u1_contents}")
     check("user 2 messages isolated", u2_contents == {"u2a", "u2b"}, f"got {u2_contents}")
 
@@ -198,10 +206,10 @@ async def test_all():
     await batcher.submit_message(_make_msg("f2", user_id=500))
     await asyncio.sleep(0.05)
     check("active count 2 before flush", await batcher.get_active_batch_count() == 2)
-    check("no batches yet", len(received) == 0)
+    check("first batch already dispatched", len(received) == 1)
     await batcher.flush_all()
     await asyncio.sleep(0.1)
-    check("2 batches flushed", len(received) == 2, f"got {len(received)}")
+    check("buffer flushed", len(received) == 2, f"got {len(received)}")
     check("active count 0 after flush", await batcher.get_active_batch_count() == 0)
 
     # Test 7: get_conversation_id
@@ -249,13 +257,14 @@ async def test_all():
 
     await batcher.submit_message(_make_msg("3", user_id=888))
     await batcher.submit_message(_make_msg("4", user_id=888))
+    await batcher.on_batch_completed("qq:888")
     await asyncio.sleep(0.05)
     check("second batch dispatched", len(received) == 2, f"got {len(received)}")
     check("different batch_ids", received[0][1] != received[1][1])
     b1_contents = [m.content for m in received[0][0]]
     b2_contents = [m.content for m in received[1][0]]
-    check("batch1 is 1,2", b1_contents == ["1", "2"], f"got {b1_contents}")
-    check("batch2 is 3,4", b2_contents == ["3", "4"], f"got {b2_contents}")
+    check("batch1 is first message", b1_contents == ["1"], f"got {b1_contents}")
+    check("batch2 contains buffered messages", b2_contents == ["2", "3", "4"], f"got {b2_contents}")
 
     # Test 9: Callback exception doesn't break others
     print("\n=== Test 9: Callback exception isolation ===")

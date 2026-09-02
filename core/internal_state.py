@@ -52,13 +52,19 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return max(low, min(high, float(value)))
 
 
-def _metric(value: float, source: str, confidence: float = 0.8) -> dict[str, Any]:
+def _metric(
+    value: float,
+    source: str,
+    confidence: float = 0.8,
+    *,
+    updated_at_ms: int | None = None,
+) -> dict[str, Any]:
     """Build a source-tracked metric object."""
     return {
         "value": round(_clamp(value), 4),
         "source": source,
         "confidence": round(_clamp(confidence), 4),
-        "updated_at": int(time.time() * 1000),
+        "updated_at": int(time.time() * 1000) if updated_at_ms is None else int(updated_at_ms),
     }
 
 
@@ -114,12 +120,13 @@ class InternalStateEngine:
         A = _to_num(pad.get("A", pad.get("arousal")))
         D = _to_num(pad.get("D", pad.get("dominance")))
 
-        needs = self._needs(activity, phase, P, D, energy)
+        sampled_at_ms = int(now * 1000)
+        needs = self._needs(activity, phase, P, D, energy, updated_at_ms=sampled_at_ms)
         fatigue = self._fatigue(now, phase, activity)
-        neuro = self._neuro(P, A, D)
+        neuro = self._neuro(P, A, D, updated_at_ms=sampled_at_ms)
 
         snapshot = {
-            "sampledAt": int(now * 1000),
+            "sampledAt": sampled_at_ms,
             "label": "计算模型，非生物测量",
             "needs": needs,
             "fatigue": fatigue,
@@ -142,7 +149,16 @@ class InternalStateEngine:
                 out[key] = round(_clamp(value), 4)
         return out or None
 
-    def _needs(self, activity: str, phase: str, P: float, D: float, energy: float) -> dict[str, Any]:
+    def _needs(
+        self,
+        activity: str,
+        phase: str,
+        P: float,
+        D: float,
+        energy: float,
+        *,
+        updated_at_ms: int | None = None,
+    ) -> dict[str, Any]:
         """Multi-dimension desires in [0,1].
 
         Driving rules (deterministic, source-tracked):
@@ -161,10 +177,10 @@ class InternalStateEngine:
         rest = _clamp(0.5 - (0.6 if is_sleeping else 0.0) + _clamp((0.5 - energy) * 0.8))
 
         return {
-            "social": _metric(social, "world:activity", 0.7),
-            "companion": _metric(companion, "emotion:pad:P", 0.75),
-            "exploration": _metric(exploration, "world:activity", 0.7),
-            "rest": _metric(rest, "world:energy", 0.8),
+            "social": _metric(social, "world:activity", 0.7, updated_at_ms=updated_at_ms),
+            "companion": _metric(companion, "emotion:pad:P", 0.75, updated_at_ms=updated_at_ms),
+            "exploration": _metric(exploration, "world:activity", 0.7, updated_at_ms=updated_at_ms),
+            "rest": _metric(rest, "world:energy", 0.8, updated_at_ms=updated_at_ms),
         }
 
     def _fatigue(self, now: float, phase: str, activity: str) -> dict[str, Any]:
@@ -182,9 +198,16 @@ class InternalStateEngine:
             # minutes since wake hour, wrapped to [0, 24)
             minutes = (hour - self.wake_hour) % 24.0
             value = 0.15 + minutes / 24.0 * 0.8  # 0.15 -> 0.95 across the day
-        return _metric(value, "time:clock", 0.85)
+        return _metric(value, "time:clock", 0.85, updated_at_ms=int(now * 1000))
 
-    def _neuro(self, P: float, A: float, D: float) -> dict[str, Any]:
+    def _neuro(
+        self,
+        P: float,
+        A: float,
+        D: float,
+        *,
+        updated_at_ms: int | None = None,
+    ) -> dict[str, Any]:
         """Neurochemical-STYLE computed metrics, non-medical.
 
           - vitality  (类多巴胺): driven by pleasure + arousal
@@ -195,9 +218,9 @@ class InternalStateEngine:
         calm = _clamp(0.5 + (D - 0.5) * 0.6 + (P - 0.5) * 0.4)
         strain = _clamp(0.5 + (A - 0.5) * 0.7 + (0.5 - P) * 0.5)
         return {
-            "vitality": _metric(vitality, "emotion:pad:P", 0.7),
-            "calm": _metric(calm, "emotion:pad:D", 0.7),
-            "strain": _metric(strain, "emotion:pad:A", 0.7),
+            "vitality": _metric(vitality, "emotion:pad:P", 0.7, updated_at_ms=updated_at_ms),
+            "calm": _metric(calm, "emotion:pad:D", 0.7, updated_at_ms=updated_at_ms),
+            "strain": _metric(strain, "emotion:pad:A", 0.7, updated_at_ms=updated_at_ms),
         }
 
     # ── history / trends ───────────────────────────────────────────────

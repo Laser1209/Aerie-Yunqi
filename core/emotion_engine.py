@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from core.emotion_threshold import get_threshold_engine, CumulativeEmotionEngine
+from core.model_gate import model_calls_disabled
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +296,7 @@ class EmotionEngine:
         ``None`` if the LLM call fails / times out. The prompt is short
         (one-shot JSON) to keep latency low.
         """
-        if not self.brain or not getattr(self.brain, "_providers", None):
+        if model_calls_disabled() or not self.brain or not getattr(self.brain, "_providers", None):
             return None
         prompt = (
             "你是一个情感分析专家。请阅读用户消息，"

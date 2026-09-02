@@ -33,6 +33,7 @@ def test_load_persona_uses_active_hub_projection_when_flag_enabled(monkeypatch, 
         "yita_default",
         {"basic": {"name": "Hub 伊塔", "english_name": "Hub Ita"}},
     )
+    manager.set_active("yita_default")
 
     monkeypatch.setattr(persona_loader, "get_persona_manager", lambda: manager)
     monkeypatch.setattr(
@@ -134,7 +135,7 @@ def test_persona_switch_keeps_active_id_when_persistence_fails(
 
     assert ok is False
     assert "disk full" in error
-    assert manager.get_active_id() == "yita_default"
+    assert manager.get_active_id() == "aerie_default"
 
 
 @pytest.mark.asyncio

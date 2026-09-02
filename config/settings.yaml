@@ -9,34 +9,34 @@ brief_subscriptions:
 computer_control:
   blacklist: []
   custom_rules: {}
-  mode: full
+  mode: manual
   whitelist: []
 douyin:
   api_base_url: https://api.justoneapi.com
-  api_token: hTyHR6DVMd4jjZlN
+  api_token: ''
 dsh:
   enabled: true
   session_window_sec: 60
 feature_flags:
   chat_request_queue_v1: true
-  chat_stream_v1: false
+  chat_stream_v1: true
   context_budget_v1: true
   conversation_model_v1: true
-  identity_contract_v1: false
+  identity_contract_v1: true
   image_assets_v1: true
   image_edit_v1: true
-  memory_write_validation_v1: false
+  memory_write_validation_v1: true
   migration_framework_v1: true
-  mobile_gateway_v1: false
+  mobile_gateway_v1: true
   multi_channel_identity_v1: true
   persona_hub_source_v1: true
   proactive_delivery_v2: true
   recall_llm_instruction_v1: true
   self_evolve_l4_enabled: true
-  thinking_trace_injection_v1: false
+  thinking_trace_injection_v1: true
   world_image_candidates_v1: true
   world_inprocess_v1: true
-  world_sidecar_v1: false
+  world_sidecar_v1: true
 message_batching:
   base_interval_seconds: 0.5
   chars_per_second: 4
@@ -50,8 +50,8 @@ office:
 proactive:
   companion_image_probability: 0.8
   enabled: true
-  image_max_per_day: 0
-  max_per_day: 0
+  image_max_per_day: 1
+  max_per_day: 5
   min_interval_min: 15
   outdoor_holiday_event: true
   outdoor_probability: 0.5
@@ -67,7 +67,7 @@ startup:
   auto_start: false
   start_minimized: false
 theme:
-  current: yita-pink
+  current: ocean-blue
 verify_batch4:
   ping: pong
   ts: 1784404889

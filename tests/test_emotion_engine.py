@@ -94,6 +94,21 @@ class TestEmotionEngineTrajectory:
         # EMA: P(t) = P(t-1)*0.7 + delta*0.3
         assert abs(s2["pad"]["P"]) >= abs(s1["pad"]["P"]) * 0.6  # rough check
 
+    @pytest.mark.asyncio
+    async def test_disabled_model_calls_skip_pad_provider(self, monkeypatch):
+        class Brain:
+            _providers = [{"name": "test", "model": "test", "key": "x", "url": "https://invalid"}]
+
+        engine = EmotionEngine(brain=Brain())
+        monkeypatch.setenv("AERIE_DISABLE_MODEL_CALLS", "1")
+
+        class NoNetworkClient:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("PAD provider must not be contacted")
+
+        monkeypatch.setattr("core.emotion_engine.httpx.AsyncClient", NoNetworkClient)
+        assert await engine.infer_llm_pad("测试") is None
+
 
 class TestEmotionEngineLabel:
     """Test emotion classification via get_label()."""

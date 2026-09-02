@@ -51,6 +51,7 @@ from core.ids import generate_id
 from core.identity import IdentityRepository, IdentityResolver
 from core.pipeline import Pipeline
 from core.paths import data_dir
+from core.model_gate import model_calls_disabled
 from core.primary_identity import PrimaryIdentityResolver
 from core.push_event_engine import get_event_engine
 from core.push_scheduler import PushScheduler
@@ -1040,7 +1041,6 @@ class Companion:
         # v2: 整点滚动调度（PulsePlanner）+ 作息学习（RoutineLearner）。
         # 失败时静默降级为 cron-only，不影响既有链路。
         try:
-            from core.paths import data_dir
             from core.proactive_planner import PulsePlanner
             from core.routine_learner import RoutineLearner
 
@@ -1829,7 +1829,15 @@ class Companion:
             return None
         try:
             emotion = self.get_primary_emotion_state()
-            return internal.compute(world_snapshot, emotion, relationship_snapshot)
+            # Context assembly may request the provider more than once within
+            # one turn.  Use second-resolution sampling so metric timestamps
+            # remain stable instead of changing at millisecond boundaries.
+            return internal.compute(
+                world_snapshot,
+                emotion,
+                relationship_snapshot,
+                now=float(int(time.time())),
+            )
         except Exception:
             logger.debug("internal state snapshot unavailable", exc_info=True)
             return None
@@ -3017,6 +3025,9 @@ class Companion:
         """
         while True:
             try:
+                if model_calls_disabled():
+                    await asyncio.sleep(600)
+                    continue
                 probe = getattr(self.brain, "probe_balances", None)
                 if callable(probe):
                     await probe()
@@ -4143,9 +4154,10 @@ class Companion:
             delivery_v2 = self.feature_flags.is_enabled("proactive_delivery_v2")
 
             mood = "neutral"
+            emotion_snapshot: dict[str, Any] | None = None
             if scene_cfg.get("mood_aware"):
-                state = self.get_primary_emotion_state()
-                mood = state.get("label", "neutral")
+                emotion_snapshot = self.get_primary_emotion_state()
+                mood = emotion_snapshot.get("label", "neutral")
 
             # Workstream 6: retrieve `dialogue` knowledge as generation
             # principles (how to talk) and inject into the push prompt.
@@ -4195,7 +4207,9 @@ class Companion:
             # ---- v2 state-aware inputs: PAD dual-channel ----
             pad = None
             try:
-                est = self.get_primary_emotion_state()
+                est = emotion_snapshot
+                if est is None:
+                    est = self.get_primary_emotion_state()
                 sp = est.get("pad") if isinstance(est, dict) else None
                 if isinstance(sp, dict):
                     pad = {

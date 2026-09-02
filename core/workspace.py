@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from core.file_organizer import EXTENSION_MAP
+from core.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,13 @@ _IMAGE_EXTS = frozenset(
 _ACTIVITY_MAX = 200
 
 # 临时工作区持久化文件(用户自定义目录重启后保留)
-_TEMP_ROOTS_FILE = Path("data/workspace_roots.json")
+_TEMP_ROOTS_FILE = data_dir() / "workspace_roots.json"
+
+
+def _temp_roots_file() -> Path:
+    """Resolve the workspace state, retaining the test/config override hook."""
+
+    return _TEMP_ROOTS_FILE
 
 
 @dataclass(slots=True)
@@ -77,8 +84,9 @@ class WorkspaceManager:
     def _load_persisted(self) -> None:
         """加载用户自定义目录 + 上次激活的工作区(data/workspace_roots.json)。"""
         try:
-            if _TEMP_ROOTS_FILE.is_file():
-                data = json.loads(_TEMP_ROOTS_FILE.read_text(encoding="utf-8"))
+            state_file = _temp_roots_file()
+            if state_file.is_file():
+                data = json.loads(state_file.read_text(encoding="utf-8"))
                 for root in data.get("roots", []) or []:
                     norm = self._normalize(root)
                     if norm and norm not in self._preset_roots and norm not in self._temp_roots:
@@ -92,8 +100,9 @@ class WorkspaceManager:
 
     def _save_persisted(self) -> None:
         try:
-            _TEMP_ROOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            _TEMP_ROOTS_FILE.write_text(
+            state_file = _temp_roots_file()
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            state_file.write_text(
                 json.dumps(
                     {"roots": self._temp_roots, "active_root": self._active_root},
                     ensure_ascii=False, indent=2,

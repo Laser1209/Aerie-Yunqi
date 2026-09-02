@@ -82,7 +82,7 @@ class TestHealthEndpoint:
     def test_health_has_version(self):
         resp = client.get("/api/health")
         data = resp.json()
-        assert data["app"] == "Aerie · 云栖"
+        assert data["app"] == "Aerie Companion"
         assert data["version"] == app.version
 
     def test_health_has_uptime(self):

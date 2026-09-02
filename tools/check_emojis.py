@@ -62,7 +62,10 @@ def main() -> int:
     files_scanned = 0
     hits = []
     for p in TARGET.rglob("*"):
-        if p.is_file() and p.suffix in {".html", ".js", ".css"}:
+        # Bundled third-party libraries are immutable vendor artifacts; scan
+        # first-party renderer sources only to avoid flagging their internal
+        # chart labels and data tables.
+        if p.is_file() and "vendor" not in p.parts and p.suffix in {".html", ".js", ".css"}:
             files_scanned += 1
             try:
                 text = p.read_text(encoding="utf-8")

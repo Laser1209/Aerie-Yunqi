@@ -36,6 +36,13 @@ def temp_data_dir():
         os.chdir(old_cwd)
 
 
+@pytest.fixture(autouse=True)
+def isolate_optional_provider_credentials(monkeypatch):
+    """Prevent host .env credentials from changing call-count contracts."""
+    monkeypatch.delenv("SILICONFLOW_API_KEY", raising=False)
+    monkeypatch.delenv("SILICONFLOW_LIGHT_MODEL", raising=False)
+
+
 @pytest.fixture
 def mock_qq_client():
     """Mock QQClient with no real WebSocket."""

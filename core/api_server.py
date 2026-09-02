@@ -77,12 +77,17 @@ from core.calendar_manager import CalendarManager
 from core.persona_hub import get_persona_manager
 from core.multimodal_input import AudioTranscriber
 from knowledge.kb import KnowledgeBase
+from core.version import APP_VERSION
+from core.companion_studio_adapter import CompanionStudioAdapter
+from core.entitlements import EntitlementStore
 
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(main.PROJECT_ROOT).resolve()
 
-app = FastAPI(title="Aerie · 云栖", version="0.3.1-Beta.1")
+app = FastAPI(title="Aerie Companion", version=APP_VERSION)
+_companion_studio = CompanionStudioAdapter()
+_entitlements = EntitlementStore()
 
 # R6.6: enable CORS so the Electron renderer (loaded from file://) can
 # call /api/persona/avatar via fetch() and other plain-XHR endpoints.
@@ -234,6 +239,12 @@ def _world_sidecar_enabled(companion: Any | None = None) -> bool:
             )
         except Exception:
             logger.warning("shared world feature flag lookup failed", exc_info=True)
+    # Without a shared runtime flag, an explicit sidecar=false environment
+    # override disables the whole dashboard, including the in-process path.
+    import os
+    sidecar_env = os.environ.get("AERIE_FEATURE_WORLD_SIDECAR_V1")
+    if sidecar_env is not None and sidecar_env.strip().lower() in {"0", "false", "no", "off"}:
+        return False
     flags_fallback = FeatureFlags()
     return (
         flags_fallback.is_enabled("world_sidecar_v1") is True
@@ -860,7 +871,7 @@ def _main_process_request_authorized(request: Request) -> bool:
 
 
 def _memory_write_validation_enabled() -> bool:
-    """P2 写入校验门开关（§3.7-2），PoC 阶段默认关闭。"""
+    """P2 写入校验门开关（§3.7-2），商业测试版本默认开启。"""
     try:
         from core.feature_flags import FeatureFlags
 
@@ -1045,13 +1056,14 @@ async def health(request: Request) -> dict:
 
     return {
         "status": overall,
-        "app": "Aerie · 云栖",
-        "version": "0.3.1-Beta.1",
+        "app": "Aerie Companion",
+        "version": APP_VERSION,
         "uptime_seconds": uptime,
         "qq_connected": qq_ws_connected,
         "git_commit": getattr(main, "GIT_COMMIT", "unknown"),
         "process_started_at": getattr(main, "PROCESS_START_ISO", ""),
         "backend_instance_id": getattr(main, "BACKEND_INSTANCE_ID", ""),
+        "build_manifest": _build_manifest_payload(),
         "data_path_id": str(_db.db_path.resolve()).lower(),
         "stale_code": stale_info,
         "startup_progress": _startup_progress_payload(),
@@ -1069,8 +1081,55 @@ async def health(request: Request) -> dict:
                 "paused_reason": push_paused_reason,
             },
             "providers": _provider_health_payload(comp),
+            "companion_studio": {
+                "configured": _companion_studio.enabled,
+                "status_endpoint": "/api/integrations/companion-studio",
+            },
         },
     }
+
+
+@app.get("/api/integrations/companion-studio")
+async def companion_studio_health() -> dict:
+    """Return Studio availability without making it a dependency of chat."""
+    return await _companion_studio.health()
+
+
+@app.post("/api/integrations/companion-studio/talk")
+async def companion_studio_talk(payload: dict[str, Any]) -> dict:
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="缺少 text")
+    return await _companion_studio.talk(text, str(payload.get("source") or "text"))
+
+
+@app.post("/api/integrations/companion-studio/speak")
+async def companion_studio_speak(payload: dict[str, Any]) -> dict:
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="缺少 text")
+    echo = payload.get("echo")
+    return await _companion_studio.speak(text, echo if isinstance(echo, bool) else None)
+
+
+@app.post("/api/integrations/companion-studio/asr")
+async def companion_studio_asr(payload: dict[str, Any]) -> dict:
+    audio = str(payload.get("audioBase64") or "")
+    if not audio:
+        raise HTTPException(status_code=400, detail="缺少 audioBase64")
+    return await _companion_studio.asr(audio, str(payload.get("format") or "wav"))
+
+
+@app.get("/api/billing/entitlement")
+async def billing_entitlement() -> dict:
+    """Return local plan and usage; no payment provider is implied."""
+    return _entitlements.snapshot()
+
+
+@app.post("/api/billing/trial")
+async def billing_trial(payload: dict[str, Any] | None = None) -> dict:
+    days = int((payload or {}).get("days", 14) or 14)
+    return _entitlements.activate_trial(days)
 
 
 def _startup_progress_payload() -> dict:
@@ -1081,6 +1140,37 @@ def _startup_progress_payload() -> dict:
         return get_startup_progress().snapshot()
     except Exception:  # noqa: BLE001
         return {"started_at": 0, "finished": True, "elapsed_ms": 0, "steps": []}
+
+
+def _build_manifest_payload() -> dict[str, Any] | None:
+    """Expose reproducibility metadata without local paths or secrets."""
+    import json as _json
+
+    candidates: list[Path] = []
+    configured = os.getenv("AERIE_BUILD_MANIFEST", "").strip()
+    if configured:
+        candidates.append(Path(configured))
+    candidates.extend(
+        (
+            Path(__file__).resolve().parents[2] / "build-manifest.json",
+            Path(__file__).resolve().parents[1] / "build-manifest.json",
+        )
+    )
+    for path in candidates:
+        try:
+            value = _json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                continue
+            return {
+                "schema": value.get("schema"),
+                "version": value.get("version"),
+                "git_commit": value.get("git_commit"),
+                "runtime_sha256": value.get("runtime_sha256"),
+                "built_at": value.get("built_at"),
+            }
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
 
 
 def _provider_health_payload(comp) -> dict:
@@ -6982,13 +7072,15 @@ async def persona_hub_import(file: UploadFile = File(...)) -> dict:
 
 @app.post("/api/persona/hub/reset-default")
 async def persona_hub_reset_default() -> dict:
-    """重置为默认伊塔人设。"""
+    """重置为当前发行配置指定的默认人设。"""
     try:
-        ok, msg = _persona_mgr.switch_persona("yita_default")
+        from core.persona_hub.persona_manager import DEFAULT_PERSONA_ID
+
+        ok, msg = _persona_mgr.switch_persona(DEFAULT_PERSONA_ID)
         if not ok:
             return JSONResponse({"error": msg}, status_code=400)
-        emit("persona:changed", persona_id="yita_default")
-        return {"status": "ok", "active_id": "yita_default"}
+        emit("persona:changed", persona_id=DEFAULT_PERSONA_ID)
+        return {"status": "ok", "active_id": DEFAULT_PERSONA_ID}
     except Exception as e:
         logger.exception("persona hub reset error")
         return JSONResponse({"error": str(e)}, status_code=500)

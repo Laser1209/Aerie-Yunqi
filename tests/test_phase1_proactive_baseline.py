@@ -140,6 +140,9 @@ def _make_push_companion(*, flag_enabled: bool, qq_online: bool = True):
     companion.get_primary_user_selection = MagicMock(
         return_value=SimpleNamespace(user_id=7)
     )
+    # Isolate the delivery contract from the developer machine's persisted
+    # persona selection (legacy yita_default may remain as user data).
+    companion._active_persona_id = MagicMock(return_value="aerie_default")
     companion.qq = SimpleNamespace(
         is_logged_in=qq_online,
         self_id=7,
@@ -177,9 +180,10 @@ async def test_v2_delivery_attempts_qq_bubble_and_notification(monkeypatch):
             "role": "assistant",
             "content": "记得休息。",
             "msg_type": "proactive",
-            "route_mode": "PROACTIVE",
-            "scene": "idle_care",
-        },
+                "route_mode": "PROACTIVE",
+                "scene": "idle_care",
+                "persona_id": "aerie_default",
+            },
     )
     assert emitted.call_args_list[:2] == [
         call(

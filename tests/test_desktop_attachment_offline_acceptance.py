@@ -78,8 +78,7 @@ def test_real_worker_offline_format_truth_matrix(synthetic_fixtures, tmp_path):
     from tools.attachment_worker.synthetic_fixtures import MARKERS
 
     content_formats = {"txt", "py", "pdf", "docx", "xlsx", "pptx", "zip"}
-    unavailable_formats = {"png", "wav", "mp4"}
-    metadata_formats = {"rar", "7z", "exe", "apk"}
+    metadata_formats = {"png", "wav", "mp4", "rar", "7z", "exe", "apk"}
     worker = AttachmentWorkerClient(python_command=[str(PYTHON312)])
     service = DesktopAttachmentService(
         _connection(),
@@ -101,12 +100,6 @@ def test_real_worker_offline_format_truth_matrix(synthetic_fixtures, tmp_path):
             assert metadata["contentExtracted"] is True, format_name
             assert metadata["contentKind"] == "extracted_text", format_name
             assert MARKERS[format_name] in content, format_name
-        elif format_name in unavailable_formats:
-            assert record["state"] == "failed", format_name
-            assert record["error_code"] == "semantic_extraction_unavailable"
-            assert metadata["contentExtracted"] is False
-            assert metadata["semanticStatus"] == "unavailable"
-            assert chunks == []
         else:
             assert format_name in metadata_formats
             assert record["state"] == "ready", format_name

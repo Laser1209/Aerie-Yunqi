@@ -13,9 +13,9 @@ def project_persona_to_legacy(persona: dict[str, Any]) -> dict[str, Any]:
     prompt_overrides = persona.get("prompt_overrides") or {}
 
     legacy = {
-        "name": basic.get("name") or persona.get("name") or "伊塔",
-        "english_name": basic.get("english_name") or "Ita",
-        "product_name": basic.get("product_name") or "Aerie · 云栖",
+        "name": basic.get("name") or persona.get("name") or "Aerie Companion",
+        "english_name": basic.get("english_name") or "Aerie Companion",
+        "product_name": basic.get("product_name") or "Aerie",
         "profile": {
             "age": basic.get("age"),
             "gender": basic.get("gender", ""),

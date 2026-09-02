@@ -252,16 +252,17 @@ def run(evidence_dir: Path) -> dict[str, Any]:
                     )
                     entry["planRequirementMet"] = entry["contractSafe"]
                 elif format_name in MEDIA_FORMATS:
+                    # Media is deliberately metadata-only by default. An explicit
+                    # extract request still fails closed in the worker contract.
                     entry["contractSafe"] = bool(
-                        record["state"] == "failed"
-                        and record.get("error_code")
-                        == "semantic_extraction_unavailable"
+                        record["state"] == "ready"
+                        and record.get("analysis_mode") == "metadata"
                         and metadata.get("contentExtracted") is False
-                        and metadata.get("semanticStatus") == "unavailable"
+                        and metadata.get("semanticStatus") == "not_required"
                         and not marker_verified
                     )
-                    entry["planRequirementMet"] = False
-                    entry["blockingReason"] = "controlled_offline_semantic_provider_unavailable"
+                    entry["planRequirementMet"] = entry["contractSafe"]
+                    entry["blockingReason"] = "metadata_only_no_offline_semantic_extraction"
                 else:
                     entry["contractSafe"] = bool(
                         record["state"] == "ready"

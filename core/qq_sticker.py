@@ -135,6 +135,12 @@ class QQStickerLibrary:
     def available(self) -> bool:
         return bool(self._urls)
 
+    @available.setter
+    def available(self, value: bool) -> None:
+        """Legacy compatibility setter; URL presence remains authoritative."""
+        if not value:
+            self._urls = []
+
     def size(self) -> int:
         return len(self._urls)
 
@@ -170,7 +176,11 @@ class QQStickerLibrary:
         if not path:
             return ""
         try:
-            return await self.vision.describe(path, question=_VISION_QUESTION)
+            try:
+                return await self.vision.describe(path, question=_VISION_QUESTION)
+            except TypeError:
+                # Older vision adapters accepted the prompt positionally.
+                return await self.vision.describe(path, _VISION_QUESTION)
         except Exception:
             logger.debug("qq sticker vision describe failed: %s", url, exc_info=True)
             return ""

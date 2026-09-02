@@ -284,6 +284,30 @@ def _make_companion(tmp_path, db_rows=None):
 
 
 class TestDispatchPushTopicMode:
+    def test_weather_template_receives_context_and_uses_fallback(self, tmp_path, monkeypatch):
+        from core import weather_service
+
+        monkeypatch.setattr(
+            weather_service,
+            "fetch_weather_for_current_location",
+            AsyncMock(return_value={
+                "city": "济南",
+                "desc": "晴",
+                "temp": "26",
+                "suggestion": "适合出门",
+            }),
+        )
+        c = _make_companion(tmp_path)
+        result = asyncio.run(c._dispatch_push(
+            "weather_push",
+            {"template": "{city}今天{weather}，{temp}度。{suggestion}。"},
+        ))
+        assert result is True
+        assert c.brain.kwargs["city"] == "济南"
+        assert c.brain.kwargs["weather"] == "晴"
+        assert c.brain.kwargs["temp"] == "26"
+        assert c.brain.kwargs["suggestion"] == "适合出门"
+
     def test_continue_mode_passes_topic_context(self, tmp_path):
         c = _make_companion(
             tmp_path,

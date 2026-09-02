@@ -4225,6 +4225,36 @@ class Companion:
             # ---- v2: world fragment ----
             world_fragment = self._proactive_world_fragment()
 
+            # Weather scenes use a richer template than other proactive
+            # scenes. Resolve the values here so a missing location/provider
+            # degrades to readable copy instead of raising KeyError in the
+            # shared template formatter.
+            template_kwargs = {
+                "date": datetime.now().strftime("%Y年%m月%d日"),
+            }
+            if scene_name == "weather_push":
+                template_kwargs.update({
+                    "city": "你所在的城市",
+                    "weather": "天气暂无",
+                    "temp": "—",
+                    "suggestion": "留意天气变化",
+                })
+                try:
+                    from core import weather_service
+
+                    weather = await weather_service.fetch_weather_for_current_location()
+                    if isinstance(weather, dict):
+                        template_kwargs.update({
+                            "city": str(weather.get("city") or template_kwargs["city"]),
+                            "weather": str(weather.get("desc") or template_kwargs["weather"]),
+                            "temp": str(weather.get("temp") or template_kwargs["temp"]),
+                            "suggestion": str(
+                                weather.get("suggestion") or template_kwargs["suggestion"]
+                            ),
+                        })
+                except Exception:
+                    logger.info("[Push] weather context unavailable; using fallback", exc_info=True)
+
             # ---- v2: memory evoke (旧事唤起，仅 new 模式 + 冷却/额度预筛) ----
             memory_fragment = ""
             if topic_mode == "new":
@@ -4242,7 +4272,7 @@ class Companion:
                 world_fragment=world_fragment,
                 memory_fragment=memory_fragment,
                 trigger_shape=str(scene_cfg.get("trigger_shape") or "anchor"),
-                date=datetime.now().strftime("%Y年%m月%d日"),
+                **template_kwargs,
             )
             if not content:
                 return False
@@ -4358,7 +4388,7 @@ class Companion:
             try:
                 chat_events.emit(
                     "proactive_message",
-                    title="云栖",
+                    title="Aerie Companion",
                     text=content,
                     content=content,
                     scene=scene_name,

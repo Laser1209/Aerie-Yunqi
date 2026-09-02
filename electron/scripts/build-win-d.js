@@ -20,6 +20,9 @@ const npm = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const result = spawnSync(npm, ['electron-builder', '--win', '--x64', '--config.directories.output=' + outputDir], {
   cwd: path.resolve(__dirname, '..'),
   env,
+  // Windows cannot spawn a .cmd shim directly with newer Node releases.
+  // Use the shell so npx.cmd resolves consistently on developer machines.
+  shell: process.platform === 'win32',
   stdio: 'inherit',
 });
 if (result.status !== 0) process.exit(result.status || 1);

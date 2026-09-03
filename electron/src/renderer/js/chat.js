@@ -485,7 +485,7 @@ class ChatManager {
 
     return `
       <div class="chat-msg__avatar-wrap">
-        <span class="chat-msg__avatar chat-msg__avatar--placeholder">伊</span>
+        <span class="chat-msg__avatar chat-msg__avatar--placeholder">A</span>
       </div>
       <div class="chat-msg__body">
         <div class="chat-msg__name">Aerie Companion</div>

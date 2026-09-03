@@ -1587,28 +1587,30 @@ async function auditPersonaEditor(page, context) {
   await page.locator("#persona-hub-back-btn").click().catch(() => {});
 }
 
-async function auditApprovalModal(page, context) {
-  await page.waitForFunction(() => window.approvalModal && typeof window.approvalModal._onNewApproval === "function", null, { timeout: 5000 }).catch(() => {});
+async function auditApprovalCard(page, context) {
+  await navigateTab(page, context, "chat");
+  await page.waitForFunction(() => window._chat && typeof window._chat._handleComputerControlSignal === "function", null, { timeout: 5000 }).catch(() => {});
   const injected = await page.evaluate(() => {
-    if (!window.approvalModal || typeof window.approvalModal._onNewApproval !== "function") return false;
-    window.approvalModal._onNewApproval({
+    if (!window._chat || typeof window._chat._handleComputerControlSignal !== "function") return false;
+    window._chat._handleComputerControlSignal({
+      type: "computer_control_approval_requested",
       id: "qa-synthetic-approval",
-      action_type: "qa.synthetic.inspect",
+      action: "qa.synthetic.inspect",
       risk_level: "low",
       params: { target: "synthetic-record" },
     });
     return true;
   });
   if (!injected) {
-    context.runtimeFailures.push("approval_modal_not_initialized");
+    context.runtimeFailures.push("approval_card_not_initialized");
     return;
   }
-  await capturePhase(page, context, "runtime/approval/synthetic", {
+  await capturePhase(page, context, "runtime/approval-card/synthetic", {
     provenance: "synthetic-runtime-event",
-    expectedSelector: "#approval-modal-overlay.approval-modal-overlay--visible",
+    expectedSelector: '[data-approval-id="qa-synthetic-approval"] .cc-card',
     expectedText: "qa.synthetic.inspect",
   });
-  const reject = await findControl(page, "#approval-reject-btn");
+  const reject = await findControl(page, '[data-approval-id="qa-synthetic-approval"] [data-cc-act="reject"]');
   if (reject) {
     const classification = {
       category: "synthetic-approval-rejection",
@@ -1676,7 +1678,7 @@ async function auditRuntimeSurfaces(page, context) {
   await auditCalendarModal(page, context);
   await auditKnowledgeModal(page, context);
   await auditPersonaEditor(page, context);
-  await auditApprovalModal(page, context);
+  await auditApprovalCard(page, context);
   await auditAttachmentFixture(page, context);
 }
 

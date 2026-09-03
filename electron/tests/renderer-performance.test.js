@@ -24,7 +24,8 @@ test("hidden panels initialize on first activation", () => {
 test("global controllers start after the first paint", () => {
   const source = rendererJs("app.js");
   assert.match(source, /const scheduleAfterFirstPaint = \(fn\) =>/);
-  assert.match(source, /scheduleAfterFirstPaint\(\(\) => \{[\s\S]*?ApprovalModal[\s\S]*?OfficeModeController/);
+  assert.match(source, /scheduleAfterFirstPaint\(\(\) => \{[\s\S]*?OfficeModeController/);
+  assert.doesNotMatch(source, /ApprovalModal/);
 });
 
 test("dynamic island has no continuous idle particle or CSS animation loop", () => {

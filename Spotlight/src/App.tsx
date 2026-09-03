@@ -7,6 +7,7 @@ import CapabilitiesPage from './pages/CapabilitiesPage'
 import JournalPage from './pages/JournalPage'
 import DownloadPage from './pages/DownloadPage'
 import MobilePage from './pages/MobilePage'
+import OpenAIAdsConsent from './components/OpenAIAdsConsent'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/mobile" element={<MobilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <OpenAIAdsConsent />
     </>
   )
 }

@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-本仓库当前没有已配置的真实 Pixel ID、CAPI secret、注册系统或支付成功回调，因此本轮只加入默认关闭的营销页 Pixel 骨架，不创建伪造的订阅转化。未配置 ID 或未显式开启时完全 no-op，避免把本地桌面用户数据误送到广告系统。
+本仓库当前没有已配置的真实 Pixel ID、CAPI secret、注册系统或支付成功回调，因此只保留默认关闭的营销页 Pixel 骨架，不创建伪造的订阅转化。即使配置 ID 并显式开启，仍必须由访客明确允许投放效果测量后才会加载 SDK；未选择或拒绝时完全 no-op。
 
 ## 已确认的转化边界
 
@@ -16,17 +16,18 @@
 
 ## 采用的初始模式
 
-当前采用 browser Pixel-only 骨架：在 Spotlight 根入口单点初始化 `oaiq`，仅在 `VITE_OPENAI_ADS_MEASUREMENT_ENABLED=true` 且存在 `VITE_OPENAI_ADS_PIXEL_ID` 时发送 `page_viewed` / `contents_viewed`。当试用或订阅服务拥有真实成功回调后，再采用 Pixel+CAPI，并由服务端生成同一 `event_id` 做去重。
+当前采用 browser Pixel-only 骨架：Spotlight 根入口只尝试初始化，必须同时满足 `VITE_OPENAI_ADS_MEASUREMENT_ENABLED=true`、存在 `VITE_OPENAI_ADS_PIXEL_ID`、本地 consent 为 `granted` 才会创建 `oaiq` 并发送 `page_viewed` / `contents_viewed`。当试用或订阅服务拥有真实成功回调后，再采用 Pixel+CAPI，并由服务端生成同一 `event_id` 做去重。
 
 ## 本轮实现与验证
 
-- 新增 `Spotlight/src/analytics/openaiAds.ts`，单点初始化、无 Pixel ID 或未显式开启时完全 no-op。
-- `Spotlight/src/main.tsx` 发送营销页 `page_viewed`；首页和下载页的 A04 下载入口发送 `contents_viewed`。
+- `Spotlight/src/analytics/openaiAds.ts` 负责单点初始化、consent 持久化与无异常事件发送；缺少配置、未选择或拒绝时完全 no-op。
+- `Spotlight/src/components/OpenAIAdsConsent.tsx` 只在 Pixel 已配置时显示“允许测量 / 仅必要功能”，选择后仍可重新打开并撤回。
+- `Spotlight/src/main.tsx` 发送营销页 `page_viewed`；首页和下载页的 A12 下载入口发送 `contents_viewed`。
 - 未发送用户标识、聊天内容、音频、屏幕内容、Persona 字段、`oppref` 或 CAPI 请求；当前没有 CAPI 事件。
-- `Spotlight` 生产构建成功；CAPI secret 暴露扫描无发现；Ads 静态检查通过。
-- 浏览器实测默认关闭状态：A04 下载链接可见，`window.oaiq` 不存在，Ads 脚本注入数量为 0，页面无 console error/warn。
+- 主仓库和独立部署仓库的 `Spotlight` 生产构建成功；CAPI secret 暴露扫描无发现；Ads Pixel-only 静态检查通过。
+- 浏览器用假的 Pixel ID 实测：未选择时 `window.oaiq` 不存在、SDK 脚本为 0；选择“仅必要功能”后仍为 0；隐私选择可以重新打开；页面无 console error/warn。
 
-启用前仍需由运营/法务确认真实 Pixel ID、营销页 consent/opt-out 规则和 canonical origin。配置完成后应重新运行 Ads 静态检查，并确认只在同意后加载脚本。
+启用前仍需由运营/法务确认真实 Pixel ID、consent 文案与适用地区规则。配置完成后应重新运行 Ads 静态检查，并在广告后台验证真实测试事件；当前不包含用户标识或 Pixel+CAPI 去重。
 
 ## 明确跳过的事件
 
@@ -46,7 +47,7 @@
 ## 投放前置条件
 
 1. 确认广告账户和真实 Pixel ID。
-2. 确认 consent/opt-out 规则及营销页 canonical origin。
+2. 由运营/法务复核现有 consent/撤回文案及适用地区规则。
 3. 确认试用和订阅供应商、成功回调、服务端 secret 名称及去重 ID 生成位置。
 4. 接入后运行 Ads 静态检查与无密钥扫描，再做小预算封闭测试。
 

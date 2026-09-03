@@ -1,5 +1,4 @@
 const releaseAssetBase = 'https://github.com/Laser1209/Aerie-Yunqi/releases/download'
-const historicalReleaseAssetBase = 'https://github.com/Laser1209/Aerie_Spotlight/releases/download'
 
 export const release = {
   version: '0.3.2-beta.0904-A12',
@@ -7,7 +6,7 @@ export const release = {
   filename: 'Aerie.Companion-0.3.2-beta.0904-A12-portable.exe',
   installerUrl: `${releaseAssetBase}/v0.3.2-beta.0904-A12/Aerie.Companion-0.3.2-beta.0904-A12-Setup.exe`,
   installerFilename: 'Aerie.Companion-0.3.2-beta.0904-A12-Setup.exe',
-  date: '2026-09-03',
+  date: '2026-09-04',
 } as const
 
 export interface HistoricalRelease {
@@ -17,12 +16,18 @@ export interface HistoricalRelease {
   installerUrl: string
 }
 
-// 历史版本归档：保留旧版本下载入口，避免老用户找不到对应安装包。
+// Keep only the two releases immediately preceding the current build.
 export const historicalReleases: HistoricalRelease[] = [
   {
-    version: '0.1.0-beta.1',
-    date: '2026-07-19',
-    url: `${historicalReleaseAssetBase}/v0.1.0-beta.1/Aerie-Cloud-0.1.0-beta.1-Portable.exe`,
-    installerUrl: `${historicalReleaseAssetBase}/v0.1.0-beta.1/Aerie-Cloud-0.1.0-beta.1-Setup.exe`,
+    version: '0.3.2-beta.0903-A10',
+    date: '2026-09-03',
+    url: `${releaseAssetBase}/v0.3.2-beta.0903-A10/Aerie.Companion-0.3.2-beta.0903-A10-portable.exe`,
+    installerUrl: `${releaseAssetBase}/v0.3.2-beta.0903-A10/Aerie.Companion-0.3.2-beta.0903-A10-Setup.exe`,
+  },
+  {
+    version: '0.3.2-beta.0903-A09',
+    date: '2026-09-03',
+    url: `${releaseAssetBase}/v0.3.2-beta.0903-A09/Aerie.Companion-0.3.2-beta.0903-A09-portable.exe`,
+    installerUrl: `${releaseAssetBase}/v0.3.2-beta.0903-A09/Aerie.Companion-0.3.2-beta.0903-A09-Setup.exe`,
   },
 ]

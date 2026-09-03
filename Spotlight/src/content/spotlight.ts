@@ -322,7 +322,7 @@ export const journalEntries: JournalEntryData[] = [
   {
     id: 'beta-031',
     version: '0.3.2-beta.0904-A12',
-    date: '2026-08-14',
+    date: '2026-09-04',
     category: 'Release Candidate',
     title: 'A warm first hello, a guided first run.',
     titleZh: '开场动画、新手教程与硬件诊断落地',

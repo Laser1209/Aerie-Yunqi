@@ -321,7 +321,7 @@ export interface JournalEntryData {
 export const journalEntries: JournalEntryData[] = [
   {
     id: 'beta-031',
-    version: '0.3.2-beta.0903-A08',
+    version: '0.3.2-beta.0903-A09',
     date: '2026-08-14',
     category: 'Release Candidate',
     title: 'A warm first hello, a guided first run.',

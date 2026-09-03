@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const outputDir = 'D:/aerie-dist-v048';
+const outputDir = 'D:/aerie-dist-v049';
 const cacheDir = 'D:/aerie-cache/electron-builder';
 const tempDir = 'D:/aerie-cache/tmp';
 for (const dir of [outputDir, cacheDir, tempDir]) fs.mkdirSync(dir, { recursive: true });
@@ -33,3 +33,4 @@ const post = spawnSync(process.execPath, [path.join(__dirname, 'post-build-rcedi
   stdio: 'inherit',
 });
 process.exit(post.status || 0);
+

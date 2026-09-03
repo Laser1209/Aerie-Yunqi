@@ -849,7 +849,7 @@
           <div class="about-hero">
             <img src="assets/logo.png" alt="" class="about-logo">
             <h1>Aerie Companion</h1>
-            <p class="about-version">Aerie Companion V 0.3.2-beta.0903-A09</p>
+            <p class="about-version">Aerie Companion V 0.3.2-beta.0903-A10</p>
             <p class="about-desc">Local-first AI for your work and ideas.</p>
             <p class="about-desc-sub">本地优先 · 可替换模型 · 数据由你掌控</p>
           </div>
@@ -1790,6 +1790,21 @@
 
           <!-- API Key 视图 -->
           <div id="settings-apikey-view" role="tabpanel" aria-labelledby="tab-settings-apikey" tabindex="0" style="display:none;">
+            <div id="settings-entitlement-card" class="apikey-provider-card" style="margin: 8px 0 16px;">
+              <div class="apikey-provider-header">
+                <div class="apikey-provider-name">
+                  <span id="settings-entitlement-dot" class="apikey-provider-dot" style="background: var(--text-muted, #999)"></span>
+                  方案与用量 · Plan &amp; Usage
+                </div>
+                <div id="settings-entitlement-plan" class="apikey-provider-status">加载中…</div>
+              </div>
+              <div id="settings-entitlement-summary" style="font-size:12px;color:var(--text-muted,#999);line-height:1.7;">
+                正在读取本地 entitlement 状态…
+              </div>
+              <div id="settings-entitlement-note" style="font-size:11px;color:var(--text-muted,#999);line-height:1.6;margin-top:6px;">
+                软件订阅与第三方 API 费用分开；未配置平台代付时，API 费用由你的供应商直接收取。
+              </div>
+            </div>
             <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
               <div>
                 <strong style="color: var(--accent, #ff5b9c);">AI 服务配置</strong><br>

@@ -103,7 +103,7 @@ class SettingsPanel {
 
     // API Key view controls
     const reloadApiBtn = document.getElementById("apikey-reload-btn");
-    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => { this.loadApiKeys(); this.loadBaiduMap(); this.loadModelRoles(); });
+    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => { this.loadEntitlement(); this.loadApiKeys(); this.loadBaiduMap(); this.loadModelRoles(); });
     const baiduSaveBtn = document.getElementById("baidu-map-save-btn");
     if (baiduSaveBtn) baiduSaveBtn.addEventListener("click", () => this.saveBaiduMap());
     const customApiToggle = document.getElementById("custom-api-toggle-btn");
@@ -298,11 +298,40 @@ class SettingsPanel {
     } else if (mode === "yaml") {
       this.loadYaml();
     } else if (mode === "apikey") {
+      this.loadEntitlement();
       this.loadApiKeys();
       this.loadBaiduMap();
       this.loadModelRoles();
     } else if (mode === "feature") {
       this.loadFeatureApis();
+    }
+  }
+
+  async loadEntitlement() {
+    const planEl = document.getElementById("settings-entitlement-plan");
+    const summaryEl = document.getElementById("settings-entitlement-summary");
+    const dotEl = document.getElementById("settings-entitlement-dot");
+    if (!planEl || !summaryEl) return;
+    try {
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/billing/entitlement" });
+      const data = (r && r.data && !r.data.error) ? r.data : null;
+      if (!data) throw new Error((r && r.data && r.data.error) || "状态不可用");
+      const plan = String(data.plan || "free");
+      const pricing = data.pricing || {};
+      const usage = data.usage || {};
+      const limits = data.limits || {};
+      const formatLimit = (value) => value == null ? "不限" : Number(value).toLocaleString("zh-CN");
+      const software = Number(pricing.monthly_software_cents || 0) / 100;
+      const softwareLabel = software > 0 ? `${software.toFixed(2)} ${pricing.currency || "CNY"}/月` : "0 元/月";
+      planEl.textContent = pricing.label || plan;
+      planEl.style.color = plan === "free" ? "var(--text-muted,#999)" : "var(--success,#2ecc71)";
+      if (dotEl) dotEl.style.background = plan === "free" ? "var(--text-muted,#999)" : "var(--success,#2ecc71)";
+      summaryEl.innerHTML = `软件：<strong>${softwareLabel}</strong> · 云调用：<strong>${Number(usage.cloud_calls || 0).toLocaleString("zh-CN")} / ${formatLimit(limits.cloud_calls_month)}</strong> · Token：<strong>${Number(usage.cloud_tokens || 0).toLocaleString("zh-CN")} / ${formatLimit(limits.cloud_tokens_month)}</strong> · 周期：${data.period || "-"}`;
+    } catch (e) {
+      planEl.textContent = "状态不可用";
+      planEl.style.color = "var(--warning,#f39c12)";
+      if (dotEl) dotEl.style.background = "var(--warning,#f39c12)";
+      summaryEl.textContent = "无法读取本地方案与用量；不会因此阻断聊天或 API 配置。";
     }
   }
 

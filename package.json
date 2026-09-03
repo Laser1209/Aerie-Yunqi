@@ -1,7 +1,7 @@
 {
   "name": "aerie-companion",
   "productName": "Aerie Companion",
-  "version": "0.3.2-beta.0903-A09",
+  "version": "0.3.2-beta.0903-A10",
   "description": "Aerie - Local-first AI companion with auto-wake proactive messenger",
   "main": "src/main.js",
   "author": "Laser",

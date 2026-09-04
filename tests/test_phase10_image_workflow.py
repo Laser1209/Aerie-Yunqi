@@ -322,6 +322,31 @@ def test_brain_generation_provider_accepts_base64_image_bytes(tmp_path):
     assert (tmp_path / "uploads" / result["asset"]["saved_as"]).exists()
 
 
+def test_brain_generation_provider_preserves_error_code(tmp_path):
+    class BrainWithProviderError:
+        def generate_image(self, prompt: str, metadata: dict | None = None):
+            return {
+                "status": "failed",
+                "provider": "openai_compatible_image",
+                "model": "gpt-image-2",
+                "error_code": "provider_network_error",
+            }
+
+    service = ImageWorkflow(
+        upload_base=tmp_path / "uploads",
+        feature_enabled=True,
+        generation_provider=LLMCallerImageGenerationProvider(BrainWithProviderError()),
+    )
+
+    result = service.generate_image(
+        prompt="a calm lake",
+        idempotency_key="provider-error-key",
+    )
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "provider_network_error"
+
+
 def test_generation_idempotency_key_conflict_prevents_history_crosswire(tmp_path):
     provider = FakeGenerationProvider()
     service = _workflow(tmp_path, provider)

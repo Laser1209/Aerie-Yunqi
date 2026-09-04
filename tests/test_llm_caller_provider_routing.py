@@ -2,6 +2,7 @@ import base64
 import io
 
 import pytest
+import httpx
 from PIL import Image
 
 from core.llm_caller import LLMCaller
@@ -241,6 +242,26 @@ def test_generate_image_accepts_data_url(monkeypatch):
     assert result["status"] == "ok"
     assert result["mime_type"] == "image/png"
     assert base64.b64decode(result["image_bytes_b64"])
+
+
+def test_generate_image_classifies_provider_auth_failure(monkeypatch):
+    monkeypatch.setenv("AERIE_IMAGE_API_KEY", "image-provider-key")
+    brain = LLMCaller()
+
+    def fake_post(*args, **kwargs):
+        response = httpx.Response(
+            401,
+            request=httpx.Request("POST", "https://image.example/v1/images/generations"),
+        )
+        response.raise_for_status()
+        return response
+
+    monkeypatch.setattr("core.llm_caller.httpx.post", fake_post)
+
+    result = brain.generate_image("draw a calm lake")
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "provider_auth_failed"
 
 
 def test_speak_text_uses_explicit_openai_compatible_tts_provider(monkeypatch):

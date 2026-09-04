@@ -2009,6 +2009,33 @@ def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
                 "output_path": None,
                 "external_id": str(first.get("revised_prompt") or ""),
             }
+        except httpx.HTTPStatusError as exc:
+            status_code = int(exc.response.status_code)
+            if status_code in (401, 403):
+                error_code = "provider_auth_failed"
+            elif status_code == 429:
+                error_code = "provider_rate_limited"
+            elif status_code >= 500:
+                error_code = "provider_http_5xx"
+            else:
+                error_code = "provider_http_error"
+            logger.warning("image provider returned HTTP %s", status_code)
+            return {
+                "status": "failed",
+                "provider": "openai_compatible_image",
+                "model": model,
+                "output_path": None,
+                "error_code": error_code,
+            }
+        except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError):
+            logger.warning("image provider network call failed", exc_info=True)
+            return {
+                "status": "failed",
+                "provider": "openai_compatible_image",
+                "model": model,
+                "output_path": None,
+                "error_code": "provider_network_error",
+            }
         except Exception:
             logger.warning("image provider call failed", exc_info=True)
             return {

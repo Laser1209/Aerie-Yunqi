@@ -357,10 +357,14 @@ class LLMCallerImageGenerationProvider:
                 external_id=str(raw.get("external_id") or ""),
             )
         return ImageGenerationResult(
-            status="unavailable",
+            status=str(raw.get("status") or "unavailable"),
             provider_id=provider_id,
             model=model,
-            error_code=str(raw.get("status") or "provider_unavailable"),
+            error_code=str(
+                raw.get("error_code")
+                or raw.get("status")
+                or "provider_unavailable"
+            ),
         )
 
     def generate_edit(

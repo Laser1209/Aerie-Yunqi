@@ -183,6 +183,66 @@ def test_generate_image_uses_image_gen_env_fallback(monkeypatch):
     assert calls[0]["json"]["response_format"] == "b64_json"
 
 
+def test_generate_image_honors_custom_endpoint_and_downloads_url(monkeypatch):
+    monkeypatch.setenv("AERIE_IMAGE_API_KEY", "image-provider-key")
+    monkeypatch.setenv("AERIE_IMAGE_BASE_URL", "https://image.example/v1")
+    monkeypatch.setenv("AERIE_IMAGE_ENDPOINT", "/custom/generate")
+    brain = LLMCaller()
+    calls = []
+    png = base64.b64decode(_png_b64())
+
+    class GenerationResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"url": "https://cdn.example/result.png"}]}
+
+    class ImageResponse:
+        content = png
+        headers = {"content-type": "image/png"}
+
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append(url)
+        return GenerationResponse()
+
+    monkeypatch.setattr("core.llm_caller.httpx.post", fake_post)
+    monkeypatch.setattr(
+        "core.llm_caller.httpx.get",
+        lambda url, **kwargs: ImageResponse(),
+    )
+
+    result = brain.generate_image("draw a calm lake")
+
+    assert result["status"] == "ok"
+    assert base64.b64decode(result["image_bytes_b64"]) == png
+    assert calls == ["https://image.example/v1/custom/generate"]
+
+
+def test_generate_image_accepts_data_url(monkeypatch):
+    monkeypatch.setenv("AERIE_IMAGE_API_KEY", "image-provider-key")
+    monkeypatch.delenv("AERIE_IMAGE_ENDPOINT", raising=False)
+    brain = LLMCaller()
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"image_url": {"url": f"data:image/png;base64,{_png_b64()}"}}]}
+
+    monkeypatch.setattr("core.llm_caller.httpx.post", lambda *args, **kwargs: Response())
+
+    result = brain.generate_image("draw a calm lake")
+
+    assert result["status"] == "ok"
+    assert result["mime_type"] == "image/png"
+    assert base64.b64decode(result["image_bytes_b64"])
+
+
 def test_speak_text_uses_explicit_openai_compatible_tts_provider(monkeypatch):
     monkeypatch.setenv("AERIE_TTS_API_KEY", "tts-provider-key")
     monkeypatch.setenv("AERIE_TTS_BASE_URL", "https://tts.example/v1")

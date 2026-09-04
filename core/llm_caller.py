@@ -1756,6 +1756,47 @@ def _openai_compatible_url(base_url: str, suffix: str) -> str:
     return base + clean_suffix
 
 
+def _image_payload_bytes(item: Any, *, timeout: float) -> tuple[bytes | None, str]:
+    """Decode common OpenAI-compatible image response shapes.
+
+    Relays differ: some honor ``response_format=b64_json``, while others
+    return a short-lived ``url`` or wrap the data in ``image_url``.  Normalize
+    those forms here so the workflow can always persist local bytes.
+    """
+    if not isinstance(item, dict):
+        return None, "image/png"
+    mime = str(item.get("mime_type") or item.get("media_type") or "image/png")
+    encoded = item.get("b64_json") or item.get("base64")
+    if encoded:
+        try:
+            return base64.b64decode(str(encoded), validate=True), mime
+        except Exception:
+            return None, mime
+    nested = item.get("image_url")
+    if isinstance(nested, dict):
+        nested_url = nested.get("url")
+    else:
+        nested_url = nested
+    url = str(item.get("url") or nested_url or "").strip()
+    if not url:
+        return None, mime
+    if url.startswith("data:") and "," in url:
+        header, payload = url.split(",", 1)
+        if ";base64" in header:
+            try:
+                return base64.b64decode(payload, validate=True), header[5:].split(";", 1)[0] or mime
+            except Exception:
+                return None, mime
+    try:
+        response = httpx.get(url, timeout=timeout, follow_redirects=True)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
+        return response.content, content_type or mime
+    except Exception:
+        logger.warning("image provider returned an unusable image URL")
+        return None, mime
+
+
 def _provider_timeout_seconds() -> float:
     raw = os.getenv("AERIE_IMAGE_PROVIDER_TIMEOUT_SECONDS", "300").strip()
     if not raw:
@@ -1926,9 +1967,11 @@ def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
         idempotency_key = str(metadata.get("idempotency_key") or "").strip()
         if not (8 <= len(idempotency_key) <= 128):
             idempotency_key = f"aerie-{uuid.uuid4().hex}"
+        endpoint = _first_env("AERIE_IMAGE_ENDPOINT", "OPENAI_IMAGE_ENDPOINT", "IMAGE_GEN_ENDPOINT") or "images/generations"
+        timeout = _provider_timeout_seconds()
         try:
             response = httpx.post(
-                _openai_compatible_url(base_url, "images/generations"),
+                _openai_compatible_url(base_url, endpoint),
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -1941,28 +1984,28 @@ def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
                     "size": size,
                     "response_format": "b64_json",
                 },
-                timeout=_provider_timeout_seconds(),
+                timeout=timeout,
             )
             response.raise_for_status()
             payload = response.json()
             data = payload.get("data") if isinstance(payload, dict) else None
             first = data[0] if isinstance(data, list) and data else {}
-            image_b64 = str(first.get("b64_json") or "")
-            if not image_b64:
+            image_bytes, mime_type = _image_payload_bytes(first, timeout=timeout)
+            if not image_bytes:
                 return {
                     "status": "unavailable",
                     "provider": "openai_compatible_image",
                     "model": model,
                     "output_path": None,
-                    "error_code": "missing_b64_json",
+                    "error_code": "missing_image_data",
                 }
             return {
                 "status": "ok",
                 "provider": "openai_compatible_image",
                 "model": model,
                 "prompt": (prompt or "")[:200],
-                "image_bytes_b64": image_b64,
-                "mime_type": "image/png",
+                "image_bytes_b64": base64.b64encode(image_bytes).decode("ascii"),
+                "mime_type": mime_type,
                 "output_path": None,
                 "external_id": str(first.get("revised_prompt") or ""),
             }
@@ -2019,6 +2062,7 @@ def _brain_generate_image_edit(
     idempotency_key = str((metadata or {}).get("idempotency_key") or "").strip()
     if not (8 <= len(idempotency_key) <= 128):
         idempotency_key = f"aerie-{uuid.uuid4().hex}"
+    timeout = _provider_timeout_seconds()
     try:
         response = httpx.post(
             _openai_compatible_url(base_url, "images/edits"),
@@ -2040,28 +2084,28 @@ def _brain_generate_image_edit(
                     mime_type or "image/png",
                 )
             },
-            timeout=_provider_timeout_seconds(),
+            timeout=timeout,
         )
         response.raise_for_status()
         payload = response.json()
         data = payload.get("data") if isinstance(payload, dict) else None
         first = data[0] if isinstance(data, list) and data else {}
-        image_b64 = str(first.get("b64_json") or "")
-        if not image_b64:
+        decoded, response_mime = _image_payload_bytes(first, timeout=timeout)
+        if not decoded:
             return {
                 "status": "unavailable",
                 "provider": "openai_compatible_image",
                 "model": model,
                 "output_path": None,
-                "error_code": "image_edit_missing_b64_json",
+                "error_code": "image_edit_missing_data",
             }
         return {
             "status": "ok",
             "provider": "openai_compatible_image",
             "model": model,
             "prompt": (prompt or "")[:200],
-            "image_bytes_b64": image_b64,
-            "mime_type": "image/png",
+            "image_bytes_b64": base64.b64encode(decoded).decode("ascii"),
+            "mime_type": response_mime,
             "output_path": None,
             "external_id": str(first.get("revised_prompt") or ""),
         }

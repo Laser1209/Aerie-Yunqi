@@ -198,7 +198,7 @@ async def test_v2_delivery_attempts_qq_bubble_and_notification(monkeypatch):
         ),
         call(
             "proactive_message",
-            title="云栖",
+            title="Aerie Companion",
             text="记得休息。",
             content="记得休息。",
             scene="idle_care",

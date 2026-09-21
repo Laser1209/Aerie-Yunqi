@@ -1,0 +1,32 @@
+# GitGuardian 配置
+#
+# 背景：GitGuardian 曾告警 `Aerie-Yunqi` 仓库中暴露「通用高熵秘密」，
+# 指向中转门卡 `aerie-***`（见 config/relay_preset.env、README.md、
+# Aerie_Obsidian_Vault/modules/AIRelayGateway.md）。
+#
+# 经核实，这是**设计内的公开凭据**，不是误报也不是可修复的泄漏：
+#
+#   1. 门卡必须随安装包分发给每一个用户（electron-builder 的 extraResources
+#      显式打包 config/relay_preset.env），任何人反编译安装包都能取得它。
+#   2. 真实的阿里云百炼 Key 从不下发，只存在 Cloudflare Worker 的 secret 里。
+#   3. 因此防滥用不靠保密，而是落在服务端：见 tools/relay-gateway/ ——
+#      单 IP 限流 + 单 IP 日配额 + 全局日配额 + 客户端版本绑定。
+#
+# 若此文件被用来「忽略」告警，请连同上面第 3 点一起审查：
+# 真正的风险控制点在 Worker，而不在仓库里是否可见。
+#
+# 注意：本文件对 ggshield（CLI）生效。GitHub App 在平台上发现的告警，
+# 需要在 GitGuardian 控制台把该事件标记为 ignored / false positive。
+
+version: 2
+
+secret:
+  ignored-paths:
+    # 随安装包下发的预置门卡，必须入库才能被打包。
+    - "config/relay_preset.env"
+    # 文档中复述了同一个门卡值；它是公开凭据，不含真实 Key。
+    - "README.md"
+    - "Aerie_Obsidian_Vault/modules/AIRelayGateway.md"
+    # 测试夹具里的合成令牌（形如 sk-synthetic-*），非真实凭据。
+    - "tests/test_desktop_shared_api_contract.py"
+    - "tests/test_p1_b2_office_context.py"

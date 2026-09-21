@@ -413,8 +413,13 @@ Aerie 客户端 ──(Bearer 门卡)──> Cloudflare Worker (api.etta.top) �
 | 项 / Item              | 值 / Value                                              |
 | ---------------------- | ------------------------------------------------------- |
 | 中转地址 / Base URL    | `https://api.etta.top`                                  |
-| 中转门卡 / Relay Token | `aerie-kFcCr0zyxq4vo50`（泄露可随时在 Cloudflare 更换） |
+| 中转门卡 / Relay Token | `aerie-kFcCr0zyxq4vo50`                                 |
 | 真实 Key / Real Key    | 仅存 Cloudflare Worker `DASHSCOPE_KEY`（secret），不落地 |
+
+> **门卡为什么写在仓库里**：它必须随安装包下发给每一个用户（`extraResources` 显式打包），
+> 任何人反编译安装包都能取得，因此它**不是秘密**，也不承担保密职责。
+> 防滥用落在服务端：`tools/relay-gateway/` 提供单 IP 限流、单 IP 日配额、
+> 全局日配额（总花费兜底）与客户端版本绑定。仓库根 `.gitguardian.yaml` 已声明此凭据为设计内公开。
 
 ### 打包预设 / Packaged Preset
 

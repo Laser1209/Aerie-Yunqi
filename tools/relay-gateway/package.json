@@ -1,0 +1,10 @@
+{
+  "name": "aerie-relay-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Aerie AI 中转网关（Cloudflare Worker）——门卡按设计公开，防滥用落在服务端",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,33 @@
+name = "aerie-ai-relay"
+main = "worker.js"
+compatibility_date = "2026-08-14"
+
+# 全局配额与限流的唯一权威计数器。
+#
+# 为什么必须用 Durable Object 而不是 KV：门卡是按设计公开的（它随安装包
+# 分发给每个用户，反编译即可取得），所以真正的防线只能是「服务端计数」。
+# KV 是最终一致的，多边缘节点并发累加会漏计，对一个「花真金白银」的额度
+# 闸门来说不够；Durable Object 单实例串行，天然给出准确计数。
+[[durable_objects.bindings]]
+name = "RELAY_GATE"
+class_name = "RelayGate"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayGate"]
+
+[vars]
+# 允许的客户端版本前缀，逗号分隔。留空 = 不校验（用于灰度：先观察一段时间
+# 客户端实际上报的版本，再收紧，避免误伤已分发出去的旧安装包）。
+ALLOWED_VERSIONS = ""
+# 单 IP 每分钟请求上限（0 = 不限）
+RATE_PER_MINUTE = "30"
+# 单 IP 每日请求上限（0 = 不限）
+DAILY_PER_IP = "300"
+# 全局每日请求上限（0 = 不限）—— 总花费的兜底闸门
+DAILY_GLOBAL = "5000"
+
+# 以下三个必须用 secret 配置，不要写进本文件：
+#   npx wrangler secret put RELAY_TOKEN    门卡（客户端持有的公开凭据）
+#   npx wrangler secret put DASHSCOPE_KEY  阿里云百炼真实 Key
+#   npx wrangler secret put DEEPSEEK_KEY   可选，仅 /deepseek 路由使用

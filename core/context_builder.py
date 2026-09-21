@@ -15,9 +15,9 @@ from .persona_hub import get_persona_manager
 logger = logging.getLogger(__name__)
 
 # 输出铁律正文（唯一实现）。
-# 运行时 system prompt 注入（L1 身份层 / L4 语言层）与人设生成期写盘
-# （core/persona_hub/persona_generator）都引用这一份，避免同一套规则散成多份
-# 各写各的——曾经有三份平行副本，其中两份还在教模型写 <action> 动作描写。
+# 运行时 system prompt 只在 L1 身份层注入一次（头部安全区，不被尾部预算截断），
+# 人设生成期写盘（core/persona_hub/persona_generator）也引用这一份，避免同一套
+# 规则散成多份各写各的——曾经有三份平行副本，其中两份还在教模型写 <action> 动作描写。
 OUTPUT_IRON_RULE = (
     "**输出铁律（最高优先级）**：\n"
     "- 只写你要说的话。不要写动作、神态、心理活动，也不要用括号补描写"
@@ -1081,8 +1081,10 @@ class ContextBuilder:
 
         text = f"**语言风格铁律（热情度 {passion_level}/10）**：{speech_style}\n\n"
 
-        if behavior.get("screen_aware", True):
-            text += OUTPUT_IRON_RULE
+        # 输出铁律只在 L1 身份层注入一次（见 _build_l1_identity）：
+        # L1 所有模式都注入且位于 system 头部安全区，不参与尾部预算截断；
+        # 这里再注入一份会让 FULL/AUTO 的 system prompt 出现两份同样的规则
+        # （AUTO 下重复内容约占 8%），且两份都只受 screen_aware 控制、无法只留一份。
 
         if action_tags or thought_tags:
             text += "\n**消息结构约定**：\n"

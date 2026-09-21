@@ -188,6 +188,14 @@ class TestContextBuilderPersonaBaseline:
         assert ("3/10" in system) or ("3 分" in system), \
             "L4 must include neutral baseline marker"
 
+    def test_output_iron_rule_injected_exactly_once(self, builder):
+        """D6 回归：输出铁律只注入一次（FULL/AUTO 下曾 L1+L4 各注入一份）。"""
+        for mode in ("FULL", "AUTO", "BASIC"):
+            system = builder.build(3998874040, "你好", mode)[0]["content"]
+            assert system.count("输出铁律") == 1, (
+                f"{mode} 模式注入次数 != 1（重复注入会白占 prompt 预算）"
+            )
+
     def test_full_mode_includes_all_neutral_layers(self, builder):
         """FULL 模式下应包含 L1/L2/L4 的中性信号。"""
         msgs = builder.build(3998874040, "你好", "FULL")

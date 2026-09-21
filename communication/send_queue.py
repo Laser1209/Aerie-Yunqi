@@ -18,7 +18,8 @@ intervals. Batch replies (with batch_id set) follow these rules:
   - sequence_index > 0: wait BEFORE sending; interval is
     max(base_interval + char_count/cps, persona_interval) with ±30%
     jitter, clamped to [min_interval, max_interval].
-  - Batch replies are sent as whole units — no further segment splitting.
+  - Batch replies are split by the same splitter as the legacy path (one
+    bubble per segment), so QQ 收到的条数与落库/桌面一致，裸分隔符不外发。
   - Non-batch replies (no batch_id) retain the legacy persona_pacing
     segment-splitting logic unchanged.
 """
@@ -282,27 +283,46 @@ class SendQueue:
             else:
                 await self._send_legacy_reply(reply)
 
-    def _backfill_qq_message_id(self, reply: OutgoingReply, send_result: Any) -> None:
+    def _backfill_qq_message_id(self, row_id: int, send_result: Any) -> None:
         """Quote V2: persist the platform message_id on the chat_log row.
 
         Senders now return the OneBot11 message_id (int) on success. Storing
         it lets inbound QQ quotes map QQ message_id -> chat_log.id, and lets
         outbound replies attach a real reply segment.
+
+        ``True`` 表示「发成功但平台没回 message_id」——bool 是 int 的子类，
+        不加区分会把成功标志写成伪 id 1，与真实平台 id 1 撞号。
         """
-        mid = send_result if isinstance(send_result, int) else 0
-        if not mid or not self._db or not reply.msg_id:
+        mid = send_result if isinstance(send_result, int) and not isinstance(
+            send_result, bool
+        ) else 0
+        if not mid or not self._db or not row_id:
             return
         try:
             self._db.update(
                 "chat_log",
                 {"qq_message_id": int(mid)},
                 "id = ?",
-                (reply.msg_id,),
+                (row_id,),
             )
         except Exception:
             logger.exception(
-                "backfill qq_message_id failed for chat_log %s", reply.msg_id
+                "backfill qq_message_id failed for chat_log %s", row_id
             )
+
+    @staticmethod
+    def _segment_row_id(reply: OutgoingReply, idx: int) -> int:
+        """第 ``idx`` 段对应的 chat_log 行 id。
+
+        落库侧是「一段一行」（Pipeline 逐段 insert），故每段的 qq_message_id
+        只能回填到自己那一行；若把所有段都写到首段行上，后写的会覆盖先写的，
+        引用映射最终指向最后一段。缺失分段行 id 时只回填首段（msg_id），
+        其余段不写——宁可少一次映射，也不写错行。
+        """
+        row_ids = getattr(reply, "segment_msg_ids", None) or []
+        if idx < len(row_ids):
+            return int(row_ids[idx] or 0)
+        return int(reply.msg_id or 0) if idx == 0 else 0
 
     def _fire_on_reply_sent(self, reply: OutgoingReply) -> None:
         """Fire the post-delivery hook (e.g. sticker sender) without blocking."""
@@ -318,6 +338,12 @@ class SendQueue:
     async def _send_legacy_reply(self, reply: OutgoingReply) -> None:
         """Legacy single-reply path with semantic segment splitting."""
         segments = self._splitter.split(reply.content)
+        if not segments:
+            # 纯分隔符/空白：没有可发内容，直接收口（绝不把分隔符原文发出去）
+            logger.info(
+                "skip empty reply for user %s (no outbound content)", reply.user_id
+            )
+            return
         first_in_batch = True
         use_segments_sender = (
             reply.channel == "qq"
@@ -347,7 +373,9 @@ class SendQueue:
                 if not ok:
                     logger.warning("QQ send failed for user %s", reply.user_id)
                 else:
-                    self._backfill_qq_message_id(reply, ok)
+                    self._backfill_qq_message_id(
+                        self._segment_row_id(reply, idx), ok
+                    )
                 if first_in_batch and ok and reply.channel == "qq" and self._recall_manager:
                     try:
                         self._recall_manager.record_sent(
@@ -399,21 +427,16 @@ class SendQueue:
             self._fire_on_reply_sent(reply)
 
     async def _send_batch_reply(self, reply: OutgoingReply, batch_id: str) -> None:
-        """Send a single reply that is part of a batch (Task 6).
+        """Send one reply that is part of a batch (Task 6).
 
-        Batch replies are sent as whole units (no further segment
-        splitting). The first reply (sequence_index == 0) goes out
-        immediately; subsequent replies wait BEFORE sending using a
-        character-count proportional interval adjusted by persona
-        emotion factor.
+        与落库/桌面同切：Pipeline 批量路径已按 ``segments`` 一段一行落库、
+        一段一气泡推送桌面，这里用同一个 splitter 实例再切一次，逐段发送，
+        绝不把带裸 ``---`` 的整段原样丢给 QQ 用户，保证两端条数一致。
+        第一条回复（sequence_index == 0）立即发；后续回复先等一段由字符数与
+        情绪共同决定的间隔（``_compute_batch_interval``）再发；条内各段之间
+        不再额外停顿——条与条之间的间隔才是批处理的语义。
         """
         seq = getattr(reply, "sequence_index", 0)
-        use_segments_sender = (
-            reply.channel == "qq"
-            and
-            reply.reply_to_qq_message_id
-            and self._qq_segments is not None
-        )
 
         emotion_label = self._resolve_emotion_label(reply.user_id)
         threshold_summary = self._resolve_threshold_summary(reply.user_id)
@@ -422,6 +445,7 @@ class SendQueue:
         interval_sec = 0.0
         style = "batch_immediate"
 
+        # 间隔按整条原文的字符数算，必须在逐段改写 reply.content 之前得出
         if seq > 0:
             interval_sec, style = self._compute_batch_interval(
                 reply_content=reply.content,
@@ -443,38 +467,64 @@ class SendQueue:
                 batch_id, seq, reply.user_id,
             )
 
-        ok = False
-        try:
-            if use_segments_sender:
-                ok = await self._qq_segments(
-                    reply.user_id,
-                    reply.content,
-                    reply.reply_to_qq_message_id,
-                )
-            else:
-                ok = await self._sender_for(reply)(reply)
-            if not ok:
-                logger.warning(
-                    "batch send failed: batch_id=%s seq=%s user=%s",
-                    batch_id, seq, reply.user_id,
-                )
-            else:
-                self._backfill_qq_message_id(reply, ok)
-            if seq == 0 and ok and reply.channel == "qq" and self._recall_manager:
-                try:
-                    self._recall_manager.record_sent(
-                        user_id=reply.user_id,
-                        content=reply.content,
-                        msg_id=reply.msg_id,
-                        segments=[reply.content],
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            logger.exception(
-                "send worker batch error: batch_id=%s seq=%s",
-                batch_id, seq,
+        segments = self._splitter.split(reply.content)
+        if not segments:
+            # 纯分隔符/空白：没有可发内容，直接收口（绝不把分隔符原文发出去）
+            logger.info(
+                "skip empty batch reply: batch_id=%s seq=%s user=%s",
+                batch_id, seq, reply.user_id,
             )
+            return
+
+        use_segments_sender = (
+            reply.channel == "qq"
+            and
+            reply.reply_to_qq_message_id
+            and self._qq_segments is not None
+        )
+
+        for idx, seg in enumerate(segments):
+            reply.content = seg
+            ok = False
+            try:
+                if idx == 0 and use_segments_sender:
+                    ok = await self._qq_segments(
+                        reply.user_id,
+                        seg,
+                        reply.reply_to_qq_message_id,
+                    )
+                else:
+                    ok = await self._sender_for(reply)(reply)
+                if not ok:
+                    logger.warning(
+                        "batch send failed: batch_id=%s seq=%s user=%s",
+                        batch_id, seq, reply.user_id,
+                    )
+                else:
+                    self._backfill_qq_message_id(
+                        self._segment_row_id(reply, idx), ok
+                    )
+                if (
+                    idx == 0
+                    and seq == 0
+                    and ok
+                    and reply.channel == "qq"
+                    and self._recall_manager
+                ):
+                    try:
+                        self._recall_manager.record_sent(
+                            user_id=reply.user_id,
+                            content=seg,
+                            msg_id=reply.msg_id,
+                            segments=segments,
+                        )
+                    except Exception:
+                        pass
+            except Exception:
+                logger.exception(
+                    "send worker batch error: batch_id=%s seq=%s",
+                    batch_id, seq,
+                )
 
         pacing_log = [{
             "seg_idx": seq,

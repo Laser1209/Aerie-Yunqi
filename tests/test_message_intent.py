@@ -79,6 +79,58 @@ def test_single_bubble_with_stray_marks_is_cleaned():
 def test_separator_only_reply_produces_nothing():
     assert _segments("") == []
     assert _segments("---") == []
+    # 纯分隔符 / 纯空白：没有可外发内容，必须整体返回空（Pipeline 不得回退成原文）
+    assert _segments("---\n---\n---") == []
+    assert _segments("---\n \n---") == []
+    assert _segments("   ") == []
+    assert _segments("\n\n") == []
+
+
+# ══════════════════════════════════════════════════════════
+# 2.5 分隔符不得切开原子单位 / 未闭合围栏（D1 回归）
+# ══════════════════════════════════════════════════════════
+
+def test_separator_inside_action_is_content_not_boundary():
+    """<action> 内的 --- 是描写内容：原子段绝不被切开（模块硬契约）。"""
+    text = "<action>她笑了笑\n---\n又把头低下</action>正文。"
+    atom = "<action>她笑了笑\n---\n又把头低下</action>"
+    segs = _segments(text)
+    assert atom in segs, f"原子段被切开: {segs}"
+    assert "".join(segs).count("<action>") == 1
+    assert "".join(segs).count("</action>") == 1
+
+
+def test_separator_inside_brackets_is_content_not_boundary():
+    """【…】 内的 --- 同理：整段是原子单位。"""
+    text = "【她笑了笑\n---\n又把头低下】正文。"
+    atom = "【她笑了笑\n---\n又把头低下】"
+    segs = _segments(text)
+    assert atom in segs, f"原子段被切开: {segs}"
+    assert "".join(segs).count("【") == 1
+    assert "".join(segs).count("】") == 1
+
+
+def test_atom_with_separator_stays_whole_when_alone():
+    assert _segments("<action>她笑了笑\n---\n又把头低下</action>") == [
+        "<action>她笑了笑\n---\n又把头低下</action>"
+    ]
+
+
+def test_separator_outside_atom_still_splits():
+    """原子段内外的分隔符只认外面那些：边界归模型，原子段不被切开。"""
+    text = "我到了。\n---\n<action>她笑了笑\n---\n又把头低下</action>\n---\n先睡吧。"
+    assert _segments(text) == [
+        "我到了。",
+        "<action>她笑了笑\n---\n又把头低下</action>",
+        "先睡吧。",
+    ]
+
+
+def test_separator_inside_unclosed_fence_is_content():
+    """未闭合围栏里的 --- 也是代码内容，不是消息边界（不得从中切开）。"""
+    segs = _segments("```\ncode\n---\nmore")
+    assert len(segs) == 1, f"未闭合围栏被切开: {segs}"
+    assert "code" in segs[0] and "more" in segs[0]
 
 
 # ══════════════════════════════════════════════════════════

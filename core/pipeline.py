@@ -743,7 +743,9 @@ class Pipeline:
         if task_verdict is not None:
             self._note_task_progress(task_verdict, reply_text)
 
-        segments = self._splitter.split(reply_text) or [reply_text]
+        # 分段：空结果 = 没有可外发内容（空文本 / 纯空白 / 去掉分隔符后什么都不剩）。
+        # 绝不回退成原文——否则纯分隔符的回复会把裸 `---` 发给用户。
+        segments = self._splitter.split(reply_text)
         self.cognition.record(trace, "split", {
             "segments": segments,
             "count": len(segments),
@@ -831,7 +833,7 @@ class Pipeline:
             logger.exception("db insert ai msg error")
 
         canonical_result: dict[str, str] | None = None
-        if user_row_id and len(ai_row_ids) == len(segments):
+        if user_row_id and segments and len(ai_row_ids) == len(segments):
             self._checkpoint_cancel(request_state, "before_canonical")
             canonical_result = self._persist_canonical_turn(
                 msg,
@@ -1071,7 +1073,7 @@ class Pipeline:
         # ══════════════════════════════════════════════
         # 13. QQ messages → SendQueue; local → skip
         # ══════════════════════════════════════════════
-        if msg.source in {"qq", "ilink"}:
+        if msg.source in {"qq", "ilink"} and segments:
             reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
 
             reply = OutgoingReply(
@@ -1085,6 +1087,9 @@ class Pipeline:
                 # observed pacing decisions back into this trace.
                 cognition_id=int(trace.get("id") or 0),
             )
+            # 落库是「一段一行」，故每段实际发出的 qq_message_id 必须回填到自己那一行；
+            # 只带首段 msg_id 会让所有段都盖到第一行上（引用映射指错段）。
+            setattr(reply, "segment_msg_ids", list(ai_row_ids))
             # Phase 9: attach eruption mode so SendQueue can pace faster
             if eruption_info and eruption_info.get("mode"):
                 try:
@@ -2402,8 +2407,8 @@ class Pipeline:
         except Exception:
             logger.exception("BASIC validation failed; best-effort skip")
 
-        # 6. 语义拆分
-        segments = self._splitter.split(reply_text) or [reply_text]
+        # 6. 语义拆分（空结果 = 无可外发内容；绝不回退成原文，防裸分隔符外泄）
+        segments = self._splitter.split(reply_text)
         self.cognition.record(trace, "split", {
             "segments": segments,
             "count": len(segments),
@@ -2473,7 +2478,7 @@ class Pipeline:
             logger.exception("db insert ai msg error")
 
         canonical_result: dict[str, str] | None = None
-        if user_row_id and len(ai_row_ids) == len(segments):
+        if user_row_id and segments and len(ai_row_ids) == len(segments):
             self._checkpoint_cancel(request_state, "before_canonical")
             canonical_result = self._persist_canonical_turn(
                 msg,
@@ -2579,7 +2584,7 @@ class Pipeline:
             except Exception:
                 pass
 
-        # 10. QQ 消息入队
+        # 10. QQ 消息入队（ai_row_ids 为空 = 无内容可发或无落库行，不入队）
         if msg.source in {"qq", "ilink"} and ai_row_ids:
             reply_to_qq_mid = self._resolve_outbound_qq_reply_id(msg)
             reply = OutgoingReply(
@@ -2591,6 +2596,8 @@ class Pipeline:
                 reply_to_qq_message_id=reply_to_qq_mid,
                 cognition_id=int(trace.get("id") or 0),
             )
+            # 落库一段一行：每段发出的 qq_message_id 回填到各自的行
+            setattr(reply, "segment_msg_ids", list(ai_row_ids))
             if self._checkpoint_cancel(request_state, "before_qq_enqueue"):
                 result["event_sequence"] = request_state.sequence
                 return result
@@ -3687,7 +3694,8 @@ class Pipeline:
                 except Exception:
                     logger.exception("[Batch %s] validation failed for seq %d", batch_id, seq_idx)
 
-                segments = self._splitter.split(reply_text) or [reply_text]
+                # 空结果 = 该条回复没有可外发内容（纯分隔符/空白）；绝不回退成原文
+                segments = self._splitter.split(reply_text)
 
                 user_row_id = 0
                 try:
@@ -3751,7 +3759,7 @@ class Pipeline:
                 # 规范化镜像：批量路径同样写入 messages/turns 会话模型，
                 # 让 QQ / mobile 消息在桌面端历史（读 messages 表）可见，
                 # 不再只活在 chat_log 里。失败不阻塞主流程。
-                if user_row_id and len(ai_row_ids) == len(segments):
+                if user_row_id and segments and len(ai_row_ids) == len(segments):
                     self._checkpoint_cancel(request_state, "before_canonical")
                     self._persist_canonical_turn(
                         msg,
@@ -3843,6 +3851,10 @@ class Pipeline:
                         batch_id=batch_id,
                         sequence_index=seq_idx,
                     )
+                    # 落库/桌面按 segments 分段（一段一行一气泡），出站必须同切：
+                    # SendQueue 逐段发送并把每段的 qq_message_id 回填到自己的行，
+                    # 否则 QQ 用户会收到带裸 `---` 的整段、条数与桌面不一致。
+                    setattr(outgoing, "segment_msg_ids", list(ai_row_ids))
                     if eruption_info and eruption_info.get("mode"):
                         try:
                             setattr(outgoing, "eruption_mode", eruption_info["mode"])

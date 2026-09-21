@@ -427,6 +427,60 @@ class TestPipelineHandle:
         pipeline.send_queue.enqueue.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_separator_only_reply_is_never_emitted_or_sent(
+        self, pipeline, monkeypatch
+    ):
+        """D2 回归：模型只回分隔符/空白时，桌面与 QQ 都不得收到裸 `---`。
+
+        修复前 `split(...) or [reply_text]` 会把分隔符原文当唯一气泡 emit/入队，
+        与 SendQueue 侧（切成 0 条）不一致且各错一种。
+        """
+        pipeline.brain.chat = AsyncMock(return_value=MagicMock(
+            text="---\n---\n---",
+            provider="test",
+            model="test",
+            tokens_prompt=10,
+            tokens_completion=5,
+            duration_ms=1,
+        ))
+        emitted: list[tuple] = []
+
+        def fake_emit(event, **kwargs):
+            emitted.append((event, kwargs))
+
+        monkeypatch.setattr("core.pipeline.emit", fake_emit)
+        msg = IncomingMessage(user_id=3998874040, content="你好", source="qq")
+
+        result = await pipeline.handle(msg)
+
+        assert result is not None
+        assert result["segments"] == []
+        assert not any(event == "assistant" for event, _ in emitted)
+        assert all(
+            "---" not in str(kwargs.get("content")) for _, kwargs in emitted
+        )
+        pipeline.send_queue.enqueue.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_qq_reply_carries_per_segment_chat_log_ids(self, pipeline):
+        """D5：出站请求带上「一段一行」的行 id，SendQueue 才能逐段回填。"""
+        pipeline.brain.chat = AsyncMock(return_value=MagicMock(
+            text="第一段在这里。\n---\n第二段在这里。",
+            provider="test",
+            model="test",
+            tokens_prompt=10,
+            tokens_completion=5,
+            duration_ms=1,
+        ))
+        msg = IncomingMessage(user_id=3998874040, content="你好", source="qq")
+
+        result = await pipeline.handle(msg)
+
+        assert len(result["segments"]) == 2
+        reply = pipeline.send_queue.enqueue.call_args.args[0]
+        assert list(reply.segment_msg_ids) == list(result["ai_msg_ids"])
+
+    @pytest.mark.asyncio
     async def test_basic_ilink_reply_does_not_copy_context_token(self, pipeline):
         pipeline.router.route.return_value = "BASIC"
         msg = IncomingMessage(

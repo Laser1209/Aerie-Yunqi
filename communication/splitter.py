@@ -29,13 +29,17 @@ Intent-first splitting (模型自报条数)
 
 Algorithm
 ---------
-1. 先找模型自报的边界（``_INTENT_SEP_RE``，围栏代码块内的不算）；
+1. 先找模型自报的边界（``_INTENT_SEP_RE``；落在围栏代码块或原子段内的
+   分隔符不算——它们分别是代码内容与原子段内容，绝不是消息边界）；
    命中 ≥2 条就按它分，超长单条再按下面的原子感知逻辑切。
 2. 没命中时回退标点切分：用 ``_ATOM_RE.finditer`` 定位所有原子 span。
 3. Walk the text, emitting text fragments (which may be split at 。！？)
    and atomic spans (kept whole).
 4. Merge tiny fragments (< 8 chars) with their neighbors, capped at
    ``max_len``.
+
+``split()`` 返回空列表 = 没有可外发内容（空文本 / 纯空白 / 去掉分隔符后
+什么都不剩）。调用方不得把空结果回退成原文，否则用户会看到裸 ``---``。
 """
 
 from __future__ import annotations
@@ -67,7 +71,9 @@ _MIN_FRAGMENT_LEN = 8
 # 不会像自定义标签那样把怪标记漏给用户。
 _INTENT_SEP_RE = re.compile(r"^[^\S\n]*-{3,}[^\S\n]*$", re.MULTILINE)
 # 围栏代码块：块内的 ---（YAML front matter / 正文分隔线）是代码内容，不是消息边界。
-_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+# 末尾用 (?:```|\Z) 而非要求成对：未闭合围栏里的 --- 同样是代码内容，
+# 一旦按「没闭合就当普通文本」处理，就会把用户贴的代码从中间切开。
+_FENCE_RE = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
 
 
 class SemanticMessageSplitter:
@@ -81,9 +87,14 @@ class SemanticMessageSplitter:
         """Split text into outbound messages, never inside atomic spans.
 
         模型自报条数优先（见模块 docstring）：命中单独一行的 ``---`` 就按它
-        分条，条数超过 ``max_segments`` 时由 ``_cap_segments`` 就近平摊收敛。
-        没有分隔符时回退到既有的原子感知标点切分——缺分隔符绝不丢内容。
+        分条（分隔符落在原子段/围栏代码块内时忽略，绝不切开它们），条数超过
+        ``max_segments`` 时由 ``_cap_segments`` 就近平摊收敛。没有可用分隔符时
+        回退到既有的原子感知标点切分——缺分隔符绝不丢内容。
+
+        返回空列表 = 没有可外发内容。调用方必须照此「不发」，不得回退成原文。
         """
+        if not text or not text.strip():
+            return []
         intended = self._split_by_intent(text)
         if intended is not None:
             if len(intended) >= 2:
@@ -97,16 +108,20 @@ class SemanticMessageSplitter:
     def _split_by_intent(self, text: str) -> list[str] | None:
         """按模型自报的边界（单独一行 ``---``）分条。
 
-        返回 None = 模型没按约定输出（或分隔符只出现在围栏代码块里）——调用方
-        必须回退到标点切分。空片段（如描写被净化后剩下的空行）会被丢弃，
-        不留空气泡。
+        返回 None = 模型没按约定输出（或分隔符只出现在围栏代码块 / 原子段里）
+        ——调用方必须回退到标点切分。空片段（如描写被净化后剩下的空行）会被
+        丢弃，不留空气泡。
+
+        分隔符优先级高，但不得切开原子单位（``<action>`` / ``<thought>`` /
+        ``【】``）与围栏代码块：落在它们内部的 ``---`` 只是内容。
         """
         if not text:
             return None
-        fences = [m.span() for m in _FENCE_RE.finditer(text)]
+        protected = [m.span() for m in _FENCE_RE.finditer(text)]
+        protected += [m.span() for m in _ATOM_RE.finditer(text)]
         separators = [
             m for m in _INTENT_SEP_RE.finditer(text)
-            if not any(start <= m.start() < end for start, end in fences)
+            if not any(start <= m.start() < end for start, end in protected)
         ]
         if not separators:
             return None

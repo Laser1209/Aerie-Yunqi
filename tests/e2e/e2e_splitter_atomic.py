@@ -1,4 +1,4 @@
-"""Aerie · 云栖 v9.0 — E2E: E · 原子感知 splitter 验证 (10 cases).
+"""Aerie · 云栖 v9.0 — E2E: E · 原子感知 splitter 验证 (16 cases).
 
 R8.1 收口验证 E 节的 SemanticMessageSplitter atomic-aware 重写：
   - <action>...</action> 整段视为不可分割单元
@@ -6,7 +6,7 @@ R8.1 收口验证 E 节的 SemanticMessageSplitter atomic-aware 重写：
   - 【...】 整段视为不可分割单元
   - 仅在 atomic 之外的文本按"。"、"！"、"？"切分
 
-10 个用例 (T3)：
+16 个用例 (T3)：
   1.  <action> 内部含"。" → 不切
   2.  <thought> 内部含"！" → 不切
   3.  【...】 内部含"？" → 不切
@@ -17,6 +17,12 @@ R8.1 收口验证 E 节的 SemanticMessageSplitter atomic-aware 重写：
   8.  短文本 < 8 字合并到 neighbor
   9.  无 atomic 时退回原 split 逻辑
   10. 空文本 → []
+  11. max_segments 上限就近平摊
+  12. max_segments=0 不限制
+  13. <action> 内的 --- 不是消息边界（原子段不被切开）
+  14. 【…】 内的 --- 不是消息边界
+  15. 未闭合围栏内的 --- 不是消息边界
+  16. 纯分隔符/纯空白 → []
 
 纯本地（不依赖 backend / DB / LLM）。
 """
@@ -298,9 +304,84 @@ def case_12_max_segments_unlimited() -> bool:
     return ok_flag
 
 
+# ── Case 13: 原子段内的意图分隔符 --- 不是消息边界 ────────────
+def case_13_separator_inside_action() -> bool:
+    s = SemanticMessageSplitter()
+    text = "<action>她笑了笑\n---\n又把头低下</action>正文。"
+    atom = "<action>她笑了笑\n---\n又把头低下</action>"
+    segs = s.split(text)
+    ok_flag = (
+        atom in segs
+        and "".join(segs).count("<action>") == 1
+        and "".join(segs).count("</action>") == 1
+    )
+    _check(
+        "Case 13 · <action> 内的 --- 是内容，原子段不被切开",
+        ok_flag,
+        f"segs={segs}",
+    )
+    return ok_flag
+
+
+# ── Case 14: 【…】 内的意图分隔符 --- 不是消息边界 ─────────────
+def case_14_separator_inside_brackets() -> bool:
+    s = SemanticMessageSplitter()
+    text = "【她笑了笑\n---\n又把头低下】正文。"
+    atom = "【她笑了笑\n---\n又把头低下】"
+    segs = s.split(text)
+    ok_flag = (
+        atom in segs
+        and "".join(segs).count("【") == 1
+        and "".join(segs).count("】") == 1
+    )
+    _check(
+        "Case 14 · 【…】 内的 --- 是内容，原子段不被切开",
+        ok_flag,
+        f"segs={segs}",
+    )
+    return ok_flag
+
+
+# ── Case 15: 未闭合围栏内的 --- 不是消息边界 ──────────────────
+def case_15_unclosed_fence() -> bool:
+    s = SemanticMessageSplitter()
+    segs = s.split("```\ncode\n---\nmore")
+    ok_flag = (
+        len(segs) == 1
+        and "code" in segs[0]
+        and "more" in segs[0]
+    )
+    _check(
+        "Case 15 · 未闭合围栏内的 --- 是内容，不切",
+        ok_flag,
+        f"segs={segs}",
+    )
+    return ok_flag
+
+
+# ── Case 16: 纯分隔符 / 纯空白 → []（没有可外发内容） ──────────
+def case_16_separator_only_or_blank() -> bool:
+    s = SemanticMessageSplitter()
+    cases = {
+        "---\n---\n---": [],
+        "---\n \n---": [],
+        "   ": [],
+        "\n\n": [],
+    }
+    bad = {text: s.split(text) for text, expect in cases.items()
+           if s.split(text) != expect}
+    ok_flag = not bad
+    _check(
+        "Case 16 · 纯分隔符/纯空白 → []",
+        ok_flag,
+        f"bad={bad}" if bad else "",
+    )
+    return ok_flag
+
+
 def main() -> int:
     print("=" * 60)
-    print("E2E T3 · E 节 atomic-aware splitter 验证 (12 用例)")
+    print("E2E T3 · E 节 atomic-aware splitter 验证 (16 用例)")
     print("=" * 60)
     results: list[bool] = [
         case_1_action_tag_intact(),
@@ -315,6 +396,10 @@ def main() -> int:
         case_10_empty_text(),
         case_11_max_segments_cap(),
         case_12_max_segments_unlimited(),
+        case_13_separator_inside_action(),
+        case_14_separator_inside_brackets(),
+        case_15_unclosed_fence(),
+        case_16_separator_only_or_blank(),
     ]
     passed = sum(1 for r in results if r)
     failed = sum(1 for r in results if not r)

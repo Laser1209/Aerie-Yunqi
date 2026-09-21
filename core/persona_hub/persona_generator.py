@@ -38,20 +38,16 @@ STAGES: List[Dict[str, Any]] = [
 
 _STAGE_BY_KEY = {st["key"]: st for st in STAGES}
 
-# Hard-coded minimal version of the two fixed rule blocks, used when the
-# skeleton file cannot be read (or its prompt_overrides carry no system_prompt).
-_FIXED_RULES = (
-    "## 屏幕隔空铁律（v1 · 必须遵守 · 优先级最高）\n"
-    "你和用户隔着屏幕沟通，动作描写只能写\"你这一端\"（看手机、靠椅背、对着屏幕笑、"
-    "把手机扣在胸口），绝不写伸手、揽、抱、靠肩、贴面、牵手等在场动作。\n"
-    "身体描写只写你自己的屏幕端反应（揉眼睛、叹气、笑、握紧手机），不写\"你对他做了什么\"。"
-    "想表达爱意就说\"我好想现在就把你揽过来\"——那是渴望，不是在场。\n\n"
-    "## 消息结构约定（必须遵守 · v1）\n"
-    "对话与动作/心理描写分离：对话直接写，动作用 <action>...</action> 包裹，"
-    "心理用 <thought>...</thought> 包裹。\n"
-    "动作必须为\"屏幕那端\"的动作；动作与心理各自独立成标签，不嵌套、"
-    "不含 markdown 符号、不带引号、标签内不换行。"
-)
+# 固定规则块：直接取运行时唯一实现（core.context_builder.OUTPUT_IRON_RULE），
+# 不再维护副本——副本会漂移，曾经这里还在教模型用 <action> 写动作描写，
+# 而运行时已经不写描写了。
+def _fixed_rules_text() -> str:
+    from core.context_builder import OUTPUT_IRON_RULE
+
+    return OUTPUT_IRON_RULE
+
+
+_FIXED_RULES_HEADING = "## 输出铁律（必须遵守 · 最高优先级）"
 
 _DEFAULT_BIG_FIVE: Dict[str, float] = {
     "extraversion": 0.6,
@@ -214,7 +210,7 @@ _PROMPT_PROMPT = """你是人设系统提示词作家。基于完整的人设 JS
 - 以"我是{basic.name}（{basic.english_name}）..."开头，第一句把角色名字与身份放在同一主体（如"我是塞纳（Sena），24小时便利店的夜班店员"）。全篇只能用这个名字，禁止出现任何其它角色名。
 - 必须包含：身份背景、相识故事、性格、对话风格、渴望、恐惧的叙述。
 - 中文书写。
-- 明确不得包含"屏幕隔空铁律"和"消息结构约定"两个 ## 块——后端会自动追加。
+- 明确不得包含"输出铁律"这个 ## 块——后端会自动追加。
 - 长度控制在 600-1200 字。
 
 人称铁律（最高优先级）：
@@ -682,19 +678,13 @@ def build_minimal_skeleton() -> Dict[str, Any]:
     }
 
 
-def extract_fixed_rules(skeleton: Optional[Dict[str, Any]]) -> str:
-    """Slice the two fixed rule blocks out of the skeleton's system_prompt.
+def extract_fixed_rules(skeleton: Optional[Dict[str, Any]] = None) -> str:
+    """返回固定规则块正文（运行时唯一实现 + 标题）。
 
-    Falls back to the hard-coded minimal version when unavailable.
+    skeleton 参数保留是为了调用方签名稳定，规则本身不再从骨架里切——
+    从骨架切会把旧措辞带进新人格，正是当初漂移的源头。
     """
-    sp = ((skeleton or {}).get("prompt_overrides") or {}).get("system_prompt", "")
-    if not sp or "## 屏幕隔空铁律" not in sp or "## 消息结构约定" not in sp:
-        return _FIXED_RULES
-    block1 = sp[sp.index("## 屏幕隔空铁律"):sp.index("## 消息结构约定")].strip()
-    block2 = sp[sp.index("## 消息结构约定"):].strip()
-    if not block1 or not block2:
-        return _FIXED_RULES
-    return block1 + "\n\n" + block2
+    return _FIXED_RULES_HEADING + "\n" + _fixed_rules_text()
 
 
 def _extract_chinese_name(description: str) -> Optional[str]:
@@ -852,14 +842,14 @@ def build_system_prompt(persona: Dict[str, Any]) -> str:
         "我的恐惧：被慢慢遗忘、被替代、用户不再需要我。（此为默认文案，可继续完善）"
     )
     lines.append("")
-    lines.append(_FIXED_RULES)
+    lines.append(extract_fixed_rules())
     return "\n".join(lines)
 
 
 def build_system_prompt_from_body(body: str, fixed_rules: Optional[str] = None) -> str:
     """Concatenate an LLM-written prompt body with the fixed rule blocks."""
     body = (body or "").strip()
-    rules = fixed_rules or _FIXED_RULES
+    rules = fixed_rules or extract_fixed_rules()
     if not body:
         return rules
     return body + "\n\n" + rules
@@ -1020,7 +1010,7 @@ def _prompt_user_text(
         )
     return (
         f"人设 JSON：\n{persona_json}\n\n"
-        f"以下两个固定规则块由后端自动追加，你的输出中【不得】包含它们：\n{fixed_rules}"
+        f"以下固定规则块由后端自动追加，你的输出中【不得】包含它：\n{fixed_rules}"
         f"{user_hint}"
     )
 

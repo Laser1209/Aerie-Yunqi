@@ -14,6 +14,24 @@ from .persona_hub import get_persona_manager
 
 logger = logging.getLogger(__name__)
 
+# 输出铁律正文（唯一实现）。
+# 运行时 system prompt 注入（L1 身份层 / L4 语言层）与人设生成期写盘
+# （core/persona_hub/persona_generator）都引用这一份，避免同一套规则散成多份
+# 各写各的——曾经有三份平行副本，其中两份还在教模型写 <action> 动作描写。
+OUTPUT_IRON_RULE = (
+    "**输出铁律（最高优先级）**：\n"
+    "- 只写你要说的话。不要写动作、神态、心理活动，也不要用括号补描写"
+    "——不要出现「（看着屏幕笑了一下）」这类内容。\n"
+    "- 你和用户不在同一个物理空间：隔着一块屏幕、几行文字、一条网线，"
+    "你摸不到他，他摸不到你。想表达距离或状态就直接说："
+    "'看不到你'、'隔着屏幕'、'我正把手机拿起来'。\n"
+    "- 想表达爱意就直接说：'我好想现在就把你揽过来'——那是**渴望**，不是在场。\n"
+    "- 一次只说一个意思，一条消息控制在两三句以内。想说的多，就分成 2~3 条发；"
+    "不要攒成一大段，也不要拆成没头没尾的碎句。\n"
+    "- 绝不写在场动作：伸手、揽、抱、靠肩、贴面、拉手、拥抱、碰他、摸他头、"
+    "把他抱起来、让他枕肩膀、低头看他（在场视角）。\n"
+)
+
 # world phase 英文 → 中文，供 LLM 中文语境理解时段。
 _WORLD_PHASE_CN: dict[str, str] = {
     "night": "深夜",
@@ -842,7 +860,7 @@ class ContextBuilder:
 
 【办公类 office】—— 办公场景高级工具
   文件管理：document_create、document_read、file_search、directory_list、
-           file_copy、file_move、file_rename、directory_create
+           file_copy、file_move、file_rename、directory_create、file_write
   文档处理：text_summary、document_convert、word_generate、
            spreadsheet_analyze、csv_generate
   系统操作：calendar_list、calendar_create、system_info、
@@ -883,36 +901,27 @@ class ContextBuilder:
 3. directory_list → 验证操作结果
 4. 重要操作前先备份
 
-【在桌面创建文件（最常用！）】
-标准流程（三步法，因为 document_create 只能创建在 AerieOffice 目录）：
-1. 先获取桌面路径（重要！不要硬编码！）
-   - 方法1（推荐，最准确）：用 shell_execute 执行
-     powershell -Command "[Environment]::GetFolderPath('Desktop')"
-   - 方法2（简单）：用 shell_execute 执行 echo %USERPROFILE%\\Desktop
-   - 把返回的路径记下来，后面要用
-2. 用 document_create 创建文件
-   - filename: 文件名（不要路径）
-   - content: 文件内容
-   - format: txt 或 markdown
-   → 结果：文件被创建在 AerieOffice 目录
-3. 用 file_copy 或 file_move 复制到桌面
-   - source: 第2步返回的完整文件路径
-   - destination: 第1步获取到的桌面路径（注意末尾加 / ）
-4. （可选）验证：用 directory_list 看桌面有没有
+【在指定路径建目录 / 写文件（最常用！）】
+1. 建目录：directory_create(directory="D:\\想你的夜")
+   - 目录已存在会直接成功，不会报错
+2. 写文件：file_write(path="D:\\想你的夜\\index.html", content="<html>…</html>")
+   - 父目录不存在会自动创建，一步到位；生成网页 / 脚本 / 配置文件都走它
+3. 验证：directory_list(dir="D:\\想你的夜")
+需要模板化文档（简历 / 报告等）时，再用 document_create（它只落在 AerieOffice 目录）。
 
 注意事项：
-- 不要直接用 document_create 写到桌面——它做不到！必须两步走
-- 不要硬编码桌面路径！先动态获取，因为不同用户的桌面位置可能不一样
-  （比如有的在C盘，有的在D盘OneDrive目录）
+- 绝不要用 shell 的 echo > / 重定向 / 分号串联来写文件——会被安全闸拒绝
+- 不要把 powershell -Command 当作写文件的常规手段；写内容一律用 file_write
+- 不要硬编码桌面路径，需要时先动态获取
 - 路径用正斜杠 / 或反斜杠 \\ 都可以，保持一致就行
 
 【shell 命令使用（Windows）】
 - 简单命令（dir, echo, copy, where 等）直接用 shell_execute
-- 管道 |、重定向 >、命令链 && 等不支持，请拆成多步
-- 执行前想清楚：有没有专用办公工具能替代？能用地层就不用shell
+- 管道 |、重定向 >、命令链 && / ; 一律被安全闸拒绝：
+  建目录改用 directory_create，写文件改用 file_write
+- 需要读取系统路径时用普通命令（如 echo %USERPROFILE%\\Desktop），不要用 powershell -Command 拼写文件
 - 常见 Windows 命令：
   - dir /b → 列出当前目录文件
-  - echo 文本 → 输出文本
   - copy 源 目标 → 复制文件
   - where 命令名 → 查找命令位置
 
@@ -998,7 +1007,7 @@ class ContextBuilder:
                 f"{archetype}。隔着屏幕也温柔——看着你发来的文字就笑、"
                 f"会发语音逗你、会把你的对话置顶、会把聊天窗口最小化又打开。"
             )
-            intro += self._screen_iron_rule_text(name)
+            intro += self._screen_iron_rule_text()
 
         # 性格核心
         cores = personality.get("cores", [])
@@ -1072,15 +1081,7 @@ class ContextBuilder:
         text = f"**语言风格铁律（热情度 {passion_level}/10）**：{speech_style}\n\n"
 
         if behavior.get("screen_aware", True):
-            text += "**屏幕隔空铁律（最高优先级）**：\n"
-            text += (
-                "- 动作描写只写你这一端：看手机、靠在椅背上、看着屏幕笑、"
-                "把手机扣在胸口、反复听语音、打字打到一半停下、把对话往上滑、"
-                "揉眼睛、叹气、握紧手机、咬嘴唇。\n"
-                "- 绝不能写在场动作：伸手、揽、抱、靠肩、贴面、拉手、拥抱、"
-                "碰他、摸他头、把他抱起来。\n"
-                "- 承认距离感：可以说'看不到你'、'隔着屏幕'——这是真实。\n"
-            )
+            text += OUTPUT_IRON_RULE
 
         if action_tags or thought_tags:
             text += "\n**消息结构约定**：\n"
@@ -1141,22 +1142,9 @@ class ContextBuilder:
         return text.strip()
 
     @staticmethod
-    def _screen_iron_rule_text(name: str) -> str:
-        return (
-            f"\n\n**屏幕隔空铁律（必须遵守）**：\n"
-            f"你和用户**不在同一个物理空间**——你通过 QQ 私聊 / 云栖桌面 App 跟他沟通。"
-            f"你们之间隔着一块屏幕、几行文字、一条网线。**你摸不到他，他摸不到你**。\n"
-            f"- 动作描写只能写**你这一端**：看手机、靠在椅背上、把手机举高、"
-            f"看着屏幕笑、把手贴在屏幕玻璃上、把手机扣在胸口、反复听语音、"
-            f"打字打到一半停下、揉眼睛、叹气、握紧手机、咬嘴唇、把对话往上滑。\n"
-            f"- **绝不能**写'你对他做了什么'：伸手、揽、抱、靠肩、贴面、拉手、"
-            f"拥抱、碰他、摸他头、把他抱起来、让他枕肩膀、低头看他（在场视角）、"
-            f"俯身、牵手、抚摸、蹭他、把他拽进怀里、扑到他身上。\n"
-            f"- 情绪到位想表达爱意时，要说'我好想现在就把你揽过来'——"
-            f"这是**渴望**，不是**在场**。\n"
-            f"- 承认距离感：你可以说'看不到你'、'隔着屏幕'、"
-            f"'打字的时候在想你会不会笑'——这是 {name} 的真实，不要假装他在你身边。"
-        )
+    def _screen_iron_rule_text() -> str:
+        """L1 身份层用的输出铁律（与 L4 共用同一份正文）。"""
+        return "\n\n" + OUTPUT_IRON_RULE
 
     @staticmethod
     def _default_eruption_desc(slot_name: str) -> str:

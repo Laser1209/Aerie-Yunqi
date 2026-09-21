@@ -181,10 +181,10 @@ class TestContextBuilderPersonaBaseline:
         assert "四爱主导位" not in system
 
     def test_persona_l4_has_screen_aware_neutral_baseline(self, builder):
-        """L4 必须含屏幕隔空铁律 + 中性基线。"""
+        """L4 必须含输出铁律（禁动作/心理描写）+ 中性基线。"""
         msgs = builder.build(3998874040, "你好", "FULL")
         system = msgs[0]["content"]
-        assert "屏幕隔空" in system, "L4 must include 屏幕隔空 iron rule"
+        assert "输出铁律" in system, "L4 must include the output iron rule"
         assert ("3/10" in system) or ("3 分" in system), \
             "L4 must include neutral baseline marker"
 

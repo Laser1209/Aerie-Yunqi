@@ -281,7 +281,7 @@ def test_fallback_path_when_llm_disabled(monkeypatch):
     assert result["is_builtin"] is False
     assert result["basic"]["name"] == "小伊"
     sp = result["prompt_overrides"]["system_prompt"]
-    assert "屏幕隔空铁律" in sp and "消息结构约定" in sp
+    assert "输出铁律" in sp, "固定规则块必须写入生成结果"
     assert result["emotion"]["thresholds"], "emotion.thresholds 不应为空"
     assert isinstance(result["behavior"]["proactivity_level"], (int, float))
     assert result["recall"], "recall 应存在且非空"
@@ -363,7 +363,7 @@ def test_llm_success_path_builds_full_persona():
     assert result["appearance"]["hair"] == "银白色长发"
     assert "天文台" in result["relationship"]["story"]
     sp = result["prompt_overrides"]["system_prompt"]
-    assert "屏幕隔空铁律" in sp and "消息结构约定" in sp
+    assert "输出铁律" in sp, "固定规则块必须写入生成结果"
     # 第一人称自洽：角色=名字，用户=你（杜绝"你是塞纳。我是店员"式人称断裂）
     assert sp.startswith("我是星野（Hoshino）")
 

@@ -175,7 +175,7 @@ def main() -> int:
     # ── 5. Yaml still loads ──
     code, body = _request("GET", "/api/config/yaml?file=persona.yaml")
     expect("persona.yaml still loads",
-           code == 200 and isinstance(body, str) and "消息结构约定" in body,
+           code == 200 and isinstance(body, str) and "输出铁律" in body,
            f"code={code} len={len(body) if isinstance(body, str) else 'n/a'}")
 
     print("=" * 60)

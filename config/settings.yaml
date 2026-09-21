@@ -71,6 +71,13 @@ startup:
   start_minimized: true
 theme:
   current: forest-green
+thinking_loop:
+  enabled: false
+  interval_seconds: 900
+  max_steps_per_hour: 4
+  max_steps_per_day: 24
+  max_tokens_per_day: 0
+  step_timeout_seconds: 120
 verify_batch4:
   ping: pong
   ts: 1784404889

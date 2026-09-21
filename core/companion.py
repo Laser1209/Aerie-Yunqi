@@ -52,6 +52,8 @@ from core.identity import IdentityRepository, IdentityResolver
 from core.pipeline import Pipeline
 from core.paths import data_dir
 from core.model_gate import model_calls_disabled
+from core.mcp_client import MCPClientManager
+from core.thinking_loop import ThinkingLoop
 from core.primary_identity import PrimaryIdentityResolver
 from core.push_event_engine import get_event_engine
 from core.push_scheduler import PushScheduler
@@ -1365,6 +1367,11 @@ class Companion:
         except Exception:
             logger.debug("MovementManager init failed", exc_info=True)
             self.movement_manager = None
+        # MCP 工具接入 / 后台思考循环：这里只占位，实际在 start() 时按配置创建。
+        # 两者默认关闭，未接线（对象为 None）等同于「不可用」，由配置决定是否启用。
+        self.mcp_manager: MCPClientManager | None = None
+        self.thinking_loop: ThinkingLoop | None = None
+        self._thinking_ticks = 0
         _COMPANION = self
 
     def _apply_proactive_overlay(self) -> None:
@@ -1534,6 +1541,10 @@ class Companion:
                 self.push_scheduler.pause("qq_offline")
 
             # boot_brief_task = asyncio.create_task(self._boot_brief())
+
+        # MCP 工具接入 + 后台思考循环：默认关闭；失败降级，不阻断启动。
+        await self._start_mcp()
+        await self._start_thinking_loop()
 
         self._started = True
         logger.info("Companion started (qq_ready=%s)", qq_ready)
@@ -2283,8 +2294,87 @@ class Companion:
         except Exception:
             logger.exception("computer_controller cleanup error")
 
+        # MCP / 后台思考循环收尾（幂等；未接线时为 no-op）。
+        await self._stop_thinking_loop()
+        await self._stop_mcp()
+
         self._started = False
         logger.info("Companion stopped")
+
+    # ── MCP 客户端接入（默认关闭，配置见 config/mcp_servers.yaml） ──────
+
+    async def _start_mcp(self) -> None:
+        """按配置拉起 MCP server，并把远端工具注册进 ToolRegistry。
+
+        默认关闭（顶层 ``enabled: false``）时 ``MCPClientManager.start()``
+        不建立任何连接、不注册任何工具，启动行为与未接线时完全一致。
+        配置损坏 / 连不上只记日志并降级为「MCP 不可用」，绝不阻断应用启动。
+        """
+        try:
+            manager = MCPClientManager(self.tool_registry)
+            summary = await manager.start()
+            self.mcp_manager = manager
+            if summary.get("enabled"):
+                logger.info(
+                    "MCP 已接入：%d 个 server 就绪，注册工具 %d 个；失败 %s",
+                    len(summary.get("started", [])),
+                    int(summary.get("tools_registered", 0)),
+                    summary.get("failed", {}),
+                )
+        except Exception:
+            logger.exception("MCP 客户端启动失败；降级为 MCP 不可用，应用继续启动")
+            self.mcp_manager = None
+
+    async def _stop_mcp(self) -> None:
+        """关闭全部 MCP 连接并回收子进程（幂等）。"""
+        manager = self.mcp_manager
+        if manager is None:
+            return
+        try:
+            await manager.aclose()
+        except Exception:
+            logger.exception("MCP 客户端关闭异常；改用同步回收")
+            manager.close_sync()
+
+    # ── 后台思考循环接入（默认关闭，配置见 settings.yaml thinking_loop） ──
+
+    async def _start_thinking_loop(self) -> None:
+        """按 ``settings.thinking_loop`` 启动后台思考循环（缺省即关闭）。
+
+        独立后台任务，不进入 pipeline 对话链路，不阻塞也不干扰用户对话。
+        ``enabled`` 为 false 时 ``ThinkingLoop.start()`` 直接返回 False，
+        不创建任何任务、不消耗 token。
+        """
+        try:
+            cfg = (self.settings or {}).get("thinking_loop")
+            loop = ThinkingLoop.from_config(cfg, step=self._thinking_step)
+            await loop.start()
+            self.thinking_loop = loop
+        except Exception:
+            logger.exception("后台思考循环启动失败；应用继续启动")
+            self.thinking_loop = None
+
+    async def _stop_thinking_loop(self) -> None:
+        """停止后台思考循环（幂等）。"""
+        loop = self.thinking_loop
+        if loop is None:
+            return
+        try:
+            await loop.stop()
+        except Exception:
+            logger.exception("后台思考循环停止异常")
+
+    async def _thinking_step(self) -> dict:
+        """最小可用的思考步骤：一次轻量打点，不调用模型（零 token）。
+
+        「真正的思考内容」（读反思 / 待办队列、调模型等）属于后续演进，
+        本阶段只保证循环可运行、可观测。``ThinkingLoop`` 的 ``step`` 回调
+        即为留好的接口：替换本方法即可接入真实认知，返回值里的 ``tokens``
+        会自动计入当日 token 预算（无需额外接 ``record_tokens``）。
+        """
+        self._thinking_ticks += 1
+        logger.debug("后台思考打点 #%d", self._thinking_ticks)
+        return {"status": "idle", "reason": "heartbeat", "tokens": 0}
 
     # ── Block-4A R1.5: boot brief hook ───────────────────────────
     async def _boot_brief(self) -> None:

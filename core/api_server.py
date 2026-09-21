@@ -5587,6 +5587,49 @@ async def task_status() -> dict:
     }
 
 
+@app.get("/api/background/status")
+async def background_status() -> dict:
+    """只读：MCP 客户端与后台思考循环的运行状态。
+
+    启停完全由配置控制（``config/mcp_servers.yaml`` 与 ``settings.yaml`` 的
+    ``thinking_loop`` 段），本端点不提供任何运行时开关/改状态操作。
+    """
+    comp = get_companion()
+
+    manager = getattr(comp, "mcp_manager", None)
+    if manager is None:
+        mcp = {
+            "enabled": False,
+            "connected": 0,
+            "tools_registered": 0,
+            "servers": [],
+            "failed": {},
+        }
+    else:
+        summary = manager.summary()
+        mcp = {
+            "enabled": bool(summary.get("enabled")),
+            "connected": len(summary.get("connected", [])),
+            "tools_registered": int(summary.get("tools_registered", 0) or 0),
+            "servers": list(summary.get("started", [])),
+            "failed": dict(summary.get("failed", {}) or {}),
+        }
+
+    loop = getattr(comp, "thinking_loop", None)
+    thinking = (
+        loop.status()
+        if loop is not None
+        else {
+            "enabled": False,
+            "running": False,
+            "tokens_today": 0,
+            "last_error": "",
+        }
+    )
+
+    return {"mcp": mcp, "thinking_loop": thinking}
+
+
 # ── v0.4.1: 工作区管理 API(文件树/缩略图/打开/操作日志) ──────────────
 
 

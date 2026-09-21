@@ -10,10 +10,11 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
+
+from core.task_loop import TaskKind, classify as classify_task
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,44 @@ class OfficeTaskType(Enum):
     SEARCH = "search"           # 信息检索 / 调研
     ANALYSIS = "analysis"       # 数据分析 / 报告
     OTHER = "other"             # 其他
+
+
+# 任务循环的类别 → 办公任务类型（同一件事，两套视图）
+_KIND_TO_OFFICE_TYPE: dict[TaskKind, OfficeTaskType] = {
+    TaskKind.FILE: OfficeTaskType.OTHER,
+    TaskKind.DOC: OfficeTaskType.DOCUMENT,
+    TaskKind.SHEET: OfficeTaskType.SPREADSHEET,
+    TaskKind.SLIDES: OfficeTaskType.PRESENTATION,
+    TaskKind.EMAIL: OfficeTaskType.EMAIL,
+    TaskKind.SCHEDULE: OfficeTaskType.SCHEDULE,
+    TaskKind.CODE: OfficeTaskType.CODE,
+    TaskKind.ANALYSIS: OfficeTaskType.ANALYSIS,
+    TaskKind.RESEARCH: OfficeTaskType.SEARCH,
+    TaskKind.COMPUTER: OfficeTaskType.OTHER,
+}
+
+# 办公专属词：属于办公语境，但不是「要动手执行」的任务，所以不进 task_loop 的表。
+_OFFICE_ONLY_KEYWORDS: dict[str, OfficeTaskType] = {
+    "开会": OfficeTaskType.SCHEDULE,
+    "汇报": OfficeTaskType.DOCUMENT,
+    "周报": OfficeTaskType.DOCUMENT,
+    "月报": OfficeTaskType.DOCUMENT,
+    "述职": OfficeTaskType.DOCUMENT,
+    "客户": OfficeTaskType.OTHER,
+    "合同": OfficeTaskType.OTHER,
+    "报销": OfficeTaskType.OTHER,
+    "项目进度": OfficeTaskType.OTHER,
+    "截止": OfficeTaskType.SCHEDULE,
+    "deadline": OfficeTaskType.SCHEDULE,
+}
+
+# 办公专属任务的分类模式（_OFFICE_ONLY_KEYWORDS 认不出具体类型时的兜底）
+_OFFICE_ONLY_TASK_PATTERNS: list[tuple[OfficeTaskType, list[str]]] = [
+    (OfficeTaskType.EMAIL, ["邮件", "email", "写信", "mail"]),
+    (OfficeTaskType.SPREADSHEET, ["表格", "excel", "数据", "统计", "报表"]),
+    (OfficeTaskType.PRESENTATION, ["ppt", "演示", "幻灯片", "slides"]),
+    (OfficeTaskType.SCHEDULE, ["会议", "日程", "安排", "时间", "日历"]),
+]
 
 
 @dataclass
@@ -107,84 +146,32 @@ class OfficeModeManager:
             self._context.confidence = 0.0
             return self._context
 
-        # AUTO 模式：基于关键词 + 启发式判断
+        # AUTO 模式：任务判定（唯一关键词表在 core.task_loop）+ 办公专属词补充
         score = 0.0
         keywords: list[str] = []
+        detected_task: OfficeTaskType | None = None
 
-        # 强办公关键词（高权重）
-        strong_keywords = {
-            "写报告": OfficeTaskType.DOCUMENT,
-            "写文档": OfficeTaskType.DOCUMENT,
-            "写邮件": OfficeTaskType.EMAIL,
-            "写方案": OfficeTaskType.DOCUMENT,
-            "做PPT": OfficeTaskType.PRESENTATION,
-            "做表格": OfficeTaskType.SPREADSHEET,
-            "Excel": OfficeTaskType.SPREADSHEET,
-            "excel": OfficeTaskType.SPREADSHEET,
-            "报表": OfficeTaskType.SPREADSHEET,
-            "开会": OfficeTaskType.SCHEDULE,
-            "安排会议": OfficeTaskType.SCHEDULE,
-            "写代码": OfficeTaskType.CODE,
-            "debug": OfficeTaskType.CODE,
-            "bug": OfficeTaskType.CODE,
-            "数据分析": OfficeTaskType.ANALYSIS,
-            "总结": OfficeTaskType.ANALYSIS,
-            "整理": OfficeTaskType.DOCUMENT,
-            "汇报": OfficeTaskType.DOCUMENT,
-            "帮我写": OfficeTaskType.DOCUMENT,
-        }
+        # 1) 任务循环判定：文档/表格/代码/调研/整理/写文件… 与「要动手的任务」
+        #    共用同一张关键词表，避免同一个判断在两处各写一份（曾经三份）。
+        verdict = classify_task(message)
+        if verdict is not None:
+            score += 0.6
+            keywords.extend(verdict.matched)
+            detected_task = _KIND_TO_OFFICE_TYPE.get(verdict.kind)
 
-        # 普通办公关键词（中权重）
-        medium_keywords = {
-            "文档": OfficeTaskType.DOCUMENT,
-            "邮件": OfficeTaskType.EMAIL,
-            "方案": OfficeTaskType.DOCUMENT,
-            "表格": OfficeTaskType.SPREADSHEET,
-            "数据": OfficeTaskType.SPREADSHEET,
-            "会议": OfficeTaskType.SCHEDULE,
-            "日程": OfficeTaskType.SCHEDULE,
-            "代码": OfficeTaskType.CODE,
-            "函数": OfficeTaskType.CODE,
-            "接口": OfficeTaskType.CODE,
-            "分析": OfficeTaskType.ANALYSIS,
-            "报告": OfficeTaskType.DOCUMENT,
-            "PPT": OfficeTaskType.PRESENTATION,
-            "演示": OfficeTaskType.PRESENTATION,
-            "统计": OfficeTaskType.SPREADSHEET,
-            "调研": OfficeTaskType.SEARCH,
-            "查一下": OfficeTaskType.SEARCH,
-            "搜索": OfficeTaskType.SEARCH,
-        }
-
+        # 2) 办公专属词：不是可执行任务，但明确属于办公语境
         msg_lower = message.lower()
-
-        # 强关键词检测
-        detected_task = None
-        for kw, task_type in strong_keywords.items():
-            if kw.lower() in msg_lower or kw in message:
-                score += 0.4
-                keywords.append(kw)
-                if detected_task is None:
-                    detected_task = task_type
-
-        # 中关键词检测
-        for kw, task_type in medium_keywords.items():
-            if kw.lower() in msg_lower or kw in message:
-                score += 0.2
+        for kw, task_type in _OFFICE_ONLY_KEYWORDS.items():
+            if kw in message or kw.lower() in msg_lower:
+                score += 0.3
                 keywords.append(kw)
                 if detected_task is None:
                     detected_task = task_type
 
         # 上下文连贯性：如果最近 3 轮是办公话题，加分
         if history:
-            office_history_count = 0
-            for msg in history[-6:]:
-                content = msg.get("content", "")
-                for kw in list(medium_keywords.keys()) + list(strong_keywords.keys()):
-                    if kw.lower() in content.lower():
-                        office_history_count += 1
-                        break
-            if office_history_count >= 2:
+            history_text = " ".join(m.get("content", "") for m in history[-6:])
+            if classify_task(history_text) is not None:
                 score += 0.2
 
         # 消息长度偏长（认真写需求）也加分
@@ -219,25 +206,21 @@ class OfficeModeManager:
         return self._context
 
     def _classify_task(self, message: str) -> None:
-        """对办公任务进行分类（已确认进入办公模式时调用）"""
-        msg_lower = message.lower()
+        """对办公任务进行分类（已确认进入办公模式时调用）。
 
-        task_patterns = [
-            (OfficeTaskType.EMAIL, ["邮件", "email", "写信", "mail"]),
-            (OfficeTaskType.DOCUMENT, ["文档", "报告", "方案", "总结", "写", "汇报", "整理"]),
-            (OfficeTaskType.SPREADSHEET, ["表格", "excel", "数据", "统计", "报表"]),
-            (OfficeTaskType.PRESENTATION, ["ppt", "演示", "幻灯片", "slides"]),
-            (OfficeTaskType.CODE, ["代码", "函数", "接口", "bug", "debug", "开发", "实现"]),
-            (OfficeTaskType.SCHEDULE, ["会议", "日程", "安排", "时间", "日历"]),
-            (OfficeTaskType.ANALYSIS, ["分析", "数据", "趋势", "对比"]),
-            (OfficeTaskType.SEARCH, ["搜索", "查找", "调研", "查一下"]),
-        ]
+        先问任务循环（唯一关键词表）；它不认的再退回办公专属词。
+        """
+        verdict = classify_task(message)
+        if verdict is not None:
+            mapped = _KIND_TO_OFFICE_TYPE.get(verdict.kind)
+            if mapped is not None:
+                self._context.task_type = mapped
+                return
 
         best_task = OfficeTaskType.OTHER
         best_count = 0
-
-        for task_type, patterns in task_patterns:
-            count = sum(1 for p in patterns if p in msg_lower)
+        for task_type, patterns in _OFFICE_ONLY_TASK_PATTERNS:
+            count = sum(1 for p in patterns if p in message.lower())
             if count > best_count:
                 best_count = count
                 best_task = task_type

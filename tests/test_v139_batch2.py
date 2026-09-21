@@ -111,90 +111,6 @@ def test_office_tools_registration():
     print("  🎉 办公工具测试全部通过!\n")
 
 
-def test_task_planner():
-    """测试任务规划引擎"""
-    print("=" * 60)
-    print("测试 3: 任务规划引擎")
-    print("=" * 60)
-
-    from core.task_planner import TaskPlanner, TaskType, TaskStatus
-
-    planner = TaskPlanner()
-
-    # 1. 简单任务不触发规划
-    assert planner.should_plan("你好") is False
-    print(f"  ✅ 简单消息不触发规划")
-
-    # 2. 复杂任务触发规划
-    long_msg = "帮我写一份关于人工智能的市场调研报告，需要包含详细的数据统计和未来趋势分析，还要对比几家主要公司的情况"
-    assert planner.should_plan(long_msg) is True
-    print(f"  ✅ 复杂任务触发规划")
-
-    # 3. 任务分类
-    task_type = planner.classify_task("帮我写一份季度工作总结报告")
-    assert task_type == TaskType.DOC_WRITE
-    print(f"  ✅ 文档写作任务分类正确: {task_type.value}")
-
-    task_type = planner.classify_task("分析一下这个销售数据表")
-    assert task_type == TaskType.DATA_ANALYSIS
-    print(f"  ✅ 数据分析任务分类正确: {task_type.value}")
-
-    # 4. 创建计划
-    plan = planner.create_plan("帮我写一份项目启动方案，要详细一点", task_id="test-001")
-    assert plan.task_id == "test-001"
-    assert len(plan.steps) >= 3
-    print(f"  ✅ 创建计划成功: {plan.title}, 共 {len(plan.steps)} 步")
-
-    # 5. 进度追踪
-    assert plan.progress_percent == 0
-    plan.mark_step_completed(1, "完成需求分析")
-    assert plan.progress_percent > 0
-    print(f"  ✅ 进度追踪正常: {plan.progress_percent}%")
-
-    # 6. 动态调整（简单模式）
-    plan_simple = planner.create_plan("简单写个报告就行", task_id="test-simple")
-    print(f"  ✅ 简单模式步数: {len(plan_simple.steps)}")
-
-    print("  🎉 任务规划引擎测试全部通过!\n")
-
-
-def test_task_executor():
-    """测试任务执行引擎"""
-    print("=" * 60)
-    print("测试 4: 任务执行引擎")
-    print("=" * 60)
-
-    from core.task_planner import TaskPlanner
-    from core.task_executor import TaskExecutor, StepExecutionStatus
-
-    planner = TaskPlanner()
-    executor = TaskExecutor(max_retries=1)
-
-    # 创建一个文档写作计划
-    plan = planner.create_plan("写一份简单的测试报告", task_id="exec-test-001")
-    print(f"  ✅ 创建执行计划: {len(plan.steps)} 步")
-
-    # 执行计划
-    result = executor.execute_plan(plan, user_message="写一份简单的测试报告")
-
-    assert result.task_id == "exec-test-001"
-    assert result.total_steps == len(plan.steps)
-    print(f"  ✅ 执行完成: {result.completed_steps}/{result.total_steps} 步")
-    print(f"  ✅ 耗时: {result.total_duration_seconds:.2f} 秒")
-    print(f"  ✅ 成功率: {result.success}")
-
-    # 检查步骤结果
-    for sr in result.step_results:
-        assert sr.status == StepExecutionStatus.COMPLETED
-        print(f"     步骤{sr.step_id}: {sr.status.value} ({sr.duration_seconds:.2f}s)")
-
-    # 检查总结
-    assert "执行完成" in result.final_summary
-    print(f"  ✅ 执行总结已生成")
-
-    print("  🎉 任务执行引擎测试全部通过!\n")
-
-
 def test_async_task_manager():
     """测试异步任务管理器"""
     print("=" * 60)
@@ -362,8 +278,6 @@ if __name__ == "__main__":
     tests = [
         ("权限管理器", test_permission_manager),
         ("办公工具矩阵", test_office_tools_registration),
-        ("任务规划引擎", test_task_planner),
-        ("任务执行引擎", test_task_executor),
         ("异步任务管理器", test_async_task_manager),
         ("数据分析工具", test_data_tools),
         ("文件管理工具", test_file_management_tools),

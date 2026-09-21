@@ -1,4 +1,4 @@
-"""工作区管理器 + 路径提取 + 人格化翻译层的单元测试。
+"""工作区管理器 + 路径提取的单元测试。
 
 纯 mock / 临时目录,不触碰真实 D 盘目录、不调真实 LLM、不触发 os.startfile。
 """
@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock
 
 from core.computer_control import (
     AccessPolicy,
@@ -15,23 +14,7 @@ from core.computer_control import (
     PolicyEntryType,
 )
 from core.pipeline import _extract_paths
-from core.work_persona import PersonaTranslator
 from core.workspace import WorkspaceManager, _TEMP_ROOTS_FILE
-
-
-class _FakeLLM:
-    """按预设文本回复的假 LLM。"""
-
-    def __init__(self, text: str, *, boom: bool = False):
-        self._text = text
-        self._boom = boom
-        self.prompt_seen: str | None = None
-
-    async def chat(self, messages, **kwargs):
-        if self._boom:
-            raise RuntimeError("llm boom")
-        self.prompt_seen = str(messages[0]["content"])
-        return type("R", (), {"text": self._text})()
 
 
 @pytest.fixture
@@ -243,34 +226,6 @@ def test_activities_clear(ws):
     assert ws.activities() == []
 
 
-# --------------------------------------------------------------------- 人格化翻译
-
-
-@pytest.mark.asyncio
-async def test_persona_translate_success():
-    fake = _FakeLLM("整理好啦,都归位了～")
-    t = PersonaTranslator(fake)
-    out = await t.translate("✗ file_organize: 没有需要整理的文件")
-    assert out == "整理好啦,都归位了～"
-    assert fake.prompt_seen is not None
-    assert "伊塔" in fake.prompt_seen
-
-
-@pytest.mark.asyncio
-async def test_persona_translate_fallback_on_error():
-    t = PersonaTranslator(_FakeLLM("", boom=True))
-    mechanical = "✗ file_organize: 没有需要整理的文件"
-    out = await t.translate(mechanical)
-    assert out == mechanical  # 失败降级原样返回
-
-
-@pytest.mark.asyncio
-async def test_persona_translate_empty():
-    t = PersonaTranslator(_FakeLLM("忽略我"))
-    assert await t.translate("") == ""
-    assert await t.translate("(无执行结果)") == "(无执行结果)"  # 占位符跳过
-
-
 # --------------------------------------------------------------------- 权限联动(v0.4.2)
 # decide_write 与电脑操控共用同一 AccessPolicy(四级模式 + 黑白名单),仅拦写操作
 
@@ -344,64 +299,3 @@ def test_decide_write_blacklist_blocks_even_full(ws):
     ws.bind_access_policy(p)
     verdict, reason = ws.decide_write(r"D:\T08171634")
     assert verdict == "block"
-
-
-# --------------------------------------------------------------------- 执行器写门控(v0.4.2)
-
-
-class _StubWorkspace:
-    """极简工作区桩:只提供 decide_write / add_activity,不触碰真实文件系统。"""
-
-    def __init__(self, verdict: str = "allow", reason: str = ""):
-        self._verdict = verdict
-        self._reason = reason
-        self.activities: list[str] = []
-
-    def decide_write(self, detail: str = "") -> tuple[str, str]:
-        return self._verdict, self._reason
-
-    def add_activity(self, kind: str, preset: str, detail: str) -> None:
-        self.activities.append(detail)
-
-
-def _file_protocol() -> dict:
-    return {
-        "protocol_version": 1,
-        "task_type": "file_organize",
-        "persona_id": "ita",
-        "session_id": "s1",
-        "goal": "整理文件",
-        "plan": {"source_dir": r"D:\T08171634"},
-    }
-
-
-def _make_executor(ws):
-    from core.work_protocol import WorkProtocolExecutor
-
-    return WorkProtocolExecutor(
-        computer=MagicMock(),
-        file_organizer=MagicMock(),
-        doc_writer=MagicMock(),
-        workspace=ws,
-    )
-
-
-@pytest.mark.asyncio
-async def test_executor_file_blocked_by_permission():
-    ws = _StubWorkspace(verdict="block", reason="命中用户黑名单")
-    ex = _make_executor(ws)
-    results = await ex.execute(_file_protocol())
-    assert results[0]["status"] == "denied"
-    assert "权限拦截" in results[0]["detail"]
-    ex._file_organizer.preview_organize.assert_not_called()  # 未触达文件管线
-
-
-@pytest.mark.asyncio
-async def test_executor_file_approve_records_activity_and_proceeds():
-    ws = _StubWorkspace(verdict="approve", reason="手动审批模式：需用户确认")
-    ex = _make_executor(ws)
-    ex._file_organizer.execute_organize.return_value = (True, "整理完成", "undo-1")
-    results = await ex.execute(_file_protocol())
-    assert results[0]["status"] == "ok"
-    assert ws.activities  # 审批记录已写入工作区活动日志
-    assert ex._file_organizer.preview_organize.called

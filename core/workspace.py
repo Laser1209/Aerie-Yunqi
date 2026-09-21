@@ -1,15 +1,14 @@
 """Aerie · 云栖 — 工作区管理器(Workspace Manager)。
 
-让 DSH 工作委托拥有一个"实地操作范围":
-- 预设工作区:来自 work_presets.yaml 各 preset 的 safety.fs_roots(可配置目录)。
+让任务执行拥有一个"实地操作范围":
+- 已授权根目录:来自 settings.yaml 的 agent.workspace_roots(可配置目录)。
 - 临时工作区:对话中用户明确给出的路径(如 "帮我整理 D:\\xxx"),自动加入。
 - 文件树:按需懒加载扫描(不递归全量,前端逐级展开)。
 - 图片缩略图:PIL 生成缓存,供前端网格预览。
 - 打开文件/文件夹:系统默认程序/资源管理器打开(仅限已注册根目录内)。
-- 操作日志:DSH 委托动作的时间线(扫描→分类→移动→完成),内存环形缓冲。
+- 操作日志:任务动作的时间线(扫描→分类→移动→完成),内存环形缓冲。
 
 安全边界:所有路径操作都必须落在已注册的工作区根目录内,否则拒绝。
-日志埋点与 dsh_cli 对齐:INFO=操作,WARNING=越界/降级,DEBUG=扫描细节。
 """
 
 from __future__ import annotations
@@ -384,20 +383,19 @@ _workspace_manager: WorkspaceManager | None = None
 
 
 def get_workspace_manager() -> WorkspaceManager:
-    """全局单例(与 get_companion 同模式)。首次调用时从 work_presets.yaml 收集预设根。"""
+    """全局单例(与 get_companion 同模式)。首次调用时读取已授权根目录。"""
     global _workspace_manager
     if _workspace_manager is None:
         roots: list[str] = []
         try:
-            import yaml
+            from config.persona_loader import load_settings
 
-            data = yaml.safe_load(Path("config/work_presets.yaml").read_text(encoding="utf-8"))
-            for preset_cfg in (data or {}).get("presets", {}).values():
-                safety = preset_cfg.get("safety", {}) if isinstance(preset_cfg, dict) else {}
-                for r in safety.get("fs_roots", []) or []:
-                    roots.append(str(r))
+            agent_cfg = (load_settings() or {}).get("agent") or {}
+            for root in agent_cfg.get("workspace_roots") or []:
+                if isinstance(root, str) and root.strip():
+                    roots.append(root.strip())
         except Exception as exc:  # noqa: BLE001
-            logger.warning("[workspace] 读取 work_presets.yaml 失败: %s", exc)
+            logger.warning("[workspace] 读取 agent.workspace_roots 失败: %s", exc)
         _workspace_manager = WorkspaceManager(preset_roots=roots)
         logger.info("[workspace] 工作区管理器初始化,根目录=%d", len(_workspace_manager.roots()))
     return _workspace_manager

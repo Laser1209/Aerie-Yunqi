@@ -5558,46 +5558,32 @@ async def settings_put(request: Request) -> dict:
                     )
             except Exception:
                 logger.warning("settings_put: hot-apply l4 toggle failed", exc_info=True)
-        # 热更新：DSH 工作模式委托开关 → 立即热切换运行中的 Pipeline(无需重启)。
-        if isinstance(body, dict) and isinstance(body.get("dsh"), dict) and "enabled" in body["dsh"]:
-            try:
-                from core.companion import get_companion
-                _comp = get_companion()
-                _pipeline = getattr(_comp, "pipeline", None)
-                if _pipeline is not None and hasattr(_pipeline, "set_dsh_enabled"):
-                    _ok = await _pipeline.set_dsh_enabled(bool(body["dsh"]["enabled"]))
-                    logger.info(
-                        "settings_put: dsh.enabled hot-applied -> %s (ok=%s)",
-                        body["dsh"]["enabled"], _ok,
-                    )
-            except Exception:
-                logger.warning("settings_put: hot-apply dsh toggle failed", exc_info=True)
         return {"status": "ok", "saved": list(body.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@app.get("/api/dsh/status")
-async def dsh_status() -> dict:
-    """返回运行中 Pipeline 的 DSH 委托状态(供测试脚本/设置页验证热加载)。"""
+@app.get("/api/task/status")
+async def task_status() -> dict:
+    """任务循环状态：是否可执行任务（工具是否已注册）、当前电脑操控权限模式。"""
     from core.companion import get_companion
 
     comp = get_companion()
     pipeline = getattr(comp, "pipeline", None)
     if pipeline is None:
-        return {"enabled": False, "initialized": False, "running": False, "error": "no pipeline"}
-    cli = getattr(pipeline, "_dsh_cli", None)
-    running = False
-    if cli is not None:
-        try:
-            st = await cli.status()
-            running = bool(st.get("running"))
-        except Exception:
-            running = False
+        return {"ready": False, "error": "no pipeline"}
+
+    registry = getattr(pipeline, "tool_registry", None)
+    controller = getattr(comp, "computer_controller", None)
+    schemas = registry.get_openai_schema() if registry is not None else []
     return {
-        "enabled": bool(getattr(pipeline, "_dsh_enabled", False)),
-        "initialized": cli is not None,
-        "running": running,
+        "ready": bool(schemas),
+        "tool_count": len(schemas),
+        "permission_mode": (
+            controller.permission.mode.value
+            if controller is not None and getattr(controller, "permission", None) is not None
+            else "unknown"
+        ),
     }
 
 

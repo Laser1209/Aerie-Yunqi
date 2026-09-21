@@ -35,8 +35,11 @@ from core.cognition import CognitionEngine
 from core.conversation_repository import active_persona_id
 from core.feature_flags import FeatureFlags
 from core.ids import generate_id
+from core.model_output import normalize_model_text
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
+from core.task_loop import TASK_REACT_ROUNDS, TaskVerdict, build_task_prompt
+from core.task_loop import classify as classify_task
 from core.content_validator import ContentValidator
 
 logger = logging.getLogger(__name__)
@@ -179,343 +182,69 @@ class Pipeline:
         self._summary_inflight: set[str] = set()
         # 用户明确要求照片时触发的后台生图任务（fire-and-forget，文本先发、图后到）。
         self._photo_tasks: set[asyncio.Task[Any]] = set()
-        self._splitter = SemanticMessageSplitter()
+        # 分段器：优先复用 SendQueue 的实例，保证「落库/桌面分段」与「实际发出的
+        # 分段」切点一致；拿不到才自建。上限来源 config: agent.max_segments_per_turn
+        # （>0 时限制单轮条数，0=不限制）。
+        shared_splitter = getattr(send_queue, "splitter", None)
+        if isinstance(shared_splitter, SemanticMessageSplitter):
+            self._splitter = shared_splitter
+        else:
+            _agent_cfg = settings.get("agent", {}) if isinstance(settings, dict) else {}
+            self._splitter = SemanticMessageSplitter(
+                max_segments=int(_agent_cfg.get("max_segments_per_turn", 3) or 0),
+            )
         # v13.9: 回复校验器（准确性 Guard + 质量 Judge）
         self.validator = ResponseValidator()
         # Task 5: Content validator — ensures replies have meaningful text after tag stripping
         self.content_validator = ContentValidator(brain)
 
-        # v13.9.8: 任务规划器（Pipeline 主路径集成，配置开关控制）
-        self._task_planner = None
-        self._task_planner_enabled = False
-        if settings and isinstance(settings, dict):
-            agent_cfg = settings.get("agent", {})
-            self._task_planner_enabled = agent_cfg.get("task_planner_enabled", False)
-            max_steps = agent_cfg.get("max_plan_steps", 10)
-            if self._task_planner_enabled:
-                try:
-                    from core.task_planner import TaskPlanner
-                    self._task_planner = TaskPlanner(max_steps=max_steps)
-                    logger.info("Pipeline task planner enabled (max_steps=%d)", max_steps)
-                except Exception:
-                    logger.exception("Failed to initialize TaskPlanner for Pipeline, task planning disabled")
-                    self._task_planner = None
-                    self._task_planner_enabled = False
+        # 任务循环：判断「这条消息是不是一件必须动手完成的事」。
+        # 执行能力走既有的 ToolRegistry + ReAct 循环，这里只保留工作区——
+        # 用户提到的路径会被注册进工作区，供桌面面板浏览/打开，也是操作日志的出处。
+        self._workspace = None
+        try:
+            from core.workspace import get_workspace_manager
 
-        # v0.4: DSH 工作模式委托(路径一 L1,开关控制,默认关闭)
-        self._dsh_enabled = False
-        self._dsh_cli = None
-        self._dsh_router = None
-        self._dsh_executor = None
-        self._dsh_aggregator = None
-        # 会话聚合状态:preset -> {"session_id", "last_activity_at"}
-        self._dsh_session_state: dict[str, dict] = {}
-        # v0.4.1: 工作区管理器 + 工作回复人格化翻译层(惰性初始化,不影响禁用路径)
-        self._dsh_workspace = None
-        self._dsh_persona = None
-        if settings and isinstance(settings, dict):
-            dsh_cfg = settings.get("dsh", {}) or {}
-            self._dsh_enabled = bool(dsh_cfg.get("enabled", False))
-            if self._dsh_enabled:
-                try:
-                    from core.dsh_cli import DshCli
-                    from core.work_mode_router import WorkModeRouter
-                    from core.work_protocol import WorkProtocolExecutor
-                    from core.session_aggregator import SessionAggregator
-                    from core.workspace import get_workspace_manager
-                    from core.work_persona import PersonaTranslator
+            self._workspace = get_workspace_manager()
+        except Exception:
+            logger.exception("[pipeline] 工作区管理器初始化失败,任务路径注册已禁用")
+            self._workspace = None
 
-                    self._dsh_cli = DshCli()
-                    self._dsh_router = WorkModeRouter(self._dsh_cli, self.brain)
-                    self._dsh_executor = WorkProtocolExecutor()
-                    self._dsh_aggregator = SessionAggregator(self.brain)
-                    self._dsh_workspace = get_workspace_manager()
-                    self._dsh_persona = PersonaTranslator(self.brain)
-                    # v0.4.2: 工作区与电脑操控共用权限模式
-                    self._bind_workspace_policy()
-                    logger.info("[pipeline] DSH 工作模式委托已启用(cli+router+executor+aggregator+workspace+persona 就绪)")
-                except Exception:
-                    logger.exception("[pipeline] DSH 委托初始化失败,已禁用")
-                    self._dsh_enabled = False
-                    self._dsh_cli = None
-                    self._dsh_router = None
-                    self._dsh_executor = None
-                    self._dsh_aggregator = None
-                    self._dsh_workspace = None
-                    self._dsh_persona = None
+    def _detect_task(self, text: str) -> TaskVerdict | None:
+        """判断一条用户消息是否为可执行任务；是则登记工作区并返回判定。
 
-    async def set_dsh_enabled(self, enabled: bool) -> bool:
-        """热切换 DSH 工作模式委托(无需重启后端)。
-
-        enabled=True:懒初始化 DSH 组件(进程懒启动,首次 delegate 才拉起)。
-        enabled=False:优雅关闭 DSH 子进程并清空引用。
-        返回是否切换成功;初始化失败时保持原状态不变并返回 False。
-        并发说明:L1 不做锁保护,假设热切换发生在空闲时(设置页操作)。
+        判定与执行纪律的唯一来源是 core.task_loop；这里只额外登记用户提到的路径，
+        让桌面工作区面板能浏览/打开这些目录，并在操作日志里留一条时间线。
         """
-        if enabled == self._dsh_enabled:
-            return True
-        if enabled:
-            if self._dsh_cli is None:
-                try:
-                    from core.dsh_cli import DshCli
-                    from core.work_mode_router import WorkModeRouter
-                    from core.work_protocol import WorkProtocolExecutor
-                    from core.session_aggregator import SessionAggregator
-                    from core.workspace import get_workspace_manager
-                    from core.work_persona import PersonaTranslator
+        verdict = classify_task(text)
+        if verdict is None:
+            return None
+        logger.info("[pipeline] 任务模式命中 %s text=%s", verdict.reason, text[:80])
+        if self._workspace is not None:
+            try:
+                for path in _extract_paths(text):
+                    self._workspace.add_temp_root(path)
+                self._workspace.add_activity(
+                    kind="info",
+                    detail=f"收到任务: {text[:60]}",
+                    preset=verdict.kind.value,
+                )
+            except Exception:
+                logger.debug("工作区登记任务路径失败", exc_info=True)
+        return verdict
 
-                    self._dsh_cli = DshCli()
-                    self._dsh_router = WorkModeRouter(self._dsh_cli, self.brain)
-                    self._dsh_executor = WorkProtocolExecutor()
-                    self._dsh_aggregator = SessionAggregator(self.brain)
-                    self._dsh_workspace = get_workspace_manager()
-                    self._dsh_persona = PersonaTranslator(self.brain)
-                    # v0.4.2: 工作区与电脑操控共用权限模式
-                    self._bind_workspace_policy()
-                except Exception:
-                    logger.exception("[pipeline] DSH 委托热启用失败")
-                    self._dsh_cli = None
-                    self._dsh_router = None
-                    self._dsh_executor = None
-                    self._dsh_aggregator = None
-                    self._dsh_workspace = None
-                    self._dsh_persona = None
-                    return False
-            self._dsh_enabled = True
-            logger.info("[pipeline] DSH 委托热启用(enabled=true)")
-        else:
-            if self._dsh_cli is not None:
-                try:
-                    await self._dsh_cli.stop()
-                except Exception:
-                    logger.warning("[pipeline] DSH 热关闭异常", exc_info=True)
-                self._dsh_cli = None
-                self._dsh_router = None
-                self._dsh_executor = None
-                self._dsh_aggregator = None
-                self._dsh_workspace = None
-                self._dsh_persona = None
-            self._dsh_enabled = False
-            logger.info("[pipeline] DSH 委托热关闭(enabled=false)")
-        return True
-
-    def _bind_workspace_policy(self) -> None:
-        """v0.4.2: 工作区与电脑操控共用权限模式。
-
-        从共享 ComputerController 取 AccessPolicy 注入 workspace,
-        并把 workspace 传给 WorkProtocolExecutor 作为写操作门控。
-        """
-        if self._dsh_workspace is None:
+    def _note_task_progress(self, verdict: TaskVerdict, reply_text: str) -> None:
+        """把一轮任务的结束写进工作区操作日志（桌面面板时间线用）。"""
+        if self._workspace is None:
             return
         try:
-            from core.computer_control import ComputerController
-
-            policy = None
-            try:
-                from core.companion import get_companion
-
-                comp = get_companion()
-                ctrl = getattr(comp, "computer_controller", None)
-                if ctrl is not None:
-                    policy = getattr(ctrl, "permission", None)
-            except Exception:
-                policy = None
-            if policy is None:
-                # 兜底:独立实例(无 companion 时),保证权限状态存在
-                policy = ComputerController().permission
-            self._dsh_workspace.bind_access_policy(policy)
-            if self._dsh_executor is not None:
-                self._dsh_executor._workspace = self._dsh_workspace
-            logger.info("[pipeline] 工作区权限已与电脑操控联动 mode=%s", getattr(policy, "mode", "?"))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("[pipeline] 工作区权限联动失败: %s", exc)
-
-    def _find_recent_active_session(
-        self, preferred_preset: str,
-    ) -> tuple[str | None, dict | None]:
-        """跨 preset 找最近活跃的 DSH session。
-
-        优先返回 preferred_preset 对应的 session(若存在);否则返回 last_activity_at
-        最大的那个。用于处理"补充指令不含关键词导致路由层判错 preset"的场景。
-
-        Returns: (preset_name, state_dict) 或 (None, None)。
-        """
-        if not self._dsh_session_state:
-            return None, None
-
-        # 优先:路由层判的 preset 本身有 session
-        preferred = self._dsh_session_state.get(preferred_preset)
-        if preferred:
-            return preferred_preset, preferred
-
-        # 兜底:所有 preset 里找最近活跃的
-        best_preset: str | None = None
-        best_state: dict | None = None
-        best_time: float = 0.0
-        for p, s in self._dsh_session_state.items():
-            t = s.get("last_activity_at", 0.0)
-            if t > best_time:
-                best_time = t
-                best_preset = p
-                best_state = s
-        return best_preset, best_state
-
-    async def _try_delegate_to_dsh(self, text: str, msg: Any) -> Any | None:
-        """DSH 工作模式委托:路由判定 → 委托 → 协议执行 → 构造兼容 response。
-
-        关闭开关 / 未命中 / 失败时返回 None,调用方回退原 brain.chat,聊天零阻塞。
-        """
-        if not (self._dsh_enabled and self._dsh_cli and self._dsh_router and self._dsh_executor):
-            return None
-        if not text or not text.strip():
-            return None
-        try:
-            decision = await self._dsh_router.decide(text, user_id=getattr(msg, "user_id", ""))
-            if decision.kind != "delegate":
-                logger.info("[pipeline] DSH 路由未委托 reason=%s", decision.reason)
-                return None
-
-            preset = decision.preset or "default"
-            logger.info("[pipeline] DSH 委托开始 preset=%s text=%s", preset, text[:80])
-
-            # 工作区:从任务文本提取显式路径,注册为临时工作区(供前端面板浏览/打开)。
-            if self._dsh_workspace is not None:
-                for path in _extract_paths(text):
-                    self._dsh_workspace.add_temp_root(path)
-                self._dsh_workspace.add_activity(
-                    kind="info", preset=preset,
-                    detail=f"收到任务: {text[:60]}",
-                )
-
-            # 会话聚合:判定是否续接历史会话(纯判定,无副作用)
-            # 跨 preset 查最近活跃 session:补充指令可能不含关键词,路由层判为新 preset
-            # (如 "顺便删重复" → default),但实际应续接上一轮(file-organizer)的 session。
-            import time as _time
-
-            session_id = None
-            if self._dsh_aggregator is not None:
-                from core.session_aggregator import SessionContext
-
-                # 找最近活跃的 session(跨所有 preset),优先查路由层判的 preset
-                active_preset, active_state = self._find_recent_active_session(preset)
-
-                agg_ctx = SessionContext(
-                    current=msg,
-                    active_session_id=active_state.get("session_id") if active_state else None,
-                    preset=active_preset,
-                    dsh_status="idle",  # L1:delegate 同步阻塞,处理新消息时上一轮必已完成
-                    last_activity_at=active_state.get("last_activity_at") if active_state else None,
-                )
-                agg_decision = await self._dsh_aggregator.decide(agg_ctx)
-                if agg_decision.action == "continue":
-                    session_id = agg_decision.session_id
-                    # 续接:用活跃 session 的 preset(而非路由层新判的 preset)
-                    preset = active_preset or preset
-                    logger.info(
-                        "[pipeline] DSH 会话聚合:续接 session=%s preset=%s reason=%s",
-                        session_id, preset, agg_decision.reason,
-                    )
-                else:
-                    logger.info("[pipeline] DSH 会话聚合:新会话 reason=%s", agg_decision.reason)
-
-            # 组装 DSH system_prompt:协议约束 + 激活工作区上下文(Agent 感知操作范围)
-            system_prompt = self._load_preset_protocol_prompt(preset)
-            active_root = (
-                self._dsh_workspace.active_root() if self._dsh_workspace is not None else None
+            self._workspace.add_activity(
+                kind="execute",
+                detail=f"{verdict.kind.value}: {reply_text[:60]}",
+                preset=verdict.kind.value,
             )
-            if active_root:
-                workspace_note = (
-                    "\n\n[当前工作区] 用户已激活的工作目录是: {root}\n"
-                    "处理文件任务时,优先在此目录内操作;用户没给具体路径时,"
-                    "默认把此目录作为操作目标。".format(root=active_root)
-                )
-                system_prompt = (system_prompt + workspace_note) if system_prompt else workspace_note.strip()
-
-            result = await self._dsh_cli.delegate(
-                text,
-                preset=preset,
-                system_prompt=system_prompt,
-                session_id=session_id,
-            )
-
-            # 更新会话状态(记录本轮实际 session + 活动时间)
-            self._dsh_session_state[preset] = {
-                "session_id": getattr(result, "session_id", None) or session_id,
-                "last_activity_at": _time.time(),
-            }
-
-            # 尝试把 DSH 输出解析为 WorkProtocol JSON;解析失败则视为普通文本回复
-            protocol = _parse_work_protocol(result.final_response)
-            if protocol is not None:
-                op_results = await self._dsh_executor.execute(protocol)
-                reply_text = self._render_protocol_results(op_results)
-                logger.info("[pipeline] DSH 协议已执行 op_count=%d", len(op_results))
-                # 工作区:记录协议执行结果到操作日志时间线
-                if self._dsh_workspace is not None:
-                    for r in op_results:
-                        self._dsh_workspace.add_activity(
-                            kind="execute", preset=preset,
-                            detail=f"{r.get('op', '')}: {r.get('status', '')}",
-                            path=r.get("detail", ""),
-                        )
-            else:
-                reply_text = result.final_response
-                logger.info("[pipeline] DSH 返回纯文本,直接作为回复(len=%d)", len(reply_text))
-
-            # 人格化翻译:把机械结果翻译成伊塔口吻(失败降级原样返回)
-            if self._dsh_persona is not None:
-                try:
-                    reply_text = await self._dsh_persona.translate(reply_text)
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("[pipeline] 人格化翻译异常,保留机械文本: %s", exc)
-
-            usage = result.usage or {}
-            from core.llm_caller import LLMCallerResponse
-
-            return LLMCallerResponse(
-                text=reply_text,
-                provider="dsh",
-                model=f"dsh-{preset}",
-                tokens_prompt=int(usage.get("inputTokens", 0)),
-                tokens_completion=int(usage.get("outputTokens", 0)),
-                tool_results=[{"name": "dsh_delegate", "success": True, "duration_ms": 0}],
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("[pipeline] DSH 委托失败,降级 LLMCaller: %s", exc)
-            return None
-
-    @staticmethod
-    def _load_preset_protocol_prompt(preset: str) -> str | None:
-        """从 work_presets.yaml 读 preset 的 protocol_prompt(DSH 输出协议约束)。"""
-        try:
-            import yaml
-            from pathlib import Path
-
-            data = yaml.safe_load(Path("config/work_presets.yaml").read_text(encoding="utf-8"))
-            presets = (data or {}).get("presets", {})
-            cfg = presets.get(preset, {})
-            return cfg.get("protocol_prompt") or None
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("[pipeline] 读取 preset protocol_prompt 失败 preset=%s: %s", preset, exc)
-            return None
-
-    @staticmethod
-    def _render_protocol_results(op_results: list[dict]) -> str:
-        """把协议执行结果渲染成用户可见文本(L1 简化,翻译层后续接入)。"""
-        lines = []
-        for r in op_results:
-            status = r.get("status", "failed")
-            op = r.get("op", "")
-            detail = str(r.get("detail", "")).strip()
-            if status == "ok":
-                lines.append(f"✓ {op}: {detail}")
-            elif status == "failed":
-                lines.append(f"✗ {op}: {detail}")
-            elif status == "denied":
-                lines.append(f"⛔ {op}: {detail}")
-            else:
-                lines.append(f"… {op}: {detail}")
-        return "\n".join(lines) if lines else "(无执行结果)"
+        except Exception:
+            logger.debug("工作区记录任务结果失败", exc_info=True)
 
     async def handle(
         self,
@@ -790,6 +519,15 @@ class Pipeline:
                 ctx_messages[0]["content"] = sys_content + "\n\n[世界事件] " + note
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
+        # 任务循环：判定这条消息是不是一件必须动手完成的事。
+        # 命中后追加执行纪律提示（计划→动手→核实回执→如实汇报），并放宽 ReAct 轮数；
+        # 执行本身仍走既有的 ToolRegistry，进度由 _build_tool_progress_hook 负责。
+        task_verdict = self._detect_task(model_content) if tools else None
+        if task_verdict is not None and ctx_messages:
+            ctx_messages[0]["content"] = (
+                str(ctx_messages[0].get("content", "")) + "\n\n" + build_task_prompt(task_verdict)
+            )
+
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
         history_chars = sum(len(m.get("content", "")) for m in ctx_messages[1:])
         context_record = {
@@ -837,42 +575,21 @@ class Pipeline:
         })
 
         # ══════════════════════════════════════════════
-        # v13.9.8: 任务规划注入（仅 FULL 模式且启用时）
-        # ══════════════════════════════════════════════
-        task_plan_injected = False
-        if (self._task_planner and self._task_planner_enabled
-                and route_mode == "FULL"
-                and model_content
-                and self._task_planner.should_plan(model_content)):
-            try:
-                plan = self._task_planner.create_plan(model_content)
-                if plan and plan.steps and len(plan.steps) > 1:
-                    sys_content = ctx_messages[0].get("content", "") if ctx_messages else ""
-                    ctx_messages[0]["content"] = self._inject_task_plan_into_context(sys_content, plan)
-                    system_chars = len(ctx_messages[0]["content"])
-                    task_plan_injected = True
-                    logger.debug("Task plan injected into Pipeline context: %d steps", plan.total_steps)
-            except Exception:
-                logger.exception("Task planning for Pipeline failed, falling back to normal mode")
-
-        # ══════════════════════════════════════════════
         # 6. Call LLM (stage 5)
         # ══════════════════════════════════════════════
         preferred_provider = office_mgr.get_preferred_provider() if is_office else None
         self._checkpoint_cancel(request_state, "before_model")
 
-        # v0.4: DSH 工作模式委托(开关控制;关闭/未命中/失败时 dsh_response=None,走原 brain)
-        dsh_response = await self._try_delegate_to_dsh(model_content, msg)
-        if dsh_response is not None:
-            response = dsh_response
-            logger.info("[pipeline] DSH 委托命中,跳过 brain.chat(model=%s)", getattr(response, "model", "dsh"))
-        else:
-            response = await self.brain.chat(
-                ctx_messages,
-                tools=tools,
-                tool_registry=self.tool_registry,
-                preferred_provider=preferred_provider,
-            )
+        # 任务回合放宽 ReAct 轮数：多步任务需要「做一步→看回执→再决定」的余量。
+        on_tool_event = self._build_tool_progress_hook(msg, request_state, tools)
+        response = await self.brain.chat(
+            ctx_messages,
+            tools=tools,
+            tool_registry=self.tool_registry,
+            preferred_provider=preferred_provider,
+            on_tool_event=on_tool_event,
+            max_react_rounds=TASK_REACT_ROUNDS if task_verdict is not None else 6,
+        )
         self._checkpoint_cancel(request_state, "after_model")
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None)
@@ -889,11 +606,8 @@ class Pipeline:
             react_trace, trace, raw_text, tool_results
         )
 
-        # Strip  thinking block from user-visible text
-        reply_text_raw = self._strip_think(raw_text)
-
-        # Strip a leading [MM-DD HH:MM] timestamp the model may echo back
-        reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
+        # 面向用户的正文本：剥 think / 时间戳回显 / 括号描写
+        reply_text_raw = normalize_model_text(raw_text)
 
         # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
         reply_text_raw, _recall_actual = await self._handle_recall_instruction(reply_text_raw, msg)
@@ -1025,6 +739,9 @@ class Pipeline:
         except Exception:
             # 校验是 best-effort，失败不影响主流程
             logger.exception("response validation failed; best-effort skip")
+
+        if task_verdict is not None:
+            self._note_task_progress(task_verdict, reply_text)
 
         segments = self._splitter.split(reply_text) or [reply_text]
         self.cognition.record(trace, "split", {
@@ -1381,6 +1098,87 @@ class Pipeline:
 
         result["event_sequence"] = request_state.sequence
         return result
+
+    def _build_tool_progress_hook(self, msg: Any, request_state: Any, tools: Any):
+        """构造工具进度回调；无工具能力的回合返回 None（纯聊天不打扰）。
+
+        粒度由 settings.yaml 的 agent.progress.style 决定，见 core/progress_reporter.py。
+        """
+        if not tools:
+            return None
+        try:
+            from config.persona_loader import load_settings
+            from core.progress_reporter import ProgressConfig, TaskProgressReporter
+
+            config = ProgressConfig.from_settings(load_settings())
+            if not config.enabled:
+                return None
+
+            reporter = TaskProgressReporter(
+                config,
+                emit=lambda text: self._emit_task_progress(msg, request_state, text),
+                task_hint=msg.content,
+            )
+            return reporter.report_tool
+        except Exception:
+            logger.exception("构建任务进度回调失败，本轮不上报进度")
+            return None
+
+    async def _emit_task_progress(self, msg: Any, request_state: Any, text: str) -> None:
+        """把一条任务进度作为独立消息推给用户（落库 + SSE + 发送队列）。
+
+        与最终回复的段落不同：进度消息不参与分句节奏，也不做人格化改写，
+        它是「过程可见性」的载体。只在工具真正跑起来之后才会出现。
+        """
+        if not text:
+            return
+
+        row_id = 0
+        try:
+            row_id = self.db.insert("chat_log", {
+                "user_id": msg.user_id,
+                "role": "assistant",
+                "content": text,
+                "msg_type": msg.msg_type,
+                "route_mode": "FULL",
+                "scene": "progress",
+                "actor_id": msg.actor_id,
+                "channel": msg.channel,
+                "channel_account_id": msg.channel_account_id,
+                "persona_id": active_persona_id(),
+            })
+        except Exception:
+            logger.exception("insert progress message error")
+
+        try:
+            emit(
+                "assistant",
+                role="assistant",
+                id=row_id,
+                user_id=msg.user_id,
+                content=text,
+                source=msg.source,
+                progress=True,
+                **self._event_contract(
+                    request_state,
+                    message_id=row_id,
+                    response_group_id=request_state.response_group_id,
+                ),
+            )
+        except Exception:
+            logger.debug("emit progress event failed", exc_info=True)
+
+        if msg.source in {"qq", "ilink"}:
+            try:
+                self.send_queue.enqueue(OutgoingReply(
+                    user_id=msg.user_id,
+                    content=text,
+                    channel=str(msg.channel or msg.source),
+                    channel_account_id=str(msg.channel_account_id or ""),
+                    msg_id=row_id,
+                ))
+            except Exception:
+                logger.exception("enqueue progress message error")
 
     async def _resolve_chat_photo_intent(
         self,
@@ -2523,11 +2321,8 @@ class Pipeline:
         model_name = getattr(response, "model", "unknown")
         usage = getattr(response, "usage", None) or {}
 
-        # 剥掉  thinking 块
-        reply_text_raw = self._strip_think(raw_text)
-
-        # 剥掉模型可能回显的历史时间戳前缀 [MM-DD HH:MM]
-        reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
+        # 面向用户的正文本：剥 think / 时间戳回显 / 括号描写
+        reply_text_raw = normalize_model_text(raw_text)
 
         # Gate 2: LLM 主动撤回指令 — 解析 <recall>, 执行撤回, 并从正文剔除
         reply_text_raw, _recall_actual = await self._handle_recall_instruction(reply_text_raw, msg)
@@ -3349,39 +3144,6 @@ class Pipeline:
         return _build_react_from_text(text, tool_calls_present=False)
 
     @staticmethod
-    def _inject_task_plan_into_context(system_prompt: str, plan) -> str:
-        """将任务计划注入到系统提示词中，引导 Agent 按步骤执行。"""
-        if not plan or not plan.steps or len(plan.steps) <= 1:
-            return system_prompt
-
-        steps_text = "\n".join([
-            f"  {s.step_id}. {s.title}：{s.description}"
-            for s in plan.steps
-        ])
-
-        plan_suffix = f"""
-
----
-
-【任务执行计划 · Task Execution Plan】
-当前任务类型：{plan.task_type.value if hasattr(plan.task_type, 'value') else str(plan.task_type)}
-任务目标：{plan.title}
-
-=== 执行步骤 ===
-{steps_text}
-
-=== 执行要求 ===
-1. 严格按照上述步骤顺序执行，不要跳步
-2. 每步执行完用工具验证结果，确认无误再进入下一步
-3. 遇到问题及时调整，但不要偏离整体目标
-4. 全部完成后给用户一个清晰的总结
-
-记住：你是一个靠谱的执行者。稳比快重要，每一步都要有结果。
-"""
-
-        return system_prompt + plan_suffix
-
-    @staticmethod
     def _strip_think(text: str) -> str:
         """Remove  thinking… response block from user-visible text."""
         import re
@@ -3778,10 +3540,8 @@ class Pipeline:
         usage = getattr(response, "usage", None) or {}
 
         react_trace = self._ensure_react_trace(react_trace, trace, raw_text, tool_results)
-        reply_text_raw = self._strip_think(raw_text)
-
-        # Strip a leading [MM-DD HH:MM] timestamp the model may echo back
-        reply_text_raw = self._strip_leading_timestamp(reply_text_raw)
+        # 面向用户的正文本：剥 think / 时间戳回显 / 括号描写
+        reply_text_raw = normalize_model_text(raw_text)
 
         self.cognition.record(trace, "brain", {
             "model": model_name,
@@ -4331,7 +4091,7 @@ class Pipeline:
 def _extract_paths(text: str) -> list[str]:
     """从用户任务文本中提取显式 Windows 路径(如 D:\\xxx、E:\\Downloads)。
 
-    仅匹配"盘符:\\..."形态的绝对路径;相对路径/模糊描述不提取(由工作区预设根覆盖)。
+    仅匹配"盘符:\\..."形态的绝对路径；模糊描述不提取（由工作区已注册的根目录覆盖）。
     返回去重后的路径列表。
     """
     if not text:
@@ -4342,22 +4102,3 @@ def _extract_paths(text: str) -> list[str]:
         if raw not in found:
             found.append(raw)
     return found
-
-
-def _parse_work_protocol(text: str) -> dict | None:
-    """尝试把 DSH 输出解析为 WorkProtocol JSON;失败返回 None(视为普通文本)。"""
-    if not text:
-        return None
-    candidate = text.strip()
-    # 剥离 markdown 代码块围栏(```json ... ``` / ``` ... ```)
-    if candidate.startswith("```"):
-        candidate = candidate.strip("`")
-        if candidate.lower().startswith("json"):
-            candidate = candidate[4:].strip()
-    try:
-        obj = json.loads(candidate)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if isinstance(obj, dict) and isinstance(obj.get("task_type"), str):
-        return obj
-    return None

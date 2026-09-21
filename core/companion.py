@@ -370,11 +370,13 @@ _PHOTO_SHOT_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("大特写", ("大特写", "细节特写", "离镜头最近")),
 )
 _SHOT_TO_PHRASE: dict[str, str] = {
-    "远景": "机位拉远，把环境或全身收进画面",
-    "中景": "中景构图，人物半身或膝上入画",
-    "近景": "镜头贴近，人物占画面大部",
-    "特写": "镜头贴近特写，背景虚化",
-    "大特写": "镜头顶到大特写，主体充满画面",
+    "远景": "机位拉远，把环境或全身收进画面（约 35mm 广角，环境占比大）",
+    "中景": "中景构图，人物半身或膝上入画（约 50mm 标准镜头）",
+    "近景": "镜头贴近，人物占画面大部（约 50mm，胸以上入画）",
+    # 特写/大特写不写"虚化"——主体虚化由 focus 模块表达（"其余虚化"），
+    # 这里只给镜头与景深参数，避免同一句里"虚化"说两遍。
+    "特写": "镜头贴近特写（约 85mm 定焦，浅景深，细节清晰）",
+    "大特写": "镜头顶到大特写，主体充满画面（约 100mm 微距，极浅景深，细节锐利）",
 }
 
 
@@ -418,8 +420,10 @@ _POV_THIRD_PARTY_BLACKLIST: tuple[str, ...] = (
 )
 
 # 姿态标签 → 自然措辞（组合器输出"她{phrase}"，避免"她坐/她躺"这类生硬表述）。
+# 措辞不含场景词（如"床上"）——场景由 scene 模块独立表达，两处都写会自相矛盾
+# （用户说"沙发上侧躺"时不能出现"躺在床上"）。
 _PHOTO_POSE_PHRASE: dict[str, str] = {
-    "侧躺": "侧躺在床上",
+    "侧躺": "侧躺着，身体自然舒展",
     "平躺": "平躺着",
     "坐": "坐着",
     "倚靠": "倚靠着",
@@ -483,6 +487,178 @@ _PHOTO_FOCUS_PARENT: dict[str, str] = {
 }
 
 
+# ── 模块化措辞表：每个维度 = 一个可替换的措辞源 ────────────────────
+# 与 documents/生图加强 语料对齐：媒介画幅 / 身份锚定 / 主体部位 / 景别镜头 /
+# 姿态 / 机位 / 服装 / 场景 / 氛围 / 真实感 / 负面约束。
+# 组合器按固定顺序拼装，任一模块缺值即跳过（缺值即停防护），绝不产出空串。
+
+# 主体部位细节措辞：让"看看腿"这类局部特写出画面语言，而不是只写"聚焦在腿"。
+_PHOTO_FOCUS_PHRASE: dict[str, str] = {
+    "双腿": "双腿线条自然舒展，膝盖与小腿比例真实，腿部皮肤通透",
+    "双脚": "双脚姿态放松，脚背弧度与脚趾细节真实自然",
+    "手": "手指修长、指节清晰，手部姿态放松自然",
+    "腰": "腰线自然收束，腰部皮肤与布料褶皱过渡真实",
+    "肩颈锁骨": "肩颈线条舒展，锁骨与颈部转折清晰自然",
+    "背影": "背面身形自然，肩背与腰臀线条流畅",
+    "头发": "发丝根根分明，碎发与发际线自然",
+    "脸庞": "面部五官比例自然，脸颊轮廓与下颌线柔和",
+    "眼睛": "眼神清澈自然，睫毛与眼睑细节真实",
+    "脚踝": "脚踝骨点清晰，脚踝线条纤细",
+    "足背": "足背弧度自然，皮肤通透",
+    "脚趾": "脚趾自然并拢舒展，趾节比例真实",
+    "小腿": "小腿线条流畅，肌肉弧度柔和",
+    "大腿": "大腿线条自然舒展，皮肤通透细腻",
+    "膝盖": "膝盖骨点与皮肤褶皱自然",
+    "手指": "手指关节清晰，指尖自然",
+    "手腕": "手腕纤细，腕骨转折自然",
+    "掌心": "掌纹与手掌厚度自然",
+    "锁骨": "锁骨线条清晰，锁骨窝自然",
+    "脖颈": "颈线修长，脖颈与下颌的过渡柔和",
+    "腰肢": "腰肢线条流畅，腰部转折自然",
+    "耳廓": "耳廓轮廓清晰，耳垂自然",
+    "嘴唇": "唇形自然饱满，唇纹清晰",
+    "全身": "全身比例协调，站姿自然，体态放松",
+}
+
+# 服装模块：用户指令里点明穿着时按关键词落到统一措辞，未点明则整块跳过。
+_PHOTO_OUTFIT_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("吊带", ("吊带", "小吊带", "背心")),
+    ("睡衣", ("睡衣", "睡裙", "家居服", "睡袍")),
+    ("衬衫", ("衬衫", "衬衣")),
+    ("浴巾", ("浴巾", "浴袍", "毛巾")),
+    ("连衣裙", ("连衣裙", "裙子", "裙装")),
+    ("针织衫", ("针织", "毛衣", "开衫")),
+    ("短裤", ("短裤", "热裤")),
+    ("运动装", ("运动", "瑜伽", "健身服")),
+    ("职业装", ("西装", "职业装", "通勤")),
+)
+_PHOTO_OUTFIT_PHRASE: dict[str, str] = {
+    "吊带": "一件修身吊带背心，面料轻薄自然贴合",
+    "睡衣": "宽松家居睡衣，柔软棉质，褶皱自然",
+    "衬衫": "一件略宽松的衬衫，领口自然敞开",
+    "浴巾": "裹着白色浴巾，布料自然垂坠",
+    "连衣裙": "一条贴身连衣裙，面料垂顺",
+    "针织衫": "柔软的针织上衣，织纹清晰",
+    "短裤": "居家短裤，松紧腰自然",
+    "运动装": "修身运动装，弹力面料贴合身形",
+    "职业装": "简约职业装，面料挺括",
+}
+
+# 氛围模块：语料里的"人物表情"维度——只写"整体氛围慵懒"会让模型自由发挥，
+# 补一句对应的神态/视线/唇部语言，画面情绪才落得下来（仍不写具体人名）。
+_PHOTO_STYLE_PHRASE: dict[str, str] = {
+    "诱惑感": "神态慵懒撩人，视线轻柔勾人，唇微启",
+    "慵懒": "神情放松慵懒，眼神半睁，动作舒缓",
+    "清新": "神态清爽干净，眼神明亮，嘴角自然",
+    "居家感": "神情放松自然，姿态随意，生活气息",
+    "氛围感": "神情安静，眼神带一点故事感",
+}
+
+# ── 图生图参考视角模块（人物类专用） ─────────────────────────────
+# three_view 存了 front/side/back 三张参考图，按画面模块挑最贴合的那张：
+# 背影特写用 back，侧卧/侧身用 side，其余用 front。front 作为兜底候选附在最后，
+# 由 _resolve_reference_assets 逐个尝试（缺失视角自动落到下一张，绝不因缺图中断）。
+_PHOTO_FOCUS_REFERENCE_VIEW: dict[str, str] = {
+    "背影": "back",
+}
+_PHOTO_POSE_REFERENCE_VIEW: dict[str, str] = {
+    "侧躺": "side",
+    "跷腿": "side",
+}
+_REFERENCE_VIEW_FALLBACK = "front"
+
+
+def _reference_assets_for_spec(spec: dict[str, str] | None) -> list[str]:
+    """按画面模块（部位/姿态）挑选 three_view 参考视角，front 兜底。"""
+    spec = spec or {}
+    focus = str(spec.get("focus") or "").strip()
+    pose = str(spec.get("pose") or "").strip()
+    view = (
+        _PHOTO_FOCUS_REFERENCE_VIEW.get(focus)
+        or _PHOTO_POSE_REFERENCE_VIEW.get(pose)
+        or _REFERENCE_VIEW_FALLBACK
+    )
+    assets = [f"three_view:{view}"]
+    if view != _REFERENCE_VIEW_FALLBACK:
+        assets.append(f"three_view:{_REFERENCE_VIEW_FALLBACK}")
+    return assets
+
+
+def _has_reference_assets(candidate: dict[str, Any] | None) -> bool:
+    """候选是否带图生图参考图（决定要不要写身份锚定模块）。"""
+    return bool((candidate or {}).get("reference_assets"))
+
+
+# 景别模块兜底：用户没给景别、也没有 focus 可推导时，按画面类型给默认景别，
+# 让每张图的镜头语言都是有意的（自拍贴身近景 / 生活场景中景），而不是留空。
+# 已给姿态时用中景：姿态要连身体一起入画，近景会把身体裁掉。
+_DEFAULT_SHOT_BY_PROMPT_KEY: dict[str, str] = {
+    "role_selfie": "近景",
+    "role_in_scene": "中景",
+    "couple_photo": "近景",
+}
+_POSED_DEFAULT_SHOT = "中景"
+
+
+def _with_default_shot(spec: dict[str, str] | None, prompt_key: str) -> dict[str, str]:
+    """补齐默认景别：已给景别或已有 focus（可推导景别）时原样返回。"""
+    out = dict(spec or {})
+    if str(out.get("shot") or "").strip() or str(out.get("focus") or "").strip():
+        return out
+    default = (
+        _POSED_DEFAULT_SHOT
+        if str(out.get("pose") or "").strip()
+        else _DEFAULT_SHOT_BY_PROMPT_KEY.get(str(prompt_key or ""), "")
+    )
+    if default:
+        out["shot"] = default
+    return out
+
+
+# 用户指令是否已经给出画面模块（部位/姿态/机位/场景/服装）。是则 base 的固定场景
+# 会让位——否则会出现"用户要床上躺着、提示词却仍写坐在书桌前托腮"的互相矛盾。
+_SPEC_SCENE_KEYS: tuple[str, ...] = ("focus", "pose", "angle", "scene", "outfit")
+
+
+def _spec_drives_scene(spec: dict[str, str] | None) -> bool:
+    """判定用户指令是否已把画面主导权交给模块（决定 base 要不要让位固定场景）。"""
+    return any(str((spec or {}).get(key) or "").strip() for key in _SPEC_SCENE_KEYS)
+
+
+# ── 出口模块：身份锚定 / 真实感 / 负面约束 ────────────────────────
+# 身份锚定：人物类走图生图时，文字层必须显式要求"以参考图为准"，
+# 否则模型会把参考图仅当配色参考，长相漂移。
+_IMAGE_IDENTITY_LOCK_PHRASE = (
+    "以附带的参考图锁定人物身份：保持同一张脸、同一五官比例与发色，"
+    "人物外貌与身材一律以参考图为准。"
+)
+
+# 真实感：语料里的反 AI 味约束（真肤质/真发丝/真布料/非 CG）。人物类与景物类
+# 用两套措辞——人物图要压"AI 脸/塑料皮"，景物图只需要材质与光影层次。
+_IMAGE_REALISM_PHRASE = (
+    "真实摄影质感：保留皮肤细微毛孔与自然纹理、真实发丝与少量碎发、"
+    "衣料褶皱与织纹自然，环境光下的肤色过渡与柔和阴影、明暗层次分明，"
+    "轻微胶片颗粒，非 CG 渲染，不要动漫风。"
+)
+_IMAGE_REALISM_PHRASE_ENV = (
+    "真实摄影质感：材质与光影层次真实，手机拍摄的纪实感，"
+    "非 CG 渲染，不要动漫风。"
+)
+
+# 负面约束：人物类与景物类分开——人物图要压手指/关节/磨皮，景物图只压过曝与文字。
+_IMAGE_NEGATIVE_PHRASE = (
+    "反面约束：不自然的脸与视线、多余或残缺的手指、僵硬的关节、"
+    "错误的远近法与透视、与光源矛盾的阴影、过度磨皮与塑料感皮肤、"
+    "AI 感五官、乱码文字、logo、水印。"
+)
+_IMAGE_NEGATIVE_PHRASE_ENV = (
+    "反面约束：过曝与白色飞溅、错误的透视、杂乱构图、乱码文字、logo、水印。"
+)
+
+_REALISM_MARKER = "真实摄影质感"
+_NEGATIVE_MARKER = "反面约束"
+
+
 def _apply_focus_coverage(spec: dict[str, str]) -> dict[str, str]:
     """按 focus 协同覆盖：仅在用户未给姿态/机位时自动补齐缺省值。
 
@@ -533,6 +709,7 @@ def _extract_photo_spec(user_raw: str) -> dict[str, str]:
         "angle": _match_photo_spec(user_raw, _PHOTO_ANGLE_TABLE),
         "scene": _match_photo_spec(user_raw, _PHOTO_SCENE_TABLE),
         "style": _match_photo_spec(user_raw, _PHOTO_STYLE_TABLE),
+        "outfit": _match_photo_spec(user_raw, _PHOTO_OUTFIT_TABLE),
         "orientation": _match_photo_spec(user_raw, _PHOTO_ORIENTATION_TABLE),
         "shot": _match_photo_spec(user_raw, _PHOTO_SHOT_TABLE),
     }
@@ -581,7 +758,7 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     覆盖规则（_PHOTO_FOCUS_RULES）：用户只给 focus（未给姿态/机位）时，自动补一个
     与 focus 相适配的默认姿态/机位，避免落回 base 的固定场景（如"坐在书桌前托腮"）
     而与特写主体冲突；用户显式给了姿态/机位时一律尊重（user wins），绝不覆盖。
-    顺序：主体特写(focus) → 场景(scene) → 姿态(pose) → 机位(angle) → 风格(style)。
+    顺序：主体部位 → 景别/镜头 → 场景 → 姿态 → 机位 → 服装 → 氛围。
     全部缺省时原样返回 base，绝不返回空串。
     """
     spec = _apply_focus_coverage(spec)
@@ -589,7 +766,10 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     parts: list[str] = []
     focus = str(spec.get("focus") or "").strip()
     if focus:
-        parts.append(f"画面重点聚焦在{focus}，其余虚化")
+        detail = _PHOTO_FOCUS_PHRASE.get(focus, "")
+        parts.append(
+            f"画面重点聚焦在{focus}，其余虚化（{detail}）" if detail else f"画面重点聚焦在{focus}，其余虚化"
+        )
     shot = str(spec.get("shot") or "").strip()
     shot_phrase = _photo_shot_phrase(shot) if shot else ""
     if shot_phrase:
@@ -604,12 +784,55 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     if angle:
         # POV 约束：机位一律自拍化措辞，禁止"别人从某角度拍她"的第三方解读。
         parts.append(f"拍摄机位：{_PHOTO_ANGLE_PHRASE.get(angle, angle)}")
+    outfit = str(spec.get("outfit") or "").strip()
+    if outfit:
+        parts.append(f"穿着{_PHOTO_OUTFIT_PHRASE.get(outfit, outfit)}")
     style = str(spec.get("style") or "").strip()
     if style:
-        parts.append(f"整体氛围{style}")
+        mood = _PHOTO_STYLE_PHRASE.get(style, "")
+        parts.append(f"整体氛围{style}（{mood}）" if mood else f"整体氛围{style}")
     if not parts:
         return base
     return f"{base}{'，'.join(parts)}。"
+
+
+def _finalize_image_prompt(prompt: str, prompt_key: str, light: str = "") -> str:
+    """生图提示词出口模块（单一收口）：POV → 光线 → 质感 → 负面。
+
+    这些是"每张图都要有"的横切约束，与具体画面模块无关，所以只在出口加一次：
+    base 与模块组合器不再各自重复同一句（否则同一条约束说两三遍，权重被摊薄）。
+    每个模块都幂等（已含标记即跳过），因为提示词会经轻量 LLM 接力重写、
+    也可能已由世界上下文兜底注入光线，出口再兜一次才能保证约束不丢不重。
+    """
+    text = _ensure_selfie_pov(prompt, prompt_key)
+    light_text = str(light or "").strip()
+    if light_text and light_text not in text:
+        text = f"{text}光线：{light_text}。"
+    if str(prompt_key or "") == "environment_object":
+        if _REALISM_MARKER not in text:
+            text = f"{text}{_IMAGE_REALISM_PHRASE_ENV}"
+        if _NEGATIVE_MARKER not in text:
+            text = f"{text}{_IMAGE_NEGATIVE_PHRASE_ENV}"
+        return text
+    if _REALISM_MARKER not in text:
+        text = f"{text}{_IMAGE_REALISM_PHRASE}"
+    if _NEGATIVE_MARKER not in text:
+        text = f"{text}{_IMAGE_NEGATIVE_PHRASE}"
+    return text
+
+
+def _local_light_phrase(now: datetime | None = None) -> str:
+    """本地时刻 → 光线短语（world 快照不可用时的确定性兜底）。
+
+    单一真源在 core.world_phase：档位改动只改那一处，这里不重复维护光照文案。
+    取不到就返回空串，由调用方跳过光线模块（缺值即停防护）。
+    """
+    try:
+        dt = now or datetime.now(LOCAL_TZ)
+        return str(_TIME_OF_DAY_LIGHT_CN.get(_time_of_day_phase(dt)) or "")
+    except Exception:
+        logger.debug("local light phrase unavailable", exc_info=True)
+        return ""
 
 
 # 游玩/出行例外（构图护栏）：提示词里出现这些词时，允许"同行的朋友/路人帮忙拍"的
@@ -871,6 +1094,8 @@ class Companion:
         # Tool registry
         # v13.9: 全局共享的 ComputerController 单例，确保权限设置全局生效
         self.computer_controller = ComputerController()
+        # 最近一次会话通道：审批等异步通知需要知道回推到哪个用户/哪个通道
+        self._last_inbound_target: dict[str, Any] = {}
         # v13.9: 细粒度权限管理器（目录授权 + 操作分类 + 高危确认）
         self.permission_manager = FineGrainedPermissionManager()
         self.tool_registry = ToolRegistry(self.db)
@@ -878,12 +1103,8 @@ class Companion:
         # 否则 compute_tools 等通过 get_companion() 获取依赖的工具会注册失败
         _COMPANION = self
         register_all_tools(self.tool_registry)
-        # v13.9: 任务规划引擎 + 执行引擎 + 异步任务
-        from core.task_planner import TaskPlanner
-        from core.task_executor import TaskExecutor
+        # 异步任务管理器：承载文档生成等后台任务，对外有独立 API 与进度回调
         from core.async_task_manager import AsyncTaskManager
-        self.task_planner = TaskPlanner()
-        self.task_executor = TaskExecutor(tool_registry=self.tool_registry)
         self.async_task_manager = AsyncTaskManager(max_concurrent=3)
         self._register_async_task_handlers()
 
@@ -919,7 +1140,11 @@ class Companion:
             self_qq=primary_selection.user_id if primary_selection else -1,
             friends_qq=qq_cfg.get("friends_qq", []),
         )
-        self.splitter = SemanticMessageSplitter()
+        # 单轮外发条数上限（0=不限制）：与 Pipeline 用同一配置，避免发送端二次拆分超限
+        _agent_cfg = self.settings.get("agent", {}) if isinstance(self.settings, dict) else {}
+        self.splitter = SemanticMessageSplitter(
+            max_segments=int(_agent_cfg.get("max_segments_per_turn", 3) or 0),
+        )
 
         # Phase 4: Recall manager hooks into SendQueue
         self.recall_manager = RecallManager(qq_client=self.qq)
@@ -936,6 +1161,9 @@ class Companion:
             on_reply_sent=self._on_qq_reply_sent,
             channel_senders={"ilink": self._send_to_ilink},
         )
+
+        # 审批不能只在桌面弹窗：私聊通道也要收到，否则任务静默挂死（2026-09-21 事件）
+        self.computer_controller.set_approval_notifier(self._notify_pending_approval)
 
         # Pipeline
         self.pipeline = Pipeline(
@@ -2271,6 +2499,42 @@ class Companion:
             reply.content,
         )
 
+    def _notify_pending_approval(self, payload: dict) -> None:
+        """把待审批事项推到最近一次会话通道（经发送队列异步投递，不阻塞工具调用）。
+
+        同步回调：request_approval 发生在工具执行链里，不能 await。
+        """
+        target = self._last_inbound_target
+        if not target or not target.get("user_id"):
+            logger.info(
+                "审批 %s 已创建但当前无会话通道，仅桌面端可见", payload.get("call_id"),
+            )
+            return
+        try:
+            self.queue.enqueue(OutgoingReply(
+                user_id=int(target["user_id"]),
+                content=self._render_approval_notice(payload),
+                channel=str(target.get("channel") or target.get("source") or "qq"),
+                channel_account_id=str(target.get("channel_account_id") or ""),
+            ))
+        except Exception:
+            logger.exception("推送审批通知失败 call_id=%s", payload.get("call_id"))
+
+    @staticmethod
+    def _render_approval_notice(payload: dict) -> str:
+        from core.progress_reporter import stage_label
+
+        label = stage_label(str(payload.get("action") or ""))
+        lines = [f"「{label}」这一步需要你点头才能往下走。"]
+        description = str(payload.get("description") or "").strip()
+        if description:
+            lines.append(f"原因：{description}")
+        lines.append(
+            "在桌面端点审批卡片放行；或把电脑操控模式改成「完全访问」，"
+            "或把该操作加入白名单，之后就不再追问。"
+        )
+        return "\n".join(lines)
+
     async def _start_ilink_gateway(self) -> None:
         if not bool((self.settings.get("ilink", {}) or {}).get("enabled", False)):
             return
@@ -2502,6 +2766,14 @@ class Companion:
         await self._submit_incoming_message(msg)
 
     async def _submit_incoming_message(self, msg: IncomingMessage) -> None:
+        # 记录最近一次会话通道，供审批等异步通知回推
+        if msg.user_id and msg.source in {"qq", "ilink"}:
+            self._last_inbound_target = {
+                "user_id": msg.user_id,
+                "source": msg.source,
+                "channel": msg.channel,
+                "channel_account_id": msg.channel_account_id,
+            }
         if self.message_batcher is not None:
             try:
                 await self.message_batcher.submit_message(msg)
@@ -3366,8 +3638,8 @@ class Companion:
         system = (
             "你是摄影构图分析器。用户给了一句给恋人的拍照指令（例如'看看腿''在床上躺着拍一张'），"
             "你要理解其隐含语义，把它拆成一张写实生活照的画面规格。\n"
-            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style/orientation/shot，值用中文或空字符串：\n"
-            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒","orientation":"竖","shot":"特写"}\n'
+            "输出必须是合法 JSON 对象，键固定为 focus/pose/angle/scene/style/outfit/orientation/shot，值用中文或空字符串：\n"
+            '{"focus":"双腿","pose":"坐","angle":"特写","scene":"床上","style":"慵懒","outfit":"睡衣","orientation":"竖","shot":"特写"}\n'
             "各键含义与合法取值：\n"
             "- focus（画面主体特写）：双腿/双脚/手/腰/肩颈锁骨/背影/头发/脸庞/眼睛/全身，"
             "可细分到单个部位：脚踝/足背/脚趾/小腿/大腿/膝盖/手指/手腕/掌心/锁骨/脖颈/腰肢/耳廓/嘴唇\n"
@@ -3375,12 +3647,13 @@ class Companion:
             "- angle（拍摄机位）：仰视低角度/俯视高角度/平视/第一人称/特写/全身入镜\n"
             "- scene（场景）：床上/沙发/浴室/厨房/窗前/阳台/工作室/玄关\n"
             "- style（氛围）：诱惑感/慵懒/清新/居家感/氛围感\n"
+            "- outfit（服装）：吊带/睡衣/衬衫/浴巾/连衣裙/针织衫/短裤/运动装/职业装，指令没提穿着时留空\n"
             "- orientation（画面方向）：竖/横/方，仅当事物明确暗示横/方构图时填，默认竖\n"
             "- shot（景别·镜头语言）：远景/中景/近景/特写/大特写。特写景别使用率最高，默认倾向特写；focus 为局部特写时取特写/大特写\n"
             "推断规则：\n"
             "1. 指令提到身体部位，focus 填最具体的部位（能细化就细化到 脚踝/大腿/手指 等单部位，不只给大类）。\n"
             "2. 若语义暗示了姿态/机位但未明说，自行补全最合理的（如'看看腿'→pose=坐，angle=特写）。\n"
-            "3. 提到环境填 scene，提到情绪/氛围填 style，明确暗示横/方构图才填 orientation。\n"
+            "3. 提到环境填 scene，提到穿着填 outfit，提到情绪/氛围填 style，明确暗示横/方构图才填 orientation。\n"
             "4. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字；不要出现任何人的名字（如'伊塔'）。\n"
             "硬性前提：这张照片由画中的女性本人手持手机拍摄的自拍（前置自拍/后置对镜/支架定时），"
             "所有机位都是她自己的取景，不存在摄影师/他人拍摄。angle 只表达她从哪个方位/距离拍自己。"
@@ -3401,6 +3674,7 @@ class Companion:
                 "angle": _normalize_spec_value(obj.get("angle"), _PHOTO_ANGLE_TABLE),
                 "scene": _normalize_spec_value(obj.get("scene"), _PHOTO_SCENE_TABLE),
                 "style": _normalize_spec_value(obj.get("style"), _PHOTO_STYLE_TABLE),
+                "outfit": _normalize_spec_value(obj.get("outfit"), _PHOTO_OUTFIT_TABLE),
                 "orientation": _normalize_spec_value(obj.get("orientation"), _PHOTO_ORIENTATION_TABLE),
                 "shot": _normalize_spec_value(obj.get("shot"), _PHOTO_SHOT_TABLE),
             }
@@ -3459,18 +3733,21 @@ class Companion:
                 candidate["size"] = _image_orientation_for_size(spec["orientation"])
             except Exception:
                 logger.debug("orientation size reflow failed", exc_info=True)
+        # 图生图参考视角：人物类按画面模块挑 three_view 视角（背影→back、侧卧→side），
+        # 在 base 构造前回填，让身份锚定模块与下游 workflow 拿到同一份参考资产。
+        if isinstance(candidate, dict) and self._is_persona_image(prompt_key):
+            candidate["reference_assets"] = _reference_assets_for_spec(spec)
         base = self._compose_base_image_prompt(prompt_key, candidate, spec=spec)
+        prompt = base
+        light = ""
         try:
             context = self._image_world_context(candidate)
-            if not context:
-                return _ensure_selfie_pov(base, prompt_key)
-            refined = await self._light_relay_refine_prompt(base, context, candidate)
-            if refined:
-                return _ensure_selfie_pov(refined, prompt_key)
-            return _ensure_selfie_pov(
-                self._inject_world_context_fallback(base, context, candidate),
-                prompt_key,
-            )
+            if context:
+                # 世界快照的光线优先（它带 world 自己的时间）；取不到再由本地时刻兜底，
+                # 让"world 关掉 / 无快照"时画面依然有明确光照，而不是一片无光的摆拍。
+                light = str(context.get("time_of_day_light") or "").strip()
+                refined = await self._light_relay_refine_prompt(base, context, candidate)
+                prompt = refined or self._inject_world_context_fallback(base, context, candidate)
         except Exception:
             # 世界数据接力失败不影响生图：退回基础提示词（base 恒非空）。
             # warning 而非 debug：历史空提示词问题曾因 debug 级吞错无法事后复盘，
@@ -3479,7 +3756,15 @@ class Companion:
                 "world image context relay failed; falling back to base prompt (key=%s)",
                 prompt_key, exc_info=True,
             )
-            return _ensure_selfie_pov(base, prompt_key)
+            prompt = base
+        return _finalize_image_prompt(prompt, prompt_key, light=light or _local_light_phrase())
+
+    @staticmethod
+    def _is_persona_image(prompt_key: str) -> bool:
+        """判定该画面是否承载对话人设（人物类图必须走图生图锁人物一致性）。"""
+        from core.world_image_candidates import PERSONA_IMAGE_PROMPT_KEYS
+
+        return str(prompt_key or "") in PERSONA_IMAGE_PROMPT_KEYS
 
     def _compose_base_image_prompt(self, prompt_key: str, candidate: dict[str, Any] | None = None, spec: dict[str, str] | None = None) -> str:
         """基础提示词：persona 外貌/身材 + 场景构图（不含世界上下文）。"""
@@ -3504,10 +3789,11 @@ class Companion:
         # 文字层只描述对应部位的构图/姿态/机位。
         focus = str((spec or {}).get("focus") or "").strip()
         if focus and focus in _CLOSEUP_FOCUS_SET:
+            # 只写媒介与色调定位：光线由光线模块（按 world/本地时刻）单独表达，
+            # 真实感/负面约束由出口模块统一负责——这里再写一遍只会重复、互相摊薄权重。
             base = (
                 "一张写实照片，人物外貌以参考图为准。"
-                "画面风格自然、生活化、暖色调、真实摄影质感，"
-                "不要动漫风，不要文字水印。"
+                "画面是手机随手拍的生活照，暖色调、生活化。"
             )
             full = f"{base}{orientation}。"
             full = f"{full}{_SELFIE_POV_PHRASE}"
@@ -3525,6 +3811,9 @@ class Companion:
         hair = str(appearance.get("hair", "银灰色长发") or "银灰色长发")
         eyes = str(appearance.get("eyes", "深灰蓝色眼睛") or "深灰蓝色眼睛")
         skin = str(appearance.get("skin", "健康肤色") or "健康肤色")
+        # persona.yaml 的 eyes 是"深灰蓝色，目光沉静；…"这种纯描述，直接拼会读成
+        # "…深灰蓝色，目光沉静"，看不出说的是眼睛 → 缺名词时补上"眼睛"。
+        eyes_phrase = eyes if "眼睛" in eyes else f"眼睛{eyes}"
         # 三维数据：与 persona.yaml profile.measurements / weight_kg /
         # body_fat_pct / cup_size 保持一致，随每次生图一并传给中转站，
         # 避免"身材数据对不上"的失真问题。
@@ -3534,7 +3823,7 @@ class Companion:
         cup_size = str(profile.get("cup_size", "") or "").strip()
         base = (
             "一张写实生活照，人物是一位28岁的中国女性独立设计师。"
-            f"身高{height}cm，{body}，{skin}。{hair}，{eyes}。"
+            f"身高{height}cm，{body}，{skin}。{hair}，{eyes_phrase}。"
         )
         body_data_parts = []
         if measurements:
@@ -3547,10 +3836,7 @@ class Companion:
             body_data_parts.append(f"体脂率{body_fat_pct}%")
         if body_data_parts:
             base += "身体数据：" + "，".join(body_data_parts) + "。"
-        base += (
-            "五官清冷精致，气质温柔的大姐姐。画面风格自然、生活化、暖色调、真实摄影质感，"
-            "不要动漫风，不要文字水印。"
-        )
+        base += "五官清冷精致，气质温柔的大姐姐。画面是生活化的写实照片，暖色调。"
         if key == "environment_object":
             # 环境/物件照：第一人称"她拍下的视角"，不强制带人物形象。
             # topic 可能来自世界模拟的公寓物件 ID 或重庆 POI（reason_code: world_visual:<topic>）。
@@ -3565,15 +3851,22 @@ class Companion:
                 translated = _visual_topic_zh(topic)
                 return (
                     f"一张写实照片，第一人称视角，{orientation}，她在重庆的家/窗边随手拍下眼前的一角：{translated}。"
-                    "画面自然、生活化、暖色调、真实摄影质感，微微的随手感，"
-                    "不要动漫风，不要文字水印。"
+                    "画面自然、生活化、暖色调，微微的随手感。"
                 )
             return (
                 f"一张写实照片，第一人称视角，{orientation}，她在重庆的复式公寓里，窗前/工作室一角。"
-                "画面自然、生活化、暖色调、真实摄影质感，不要动漫风，不要文字水印。"
+                "画面自然、生活化、暖色调，微微的随手感。"
             )
+        # 用户指令已给出画面模块时，base 的固定场景让位（否则会与模块互相矛盾：
+        # 用户要"床上躺着"，提示词却仍写"坐在书桌前托腮"）。无指令（主动发图 /
+        # world 生活场景）时保留固定场景作为画面主轴。
+        spec_drives_scene = _spec_drives_scene(spec)
         if key == "role_selfie":
-            scene = "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑直视镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
+            scene = (
+                "她在家里的随手自拍，像刚拍下这一刻发给恋人。"
+                if spec_drives_scene
+                else "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑直视镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
+            )
         elif key == "role_in_scene":
             # POV 约束：自拍视角，画面里能看出是她本人手持手机拍下的这一刻，
             # 绝不能用"侧身望向镜头"这种第三方拍摄摆姿（那暗示存在一个拍摄者）。
@@ -3584,22 +3877,30 @@ class Companion:
                 topic = topic.split("world_visual:", 1)[1].strip()
             else:
                 topic = ""
-            topic_zh = _visual_topic_zh(topic) if topic else ""
+            topic_zh = _visual_topic_zh(topic) if topic and not spec_drives_scene else ""
             if topic_zh and topic_zh != topic:
                 scene = (
-                    f"{topic_zh}，她举着手机前置摄像头对着自己，嘴角带笑，"
+                    f"{topic_zh}，此刻举起手机前置摄像头对着自己，嘴角带笑，"
                     "像刚拍下这一刻随手发给你，身后是她重庆的家。"
                 )
             else:
                 scene = "她举着手机前置摄像头对着自己，嘴角带笑，像刚拍下这一刻随手发给你，身后是重庆高层复式公寓落地窗。"
         elif key == "couple_photo":
-            scene = "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
+            scene = (
+                "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，背景是暖色灯光下的客厅。"
+                if spec_drives_scene
+                else "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
+            )
         else:
             scene = "她坐在重庆的家里，窗外是夜景，她手持手机前置摄像头对着自己，神情放松地看着镜头。"
         full = f"{base}{scene}{orientation}。"
         # POV 硬约束：所有人物类（非环境照）在基础提示词阶段就追加手持自拍前提，
         # 即便后续世界接力/模块化组合器未显式携带，也保证"她本人手持拍摄"成立。
         full = f"{full}{_SELFIE_POV_PHRASE}"
+        # 身份锚定模块：附了参考图的人物类必须显式声明"以参考图为准"，否则
+        # 生成模型会把参考图当成配色参考，长相/身材随每张图漂移。
+        if _has_reference_assets(candidate):
+            full = f"{full}{_IMAGE_IDENTITY_LOCK_PHRASE}"
         # 用户主动要图（scene=local_send）时，candidate 带 user_raw 原始指令，
         # 用模块化组合器把主体/姿态/机位/场景/风格叠加上去。spec 来源：
         #   1) 语义自补优先（_semantic_photo_spec 已解析，命中任一维度）；
@@ -3607,11 +3908,9 @@ class Companion:
         # 全部未命中时 _compose_modular_prompt 原样返回 full，绝不产生空串（缺值即停防护）。
         if (candidate or {}).get("scene") == "local_send":
             user_raw = str((candidate or {}).get("user_raw") or "").strip()
-            if user_raw:
-                if not spec:
-                    spec = _extract_photo_spec(user_raw)
-                full = _compose_modular_prompt(full, spec)
-        return full
+            if user_raw and not spec:
+                spec = _extract_photo_spec(user_raw)
+        return _compose_modular_prompt(full, _with_default_shot(spec, key))
 
     def _image_world_context(self, candidate: dict[str, Any] | None = None) -> dict[str, Any]:
         """提取生图可用的世界上下文，只保留真实存在的数据。

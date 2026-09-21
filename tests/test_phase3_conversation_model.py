@@ -565,7 +565,6 @@ def test_phase3_companion_wires_conversation_flag_into_pipeline(
         companion = companion_module.Companion(
             {
                 "qq": {"self_qq": 0, "friends_qq": []},
-                "agent": {"task_planner_enabled": False},
             },
             database=database,
         )

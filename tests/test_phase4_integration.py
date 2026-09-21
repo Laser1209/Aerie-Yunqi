@@ -195,7 +195,6 @@ def test_companion_injects_one_repository_instance_into_service_worker_and_pipel
     companion = companion_module.Companion(
         {
             "qq": {"self_qq": 0, "friends_qq": [], "startup_wait_timeout": 0},
-            "agent": {"task_planner_enabled": False},
         },
         database=phase4_db,
     )
@@ -234,7 +233,6 @@ def test_queue_flag_requires_migration_and_conversation_flags_fail_closed(
         companion = companion_module.Companion(
             {
                 "qq": {"self_qq": 0, "friends_qq": []},
-                "agent": {"task_planner_enabled": False},
             },
             database=database,
         )
@@ -272,7 +270,6 @@ async def test_worker_starts_before_qq_wait_until_ready(
     companion = companion_module.Companion(
         {
             "qq": {"self_qq": 0, "friends_qq": [], "startup_wait_timeout": 0},
-            "agent": {"task_planner_enabled": False},
         },
         database=phase4_db,
     )
@@ -452,7 +449,6 @@ async def test_flag_off_worker_does_not_consume_existing_queued_rows(
     companion = companion_module.Companion(
         {
             "qq": {"self_qq": 0, "friends_qq": [], "startup_wait_timeout": 0},
-            "agent": {"task_planner_enabled": False},
         },
         database=phase4_db,
     )
@@ -681,7 +677,6 @@ def _make_e2e_harness(
         db=phase4_db,
         cognition=_E2ECognition(),
         conversation_repository=ConversationRepository(phase4_db, enabled=True),
-        settings={"agent": {"task_planner_enabled": False}},
     )
     real_pipeline.validator = _E2EValidator()
     real_pipeline._splitter.split = MagicMock(return_value=["助手第一段", "助手第二段"])

@@ -5,86 +5,6 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def test_task_executor_with_real_tools():
-    """测试任务执行器 + 真实工具调用"""
-    print("=" * 60)
-    print("测试 1: TaskExecutor + ToolRegistry 真实工具调用")
-    print("=" * 60)
-
-    from core.tool_registry import ToolRegistry
-    from core.office_tools import register_office_tools
-    from core.task_planner import TaskPlanner, TaskStep, TaskStatus
-    from core.task_executor import TaskExecutor, StepExecutionStatus
-
-    # 注册工具
-    registry = ToolRegistry()
-    register_office_tools(registry)
-    print(f"  ✅ 注册工具: {len(registry.list_names())} 个")
-
-    # 创建执行器（带真实 tool_registry）
-    executor = TaskExecutor(tool_registry=registry, max_retries=1)
-
-    # 构造一个带 tool_args 的步骤，测试 text_summary 工具
-    step = TaskStep(
-        step_id=1,
-        title="文本摘要测试",
-        description="测试摘要功能",
-        tool="summarize",
-    )
-    step.tool_args = {  # type: ignore
-        "text": "这是一段很长的测试文本。" * 20,
-        "max_length": 50,
-    }
-
-    context = {"user_message": "帮我总结一下这段文字"}
-    result = executor._handler_summarize(step, context)
-    assert result.status == StepExecutionStatus.COMPLETED
-    print(f"  ✅ text_summary 工具调用成功: {result.result[:50]}...")
-
-    # 测试 data_stats 工具
-    step2 = TaskStep(
-        step_id=2,
-        title="数据分析测试",
-        description="测试数据统计",
-        tool="analyze",
-    )
-    step2.tool_args = {  # type: ignore
-        "dataset": [
-            {"name": "A", "value": 100},
-            {"name": "B", "value": 200},
-            {"name": "C", "value": 300},
-        ]
-    }
-    result2 = executor._handler_analyze(step2, context)
-    assert result2.status == StepExecutionStatus.COMPLETED
-    print(f"  ✅ data_stats 工具调用成功: {result2.result}")
-
-    # 测试通用 tool_call 处理器
-    step3 = TaskStep(
-        step_id=3,
-        title="目录列表测试",
-        description="测试目录遍历",
-        tool="tool_call",
-    )
-    step3.tool_name = "directory_list"  # type: ignore
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmpdir:
-        step3.tool_args = {"directory": tmpdir}  # type: ignore
-        result3 = executor._handler_tool_call(step3, context)
-        assert result3.status == StepExecutionStatus.COMPLETED
-        print(f"  ✅ tool_call 通用处理器调用成功: directory_list")
-
-    # 执行完整计划
-    planner = TaskPlanner()
-    plan = planner.create_plan("写一份简单的测试报告", task_id="deep-test-001")
-    exec_result = executor.execute_plan(plan, user_message="写一份简单的测试报告")
-    assert exec_result.success is True
-    print(f"  ✅ 完整计划执行成功: {exec_result.completed_steps}/{exec_result.total_steps} 步")
-    print(f"  ✅ 执行总结: {exec_result.final_summary[:60]}...")
-
-    print("  🎉 任务执行器 + 真实工具调用测试全部通过!\n")
-
-
 def test_async_task_manager_with_real_handlers():
     """测试异步任务管理器 + 真实任务处理器"""
     print("=" * 60)
@@ -280,7 +200,6 @@ if __name__ == "__main__":
     all_passed = True
 
     tests = [
-        ("TaskExecutor + 真实工具", test_task_executor_with_real_tools),
         ("AsyncTaskManager + 真实处理器", test_async_task_manager_with_real_handlers),
         ("权限管理器边界条件", test_permission_edge_cases),
         ("办公工具 Schema 完整性", test_office_tool_schemas),

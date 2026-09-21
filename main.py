@@ -152,7 +152,7 @@ async def _main() -> None:
         state_path=data_dir() / "runtime_config.json",
     )
     mark_step("bootstrap", "done", "配置与依赖就绪")
-    mark_step("companion", "running", "初始化组件(DB/QQ/世界模拟/DSH)")
+    mark_step("companion", "running", "初始化组件(DB/QQ/世界模拟/任务循环)")
     companion = Companion(
         settings=settings,
         runtime_config_service=runtime_config_service,

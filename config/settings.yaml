@@ -1,3 +1,9 @@
+agent:
+  max_segments_per_turn: 3
+  progress:
+    max_messages: 4
+    style: stage
+  workspace_roots: []
 brief_subscriptions:
   enabled: true
   sources:
@@ -14,9 +20,6 @@ computer_control:
 douyin:
   api_base_url: https://api.justoneapi.com
   api_token: ''
-dsh:
-  enabled: true
-  session_window_sec: 60
 feature_flags:
   chat_request_queue_v1: true
   chat_stream_v1: true
@@ -50,8 +53,8 @@ office:
 proactive:
   companion_image_probability: 0.8
   enabled: true
-  image_max_per_day: 1
-  max_per_day: 5
+  image_max_per_day: 0
+  max_per_day: 30
   min_interval_min: 15
   outdoor_holiday_event: true
   outdoor_probability: 0.5
@@ -64,10 +67,10 @@ qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0
 startup:
-  auto_start: false
-  start_minimized: false
+  auto_start: true
+  start_minimized: true
 theme:
-  current: ocean-blue
+  current: forest-green
 verify_batch4:
   ping: pong
   ts: 1784404889

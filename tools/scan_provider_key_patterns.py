@@ -261,6 +261,12 @@ def _git(*args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
 
 
 def _history_candidate_commits() -> list[str]:
+    # --no-textconv is load-bearing, not a stylistic choice. When a textconv
+    # driver is configured for a binary type (e.g. ``diff.astextplain``), git
+    # tries to convert files such as .docx before diffing them; that conversion
+    # fails with "unsupported filetype" and git aborts with exit code 128,
+    # which previously made the whole history scan raise RuntimeError. Secret
+    # scanning only ever wants raw text, so textconv is never useful here.
     proc = _git(
         "log",
         "--all",
@@ -268,6 +274,7 @@ def _history_candidate_commits() -> list[str]:
         "-G",
         GIT_COMBINED_PATTERN,
         "--format=%H",
+        "--no-textconv",
         timeout=180,
     )
     if proc.returncode not in (0, 1):
@@ -357,6 +364,7 @@ def scan_history() -> tuple[list[Finding], dict[str, int]]:
             "--format=",
             "--unified=0",
             "--no-ext-diff",
+            "--no-textconv",
             commit,
             timeout=120,
         )

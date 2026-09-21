@@ -368,3 +368,30 @@ def test_cli_blocks_on_unconfirmed_git_pickaxe_candidates(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "unconfirmed_git_pickaxe_commits=1" in output
     assert "PROVIDER_KEY_SCAN_OK" not in output
+
+
+def test_history_scan_disables_textconv(monkeypatch):
+    """两处会 diff 内容的 git 调用都必须带 --no-textconv。
+
+    否则当某类文件（如 .docx）配了 textconv 转换器时，git 会在转换阶段以
+    "unsupported filetype" 退出码 128 中断，导致整个历史扫描直接失败——
+    这会让人误以为「历史里没有密钥」。
+    """
+    from tools import scan_provider_key_patterns as scanner
+
+    seen: list[tuple[str, ...]] = []
+
+    def fake_git(*args, **kwargs):
+        seen.append(args)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(scanner, "_git", fake_git)
+
+    scanner._history_candidate_commits()
+    # scan_history 需要至少一个候选提交才会走到 git show 分支。
+    monkeypatch.setattr(scanner, "_history_candidate_commits", lambda: ["a" * 40])
+    scanner.scan_history()
+
+    assert seen, "应至少发生一次 git 调用"
+    for args in seen:
+        assert "--no-textconv" in args, f"缺少 --no-textconv 会中断历史扫描: {args}"

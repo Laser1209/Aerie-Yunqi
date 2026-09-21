@@ -48,6 +48,9 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# 项目根目录：提案里的相对路径必须最终落在它之内，越界一律拒绝。
+PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+
 
 class EvolutionStatus(str, Enum):
     PROPOSED = "proposed"
@@ -72,6 +75,19 @@ class RiskLevel(str, Enum):
     MEDIUM = "medium"       # 白名单边缘，或修改共享模块
     HIGH = "high"           # 核心模块，或涉及安全/权限
     CRITICAL = "critical"   # 核心安全模块，绝对禁止自动修改
+
+
+# 风险等级的显式大小顺序。
+# RiskLevel 继承 str，直接用 value 比大小会退化成字典序
+# （"critical" < "high" < "low" < "medium" < "safe"，与语义完全相反），
+# 因此合并风险时必须走这张表而不是字符串比较。
+_RISK_ORDER: dict[RiskLevel, int] = {
+    RiskLevel.SAFE: 0,
+    RiskLevel.LOW: 1,
+    RiskLevel.MEDIUM: 2,
+    RiskLevel.HIGH: 3,
+    RiskLevel.CRITICAL: 4,
+}
 
 
 # ═══════════════════════════════════════════════════
@@ -127,10 +143,58 @@ SENSITIVE_PATTERNS: list[str] = [
     "private_key",
 ]
 
+# Gate3 允许的执行器：模型给的测试命令只能落在这些解释器/测试运行器上，
+# 即使命令串被拆成参数列表，也不允许拉起任意外部程序。
+_ALLOWED_TEST_EXECUTABLES: set[str] = {
+    "pytest", "pytest.exe",
+    "python", "python.exe",
+    "python3", "python3.exe",
+    "py", "py.exe",
+}
+
+
+def _resolve_in_root(root: Path, file_path: str) -> Optional[Path]:
+    """把提案中的相对路径解析为 root 内的绝对路径；不合法返回 None。
+
+    模型给出的路径不可信：绝对路径、Windows 盘符路径、`..` 穿越都能在纯字符串
+    层面拼出白名单前缀（如 `../../skills/x.py`），因此必须 resolve 之后确认目标
+    仍落在 root 之内，而不是只做前缀匹配。
+    """
+    if not isinstance(file_path, str) or not file_path.strip():
+        return None
+    raw = file_path.strip().replace("\\", "/")
+    # 绝对路径、盘符路径（C:/...）、UNC 路径（//server/...）没有"项目内相对路径"语义
+    if raw.startswith("/") or (len(raw) > 1 and raw[1] == ":"):
+        return None
+    try:
+        target = (root / raw).resolve()
+        target.relative_to(root.resolve())
+    except (OSError, ValueError):
+        return None
+    return target
+
+
+def _safe_relative_path(file_path: str) -> Optional[str]:
+    """把路径归一化为项目根内的 POSIX 相对路径；越界/绝对/盘符路径返回 None。"""
+    target = _resolve_in_root(PROJECT_ROOT, file_path)
+    if target is None:
+        return None
+    return target.relative_to(PROJECT_ROOT).as_posix()
+
+
+def _silent_unlink(path: Path) -> None:
+    """清理临时/半成品文件；不存在或删不掉都不该打断主流程。"""
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("L4 清理临时文件失败: %s", path)
+
 
 def _is_in_whitelist(file_path: str) -> bool:
-    """检查文件是否在自动进化白名单内"""
-    normalized = file_path.replace("\\", "/").lstrip("./")
+    """检查文件是否在自动进化白名单内（越界路径视为不在白名单）"""
+    normalized = _safe_relative_path(file_path)
+    if normalized is None:
+        return False
     for prefix in AUTO_EVOLVE_WHITELIST:
         if normalized.startswith(prefix):
             return True
@@ -138,8 +202,14 @@ def _is_in_whitelist(file_path: str) -> bool:
 
 
 def _is_core_module(file_path: str) -> bool:
-    """检查文件是否为核心模块"""
-    normalized = file_path.replace("\\", "/").lstrip("./")
+    """检查文件是否为核心模块
+
+    越界路径无法确认真实落点，按最保守处理（视为核心模块），
+    避免用 `../` 之类绕过"核心模块必须人工审批"。
+    """
+    normalized = _safe_relative_path(file_path)
+    if normalized is None:
+        return True
     for core_path in CORE_MODULES:
         if normalized == core_path or normalized.startswith(core_path.rstrip("/") + "/"):
             return True
@@ -148,7 +218,7 @@ def _is_core_module(file_path: str) -> bool:
 
 def _assess_risk(file_path: str, diff_content: str) -> RiskLevel:
     """评估修改风险等级"""
-    normalized = file_path.replace("\\", "/").lstrip("./")
+    normalized = _safe_relative_path(file_path) or ""
 
     # 核心安全模块 → CRITICAL
     for sensitive_file in ["tool_isolation", "prompt_injection", "sandbox_runner"]:
@@ -174,7 +244,8 @@ def _assess_risk(file_path: str, diff_content: str) -> RiskLevel:
             risk = RiskLevel.LOW if risk == RiskLevel.SAFE else risk
     else:
         # 不在白名单 → 至少 MEDIUM
-        risk = RiskLevel.MEDIUM if risk.value < RiskLevel.MEDIUM.value else risk
+        if _RISK_ORDER[risk] < _RISK_ORDER[RiskLevel.MEDIUM]:
+            risk = RiskLevel.MEDIUM
 
     return risk
 
@@ -256,6 +327,12 @@ class ViabilityGate:
             path = fc.get("path", "")
             diff = fc.get("diff", "") or fc.get("new_content", "") or ""
 
+            # 越界路径（绝对/盘符/`../` 穿越）直接判失败：
+            # 只做白名单字符串前缀匹配时这类路径能被误判为"安全"，必须前置拦截
+            if _resolve_in_root(self.project_root, path) is None:
+                issues.append(f"路径越界，拒绝: {path}")
+                continue
+
             # 检查是否为核心安全模块
             if _is_core_module(path):
                 if "tool_isolation" in path or "prompt_injection" in path or "sandbox" in path:
@@ -271,8 +348,8 @@ class ViabilityGate:
             if found_patterns:
                 warnings.append(f"检测到敏感模式: {found_patterns}")
 
-        # 安全审查通过条件：无 CRITICAL 问题
-        passed = not any("核心安全模块" in i for i in issues)
+        # 安全审查通过条件：没有任何 issue（核心安全模块 / 越界路径）
+        passed = not issues
 
         result = {
             "passed": passed,
@@ -351,51 +428,62 @@ class ViabilityGate:
     ) -> tuple[bool, dict]:
         """Gate 3: 测试验证
 
-        尝试运行相关测试。如果没有测试命令或无法运行，
-        标记为 "skipped" 但不阻塞（因为本地环境可能不完整）。
+        没有测试命令时必须判为「未验证」而非通过：模型给的命令串本身不可信，
+        而"没命令就放行"等于把 Gate3 变成摆设，自动应用通道必须至少跑过一次真实验证。
+        有命令时也只按参数列表执行（不再经过 shell），杜绝命令注入。
         """
         issues: list[str] = []
+        verified = False
         test_passed = False
         test_output = ""
 
         if test_command:
             try:
                 import subprocess
-                result = subprocess.run(
-                    test_command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                    cwd=str(self.project_root),
-                )
-                test_passed = result.returncode == 0
-                test_output = result.stdout[-500:] if result.stdout else result.stderr[-500:]
-                if not test_passed:
-                    issues.append(f"测试失败: {test_output[:200]}")
+                # 不用 shell=True：模型给的字符串只能拆成参数列表执行
+                argv = test_command.split()
+                executable = Path(argv[0]).name.lower() if argv else ""
+                if executable not in _ALLOWED_TEST_EXECUTABLES:
+                    issues.append(f"测试命令不在允许的执行器白名单内: {argv[0] if argv else ''}")
+                else:
+                    result = subprocess.run(
+                        argv,
+                        shell=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        cwd=str(self.project_root),
+                    )
+                    verified = True
+                    test_passed = result.returncode == 0
+                    test_output = result.stdout[-500:] if result.stdout else result.stderr[-500:]
+                    if not test_passed:
+                        issues.append(f"测试失败: {test_output[:200]}")
             except subprocess.TimeoutExpired:
                 issues.append("测试超时（>120s）")
             except Exception as e:
                 issues.append(f"测试运行失败: {e}")
         else:
-            # 无测试命令，跳过但不阻塞
-            issues.append("未指定测试命令，跳过测试验证")
-            test_passed = True  # 视为通过（非阻塞）
+            # 无测试命令 → 明确的未验证状态，不满足自动应用条件
+            issues.append("未指定测试命令：未验证，不满足自动应用条件")
+
+        passed = verified and test_passed
 
         result = {
-            "passed": test_passed,
+            "passed": passed,
+            "verified": verified,
             "skipped": test_command is None,
             "issues": issues,
             "output_preview": test_output[:300] if test_output else "",
         }
 
         proposal.gate_results["gate3"] = result
-        if test_passed:
+        if passed:
             proposal.status = EvolutionStatus.GATE3_PASSED
         else:
             proposal.status = EvolutionStatus.GATE3_FAILED
 
-        return test_passed, result
+        return passed, result
 
     # ── Gate 4: 回滚准备 ───────────────────────────
 
@@ -409,23 +497,28 @@ class ViabilityGate:
         backup_path.mkdir(parents=True, exist_ok=True)
 
         files_backed_up = 0
+        root = self.project_root.resolve()
 
         for fc in proposal.file_changes:
             path = fc.get("path", "")
             action = fc.get("action", "modify")
-            full_path = self.project_root / path
+            # 越界路径不能备份也不能应用，直接判失败（否则备份/写入会落到项目外）
+            full_path = _resolve_in_root(self.project_root, path)
+            if full_path is None:
+                issues.append(f"路径越界，拒绝: {path}")
+                continue
+            rel_path = full_path.relative_to(root)
 
             try:
                 if action in ("modify", "delete") and full_path.exists():
                     # 备份原文件
-                    rel_dir = Path(path).parent
-                    backup_file = backup_path / path
+                    backup_file = backup_path / rel_path
                     backup_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(str(full_path), str(backup_file))
                     files_backed_up += 1
                 elif action == "create":
                     # 新建文件：记录标记，回滚时删除
-                    marker = backup_path / (path + ".newfile_marker")
+                    marker = backup_path / (str(rel_path) + ".newfile_marker")
                     marker.parent.mkdir(parents=True, exist_ok=True)
                     marker.write_text(f"created by proposal {proposal.proposal_id}")
                     files_backed_up += 1
@@ -528,16 +621,21 @@ class EvolutionArchive:
                         entry = json.loads(line)
                         pid = entry.get("proposal_id")
                         if pid:
-                            # 重建基本信息
+                            # 重建完整提案：file_changes/gate_results 必须一起恢复，
+                            # 否则重启后既复现不了原始文件集合（pending 审批失效），
+                            # 也回滚不了已应用的提案；时间戳缺失还会误判 24h 回退窗口。
                             p = EvolutionProposal(
                                 proposal_id=pid,
                                 title=entry.get("title", ""),
                                 description=entry.get("description", ""),
+                                file_changes=entry.get("file_changes") or [],
                                 status=EvolutionStatus(entry.get("status", "proposed")),
                                 created_at=entry.get("created_at", 0),
                                 applied_at=entry.get("applied_at"),
                                 rolled_back_at=entry.get("rolled_back_at"),
                                 risk_level=RiskLevel(entry.get("risk_level", "safe")),
+                                gate_results=entry.get("gate_results") or {},
+                                author=entry.get("author", "ai_self_evolve"),
                             )
                             self._proposals[pid] = p
                     except Exception:
@@ -546,13 +644,24 @@ class EvolutionArchive:
             logger.exception("Failed to load evolution journal")
 
     def _journal_append(self, event: str, proposal: EvolutionProposal, **extra) -> None:
-        """追加日志"""
+        """追加日志
+
+        写入的是完整提案快照（含 file_changes / gate_results / 各时间戳），
+        重启后 _load_journal 才能原样复现，而不是只剩一个空壳状态。
+        """
         entry = {
             "event": event,
             "proposal_id": proposal.proposal_id,
             "title": proposal.title,
+            "description": proposal.description,
             "status": proposal.status.value,
             "risk_level": proposal.risk_level.value,
+            "file_changes": proposal.file_changes,
+            "gate_results": proposal.gate_results,
+            "created_at": proposal.created_at,
+            "applied_at": proposal.applied_at,
+            "rolled_back_at": proposal.rolled_back_at,
+            "author": proposal.author,
             "timestamp": time.time(),
             **extra,
         }
@@ -584,7 +693,11 @@ class EvolutionArchive:
         return props[:limit]
 
     def apply_proposal(self, proposal: EvolutionProposal) -> tuple[bool, str]:
-        """应用提案（修改文件）"""
+        """应用提案（修改文件）
+
+        多文件必须原子化：先把全部新内容写到目标同目录的临时文件，全部就绪后才
+        os.replace 到位；任何一步失败都把已替换的文件还原，绝不留下半套修改。
+        """
         if proposal.status != EvolutionStatus.GATE4_PASSED:
             return False, f"提案状态错误: {proposal.status.value}（需先通过 4 道门）"
 
@@ -592,29 +705,62 @@ class EvolutionArchive:
         if proposal.proposal_id not in self._proposals:
             self.store_proposal(proposal)
 
+        # ── 阶段一：解析路径并写临时文件（此时还没动任何真实文件）──
+        plan: list[tuple[str, Path, Optional[Path]]] = []
         try:
             for fc in proposal.file_changes:
                 path = fc.get("path", "")
                 action = fc.get("action", "modify")
-                full_path = self.project_root / path
+                target = _resolve_in_root(self.project_root, path)
+                if target is None:
+                    raise ValueError(f"路径越界，拒绝应用: {path}")
 
-                if action == "modify" or action == "create":
-                    new_content = fc.get("new_content", "")
-                    full_path.parent.mkdir(parents=True, exist_ok=True)
-                    full_path.write_text(new_content, encoding="utf-8")
+                if action == "delete":
+                    plan.append((action, target, None))
+                    continue
 
-                elif action == "delete":
-                    if full_path.exists():
-                        full_path.unlink()
-
-            proposal.status = EvolutionStatus.APPLIED
-            proposal.applied_at = time.time()
-            self._journal_append("proposal_applied", proposal)
-            return True, "应用成功"
-
+                target.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = target.with_name(f"{target.name}.l4tmp_{proposal.proposal_id}")
+                tmp_path.write_text(fc.get("new_content", ""), encoding="utf-8")
+                plan.append((action, target, tmp_path))
         except Exception as e:
+            for _, _, tmp_path in plan:
+                if tmp_path is not None:
+                    _silent_unlink(tmp_path)
             self._journal_append("apply_failed", proposal, error=str(e))
             return False, f"应用失败: {e}"
+
+        # ── 阶段二：替换；先记下原内容，失败时按逆序还原 ──
+        undo: list[tuple[Path, Optional[bytes]]] = []
+        try:
+            for action, target, tmp_path in plan:
+                undo.append((target, target.read_bytes() if target.exists() else None))
+                if action == "delete":
+                    if target.exists():
+                        target.unlink()
+                elif tmp_path is not None:
+                    os.replace(str(tmp_path), str(target))
+        except Exception as e:
+            for target, original in reversed(undo):
+                try:
+                    if original is None:
+                        # 原本不存在 → 删掉半成品
+                        _silent_unlink(target)
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(original)
+                except Exception:
+                    logger.exception("L4 应用失败后还原文件出错: %s", target)
+            for _, _, tmp_path in plan:
+                if tmp_path is not None:
+                    _silent_unlink(tmp_path)
+            self._journal_append("apply_failed", proposal, error=str(e))
+            return False, f"应用失败（已回滚）: {e}"
+
+        proposal.status = EvolutionStatus.APPLIED
+        proposal.applied_at = time.time()
+        self._journal_append("proposal_applied", proposal)
+        return True, "应用成功"
 
     def rollback_proposal(self, proposal_id: str) -> tuple[bool, str]:
         """回滚提案"""
@@ -634,12 +780,16 @@ class EvolutionArchive:
                 return False, f"备份不存在: {backup_path}"
 
             # 恢复文件
+            root = self.project_root.resolve()
             for fc in proposal.file_changes:
                 path = fc.get("path", "")
                 action = fc.get("action", "modify")
-                full_path = self.project_root / path
-                backup_file = backup_path / path
-                newfile_marker = backup_path / (path + ".newfile_marker")
+                full_path = _resolve_in_root(self.project_root, path)
+                if full_path is None:
+                    return False, f"路径越界，拒绝回滚: {path}"
+                rel_path = full_path.relative_to(root)
+                backup_file = backup_path / rel_path
+                newfile_marker = backup_path / (str(rel_path) + ".newfile_marker")
 
                 if action in ("modify", "delete") and backup_file.exists():
                     full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -732,7 +882,7 @@ class L4SelfEvolution:
                 fc.get("path", ""),
                 fc.get("diff", "") or fc.get("new_content", "") or "",
             )
-            if file_risk.value > risk.value:
+            if _RISK_ORDER[file_risk] > _RISK_ORDER[risk]:
                 risk = file_risk
 
         proposal = EvolutionProposal(

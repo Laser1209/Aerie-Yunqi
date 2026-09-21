@@ -22,7 +22,12 @@ ENV/
 # Data & logs (runtime artifacts) — 整个 data/ 均为运行态数据与用户隐私数据
 # （QQ 语音/图片、用户文档、头像、三视图、向量库、诊断包、决策日志、状态文件），
 # 一律不入库；种子/模板源在 core/persona_hub/preset_templates/ 等代码目录维护。
-data/
+#
+# 必须锚定为 /data/：不锚定的 `data/` 会匹配任意层级的同名目录，
+# 曾因此把 skills/data/（figma、notion-cli 等 skill 的源码）一起吞掉。
+# 仓内其它 data 目录（electron/dist-*/、android-client/、tmp/ 等）
+# 均由各自父目录的规则覆盖，不依赖这一条。
+/data/
 /logs/
 *.log
 

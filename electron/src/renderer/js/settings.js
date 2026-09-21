@@ -1129,17 +1129,21 @@ class SettingsPanel {
         l4El.checked = ((s.feature_flags || {}).self_evolve_l4_enabled) === true;
       }
 
-      // DSH work-mode delegation toggle — read back from dsh.enabled.
-      const dshEl = document.getElementById("setting-dsh-enabled");
-      if (dshEl) {
-        dshEl.checked = ((s.dsh || {}).enabled) === true;
+      // Task progress granularity — read back from agent.progress.style.
+      const progressEl = document.getElementById("setting-task-progress-style");
+      if (progressEl) {
+        const style = (((s.agent || {}).progress) || {}).style || "stage";
+        progressEl.value = ["stage", "start_end", "verbose", "off"].includes(style)
+          ? style
+          : "stage";
       }
 
-      // DSH session window — read back from dsh.session_window_sec.
-      const dshWinEl = document.getElementById("setting-dsh-session-window");
-      if (dshWinEl) {
-        const win = (s.dsh || {}).session_window_sec;
-        if (win != null) dshWinEl.value = String(win);
+      // Max messages per turn — read back from agent.max_segments_per_turn.
+      const segEl = document.getElementById("setting-max-segments");
+      if (segEl) {
+        const raw = ((s.agent || {}).max_segments_per_turn);
+        const maxSeg = (raw == null) ? 3 : Number(raw);
+        segEl.value = String([1, 2, 3, 4, 0].includes(maxSeg) ? maxSeg : 3);
       }
 
       // R7.1: my-location picker.
@@ -1246,10 +1250,12 @@ class SettingsPanel {
       feature_flags: {
         self_evolve_l4_enabled: document.getElementById("setting-self-evolve-l4")?.checked === true,
       },
-      // DSH work-mode delegation toggle — persists into dsh.enabled + session window.
-      dsh: {
-        enabled: document.getElementById("setting-dsh-enabled")?.checked === true,
-        session_window_sec: parseInt(document.getElementById("setting-dsh-session-window")?.value || "30", 10),
+      // Task execution settings — persist into agent.*.
+      agent: {
+        progress: {
+          style: document.getElementById("setting-task-progress-style")?.value || "stage",
+        },
+        max_segments_per_turn: Number(document.getElementById("setting-max-segments")?.value ?? 3),
       },
     };
     try {

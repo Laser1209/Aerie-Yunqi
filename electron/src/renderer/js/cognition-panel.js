@@ -1222,6 +1222,7 @@ class CognitionPanel {
           key_press: { label: "按键", cls: "keyboard" },
           key_type: { label: "输入", cls: "keyboard" },
           shell_cmd: { label: "命令", cls: "shell" },
+          file_write: { label: "写文件", cls: "shell" },
           window_info: { label: "窗口", cls: "screenshot" },
           uia_action: { label: "UIA", cls: "shell" },
         };

@@ -4,7 +4,7 @@
  * 三个视图:
  *   files  — 文件树(懒加载,目录点击展开)
  *   images — 图片缩略图网格(当前目录下图片)
- *   log    — DSH 操作日志时间线(轮询刷新)
+ *   log    — 任务操作日志时间线(轮询刷新)
  * 所有路径操作走后端 /api/workspace/*(渲染层无 nodeIntegration)。
  */
 (function () {

@@ -447,6 +447,7 @@ class ChatManager {
       key_press: "键盘按键",
       key_type: "输入文本",
       shell_cmd: "执行命令",
+      file_write: "写入文件",
       window_info: "获取窗口列表",
       window_focus: "切换窗口",
       uia_action: "UI 自动化",

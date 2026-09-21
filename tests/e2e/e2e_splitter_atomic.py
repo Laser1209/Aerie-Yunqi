@@ -31,8 +31,8 @@ if hasattr(sys.stderr, "reconfigure"):
 import os
 import sys
 
-# Ensure repo root on path
-_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Ensure repo root on path (this file lives in tests/e2e/)
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -263,9 +263,44 @@ def case_10_empty_text() -> bool:
     return ok_flag
 
 
+# ── Case 11: max_segments 上限（就近并成 N 条，不丢内容也不攒长段） ──
+def case_11_max_segments_cap() -> bool:
+    s = SemanticMessageSplitter(max_segments=3)
+    text = "第一句话在这里。第二句话在这里。第三句话在这里。第四句话在这里。第五句话在这里。"
+    segs = s.split(text)
+    joined = "".join(segs).replace(" ", "")
+    lengths = [len(seg) for seg in segs]
+    ok_flag = (
+        len(segs) == 3
+        and joined == text.replace(" ", "")
+        # 均分：最长一条不应超过总长的 60%（避免「溢出全塞最后一条」的文字墙）
+        and max(lengths) <= sum(lengths) * 0.6
+    )
+    _check(
+        "Case 11 · max_segments 上限：就近分桶、不丢内容、不攒长段",
+        ok_flag,
+        f"segs_len={len(segs)} lengths={lengths}",
+    )
+    return ok_flag
+
+
+# ── Case 12: max_segments=0 不限制（保持既有行为） ─────────────
+def case_12_max_segments_unlimited() -> bool:
+    text = "第一句话在这里。第二句话在这里。第三句话在这里。第四句话在这里。第五句话在这里。"
+    limited = len(SemanticMessageSplitter(max_segments=3).split(text))
+    unlimited = SemanticMessageSplitter().split(text)
+    ok_flag = len(unlimited) > limited and all(seg for seg in unlimited)
+    _check(
+        "Case 12 · max_segments=0 不限制",
+        ok_flag,
+        f"unlimited={len(unlimited)} limited={limited}",
+    )
+    return ok_flag
+
+
 def main() -> int:
     print("=" * 60)
-    print("E2E T3 · E 节 atomic-aware splitter 验证 (10 用例)")
+    print("E2E T3 · E 节 atomic-aware splitter 验证 (12 用例)")
     print("=" * 60)
     results: list[bool] = [
         case_1_action_tag_intact(),
@@ -278,6 +313,8 @@ def main() -> int:
         case_8_short_fragment_merged(),
         case_9_no_atoms_original_split(),
         case_10_empty_text(),
+        case_11_max_segments_cap(),
+        case_12_max_segments_unlimited(),
     ]
     passed = sum(1 for r in results if r)
     failed = sum(1 for r in results if not r)

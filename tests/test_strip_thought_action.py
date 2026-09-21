@@ -3,6 +3,7 @@ import sys
 sys.path.insert(0, "e:\\Agent_reply")
 
 from communication.qq_client import strip_thought_action_tags
+from core.model_output import strip_narration
 
 
 def test_basic():
@@ -88,6 +89,35 @@ def test_multiple_tags():
     print("✅ 多个同类标签测试通过")
 
 
+def test_narration_fullwidth_parens():
+    """全角括号描写应被剥除（回归：括号描写曾 100% 直达用户）"""
+    text = "（看到消息愣了一下，忍不住咬了咬下唇）……傻瓜。"
+    assert strip_narration(text) == "……傻瓜。"
+    print("✅ 全角括号描写剥除测试通过")
+
+
+def test_narration_inline():
+    """句中的括号描写同样剥除，保留对话"""
+    text = "而且——（手指在屏幕上敲了一下）你给我起的名字？"
+    result = strip_narration(text)
+    assert "手指在屏幕上敲了一下" not in result
+    assert "你给我起的名字？" in result
+    print("✅ 句内括号描写剥除测试通过")
+
+
+def test_narration_keeps_halfwidth():
+    """半角括号不剥，避免误伤英文括注与代码片段"""
+    text = "see foo() (note: not narration)"
+    assert strip_narration(text) == text
+    print("✅ 半角括号不误伤测试通过")
+
+
+def test_narration_pure_returns_empty():
+    """整条都是描写时返回空串，由调用方决定兜底"""
+    assert strip_narration("（只是心理活动）") == ""
+    print("✅ 纯描写返回空串测试通过")
+
+
 if __name__ == "__main__":
     test_basic()
     test_multiline()
@@ -96,5 +126,9 @@ if __name__ == "__main__":
     test_case_insensitive()
     test_empty_input()
     test_multiple_tags()
+    test_narration_fullwidth_parens()
+    test_narration_inline()
+    test_narration_keeps_halfwidth()
+    test_narration_pure_returns_empty()
     print()
     print("🎉 所有测试通过！")

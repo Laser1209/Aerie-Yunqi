@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from core.key_rotator import KeyRotator
+from core.model_output import normalize_model_text
 from core.provider_health import ProviderHealthManager
 from core.token_tracker import get_token_tracker
 from core.model_gate import model_calls_disabled
@@ -457,6 +458,7 @@ class LLMCaller:
         max_react_rounds: int = 6,
         preferred_provider: str | None = None,
         temperature: float | None = None,
+        on_tool_event: Any = None,
     ) -> LLMCallerResponse:
         """Send chat completion request, try all providers in sequence.
 
@@ -468,6 +470,7 @@ class LLMCaller:
         Args:
             preferred_provider: 优先使用的 provider 名称，会被移到列表最前面
             temperature: 可选覆盖全局温度；None 时沿用 self._temperature
+            on_tool_event: 可选异步回调，每次工具执行后被调用（用于任务进度上报）
 
         On failure of all providers, returns a fallback response.
         """
@@ -637,6 +640,19 @@ class LLMCaller:
                             tc_name, "ok" if success else "fail", tool_dur,
                             "" if success else f" error={result.get('error', 'unknown')[:80]}",
                         )
+
+                        # 任务进度上报（best-effort，失败不影响主流程）
+                        if on_tool_event is not None:
+                            try:
+                                await on_tool_event(
+                                    tc_name,
+                                    success=success,
+                                    error="" if success else str(result.get("error", "")),
+                                    arguments=tc_args,
+                                    duration_ms=tool_dur,
+                                )
+                            except Exception:
+                                logger.debug("tool progress callback failed", exc_info=True)
 
                 # Hit max rounds or provider returned fallback — try next provider
                 if provider_tool_results:
@@ -1099,7 +1115,9 @@ class LLMCaller:
         try:
             resp = await self.chat(messages, temperature=temperature)
             if resp.text and not resp.text.startswith("(伊塔"):
-                return self._pick_best_candidate(resp.text)
+                # 主动消息也是模型自由文本：与正常回合共用同一套输出净化，
+                # 否则括号里的动作/心理描写会从这条链路漏给用户。
+                return normalize_model_text(self._pick_best_candidate(resp.text))
         except Exception:
             pass
 
@@ -2085,7 +2103,10 @@ def _brain_generate_image_edit(
         or "https://api.openai.com/v1"
     )
     model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL", "IMAGE_GEN_MODEL") or "gpt-image-1"
-    size = size or _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+    # 画幅优先级与文生图一致：显式入参 → 调用方 metadata → env → 1:1 兜底。
+    size = str(size or (metadata or {}).get("size") or "").strip()
+    if not size:
+        size = _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
     idempotency_key = str((metadata or {}).get("idempotency_key") or "").strip()
     if not (8 <= len(idempotency_key) <= 128):
         idempotency_key = f"aerie-{uuid.uuid4().hex}"

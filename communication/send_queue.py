@@ -43,6 +43,10 @@ SenderFn = Callable[[OutgoingReply], Awaitable[bool]]
 PacingFn = Callable[..., tuple[float, str]]
 
 _DEFAULT_MAX_QUEUE = 20
+# 硬上限：只有 worker 卡死这类极端积压才丢弃，避免内存无界。
+# 软上限（_DEFAULT_MAX_QUEUE）只告警、不丢件——静默丢消息会让用户
+# 「发了但收不到」，且事后无从排查（含任务进度与审批通知）。
+_DEFAULT_HARD_QUEUE = 200
 _BALANCED_INTERVAL_MID = 0.675
 
 
@@ -73,16 +77,42 @@ class SendQueue:
         self._queue: deque[OutgoingReply] = deque()
         self._task: asyncio.Task | None = None
         self._running = False
+        self._dropped = 0  # 硬上限触发的累计丢件数（诊断用）
+
+    @property
+    def splitter(self) -> SemanticMessageSplitter:
+        """本队列使用的切分器（对外只读）。
+
+        Pipeline 与本队列共用同一个实例，保证「落库/桌面分段」与
+        「实际发出的分段」切点一致；上限也只有一个所有者。
+        """
+        return self._splitter
 
     def _sender_for(self, reply: OutgoingReply) -> SenderFn:
         return self._channel_senders[reply.channel]
 
+    def _admit(self, reply: OutgoingReply) -> bool:
+        """入队准入：软上限只告警，硬上限才丢弃。返回是否入队。"""
+        depth = len(self._queue)
+        if depth >= _DEFAULT_HARD_QUEUE:
+            self._dropped += 1
+            logger.error(
+                "Send queue 深度 %d 已达硬上限，丢弃一条（累计丢弃 %d）→ user=%s；"
+                "worker 可能卡住，请查日志确认发送链路",
+                depth, self._dropped, reply.user_id,
+            )
+            return False
+        if depth >= _DEFAULT_MAX_QUEUE:
+            logger.warning(
+                "Send queue 积压 %d 条（软上限 %d），本条仍入队（不丢件）",
+                depth, _DEFAULT_MAX_QUEUE,
+            )
+        return True
+
     def enqueue(self, reply: OutgoingReply) -> None:
         """Add a single reply to the send queue (QQ messages only)."""
-        if len(self._queue) >= _DEFAULT_MAX_QUEUE:
-            logger.warning("Send queue full, dropping reply to %s", reply.user_id)
-            return
-        self._queue.append(reply)
+        if self._admit(reply):
+            self._queue.append(reply)
 
     def enqueue_batch(self, replies: list[OutgoingReply]) -> None:
         """Add a batch of replies to the send queue, preserving order.
@@ -94,11 +124,8 @@ class SendQueue:
         if not replies:
             return
         for reply in replies:
-            if len(self._queue) >= _DEFAULT_MAX_QUEUE:
-                logger.warning(
-                    "Send queue full during batch enqueue, dropping reply seq=%s to %s",
-                    getattr(reply, "sequence_index", "?"), reply.user_id,
-                )
+            if not self._admit(reply):
+                # 已到硬上限：后续条目同样进不来，直接收尾
                 break
             self._queue.append(reply)
 

@@ -1,4 +1,4 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Semantic message splitter (atomic-aware, R8.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Semantic message splitter (atomic-aware, R8.1).
 
 Splits long messages at natural boundaries (sentence ends, line breaks)
 so multi-part sends feel human-like. R8.1+ adds atomic-aware splitting:
@@ -53,8 +53,11 @@ _MIN_FRAGMENT_LEN = 8
 
 
 class SemanticMessageSplitter:
-    def __init__(self, max_len: int = _DEFAULT_MAX_LEN) -> None:
+    def __init__(self, max_len: int = _DEFAULT_MAX_LEN, max_segments: int = 0) -> None:
         self.max_len = max_len
+        # >0 时限制单次外发条数：相邻段落就近并成 N 条，不丢内容、也不攒成一大段。
+        # 0 = 不限制（保持既有行为）。
+        self.max_segments = max(0, int(max_segments))
 
     def split(self, text: str) -> list[str]:
         """Split text at sentence boundaries, never inside atomic spans.
@@ -66,6 +69,9 @@ class SemanticMessageSplitter:
         3. Merge tiny fragments (< 8 chars) with their neighbors
            while honoring max_len.
         """
+        return self._cap_segments(self._split_uncapped(text))
+
+    def _split_uncapped(self, text: str) -> list[str]:
         if not text:
             return [text] if text else []
 
@@ -91,6 +97,29 @@ class SemanticMessageSplitter:
 
         # Step 3: merge tiny fragments
         return self._merge_tiny(segments)
+
+    def _cap_segments(self, segments: list[str]) -> list[str]:
+        """把段落数压到 ``max_segments`` 以内，且不让任何一条变成一大段。
+
+        做法：按字符数把相邻段落就近收进 N 个桶（目标 = 总长度 / N），
+        而不是把溢出全部塞进最后一条——后者会产出一面文字墙，等于把
+        「分段发送」又退回成「一条长文」，正好是本次要修掉的反模式。
+        """
+        if self.max_segments <= 0 or len(segments) <= self.max_segments:
+            return segments
+
+        total = sum(len(seg) for seg in segments)
+        target = max(1, -(-total // self.max_segments))  # ceil，尽量均分
+        buckets: list[str] = []
+        current = ""
+        for seg in segments:
+            if current and len(current) >= target and len(buckets) < self.max_segments - 1:
+                buckets.append(current)
+                current = ""
+            current += seg
+        if current:
+            buckets.append(current)
+        return buckets
 
     def _split_no_atoms(self, text: str) -> list[str]:
         """Original split logic when there are no atomic spans."""

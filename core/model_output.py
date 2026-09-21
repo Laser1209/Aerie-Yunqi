@@ -23,7 +23,12 @@ import re
 # 避免误伤英文括注与代码片段。
 _NARRATION_PAREN_RE = re.compile(r"（[^（）\n]{0,120}?）")
 
-_THINK_RE = re.compile(r" thinking.*? response", re.DOTALL)
+# 推理块标签用拼接构造：整段标签字面量曾在写入通道里被改写成特殊 token，
+# 正则因此静默失效（think 块连块内的 --- 一起漏给用户）。拼接后编译结果
+# 与字面量完全一致。
+_THINK_OPEN = "<" + "think" + ">"
+_THINK_CLOSE = "</" + "think" + ">"
+_THINK_RE = re.compile(_THINK_OPEN + ".*?" + _THINK_CLOSE, re.DOTALL)
 
 _HIST_LABEL_RE = re.compile(r"\[\d{2,4}-\d{2}(?:-\d{2})? ?\d{2}:\d{2}(?::\d{2})?\]\s*")
 

@@ -19,12 +19,22 @@ broadcast time and corrupting the chat UI. Industry practice (gramio,
 langflow, langchain RecursiveCharacterTextSplitter) treats atomic
 entities as indivisible; we follow the same convention.
 
+Intent-first splitting (模型自报条数)
+---------------------------------
+切点由谁决定，决定了「像不像人」。旧逻辑里模型只写一整段，切点全靠
+标点猜；现在系统提示词（``core.context_builder.OUTPUT_IRON_RULE``）
+要求模型用「单独一行 ``---``」自己划出消息边界，``split()`` 优先按它
+分条，模型没照做时再回退到标点切分：条数和每条说什么由模型决定，
+程序只负责兜底。
+
 Algorithm
 ---------
-1. Use ``_ATOM_RE.finditer`` to locate all atomic spans.
-2. Walk the text, emitting text fragments (which may be split at 。！？)
+1. 先找模型自报的边界（``_INTENT_SEP_RE``，围栏代码块内的不算）；
+   命中 ≥2 条就按它分，超长单条再按下面的原子感知逻辑切。
+2. 没命中时回退标点切分：用 ``_ATOM_RE.finditer`` 定位所有原子 span。
+3. Walk the text, emitting text fragments (which may be split at 。！？)
    and atomic spans (kept whole).
-3. Merge tiny fragments (< 8 chars) with their neighbors, capped at
+4. Merge tiny fragments (< 8 chars) with their neighbors, capped at
    ``max_len``.
 """
 
@@ -51,6 +61,14 @@ _SPLIT_PATTERNS = [
 _DEFAULT_MAX_LEN = 200
 _MIN_FRAGMENT_LEN = 8
 
+# 模型自报的消息边界：单独一行写 3 个以上连字符（Markdown 分隔线）。
+# 选它的理由：模型对 Markdown 分隔线极熟（遵循率高）、单行零成本、中文正文
+# 里不会自然出现（比空行/编号更不容易误判），且万一解析漏了也只是多一行横线，
+# 不会像自定义标签那样把怪标记漏给用户。
+_INTENT_SEP_RE = re.compile(r"^[^\S\n]*-{3,}[^\S\n]*$", re.MULTILINE)
+# 围栏代码块：块内的 ---（YAML front matter / 正文分隔线）是代码内容，不是消息边界。
+_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+
 
 class SemanticMessageSplitter:
     def __init__(self, max_len: int = _DEFAULT_MAX_LEN, max_segments: int = 0) -> None:
@@ -60,16 +78,58 @@ class SemanticMessageSplitter:
         self.max_segments = max(0, int(max_segments))
 
     def split(self, text: str) -> list[str]:
-        """Split text at sentence boundaries, never inside atomic spans.
+        """Split text into outbound messages, never inside atomic spans.
 
-        R8.1+ atomic-aware algorithm:
-        1. Locate atomic spans (<action>, <thought>, 【...】).
-        2. Build segments by walking the text and only splitting
-           non-atomic fragments at sentence terminators.
-        3. Merge tiny fragments (< 8 chars) with their neighbors
-           while honoring max_len.
+        模型自报条数优先（见模块 docstring）：命中单独一行的 ``---`` 就按它
+        分条，条数超过 ``max_segments`` 时由 ``_cap_segments`` 就近平摊收敛。
+        没有分隔符时回退到既有的原子感知标点切分——缺分隔符绝不丢内容。
         """
+        intended = self._split_by_intent(text)
+        if intended is not None:
+            if len(intended) >= 2:
+                return self._cap_segments(self._expand_overlong(intended))
+            # 只切出一条（或分隔符之外没有内容）：分隔符本身不是内容，剔除后走默认逻辑
+            if not intended:
+                return []
+            text = intended[0]
         return self._cap_segments(self._split_uncapped(text))
+
+    def _split_by_intent(self, text: str) -> list[str] | None:
+        """按模型自报的边界（单独一行 ``---``）分条。
+
+        返回 None = 模型没按约定输出（或分隔符只出现在围栏代码块里）——调用方
+        必须回退到标点切分。空片段（如描写被净化后剩下的空行）会被丢弃，
+        不留空气泡。
+        """
+        if not text:
+            return None
+        fences = [m.span() for m in _FENCE_RE.finditer(text)]
+        separators = [
+            m for m in _INTENT_SEP_RE.finditer(text)
+            if not any(start <= m.start() < end for start, end in fences)
+        ]
+        if not separators:
+            return None
+        parts: list[str] = []
+        cursor = 0
+        for sep in separators:
+            parts.append(text[cursor:sep.start()])
+            cursor = sep.end()
+        parts.append(text[cursor:])
+        return [part.strip() for part in parts if part.strip()]
+
+    def _expand_overlong(self, parts: list[str]) -> list[str]:
+        """模型自报的单条超过 ``max_len`` 时按原子感知逻辑再切。
+
+        气泡边界归模型，但单条仍不得变回「文字墙」；切分不丢内容。
+        """
+        expanded: list[str] = []
+        for part in parts:
+            if len(part) > self.max_len:
+                expanded.extend(self._split_uncapped(part) or [part])
+            else:
+                expanded.append(part)
+        return expanded
 
     def _split_uncapped(self, text: str) -> list[str]:
         if not text:

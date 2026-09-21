@@ -80,7 +80,12 @@ class SelfEvolveProposer:
     @staticmethod
     def _client_for(key: str, base_url: str):
         from openai import AsyncOpenAI
-        return AsyncOpenAI(api_key=key, base_url=base_url)
+        from core.relay_headers import is_relay_base_url, relay_headers
+        return AsyncOpenAI(
+            api_key=key,
+            base_url=base_url,
+            default_headers=relay_headers() if is_relay_base_url(base_url) else None,
+        )
 
     @staticmethod
     def _system_prompt() -> str:

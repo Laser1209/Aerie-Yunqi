@@ -22,6 +22,7 @@ from core.provider_health import ProviderHealthManager
 from core.token_tracker import get_token_tracker
 from core.model_gate import model_calls_disabled
 from core.entitlements import EntitlementStore
+from core.relay_headers import is_relay_base_url, relay_headers
 
 logger = logging.getLogger(__name__)
 
@@ -846,6 +847,10 @@ class LLMCaller:
             "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
         }
+        # 本链路直接用 httpx（不走 openai SDK），没有 default_headers 参数；
+        # 走中转网关时把客户端版本头并入请求头（Worker 据此判断是否放行）。
+        if is_relay_base_url(provider.get("url")):
+            headers.update(relay_headers())
 
         t0 = time.monotonic()
         async with httpx.AsyncClient(timeout=30.0) as client:

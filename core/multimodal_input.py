@@ -223,9 +223,13 @@ class ImageAnalyzer:
         if self.api_key:
             try:
                 from openai import AsyncOpenAI
+                from core.relay_headers import is_relay_base_url, relay_headers
                 kwargs = {"api_key": self.api_key}
                 if self.api_base:
                     kwargs["base_url"] = self.api_base
+                # 走中转网关时上报客户端版本（Worker 据此放行/淘汰旧版本）。
+                if is_relay_base_url(self.api_base):
+                    kwargs["default_headers"] = relay_headers()
                 self._client = AsyncOpenAI(**kwargs)
             except ImportError:
                 logger.warning("openai package not available — image analysis disabled")
@@ -479,9 +483,13 @@ class AudioTranscriber:
             for key in keys:
                 try:
                     from openai import AsyncOpenAI
+                    from core.relay_headers import is_relay_base_url, relay_headers
                     client = AsyncOpenAI(
                         api_key=key,
                         base_url=provider["base_url"],
+                        default_headers=(
+                            relay_headers() if is_relay_base_url(provider["base_url"]) else None
+                        ),
                     )
                     # DashScope/WS 兼容 ASR：走 compatible-mode chat/completions + input_audio(base64)，
                     # 它不提供 /audio/transcriptions 接口（会 404）。

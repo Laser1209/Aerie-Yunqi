@@ -191,7 +191,12 @@ class _SFClient:
         if self.api_key:
             try:
                 from openai import AsyncOpenAI
-                self._client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+                from core.relay_headers import is_relay_base_url, relay_headers
+                self._client = AsyncOpenAI(
+                    api_key=self.api_key,
+                    base_url=self.base_url,
+                    default_headers=relay_headers() if is_relay_base_url(self.base_url) else None,
+                )
             except Exception as e:  # pragma: no cover
                 logger.warning("SiliconFlow client init failed: %s", e)
 
@@ -220,7 +225,12 @@ class _SFClient:
                 continue
             try:
                 from openai import AsyncOpenAI
-                client = AsyncOpenAI(api_key=key, base_url=self._asr_base_url)
+                from core.relay_headers import is_relay_base_url, relay_headers
+                client = AsyncOpenAI(
+                    api_key=key,
+                    base_url=self._asr_base_url,
+                    default_headers=relay_headers() if is_relay_base_url(self._asr_base_url) else None,
+                )
                 resp = await client.chat.completions.create(
                     model=self.asr_model,
                     messages=[

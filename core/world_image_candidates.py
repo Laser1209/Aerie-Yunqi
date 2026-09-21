@@ -100,10 +100,12 @@ def _vision_scene_same(image_path: str | Path, prompt: str) -> bool:
     try:
         import httpx
 
+        from core.relay_headers import is_relay_base_url, relay_headers
         client = OpenAI(
             api_key=api_key,
             base_url=base_url,
             http_client=httpx.Client(trust_env=False, timeout=60),
+            default_headers=relay_headers() if is_relay_base_url(base_url) else None,
         )
         resp = client.chat.completions.create(
             model=model,

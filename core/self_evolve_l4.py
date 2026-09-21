@@ -35,6 +35,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -62,6 +63,9 @@ class EvolutionStatus(str, Enum):
     GATE3_FAILED = "gate3_failed"
     GATE4_PASSED = "gate4_passed"
     GATE4_FAILED = "gate4_failed"
+    # 已写入"应用意图"、正在落盘。硬崩溃（捕获不到的强杀）会把这个状态留在
+    # journal 里，重启后据此发现半套修改并允许回滚。
+    APPLYING = "applying"
     APPROVED = "approved"
     APPLIED = "applied"
     REJECTED = "rejected"
@@ -95,11 +99,18 @@ _RISK_ORDER: dict[RiskLevel, int] = {
 # ═══════════════════════════════════════════════════
 
 # 自动进化白名单（可自动应用修改）
+#
+# 这里**只放代码目录**。`data/` 必须排除：它是运行态数据根（qq_engine/、napcat/、
+# personas/avatars、dsh_sessions/、*.db、决策日志……），且 L4 自身的审计日志
+# （data/evolution_archive/evolution_journal.jsonl）与回滚备份
+# （data/evolution_backups/）也住在里面。一旦 `data/` 在白名单内，一条提案就能
+# 自动覆盖/删除自己的 journal（"谁改了什么"的唯一记录）与备份，删除备份后连
+# 回滚都直接失败，用户隐私数据同样可被自动改写。移除后这些路径落到"白名单外"
+# → 至少 MEDIUM 风险 → 只能走人工审批。
 AUTO_EVOLVE_WHITELIST: list[str] = [
     "skills/",              # 技能模块
     "memory/layers/",       # 记忆层（非核心调度）
     "voice/",               # 语音模块
-    "data/",                # 数据目录
     "scripts/",             # 脚本
     "tests/",               # 测试
     "plugins/",             # 插件
@@ -117,11 +128,12 @@ CORE_MODULES: list[str] = [
     "core/decision.py",
     "core/pipeline.py",
     "core/sandbox_runner.py",
+    # 自进化链路自身：门禁、提案生成、调度——改掉任何一环都能绕过越界/风险判断，
+    # 必须人工审批（风险徽标必须是 HIGH，不能只显示 MEDIUM 误导审批人）。
+    "core/self_evolve_l4.py",
+    "core/self_evolve_proposer.py",
     "core/self_evolver.py",
-    "core/evolution_manager.py",      # 自身也要保护
-    "core/self_evolve_archive.py",    # 自身也要保护
-    "core/viability_gate.py",         # 自身也要保护
-    "core/security/",
+    "core/evolution_manager.py",
 ]
 
 # 敏感模式（修改内容中出现即提升风险等级）
@@ -143,14 +155,38 @@ SENSITIVE_PATTERNS: list[str] = [
     "private_key",
 ]
 
-# Gate3 允许的执行器：模型给的测试命令只能落在这些解释器/测试运行器上，
-# 即使命令串被拆成参数列表，也不允许拉起任意外部程序。
-_ALLOWED_TEST_EXECUTABLES: set[str] = {
-    "pytest", "pytest.exe",
-    "python", "python.exe",
-    "python3", "python3.exe",
-    "py", "py.exe",
-}
+# Gate3 允许的测试调用：先认可执行文件名，再校验参数前缀。
+# 只放行「测试运行器本身」与「解释器 -m pytest/unittest」，因此：
+#   - `python -c "..."` 被拒（-c 不在允许的参数前缀里）
+#   - `python 任意脚本.py` 被拒（会执行提案自己刚写的文件）
+#   - 带目录的可执行文件被拒（`C:\Python314\python.exe -m pytest x` 实为任意程序）
+_ALLOWED_TEST_RUNNER_NAMES: set[str] = {"pytest"}
+_ALLOWED_PYTHON_NAMES: set[str] = {"python", "python3", "py"}
+_ALLOWED_TEST_MODULES: set[str] = {"pytest", "unittest"}
+
+
+def _normalize_executable(token: str) -> str:
+    """取裸可执行文件名（去目录、去 .exe、转小写）；带路径分隔符的返回空串。"""
+    if "/" in token or "\\" in token:
+        return ""
+    name = Path(token).name.lower()
+    return name[:-4] if name.endswith(".exe") else name
+
+
+def _is_allowed_test_invocation(argv: list[str]) -> bool:
+    """Gate3 命令白名单：`pytest ...` 或 `<python> -m pytest|unittest ...`。
+
+    只看 basename 是不够的：basename 同样是 `python` 时，`python -c <任意代码>`
+    能在 Gate3 里执行任意代码。必须再校验参数前缀。
+    """
+    if not argv:
+        return False
+    executable = _normalize_executable(argv[0])
+    if executable in _ALLOWED_TEST_RUNNER_NAMES:
+        return True
+    if executable in _ALLOWED_PYTHON_NAMES:
+        return len(argv) >= 3 and argv[1] == "-m" and argv[2] in _ALLOWED_TEST_MODULES
+    return False
 
 
 def _resolve_in_root(root: Path, file_path: str) -> Optional[Path]:
@@ -165,6 +201,11 @@ def _resolve_in_root(root: Path, file_path: str) -> Optional[Path]:
     raw = file_path.strip().replace("\\", "/")
     # 绝对路径、盘符路径（C:/...）、UNC 路径（//server/...）没有"项目内相对路径"语义
     if raw.startswith("/") or (len(raw) > 1 and raw[1] == ":"):
+        return None
+    # NTFS 备用数据流（`skills/x.py:ads`）会被 Path 当成普通相对路径：写入落到 ADS 上，
+    # 目录列举、审计与备份都看不见它，备份/回滚语义走样 → 含冒号一律拒绝
+    # （Windows 文件名本身不允许冒号，正常仓库路径不会命中）。
+    if ":" in raw:
         return None
     try:
         target = (root / raw).resolve()
@@ -274,7 +315,13 @@ class EvolutionProposal:
 
     @property
     def can_auto_apply(self) -> bool:
-        """是否可以自动应用（白名单 + 低风险）"""
+        """是否可以自动应用（白名单 + 低风险）
+
+        空 file_changes 必须显式排除：`all([])` 恒为 True，会让"什么都没改"的空提案
+        伪装成自动应用成功，污染 stats() 的 applied / success_rate。
+        """
+        if not self.file_changes:
+            return False
         if self.risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL):
             return False
         all_whitelist = all(
@@ -322,6 +369,11 @@ class ViabilityGate:
         """
         issues: list[str] = []
         warnings: list[str] = []
+
+        # 空提案没有任何实际写入，却会被 `all([])` 判成"白名单 + 低风险"而自动应用，
+        # 把空窗期伪造成"自进化正常运转" → 直接判失败。
+        if not proposal.file_changes:
+            issues.append("提案没有任何 file_changes，拒绝")
 
         for fc in proposal.file_changes:
             path = fc.get("path", "")
@@ -430,7 +482,9 @@ class ViabilityGate:
 
         没有测试命令时必须判为「未验证」而非通过：模型给的命令串本身不可信，
         而"没命令就放行"等于把 Gate3 变成摆设，自动应用通道必须至少跑过一次真实验证。
-        有命令时也只按参数列表执行（不再经过 shell），杜绝命令注入。
+        有命令时也只按参数列表执行（不再经过 shell），且必须是白名单调用模式
+        （`pytest ...` 或 `<python> -m pytest|unittest ...`），杜绝命令注入与 `-c`。
+        本方法会阻塞执行测试（最长 120s），调用方需放到线程里跑。
         """
         issues: list[str] = []
         verified = False
@@ -442,9 +496,8 @@ class ViabilityGate:
                 import subprocess
                 # 不用 shell=True：模型给的字符串只能拆成参数列表执行
                 argv = test_command.split()
-                executable = Path(argv[0]).name.lower() if argv else ""
-                if executable not in _ALLOWED_TEST_EXECUTABLES:
-                    issues.append(f"测试命令不在允许的执行器白名单内: {argv[0] if argv else ''}")
+                if not _is_allowed_test_invocation(argv):
+                    issues.append(f"测试命令不在允许的白名单模式内: {test_command}")
                 else:
                     result = subprocess.run(
                         argv,
@@ -472,7 +525,9 @@ class ViabilityGate:
         result = {
             "passed": passed,
             "verified": verified,
-            "skipped": test_command is None,
+            # 空串与 None 一样都是"没给测试命令"（上面的分支同样按未指定处理），
+            # 门上证据不能自相矛盾
+            "skipped": not test_command,
             "issues": issues,
             "output_preview": test_output[:300] if test_output else "",
         }
@@ -621,6 +676,12 @@ class EvolutionArchive:
                         entry = json.loads(line)
                         pid = entry.get("proposal_id")
                         if pid:
+                            if not entry.get("file_changes"):
+                                # 旧格式记录缺 file_changes：该提案无法自动回滚，
+                                # 明确告警，别让它在日志里静默变成"空集合"
+                                logger.warning(
+                                    "L4 journal 记录不完整（缺 file_changes）: %s", pid
+                                )
                             # 重建完整提案：file_changes/gate_results 必须一起恢复，
                             # 否则重启后既复现不了原始文件集合（pending 审批失效），
                             # 也回滚不了已应用的提案；时间戳缺失还会误判 24h 回退窗口。
@@ -697,6 +758,10 @@ class EvolutionArchive:
 
         多文件必须原子化：先把全部新内容写到目标同目录的临时文件，全部就绪后才
         os.replace 到位；任何一步失败都把已替换的文件还原，绝不留下半套修改。
+
+        落盘前先写一条 `apply_started`（状态 APPLYING）"应用意图"：这样即便进程被
+        强杀（KeyboardInterrupt/SIGKILL 之类捕获不到的中断），重启后也能从 journal
+        发现"这次应用没走完"，并用 rollback_proposal 把半套修改恢复回去。
         """
         if proposal.status != EvolutionStatus.GATE4_PASSED:
             return False, f"提案状态错误: {proposal.status.value}（需先通过 4 道门）"
@@ -730,7 +795,12 @@ class EvolutionArchive:
             self._journal_append("apply_failed", proposal, error=str(e))
             return False, f"应用失败: {e}"
 
-        # ── 阶段二：替换；先记下原内容，失败时按逆序还原 ──
+        # ── 阶段二：先落"应用意图"，再替换；失败时按逆序还原 ──
+        # 顺序不能反：若先改盘再写日志，中途被强杀就会既没有 applied 记录、也没有
+        # apply_started，重启后状态停在 gate4_passed，回滚接口会拒绝，半套修改永久留存。
+        proposal.status = EvolutionStatus.APPLYING
+        self._journal_append("apply_started", proposal)
+
         undo: list[tuple[Path, Optional[bytes]]] = []
         try:
             for action, target, tmp_path in plan:
@@ -740,7 +810,9 @@ class EvolutionArchive:
                         target.unlink()
                 elif tmp_path is not None:
                     os.replace(str(tmp_path), str(target))
-        except Exception as e:
+        except BaseException as e:
+            # 含 KeyboardInterrupt / SystemExit：能捕获就还原。捕获不到的硬崩溃
+            #（SIGKILL）由上面那条 apply_started 在重启后兜底发现并回滚。
             for target, original in reversed(undo):
                 try:
                     if original is None:
@@ -754,7 +826,13 @@ class EvolutionArchive:
             for _, _, tmp_path in plan:
                 if tmp_path is not None:
                     _silent_unlink(tmp_path)
-            self._journal_append("apply_failed", proposal, error=str(e))
+            proposal.status = EvolutionStatus.GATE4_PASSED
+            self._journal_append(
+                "apply_failed", proposal, error=f"{type(e).__name__}: {e}"
+            )
+            if not isinstance(e, Exception):
+                # 中断信号要继续向上抛，不能被当成普通失败吞掉
+                raise
             return False, f"应用失败（已回滚）: {e}"
 
         proposal.status = EvolutionStatus.APPLIED
@@ -763,19 +841,40 @@ class EvolutionArchive:
         return True, "应用成功"
 
     def rollback_proposal(self, proposal_id: str) -> tuple[bool, str]:
-        """回滚提案"""
+        """回滚提案
+
+        可回滚状态两类：
+          - APPLIED：正常应用完成，且处在 24h 回退窗口内
+          - APPLYING：应用中途被强杀（journal 里只留下 apply_started），文件可能
+            只落了一半，必须允许回滚，否则半套修改永久留存且不可检测
+        """
         proposal = self._proposals.get(proposal_id)
         if not proposal:
             return False, f"提案不存在: {proposal_id}"
 
-        if proposal.status != EvolutionStatus.APPLIED:
-            return False, f"提案状态错误: {proposal.status.value}（只能回滚已应用的提案）"
+        if proposal.status not in (EvolutionStatus.APPLIED, EvolutionStatus.APPLYING):
+            return False, f"提案状态错误: {proposal.status.value}（只能回滚已应用或应用中断的提案）"
 
-        if not proposal.is_rollback_window_open:
-            return False, "已超过 24 小时回退窗口"
+        backup_path = (
+            self.project_root / "data" / "evolution_backups" / f"proposal_{proposal_id}"
+        )
+
+        # 旧格式 journal 行只存了 proposal_id/status，缺 file_changes 时无法确定要恢复
+        # 哪些文件。必须给准确原因：旧实现会误报"已超过 24 小时回退窗口"，让运维误判
+        # 为窗口过期而放弃恢复。
+        if not proposal.file_changes:
+            return False, (
+                f"提案缺 file_changes（journal 记录不完整），无法自动回滚；"
+                f"原文件可从备份目录手工恢复: {backup_path}"
+            )
+
+        if proposal.status == EvolutionStatus.APPLIED:
+            if proposal.applied_at is None:
+                return False, "提案缺 applied_at 时间戳（journal 记录不完整），无法自动回滚"
+            if not proposal.is_rollback_window_open:
+                return False, "已超过 24 小时回退窗口"
 
         try:
-            backup_path = self.project_root / "data" / "evolution_backups" / f"proposal_{proposal_id}"
             if not backup_path.exists():
                 return False, f"备份不存在: {backup_path}"
 
@@ -910,8 +1009,11 @@ class L4SelfEvolution:
             "can_auto_apply": proposal.can_auto_apply,
         }
 
-        # 运行 4 道门
-        all_passed, gate_summary = self.gate.run_all_gates(proposal, test_command)
+        # 运行 4 道门。Gate3 会同步跑 subprocess（最长 120s），直接调用会把整个
+        # 事件循环冻住（聊天/MCP/思考循环/QQ 收发全部停摆）→ 整段闸门挪到线程里。
+        all_passed, gate_summary = await asyncio.to_thread(
+            self.gate.run_all_gates, proposal, test_command
+        )
         result["gates"] = gate_summary
 
         if not all_passed:

@@ -269,6 +269,38 @@ def register_computer_tools(registry: Any, controller: ComputerController) -> No
         },
     }, category="system_control")
 
+    registry.register("file_write", controller.file_write, {
+        "name": "file_write",
+        "description": """把文本内容写入用户电脑上的指定文件（父目录不存在会自动创建）。
+
+使用场景：
+- 生成网页 / HTML / 脚本 / 配置文件到指定路径
+- 写入或覆盖任意文本文件（含中文路径）
+- 需要写文件内容时一律用本工具，不要用 shell 的 echo / 重定向拼内容
+
+参数说明：
+- path: 目标文件的完整路径，如 D:\\想你的夜\\index.html
+- content: 要写入的完整文本内容
+- encoding: 文本编码（默认 utf-8）
+- overwrite: 是否允许覆盖已存在文件（默认 true）
+
+注意事项：
+- 需要单独建目录时用 directory_create；本工具也会自动创建父目录
+- shell 重定向 / 分号串联会被安全闸拒绝，不要作为写文件手段
+
+相关工具：directory_create, document_create, file_move, file_copy""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "目标文件的完整路径"},
+                "content": {"type": "string", "description": "要写入的完整文本内容"},
+                "encoding": {"type": "string", "description": "文本编码（默认 utf-8）"},
+                "overwrite": {"type": "boolean", "description": "是否允许覆盖已存在文件（默认 true）"},
+            },
+            "required": ["path", "content"],
+        },
+    }, category="system_control")
+
     registry.register("uia_action", controller.uia_action, {
         "name": "uia_action",
         "description": """通过 Windows UI Automation 执行界面自动化操作。

@@ -27,7 +27,7 @@ import subprocess
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -99,18 +99,55 @@ class RiskLevel(str, Enum):
     CRITICAL = "critical"
 
 
-# 危险命令黑名单（Windows）
-DANGEROUS_COMMANDS = [
-    "format", "del /f /s /q", "rd /s /q", "rmdir /s /q",
-    "taskkill /f /im explorer.exe",
-    "shutdown", "restart", "poweroff",
-    "reg delete", "reg add",
-    "net user", "net localgroup administrators",
-    "sc delete", "sc stop",
-    "wmic", "powershell -command",
-    "curl http", "wget http",
-    "echo . >", "echo >",  # 覆盖文件
-]
+# 危险命令硬闸（Windows）：按「命令首词 + 危险子命令」精确匹配，不做全文子串匹配。
+# 旧实现用子串匹配（含 "powershell -command"），会把 `powershell -Command "New-Item ..."`
+# 这类常规写操作一并毙掉，合法任务永远失败；同时非零退出的回执没有 error，模型无法自愈。
+# 结构：首词 → 危险子命令元组；空元组表示该命令整体不可执行。
+DANGEROUS_COMMAND_HEADS: dict[str, tuple[str, ...]] = {
+    "format": (),
+    "diskpart": (),
+    "shutdown": (),
+    "reboot": (),
+    "poweroff": (),
+    "bcdedit": (),
+    "vssadmin": (),
+    "fsutil": (),
+    "takeown": (),
+    "cipher": ("/w",),
+    "reg": ("delete", "add", "import", "restore", "load", "unload", "save", "copy"),
+    "sc": ("delete", "stop", "config", "failure"),
+    "net": ("user", "localgroup", "share", "accounts"),
+    "schtasks": ("/delete", "/change"),
+    "taskkill": ("/f",),
+    # wmic 整体禁用：除 delete/terminate 外，`wmic process call create`、
+    # `wmic startup`、`wmic shadowcopy` 都是持久化/远程执行滥用面。
+    "wmic": (),
+}
+
+# 危险参数形态：在命令全文上做正则，覆盖首词之外的危险写法
+DANGEROUS_COMMAND_PATTERNS: tuple[str, ...] = (
+    r"\bdel\b[^\n]*?/[fsq]\b",
+    r"\brd\b[^\n]*?/s\b",
+    r"\brmdir\b[^\n]*?/s\b",
+    r"\brm\s+-[a-z]*[rf]",
+    r"\bmkfs\b",
+    r"\bremove-item\b[^\n]*?-(recurse|force)\b",
+    r"\bformat-volume\b",
+    r"\bclear-disk\b",
+    r"\bstop-computer\b",
+    r"\brestart-computer\b",
+    r"\bset-executionpolicy\b",
+    r"\binvoke-expression\b",
+    r"\biex\b",
+    r"\bnew-object\b[^\n]*\bnet\.webclient\b",
+    r"\bdownloadstring\b",
+    r"\bdownloadfile\b",
+    r"\b-encodedcommand\b",
+    r"\bstart-process\b[^\n]*?-verb\s+runas",
+    r"\bcurl\s+https?://",
+    r"\bwget\s+https?://",
+    r"/dev/(sd|nvme|hd)",
+)
 
 # 操作 → 风险等级映射
 ACTION_RISK_MAP = {
@@ -127,6 +164,21 @@ ACTION_RISK_MAP = {
     # 工作区文件写操作:中风险(移动/删除/改名/生成文件)
     ControlAction.FILE_WRITE: RiskLevel.MEDIUM,
 }
+
+
+def _summarize_approval_params(params: dict, limit: int = 200) -> dict:
+    """审批对外展示用的参数副本：长字符串截断。
+
+    file_write 的 params 携带整份文件内容（审批通过后要重放），但事件流与
+    私聊通知不该背着几 MB 文本走，所以对外只给截断预览。
+    """
+    summary: dict[str, Any] = {}
+    for key, value in (params or {}).items():
+        if isinstance(value, str) and len(value) > limit:
+            summary[key] = f"{value[:limit]}…（共 {len(value)} 字）"
+        else:
+            summary[key] = value
+    return summary
 
 
 @dataclass
@@ -843,23 +895,49 @@ class RestrictedShell:
         self.timeout = timeout
         self.max_output = max_output
 
+    @staticmethod
+    def _command_head(command: str) -> str:
+        """取命令首词（可执行名）：去引号、路径与已知后缀。"""
+        stripped = command.strip()
+        if not stripped:
+            return ""
+        match = re.match(r'^"([^"]+)"|^(\S+)', stripped)
+        token = (match.group(1) or match.group(2)) if match else ""
+        token = token.replace("\\", "/").rsplit("/", 1)[-1]
+        for ext in (".exe", ".cmd", ".bat", ".com", ".ps1"):
+            if token.lower().endswith(ext):
+                token = token[: -len(ext)]
+                break
+        return token.lower()
+
     def is_dangerous(self, command: str) -> tuple[bool, list[str]]:
         """检查命令是否危险
 
         Returns:
             (是否危险, 危险原因列表)
         """
-        issues = []
-        cmd_lower = command.lower()
+        issues: list[str] = []
 
-        for pattern in DANGEROUS_COMMANDS:
-            if pattern.lower() in cmd_lower:
+        # 首词精确匹配（不做全文子串匹配，避免误伤常规写操作）
+        head = self._command_head(command)
+        subs = DANGEROUS_COMMAND_HEADS.get(head)
+        if subs is not None:
+            if not subs:
+                issues.append(f"高危命令: {head}")
+            else:
+                tokens = [t.strip("\"'").lower() for t in command.split()[1:]]
+                hit = next((s for s in subs if s in tokens), None)
+                if hit:
+                    issues.append(f"高危命令: {head} {hit}")
+
+        # 危险参数形态
+        for pattern in DANGEROUS_COMMAND_PATTERNS:
+            if re.search(pattern, command, re.IGNORECASE):
                 issues.append(f"匹配危险模式: {pattern}")
 
-        # 检查管道和重定向（高风险）
+        # 管道 + 高危命令组合
         if "|" in command and not command.strip().startswith("dir"):
-            # 管道可能用于链式危险操作
-            if any(d in cmd_lower for d in ["del", "format", "rd", "shutdown"]):
+            if any(d in command.lower() for d in ["del", "format", "rd", "shutdown"]):
                 issues.append("管道 + 危险命令")
 
         return len(issues) > 0, issues
@@ -887,8 +965,9 @@ class RestrictedShell:
                 success=False,
                 action=ControlAction.SHELL_CMD.value,
                 error=(
-                    "命令包含管道/重定向/命令链接符号，"
-                    "请拆分为多个独立的简单命令分步执行"
+                    "命令包含管道/重定向/命令链接符号，被安全闸拒绝。"
+                    "创建目录请用 directory_create，写入文件内容请用 file_write，"
+                    "不要用 shell 重定向或逗号/分号串联多步"
                 ),
                 data={
                     "command": command[:100],
@@ -938,9 +1017,19 @@ class RestrictedShell:
                 stderr = stderr[:self.max_output] + f"\n... [已截断，共 {len(result.stderr)} 字符]"
                 truncated = True
 
+            # 非零退出必须回填 error：否则上层审计与模型只看到 "failed: "，
+            # 拿不到任何原因，只能反复换写法重试直到放弃。
+            success = result.returncode == 0
+            error = ""
+            if not success:
+                error = (stderr or "").strip() or (stdout or "").strip()
+                if not error:
+                    error = f"命令以退出码 {result.returncode} 结束且无输出"
+
             return ControlResult(
-                success=result.returncode == 0,
+                success=success,
                 action=ControlAction.SHELL_CMD.value,
+                error=error,
                 data={
                     "command": command[:100],
                     "stdout": stdout,
@@ -1217,6 +1306,13 @@ class ComputerController:
         self.permission._shell = self.shell
 
         self._pending_approvals: dict[str, dict] = {}
+        # 审批通知钩子：由 Companion 注入，把「待审批」推到当前会话通道。
+        # 仅靠桌面 SSE 的话，QQ / 微信私聊里的任务会静默挂死（2026-09-21 事件）。
+        self._approval_notifier: Optional[Callable[[dict], None]] = None
+
+    def set_approval_notifier(self, notifier: Optional[Callable[[dict], None]]) -> None:
+        """注册审批通知钩子（同步回调，内部自行异步投递）。"""
+        self._approval_notifier = notifier
 
     # ---- 模式管理 ----
 
@@ -1403,6 +1499,71 @@ class ComputerController:
                     "success" if result.success else f"failed: {result.error}")
         return result
 
+    # ---- 文件写入 ----
+
+    def _write_file(self, path: str, content: str, encoding: str = "utf-8",
+                    overwrite: bool = True) -> ControlResult:
+        """落盘实现（不做权限裁决，闸门由调用方负责）。"""
+        action = ControlAction.FILE_WRITE
+        target = Path(path).expanduser()
+        details = {"path": str(target)}
+        try:
+            if target.exists() and not overwrite:
+                return ControlResult(
+                    success=False,
+                    action=action.value,
+                    error=f"文件已存在且未允许覆盖: {target}",
+                    data=details,
+                )
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding=encoding)
+            return ControlResult(
+                success=True,
+                action=action.value,
+                data={**details, "written": True},
+            )
+        except Exception as exc:
+            return ControlResult(
+                success=False, action=action.value, error=str(exc), data=details,
+            )
+
+    def file_write(
+        self,
+        path: str,
+        content: str = "",
+        encoding: str = "utf-8",
+        overwrite: bool = True,
+    ) -> ControlResult:
+        """把文本内容写入指定路径（父目录自动创建）。
+
+        任务型写入的正规入口：替代「shell + 重定向 / 分号串联」的写法，
+        让建目录、写网页、写脚本这类任务有可执行且可审计的路径。
+
+        审批参数必须携带 ``content``——审批通过后 ``_execute_action`` 要靠
+        同一份 params 重放这一步，缺了内容就会出现「点了批准却写不出来」。
+        """
+        action = ControlAction.FILE_WRITE
+        target = Path(path).expanduser()
+        gate_details = {
+            "path": str(target),
+            "content": content,
+            "encoding": encoding,
+            "overwrite": overwrite,
+            "bytes": len(content.encode(encoding, errors="replace")),
+        }
+        audit_details = {"path": str(target), "bytes": gate_details["bytes"]}
+
+        gate = self._gate(action, gate_details)
+        if gate is not None:
+            self._audit(action, audit_details,
+                        "blocked" if gate.data.get("blocked") else "pending_approval")
+            return gate
+
+        result = self._write_file(path, content, encoding, overwrite)
+        self._audit(action, audit_details,
+                    "success" if result.success else f"failed: {result.error}")
+        return result
+
     # ---- UIA ----
 
     def uia_action(self, action_type: str, params: dict | None = None) -> ControlResult:
@@ -1542,19 +1703,33 @@ class ComputerController:
             "result": None,
         }
         logger.info("审批请求已创建: %s (%s)", call_id, action.value)
+        risk = ACTION_RISK_MAP.get(action, RiskLevel.MEDIUM)
+        display_params = _summarize_approval_params(params)
 
-        # v13.0: 推送审批请求事件到前端
+        # v13.0: 推送审批请求事件到前端（桌面端审批卡片）
         try:
             from core.chat_events import emit
-            risk = ACTION_RISK_MAP.get(action, RiskLevel.MEDIUM)
             emit("computer_control_approval_requested",
                  id=call_id,
                  action=action.value,
                  risk_level=risk.value,
-                 params=params,
+                 params=display_params,
                  description=description)
         except Exception:
             pass
+
+        # 私聊通道同样要收到，否则任务静默挂死
+        if self._approval_notifier is not None:
+            try:
+                self._approval_notifier({
+                    "call_id": call_id,
+                    "action": action.value,
+                    "risk_level": risk.value,
+                    "params": display_params,
+                    "description": description,
+                })
+            except Exception:
+                logger.exception("审批通知钩子执行失败 call_id=%s", call_id)
 
         return call_id
 
@@ -1750,6 +1925,21 @@ class ComputerController:
             if user_approved:
                 return self.windows.focus_window(hwnd)
             return self.focus_window(hwnd)
+        elif action == ControlAction.FILE_WRITE:
+            # params 里带着完整 content，审批放行后靠它重放落盘
+            if user_approved:
+                return self._write_file(
+                    params.get("path", ""),
+                    params.get("content", ""),
+                    params.get("encoding", "utf-8"),
+                    bool(params.get("overwrite", True)),
+                )
+            return self.file_write(
+                params.get("path", ""),
+                params.get("content", ""),
+                params.get("encoding", "utf-8"),
+                bool(params.get("overwrite", True)),
+            )
         elif action == ControlAction.UIA_ACTION:
             return self.uia_action(
                 params.get("action_type", ""),

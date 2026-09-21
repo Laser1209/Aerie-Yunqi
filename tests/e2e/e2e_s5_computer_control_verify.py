@@ -26,6 +26,9 @@
   T23 审计日志完整性
   T24 状态查询
   T25 审批流程（放行 / 拒绝 / 入白名单）
+  T26 file_write 落盘往返（中文路径 + 自动建父目录 + 审计）
+  T27 失败回执带原因 + MANUAL 下 file_write 需审批
+  T28 审批放行后 file_write 真的落盘（审批重放）
 """
 
 from __future__ import annotations
@@ -44,7 +47,8 @@ from core.computer_control import (
     ControlAction,
     ControlMode,
     ControlResult,
-    DANGEROUS_COMMANDS,
+    DANGEROUS_COMMAND_HEADS,
+    DANGEROUS_COMMAND_PATTERNS,
     Decision,
     KeyboardController,
     MouseController,
@@ -109,7 +113,7 @@ def t4_policy_blacklist() -> tuple[bool, str]:
 
 
 def t5_dangerous_detection() -> tuple[bool, str]:
-    """T5 危险命令检测（5类危险命令）"""
+    """T5 危险命令检测（5类危险命令 + 常规写操作不误伤）"""
     shell = RestrictedShell()
     dangerous_cmds = [
         "format c:",
@@ -118,21 +122,26 @@ def t5_dangerous_detection() -> tuple[bool, str]:
         "reg delete HKLM /f",
         "net user admin password /add",
     ]
+    safe_cmds = [
+        "dir",
+        "echo hello",
+        "tasklist",
+        # 回归（2026-09-21 建目录事件）：常规写操作不得被误判为危险
+        'powershell -Command "New-Item -Path \'D:\\想你的夜\' -ItemType Directory -Force"',
+        'mkdir "D:\\想你的夜"',
+        'powershell -Command "Set-Content -Path \'D:\\想你的夜\\index.html\' -Value \'<html></html>\'"',
+        'python -c "import os; os.makedirs(\'D:\\\\想你的夜\', exist_ok=True)"',
+    ]
     passed = 0
-    for cmd in dangerous_cmds:
+    for cmd in dangerous_cmds + safe_cmds:
         is_danger, _ = shell.is_dangerous(cmd)
-        if is_danger:
-            passed += 1
-
-    # 安全命令不应该被误判
-    safe_cmds = ["dir", "echo hello", "tasklist"]
-    for cmd in safe_cmds:
-        is_danger, _ = shell.is_dangerous(cmd)
-        if not is_danger:
+        expected = cmd in dangerous_cmds
+        if is_danger == expected:
             passed += 1
 
     total = len(dangerous_cmds) + len(safe_cmds)
-    return passed >= 6, f"passed={passed}/{total}, patterns={len(DANGEROUS_COMMANDS)}条"
+    patterns = len(DANGEROUS_COMMAND_HEADS) + len(DANGEROUS_COMMAND_PATTERNS)
+    return passed == total, f"passed={passed}/{total}, patterns={patterns}条"
 
 
 def t6_mode_decision() -> tuple[bool, str]:
@@ -530,6 +539,94 @@ def t25_approval_flow() -> tuple[bool, str]:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def t26_file_write_roundtrip() -> tuple[bool, str]:
+    """T26 file_write 落盘往返（中文路径 + 自动建父目录 + 审计）"""
+    tmpdir = Path(tempfile.mkdtemp(prefix="aerie_fw_"))
+    try:
+        ctrl = ComputerController(
+            mode=ControlMode.FULL,
+            audit_log_dir=str(tmpdir / "audit"),
+            persist=False,
+        )
+        target = tmpdir / "想你的夜" / "index.html"
+        payload = "<html><body>今日灵签</body></html>"
+        result = ctrl.file_write(str(target), payload)
+        checks = [
+            result.success,
+            result.action == ControlAction.FILE_WRITE.value,
+            target.exists(),
+            target.read_text(encoding="utf-8") == payload,
+            result.error == "",
+        ]
+        logs = ctrl.get_audit_logs()
+        checks.append(any(
+            log.get("action") == ControlAction.FILE_WRITE.value for log in logs
+        ))
+        return all(checks), f"written={target.exists()}, bytes={len(payload)}"
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def t27_failure_receipt_and_approval() -> tuple[bool, str]:
+    """T27 失败回执带原因（旧实现只有 "failed: "）+ MANUAL 下 file_write 需审批"""
+    tmpdir = Path(tempfile.mkdtemp(prefix="aerie_fw2_"))
+    try:
+        ctrl = ComputerController(
+            mode=ControlMode.MANUAL,
+            audit_log_dir=str(tmpdir / "audit"),
+            persist=False,
+        )
+        target = tmpdir / "x.html"
+        r = ctrl.file_write(str(target), "<html></html>")
+        checks = [
+            r.data.get("needs_approval") is True,
+            not target.exists(),
+        ]
+        # 非零退出的工具回执必须携带原因，否则模型无法诊断、无法自愈
+        probe = ctrl.shell.execute("exit 3")
+        checks.append(not probe.success)
+        checks.append(bool(probe.error.strip()))
+        return all(checks), (
+            f"needs_approval={r.data.get('needs_approval')}, "
+            f"err={probe.error[:40]!r}"
+        )
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def t28_file_write_approval_replay() -> tuple[bool, str]:
+    """T28 审批放行后 file_write 必须真的落盘。
+
+    回归：`_execute_action` 曾缺 FILE_WRITE 分支、审批参数也不带 content，
+    于是 MANUAL/AUTO 下用户点了「批准」仍然写不出文件（T27 只验到「需审批」）。
+    """
+    tmpdir = Path(tempfile.mkdtemp(prefix="aerie_fw3_"))
+    try:
+        ctrl = ComputerController(
+            mode=ControlMode.MANUAL,
+            audit_log_dir=str(tmpdir / "audit"),
+            persist=False,
+        )
+        target = tmpdir / "想你的夜" / "index.html"
+        payload = "<html><body>今日灵签</body></html>"
+        r = ctrl.file_write(str(target), payload)
+        call_id = r.data.get("call_id")
+        checks = [
+            r.data.get("needs_approval") is True,
+            not target.exists(),
+            bool(call_id),
+        ]
+        checks.append(ctrl.approve_action(call_id))
+        checks.append(target.exists())
+        checks.append(target.read_text(encoding="utf-8") == payload)
+        return all(checks), f"approved={checks[3]}, written={target.exists()}"
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def main() -> int:
     tests = [
         t1_permission_modes,
@@ -557,6 +654,9 @@ def main() -> int:
         t23_audit_integrity,
         t24_status_query,
         t25_approval_flow,
+        t26_file_write_roundtrip,
+        t27_failure_receipt_and_approval,
+        t28_file_write_approval_replay,
     ]
 
     print("=" * 60)

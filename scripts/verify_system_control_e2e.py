@@ -184,50 +184,50 @@ def test_office_mode_enhancement():
         return False
 
 
-def test_task_planner():
-    """验证任务规划能力"""
+def test_task_classification():
+    """验证任务判定：能不能认出「这是一件要动手的事」"""
     print("\n" + "=" * 70)
-    print("【验证4】任务规划能力")
+    print("【验证4】任务判定能力")
     print("=" * 70)
 
     try:
-        from core.task_planner import TaskPlanner, TaskType
+        from core.task_loop import TaskKind, build_task_prompt, classify
 
-        planner = TaskPlanner(max_steps=10)
+        # 必须命中：具体路径 / 明确动作
+        task_cases = [
+            ("帮我在D盘建立一个文件夹，名字是想你的夜", TaskKind.FILE),
+            ("用这个提示词去生成一个网页", TaskKind.FILE),
+            ("把下载目录里的照片整理一下", TaskKind.FILE),
+            ("帮我写一份周报", TaskKind.DOC),
+        ]
+        # 必须不命中：日常聊天不能被当成活
+        chat_cases = [
+            "我今天好累",
+            "想你了",
+            "在干嘛",
+            "晚上吃什么好呢",
+        ]
 
-        # 测试1：简单任务不需要规划
-        simple_msg = "今天天气怎么样"
-        should_plan = planner.should_plan(simple_msg)
-        print(f"\n简单任务 should_plan: {should_plan}")
+        ok = 0
+        for text, expected_kind in task_cases:
+            verdict = classify(text)
+            hit = verdict is not None and verdict.kind == expected_kind
+            ok += int(hit)
+            print(f"  {'✓' if hit else '✗'} 任务：{text[:24]}  → {verdict.kind.value if verdict else 'None'}")
 
-        # 测试2：复杂任务需要规划
-        complex_msg = "帮我写一份详细的数据分析报告，需要先收集数据，然后进行统计分析，最后生成图表和总结文档"
-        should_plan_complex = planner.should_plan(complex_msg)
-        print(f"复杂任务 should_plan: {should_plan_complex}")
+        for text in chat_cases:
+            verdict = classify(text)
+            hit = verdict is None
+            ok += int(hit)
+            print(f"  {'✓' if hit else '✗'} 聊天：{text[:24]}  → {verdict.kind.value if verdict else 'None'}")
 
-        # 测试3：生成计划
-        if should_plan_complex:
-            plan = planner.create_plan(complex_msg)
-            print(f"\n生成的计划：")
-            print(f"  标题：{plan.title}")
-            print(f"  任务类型：{plan.task_type}")
-            print(f"  步骤数：{plan.total_steps}")
-            print(f"  步骤列表：")
-            for step in plan.steps:
-                print(f"    {step.step_id}. {step.title}")
-
-            if plan.total_steps >= 3:
-                print(f"\n✅ 任务规划正常工作，生成了 {plan.total_steps} 个步骤")
-                return True
-            else:
-                print(f"\n❌ 任务规划步骤太少：{plan.total_steps}")
-                return False
-        else:
-            print("⚠️ 复杂任务也没触发规划，可能需要调整阈值")
-            return True  # 不算失败，可能是阈值问题
+        total = len(task_cases) + len(chat_cases)
+        prompt = build_task_prompt(classify("帮我在D盘建立一个文件夹"))
+        print(f"\n判定通过 {ok}/{total}；执行纪律提示 {len(prompt)} 字")
+        return ok == total
 
     except Exception as e:
-        print(f"❌ 任务规划验证失败：{e}")
+        print(f"❌ 任务判定验证失败：{e}")
         import traceback
         traceback.print_exc()
         return False
@@ -283,7 +283,7 @@ def main():
         "工具注册完整性",
         "ContextBuilder L5",
         "Office Mode 增强",
-        "任务规划能力",
+        "任务判定能力",
         "工具描述增强",
     ]
 
@@ -291,7 +291,7 @@ def main():
         test_tool_registration_integrity,
         test_context_builder_l5,
         test_office_mode_enhancement,
-        test_task_planner,
+        test_task_classification,
         test_tool_descriptions_enhanced,
     ]
 

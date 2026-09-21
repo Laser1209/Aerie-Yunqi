@@ -240,7 +240,12 @@ class MCPServerClient:
     @property
     def connected(self) -> bool:
         proc = self._proc
-        return bool(proc is not None and proc.returncode is None)
+        if proc is None or proc.returncode is not None:
+            return False
+        # M4: 读循环一旦退出（协议错误 / 进程结束）连接即不可用，
+        # 不能只看 returncode——否则子进程还活着但读循环已死时会误报 True。
+        task = self._stdout_task
+        return task is not None and not task.done()
 
     def stderr_tail(self) -> str:
         return "\n".join(self._stderr_tail)
@@ -305,6 +310,11 @@ class MCPServerClient:
                 server=self.server_name,
                 detail={"cause": e.kind},
             ) from e
+        except BaseException:
+            # M2: 取消（CancelledError）/ 中断等同样要回收子进程。此处只用同步
+            # 强杀：取消路径不能再 await；也不能只靠 atexit（os._exit 会绕过）。
+            self.terminate_nowait()
+            raise
 
         if not isinstance(result, dict):
             await self.close()
@@ -469,13 +479,24 @@ class MCPServerClient:
                 )
                 skipped[name] = "name_conflict"
                 continue
-            registry.register(
-                name=name,
-                func=self._make_callable(remote_name),
-                schema=self._to_openai_schema(name, remote_name, spec),
-                provider_hint="text",
-                category="mcp",
-            )
+            try:
+                registry.register(
+                    name=name,
+                    func=self._make_callable(remote_name),
+                    schema=self._to_openai_schema(name, remote_name, spec),
+                    provider_hint="text",
+                    category="mcp",
+                )
+            except Exception as e:
+                # M3: 逐个工具隔离。某个工具注册失败只跳过它，不留半注册状态、
+                # 不让整个 server 变成 failed（否则 registry 里残留可被模型看到、
+                # 却因 _clients 无此连接而永远调不通的工具）。
+                logger.warning(
+                    "MCP %s: 工具 %s 注册失败，跳过（%s: %s）",
+                    self.server_name, name, type(e).__name__, e,
+                )
+                skipped[name] = f"register_failed: {type(e).__name__}"
+                continue
             self.registered_tools[name] = remote_name
             registered[name] = remote_name
         return {"registered": registered, "skipped": skipped}
@@ -522,15 +543,35 @@ class MCPServerClient:
                     server=self.server_name,
                     detail={"returncode": proc.returncode, "stderr": self.stderr_tail()},
                 )
+            if self._stdout_task is None or self._stdout_task.done():
+                # M4: 读循环已退出 → 连接不可用。立刻失败，别让调用白等满超时。
+                raise MCPError(
+                    "process_exit",
+                    f"读取循环已停止，连接不可用（method={method}）",
+                    server=self.server_name,
+                    detail={"stderr": self.stderr_tail()},
+                )
             loop = asyncio.get_running_loop()
             req_id = self._next_id
             self._next_id += 1
             future: asyncio.Future = loop.create_future()
             self._pending[req_id] = (future, method)
+            payload = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
             try:
-                await self._write(
-                    {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
-                )
+                # M1: 写阶段也必须受超时保护。对端不读 stdin 时 stdout/stdin 管道
+                # 写满，drain() 会永久阻塞并把整条连接（_lock）一起锁死。
+                await asyncio.wait_for(self._write(payload), timeout=timeout)
+            except asyncio.TimeoutError as e:
+                self._pending.pop(req_id, None)
+                # 管道已写满且对端不读 → 连接不可用，直接关停回收，避免后续调用继续卡
+                await self.close()
+                raise MCPError(
+                    "timeout",
+                    f"{method} 写入超时（{timeout}s）：对端未读取 stdin",
+                    server=self.server_name,
+                    detail={"timeout_seconds": timeout},
+                ) from e
+            try:
                 return await asyncio.wait_for(future, timeout=timeout)
             except asyncio.TimeoutError as e:
                 raise MCPError(

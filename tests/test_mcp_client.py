@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ from core.mcp_client import (
     DEFAULT_CONFIG_PATH,
     MCPClientManager,
     MCPError,
+    MCPServerClient,
     MCPServerConfig,
     load_servers_config,
     local_tool_name,
@@ -63,15 +65,22 @@ for line in sys.stdin:
     method = msg.get("method")
     mid = msg.get("id")
     if method == "initialize":
+        if MODE == "mute":
+            continue  # 握手期装死：用于验证取消/异常时子进程被回收
         send({"jsonrpc": "2.0", "id": mid, "result": {
             "protocolVersion": "2025-06-18",
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "stub", "version": "0.1"},
         }})
+        if MODE == "halfclose":
+            sys.stdout.flush()
+            os.close(1)  # 直接关闭 stdout 写端：读循环收到 EOF，但进程仍存活
     elif method == "notifications/initialized":
         pass
     elif method == "tools/list":
         send({"jsonrpc": "2.0", "id": mid, "result": {"tools": TOOLS}})
+        if MODE == "deaf":
+            break  # 之后不再读 stdin：写内容会填满管道，用于验证写入超时
     elif method == "tools/call":
         params = msg.get("params") or {}
         name = params.get("name")
@@ -99,6 +108,9 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "id": mid, "error": {
             "code": -32601, "message": "Method not found: %s" % method,
         }})
+
+if MODE == "deaf":
+    time.sleep(600)  # 保持存活但不读 stdin，模拟对端卡死
 """
 
 
@@ -408,3 +420,125 @@ async def test_register_tools_is_idempotent(tmp_path):
         assert set(again["skipped"].values()) == {"already_registered"}
     finally:
         await manager.aclose()
+
+
+# ── 缺陷回归：M1 写超时 / M2 取消回收 / M3 半注册 / M4 读循环退出 ──
+
+@pytest.mark.asyncio
+async def test_m1_write_timeout_does_not_hang_connection(tmp_path):
+    """M1: 对端不读 stdin 时写阶段必须在超时内失败，且不锁死整条连接。"""
+    stub = _write_stub(tmp_path)
+    registry = ToolRegistry()
+    manager = MCPClientManager(
+        registry, servers=_servers(stub, mode="deaf", call_timeout_seconds=1)
+    )
+    try:
+        await manager.start()
+        client = manager.get_client("stub")
+        assert client is not None
+
+        # 发一个远超管道缓冲的大 payload → drain() 阻塞（旧实现会永久卡死）
+        bloated = "x" * (2 * 1024 * 1024)
+        started = time.monotonic()
+        out = await asyncio.wait_for(client.invoke("echo", {"text": bloated}), timeout=20)
+        assert out["kind"] == "timeout"
+        assert time.monotonic() - started < 12
+
+        # 连接已被判定为不可用 → 后续调用快速失败，不再白等满超时
+        started = time.monotonic()
+        out2 = await asyncio.wait_for(client.invoke("echo", {"text": "y"}), timeout=10)
+        assert out2["kind"] in {"timeout", "process_exit", "closed"}
+        assert time.monotonic() - started < 3
+        assert client.connected is False
+    finally:
+        await manager.aclose()
+
+
+@pytest.mark.asyncio
+async def test_m2_cancelled_handshake_reaps_child(tmp_path):
+    """M2: 握手阶段被取消也要回收子进程，不能只靠 atexit。"""
+    stub = _write_stub(tmp_path)
+    cfg = MCPServerConfig.from_dict("stub", {
+        "enabled": True,
+        "command": sys.executable,
+        "args": [str(stub)],
+        "env": {"STUB_MODE": "mute"},
+        "timeout_seconds": 30,
+    })
+    client = MCPServerClient(cfg)
+    task = asyncio.create_task(client.connect())
+    await asyncio.sleep(0.3)  # 等子进程起来并进入握手等待
+    proc = client._proc
+    assert proc is not None and proc.returncode is None
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert client not in mcp_client._ACTIVE_CLIENTS  # 退出兜底清单不留残项
+    await asyncio.wait_for(proc.wait(), timeout=5)
+    assert proc.returncode is not None  # 子进程已被回收
+
+
+@pytest.mark.asyncio
+async def test_m3_partial_register_failure_leaves_consistent_state(tmp_path):
+    """M3: 单个工具注册失败只跳过它，不留半注册状态、server 仍标为可用。"""
+    stub = _write_stub(tmp_path)
+
+    class FlakyRegistry(ToolRegistry):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def register(self, name, func, schema, provider_hint="text", category="utility"):
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("registry exploded")
+            super().register(name, func, schema, provider_hint, category)
+
+    registry = FlakyRegistry()
+    manager = MCPClientManager(registry, servers=_servers(stub))
+    try:
+        summary = await manager.start()
+        assert summary["started"] == ["stub"]
+        assert summary["failed"] == {}
+        client = manager.get_client("stub")
+        assert client is not None
+        # summary 与实际注册数一致（4 个工具中第 2 个失败 → 3 个成功）
+        assert summary["tools_registered"] == 3
+        assert summary["tools_registered"] == len(client.registered_tools)
+        assert registry.get("mcp__stub__boom") is None  # 失败的工具未残留
+    finally:
+        await manager.aclose()
+
+
+@pytest.mark.asyncio
+async def test_m4_read_loop_death_marks_disconnected_and_fails_fast(tmp_path):
+    """M4: 读循环退出后 connected=False，后续调用快速失败而非白等满超时。"""
+    stub = _write_stub(tmp_path)
+    cfg = MCPServerConfig.from_dict("stub", {
+        "enabled": True,
+        "command": sys.executable,
+        "args": [str(stub)],
+        "env": {"STUB_MODE": "halfclose"},
+        "timeout_seconds": 5,
+        "call_timeout_seconds": 5,
+    })
+    client = MCPServerClient(cfg)
+    try:
+        await client.connect()
+        # 等读循环收到 EOF 自行退出（轮询，避免平台调度差异导致的偶发）
+        for _ in range(40):
+            if client._stdout_task is not None and client._stdout_task.done():
+                break
+            await asyncio.sleep(0.05)
+        assert client._stdout_task is not None and client._stdout_task.done()
+        assert client._proc is not None and client._proc.returncode is None  # 进程还活着
+        assert client.connected is False  # 旧实现只看 returncode 会误报 True
+
+        started = time.monotonic()
+        out = await asyncio.wait_for(client.invoke("echo", {"text": "x"}), timeout=5)
+        assert out["kind"] in {"process_exit", "closed"}
+        assert time.monotonic() - started < 1  # 立即失败，不白等满 5s
+    finally:
+        await client.close()

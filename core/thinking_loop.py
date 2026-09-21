@@ -11,9 +11,14 @@
   - ``interval_seconds``      两次思考之间的间隔（下限 0.05s，防热循环）
   - ``max_steps_per_hour``    每小时最多几步（<=0 表示不限）
   - ``max_steps_per_day``     每天最多几步（<=0 表示不限）
-  - ``max_tokens_per_day``    token 预算（<=0 表示不限，由 step/record_tokens 上报）
-  - ``step_timeout_seconds``  单步超时；超时按失败计，不阻塞后续轮次
+  - ``max_tokens_per_day``    token 预算。语义：``0`` = **禁用**（零额度，任何 step
+                              都不执行，防止"以为设了 0 就安全、其实无限烧 token"）；
+                              ``<0`` = 显式不限（放弃保护）；未配置 = 安全默认
+                              ``DEFAULT_MAX_TOKENS_PER_DAY``
+  - ``step_timeout_seconds``  单步超时；同步/异步 step 都生效，超时按失败计，不阻塞后续轮次
   超预算时本轮直接跳过（skip），循环不退出——不会因为额度用光就静默死掉。
+
+``run_once()`` 与后台循环受同一套约束：``enabled=False`` 时不会执行 step、不计 token。
 
 可插拔：构造时传入 ``step`` 回调（sync / async 均可，建议 async）。
 回调返回的 dict 若含 ``"tokens": int``，会累加进当日 token 消耗。
@@ -39,16 +44,22 @@ MIN_INTERVAL_SECONDS = 0.05
 _HISTORY_LIMIT = 20
 _DEFAULT_INTERVAL_SECONDS = 900.0  # 15 分钟
 _DEFAULT_STEP_TIMEOUT_SECONDS = 120.0
+# 未配置 token 预算时的安全默认上限（防止"0 视为不限"导致无限烧 token）
+DEFAULT_MAX_TOKENS_PER_DAY = 100_000
 
 
 @dataclass
 class ThinkingBudget:
-    """节奏与预算上限。``<=0`` 的额度字段表示不限制。"""
+    """节奏与预算上限。
+
+    ``max_steps_per_hour`` / ``max_steps_per_day``：``<=0`` 表示不限制。
+    ``max_tokens_per_day``：``0`` 表示禁用（零额度），``<0`` 表示不限制。
+    """
 
     interval_seconds: float = _DEFAULT_INTERVAL_SECONDS
     max_steps_per_hour: int = 4
     max_steps_per_day: int = 24
-    max_tokens_per_day: int = 0
+    max_tokens_per_day: int = DEFAULT_MAX_TOKENS_PER_DAY
     step_timeout_seconds: float = _DEFAULT_STEP_TIMEOUT_SECONDS
 
     def normalized(self) -> "ThinkingBudget":
@@ -95,7 +106,7 @@ class ThinkingLoop:
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         max_steps_per_hour: int = 4,
         max_steps_per_day: int = 24,
-        max_tokens_per_day: int = 0,
+        max_tokens_per_day: int = DEFAULT_MAX_TOKENS_PER_DAY,
         step_timeout_seconds: float = _DEFAULT_STEP_TIMEOUT_SECONDS,
         on_event: Callable[[dict], Any] | None = None,
     ) -> None:
@@ -148,7 +159,9 @@ class ThinkingLoop:
             interval_seconds=float(data.get("interval_seconds", _DEFAULT_INTERVAL_SECONDS)),
             max_steps_per_hour=int(data.get("max_steps_per_hour", 4)),
             max_steps_per_day=int(data.get("max_steps_per_day", 24)),
-            max_tokens_per_day=int(data.get("max_tokens_per_day", 0)),
+            max_tokens_per_day=int(
+                data.get("max_tokens_per_day", DEFAULT_MAX_TOKENS_PER_DAY)
+            ),
             step_timeout_seconds=float(
                 data.get("step_timeout_seconds", _DEFAULT_STEP_TIMEOUT_SECONDS)
             ),
@@ -180,7 +193,15 @@ class ThinkingLoop:
             self.budget.interval_seconds,
             self.budget.max_steps_per_hour,
             self.budget.max_steps_per_day,
-            self.budget.max_tokens_per_day if self.budget.max_tokens_per_day > 0 else "不限",
+            (
+                "禁用"
+                if self.budget.max_tokens_per_day == 0
+                else (
+                    "不限"
+                    if self.budget.max_tokens_per_day < 0
+                    else self.budget.max_tokens_per_day
+                )
+            ),
         )
         return True
 
@@ -223,7 +244,13 @@ class ThinkingLoop:
             self._running = False
 
     async def run_once(self) -> dict | None:
-        """立即执行一步（受同样的预算/超时约束）。便于手动触发与测试。"""
+        """立即执行一步（受同样的预算/超时约束）。便于手动触发与测试。
+
+        与后台循环一致：``enabled=False`` 时直接跳过，不执行 step、不计 token。
+        """
+        if not self.enabled:
+            logger.debug("后台思考循环未启用，忽略手动触发")
+            return None
         return await self._tick()
 
     async def _tick(self) -> dict | None:
@@ -239,8 +266,15 @@ class ThinkingLoop:
 
         started = time.monotonic()
         try:
+            # T2: 同步 step 不能在事件循环里直接调用——否则 step_timeout_seconds
+            # 形同虚设（wait_for 拿到的是已求值结果）、还会阻塞整个事件循环。
+            # 因此同步 step 丢线程池执行，异步 step 直接 await，二者都受 wait_for 约束。
+            if inspect.iscoroutinefunction(self.step):
+                work: Any = self.step()
+            else:
+                work = asyncio.to_thread(self.step)
             result = await asyncio.wait_for(
-                _maybe_await(self.step()),
+                _maybe_await(work),
                 timeout=self.budget.step_timeout_seconds,
             )
         except asyncio.TimeoutError:
@@ -286,7 +320,10 @@ class ThinkingLoop:
             return "hourly_step_limit"
         if self.budget.max_steps_per_day > 0 and self._steps_day >= self.budget.max_steps_per_day:
             return "daily_step_limit"
-        if self.budget.max_tokens_per_day > 0 and self._tokens_day >= self.budget.max_tokens_per_day:
+        # T3: token 预算语义——0 = 禁用（零额度立即拦截，避免出厂值 0 被当成"不限"
+        # 而无限烧 token）；<0 = 显式不限。
+        limit = self.budget.max_tokens_per_day
+        if limit >= 0 and self._tokens_day >= limit:
             return "daily_token_limit"
         return ""
 

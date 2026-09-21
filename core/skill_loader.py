@@ -51,8 +51,8 @@ class SkillLoader:
     """Discovers + registers skills into a ToolRegistry.
 
     The registry is mutated in place via ``register(name, func, schema,
-    provider_hint)``. Existing tools (the 3 default ones) are never
-    overwritten — duplicate names are skipped.
+    provider_hint)``. 既有工具（内置工具、其它来源）**绝不覆盖**：注册前先查
+    ``registry.get(name)``，同名则跳过并记 WARNING。
     """
 
     def __init__(self, tool_registry: Any, router: Any) -> None:
@@ -64,7 +64,12 @@ class SkillLoader:
 
     # ── Public API ─────────────────────────────────────
     def discover(self) -> int:
-        """Scan all skill roots (priority order) and parse SKILL.md frontmatter."""
+        """Scan all skill roots (priority order) and parse SKILL.md frontmatter.
+
+        幂等：每次调用先清空 ``self.discovered``，重复调用返回同一结果。
+        """
+        # 重新发现：先清空，否则第二次调用会因子典非空而全部走 first-write-wins 返回 0
+        self.discovered.clear()
         count = 0
         for base, kind in _SKILL_ROOTS:
             if not base.exists():
@@ -120,8 +125,23 @@ class SkillLoader:
                 rp = run_py.resolve()
             except Exception:
                 continue
-            if not any(str(rp).startswith(str(b)) for b in _ALLOWED_BASES):
+            # 真正的目录包含判定（is_relative_to 按路径分量比较）；不能用字符串
+            # 前缀匹配——`skills/cloud-evil` 会被误判成在 `skills/cloud` 之内，
+            # 让 junction/软链指向的越界 skill 执行成功。
+            if not any(rp.is_relative_to(b) for b in _ALLOWED_BASES):
                 logger.warning("skill %s: run.py outside allowed bases, skip", name)
+                continue
+            # 冲突检查：已存在的工具（内置工具 / 其它来源）绝不覆盖。
+            # companion 先 register_all_tools() 再 skill_loader.register_all()，
+            # 若此处不拦截，cloud 的 scaffold 桩技能会顶掉同名的真实内置工具。
+            try:
+                existing = self.registry.get(name)
+            except AttributeError:
+                existing = None
+            if existing is not None:
+                logger.warning(
+                    "skill %s: 工具名已被注册表占用，跳过注册（不覆盖既有工具）", name
+                )
                 continue
             try:
                 spec = importlib.util.spec_from_file_location(f"skill_{name}", run_py)

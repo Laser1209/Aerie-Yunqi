@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -166,3 +168,78 @@ def test_read_only_defaults_by_root(tmp_path, monkeypatch):
     assert loader.discovered["skill-b"]["read_only"] is False
     assert loader.discovered["skill-c"]["read_only"] is True
     assert loader.discovered["skill-d"]["read_only"] is True  # 显式声明优先
+
+
+# ── 缺陷回归：S1 撞名 / S2 越界 / S3 幂等 ─────────────
+
+def test_s1_existing_tool_is_never_overwritten(tmp_path, monkeypatch):
+    """S1: 注册表里已存在的工具（如内置 screenshot）不得被同名 skill 覆盖。
+
+    companion 先 register_all_tools() 后 skill_loader.register_all()，cloud 的
+    scaffold 桩技能会撞上同名真实内置工具；此处必须在 skill_loader 内部拦下。
+    """
+    root = tmp_path / "local"
+    _write_skill(root, "screenshot", "screenshot", "from-skill")
+    monkeypatch.setattr(skill_loader_module, "_SKILL_ROOTS", ((root, "local"),))
+    monkeypatch.setattr(skill_loader_module, "_ALLOWED_BASES", (root.resolve(),))
+
+    registry = ToolRegistry()
+
+    def real_screenshot(args=None) -> dict:
+        return {"origin": "builtin"}
+
+    registry.register("screenshot", real_screenshot, {"description": "内置截图工具"})
+
+    loader = _loader(registry)
+    assert loader.discover() == 1
+    assert loader.register_all() == 0  # 撞名 → 跳过并告警
+    entry = registry.get("screenshot")
+    assert entry is not None
+    assert entry["func"] is real_screenshot  # 真实工具仍在，未被桩顶掉
+    assert entry["func"]({}) == {"origin": "builtin"}
+
+
+def _make_junction(link: Path, target: Path) -> bool:
+    """在 Windows 上创建目录 junction（无需管理员权限）。"""
+    if os.name != "nt":
+        return False
+    result = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and link.exists()
+
+
+def test_s2_junction_escape_is_rejected(tmp_path, monkeypatch):
+    """S2: 用 junction 把 base 内的目录指向 base 之外，越界 skill 必须被拒绝。
+
+    旧实现用字符串前缀匹配：`<tmp>/cloud` 是 `<tmp>/cloud-evil` 的前缀 →
+    越界 run.py 被误判为合法。
+    """
+    allowed = tmp_path / "cloud"
+    evil = tmp_path / "cloud-evil"
+    allowed.mkdir()
+    _write_skill(evil, "trap", "trap", "escaped")  # 真实文件在 cloud-evil/trap
+
+    link = allowed / "trap"
+    if not _make_junction(link, evil / "trap"):
+        pytest.skip("无法创建 junction（非 Windows 或无权限）")
+
+    monkeypatch.setattr(skill_loader_module, "_SKILL_ROOTS", ((allowed, "cloud"),))
+    monkeypatch.setattr(skill_loader_module, "_ALLOWED_BASES", (allowed.resolve(),))
+
+    registry = ToolRegistry()
+    loader = _loader(registry)
+    assert loader.discover() == 1  # SKILL.md 能通过 junction 读到
+    assert loader.register_all() == 0  # 但 run.py 真实位置在 base 之外 → 拒绝
+    assert registry.get("trap") is None
+
+
+def test_s3_discover_is_idempotent():
+    """S3: discover() 可重复调用，返回值与结果集稳定（旧实现第二次返回 0）。"""
+    loader = _loader()
+    first = loader.discover()
+    second = loader.discover()
+    assert first == second >= 77
+    assert len(loader.discovered) == first

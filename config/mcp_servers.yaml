@@ -1,0 +1,32 @@
+# Aerie · 云栖 — MCP server 连接配置（core/mcp_client.py）
+#
+# 默认关闭：`enabled: false` 时 MCPClientManager.start() 不建立任何连接，
+# 也不会向 ToolRegistry 注册任何工具，现有启动行为完全不变。
+# 只有顶层和某个 server 同时 `enabled: true` 才会真正拉起子进程。
+#
+# 字段说明（仅支持 stdio transport）：
+#   command              可执行文件（stdio 子进程）
+#   args                 参数列表
+#   env                  追加/覆盖的环境变量（不写则继承主进程环境）
+#   cwd                  子进程工作目录（可省略）
+#   timeout_seconds      initialize / tools/list 超时（秒，默认 30）
+#   call_timeout_seconds tools/call 超时（秒，默认 120）
+#
+# 远端工具注册名规则：mcp__<server>__<远端工具名>
+# 与既有工具同名时跳过并告警，绝不覆盖已有工具。
+
+enabled: false
+
+servers:
+  # 示例：JustOneAPI MCP（本仓库 justoneapi-mcp/ 子项目，stdio 方式）
+  # 启用步骤：顶层 enabled 改 true → 本项 enabled 改 true → 填好 token
+  justoneapi:
+    enabled: false
+    transport: stdio
+    command: npx
+    args: ["-y", "justoneapi-mcp"]
+    env: {}
+    # env:
+    #   JUSTONEAPI_TOKEN: "<your token>"
+    timeout_seconds: 30
+    call_timeout_seconds: 120

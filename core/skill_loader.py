@@ -1,13 +1,19 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Skill Loader (Block-4C R3.1).
+"""Aerie · 云栖 v0.1.0-beta.1 — Skill Loader (Block-4C R3.1).
 
-Discovers skill directories under ``skills/local/`` and ``skills/data/``,
-parses their ``SKILL.md`` YAML frontmatter, and registers each
-``run.py`` callable as a tool in the central ``ToolRegistry``.
+Discovers skill directories under ``skills/local/``, ``skills/cloud/`` and
+``skills/data/``, parses their ``SKILL.md`` YAML frontmatter, and registers
+each ``run.py`` callable as a tool in the central ``ToolRegistry``.
+
+Root priority (``_SKILL_ROOTS`` order, first write wins on name collision):
+  ``local`` > ``cloud`` > ``data``
+  - local: 本机专用能力（最高优先，可覆盖同名通用能力）
+  - cloud: 通用能力包（scaffold 生成，元数据显式声明 read_only）
+  - data : 历史遗留桶（当前 5 个 skill 均 read_only=true），兜底最低优先
 
 Security notes:
   - YAML is loaded with ``yaml.safe_load`` (no python/object constructors).
   - The skill path is resolved and verified to live under one of the
-    two whitelisted base directories.
+    whitelisted base directories (all three roots above).
   - All shell-style arguments are passed to ``subprocess.run`` as
     list args with ``shell=False`` (per skill implementation).
   - Any failure (missing dir, bad frontmatter, ImportError) is logged
@@ -28,8 +34,17 @@ logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _LOCAL_SKILLS_DIR = _PROJECT_ROOT / "skills" / "local"
+_CLOUD_SKILLS_DIR = _PROJECT_ROOT / "skills" / "cloud"
 _DATA_SKILLS_DIR = _PROJECT_ROOT / "skills" / "data"
-_ALLOWED_BASES = (_LOCAL_SKILLS_DIR.resolve(), _DATA_SKILLS_DIR.resolve())
+
+# 扫描顺序即优先级：同名 skill 先扫到的胜出（local > cloud > data）。
+# 缺失的根目录会被直接跳过（skills/data 与 skills/cloud 都可能不存在）。
+_SKILL_ROOTS: tuple[tuple[Path, str], ...] = (
+    (_LOCAL_SKILLS_DIR, "local"),
+    (_CLOUD_SKILLS_DIR, "cloud"),
+    (_DATA_SKILLS_DIR, "data"),
+)
+_ALLOWED_BASES = tuple(base.resolve() for base, _kind in _SKILL_ROOTS)
 
 
 class SkillLoader:
@@ -43,18 +58,15 @@ class SkillLoader:
     def __init__(self, tool_registry: Any, router: Any) -> None:
         self.registry = tool_registry
         self.router = router
-        # name -> {"path": Path, "hint": str, "read_only": bool, "desc": str, "kind": "local"|"data"}
+        # name -> {"path": Path, "hint": str, "read_only": bool, "desc": str, "kind": "local"|"cloud"|"data"}
         self.discovered: dict[str, dict] = {}
         self._registered: set[str] = set()
 
     # ── Public API ─────────────────────────────────────
     def discover(self) -> int:
-        """Scan both skill roots and parse SKILL.md frontmatter."""
+        """Scan all skill roots (priority order) and parse SKILL.md frontmatter."""
         count = 0
-        for base, kind in (
-            (_LOCAL_SKILLS_DIR, "local"),
-            (_DATA_SKILLS_DIR, "data"),
-        ):
+        for base, kind in _SKILL_ROOTS:
             if not base.exists():
                 continue
             try:
@@ -70,7 +82,11 @@ class SkillLoader:
                         continue
                     name = str(meta["name"]).strip()
                     if name in self.discovered:
-                        # First write wins (local > data precedence).
+                        # First write wins (local > cloud > data precedence).
+                        logger.debug(
+                            "skill %s in %s shadowed by %s",
+                            name, kind, self.discovered[name]["kind"],
+                        )
                         continue
                     self.discovered[name] = {
                         "path": entry,

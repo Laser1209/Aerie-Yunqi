@@ -1,6 +1,60 @@
 "use strict";
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Sandboxed Electron preloads can require Electron/built-in modules only.
+// Keep this tiny allowlist local to the preload; the equivalent pure module is
+// used by Node tests and the Renderer adapter, while no sandbox relaxation is
+// needed in production.
+function createCompanionStudioApi(request) {
+  const paths = Object.freeze({
+    health: "/api/integrations/companion-studio",
+    talk: "/api/integrations/companion-studio/talk",
+    speak: "/api/integrations/companion-studio/speak",
+    asr: "/api/integrations/companion-studio/asr",
+  });
+  const text = (value, field) => {
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new TypeError(`${field} must be a non-empty string`);
+    }
+    return value;
+  };
+  const normalize = (result) => {
+    const body = result && result.data && typeof result.data === "object"
+      ? result.data : result;
+    if (!body || typeof body !== "object") {
+      return { ok: false, status: "unavailable", reason: "invalid_response" };
+    }
+    return {
+      ...body,
+      ok: body.ok === true,
+      status: typeof body.status === "string" ? body.status : "unavailable",
+    };
+  };
+  const call = (method, path, body) => Promise.resolve(request({
+    method,
+    path,
+    ...(body === undefined ? {} : { body }),
+  })).then(normalize);
+  return Object.freeze({
+    health: () => call("GET", paths.health),
+    talk: (value, source = "text") => call("POST", paths.talk, {
+      text: text(value, "text"), source: text(source, "source"),
+    }),
+    speak: (value, echo) => {
+      const body = { text: text(value, "text") };
+      if (echo !== undefined) {
+        if (typeof echo !== "boolean") throw new TypeError("echo must be a boolean");
+        body.echo = echo;
+      }
+      return call("POST", paths.speak, body);
+    },
+    asr: (audioBase64, audioFormat = "wav") => call("POST", paths.asr, {
+      audioBase64: text(audioBase64, "audioBase64"),
+      format: text(audioFormat, "audioFormat"),
+    }),
+  });
+}
+
 // Keep every renderer surface on the same backend port, including isolated
 // QA instances and packaged launches configured through the environment.
 const BACKEND_PORT = Number.parseInt(process.env.AERIE_BACKEND_PORT || "7890", 10);
@@ -46,6 +100,14 @@ contextBridge.exposeInMainWorld("aerie", {
       ipcRenderer.on("chat:message", (_event, data) => cb(data));
     },
   },
+  // Companion Studio is a Renderer capability backed by Aerie's API. Keep
+  // this allowlisted surface separate from the generic request bridge so the
+  // integrated module cannot depend on the standalone 8899 service or invent
+  // arbitrary IPC channels.
+  companionStudio: createCompanionStudioApi((opts) => withBackendWait(
+    (requestOpts) => ipcRenderer.invoke("api:request", requestOpts),
+    opts,
+  )),
   // Phase 9 Batch 4: SSE → IPC bridge subscription for brain center
   sse: {
     subscribe: (callback) => {

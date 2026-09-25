@@ -404,6 +404,77 @@ class ChatManager {
     return null;
   }
 
+  // ── 图片独立发送状态（出图中 / 完成 / 失败重发） ──────────────────
+
+  _handleImageStatus(payload) {
+    if (!this._el.messages || !payload || !payload.id) return;
+    const status = String(payload.status || "generating");
+    if (status === "ready") {
+      // 真实图片附件消息已通过 assistant 事件独立落位，撤掉占位气泡
+      const existing = this._el.messages.querySelector(`[data-id="${payload.id}"]`);
+      if (existing) existing.remove();
+      return;
+    }
+    const existed = Boolean(
+      this._el.messages.querySelector(`[data-id="${payload.id}"]`),
+    );
+    const el = this._upsertImageStatusBubble(payload);
+    if (!existed && (this._atBottom || document.activeElement === this._el.input)) {
+      this._el.messages.scrollTop = this._el.messages.scrollHeight;
+    }
+    if (status === "failed") {
+      const retryBtn = el.querySelector("[data-image-retry]");
+      if (retryBtn) {
+        retryBtn.addEventListener("click", async () => {
+          const retryText = String(retryBtn.getAttribute("data-image-retry") || "");
+          el.remove();
+          if (!retryText) return;
+          this._el.input.value = retryText;
+          try {
+            await this.send();
+          } catch (_) {}
+        });
+      }
+    }
+  }
+
+  _upsertImageStatusBubble(payload) {
+    const domId = String(payload.id);
+    let el = this._el.messages.querySelector(`[data-id="${domId}"]`);
+    if (!el) {
+      el = document.createElement("div");
+      el.setAttribute("data-id", domId);
+      this._el.messages.appendChild(el);
+    }
+    const displayName = (this._personaCache && this._personaCache.name) || "Aerie Companion";
+    const aiAvatar = (this._personaCache && this._personaCache.avatar_dataurl)
+      || (this._personaCache && this._personaCache.avatar_url)
+      || "";
+    const avatar = aiAvatar
+      ? `<img class="chat-msg__avatar" src="${this._escapeHtml(aiAvatar)}" alt="">`
+      : `<span class="chat-msg__avatar chat-msg__avatar--placeholder" aria-hidden="true">${this._escapeHtml(displayName.slice(0, 1))}</span>`;
+    const failed = String(payload.status || "") === "failed";
+    const retryText = this._escapeHtml(payload.retry_text || "");
+    const body = failed
+      ? `<div class="chat-bubble chat-bubble--image-status is-failed">
+           <svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-image"/></svg>
+           <span class="chat-image-status__text">图片这次没发出来</span>
+           <button type="button" class="chat-image-status__retry" data-image-retry="${retryText}">再拍一张</button>
+         </div>`
+      : `<div class="chat-bubble chat-bubble--image-status">
+           <span class="chat-image-status__spinner" aria-hidden="true"></span>
+           <span class="chat-image-status__text">正在拍照…</span>
+         </div>`;
+    el.className = "chat-msg chat-msg--assistant chat-msg--image-status";
+    el.innerHTML = `
+      <div class="chat-msg__avatar-wrap">${avatar}</div>
+      <div class="chat-msg__body">
+        <div class="chat-msg__name">${this._escapeHtml(displayName)}</div>
+        ${body}
+      </div>`;
+    return el;
+  }
+
   // ── 对话框内审批卡片（仿 Trae） ──────────────────
 
   _handleComputerControlSignal(payload) {
@@ -943,6 +1014,17 @@ class ChatManager {
       });
     };
     this._el.messages.addEventListener("scroll", onScroll, { passive: true });
+    // 裂图兜底：error 不冒泡，只能在 capture 阶段委托。图片加载失败时
+    // （历史假 URL、文件被删、后端未启动）隐藏原生裂图图标，换成占位样式，
+    // 避免 UI 出现破损图标。
+    this._el.messages.addEventListener("error", (event) => {
+      const target = event.target;
+      if (!target || target.tagName !== "IMG") return;
+      target.classList.add("is-broken");
+      target.removeAttribute("src");
+      const card = target.closest(".chat-attach-card--image");
+      if (card) card.classList.add("is-broken");
+    }, true);
   }
 
   _trimMessageWindow(removeSide) {
@@ -1046,6 +1128,10 @@ class ChatManager {
         </div>
       </div>`;
     }
+    const hasImageAttachment = !typing && Array.isArray(msg.attachments)
+      && msg.attachments.some(
+        (att) => String(att && (att.category || att.type) || "").toLowerCase() === "image",
+      );
     if (!typing && msg.attachments && msg.attachments.length > 0) {
       html += '<div class="chat-attachments">';
       for (const att of msg.attachments) {
@@ -1059,7 +1145,9 @@ class ChatManager {
         ${this._buildTypingIndicator(typingStatus)}
       </div>`;
     } else {
-      html += this._parseMessage(msg.content || "");
+      // 图片已由结构化附件卡片展示时，正文里的 [图片]/[图片内容] 角标是冗余的，
+      // 整条图片消息只保留（可选的）纯文字部分。
+      html += this._parseMessage(msg.content || "", { hideImageMarkers: hasImageAttachment });
     }
     if (tsText) {
       html += `<span class="chat-msg__meta-time">${tsText}</span>`;
@@ -1159,7 +1247,10 @@ class ChatManager {
 
     // ── IMAGE category: standalone large thumbnail bubble ──
     if (String(category).toLowerCase() === "image") {
+      // 后端生成图走相对地址 /uploads/<file>（字段名 url/thumbnail_url，
+      // 蛇形/驼峰两种历史约定都兼容）；用户上传附件走 downloadUrl。
       let src = att.thumbnailUrl || att.thumbnail_url || "";
+      if (!src && att.url) src = att.url;
       if (!src && att.downloadUrl) src = att.downloadUrl;
       if (!src && att.download_url) src = att.download_url;
       if (src) {
@@ -1331,6 +1422,13 @@ class ChatManager {
   _ingestChatSignal(signal, transport = "unknown") {
     let normalized = this._normalizeChatSignal(signal);
     if (!normalized) return;
+    // 图片独立发送状态：不进消息 store，由独立的占位气泡管理
+    // （generating 出图中 → ready 撤占位，真实图片附件消息随后落位；
+    //   failed 占位转失败态并提供手动重发）。
+    if (normalized.type === "assistant_image_status") {
+      this._handleImageStatus(normalized);
+      return;
+    }
     // 关联乐观气泡(修复重复渲染)：
     //  1) 带 request_id 的回显 → 用 _clientToRequest 反查 client_id(queue 路径)；
     //  2) 无 request_id 的 user 回显(local 同步路径) → 按内容匹配未确认的
@@ -2165,8 +2263,18 @@ class ChatManager {
      segments are plain text in a smaller, centered glass row.
      The three types appear in the order they were written, so a
      single message can interleave dialogue and narration naturally. */
-  _parseMessage(content) {
+  _parseMessage(content, { hideImageMarkers = false } = {}) {
     if (!content) return "";
+    // 图片已由附件卡片承载时，把整行 [图片]/[图片:..]/[图片内容] 占位
+    // （含同行描述）与残留 markdown 图片一并剥掉，避免描述变成孤立文本泡。
+    if (hideImageMarkers) {
+      content = String(content)
+        .replace(/^[ \t]*\[图片(?::[^\]]*)?\][^\n]*\n?/gm, "")
+        .replace(/[ \t]*\[图片内容\][^\n]*/g, "")
+        .replace(/!\[[^\]]*\]\([^)\s]+(?:\s+"[^"]*")?\)/g, "")
+        .trim();
+      if (!content) return "";
+    }
     const tagRe = /<(action|thought)>([\s\S]*?)<\/\1>/g;
     const parts = [];
     let last = 0;
@@ -2195,7 +2303,22 @@ class ChatManager {
           const deco = this._decorateContentMarkers(p.body);
           let html = this._renderMarkdown(deco.cleaned);
           for (const d of deco.decorations) {
+            // 图片已作为结构化附件卡片展示时，[图片]/[图片内容] 角标直接
+            // 抹掉（表情包角标不受影响）。
+            if (
+              hideImageMarkers
+              && (d.kind === "image" || d.kind === "info")
+            ) {
+              html = html.split(d.token).join("");
+              continue;
+            }
             html = html.split(d.token).join(this._buildMarkerBadge(d));
+          }
+          if (hideImageMarkers) html = html.trim();
+          // 纯图片消息（正文只剩 [图片] 描述，图片已在附件卡片里）不渲染空气泡
+          if (hideImageMarkers && !html.replace(/<[^>]*>/g, "").trim()
+              && !/<img\b/i.test(html)) {
+            return "";
           }
           return `<div class="chat-bubble chat-bubble--text">${html}</div>`;
         }

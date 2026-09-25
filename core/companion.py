@@ -1913,14 +1913,28 @@ class Companion:
             if not url:
                 logger.warning("[WorldImage] no asset url for local chat delivery")
                 return False
-            base = _api_base_url()
-            image_url = url if url.startswith("http") else base + (url if url.startswith("/") else "/" + url)
+            # 图片与文本分离：图片是一条独立的 assistant 消息，URL 只存在于
+            # 结构化附件里（相对路径 /uploads/...，由前端拼后端 origin），
+            # 正文绝不内嵌 markdown 图片——否则 LLM 会在历史上下文里模仿该格式
+            # 编造不存在的 uploads 文件名，前端只剩裂图图标。
+            from core.image_output_guard import uploads_relative_path, build_image_attachment
+
+            rel_path = uploads_relative_path(url)
+            if not rel_path:
+                logger.warning("[WorldImage] asset url is not an uploads path: %s", url)
+                return False
+            attachment = build_image_attachment(rel_path)
+            if not attachment:
+                return False
             target = str(plan.get("target") or "").strip() or "master"
-            # P3：本地聊天内容补图片描述，让上下文装配能看到"图里是什么"而非只有 URL。
+            # 正文用与 QQ 通道一致的 [图片] 描述格式：给 LLM 上下文保留
+            # "这是张什么图"，渲染层则由附件卡片展示真实照片。
             desc = _image_event_desc(plan)
-            content = f"![图片]({image_url})\n[图片内容] {desc}"
+            content = f"[图片] {desc}"
             scene = str(plan.get("scene") or "world_image")
+            attachments_json = json.dumps([attachment], ensure_ascii=False)
             message_id: int | str = generate_id("message")
+            user_id_int = 0
             try:
                 db = getattr(self, "db", None)
                 if db is not None and hasattr(db, "insert"):
@@ -1936,6 +1950,7 @@ class Companion:
                             "user_id": user_id_int,
                             "role": "assistant",
                             "content": content,
+                            "attachments": attachments_json,
                             "msg_type": scene if scene else "world_image",
                             "route_mode": "PROACTIVE",
                             "scene": scene if scene else "world_image",
@@ -1952,6 +1967,7 @@ class Companion:
                         content=content,
                         legacy_chat_log_id=int(message_id),
                         persona_id=persona_id,
+                        attachments=[attachment],
                     )
             except Exception:
                 logger.warning(
@@ -1966,6 +1982,7 @@ class Companion:
                 id=message_id,
                 user_id=target,
                 content=content,
+                attachments=[attachment],
                 source="local_chat",
                 scene=scene if scene else "world_image",
                 channel="desktop",
@@ -1973,15 +1990,15 @@ class Companion:
             # P3：本地通道也落 EVENT 记忆（content 存相对路径，不存完整 URL）。
             try:
                 await self._persist_image_event(
-                    int(user_id_int) if "user_id_int" in dir() else 0,
+                    user_id_int,
                     desc,
                     "desktop",
-                    image_path=str(plan.get("asset_url") or "").lstrip("/"),
+                    image_path=rel_path,
                     persona_id=str(plan.get("persona_id") or "") or None,
                 )
             except Exception:
                 logger.debug("[WorldImage] local chat image event record failed", exc_info=True)
-            logger.info("[WorldImage] delivered generated image to local chat: %s", image_url)
+            logger.info("[WorldImage] delivered generated image to local chat: %s", rel_path)
             return True
 
         self.world_image_candidate_consumer = WorldImageCandidateConsumer(

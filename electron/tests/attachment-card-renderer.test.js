@@ -230,6 +230,52 @@ test("attachment card for failed state shows retry button and error message", ()
   assert.ok(card.hasText("encoding error"), "error message should be visible");
 });
 
+test("image card falls back to backend-generated `url` field with absolute rewrite", () => {
+  // 本地生图附件只带 url/thumbnail_url（蛇形 + 相对地址），不带 downloadUrl
+  const { chat } = loadChatManager();
+  const card = parseCard(chat._buildAttachmentCard({
+    attachmentId: "img_001",
+    category: "image",
+    name: "a1b2c3.png",
+    state: "ready",
+    url: "/uploads/a1b2c3.png",
+  }));
+  assert.ok(card.hasThumbnailImg(), "url fallback should still render <img>");
+  assert.ok(
+    card.hasText("http://127.0.0.1:7890/uploads/a1b2c3.png"),
+    "relative /uploads url must be rewritten to absolute backend URL",
+  );
+});
+
+test("image card prefers thumbnail_url over url when both present", () => {
+  const { chat } = loadChatManager();
+  const card = parseCard(chat._buildAttachmentCard({
+    attachmentId: "img_002",
+    category: "image",
+    name: "x.png",
+    state: "ready",
+    url: "/uploads/x.png",
+    thumbnail_url: "/uploads/.image_assets/thumbs/x.png",
+  }));
+  assert.ok(card.hasText(".image_assets/thumbs/x.png"));
+});
+
+test("_parseMessage hides [图片]/[图片内容] markers when image attachment already shown", () => {
+  const { chat } = loadChatManager();
+  const hidden = chat._parseMessage("[图片] 一张自拍", { hideImageMarkers: true });
+  // 纯图片占位消息不应再渲染空气泡或图片角标
+  assert.equal(hidden, "");
+  const withText = chat._parseMessage("[图片] 一张自拍\n这张喜欢吗", { hideImageMarkers: true });
+  assert.ok(withText.includes("这张喜欢吗"), "non-image text must survive marker hiding");
+  assert.ok(!withText.includes("[图片]"), "image marker badge must be gone");
+  // 表情包标记不受图片附件影响（正常渲染为 sticker 徽章）
+  const sticker = chat._parseMessage("哼 [表情包]", { hideImageMarkers: true });
+  assert.ok(
+    sticker.includes("chat-marker--sticker"),
+    "sticker marker must still render as sticker badge when image markers hidden",
+  );
+});
+
 test("attachment card does not expose local absolute paths", () => {
   const { chat } = loadChatManager();
   const card = parseCard(chat._buildAttachmentCard({

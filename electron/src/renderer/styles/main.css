@@ -2104,6 +2104,71 @@ body {
   opacity: 0.75;
   flex-shrink: 0;
 }
+/* 裂图兜底：img 是替换元素不支持伪元素，占位画在 wrap 上 */
+.chat-attach-card--image.is-broken .chat-attach-card__image-wrap {
+  min-width: 240px;
+  min-height: 150px;
+  position: relative;
+  background: var(--bg-200);
+}
+.chat-attach-card--image.is-broken .chat-attach-card__image-wrap::after {
+  content: "图片暂时无法显示";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.chat-attach-card--image.is-broken img {
+  display: none;
+}
+
+/* ── 图片独立发送状态气泡（出图中 / 失败重发） ── */
+.chat-msg--image-status .chat-bubble--image-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.chat-image-status__spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+  border-top-color: var(--color-primary, #a78bfa);
+  animation: chat-image-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes chat-image-spin {
+  to { transform: rotate(360deg); }
+}
+.chat-image-status__text {
+  line-height: 1.4;
+}
+.chat-bubble--image-status.is-failed {
+  gap: 10px;
+}
+.chat-bubble--image-status.is-failed .icon {
+  color: var(--color-danger, #e08e8e);
+  flex-shrink: 0;
+}
+.chat-image-status__retry {
+  border: none;
+  background: transparent;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 8px;
+  color: var(--color-primary, #a78bfa);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.chat-image-status__retry:hover {
+  background: rgba(167, 139, 250, 0.12);
+}
 
 /* ── AUDIO / VOICE card: voice bar + transcript, no playback ── */
 .chat-attach-card--audio {

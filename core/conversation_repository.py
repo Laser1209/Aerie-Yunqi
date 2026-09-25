@@ -419,6 +419,7 @@ class ConversationRepository:
         content: str,
         legacy_chat_log_id: int,
         persona_id: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> str | None:
         """把主动推送（主动消息/生图消息）补齐进 normalized messages 层。
 
@@ -426,6 +427,9 @@ class ConversationRepository:
         导致管理平台聊天记录看不到它们、级联删除也漏掉它们。这里为其补一条
         assistant messages 行，归入对应角色在该通道的会话（conversation_id 与
         普通消息一致，通过 legacy_chat_log_id 关联回 chat_log）。
+
+        ``attachments`` 为结构化附件（如本地生图的图片卡片），与 chat_log
+        的 attachments 列保持同一份 JSON，避免历史接口读 messages 表时丢图。
         """
         if not self.enabled:
             return None
@@ -460,13 +464,16 @@ class ConversationRepository:
                        VALUES (?, ?, 'completed', datetime('now', 'localtime'))""",
                     (turn_id, conversation_id),
                 )
+            serialized_attachments = (
+                json.dumps(attachments, ensure_ascii=False) if attachments else None
+            )
             self._insert_message(
                 conn,
                 conversation_id=conversation_id,
                 turn_id=turn_id,
                 role="assistant",
                 content=content,
-                attachments=None,
+                attachments=serialized_attachments,
                 response_group_id=None,
                 sequence=1,
                 channel=channel,

@@ -34,6 +34,7 @@ from core.chat_request_repository import RequestContext
 from core.cognition import CognitionEngine
 from core.conversation_repository import active_persona_id
 from core.feature_flags import FeatureFlags
+from core.image_output_guard import strip_llm_image_artifacts
 from core.ids import generate_id
 from core.model_output import normalize_model_text
 from core.office_mode import get_office_mode_manager, OfficeMode
@@ -687,6 +688,10 @@ class Pipeline:
         except Exception:
             # Self-check is best-effort; never break the pipeline.
             logger.exception("output_self_check failed; using sanitized text as-is")
+        # 图片输出守卫：真实照片由后台生图链路作为独立附件消息送达，
+        # LLM 不得在正文里编造 ![图片](url) / [图片内容] 等占位语法
+        # （模型会模仿历史消息格式瞎编 uploads 文件名，前端只渲染出裂图）。
+        reply_text = strip_llm_image_artifacts(reply_text)
 
         # Task 5: Content validation — ensure reply has meaningful text after tag stripping
         content_remedied = False
@@ -1028,11 +1033,46 @@ class Pipeline:
             if not await _emit_segments(0, lead_in_count):
                 return result
         # 2) 出图并等送达（失败/超时不阻塞后续文本）
-        if photo_intent:
+        # 图片与文本分开发送：本地桌面端先推一个"出图中"占位状态，
+        # 图片真正作为独立附件消息落库后再推 ready 撤掉占位；
+        # 失败则占位转 failed，由前端提供手动重发。
+        photo_pending_id = ""
+        # getattr 兜底：部分单测用 SimpleNamespace 构造消息，未必带 source
+        if photo_intent and getattr(msg, "source", None) == "local":
+            photo_pending_id = "imgpending:" + (
+                str(getattr(request_context, "turn_id", "") or "")
+                or hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
+            )
             try:
-                await self._deliver_chat_photo(msg, request_context, photo_intent, trace)
+                emit(
+                    "assistant_image_status",
+                    type="assistant_image_status",
+                    role="assistant",
+                    id=photo_pending_id,
+                    user_id=msg.user_id,
+                    status="generating",
+                    hint=photo_intent,
+                    source=msg.source,
+                    **self._event_contract(
+                        request_state,
+                        message_id=photo_pending_id,
+                        response_group_id=request_state.response_group_id,
+                    ),
+                )
+            except Exception:
+                logger.debug("assistant_image_status generating emit failed", exc_info=True)
+        if photo_intent:
+            photo_result: dict = {}
+            try:
+                photo_result = await self._deliver_chat_photo(
+                    msg, request_context, photo_intent, trace,
+                )
             except Exception:
                 logger.debug("chat photo deliver failed", exc_info=True)
+            if photo_pending_id:
+                self._emit_photo_pending_result(
+                    msg, request_state, photo_pending_id, photo_result,
+                )
         # 3) 再发剩余文本
         if not await _emit_segments(lead_in_count, len(segments)):
             return result
@@ -1309,6 +1349,57 @@ class Pipeline:
         )
         self._record_chat_photo_tool(msg, candidate, result, trace)
         return result
+
+    @staticmethod
+    def _photo_result_delivered(result: dict | None) -> bool:
+        """生图候选结果是否真的把图片送达到了通道。
+
+        publish 返回 "published" 只代表事件入箱，必须检查 consumed 明细里
+        至少一条 status=completed（consumer 的投递成功终态）。
+        """
+        if not isinstance(result, dict):
+            return False
+        consumed = result.get("consumed")
+        if isinstance(consumed, list) and consumed:
+            return any(
+                isinstance(item, dict) and str(item.get("status") or "") == "completed"
+                for item in consumed
+            )
+        return str(result.get("status") or "") in {
+            "ok", "success", "sent", "delivered", "completed",
+        }
+
+    def _emit_photo_pending_result(
+        self,
+        msg: IncomingMessage,
+        request_state: RequestContext | None,
+        pending_id: str,
+        photo_result: dict | None,
+    ) -> None:
+        """图片投递结束后推送占位气泡的终态（ready 撤掉 / failed 给重发）。"""
+        delivered = self._photo_result_delivered(photo_result)
+        try:
+            emit(
+                "assistant_image_status",
+                type="assistant_image_status",
+                role="assistant",
+                id=pending_id,
+                user_id=msg.user_id,
+                status="ready" if delivered else "failed",
+                # 失败时前端重发按钮复用原用户指令再走一轮生图
+                retry_text="" if delivered else str(msg.content or ""),
+                source=msg.source,
+                **self._event_contract(
+                    request_state,
+                    message_id=pending_id,
+                    response_group_id=(
+                        request_state.response_group_id
+                        if request_state is not None else None
+                    ),
+                ),
+            )
+        except Exception:
+            logger.debug("assistant_image_status terminal emit failed", exc_info=True)
 
     def _record_chat_photo_tool(
         self,
@@ -2363,6 +2454,8 @@ class Pipeline:
             reply_text = _sc_result.cleaned_text
         except Exception:
             pass
+        # 图片输出守卫：禁止 LLM 在正文编造图片占位语法（见 FULL 路径说明）
+        reply_text = strip_llm_image_artifacts(reply_text)
 
         # Task 5: Content validation for BASIC lightweight mode
         content_remedied = False
@@ -3657,6 +3750,8 @@ class Pipeline:
                     reply_text = _sc_result.cleaned_text
                 except Exception:
                     logger.exception("[Batch %s] output_self_check failed for seq %d", batch_id, seq_idx)
+                # 图片输出守卫：禁止 LLM 在正文编造图片占位语法（见 FULL 路径说明）
+                reply_text = strip_llm_image_artifacts(reply_text)
 
                 # Task 5: Content validation for batch mode (per-reply)
                 content_remedied = False

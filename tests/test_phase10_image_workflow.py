@@ -322,6 +322,40 @@ def test_brain_generation_provider_accepts_base64_image_bytes(tmp_path):
     assert (tmp_path / "uploads" / result["asset"]["saved_as"]).exists()
 
 
+def test_brain_edit_provider_forwards_size():
+    """图生图必须把画幅透传给 provider（与文生图一致）。
+
+    edit 通道默认落回 1:1，若不透传，伊塔按场景决断的 9:16 / 16:9 会在
+    人物图上被静默丢掉。
+    """
+    captured: dict = {}
+
+    class BrainWithEdit:
+        def generate_image_edit(
+            self, prompt, image_bytes, *, mime_type="image/png", size=None, metadata=None
+        ):
+            captured["size"] = size
+            return {
+                "status": "unavailable",
+                "provider": "openai_compatible_image",
+                "model": "image-test-model",
+                "error_code": "image_edit_unsupported",
+            }
+
+    provider = LLMCallerImageGenerationProvider(BrainWithEdit())
+    result = provider.generate_edit(
+        prompt="edit this",
+        image_bytes=b"reference",
+        mime_type="image/png",
+        request_id="imgedit-1",
+        owner_id="master",
+        metadata={"size": "768x1344"},
+    )
+
+    assert captured["size"] == "768x1344"
+    assert result.status == "unavailable"
+
+
 def test_brain_generation_provider_preserves_error_code(tmp_path):
     class BrainWithProviderError:
         def generate_image(self, prompt: str, metadata: dict | None = None):

@@ -393,6 +393,9 @@ class LLMCallerImageGenerationProvider:
                 prompt,
                 image_bytes,
                 mime_type=mime_type,
+                # 画幅随候选一起透传（与文生图一致）：图生图默认会落回 1:1，
+                # 丢掉伊塔按场景决断的 9:16 / 16:9。
+                size=str((metadata or {}).get("size") or ""),
                 metadata=metadata,
             )
         except Exception:

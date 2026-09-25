@@ -13,12 +13,19 @@ from core.companion import (
     _ensure_selfie_pov,
     _extract_llm_json,
     _extract_photo_spec,
+    _finalize_image_prompt,
     _image_event_desc,
     _image_orientation_for_size,
     _is_friendly_shot_exception,
+    _local_light_phrase,
     _normalize_spec_value,
+    _PHOTO_OUTFIT_TABLE,
+    _PHOTO_POSE_PHRASE,
+    _PHOTO_STYLE_PHRASE,
     _photo_shot_fallback,
     _photo_shot_phrase,
+    _reference_assets_for_spec,
+    _with_default_shot,
     _PHOTO_FOCUS_DETAIL_TABLE,
     _PHOTO_FOCUS_TABLE,
     _PHOTO_ORIENTATION_TABLE,
@@ -422,7 +429,9 @@ def test_normalize_shot_approximation():
 
 
 def test_shot_phrase_lookup():
-    assert "背景虚化" in (_photo_shot_phrase("特写") or "")
+    # 特写/大特写只给镜头与景深语言（"虚化"由 focus 模块表达，不重复说）
+    assert "浅景深" in (_photo_shot_phrase("特写") or "")
+    assert "虚化" not in (_photo_shot_phrase("特写") or "")
     assert "机位拉远" in (_photo_shot_phrase("远景") or "")
 
 
@@ -468,3 +477,245 @@ def test_ensure_selfie_pov_home_premise_kept():
     # 房间内普通请求 → 仍追加手持自拍前提（防第三方拍摄误读）
     out = _ensure_selfie_pov("躺在床上拍一张", "role_selfie")
     assert "她本人手持手机拍摄" in out
+
+
+# ── 模块化补充：部位细节 / 服装 / 景别镜头语言 ─────────────────
+def test_focus_detail_phrase_injected():
+    """focus 命中时不仅写"聚焦在X"，还要给出该部位的画面语言。"""
+    out = _compose_modular_prompt("base", _spec("看看腿"))
+    assert "画面重点聚焦在双腿，其余虚化" in out
+    assert "腿部皮肤通透" in out
+
+
+def test_focus_detail_covers_every_closeup_label():
+    """_PHOTO_FOCUS_PHRASE 覆盖全部局部特写标签，避免出现无措辞的空模块。"""
+    from core.companion import _CLOSEUP_FOCUS_SET, _PHOTO_FOCUS_PHRASE
+
+    assert _CLOSEUP_FOCUS_SET <= set(_PHOTO_FOCUS_PHRASE)
+
+
+def test_extract_outfit_keyword():
+    assert _extract_photo_spec("穿睡衣拍一张")["outfit"] == "睡衣"
+    assert _extract_photo_spec("裹浴巾拍一张")["outfit"] == "浴巾"
+    assert _extract_photo_spec("拍一张")["outfit"] == ""
+
+
+def test_normalize_outfit_approximation():
+    assert _normalize_spec_value("睡衣", _PHOTO_OUTFIT_TABLE) == "睡衣"
+    assert _normalize_spec_value("连衣裙", _PHOTO_OUTFIT_TABLE) == "连衣裙"
+
+
+def test_compose_injects_outfit_module():
+    out = _compose_modular_prompt("base", _spec("穿睡衣在床上拍一张"))
+    assert "穿着宽松家居睡衣" in out
+
+
+def test_shot_phrase_carries_lens_language():
+    """景别模块带镜头/焦段语言，而不是只有一句"贴近/拉远"。"""
+    assert "85mm" in (_photo_shot_phrase("特写") or "")
+    assert "35mm" in (_photo_shot_phrase("远景") or "")
+
+
+def test_default_shot_by_prompt_key():
+    """既无景别也无 focus 时，按画面类型补默认景别（自拍近景 / 生活场景中景）。"""
+    assert _with_default_shot({}, "role_selfie")["shot"] == "近景"
+    assert _with_default_shot({}, "role_in_scene")["shot"] == "中景"
+    assert _with_default_shot({}, "unknown_key") == {}
+
+
+def test_default_shot_respects_explicit_or_focus():
+    assert _with_default_shot({"shot": "远景"}, "role_selfie")["shot"] == "远景"
+    # 已有 focus（可推导景别）时不覆盖，交给 _photo_shot_fallback
+    assert "shot" not in _with_default_shot({"focus": "双腿"}, "role_selfie")
+
+
+# ── 图生图参考视角模块：分部位/姿态 → three_view 视角 ─────────────
+def test_reference_view_back_for_back_focus():
+    assert _reference_assets_for_spec({"focus": "背影"}) == [
+        "three_view:back",
+        "three_view:front",
+    ]
+
+
+def test_reference_view_side_for_side_pose():
+    assert _reference_assets_for_spec({"pose": "侧躺"}) == [
+        "three_view:side",
+        "three_view:front",
+    ]
+
+
+def test_reference_view_defaults_to_front_without_fallback():
+    assert _reference_assets_for_spec({"focus": "脸庞"}) == ["three_view:front"]
+    assert _reference_assets_for_spec(None) == ["three_view:front"]
+
+
+# ── 出口模块：真实感 + 负面约束（幂等、景物另用一套） ─────────────
+def test_finalize_adds_realism_and_negative_for_person():
+    out = _finalize_image_prompt("一张写实生活照。", "role_selfie")
+    assert "毛孔" in out
+    assert "反面约束" in out
+    assert "多余或残缺的手指" in out
+
+
+def test_finalize_is_idempotent():
+    once = _finalize_image_prompt("一张写实生活照。", "role_selfie")
+    twice = _finalize_image_prompt(once, "role_selfie")
+    assert twice == once
+
+
+def test_finalize_environment_uses_env_realism_and_negative():
+    """景物图用景物那套：材质/光影真实，但不塞人物专属的毛孔/手指约束。"""
+    out = _finalize_image_prompt("一张写实照片，第一人称视角。", "environment_object")
+    assert "真实摄影质感" in out
+    assert "反面约束" in out
+    assert "毛孔" not in out
+    assert "多余或残缺的手指" not in out
+
+
+# ── 光线模块：world 优先、本地时刻兜底、幂等 ───────────────────
+def test_finalize_injects_light():
+    out = _finalize_image_prompt(
+        "一张写实生活照。", "role_selfie", light="傍晚，黄昏的暖色调光线"
+    )
+    assert "光线：傍晚，黄昏的暖色调光线" in out
+
+
+def test_finalize_light_is_idempotent():
+    """世界上下文兜底可能已注入同一段光线 → 出口不得重复写第二遍。"""
+    once = _finalize_image_prompt(
+        "一张写实生活照。", "role_selfie", light="傍晚，黄昏的暖色调光线"
+    )
+    twice = _finalize_image_prompt(once, "role_selfie", light="傍晚，黄昏的暖色调光线")
+    assert twice == once
+    assert twice.count("黄昏的暖色调光线") == 1
+
+
+def test_finalize_skips_light_when_already_in_world_text():
+    """光线已由「画面氛围：…」注入时（world 兜底路径），出口不再追加。"""
+    base = "一张写实生活照。画面氛围：傍晚，黄昏的暖色调光线。"
+    out = _finalize_image_prompt(base, "role_selfie", light="傍晚，黄昏的暖色调光线")
+    assert out.count("黄昏的暖色调光线") == 1
+
+
+def test_finalize_without_light_never_empty():
+    """取不到光线（空串）时跳过模块，不产出空段、不影响其余约束。"""
+    out = _finalize_image_prompt("一张写实生活照。", "role_selfie", light="")
+    assert "光线：" not in out
+    assert "反面约束" in out
+
+
+def test_local_light_phrase_covers_every_phase():
+    """本地光线兜底必须对每个时段都给得出文案（单一真源 world_phase），无英文/空值。"""
+    from datetime import datetime
+
+    from core.world_phase import TIME_OF_DAY_LIGHT_CN
+
+    for hour in (6, 9, 13, 16, 19, 22, 2):
+        text = _local_light_phrase(datetime(2026, 9, 21, hour, 0))
+        assert text and text in TIME_OF_DAY_LIGHT_CN.values()
+
+
+# ── 模块去重：横切约束只由出口说一次 ────────────────────────
+def test_cross_cutting_constraints_are_not_duplicated():
+    """base 与出口模块不得重复同一条横切约束。
+
+    真实感/反动漫/负面约束由出口统一负责；base 若再写一遍，同一条约束会出现
+    两三次，模型对单条约束的权重被摊薄（历史现象：一段提示词里"真实摄影质感"
+    和"不要动漫风"各出现两遍，"水印"出现三遍）。
+    """
+    from unittest.mock import patch
+
+    from core.companion import Companion
+
+    comp = Companion.__new__(Companion)
+    with patch("config.persona_loader.load_persona", return_value={}):
+        base = comp._compose_base_image_prompt(
+            "role_selfie",
+            {"scene": "local_send", "user_raw": "拍一张", "size": "768x1344"},
+        )
+    out = _finalize_image_prompt(base, "role_selfie")
+    assert out.count("真实摄影质感") == 1
+    assert out.count("不要动漫风") == 1
+    assert out.count("反面约束") == 1
+
+
+def test_environment_cross_cutting_constraints_not_duplicated():
+    from unittest.mock import patch
+
+    from core.companion import Companion
+
+    comp = Companion.__new__(Companion)
+    with patch("config.persona_loader.load_persona", return_value={}):
+        base = comp._compose_base_image_prompt(
+            "environment_object", {"reason_code": "world_visual:object_gray_sofa"}
+        )
+    out = _finalize_image_prompt(base, "environment_object")
+    assert out.count("真实摄影质感") == 1
+    assert out.count("不要动漫风") == 1
+    assert out.count("反面约束") == 1
+
+
+# ── base 模板：不抢光线模块的职责、名词完整 ─────────────────
+def _base_with_persona(prompt_key: str, candidate: dict, persona: dict) -> str:
+    from unittest.mock import patch
+
+    from core.companion import Companion
+
+    comp = Companion.__new__(Companion)
+    with patch("config.persona_loader.load_persona", return_value=persona):
+        return comp._compose_base_image_prompt(prompt_key, candidate)
+
+
+def test_base_prompt_does_not_claim_lighting():
+    """光线由光线模块单独表达；base 若写死"自然光"，深夜/雨天的画面就会自相矛盾。"""
+    person = _base_with_persona(
+        "role_selfie", {"scene": "local_send", "user_raw": "拍一张"}, {}
+    )
+    env = _base_with_persona(
+        "environment_object", {"reason_code": "world_visual:object_gray_sofa"}, {}
+    )
+    assert "自然光" not in person
+    assert "自然光" not in env
+
+
+def test_base_prompt_prefixes_eye_noun_when_missing():
+    """persona eyes 只有描述（"深灰蓝色，目光沉静"）时补"眼睛"名词。"""
+    persona = {"persona": {"appearance": {"eyes": "深灰蓝色，目光沉静"}, "profile": {}}}
+    out = _base_with_persona(
+        "role_selfie", {"scene": "local_send", "user_raw": "拍一张"}, persona
+    )
+    assert "眼睛深灰蓝色" in out
+    assert "眼睛眼睛" not in out
+
+
+def test_base_prompt_keeps_eye_noun_when_present():
+    persona = {"persona": {"appearance": {"eyes": "深灰蓝色眼睛"}, "profile": {}}}
+    out = _base_with_persona(
+        "role_selfie", {"scene": "local_send", "user_raw": "拍一张"}, persona
+    )
+    assert out.count("眼睛") == 1
+
+
+# ── 氛围模块：带神态/视线，而不是只写"整体氛围X" ──────────────
+def test_style_phrase_covers_every_label():
+    from core.companion import _PHOTO_STYLE_TABLE
+
+    assert {label for label, _ in _PHOTO_STYLE_TABLE} == set(_PHOTO_STYLE_PHRASE)
+
+
+def test_compose_injects_style_mood():
+    out = _compose_modular_prompt("base", _spec("要慵懒的感觉"))
+    assert "整体氛围慵懒" in out
+    assert _PHOTO_STYLE_PHRASE["慵懒"] in out
+
+
+# ── 姿态模块：措辞不夹带场景词（场景由 scene 模块独立表达） ──────
+def test_pose_phrase_has_no_scene_word():
+    assert "床" not in _PHOTO_POSE_PHRASE["侧躺"]
+
+
+def test_side_lying_on_sofa_does_not_say_bed():
+    """用户说"沙发上侧躺" → 画面里不能出现"躺在床上"这种自相矛盾。"""
+    out = _compose_modular_prompt("base", _spec("在沙发上侧躺拍一张"))
+    assert "场景是沙发" in out
+    assert "床上" not in out

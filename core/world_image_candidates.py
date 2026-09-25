@@ -40,10 +40,11 @@ _IMAGE_CANDIDATE_TOPICS = {
 }
 _MANUAL_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
 
-# 方向3：人物类走图生图。仅对角色/合影 prompt_key 尝试 generate_image_edit（用
-# three_view:front 参考图锁定人物外貌），由 image_edit_v1 flag 门控；edit 未产出
-# completed 时优雅降级回文生图（generate_image），绝不中断主链路。
-_ROLE_EDIT_PROMPT_KEYS = frozenset({"role_selfie", "role_in_scene", "couple_photo"})
+# 生图路由（单一真源）：承载对话人设的画面（自拍/生活场景/合影）必须走图生图——
+# 用 three_view 参考图锁人物一致性，绝不靠文字描述重画一张脸；风景/物件/文档等
+# 非人物画面走文生图。由 image_edit_v1 作为总开关（kill switch），edit 通道不可用
+# （中转站不支持 /images/edits）时降级回文生图，保证用户要图不落空。
+PERSONA_IMAGE_PROMPT_KEYS = frozenset({"role_selfie", "role_in_scene", "couple_photo"})
 _DEFAULT_EDIT_REFERENCE = ("three_view:front",)
 _IMAGE_EDIT_FLAG = "image_edit_v1"
 
@@ -636,6 +637,14 @@ class WorldImageCandidateConsumer:
             "source": _safe_value(payload.get("source") or "generated"),
             "score": _safe_float(payload.get("score"), 0.0),
             "size": _safe_value(payload.get("size") or ""),
+            # 提示词模块化输入（原始指令 + 参考图视角）必须随事件一起重建，
+            # 否则 _image_prompt_for 拿不到指令，分部位/景别/参考视角全部退化成默认。
+            "user_raw": _safe_value(payload.get("user_raw") or ""),
+            "reference_assets": [
+                _safe_value(item)
+                for item in (payload.get("reference_assets") or [])
+                if isinstance(item, str) and item.strip()
+            ],
             "expires_at": _safe_value(payload.get("expires_at") or ""),
             "created_at": _safe_value(payload.get("created_at") or getattr(event, "occurred_at", "") or ""),
             "event_id": _safe_value(getattr(event, "event_id", "") or ""),
@@ -815,14 +824,16 @@ class WorldImageCandidateConsumer:
     def _generate_workflow_result(
         self, prompt: str, candidate: dict[str, Any]
     ) -> dict[str, Any]:
-        """按候选类型选择生图路径：角色类（flag 开启时）尝试图生图，否则文生图。
+        """按候选类型选择生图路径：人物类走图生图，其余走文生图。
 
-        角色/合影 prompt_key 且 image_edit_v1 开启 → 先试 generate_image_edit（用
-        three_view:front 等参考图锁定人物外貌）；edit 未产出 completed 时优雅降级
-        回 generate_image，绝不让用户要图因 edit 失败而落空（能力探测 + 降级护栏）。
+        承载对话人设的 prompt_key（自拍/生活场景/合影）→ generate_image_edit，
+        参考图由提示词层按画面模块选定（three_view 正/侧/背，见
+        ``_reference_assets_for_spec``）；edit 未产出 completed 时优雅降级回
+        generate_image，绝不让用户要图因 edit 失败而落空（能力探测 + 降级护栏）。
+        风景/物件/文档类不带参考图，直接文生图。
         """
         prompt_key = str(candidate.get("prompt_key") or "")
-        use_edit = self._image_edit_enabled() and prompt_key in _ROLE_EDIT_PROMPT_KEYS
+        use_edit = self._image_edit_enabled() and prompt_key in PERSONA_IMAGE_PROMPT_KEYS
         if not use_edit:
             return self._call_generate_image(prompt, candidate)
         reference_assets = candidate.get("reference_assets") or list(_DEFAULT_EDIT_REFERENCE)

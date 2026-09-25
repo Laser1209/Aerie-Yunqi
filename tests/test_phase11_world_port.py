@@ -94,6 +94,32 @@ async def test_inprocess_world_adapter_five_interface_contract_and_redaction():
 
 
 @pytest.mark.asyncio
+async def test_inprocess_publish_image_candidate_keeps_prompt_modules():
+    """进程内发布也必须保留 user_raw / reference_assets（与 sidecar 载荷对齐）。
+
+    这两项是提示词模块化的输入：进程内模式是默认模式，若在这里被 redact 掉，
+    "看看腿"这类指令的分部位/景别解析会静默失效，参考视角也会退回写死的 front。
+    """
+    port = InProcessWorldAdapter(instance_id="world-test")
+
+    result = await port.publish_image_candidate({
+        "candidate_id": "cand-modules",
+        "idempotency_key": "world-cand-modules",
+        "prompt_key": "role_selfie",
+        "user_raw": "看看腿",
+        "reference_assets": ["three_view:back", "three_view:front"],
+        "prompt": "raw prompt must not leak",
+    })
+    events = await port.replay_events(last_seq=0)
+    payload = events[0].payload
+
+    assert result["status"] == "accepted"
+    assert payload["user_raw"] == "看看腿"
+    assert payload["reference_assets"] == ["three_view:back", "three_view:front"]
+    assert "raw prompt must not leak" not in json.dumps(events[0].to_public_dict(), ensure_ascii=False)
+
+
+@pytest.mark.asyncio
 async def test_inprocess_observe_idempotency_does_not_duplicate_events():
     port = InProcessWorldAdapter(instance_id="world-idem")
     observation = Observation(

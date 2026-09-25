@@ -338,6 +338,14 @@ def _image_candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
         "source": _safe_text(payload.get("source") or "generated"),
         "score": _safe_float(payload.get("score"), 0.0),
         "size": _safe_text(payload.get("size") or ""),
+        # 生图指令与参考图是提示词模块化的输入：丢掉它们，消费端只能拿 intent
+        # 关键字拼死板模板（分部位/景别全部失效）。这里按公开字段透传，非凭据。
+        "user_raw": _safe_text(payload.get("user_raw") or "", 500),
+        "reference_assets": [
+            _safe_text(item, 200)
+            for item in (payload.get("reference_assets") or [])
+            if isinstance(item, str) and item.strip()
+        ],
         "expires_at": _safe_text(payload.get("expires_at") or ""),
         "created_at": _safe_text(payload.get("created_at") or ""),
     }

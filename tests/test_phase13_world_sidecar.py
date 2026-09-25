@@ -173,6 +173,35 @@ if (status.crashCount !== 2) throw new Error("unexpected crash count");
     )
 
 
+def test_world_sidecar_image_candidate_keeps_prompt_modules(tmp_path):
+    """Sidecar 载荷必须保留 user_raw / reference_assets。
+
+    它们是提示词模块化的输入，且与进程内 redact_image_candidate 契约逐字段对齐
+    （两种 world_port 模式下消费端看到同样的候选）。丢掉 user_raw 会让分部位/
+    景别解析拿不到指令，丢掉 reference_assets 会让参考视角永远退回 front。
+    """
+    from world_service.storage.sqlite_store import WorldSidecarStore
+
+    store = WorldSidecarStore(tmp_path / "world.db")
+    store.append_image_candidate(
+        {
+            "candidate_id": "cand-modules",
+            "idempotency_key": "world-cand-modules",
+            "prompt_key": "role_selfie",
+            "user_raw": "看看腿",
+            "reference_assets": ["three_view:back", "three_view:front"],
+            "prompt": "raw prompt must not leak",
+        }
+    )
+
+    events = store.events_after(consumer_id="core", last_seq=0)
+    payload = events[0]["payload"]
+
+    assert payload["user_raw"] == "看看腿"
+    assert payload["reference_assets"] == ["three_view:back", "three_view:front"]
+    assert "raw prompt must not leak" not in json.dumps(payload, ensure_ascii=False)
+
+
 def test_core_event_stream_publishes_world_event_once():
     from core import event_stream
 

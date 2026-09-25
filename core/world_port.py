@@ -775,6 +775,15 @@ def redact_image_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "source": str(payload.get("source") or "generated"),
         "score": _safe_float(payload.get("score"), 0.0),
         "size": str(payload.get("size") or ""),
+        # 生图指令（用户原话）与参考图视角是提示词模块化的输入，必须与 sidecar
+        # 载荷逐字段对齐：丢掉它们，消费端只能按 intent 拼固定模板，分部位/
+        # 景别/参考视角全部失效。它们不是凭据，故按公开字段透传（与 sqlite_store 一致）。
+        "user_raw": str(payload.get("user_raw") or "")[:500],
+        "reference_assets": [
+            str(item)[:200]
+            for item in (payload.get("reference_assets") or [])
+            if isinstance(item, str) and item.strip()
+        ],
         "expires_at": str(payload.get("expires_at") or ""),
         "created_at": str(payload.get("created_at") or ""),
     }

@@ -1019,6 +1019,69 @@ async def test_edit_failure_falls_back_to_txt2img(tmp_path):
     assert workflow.edit_calls[0]["reference_assets"] == ["three_view:front"]
 
 
+@pytest.mark.asyncio
+async def test_environment_candidate_stays_txt2img(tmp_path):
+    """非人物画面（物件/风景）无对话人设可锁 → 必须走文生图，不挂参考图。"""
+    workflow = EditWorkflowStub("completed")
+    consumer = _role_edit_consumer(tmp_path, workflow, EditFlagStub(True))
+    result = await consumer.process_event(
+        _candidate_event(prompt_key="environment_object", reason_code="world_visual:window")
+    )
+    assert result["status"] == "completed"
+    assert workflow.generate_calls
+    assert workflow.edit_calls == []
+
+
+@pytest.mark.asyncio
+async def test_event_reconstruction_keeps_prompt_modules(tmp_path):
+    """事件重建必须保留 user_raw / reference_assets。
+
+    这两项是提示词模块化的输入：丢了 user_raw，分部位/景别解析拿不到指令
+    （历史现象：production 日志里 prompt.spec 恒为空、构图退回写死的托腮自拍）；
+    丢了 reference_assets，参考视角永远退回写死的 front。
+    """
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    seen: list[dict] = []
+
+    async def resolver(prompt_key, candidate):
+        seen.append(dict(candidate))
+        return "一张写实照片"
+
+    workflow = EditWorkflowStub("completed")
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=EditFlagStub(True),
+        image_workflow=workflow,
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "modules.json"),
+        prompt_resolver=resolver,
+        clock=_clock,
+    )
+
+    result = await consumer.process_event(
+        _candidate_event(
+            prompt_key="role_selfie",
+            reason_code="user_requested",
+            user_raw="看看腿",
+            reference_assets=["three_view:back", "three_view:front"],
+            size="768x1344",
+        )
+    )
+
+    assert result["status"] == "completed"
+    assert seen and seen[0]["user_raw"] == "看看腿"
+    assert seen[0]["reference_assets"] == ["three_view:back", "three_view:front"]
+    # 提示词层选定的参考视角必须原样传给 workflow，不能被默认 front 覆盖。
+    assert workflow.edit_calls[0]["reference_assets"] == ["three_view:back", "three_view:front"]
+    # 画幅也必须随候选走到 provider（edit 通道默认 1:1，不透传就丢 9:16）。
+    assert workflow.edit_calls[0]["metadata"]["size"] == "768x1344"
+
+
 # ── 方向4：时间光线 + 房间物件恒注入（room 键） ─────────────────
 def _fallback_injector():
     from core.companion import Companion

@@ -240,33 +240,41 @@ def test_file_management_tools():
 
     # 创建临时目录
     with tempfile.TemporaryDirectory() as tmpdir:
-        # 1. 列目录
-        result = tool_directory_list(tmpdir)
-        assert result["success"] is True
-        print(f"  ✅ 目录列表: {result['total_count']} 项")
+        # 安全守卫：写工具只允许操作已授权工作区，测试前注册、结束后移除
+        from core.workspace import get_workspace_manager
 
-        # 2. 创建子目录
-        result = tool_directory_create(os.path.join(tmpdir, "subdir"))
-        assert result["success"] is True
-        print(f"  ✅ 创建目录: {result['path']}")
+        ws = get_workspace_manager()
+        ws.add_temp_root(tmpdir)
+        try:
+            # 1. 列目录
+            result = tool_directory_list(tmpdir)
+            assert result["success"] is True
+            print(f"  ✅ 目录列表: {result['total_count']} 项")
 
-        # 3. 创建一个测试文件
-        test_file = os.path.join(tmpdir, "test.txt")
-        with open(test_file, "w", encoding="utf-8") as f:
-            f.write("Hello, World!")
+            # 2. 创建子目录
+            result = tool_directory_create(os.path.join(tmpdir, "subdir"))
+            assert result["success"] is True
+            print(f"  ✅ 创建目录: {result['path']}")
 
-        # 4. 复制文件
-        dest = os.path.join(tmpdir, "test_copy.txt")
-        result = tool_file_copy(test_file, dest)
-        assert result["success"] is True
-        assert os.path.exists(dest)
-        print(f"  ✅ 文件复制成功")
+            # 3. 创建一个测试文件
+            test_file = os.path.join(tmpdir, "test.txt")
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write("Hello, World!")
 
-        # 5. 重命名
-        result = tool_file_rename(dest, "renamed.txt")
-        assert result["success"] is True
-        assert os.path.exists(os.path.join(tmpdir, "renamed.txt"))
-        print(f"  ✅ 文件重命名成功")
+            # 4. 复制文件
+            dest = os.path.join(tmpdir, "test_copy.txt")
+            result = tool_file_copy(test_file, dest)
+            assert result["success"] is True
+            assert os.path.exists(dest)
+            print(f"  ✅ 文件复制成功")
+
+            # 5. 重命名
+            result = tool_file_rename(dest, "renamed.txt")
+            assert result["success"] is True
+            assert os.path.exists(os.path.join(tmpdir, "renamed.txt"))
+            print(f"  ✅ 文件重命名成功")
+        finally:
+            ws.remove_temp_root(tmpdir)
 
     print("  🎉 文件管理工具测试全部通过!\n")
 

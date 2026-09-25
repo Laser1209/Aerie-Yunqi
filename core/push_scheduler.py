@@ -17,6 +17,17 @@ from core.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
+# 标准 cron 昵称映射（5 段：分 时 日 月 周）
+_CRON_ALIASES: dict[str, str] = {
+    "@yearly": "0 0 1 1 *",
+    "@annually": "0 0 1 1 *",
+    "@monthly": "0 0 1 * *",
+    "@weekly": "0 0 * * 0",   # 周日 00:00
+    "@daily": "0 0 * * *",
+    "@midnight": "0 0 * * *",
+    "@hourly": "0 * * * *",
+}
+
 
 class PushPolicy:
     """Enforce push frequency limits and quiet periods."""
@@ -339,16 +350,14 @@ class PushPolicy:
             self._persist()
         if self.hard_cap > 0 and self.daily_count >= self.hard_cap:
             return False, "hard_cap"
-        soft_target = self.soft_budget_target()
-        if soft_target > 0 and self.daily_count >= soft_target:
-            # v2: soft budget is advisory only — hard_cap is the real fuse.
-            return True, "soft_budget_over"
+        # 硬性约束必须全部裁决完，才允许软预算给出"放行但提示"的结论；
+        # 软预算是 advisory 提示，绝不能提前 return 短路静默时段/间隔。
         now_time = now_dt.time()
         in_quiet = False
         if self.quiet_start <= self.quiet_end:
             in_quiet = self.quiet_start <= now_time <= self.quiet_end
         else:
-            # overnight range: e.g. 23:30 - 07:00
+            # 跨夜区间：如 23:30 - 07:00
             in_quiet = now_time >= self.quiet_start or now_time <= self.quiet_end
         if in_quiet and scene not in self.exempt_scenes:
             return False, "quiet_period"
@@ -356,13 +365,17 @@ class PushPolicy:
             elapsed = (now_dt - self.last_push_at).total_seconds() / 60
             if elapsed < self.min_interval_min:
                 return False, "interval"
-        # Per-scene minimum interval: 60 min default for non-exempt scenes
+        # 场景级最小间隔：非豁免场景默认为全局间隔的 2 倍
         scene_min_interval = self.min_interval_min * 2 if scene not in self.exempt_scenes else 0
         last_scene = self.scene_last_sent.get(scene)
         if last_scene and scene not in self.exempt_scenes:
             elapsed_scene = (now_dt - last_scene).total_seconds() / 60
             if elapsed_scene < scene_min_interval:
                 return False, f"scene_interval:{scene}"
+        # 硬性约束全部通过后，软预算耗尽仅提示不拦截（hard_cap 才是真熔断）
+        soft_target = self.soft_budget_target()
+        if soft_target > 0 and self.daily_count >= soft_target:
+            return True, "soft_budget_over"
         return True, "ok"
 
     def soft_budget_target(self) -> float:
@@ -395,6 +408,12 @@ class PushPolicy:
 
     def record(self, scene: str) -> None:
         now = datetime.now()
+        today = now.date()
+        if today != self.today:
+            # 跨天：先滚日桶再记账，否则昨天的计数会占用今天的额度
+            self.daily_count = 0
+            self.today = today
+            self.scene_last_sent.clear()
         self.daily_count += 1
         self.last_push_at = now
         self.scene_last_sent[scene] = now
@@ -569,7 +588,7 @@ class CronScheduler:
                 await asyncio.sleep(60)
 
     async def _run_pending_processor(self) -> None:
-        """每分钟检查 pending 计划，到点的经 policy 校验后触发。"""
+        """每分钟检查 pending 计划，到点的统一经 _dispatch 派发。"""
         while self._running:
             try:
                 due = self.policy.pop_due_plans()
@@ -577,16 +596,14 @@ class CronScheduler:
                     scene = str(plan.get("scene") or "idle_care")
                     scene_cfg = dict(self.scenes.get(scene) or {})
                     payload = plan.get("payload") or {}
-                    scene_cfg.update(payload if isinstance(payload, dict) else {})
-                    force = bool(scene_cfg.get("force"))
-                    if not force:
-                        ok, reason = self.policy.can_push(scene)
-                        if not ok:
-                            logger.info("[PushScheduler] pending %s skipped: %s", scene, reason)
-                            continue
-                    if self._dispatcher:
-                        logger.info("[PushScheduler] dispatching pending plan scene=%s", scene)
-                        await self._dispatcher(scene, scene_cfg)
+                    if isinstance(payload, dict):
+                        scene_cfg.update(payload)
+                    # 必须与 cron 正常派发走同一条路径：pause / judge /
+                    # can_push（hard_cap、静默时段、最小间隔）/ record 记账
+                    # 全部由 _dispatch 统一裁决，禁止直调 dispatcher 形成
+                    # 两套不一致逻辑。
+                    logger.info("[PushScheduler] dispatching pending plan scene=%s", scene)
+                    await self._dispatch(scene, scene_cfg)
             except asyncio.CancelledError:
                 return
             except Exception:
@@ -601,6 +618,16 @@ class CronScheduler:
         Uses a simple self-rolled cron parser instead of depending on croniter.
         Supports: minute hour day_of_month month day_of_week
         """
+        # 启动前只解析一次：表达式非法时显式报错并终止该场景任务，
+        # 避免解析异常被循环吞掉后每 60 秒静默重试、场景永不触发。
+        try:
+            self._parse_cron(cron_expr)
+        except ValueError:
+            logger.error(
+                "[PushScheduler] 场景 %s 的 cron 表达式无效，已停止调度: %r",
+                scene_name, cron_expr, exc_info=True,
+            )
+            return
         while self._running:
             try:
                 # R9.0+: soft gate — if paused, wait for resume
@@ -737,8 +764,11 @@ class CronScheduler:
 
         try:
             success = await self._dispatcher(scene_name, forward_cfg)
-            if success:
+            # 与 _dispatch_desire_text 统一：force 派发不记账，
+            # 避免 boot_greeting 污染 daily_count / 冷却状态。
+            if success and not force:
                 self.policy.record(scene_name)
+            if success:
                 logger.info(
                     "[PushScheduler] Sent: %s (tone=%s score=%s)",
                     scene_name, decision.tone if decision else "?",
@@ -828,53 +858,119 @@ class CronScheduler:
             return False
 
     @staticmethod
-    def _next_cron_time(cron_expr: str) -> datetime:
-        """Compute the next datetime matching a cron expression.
+    def _parse_cron_field(field: str, lo: int, hi: int) -> tuple[set[int], bool]:
+        """解析单个 cron 字段，返回 (允许取值集合, 是否为 ``*`` 通配)。
 
-        Supported fields: minute hour day month weekday.
-        Wildcards (*) and lists (e.g. 30 6,7 * * *) are supported.
+        支持语法：``*``、``*/n``、``a``、``a-b``、``a-b/n``、``a/n``
+        以及逗号组合（如 ``30 6,7 * * *``、``*/15``、``0 9-18/2 * * *``）。
+        取值越界、步长非法时抛 ValueError。
         """
-        parts = cron_expr.strip().split()
+        field = field.strip()
+        if field == "*":
+            return set(range(lo, hi + 1)), True
+        values: set[int] = set()
+        for item in field.split(","):
+            item = item.strip()
+            if not item:
+                raise ValueError(f"cron 字段含空片段: {field!r}")
+            step = 1
+            if "/" in item:
+                base, _, step_text = item.partition("/")
+                if not step_text.isdigit() or int(step_text) <= 0:
+                    raise ValueError(f"cron 步长非法: {item!r}")
+                step = int(step_text)
+            else:
+                base = item
+            if base == "*":
+                start, end = lo, hi
+            elif "-" in base:
+                lo_text, _, hi_text = base.partition("-")
+                start, end = int(lo_text), int(hi_text)
+            elif "/" in item:
+                # "a/n"：从 a 按步长取到字段上限
+                start, end = int(base), hi
+            else:
+                start = end = int(base)
+            if start < lo or end > hi or start > end:
+                raise ValueError(
+                    f"cron 字段越界: {item!r}，允许范围 {lo}-{hi}"
+                )
+            values.update(range(start, end + 1, step))
+        if not values:
+            raise ValueError(f"cron 字段无有效取值: {field!r}")
+        return values, False
+
+    @staticmethod
+    def _parse_cron(cron_expr: str) -> dict[str, Any]:
+        """解析 cron 表达式（含 @ 昵称）为各字段取值集合。
+
+        返回 minutes/hours/dom/months/weekdays 集合，以及 dom_star /
+        dow_star 两个通配标记。星期按标准 cron 语义归一化到 Python
+        ``datetime.weekday()``：cron 的 0 与 7 都表示周日（weekday=6），
+        1=周一 … 6=周六。非法表达式抛 ValueError。
+        """
+        expr = cron_expr.strip()
+        if expr.startswith("@"):
+            mapped = _CRON_ALIASES.get(expr.lower())
+            if mapped is None:
+                raise ValueError(f"未知 cron 昵称: {cron_expr!r}")
+            expr = mapped
+        parts = expr.split()
         if len(parts) != 5:
-            raise ValueError(f"Invalid cron expression: {cron_expr}")
+            raise ValueError(f"cron 表达式需为 5 段: {cron_expr!r}")
+        minutes, _ = CronScheduler._parse_cron_field(parts[0], 0, 59)
+        hours, _ = CronScheduler._parse_cron_field(parts[1], 0, 23)
+        dom, dom_star = CronScheduler._parse_cron_field(parts[2], 1, 31)
+        months, _ = CronScheduler._parse_cron_field(parts[3], 1, 12)
+        raw_dow, dow_star = CronScheduler._parse_cron_field(parts[4], 0, 7)
+        weekdays = {6 if value in (0, 7) else value - 1 for value in raw_dow}
+        return {
+            "minutes": minutes,
+            "hours": hours,
+            "dom": dom,
+            "months": months,
+            "weekdays": weekdays,
+            "dom_star": dom_star,
+            "dow_star": dow_star,
+        }
 
-        def parse_field(field: str, default_range: tuple[int, int]) -> list[int]:
-            if field == "*":
-                mn, mx = default_range
-                return list(range(mn, mx + 1))
-            values = []
-            for item in field.split(","):
-                if "-" in item:
-                    lo, hi = item.split("-")
-                    values.extend(range(int(lo), int(hi) + 1))
-                else:
-                    values.append(int(item))
-            return sorted(values)
+    @staticmethod
+    def _next_cron_time(cron_expr: str) -> datetime:
+        """计算下一个匹配 cron 表达式的分钟整点时间。
 
-        minutes = parse_field(parts[0], (0, 59))
-        hours = parse_field(parts[1], (0, 23))
-        days = parse_field(parts[2], (1, 31))
-        months = parse_field(parts[3], (1, 12))
-        weekdays = parse_field(parts[4], (0, 6))
+        支持字段：minute hour day_of_month month day_of_week，
+        以及 ``*/n`` 步长、逗号列表与 ``@daily`` 等昵称。
+        DoM 与 DoW 遵循标准 cron 语义：两者都被指定（均非 ``*``）时
+        取 OR——日期或星期任一满足即触发；任一为 ``*`` 时按另一个
+        字段单独裁决。
+        """
+        spec = CronScheduler._parse_cron(cron_expr)
 
         now = datetime.now().replace(second=0, microsecond=0)
-        # Try same day, next minute through hour
-        for attempt in range(525600):  # max 1 year of minutes
+        for attempt in range(525600):  # 最多向后扫描一年
             candidate = now + timedelta(minutes=attempt + 1)
-            if candidate.minute not in minutes:
+            if candidate.minute not in spec["minutes"]:
                 continue
-            if candidate.hour not in hours:
+            if candidate.hour not in spec["hours"]:
                 continue
-            if candidate.day not in days:
+            if candidate.month not in spec["months"]:
                 continue
-            if candidate.month not in months:
+            dom_ok = candidate.day in spec["dom"]
+            dow_ok = candidate.weekday() in spec["weekdays"]
+            if spec["dom_star"] and spec["dow_star"]:
+                day_match = True
+            elif spec["dom_star"]:
+                day_match = dow_ok
+            elif spec["dow_star"]:
+                day_match = dom_ok
+            else:
+                # 两者都受限：标准 cron OR 语义
+                day_match = dom_ok or dow_ok
+            if not day_match:
                 continue
-            if weekdays != list(range(0, 7)):
-                if candidate.weekday() not in weekdays:
-                    continue
             return candidate
 
-        # Fallback: tomorrow at first matching minute
+        # 兜底：次日同一分钟（正常情况下一年内必然命中）
         return now + timedelta(days=1)
 
 

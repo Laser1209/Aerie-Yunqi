@@ -2851,10 +2851,29 @@ _admin_purge_task: asyncio.Task | None = None
 # 注：同源 POST 浏览器也会带 Origin（如 http://127.0.0.1:7890），须放行服务端自身 Origin。
 _ALLOWED_ADMIN_ORIGINS = {"", "null", "file://", "app://"}
 
+# C5：除 /api/admin/ 外，以下前缀下的写操作（非 GET/HEAD/OPTIONS）同样敏感——
+# 改电脑操控权限模式、批准/拒绝审批、改黑白名单、增删工作区根（os.startfile
+# 也在 POST /api/workspace/open）。旧实现零鉴权，任意恶意网页都能跨源触发。
+_SENSITIVE_WRITE_PREFIXES = (
+    "/api/admin/",
+    "/api/computer_control/",
+    "/api/workspace/",
+)
+_SAFE_READ_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _is_sensitive_request(path: str, method: str) -> bool:
+    if not path.startswith(_SENSITIVE_WRITE_PREFIXES):
+        return False
+    # /api/admin/ 保持全方法守卫（含查询也要门闩）；其余前缀只守写操作
+    if path.startswith("/api/admin/"):
+        return True
+    return method.upper() not in _SAFE_READ_METHODS
+
 
 @app.middleware("http")
 async def _admin_origin_guard(request: Request, call_next):
-    if request.url.path.startswith("/api/admin/"):
+    if _is_sensitive_request(request.url.path, request.method):
         origin = (request.headers.get("origin") or "").strip()
         own_origin = f"{request.url.scheme}://{request.url.netloc}"
         if origin not in _ALLOWED_ADMIN_ORIGINS and origin != own_origin:

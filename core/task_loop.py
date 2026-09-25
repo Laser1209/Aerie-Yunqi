@@ -94,8 +94,10 @@ _COMPILED: tuple[tuple[re.Pattern[str], TaskKind, str], ...] = tuple(
 
 # 明确的文件系统信号：Windows 路径 / 盘符。命中即视为任务：
 # 用户把具体路径都给了，那就是要动手，不是闲聊。
+# 盘符字母前用负向后顾排除「字母/数字/点/斜杠/冒号」紧邻的情形，
+# 否则 URL 里的 "https:/"（s:/）、"a.b:C:\" 这类文本会被误判成盘符路径。
 _PATH_SIGNALS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"[A-Za-z]:[\\/]"),
+    re.compile(r"(?<![A-Za-z0-9./\\:])[A-Za-z]:[\\/]"),
     re.compile(r"[A-Za-z]\s*盘"),
     re.compile(r"~(?:/|\\)"),
 )

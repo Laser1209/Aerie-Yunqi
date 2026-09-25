@@ -21,6 +21,8 @@ from core.workspace import WorkspaceManager, _TEMP_ROOTS_FILE
 def ws(tmp_path, monkeypatch):
     # 隔离持久化文件,避免测试污染真实 data/workspace_roots.json
     monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "workspace_roots.json")
+    # L4：add_temp_root 要求目录真实存在，测试统一预建常用临时根
+    (tmp_path / "temp_x").mkdir(parents=True, exist_ok=True)
     return WorkspaceManager(preset_roots=[str(tmp_path / "root_a"), str(tmp_path / "root_b")])
 
 
@@ -98,6 +100,7 @@ def test_roots_info_source(ws, tmp_path):
 def test_temp_roots_persist_across_reload(tmp_path, monkeypatch):
     """自定义目录持久化:重建实例后仍保留;预设根不持久化(来自配置)。"""
     monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "ws.json")
+    (tmp_path / "temp_x").mkdir(parents=True, exist_ok=True)
     ws1 = WorkspaceManager(preset_roots=[str(tmp_path / "root_a")])
     ws1.add_temp_root(str(tmp_path / "temp_x"))
 
@@ -108,12 +111,28 @@ def test_temp_roots_persist_across_reload(tmp_path, monkeypatch):
 
 def test_remove_persists_across_reload(tmp_path, monkeypatch):
     monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "ws.json")
+    (tmp_path / "temp_x").mkdir(parents=True, exist_ok=True)
     ws1 = WorkspaceManager(preset_roots=[])
     ws1.add_temp_root(str(tmp_path / "temp_x"))
     ws1.remove_temp_root(str(tmp_path / "temp_x"))
 
     ws2 = WorkspaceManager(preset_roots=[])
     assert str(tmp_path / "temp_x") not in ws2.roots()  # 移除也持久化
+
+
+def test_add_temp_root_rejects_missing_dir(ws, tmp_path):
+    """L4：不存在的目录不能注册为授权根。"""
+    ghost = tmp_path / "does_not_exist"
+    assert ghost.exists() is False
+    assert ws.add_temp_root(str(ghost)) is False
+    assert str(ghost) not in ws.roots()
+
+
+def test_add_temp_root_rejects_file(ws, tmp_path):
+    """L4：文件路径不能注册为工作区根。"""
+    file_path = tmp_path / "a_file.txt"
+    file_path.write_text("x")
+    assert ws.add_temp_root(str(file_path)) is False
 
 
 # --------------------------------------------------------------------- 激活工作区
@@ -162,6 +181,25 @@ def test_resolve_within(root_a, ws, tmp_path):
     assert ws.resolve_within(str(outside)) is None
     # 根目录本身放行
     assert ws.resolve_within(str(root_a)) is not None
+
+
+def test_resolve_within_rejects_parent_traversal(root_a, ws):
+    """C6：相对路径携带 ..\\.. 逃出工作区必须拒绝（无论目标是否存在）。"""
+    escape = ws.resolve_within(r"..\..\..\Windows\System32\evil.dll")
+    assert escape is None
+
+
+def test_resolve_within_relative_nonexistent_inside(root_a, ws):
+    """C6：根内不存在的相对路径仍可解析（写入场景），但必须落在根内。"""
+    target = ws.resolve_within(r"sub\new_file.txt")
+    assert target is not None
+    assert target == (root_a / "sub" / "new_file.txt").resolve()
+
+
+def test_resolve_within_no_roots(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "empty.json")
+    empty_ws = WorkspaceManager(preset_roots=[])
+    assert empty_ws.resolve_within("anything.txt") is None
 
 
 # --------------------------------------------------------------------- 文件树

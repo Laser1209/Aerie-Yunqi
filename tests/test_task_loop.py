@@ -67,6 +67,35 @@ def test_empty_and_whitespace() -> None:
     assert classify(None) is None
 
 
+# ── 缺陷4：URL / 类 URL 文本不能被盘符信号误判 ──────────────────
+
+URL_CHAT_CASES = [
+    "看看这个 https://x.com/a",
+    "https://x.com/a",
+    "http://localhost:8080/path",
+    r"链接是 a.b:C:\x 哦",
+]
+
+
+@pytest.mark.parametrize("text", URL_CHAT_CASES)
+def test_url_is_not_mistaken_for_path_task(text: str) -> None:
+    """URL 里的 's:/'、'a.b:C:\\' 不能命中盘符信号，含 URL 的闲聊必须判 None。"""
+    assert classify(text) is None, f"含 URL 的闲聊被误判成任务: {text!r}"
+
+
+def test_real_windows_path_still_detected_as_file_task() -> None:
+    """独立盘符路径仍然判为文件任务（URL 修复不能误伤真路径）。"""
+    verdict = classify(r"帮我在 D:\test 建文件夹")
+    assert verdict is not None
+    assert verdict.kind is TaskKind.FILE
+    assert verdict.has_path is True
+
+    bare = classify(r"C:\Users\me\docs")
+    assert bare is not None
+    assert bare.kind is TaskKind.FILE
+    assert bare.has_path is True
+
+
 def test_react_rounds_allow_multi_step() -> None:
     """任务模式必须比默认 6 轮宽，否则多步任务做不完。"""
     assert TASK_REACT_ROUNDS > 6

@@ -132,9 +132,10 @@ class WorkspaceManager:
         """把用户指定路径注册为自定义工作区(已存在则返回 False)。
 
         与对话自动提取共用:任何来源的临时目录都会持久化,重启后保留。
+        目标必须是真实存在的目录（L4：防止把任意/伪造路径变成授权根）。
         """
         norm = self._normalize(root)
-        if norm is None:
+        if norm is None or not Path(norm).is_dir():
             return False
         if norm in self._preset_roots or norm in self._temp_roots:
             return False
@@ -227,30 +228,43 @@ class WorkspaceManager:
         """把用户给的路径解析为工作区内绝对路径;越界返回 None。
 
         解析规则:
-          1. 相对路径 → 依次尝试各根目录拼接。
+          1. 相对路径 → 依次尝试各根目录拼接（含 ..\\ 规范化，越界即跳过）。
           2. 绝对路径 → 必须位于某个根目录内(含根目录本身)。
+
+        所有返回路径统一过"在根内"校验；不存在的目标也按规范化路径判定，
+        防止 ..\\..\\ 逃逸（旧实现只查 cand.exists()，不存在时直接退回首根）。
         """
         p = Path(str(path).strip().strip('"').strip("'"))
-        if not p.is_absolute():
-            for root in self.roots():
-                cand = Path(root) / p
-                if cand.exists():
-                    return cand
-            # 相对路径在根目录内不存在,退回工作区首个根
-            if self.roots():
-                return Path(self.roots()[0]) / p
+        resolved_roots = self._resolved_roots()
+        if not resolved_roots:
             return None
 
-        p = p.resolve()
-        for root in self.roots():
-            try:
-                root_p = Path(root).resolve()
-                if p == root_p or root_p in p.parents:
-                    return p
-            except OSError:
-                continue
+        if not p.is_absolute():
+            for root_p in resolved_roots:
+                cand = (root_p / p).resolve()
+                if self._is_within(cand, root_p):
+                    return cand
+            logger.warning("[workspace] 相对路径无法落在任何根内,拒绝: %s", path)
+            return None
+
+        target = p.resolve()
+        if any(self._is_within(target, root_p) for root_p in resolved_roots):
+            return target
         logger.warning("[workspace] 路径越界,拒绝: %s", path)
         return None
+
+    @staticmethod
+    def _is_within(candidate: Path, root: Path) -> bool:
+        return candidate == root or root in candidate.parents
+
+    def _resolved_roots(self) -> list[Path]:
+        result: list[Path] = []
+        for root in self.roots():
+            try:
+                result.append(Path(root).resolve())
+            except OSError:
+                continue
+        return result
 
     # -------------------------------------------------------------- 文件树
 

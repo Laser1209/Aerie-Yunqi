@@ -70,6 +70,30 @@ def stage_label(tool_name: str) -> str:
     return _TOOL_STAGE_LABELS.get(tool_name) or f"执行 {tool_name}"
 
 
+# 聊天场景里的轻量查询工具：不值得演「开工」，第一次调用前最多搭一句话。
+# key 为工具名，value 为该类查询的自然搭话；未列入的工具走默认搭话。
+_CHAT_FILLER_LOOKUP: dict[str, str] = {
+    "get_time": "稍等，我看看。",
+    "get_system_info": "稍等，我看看。",
+    "system_info": "稍等，我看看。",
+    "calendar_list": "稍等，我看看。",
+    "weather_query": "稍等，我看看。",
+    "web_fetch": "我查一下，稍等。",
+    "code_search": "我查一下，稍等。",
+    "translation": "我翻一下，稍等。",
+    "text_summary": "我看一下，稍等。",
+    "document_read": "我看一下，稍等。",
+}
+_CHAT_FILLER_DEFAULT = "等我一下。"
+# 聊天模式下工具失败时的说法（不提工具名、不演戏）。
+_CHAT_FAILURE_TEXT = "哎呀，这一下没成，我再想想办法。"
+
+
+def chat_filler_for(tool_name: str) -> str:
+    """聊天场景下，某工具开跑前的那句自然搭话。"""
+    return _CHAT_FILLER_LOOKUP.get(tool_name, _CHAT_FILLER_DEFAULT)
+
+
 @dataclass
 class ProgressConfig:
     """进度上报配置（来自 settings.yaml 的 agent.progress）。"""
@@ -116,10 +140,15 @@ class TaskProgressReporter:
         emit: Callable[[str], Awaitable[None]],
         *,
         task_hint: str = "",
+        chat_mode: bool = False,
     ) -> None:
         self._config = config
         self._emit = emit
         self._task_hint = (task_hint or "").strip()
+        # 聊天模式：这不是在「干活」，只是对话里顺手查个东西。
+        # 全程不发「我先去办」「正在执行 xxx」，第一次调用前最多一句自然搭话，
+        # 只有失败才再开口。
+        self._chat_mode = chat_mode
         self._started = False
         self._sent = 0
         self._seen_stages: set[str] = set()
@@ -164,7 +193,18 @@ class TaskProgressReporter:
 
         if not self._started:
             self._started = True
-            await self._send(self._start_text())
+            if not self._chat_mode:
+                await self._send(self._start_text())
+
+        # 聊天模式：成功时最多在第一次调用前搭一句话，不播报阶段/完成；
+        # 失败仍要如实说一声（不提工具名）。
+        if self._chat_mode:
+            if not success:
+                await self._send(_CHAT_FAILURE_TEXT)
+                return
+            if self._sent == 0:
+                await self._send(chat_filler_for(tool_name))
+            return
 
         label = stage_label(tool_name)
 

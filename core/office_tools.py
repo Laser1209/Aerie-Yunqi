@@ -114,6 +114,149 @@ def set_office_dir(path: str | Path) -> dict:
 get_office_dir()
 
 
+# ── 写操作安全守卫（2026-09-25 审计 C2/C6）──────────────────────────
+#
+# 旧实现的文件写工具（copy/move/rename/建目录/整理/去重/清理/转换）直接
+# 落盘，既不查 WorkspaceManager 的授权根，也不走 AccessPolicy 裁决：
+# MANUAL 模式下照样 success=True，审批数 0、审计数 0，任何路径都能写。
+# 现在所有用户可控路径的写操作必须：
+#   1. 落在已授权工作区根或办公目录内（防路径逃逸）；
+#   2. 过电脑操控共用的 AccessPolicy（FULL 放行 / MANUAL 拒绝并提示 / 黑名单拦截）；
+#   3. 无论放行与否都写一条审计。
+def _allowed_write_roots() -> list[Path]:
+    """当前允许写入的根目录：已注册工作区 + 办公目录。"""
+    roots: list[Path] = []
+    try:
+        from core.workspace import get_workspace_manager
+
+        roots.extend(Path(r).resolve() for r in get_workspace_manager().roots())
+    except Exception:  # noqa: BLE001
+        logger.debug("workspace manager 不可用，写守卫仅认办公目录", exc_info=True)
+    try:
+        roots.append(get_office_dir().resolve())
+    except Exception:  # noqa: BLE001
+        pass
+    # 去重保序
+    unique: list[Path] = []
+    for root in roots:
+        if root not in unique:
+            unique.append(root)
+    return unique
+
+
+def _resolve_write_target(raw: str | os.PathLike) -> Optional[Path]:
+    """把写入目标解析为授权根内的绝对路径；越界/非法返回 None。
+
+    支持相对路径（相对办公目录），对不存在的目标同样可判定
+    （resolve(strict=False) 会规范化 ..\\.. 逃逸）。
+    """
+    text = str(raw or "").strip().strip('"').strip("'")
+    if not text:
+        return None
+    p = Path(text).expanduser()
+    if not p.is_absolute():
+        p = get_office_dir() / p
+    try:
+        resolved = p.resolve()
+    except OSError:
+        return None
+    return resolved if any(
+        resolved == root or root in resolved.parents
+        for root in _allowed_write_roots()
+    ) else None
+
+
+def _is_blocked_fetch_host(host: str) -> bool:
+    """web_fetch 是否禁止访问该主机：本机回环与链路本地一律拒绝。"""
+    if not host or host == "localhost":
+        return True
+    try:
+        import ipaddress
+
+        ip = ipaddress.ip_address(host.strip("[]"))
+        return bool(ip.is_loopback or ip.is_link_local or ip.is_unspecified)
+    except ValueError:
+        # 非 IP 字面量（普通域名）放行，DNS 解析结果不二次校验
+        return False
+
+
+def _get_controller() -> Any:
+    """取电脑操控器（持有共用 AccessPolicy 与审计器）；不可用时返回 None。"""
+    try:
+        from core.companion import get_companion
+
+        companion = get_companion()
+        return getattr(companion, "computer_controller", None) if companion else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def guard_write_paths(**paths: Any) -> Optional[dict]:
+    """写工具统一守卫。
+
+    Args:
+        **paths: 具名写入目标（参数名仅用于错误提示），值为路径字符串。
+
+    Returns:
+        None 表示放行；否则是应直接返回给调用方的失败结果
+        （路径越界 / 策略拦截 / 需用户切换授权）。
+    """
+    targets: list[tuple[str, Path]] = []
+    for label, raw in paths.items():
+        if raw in (None, ""):
+            continue
+        target = _resolve_write_target(raw)
+        if target is None:
+            logger.warning("[office_guard] 写入路径越界，拒绝 %s=%r", label, raw)
+            return {
+                "success": False,
+                "error": (
+                    f"写入目标不在已授权工作区内: {raw}。"
+                    "请先在「工作区」里添加该目录，或把文件保存到办公目录"
+                ),
+                "reason": "outside_workspace_roots",
+            }
+        targets.append((label, target))
+
+    controller = _get_controller()
+    if controller is None:
+        # 无策略环境（测试/独立脚本）：路径边界已验，放行
+        return None
+
+    from core.computer_control import ControlAction, Decision
+
+    for label, target in targets:
+        decision, reason = controller.permission.decide(
+            ControlAction.FILE_WRITE, {"path": str(target)}
+        )
+        result_state = {
+            Decision.ALLOW: "allowed",
+            Decision.BLOCK: "blocked",
+            Decision.APPROVE: "needs_approval",
+        }.get(decision, "unknown")
+        try:
+            controller._audit(
+                ControlAction.FILE_WRITE,
+                {"path": str(target)},
+                result_state,
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("[office_guard] 审计写入失败", exc_info=True)
+
+        if decision != Decision.ALLOW:
+            logger.warning(
+                "[office_guard] 写入被策略拒绝 %s=%s decision=%s",
+                label, target, decision.value,
+            )
+            return {
+                "success": False,
+                "error": f"当前电脑操控权限不允许写入 {target}（{reason}）",
+                "needs_approval": decision == Decision.APPROVE,
+                "reason": reason,
+            }
+    return None
+
+
 # ── 工具函数 ──────────────────────────────────────
 
 
@@ -189,7 +332,8 @@ def tool_document_read(filepath: str) -> dict:
         if not path.is_file():
             return {"success": False, "error": f"不是文件: {path}"}
 
-        # 安全检查：只允许读取办公目录和常见文档目录
+        # 安全检查：只允许读取办公目录和常见文档目录。
+        # 用路径段包含判定，不能用 str.startswith（Desktop2 会被误认成 Desktop）
         allowed_parents = [
             office_dir.resolve(),
             Path(os.path.expanduser("~/Desktop")).resolve(),
@@ -197,7 +341,10 @@ def tool_document_read(filepath: str) -> dict:
             Path(os.path.expanduser("~/Downloads")).resolve(),
         ]
         resolved = path.resolve()
-        allowed = any(str(resolved).startswith(str(p)) for p in allowed_parents)
+        allowed = any(
+            resolved == parent or parent in resolved.parents
+            for parent in allowed_parents
+        )
         if not allowed:
             return {"success": False, "error": "出于安全考虑，仅允许读取桌面/文档/下载/AerieOffice 目录下的文件"}
 
@@ -624,6 +771,10 @@ def tool_file_copy(source: str, destination: str) -> dict:
         复制结果
     """
     try:
+        blocked = guard_write_paths(destination=destination)
+        if blocked:
+            return blocked
+
         src = Path(source)
         dst = Path(destination)
 
@@ -668,6 +819,10 @@ def tool_file_move(source: str, destination: str) -> dict:
         移动结果
     """
     try:
+        blocked = guard_write_paths(destination=destination)
+        if blocked:
+            return blocked
+
         src = Path(source)
         dst = Path(destination)
 
@@ -702,6 +857,13 @@ def tool_file_rename(filepath: str, new_name: str) -> dict:
             return {"success": False, "error": f"文件不存在: {filepath}"}
 
         new_path = path.parent / new_name
+        # new_name 若携带路径分隔符/.. 可把改名目标带出工作区，校验新路径
+        blocked = guard_write_paths(
+            filepath=filepath, destination=str(new_path),
+        )
+        if blocked:
+            return blocked
+
         path.rename(new_path)
         return {
             "success": True,
@@ -724,10 +886,14 @@ def tool_directory_create(directory: str) -> dict:
         创建结果
     """
     try:
+        blocked = guard_write_paths(directory=directory)
+        if blocked:
+            return blocked
+
         office_dir = get_office_dir()
         path = Path(directory)
         if not path.is_absolute():
-            path = office_dir / directory
+            path = office_dir / path
 
         path.mkdir(parents=True, exist_ok=True)
         return {
@@ -762,6 +928,11 @@ def tool_document_convert(
         path = Path(filepath)
         if not path.exists():
             return {"success": False, "error": f"文件不存在: {filepath}"}
+
+        # 转换产物写在源文件同目录，源路径必须在授权区内
+        blocked = guard_write_paths(filepath=filepath)
+        if blocked:
+            return blocked
 
         content = path.read_text(encoding="utf-8", errors="ignore")
 
@@ -1005,13 +1176,18 @@ def tool_app_open(app_name: str) -> dict:
     """打开应用程序。
 
     Args:
-        app_name: 应用名称（notepad/calc/chrome/edge/word/excel 等快捷名，或完整路径）
+        app_name: 应用快捷名（notepad/calc/chrome/edge/word/excel 等），
+            或 PATH 内程序名，或 .exe/.lnk 绝对路径。
+            命令行（cmd/powershell）不在此工具开放范围，需走 shell_execute 审批。
 
     Returns:
         打开结果
     """
     try:
         import subprocess
+
+        # 不含 cmd/powershell：旧实现等于给模型开了一条绕过 shell 危险命令
+        # 矩阵与审批闸门的通道
         app_map = {
             "notepad": "notepad.exe",
             "calc": "calc.exe",
@@ -1019,20 +1195,51 @@ def tool_app_open(app_name: str) -> dict:
             "chrome": "chrome.exe",
             "edge": "msedge.exe",
             "explorer": "explorer.exe",
-            "cmd": "cmd.exe",
-            "powershell": "powershell.exe",
             "word": "winword.exe",
             "excel": "excel.exe",
             "powerpoint": "powerpnt.exe",
             "ppt": "powerpnt.exe",
             "outlook": "outlook.exe",
         }
-        exe = app_map.get(app_name.lower(), app_name)
+        raw = (app_name or "").strip()
+        if not raw:
+            return {"success": False, "error": "应用名称为空"}
 
-        if os.path.isabs(exe):
-            subprocess.Popen(exe)
+        key = raw.lower()
+        if key in app_map:
+            exe = app_map[key]
         else:
-            subprocess.Popen(["cmd", "/c", "start", "", exe], shell=False)
+            # 拒绝夹带参数 / UNC / 脚本解释器；绝对路径只接受 exe 与快捷方式
+            if any(ch.isspace() for ch in raw):
+                return {"success": False, "error": "不支持带参数启动，仅可指定程序名"}
+            lowered = raw.lower()
+            if lowered.startswith("\\\\"):
+                return {"success": False, "error": "禁止从网络路径（UNC）启动程序"}
+            # 危险命令首词（wscript/mshta/regsvr32/schtasks 等）与脚本后缀
+            from core.computer_control import RestrictedShell
+
+            if RestrictedShell().is_dangerous(raw):
+                return {
+                    "success": False,
+                    "error": f"该程序不允许通过 app_open 启动: {raw}，如需执行命令请走命令行工具",
+                }
+            if os.path.isabs(raw):
+                if not lowered.endswith((".exe", ".lnk")):
+                    return {
+                        "success": False,
+                        "error": "完整路径仅允许 .exe / .lnk，其他类型请用对应工具打开",
+                    }
+                exe = raw
+            else:
+                if "\\" in raw or "/" in raw:
+                    return {
+                        "success": False,
+                        "error": "仅支持应用快捷名或绝对路径，不支持相对路径",
+                    }
+                exe = raw
+
+        # 直接启动程序本身，不再经 `cmd /c start` 中介，避免元字符注入
+        subprocess.Popen([exe], shell=False)
 
         return {
             "success": True,
@@ -1353,6 +1560,23 @@ def tool_web_fetch(url: str, max_length: int = 5000) -> dict:
         parsed = urlparse(url)
         if not parsed.scheme:
             url = "https://" + url
+            parsed = urlparse(url)
+
+        # 协议白名单：旧实现接受 file://，可直接读取本机任意文件
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return {
+                "success": False,
+                "error": f"不允许的协议: {parsed.scheme}（仅支持 http/https）",
+            }
+
+        # 阻断 loopback / 链路本地（含云元数据 169.254.169.254）：
+        # 模型可以借此访问本机无鉴权服务或实例凭据
+        host = (parsed.hostname or "").lower()
+        if _is_blocked_fetch_host(host):
+            return {
+                "success": False,
+                "error": f"出于安全考虑，禁止访问本机/链路本地地址: {host}",
+            }
 
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 AerieOffice/13.9"})
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -1562,6 +1786,12 @@ def tool_file_organize(source_dir: str,
         recursive: 是否递归扫描子目录
     """
     try:
+        blocked = guard_write_paths(
+            source_dir=source_dir, target_dir=target_dir or source_dir,
+        )
+        if blocked:
+            return blocked
+
         org = _file_organizer()
         plan = org.preview_organize(source_dir, target_dir or None, recursive)
 
@@ -1600,6 +1830,10 @@ def tool_file_dedup(source_dir: str,
         keep: 保留哪份副本（newest=最新 / oldest=最早）
     """
     try:
+        blocked = guard_write_paths(source_dir=source_dir)
+        if blocked:
+            return blocked
+
         org = _file_organizer()
         plan = org.preview_dedup(source_dir, recursive=recursive, keep=keep)
         if not plan.actions:
@@ -1635,6 +1869,10 @@ def tool_file_cleanup(source_dir: str,
         recursive: 是否递归
     """
     try:
+        blocked = guard_write_paths(source_dir=source_dir)
+        if blocked:
+            return blocked
+
         org = _file_organizer()
         plan = org.preview_expired_cleanup(
             source_dir, older_than_days=older_than_days, recursive=recursive,

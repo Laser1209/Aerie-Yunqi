@@ -531,13 +531,20 @@ class LLMCaller:
                 tool_names = [p["name"] for p in tool_providers]
                 logger.debug("tool-use mode: providers reordered, tool-capable first: %s", tool_names)
 
+        # ReAct 对话状态在所有 provider 间共享：回退到下一个 provider 时，
+        # 已产生的 assistant tool_calls 消息与对应 tool 结果消息必须完整携带，
+        # 否则下一个 provider 看不到工具回执，会把有副作用的工具再执行一遍。
+        working_msgs = list(messages)
+        # 已执行过的 tool_call id 去重表（跨 provider、跨轮次），同一 id 绝不执行第二次。
+        executed_tool_ids: set[str] = set()
+
         for idx, provider in enumerate(providers):
             try:
-                working_msgs = list(messages)
-                provider_tool_results: list[dict] = []
                 rounds_used = 0
 
-                while rounds_used < max_react_rounds:
+                # 轮数上限只约束「执行工具」的次数；即使 max_react_rounds=0，
+                # 也保证每个 provider 至少拿到一次模型调用机会（纯文本问答不被轮数吞掉）。
+                while True:
                     resp = await self._call_provider(provider, working_msgs, tools, temperature)
 
                     total_prompt_tokens += resp.tokens_prompt
@@ -558,7 +565,7 @@ class LLMCaller:
                                 tokens_completion=total_completion_tokens,
                                 duration_ms=total_duration_ms,
                                 react_trace=resp.react_trace,
-                                tool_results=provider_tool_results if provider_tool_results else None,
+                                tool_results=all_tool_results or None,
                             )
                             if tracker._db is not None:
                                 tracker.record(
@@ -577,7 +584,7 @@ class LLMCaller:
                                 "LLM: %s/%s → %d+%d tokens, %dms, %d tool calls",
                                 final_resp.provider, final_resp.model,
                                 final_resp.tokens_prompt, final_resp.tokens_completion,
-                                final_resp.duration_ms, len(provider_tool_results),
+                                final_resp.duration_ms, len(all_tool_results),
                             )
                             self._health.mark_ok(provider["name"])
                             return final_resp
@@ -589,20 +596,44 @@ class LLMCaller:
                             )
                             break
 
-                    # ReAct round: execute tool calls and feed results back
+                    # 模型请求工具调用，但 ReAct 轮数预算已尽（max_react_rounds=0
+                    # 的首轮同样走这里）：不再执行任何工具，working_msgs 中已有的
+                    # 工具回执原样保留，交给下一个 provider 继续。
+                    if rounds_used >= max_react_rounds:
+                        logger.info(
+                            "Provider %s hit react round cap (%d); %d tool call(s) already executed, trying next provider",
+                            provider["name"], max_react_rounds, len(executed_tool_ids),
+                        )
+                        break
+
                     rounds_used += 1
 
-                    # Append the assistant message with tool_calls to history
+                    # 按 tool_call id 去重：在更早轮次或其他 provider 已执行过的
+                    # 调用直接跳过，绝不重复触发有副作用的工具。
+                    new_calls = [
+                        tc
+                        for tc in tool_calls
+                        if not tc.get("id") or tc["id"] not in executed_tool_ids
+                    ]
+                    if not new_calls:
+                        # 模型只重复了已执行的调用：不追加消息、不执行工具，
+                        # 本轮已计入轮数，让模型基于已有回执再答一次（受轮数上限约束终止）。
+                        continue
+
+                    # assistant 消息只写本轮真正要执行的 tool_calls，
+                    # 保证其中每个调用后面都有对应的 tool 结果消息配对。
                     assistant_msg = {
                         "role": "assistant",
                         "content": None,
-                        "tool_calls": tool_calls,
+                        "tool_calls": new_calls,
                     }
                     working_msgs.append(assistant_msg)
 
                     # Execute each tool call
-                    for tc in tool_calls:
+                    for tc in new_calls:
                         tc_id = tc.get("id", "")
+                        if tc_id:
+                            executed_tool_ids.add(tc_id)
                         tc_name = tc.get("function", {}).get("name", "")
                         tc_args_raw = tc.get("function", {}).get("arguments", "{}")
                         try:
@@ -613,11 +644,19 @@ class LLMCaller:
                         t_tool = time.monotonic()
                         try:
                             result = await tool_registry.execute(tc_name, tc_args)
-                            success = "error" not in result
+                            # 工具可返回任意类型：只有 dict 且显式带 "error" 键才算失败；
+                            # None / int / list 等标量或容器一律视为工具的正常返回。
+                            success = not (isinstance(result, dict) and "error" in result)
                         except Exception as e:
                             result = {"error": str(e)}
                             success = False
                         tool_dur = int((time.monotonic() - t_tool) * 1000)
+                        # result 不一定是 dict，取错误文案前先收敛类型。
+                        err_text = (
+                            result.get("error", "unknown")
+                            if isinstance(result, dict)
+                            else "unknown"
+                        )
 
                         tool_result_entry = {
                             "name": tc_name,
@@ -626,7 +665,8 @@ class LLMCaller:
                             "success": success,
                             "duration_ms": tool_dur,
                         }
-                        provider_tool_results.append(tool_result_entry)
+                        # 聚合所有 provider 的工具结果（不再只留最后一个 provider 的）。
+                        all_tool_results.append(tool_result_entry)
 
                         # Append tool result message
                         tool_msg = {
@@ -639,7 +679,7 @@ class LLMCaller:
                         logger.info(
                             "ReAct tool: %s → %s (%.2fms)%s",
                             tc_name, "ok" if success else "fail", tool_dur,
-                            "" if success else f" error={result.get('error', 'unknown')[:80]}",
+                            "" if success else f" error={str(err_text)[:80]}",
                         )
 
                         # 任务进度上报（best-effort，失败不影响主流程）
@@ -648,16 +688,12 @@ class LLMCaller:
                                 await on_tool_event(
                                     tc_name,
                                     success=success,
-                                    error="" if success else str(result.get("error", "")),
+                                    error="" if success else str(err_text),
                                     arguments=tc_args,
                                     duration_ms=tool_dur,
                                 )
                             except Exception:
                                 logger.debug("tool progress callback failed", exc_info=True)
-
-                # Hit max rounds or provider returned fallback — try next provider
-                if provider_tool_results:
-                    all_tool_results = provider_tool_results
 
             except Exception as e:
                 last_error = str(e)

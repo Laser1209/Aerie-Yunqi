@@ -581,7 +581,9 @@ class Pipeline:
         self._checkpoint_cancel(request_state, "before_model")
 
         # 任务回合放宽 ReAct 轮数：多步任务需要「做一步→看回执→再决定」的余量。
-        on_tool_event = self._build_tool_progress_hook(msg, request_state, tools)
+        on_tool_event = self._build_tool_progress_hook(
+            msg, request_state, tools, task_verdict
+        )
         response = await self.brain.chat(
             ctx_messages,
             tools=tools,
@@ -1104,7 +1106,7 @@ class Pipeline:
         result["event_sequence"] = request_state.sequence
         return result
 
-    def _build_tool_progress_hook(self, msg: Any, request_state: Any, tools: Any):
+    def _build_tool_progress_hook(self, msg: Any, request_state: Any, tools: Any, task_verdict: Any = None):
         """构造工具进度回调；无工具能力的回合返回 None（纯聊天不打扰）。
 
         粒度由 settings.yaml 的 agent.progress.style 决定，见 core/progress_reporter.py。
@@ -1123,6 +1125,9 @@ class Pipeline:
                 config,
                 emit=lambda text: self._emit_task_progress(msg, request_state, text),
                 task_hint=msg.content,
+                # 命中任务判定才是「干活」，走开工+阶段播报；
+                # 日常对话里顺手查时间/查网页只搭一句自然的话，不演工单流程。
+                chat_mode=task_verdict is None,
             )
             return reporter.report_tool
         except Exception:

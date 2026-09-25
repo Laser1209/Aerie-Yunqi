@@ -103,32 +103,68 @@ class RiskLevel(str, Enum):
 # 旧实现用子串匹配（含 "powershell -command"），会把 `powershell -Command "New-Item ..."`
 # 这类常规写操作一并毙掉，合法任务永远失败；同时非零退出的回执没有 error，模型无法自愈。
 # 结构：首词 → 危险子命令元组；空元组表示该命令整体不可执行。
+#
+# 2026-09-25 加固：旧表只对首词字面量生效，`cmd /c format`、
+# `C:\Windows\System32\cmd.exe /c ...`、`%COMSPEC%`、`$env:ComSpec`、
+# `powershell -enc <base64>`、`erase`/`net1` 别名、换行拼接均可绕过。
+# 现在由 is_dangerous 统一做：环境变量伪展开 → 解释器穿透（cmd /c、
+# powershell -c/-f/-enc）→ 别名归一 → 首词表 → 全文危险模式。
 DANGEROUS_COMMAND_HEADS: dict[str, tuple[str, ...]] = {
     "format": (),
     "diskpart": (),
     "shutdown": (),
-    "reboot": (),
     "poweroff": (),
     "bcdedit": (),
     "vssadmin": (),
     "fsutil": (),
     "takeown": (),
     "cipher": ("/w",),
+    # 计划任务是持久化重灾区，伴聊场景没有任何合法创建/修改需求，整禁
+    "schtasks": (),
+    # 脚本宿主 / LOLBin：伴聊无正当用途，整禁
+    "wscript": (),
+    "cscript": (),
+    "mshta": (),
+    "regsvr32": (),
     "reg": ("delete", "add", "import", "restore", "load", "unload", "save", "copy"),
-    "sc": ("delete", "stop", "config", "failure"),
+    # create = binPath= 服务持久化
+    "sc": ("delete", "stop", "config", "failure", "create"),
     "net": ("user", "localgroup", "share", "accounts"),
-    "schtasks": ("/delete", "/change"),
     "taskkill": ("/f",),
+    "icacls": ("/grant", "/setowner", "/inheritancelevel", "/remove", "/reset"),
+    "cacls": ("/p", "/e", "/g", "/r"),
+    "certutil": (
+        "-urlcache", "-decode", "-decodehex", "-verifyctl", "-encode",
+    ),
     # wmic 整体禁用：除 delete/terminate 外，`wmic process call create`、
     # `wmic startup`、`wmic shadowcopy` 都是持久化/远程执行滥用面。
     "wmic": (),
 }
 
-# 危险参数形态：在命令全文上做正则，覆盖首词之外的危险写法
+# 控制台别名/兼容名 → 规范首词
+_HEAD_ALIASES: dict[str, str] = {
+    "erase": "del",
+    "net1": "net",
+    "rmdir": "rd",
+    "reboot": "shutdown",
+}
+
+# 需要穿透检查的解释器
+_CMD_INTERPRETERS = {"cmd"}
+_PS_INTERPRETERS = {"powershell", "pwsh"}
+
+# 解释器嵌套递归上限（cmd /c powershell /c cmd ...）
+_INTERPRETER_DEPTH_LIMIT = 3
+
+# 待审批条目存活时间：超时未处理即失效，防止旧审批长期堆积被误点
+APPROVAL_TTL_SEC = 300
+
+# 危险参数形态：在命令全文（含 cmd /c、powershell -c 展开后的内层文本）
+# 上做正则，覆盖首词表之外的危险写法
 DANGEROUS_COMMAND_PATTERNS: tuple[str, ...] = (
-    r"\bdel\b[^\n]*?/[fsq]\b",
+    r"[\r\n]",  # 换行可拼接下一条命令，旧元字符检查不含换行
+    r"\b(?:del|erase)\b[^\n]*?/[fsq]\b",
     r"\brd\b[^\n]*?/s\b",
-    r"\brmdir\b[^\n]*?/s\b",
     r"\brm\s+-[a-z]*[rf]",
     r"\bmkfs\b",
     r"\bremove-item\b[^\n]*?-(recurse|force)\b",
@@ -138,15 +174,26 @@ DANGEROUS_COMMAND_PATTERNS: tuple[str, ...] = (
     r"\brestart-computer\b",
     r"\bset-executionpolicy\b",
     r"\binvoke-expression\b",
+    r"\binvoke-command\b",
     r"\biex\b",
     r"\bnew-object\b[^\n]*\bnet\.webclient\b",
     r"\bdownloadstring\b",
     r"\bdownloadfile\b",
+    r"\bnew-service\b",
     r"\b-encodedcommand\b",
     r"\bstart-process\b[^\n]*?-verb\s+runas",
     r"\bcurl\s+https?://",
     r"\bwget\s+https?://",
     r"/dev/(sd|nvme|hd)",
+    # 解释器内层文本（cmd /c、powershell -c 之后）同样要抓得到
+    r"\breg(?:\.exe)?\s+(?:delete|add|import|restore|load|unload|save|copy)\b",
+    r"\bnet1?\s+(?:user|localgroup|share|accounts)\b",
+    r"\bsc(?:\.exe)?\s+(?:create|delete|config|stop|failure)\b",
+    r"\bschtasks(?:\.exe)?\s+/\s*(?:create|delete|change)\b",
+    r"\bcertutil(?:\.exe)?\b[^\n]*(?:-urlcache|-decode|-decodehex|-verifyctl)",
+    r"\b(?:icacls|cacls)(?:\.exe)?\b[^\n]*(?:/grant|/setowner|/p\s|/remove)",
+    r"\bmsiexec(?:\.exe)?\b[^\n]*/i\s+https?://",
+    r"\brundll32(?:\.exe)?\b[^\n]*(?:https?:|url\.dll|javascript:)",
 )
 
 # 操作 → 风险等级映射
@@ -172,13 +219,40 @@ def _summarize_approval_params(params: dict, limit: int = 200) -> dict:
     file_write 的 params 携带整份文件内容（审批通过后要重放），但事件流与
     私聊通知不该背着几 MB 文本走，所以对外只给截断预览。
     """
-    summary: dict[str, Any] = {}
+    summary: dict[str] = {}
     for key, value in (params or {}).items():
         if isinstance(value, str) and len(value) > limit:
             summary[key] = f"{value[:limit]}…（共 {len(value)} 字）"
         else:
             summary[key] = value
     return summary
+
+
+def _audit_safe_params(action: "ControlAction", params: dict) -> dict:
+    """审计日志用的参数副本：绝不落文件内容/密钥等大段或敏感明文。
+
+    审批通过/拒绝的旧实现直接把 params（含 file_write 的完整 content）
+    写进 computer_control.jsonl，属于审计环节泄露。
+    """
+    params = params or {}
+    if action == ControlAction.FILE_WRITE:
+        content = str(params.get("content", ""))
+        return {
+            "path": params.get("path", ""),
+            "bytes": len(content.encode(str(params.get("encoding") or "utf-8"),
+                                        errors="replace")),
+        }
+    if action == ControlAction.SHELL_CMD:
+        return {
+            "command": str(params.get("command", ""))[:200],
+            "cwd": params.get("cwd"),
+        }
+    if action == ControlAction.KEY_TYPE:
+        return {"text_length": len(str(params.get("text", "")))}
+    if action == ControlAction.UIA_ACTION:
+        return {"action_type": params.get("action_type", "")}
+    # 其余动作只含键名/坐标等短参数，统一走截断
+    return _summarize_approval_params(params)
 
 
 @dataclass
@@ -390,8 +464,10 @@ class AccessPolicy:
                 if entry.value == action.value:
                     return True
             elif entry.type == PolicyEntryType.COMMAND.value:
-                cmd = str(details.get("command", "")).lower()
-                if cmd.startswith(entry.value.lower()):
+                # 精确匹配：旧的 startswith 会让白名单 "dir" 放行 "diskpart"、
+                # 白名单 "echo x" 放行 "echo x & del ..." 等同前缀命令。
+                cmd = str(details.get("command", "")).strip().lower()
+                if cmd == entry.value.strip().lower():
                     return True
             elif entry.type == PolicyEntryType.PATTERN.value:
                 try:
@@ -901,44 +977,151 @@ class RestrictedShell:
         stripped = command.strip()
         if not stripped:
             return ""
-        match = re.match(r'^"([^"]+)"|^(\S+)', stripped)
-        token = (match.group(1) or match.group(2)) if match else ""
+        tokens = RestrictedShell._tokenize(stripped)
+        token = tokens[0] if tokens else ""
         token = token.replace("\\", "/").rsplit("/", 1)[-1]
         for ext in (".exe", ".cmd", ".bat", ".com", ".ps1"):
             if token.lower().endswith(ext):
                 token = token[: -len(ext)]
                 break
-        return token.lower()
+        head = token.lower()
+        return _HEAD_ALIASES.get(head, head)
 
-    def is_dangerous(self, command: str) -> tuple[bool, list[str]]:
+    @staticmethod
+    def _tokenize(line: str) -> list[str]:
+        """按空白切词，保留引号片段（比 shlex 更贴近 cmd 的切法）。"""
+        return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', line)
+
+    @staticmethod
+    def _expand_env_for_analysis(line: str) -> str:
+        """把环境变量引用伪展开成实际值（仅用于安全分析，绝不参与执行）。
+
+        覆盖 cmd 的 ``%COMSPEC%`` 与 PowerShell 的 ``$env:ComSpec`` /
+        ``${env:ComSpec}``：攻击者用它们隐藏真正的解释器首词。
+        未设置的变量替换为空——依赖未设置变量的命令本身也跑不起来。
+        """
+
+        def _repl(match: re.Match) -> str:
+            name = match.group(1) or match.group(2) or ""
+            value = os.environ.get(name.upper(), "")
+            base = value.replace("\\", "/").rsplit("/", 1)[-1]
+            for ext in (".exe", ".cmd", ".bat", ".com", ".ps1"):
+                if base.lower().endswith(ext):
+                    base = base[: -len(ext)]
+                    break
+            return f" {base} " if base else " "
+
+        return re.sub(
+            r"%([A-Za-z0-9_()]+)%|\$\{?env:([A-Za-z0-9_]+)\}?",
+            _repl,
+            line,
+            flags=re.IGNORECASE,
+        )
+
+    @staticmethod
+    def _subcommand_hit(subs: tuple[str, ...], tokens: list[str]) -> Optional[str]:
+        """子命令命中：支持精确匹配与 ``/grant:r`` 这类冒号续接形态。"""
+        for sub in subs:
+            for raw in tokens:
+                token = raw.strip("\"'").lower()
+                if token == sub or token.startswith(sub + ":"):
+                    return sub
+        return None
+
+    @staticmethod
+    def _cmd_inner(tokens: list[str]) -> Optional[str]:
+        """取 cmd /c|/k|/r 之后的内层命令行。"""
+        for idx, raw in enumerate(tokens[1:], start=1):
+            if raw.strip("\"'").lower() in {"/c", "/k", "/r", "-c"}:
+                rest = " ".join(tokens[idx + 1:]).strip().strip("\"'")
+                return rest or None
+        return None
+
+    @staticmethod
+    def _powershell_issues(tokens: list[str]) -> list[str]:
+        """检查 powershell/pwsh 参数：编码执行、脚本文件一律拦，
+        -Command/-c 内层文本递归跑全套危险模式。"""
+        issues: list[str] = []
+        for idx, raw in enumerate(tokens[1:], start=1):
+            token = raw.strip("\"'").lower()
+            if not token.startswith("-"):
+                continue
+            body = token[1:]
+            # PowerShell 参数按唯一前缀消歧：-e/-en/-enc… 与 -ec 都指向
+            # -EncodedCommand（实测 -enc 可直接执行 base64(utf-16le)）。
+            if body == "ec" or (
+                body
+                and len(body) <= len("encodedcommand")
+                and "encodedcommand".startswith(body)
+            ):
+                issues.append("powershell 编码执行参数（-EncodedCommand 缩写）")
+                continue
+            # -f/-fi/-fil/-file：执行外部 .ps1 脚本
+            if body in {"f", "fi", "fil", "file"}:
+                issues.append("powershell 执行外部脚本文件（-File）")
+                continue
+            # -c/-co/.../-command：内层是真正要跑的命令
+            if len(body) <= len("command") and "command".startswith(body):
+                rest = " ".join(tokens[idx + 1:]).strip().strip("\"'")
+                if rest:
+                    inner_shell = RestrictedShell()
+                    dangerous, inner_issues = inner_shell.is_dangerous(rest, _depth=1)
+                    if dangerous:
+                        issues.extend(inner_issues)
+        return issues
+
+    def is_dangerous(self, command: str, _depth: int = 0) -> tuple[bool, list[str]]:
         """检查命令是否危险
+
+        判定顺序：
+          1. 换行等控制字符（可链式拼接，旧元字符检查漏网）
+          2. 环境变量伪展开（%COMSPEC% / $env:ComSpec）
+          3. 全文危险模式正则（含解释器内层文本同款规则）
+          4. 首词表精确匹配（别名归一后）
+          5. 解释器穿透：cmd /c 递归；powershell 编码/脚本/内层命令
 
         Returns:
             (是否危险, 危险原因列表)
         """
+        if _depth > _INTERPRETER_DEPTH_LIMIT:
+            return True, ["解释器嵌套超过上限，疑似隐藏真实命令"]
+
         issues: list[str] = []
 
-        # 首词精确匹配（不做全文子串匹配，避免误伤常规写操作）
-        head = self._command_head(command)
-        subs = DANGEROUS_COMMAND_HEADS.get(head)
-        if subs is not None:
-            if not subs:
-                issues.append(f"高危命令: {head}")
-            else:
-                tokens = [t.strip("\"'").lower() for t in command.split()[1:]]
-                hit = next((s for s in subs if s in tokens), None)
-                if hit:
-                    issues.append(f"高危命令: {head} {hit}")
+        # 换行先在原始文本上判，避免展开后丢失证据
+        if any(ch in command for ch in "\r\n"):
+            issues.append("包含换行符，可链式拼接命令")
 
-        # 危险参数形态
+        analysis = self._expand_env_for_analysis(command)
+
+        # 危险参数形态（对内层递归文本同样生效）
         for pattern in DANGEROUS_COMMAND_PATTERNS:
-            if re.search(pattern, command, re.IGNORECASE):
+            if re.search(pattern, analysis, re.IGNORECASE):
                 issues.append(f"匹配危险模式: {pattern}")
 
-        # 管道 + 高危命令组合
-        if "|" in command and not command.strip().startswith("dir"):
-            if any(d in command.lower() for d in ["del", "format", "rd", "shutdown"]):
-                issues.append("管道 + 危险命令")
+        tokens = self._tokenize(analysis)
+        if tokens:
+            head = self._command_head(analysis)
+            subs = DANGEROUS_COMMAND_HEADS.get(head)
+            if subs is not None:
+                if not subs:
+                    issues.append(f"高危命令: {head}")
+                else:
+                    hit = self._subcommand_hit(subs, tokens)
+                    if hit:
+                        issues.append(f"高危命令: {head} {hit}")
+
+            # cmd /c ... → 内层命令递归
+            if head in _CMD_INTERPRETERS:
+                inner = self._cmd_inner(tokens)
+                if inner:
+                    inner_danger, inner_issues = self.is_dangerous(inner, _depth + 1)
+                    if inner_danger:
+                        issues.extend(inner_issues)
+
+            # powershell / pwsh
+            if head in _PS_INTERPRETERS:
+                issues.extend(self._powershell_issues(tokens))
 
         return len(issues) > 0, issues
 
@@ -982,6 +1165,8 @@ class RestrictedShell:
             if is_windows:
                 # Windows: 很多命令是 cmd.exe 内置的（echo/dir/copy 等），
                 # 必须用 shell=True 才能找到。安全由前面的白名单+危险检查保证。
+                # 编码必须跟系统区域走（中文版是 GBK/cp936）：写死 utf-8 会把
+                # 中文报错解成 U+FFFD，模型拿不到可读 stderr，自愈链路形同虚设。
                 result = subprocess.run(
                     command,
                     shell=True,
@@ -989,7 +1174,7 @@ class RestrictedShell:
                     capture_output=True,
                     text=True,
                     timeout=self.timeout,
-                    encoding="utf-8",
+                    encoding="locale",
                     errors="replace",
                 )
             else:
@@ -1002,7 +1187,7 @@ class RestrictedShell:
                     capture_output=True,
                     text=True,
                     timeout=self.timeout,
-                    encoding="utf-8",
+                    encoding="locale",
                     errors="replace",
                 )
 
@@ -1468,8 +1653,8 @@ class ComputerController:
                     "success" if result.success else f"failed: {result.error}")
         return result
 
-    def hotkey(self, *keys: str) -> ControlResult:
-        """快捷键"""
+    def hotkey(self, keys: list[str]) -> ControlResult:
+        """快捷键组合（LLM 工具入参为 keys 数组，与 function schema 对齐）。"""
         action = ControlAction.KEY_PRESS
         gate = self._gate(action, {"keys": list(keys)})
         if gate is not None:
@@ -1487,15 +1672,18 @@ class ComputerController:
     def shell_execute(self, command: str, cwd: Optional[str] = None) -> ControlResult:
         """执行 shell 命令"""
         action = ControlAction.SHELL_CMD
-        details = {"command": command[:200], "cwd": cwd}
-        gate = self._gate(action, details)
+        # 审批 params 必须保留完整命令——批准后 _execute_action 要原样重放；
+        # 截断只用于审计/展示，否则超过 200 字的命令尾部会在重放时丢失。
+        gate_params = {"command": command, "cwd": cwd}
+        audit_details = {"command": command[:200], "cwd": cwd}
+        gate = self._gate(action, gate_params)
         if gate is not None:
-            self._audit(action, details,
+            self._audit(action, audit_details,
                         "blocked" if gate.data.get("blocked") else "pending_approval")
             return gate
 
         result = self.shell.execute(command, cwd)
-        self._audit(action, details,
+        self._audit(action, audit_details,
                     "success" if result.success else f"failed: {result.error}")
         return result
 
@@ -1668,10 +1856,35 @@ class ComputerController:
 
     # ---- 审批流程 ----
 
+    def _get_live_pending(self, call_id: str) -> Optional[dict]:
+        """取仍然有效的待审批条目；不存在/已处理/已过期一律返回 None。
+
+        旧实现不看 status 也没有 TTL：重复批准会执行两次，拒绝后仍可批准，
+        几小时前的旧审批还能被误点。
+        """
+        entry = self._pending_approvals.get(call_id)
+        if entry is None:
+            return None
+        if entry.get("status") != "pending":
+            return None
+        created_at = float(entry.get("created_at") or 0.0)
+        if created_at and time.time() - created_at > APPROVAL_TTL_SEC:
+            self._pending_approvals.pop(call_id, None)
+            logger.info("审批请求已过期，自动失效: %s", call_id)
+            return None
+        return entry
+
     def get_pending_approvals(self) -> list[dict]:
-        """获取待审批列表"""
+        """获取待审批列表（参数做截断净化，不回传文件全文等明文）"""
         result = []
-        for call_id, entry in self._pending_approvals.items():
+        now = time.time()
+        for call_id, entry in list(self._pending_approvals.items()):
+            if entry.get("status") != "pending":
+                continue
+            created_at = float(entry.get("created_at") or 0.0)
+            if created_at and now - created_at > APPROVAL_TTL_SEC:
+                self._pending_approvals.pop(call_id, None)
+                continue
             action = entry.get("action")
             action_name = action.value if hasattr(action, "value") else str(action)
             risk = ACTION_RISK_MAP.get(action, RiskLevel.MEDIUM) if hasattr(action, "value") else RiskLevel.MEDIUM
@@ -1679,9 +1892,9 @@ class ComputerController:
                 "id": call_id,
                 "action": action_name,
                 "risk_level": risk.value if hasattr(risk, "value") else str(risk),
-                "params": entry.get("params", {}),
+                "params": _summarize_approval_params(entry.get("params", {})),
                 "description": entry.get("description", ""),
-                "created_at": entry.get("created_at", time.time()),
+                "created_at": entry.get("created_at", now),
             })
         return result
 
@@ -1738,12 +1951,16 @@ class ComputerController:
 
         Args:
             call_id: 审批请求 ID
-            whitelist: 是否将该操作加入白名单（后续自动放行）
+            whitelist: 是否将该操作加入白名单（后续自动放行）。
+                shell_cmd 只把这一条具体命令加入白名单（精确匹配），
+                绝不放行整个 shell_cmd 类别；其他动作按动作类型放行。
         """
-        entry = self._pending_approvals.get(call_id)
-        if not entry:
+        entry = self._get_live_pending(call_id)
+        if entry is None:
+            # 不存在 / 已处理 / 已过期：幂等失败，绝不重复执行
             return False
 
+        # 先占状态再执行：并发的第二次批准进来时只能看到 approved
         entry["status"] = "approved"
         action = entry.get("action")
         params = entry.get("params", {})
@@ -1751,21 +1968,29 @@ class ComputerController:
         # 放行并入白名单
         if whitelist:
             try:
-                self.permission.add_whitelist(
-                    PolicyEntryType.ACTION.value,
-                    action.value,
-                    note="审批放行时加入",
-                )
+                if action == ControlAction.SHELL_CMD:
+                    self.permission.add_whitelist(
+                        PolicyEntryType.COMMAND.value,
+                        str(params.get("command", "")).strip(),
+                        note="审批放行时加入（仅本条命令）",
+                    )
+                else:
+                    self.permission.add_whitelist(
+                        PolicyEntryType.ACTION.value,
+                        action.value,
+                        note="审批放行时加入",
+                    )
             except Exception as e:
                 logger.warning("审批加入白名单失败: %s", e)
 
         # 执行操作（user_approved 绕过闸门，避免二次审批死循环）
         result = None
+        safe_params = _audit_safe_params(action, params)
         try:
             result = self._execute_action(action, params, user_approved=True)
             entry["result"] = result
             self._audit(
-                action, params,
+                action, safe_params,
                 "success" if result.success else f"failed: {result.error}",
                 user_approved=True,
             )
@@ -1776,7 +2001,7 @@ class ComputerController:
                 error=str(e),
             )
             entry["result"] = result
-            self._audit(action, params, f"error: {e}", user_approved=True)
+            self._audit(action, safe_params, f"error: {e}", user_approved=True)
 
         # 推送审批结果到对话框审批卡片
         self._emit_approval_updated(call_id, "approved", whitelist=whitelist,
@@ -1798,8 +2023,8 @@ class ComputerController:
             call_id: 审批请求 ID
             blacklist: 是否将该操作加入黑名单（后续直接拦截）
         """
-        entry = self._pending_approvals.get(call_id)
-        if not entry:
+        entry = self._get_live_pending(call_id)
+        if entry is None:
             return False
 
         entry["status"] = "rejected"
@@ -1817,7 +2042,8 @@ class ComputerController:
             except Exception as e:
                 logger.warning("审批加入黑名单失败: %s", e)
 
-        self._audit(action, params, "rejected by user", user_approved=False)
+        self._audit(action, _audit_safe_params(action, params),
+                    "rejected by user", user_approved=False)
         self._emit_approval_updated(call_id, "rejected", blacklist=blacklist)
 
         # 清理（守护线程，避免同步上下文无 event loop 崩溃）
@@ -1904,6 +2130,12 @@ class ComputerController:
                 return self.mouse.scroll(params.get("clicks", 1))
             return self.mouse_scroll(params.get("clicks", 1))
         elif action == ControlAction.KEY_PRESS:
+            # hotkey 与 key_press 共用 KEY_PRESS action，重放时按 params 形态分流
+            if "keys" in params:
+                keys = params.get("keys") or []
+                if user_approved:
+                    return self.keyboard.hotkey(*keys)
+                return self.hotkey(keys)
             if user_approved:
                 return self.keyboard.press(params.get("key", ""))
             return self.key_press(params.get("key", ""))

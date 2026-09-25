@@ -74,11 +74,8 @@ theme:
 thinking_loop:
   enabled: false
   interval_seconds: 900
-  # 三重预算：小时步数 / 日步数 / 日 token。任一触顶只跳过本轮，不退出循环。
-  # max_tokens_per_day 语义：0 = 禁用（任何 step 都不执行）；负数 = 显式不限；
-  # 不写该键 = 用安全默认上限。这里给正数，使 enabled 打开后即刻生效且仍有封顶。
-  max_steps_per_hour: 4
   max_steps_per_day: 24
+  max_steps_per_hour: 4
   max_tokens_per_day: 100000
   step_timeout_seconds: 120
 verify_batch4:

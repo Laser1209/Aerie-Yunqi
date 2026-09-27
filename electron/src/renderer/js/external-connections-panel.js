@@ -7,8 +7,11 @@ class ExternalConnectionsPanel {
       qq: { phase: "idle" },
       ilink: { phase: "disabled" },
     };
-    this.actionPhases = new Set(["qr_pending", "scanned", "pairing_required", "session_expired", "error"]);
+    this.actionPhases = new Set(["qr_pending", "qr_expired", "scanned", "waiting", "expired", "pairing_required", "session_expired", "error"]);
     this.lastAutoExpandedPhase = { qq: "", ilink: "" };
+    this.pairingCode = "";
+    this.pairingExpiresAt = "";
+    this.pairingCodePending = false;
     this.elements = this.readElements();
     this.bindCollapsibles();
     this.bindPrimaryChannel();
@@ -46,8 +49,16 @@ class ExternalConnectionsPanel {
       ilinkText: document.getElementById("ilink-gateway-phase-text"),
       ilinkStart: document.getElementById("ilink-gateway-start-btn"),
       ilinkStop: document.getElementById("ilink-gateway-stop-btn"),
+      ilinkLogin: document.getElementById("ilink-login-btn"),
+      ilinkQrZone: document.getElementById("ilink-gateway-qr-zone"),
       ilinkQrImage: document.getElementById("ilink-gateway-qr-img"),
+      ilinkLoginHint: document.getElementById("ilink-login-hint"),
+      ilinkQrRefresh: document.getElementById("ilink-qr-refresh-btn"),
       ilinkLogs: document.getElementById("ilink-gateway-logs"),
+      ilinkPairingZone: document.getElementById("ilink-pairing-zone"),
+      ilinkPairingCode: document.getElementById("ilink-pairing-code"),
+      ilinkPairingHint: document.getElementById("ilink-pairing-hint"),
+      ilinkPairingRefresh: document.getElementById("ilink-pairing-refresh-btn"),
       primaryInputs: Array.from(document.querySelectorAll('input[name="proactive-primary-channel"]')),
       primaryMessage: document.getElementById("primary-channel-message"),
     };
@@ -76,6 +87,72 @@ class ExternalConnectionsPanel {
   bindILinkActions() {
     if (this.elements.ilinkStart) this.elements.ilinkStart.addEventListener("click", () => this.runILinkAction("start"));
     if (this.elements.ilinkStop) this.elements.ilinkStop.addEventListener("click", () => this.runILinkAction("stop"));
+    if (this.elements.ilinkLogin) this.elements.ilinkLogin.addEventListener("click", () => this.startILinkLogin());
+    if (this.elements.ilinkQrRefresh) this.elements.ilinkQrRefresh.addEventListener("click", () => this.startILinkLogin());
+    if (this.elements.ilinkPairingRefresh) this.elements.ilinkPairingRefresh.addEventListener("click", () => this.refreshILinkPairingCode());
+  }
+
+  async startILinkLogin() {
+    const gateway = this.bridge && this.bridge.ilinkGateway;
+    if (!gateway || typeof gateway.loginStart !== "function") return;
+    this.expandChannel("ilink");
+    if (this.elements.ilinkLogin) this.elements.ilinkLogin.disabled = true;
+    if (this.elements.ilinkLoginHint) this.elements.ilinkLoginHint.textContent = "正在获取二维码…";
+    const result = await gateway.loginStart();
+    if (this.elements.ilinkLogin) this.elements.ilinkLogin.disabled = false;
+    if (result && result.qrcode_image && this.elements.ilinkQrImage) {
+      this.elements.ilinkQrImage.src = result.qrcode_image;
+    }
+    await this.poll();
+  }
+
+  async refreshILinkPairingCode() {
+    if (this.pairingCodePending) return;
+    const gateway = this.bridge && this.bridge.ilinkGateway;
+    if (!gateway || typeof gateway.pairingCode !== "function") return;
+    this.pairingCodePending = true;
+    this.pairingCode = "";
+    try {
+      const result = await gateway.pairingCode();
+      if (result && result.code) {
+        this.pairingCode = result.code;
+        this.pairingExpiresAt = result.expires_at || "";
+      }
+    } finally {
+      this.pairingCodePending = false;
+    }
+    this.renderPairingCode();
+  }
+
+  renderPairingCode() {
+    if (this.elements.ilinkPairingCode) {
+      this.elements.ilinkPairingCode.textContent = this.pairingCode || "--------";
+    }
+    if (this.elements.ilinkPairingHint) {
+      this.elements.ilinkPairingHint.textContent = this.pairingCode
+        ? "把上面这串数字发到微信对话里，即可完成绑定（10 分钟内有效）"
+        : "正在生成配对码…";
+    }
+  }
+
+  renderPairing(status, connected) {
+    const pairing = status.pairing || null;
+    const required = Boolean(pairing && pairing.required && !pairing.bound);
+    const expiresAt = pairing && pairing.expires_at ? Date.parse(pairing.expires_at) : 0;
+    if (expiresAt > 0 && Date.now() >= expiresAt) this.pairingCode = "";
+    if (!required) {
+      this.pairingCode = "";
+      this.pairingExpiresAt = "";
+    }
+    if (this.elements.ilinkPairingZone) {
+      this.elements.ilinkPairingZone.classList.toggle("hidden", !(required && connected));
+    }
+    if (!required || !connected) return;
+    if (this.pairingCode) {
+      this.renderPairingCode();
+    } else if (!this.pairingCodePending) {
+      void this.refreshILinkPairingCode();
+    }
   }
 
   bindPrimaryChannel() {
@@ -176,9 +253,11 @@ class ExternalConnectionsPanel {
   renderILink() {
     const status = this.statuses.ilink;
     const phase = status.phase || "disabled";
+    const login = status.login || { phase: "idle" };
+    const loginPhase = login.phase || "idle";
     const labels = {
       disabled: "未启用",
-      idle: "未连接",
+      idle: status.configured ? "未连接" : "未登录",
       starting: "连接中…",
       connected: "已连接",
       session_expired: "会话已失效",
@@ -189,12 +268,68 @@ class ExternalConnectionsPanel {
       this.elements.ilinkBadge.textContent = label;
       this.elements.ilinkBadge.className = "external-status-badge external-status-badge--" + phase;
     }
-    if (this.elements.ilinkDot) this.elements.ilinkDot.className = "phase-dot phase-dot--" + phase;
-    if (this.elements.ilinkText) this.elements.ilinkText.textContent = label;
-    if (this.elements.ilinkStart) this.elements.ilinkStart.disabled = ["starting", "connected"].includes(phase) || !status.configured;
-    if (this.elements.ilinkStop) this.elements.ilinkStop.disabled = phase !== "connected";
-    if (phase !== "qr_pending" && this.elements.ilinkQrImage) this.elements.ilinkQrImage.removeAttribute("src");
-    if (this.elements.ilinkLogs) this.elements.ilinkLogs.textContent = status.error_code || (status.mockSafe ? "等待后端连接能力" : label);
+
+    const loginActive = ["waiting", "scanned", "expired", "error", "confirmed"].includes(loginPhase);
+    const dotPhase = phase === "connected"
+      ? "connected"
+      : loginPhase === "scanned" || loginPhase === "waiting" || loginPhase === "confirmed"
+        ? "starting"
+        : loginPhase === "expired" || loginPhase === "error"
+          ? "error"
+          : phase === "idle" || phase === "disabled"
+            ? "idle"
+            : phase;
+    if (this.elements.ilinkDot) this.elements.ilinkDot.className = "phase-dot phase-dot--" + dotPhase;
+
+    const text = loginPhase === "waiting"
+      ? "等待微信扫码"
+      : loginPhase === "scanned"
+        ? "已扫码，请在手机上确认"
+        : loginPhase === "confirmed"
+          ? "登录成功，正在连接…"
+          : loginPhase === "expired"
+            ? "二维码已过期"
+            : loginPhase === "error"
+              ? "扫码登录失败，请重试"
+              : label;
+    if (this.elements.ilinkText) this.elements.ilinkText.textContent = text;
+
+    const connected = phase === "connected";
+    const configured = Boolean(status.configured);
+    if (this.elements.ilinkLogin) {
+      this.elements.ilinkLogin.classList.toggle("hidden", configured || connected);
+      this.elements.ilinkLogin.disabled = loginActive;
+    }
+    if (this.elements.ilinkStart) {
+      this.elements.ilinkStart.classList.toggle("hidden", !configured || connected);
+      this.elements.ilinkStart.disabled = phase === "starting";
+    }
+    if (this.elements.ilinkStop) this.elements.ilinkStop.disabled = !connected;
+
+    this.renderPairing(status, connected);
+
+    if (this.elements.ilinkQrZone) this.elements.ilinkQrZone.classList.toggle("hidden", !loginActive || connected);
+    if (this.elements.ilinkLoginHint) {
+      const hint = loginPhase === "scanned"
+        ? "已扫码，请在手机上确认登录"
+        : loginPhase === "confirmed"
+          ? "登录成功，正在建立微信连接…"
+          : loginPhase === "expired"
+            ? "二维码已过期，点击下方按钮刷新"
+            : loginPhase === "error"
+              ? (login.error_code === "qrcode_request_failed" ? "获取二维码失败，请重试" : "登录失败，请重试")
+              : "请使用微信扫描二维码登录";
+      this.elements.ilinkLoginHint.textContent = hint;
+    }
+    if (this.elements.ilinkQrRefresh) {
+      this.elements.ilinkQrRefresh.classList.toggle("hidden", !["expired", "error"].includes(loginPhase));
+    }
+    if ((loginPhase === "expired" || loginPhase === "confirmed" || connected) && this.elements.ilinkQrImage) {
+      this.elements.ilinkQrImage.removeAttribute("src");
+    }
+    if (this.elements.ilinkLogs) {
+      this.elements.ilinkLogs.textContent = login.error_code || status.error_code || (status.mockSafe ? "等待后端连接能力" : text);
+    }
   }
 
   async runILinkAction(action) {

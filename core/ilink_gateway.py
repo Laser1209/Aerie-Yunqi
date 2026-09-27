@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
+import sqlite3
 from collections.abc import Callable
 from typing import Any
 
@@ -9,9 +11,16 @@ import httpx
 
 from communication.ilink.channel import ILinkChannel, TextCallback
 from communication.ilink.client import ILinkClient
-from communication.ilink.errors import ILinkHTTPError, ILinkRateLimitError, ILinkSessionExpired
+from communication.ilink.errors import (
+    ILinkHTTPError,
+    ILinkProtocolError,
+    ILinkRateLimitError,
+    ILinkSessionExpired,
+)
 from core.ilink_credentials import ILinkCredentials, ILinkCredentialsStore
 from core.ilink_state import ILinkStateStore
+
+logger = logging.getLogger(__name__)
 
 
 class ILinkGateway:
@@ -47,6 +56,7 @@ class ILinkGateway:
         if credentials is None:
             raise RuntimeError("iLink credentials are required")
         self._bot_id = credentials.bot_id
+        self._ensure_pairing_code(credentials.bot_id)
         self._client = self.client_factory(credentials)
         channel = self.channel_factory(
             self._client,
@@ -75,6 +85,59 @@ class ILinkGateway:
             "phase": phase,
             "configured": configured,
             "connected": connected,
+            "pairing": self._pairing_status(),
+        }
+
+    def create_pairing_code(self) -> dict[str, Any]:
+        """生成（或重置）配对码：面板展示给用户，用户发到微信即完成绑定。"""
+        bot_id = self._current_bot_id()
+        if bot_id is None:
+            raise RuntimeError("iLink credentials are required")
+        code = self.state_store.create_pairing_code(bot_id)
+        info = self.state_store.get_pairing_info(bot_id) or {}
+        return {
+            "code": code,
+            "bot_id": bot_id,
+            "expires_at": info.get("expires_at"),
+        }
+
+    def _current_bot_id(self) -> str | None:
+        if self._bot_id is not None:
+            return self._bot_id
+        credentials = self.credentials_store.load()
+        return credentials.bot_id if credentials is not None else None
+
+    def _ensure_pairing_code(self, bot_id: str) -> None:
+        """未绑定且无可用配对码时补发一个（网关启动即生成，供面板展示）。"""
+        try:
+            if self.state_store.get_binding(bot_id) is not None:
+                return
+            info = self.state_store.get_pairing_info(bot_id)
+            if info is not None and info.get("active"):
+                return
+            self.state_store.create_pairing_code(bot_id)
+        except sqlite3.Error:
+            logger.debug("iLink pairing code bootstrap skipped", exc_info=True)
+            return
+        # 配对码是短期可绑定凭证：日志不落明文，只在面板展示给用户。
+        logger.info("iLink pairing code issued for bot %s", bot_id)
+
+    def _pairing_status(self) -> dict[str, Any]:
+        """配对状态快照；状态库不可用时降级为「无需配对」而非抛错。"""
+        bot_id = self._current_bot_id()
+        if bot_id is None:
+            return {"required": False, "bound": False, "expires_at": None, "attempts": 0}
+        try:
+            bound = self.state_store.get_binding(bot_id) is not None
+            info = self.state_store.get_pairing_info(bot_id)
+        except sqlite3.Error:
+            logger.debug("iLink pairing status unavailable", exc_info=True)
+            return {"required": False, "bound": False, "expires_at": None, "attempts": 0}
+        return {
+            "required": not bound,
+            "bound": bound,
+            "expires_at": (info or {}).get("expires_at"),
+            "attempts": int((info or {}).get("failed_attempts", 0)),
         }
 
     async def stop(self) -> None:
@@ -136,6 +199,12 @@ class ILinkGateway:
             except ILinkHTTPError as exc:
                 if exc.status_code < 500:
                     raise
+                failure_count += 1
+                await self.sleep(self._backoff(failure_count))
+            except ILinkProtocolError:
+                # One malformed payload must not kill the channel: the cursor
+                # is only advanced after successful parsing, so retry the same
+                # long-poll with backoff.
                 failure_count += 1
                 await self.sleep(self._backoff(failure_count))
             except (OSError, TimeoutError, httpx.TimeoutException):

@@ -15,7 +15,7 @@ brief_subscriptions:
 computer_control:
   blacklist: []
   custom_rules: {}
-  mode: manual
+  mode: full
   whitelist: []
 douyin:
   api_base_url: https://api.justoneapi.com
@@ -26,6 +26,7 @@ feature_flags:
   context_budget_v1: true
   conversation_model_v1: true
   identity_contract_v1: true
+  ilink_pairing_v1: true
   image_assets_v1: true
   image_edit_v1: true
   memory_write_validation_v1: true
@@ -40,6 +41,7 @@ feature_flags:
   world_image_candidates_v1: true
   world_inprocess_v1: true
   world_sidecar_v1: true
+  write_approval_v1: true
 message_batching:
   base_interval_seconds: 0.5
   chars_per_second: 4
@@ -50,16 +52,19 @@ message_batching:
   window_seconds: 1.5
 office:
   dir: F:\文件\Aerie
+  first_run_prompted: true
+  write_approval_timeout_sec: 60
 proactive:
-  companion_image_probability: 0.8
+  companion_image_probability: 1
   enabled: true
   image_max_per_day: 0
-  max_per_day: 30
+  max_per_day: 0
   min_interval_min: 15
   outdoor_holiday_event: true
   outdoor_probability: 0.5
   outdoor_weather_event: true
   photo_min_interval_sec: 0
+  primary_channel: qq
   system_notifications: true
 qq:
   heartbeat_interval: 30
@@ -70,7 +75,7 @@ startup:
   auto_start: true
   start_minimized: true
 theme:
-  current: forest-green
+  current: yita-pink
 thinking_loop:
   enabled: false
   interval_seconds: 900

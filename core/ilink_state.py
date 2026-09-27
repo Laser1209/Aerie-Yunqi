@@ -7,7 +7,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from core.paths import data_dir
 from core.windows_dpapi import DPAPIError, protect_data, unprotect_data
@@ -123,6 +123,26 @@ class ILinkStateStore:
         )
         self._connection.commit()
         return code
+
+    def get_pairing_info(self, bot_id: str) -> dict[str, Any] | None:
+        """只读查询当前配对码状态，不泄露 code_hash / salt。
+
+        Returns:
+            None 表示该 bot 无配对码；否则返回过期时刻、失败次数与是否仍可用。
+        """
+        row = self._connection.execute(
+            "SELECT expires_at, failed_attempts FROM ilink_pairing WHERE bot_id = ?",
+            (bot_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        failed_attempts = int(row["failed_attempts"])
+        return {
+            "expires_at": str(row["expires_at"]),
+            "failed_attempts": failed_attempts,
+            "active": self._now() < expires_at and failed_attempts < 5,
+        }
 
     def verify_pairing(
         self,

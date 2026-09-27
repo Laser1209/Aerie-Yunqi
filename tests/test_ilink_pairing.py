@@ -105,3 +105,26 @@ def test_message_deduplication_persists_across_store_reopen(tmp_path):
     reopened = ILinkStateStore(path)
     assert not reopened.mark_message_processed("bot-1", "bot-1:42:client-42")
     reopened.close()
+
+
+def test_get_pairing_info_tracks_expiry_and_attempts(tmp_path, monkeypatch):
+    import core.ilink_state as ilink_state
+
+    current = datetime(2026, 8, 21, tzinfo=timezone.utc)
+    monkeypatch.setattr(ilink_state.secrets, "randbelow", lambda upper: 13572468)
+    store = ilink_state.ILinkStateStore(tmp_path / "ilink_state.db", now=lambda: current)
+
+    assert store.get_pairing_info("bot-1") is None
+
+    store.create_pairing_code("bot-1")
+    info = store.get_pairing_info("bot-1")
+    assert info is not None
+    assert info["failed_attempts"] == 0
+    assert info["active"] is True
+
+    assert not store.verify_pairing("bot-1", "wx-stranger", "wrong", 7)
+    assert store.get_pairing_info("bot-1")["failed_attempts"] == 1
+
+    current += timedelta(minutes=11)
+    assert store.get_pairing_info("bot-1")["active"] is False
+    store.close()

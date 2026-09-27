@@ -125,6 +125,9 @@ contextBridge.exposeInMainWorld("aerie", {
   napcat: {
     getStatus: () => ipcRenderer.invoke("napcat:getStatus"),
     getQrCode: () => ipcRenderer.invoke("napcat:getQrCode"),
+    refreshQrCode: () => ipcRenderer.invoke("napcat:refreshQrCode"),
+    getQuickAccounts: () => ipcRenderer.invoke("napcat:getQuickAccounts"),
+    quickLogin: (uin) => ipcRenderer.invoke("napcat:quickLogin", uin),
     start: () => ipcRenderer.invoke("napcat:start"),
     stop: () => ipcRenderer.invoke("napcat:stop"),
     onEvent: (cb) => {
@@ -135,6 +138,9 @@ contextBridge.exposeInMainWorld("aerie", {
     getStatus: () => ipcRenderer.invoke("ilinkGateway:getStatus"),
     start: () => ipcRenderer.invoke("ilinkGateway:start"),
     stop: () => ipcRenderer.invoke("ilinkGateway:stop"),
+    loginStart: () => ipcRenderer.invoke("ilinkGateway:loginStart"),
+    loginCancel: () => ipcRenderer.invoke("ilinkGateway:loginCancel"),
+    pairingCode: () => ipcRenderer.invoke("ilinkGateway:pairingCode"),
   },
   electron: {
     onHealth: (cb) => {

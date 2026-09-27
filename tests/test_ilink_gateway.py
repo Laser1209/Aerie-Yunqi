@@ -343,3 +343,91 @@ async def test_session_expiry_clears_credentials_and_state_then_stops(tmp_path):
     assert gateway.poll_task is None
     client.close.assert_awaited_once()
     state_store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_start_issues_pairing_code_when_unbound(tmp_path):
+    credentials_store = ILinkCredentialsStore(tmp_path / "credentials.json")
+    credentials_store.save(
+        ILinkCredentials("token", "bot-1", "bot-user", "https://ilinkai.weixin.qq.com")
+    )
+    state_store = ILinkStateStore(tmp_path / "state.db")
+    gateway = ILinkGateway(
+        credentials_store,
+        state_store,
+        3998874040,
+        AsyncMock(),
+        client_factory=lambda _credentials: AsyncMock(),
+        channel_factory=lambda *_args: BlockingChannel(),
+    )
+
+    await gateway.start()
+    pairing = gateway.get_status()["pairing"]
+    await gateway.stop()
+
+    assert pairing["required"] is True
+    assert pairing["bound"] is False
+    assert pairing["expires_at"] is not None
+    state_store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_start_keeps_existing_active_pairing_code(tmp_path, monkeypatch):
+    import core.ilink_state as ilink_state
+
+    monkeypatch.setattr(ilink_state.secrets, "randbelow", lambda upper: 24681357)
+    credentials_store = ILinkCredentialsStore(tmp_path / "credentials.json")
+    credentials_store.save(
+        ILinkCredentials("token", "bot-1", "bot-user", "https://ilinkai.weixin.qq.com")
+    )
+    state_store = ILinkStateStore(tmp_path / "state.db")
+    state_store.create_pairing_code("bot-1")
+    gateway = ILinkGateway(
+        credentials_store,
+        state_store,
+        3998874040,
+        AsyncMock(),
+        client_factory=lambda _credentials: AsyncMock(),
+        channel_factory=lambda *_args: BlockingChannel(),
+    )
+
+    await gateway.start()
+    retained = state_store.verify_pairing("bot-1", "wx-owner", "24681357", 3998874040)
+    await gateway.stop()
+
+    assert retained is True
+    state_store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_create_pairing_code_works_before_start(tmp_path):
+    credentials_store = ILinkCredentialsStore(tmp_path / "credentials.json")
+    credentials_store.save(
+        ILinkCredentials("token", "bot-1", "bot-user", "https://ilinkai.weixin.qq.com")
+    )
+    state_store = ILinkStateStore(tmp_path / "state.db")
+    gateway = ILinkGateway(
+        credentials_store,
+        state_store,
+        3998874040,
+        AsyncMock(),
+        client_factory=lambda _credentials: AsyncMock(),
+        channel_factory=lambda *_args: BlockingChannel(),
+    )
+
+    result = gateway.create_pairing_code()
+
+    assert len(result["code"]) == 8
+    assert result["bot_id"] == "bot-1"
+    assert result["expires_at"] is not None
+    state_store.close()
+
+
+def test_gateway_create_pairing_code_requires_credentials(tmp_path):
+    credentials_store = ILinkCredentialsStore(tmp_path / "credentials.json")
+    state_store = ILinkStateStore(tmp_path / "state.db")
+    gateway = ILinkGateway(credentials_store, state_store, 3998874040, AsyncMock())
+
+    with pytest.raises(RuntimeError):
+        gateway.create_pairing_code()
+    state_store.close()

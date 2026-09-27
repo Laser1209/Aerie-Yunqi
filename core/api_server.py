@@ -1880,10 +1880,35 @@ async def napcat_logs(limit: int = Query(default=50)) -> dict:
 @app.get("/api/napcat/qrcode")
 async def napcat_qrcode() -> Response:
     launcher = get_launcher()
-    data = launcher.read_qrcode()
+    data = await launcher.render_qrcode_png()
     if data is None:
         return JSONResponse({"error": "no QR code available"}, status_code=404)
-    return Response(content=data, media_type="image/png")
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/api/napcat/qrcode/refresh")
+async def napcat_qrcode_refresh() -> dict:
+    launcher = get_launcher()
+    return await launcher.refresh_qrcode()
+
+
+@app.get("/api/napcat/quick-login-list")
+async def napcat_quick_login_list() -> dict:
+    launcher = get_launcher()
+    return {"accounts": await launcher.quick_login_list()}
+
+
+@app.post("/api/napcat/quick-login")
+async def napcat_quick_login(payload: dict | None = None) -> dict:
+    uin = str((payload or {}).get("uin") or "").strip()
+    if not uin.isdigit():
+        return {"ok": False, "message": "uin 无效", "error_code": "invalid_uin"}
+    launcher = get_launcher()
+    return await launcher.quick_login(uin)
 
 
 @app.post("/api/napcat/download")
@@ -1912,6 +1937,20 @@ async def napcat_update_check() -> dict:
     return await asyncio.to_thread(get_downloader().check_update)
 
 
+def _ilink_pairing_enabled() -> bool:
+    comp = get_companion()
+    flags = getattr(comp, "feature_flags", None) if comp else None
+    is_enabled = getattr(flags, "is_enabled", None)
+    if callable(is_enabled):
+        try:
+            return is_enabled("ilink_pairing_v1") is True
+        except Exception:
+            logger.debug("iLink pairing flag lookup failed", exc_info=True)
+    from core.feature_flags import FeatureFlags
+
+    return FeatureFlags().is_enabled("ilink_pairing_v1") is True
+
+
 @app.get("/api/ilink/status")
 async def ilink_status() -> dict:
     comp = get_companion()
@@ -1923,7 +1962,62 @@ async def ilink_status() -> dict:
             "connected": False,
             "error_code": "backend_not_ready",
         }
-    return gateway.get_status()
+    status = gateway.get_status()
+    if not _ilink_pairing_enabled():
+        status.pop("pairing", None)
+    flow = getattr(comp, "ilink_auth_flow", None)
+    if flow is not None:
+        login = flow.get_status()
+        status["login"] = {
+            "phase": login["phase"],
+            "qrcode_available": login["qrcode_available"],
+            "error_code": login["error_code"],
+        }
+    return status
+
+
+@app.post("/api/ilink/login/start")
+async def ilink_login_start() -> dict:
+    comp = get_companion()
+    flow = getattr(comp, "ilink_auth_flow", None) if comp else None
+    if flow is None:
+        return {"phase": "disabled", "qrcode_available": False, "error_code": "backend_not_ready"}
+    return await flow.start()
+
+
+@app.get("/api/ilink/login/status")
+async def ilink_login_status() -> dict:
+    comp = get_companion()
+    flow = getattr(comp, "ilink_auth_flow", None) if comp else None
+    if flow is None:
+        return {"phase": "disabled", "qrcode_available": False, "error_code": "backend_not_ready"}
+    return flow.get_status()
+
+
+@app.post("/api/ilink/login/cancel")
+async def ilink_login_cancel() -> dict:
+    comp = get_companion()
+    flow = getattr(comp, "ilink_auth_flow", None) if comp else None
+    if flow is None:
+        return {"phase": "disabled", "qrcode_available": False}
+    return await flow.cancel()
+
+
+@app.post("/api/ilink/pairing-code")
+async def ilink_pairing_code() -> Any:
+    """生成配对码：用户把该码发到微信即可完成绑定（开关关闭时返回 404）。"""
+    if not _ilink_pairing_enabled():
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    comp = get_companion()
+    gateway = getattr(comp, "ilink_gateway", None) if comp else None
+    if gateway is None:
+        return JSONResponse({"error": "backend_not_ready"}, status_code=503)
+    try:
+        result = gateway.create_pairing_code()
+    except RuntimeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=409)
+    emit("ilink_pairing_code_issued", expires_at=result.get("expires_at"))
+    return result
 
 
 @app.post("/api/ilink/start")
@@ -5744,6 +5838,27 @@ async def workspace_activities(limit: int = 50) -> dict:
     return {"activities": _ws().activities(limit=limit)}
 
 
+@app.get("/api/agent/write-approval/pending")
+async def agent_write_approval_pending() -> dict:
+    """列出待确认的越界写入请求（前端刷新后补齐展示）。"""
+    from core import write_approval
+
+    return {"pending": write_approval.pending()}
+
+
+@app.post("/api/agent/write-approval")
+async def agent_write_approval(request: Request) -> Any:
+    """越界写入的授权结果（桌面端审批卡片确认后回调）。"""
+    body = await request.json()
+    req_id = str(body.get("id") or "").strip()
+    if not req_id:
+        return JSONResponse({"error": "id required"}, status_code=400)
+    from core import write_approval
+
+    resolved = write_approval.resolve(req_id, bool(body.get("approved")))
+    return {"status": "ok" if resolved else "not_found"}
+
+
 @app.post("/api/workspace/activities/clear")
 async def workspace_activities_clear() -> dict:
     """清空工作区操作日志。"""
@@ -5785,54 +5900,11 @@ async def settings_reset() -> dict:
 
 # ── v13.9.9: API Key management & self-check ──
 
-_PROVIDER_META = [
-    {"key": "deepseek", "name": "DeepSeek", "env_key": "DEEPSEEK_API_KEY",
-     "env_url": "DEEPSEEK_BASE_URL", "env_model": "DEEPSEEK_MODEL",
-     "default_url": "https://api.deepseek.com/v1", "default_model": "deepseek-chat",
-     "models": ["deepseek-chat", "deepseek-reasoner"]},
-    {"key": "dashscope", "name": "通义千问 (DashScope)", "env_key": "DASHSCOPE_API_KEY",
-     "env_url": "QWEN_BASE_URL", "env_model": "QWEN_MODEL",
-     "default_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "default_model": "qwen-plus",
-     "models": ["qwen-plus", "qwen-max", "qwen-turbo", "qwen-long", "qwen3-max"]},
-    {"key": "doubao", "name": "豆包 (Doubao)", "env_key": "DOUBAO_API_KEY",
-     "env_url": "DOUBAO_BASE_URL", "env_model": "DOUBAO_MODEL",
-     "default_url": "https://ark.cn-beijing.volces.com/api/v3", "default_model": "doubao-seed-2-1-turbo-260628",
-     "models": ["doubao-seed-2-1-turbo-260628", "doubao-1-5-pro-32k", "doubao-1-5-lite-32k"]},
-    {"key": "siliconflow", "name": "SiliconFlow", "env_key": "SILICONFLOW_API_KEY",
-     "env_url": "SILICONFLOW_BASE_URL", "env_model": "SILICONFLOW_MODEL",
-     "default_url": "https://api.siliconflow.com/v1", "default_model": "google/gemma-4-26B-A4B-it",
-     "models": ["Qwen/Qwen3-235B-A22B", "deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct", "google/gemma-4-26B-A4B-it"]},
-    {"key": "openai", "name": "OpenAI / GPT", "env_key": "OPENAI_API_KEY",
-     "env_url": "OPENAI_BASE_URL", "env_model": "OPENAI_MODEL",
-     "default_url": "https://api.codexgood.com/v1", "default_model": "gpt-5.5",
-     "models": ["gpt-5.5", "gpt-4o", "gpt-4o-mini"]},
-    {"key": "gemini", "name": "Gemini", "env_key": "GEMINI_API_KEY",
-     "env_url": "GEMINI_BASE_URL", "env_model": "GEMINI_MODEL",
-     "default_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "default_model": "gemini-2.0-flash-exp",
-     "models": ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"]},
-    {"key": "glm", "name": "智谱 GLM", "env_key": "BIGMODEL_API_KEY",
-     "env_url": "BIGMODEL_BASE_URL", "env_model": "BIGMODEL_MODEL",
-     "default_url": "https://open.bigmodel.cn/api/paas/v4/", "default_model": "glm-4-plus",
-     "models": ["glm-4-plus", "glm-4-flash", "glm-4-air"]},
-    {"key": "minimax", "name": "MiniMax", "env_key": "MINIMAX_API_KEY",
-     "env_url": "MINIMAX_BASE_URL", "env_model": "MINIMAX_MODEL",
-     "default_url": "https://api.minimaxi.com/v1", "default_model": "MiniMax-M3",
-     "models": ["MiniMax-M3", "MiniMax-Text-01", "abab6.5s-chat"]},
-]
+# 厂商元数据与功能点定义的唯一来源是 core.ai_services，设置页与运行时共用，
+# 杜绝「卡片写的 env 变量」与「功能点写的 env 变量」互相串改。
+from core.ai_services import card_provider_metas
 
-# 模型功能点（role）→ 环境变量的映射（自定义 API 配置面板）。
-_MODEL_ROLES = [
-    {"key": "main_chat", "name": "对话 AI", "env_key": "DEEPSEEK_MODEL",
-     "desc": "主对话场景的默认模型"},
-    {"key": "subagent", "name": "辅助 AI", "env_key": "AERIE_WS_MODEL",
-     "desc": "子 Agent / 轻量任务"},
-    {"key": "subagent_code", "name": "代码辅助", "env_key": "AERIE_WS_CODE_MODEL",
-     "desc": "代码类子 Agent"},
-    {"key": "light_assist", "name": "轻量辅助", "env_key": "SILICONFLOW_LIGHT_MODEL",
-     "desc": "快速辅助（问候纠错 / 生图提示词接力）"},
-    {"key": "asr", "name": "语音转写", "env_key": "AERIE_WS_ASR_MODEL",
-     "desc": "语音转写 ASR"},
-]
+_PROVIDER_META = card_provider_metas()
 
 # 功能 API（外部服务）元数据：设置页「功能 API 配置」界面展示。
 # builtin=True 表示内置免费、无需密钥；fields 中 secret=True 的字段脱敏展示。
@@ -5950,26 +6022,30 @@ def _mask_secret(value: str) -> str:
     return "•" * 8 + value[-4:]
 
 
-_CUSTOM_PROVIDERS_ENV_KEY = "AERIE_CUSTOM_PROVIDERS"
+from core.ai_services import (
+    ROLE_META,
+    SPECIAL_SERVICE_META,
+    AiServicesError,
+    get_store,
+    list_bindable_providers,
+    resolve_provider,
+    run_provider_check,
+)
 
 
-def _read_custom_providers() -> list[dict]:
-    """Read user-added custom OpenAI-compatible providers from .env (JSON array)."""
-    raw = _read_env_file().get(_CUSTOM_PROVIDERS_ENV_KEY, "")
-    if not raw:
-        return []
+def _ai_store():
+    return get_store()
+
+
+def _hot_reload_brain() -> None:
+    """保存配置后热重建对话 brain，使新厂商 / 绑定立即生效。"""
     try:
-        data = json.loads(raw)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, ValueError):
-        return []
-
-
-def _write_custom_providers(providers: list[dict]) -> None:
-    """Persist custom providers to .env as a JSON array."""
-    env = _read_env_file()
-    env[_CUSTOM_PROVIDERS_ENV_KEY] = json.dumps(providers, ensure_ascii=False)
-    _write_env_file(env)
+        comp = get_companion()
+        if comp and hasattr(comp, "brain"):
+            from core.llm_caller import LLMCaller
+            comp.brain = LLMCaller()
+    except Exception:
+        logger.debug("provider config hot-reload failed", exc_info=True)
 
 
 @app.get("/api/env/providers")
@@ -5977,10 +6053,12 @@ async def env_providers() -> dict:
     """Return list of AI providers with config status (keys masked) + 余额/健康状态。"""
     env = _read_env_file()
     health = _read_provider_health_state()
+    checks = _ai_store().get_checks()
     providers = []
     for meta in _PROVIDER_META:
         key_val = env.get(meta["env_key"], "")
         h = health.get(meta["key"]) or health.get(_HEALTH_ALIAS.get(meta["key"], "")) or {}
+        check = checks.get(meta["key"]) or {}
         providers.append({
             "key": meta["key"],
             "name": meta["name"],
@@ -5997,6 +6075,7 @@ async def env_providers() -> dict:
             "balance": h.get("balance"),
             "health_status": h.get("status", "unknown"),
             "health_reason": h.get("reason", ""),
+            "check": check,
         })
     return {
         "providers": providers,
@@ -6058,11 +6137,17 @@ async def providers_connectivity() -> dict:
     return {"providers": providers}
 
 
+def _looks_like_masked(value: str) -> bool:
+    v = (value or "").strip()
+    return bool(v) and any(marker in v for marker in ("•", "·", "●"))
+
+
 @app.post("/api/env/save")
 async def env_save(request: Request) -> dict:
-    """Save provider API key / base_url / model to .env file.
+    """Save built-in provider credentials to .env, then run a connectivity check.
 
     Body: {"provider_key": "deepseek", "api_key": "...", "base_url": "...", "model": "..."}
+    A masked placeholder (••••) as api_key is rejected server-side.
     """
     try:
         body = await request.json()
@@ -6071,9 +6156,15 @@ async def env_save(request: Request) -> dict:
         if not meta:
             return JSONResponse({"error": "Unknown provider: " + provider_key}, status_code=400)
 
+        api_key = body.get("api_key")
+        if api_key is not None and _looks_like_masked(str(api_key)):
+            return JSONResponse(
+                {"error": "API Key 仍是脱敏占位值，请输入真实密钥后再保存"},
+                status_code=400,
+            )
+
         env = _read_env_file()
         changed: dict[str, str] = {}
-        api_key = body.get("api_key")
         if api_key is not None:
             env[meta["env_key"]] = api_key
             changed[meta["env_key"]] = api_key
@@ -6087,137 +6178,253 @@ async def env_save(request: Request) -> dict:
             changed[meta["env_model"]] = model
 
         _write_env_file(env)
-        # 热加载：更新进程内环境变量并重建对话 brain，使新 API Key / model / url 立即生效，
-        # 无需重启后端。临时实例化的 LLMCaller / ASR 客户端会读取新 env。
         if changed:
             os.environ.update(changed)
-            try:
-                comp = get_companion()
-                if comp and hasattr(comp, "brain"):
-                    from core.llm_caller import LLMCaller
-                    comp.brain = LLMCaller()
-            except Exception:
-                logger.debug("provider env hot-reload failed", exc_info=True)
-        return {"status": "ok", "provider": provider_key, "hot_reloaded": list(changed.keys())}
+
+        # 保存即测：对新凭证做轻量 /models 探测，结果落 ai_services.json + jsonl。
+        check: dict = {}
+        current_key = env.get(meta["env_key"], "")
+        if current_key:
+            check = await run_provider_check(
+                base_url=env.get(meta["env_url"], meta["default_url"]),
+                api_key=current_key,
+                mode="models",
+            )
+            _ai_store().record_check(provider_key, check)
+
+        _hot_reload_brain()
+        return {
+            "status": "ok",
+            "provider": provider_key,
+            "hot_reloaded": list(changed.keys()),
+            "check": check,
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Custom OpenAI-compatible providers (file-backed) ──
+
+
+def _custom_provider_view(cp: dict) -> dict:
+    return {
+        "id": cp.get("id", ""),
+        "name": cp.get("name", ""),
+        "base_url": cp.get("base_url", ""),
+        "api_key_masked": _mask_secret(cp.get("api_key", "")),
+        "model": cp.get("model", ""),
+        "supports_tools": bool(cp.get("supports_tools", False)),
+        "max_tool_calls": cp.get("max_tool_calls", 8),
+        "check": _ai_store().get_checks().get(cp.get("id", ""), {}),
+    }
 
 
 @app.get("/api/env/custom-providers")
 async def env_custom_providers_get() -> dict:
     """Return user-added custom API providers (keys masked)."""
-    providers = []
-    for cp in _read_custom_providers():
-        extra_kv = cp.get("extra_kv")
-        if not isinstance(extra_kv, dict):
-            extra_kv = {}
-        providers.append({
-            "id": cp.get("id", ""),
-            "name": cp.get("name", ""),
-            "base_url": cp.get("base_url", ""),
-            "api_key_masked": _mask_secret(cp.get("api_key", "")),
-            "model": cp.get("model", ""),
-            "extra_kv": extra_kv,
-            "max_tool_calls": cp.get("max_tool_calls", 8),
-        })
+    providers = [_custom_provider_view(cp) for cp in _ai_store().list_custom_providers(include_key=True)]
     return {"providers": providers}
 
 
-@app.post("/api/env/custom-providers")
-async def env_custom_providers_save(request: Request) -> dict:
-    """Save user-added custom API providers. Body: {"providers": [...]}"""
+@app.put("/api/env/custom-providers")
+async def env_custom_providers_upsert(request: Request) -> dict:
+    """Create or update one custom provider, then check connectivity.
+
+    Body: {"id"?: "...", "name", "base_url", "api_key", "model",
+           "supports_tools"?: bool, "max_tool_calls"?: int, "force"?: bool}
+    On update, empty api_key keeps the stored key.
+    """
     try:
         body = await request.json()
-        items = body.get("providers")
-        if not isinstance(items, list):
-            return JSONResponse({"error": "invalid_providers"}, status_code=400)
-        clean = []
-        for idx, it in enumerate(items):
-            if not isinstance(it, dict):
-                continue
-            name = str(it.get("name") or "").strip()
-            base_url = str(it.get("base_url") or "").strip()
-            api_key = str(it.get("api_key") or "").strip()
-            model = str(it.get("model") or "").strip()
-            if not name and not base_url:
-                continue
-            extra_kv = it.get("extra_kv")
-            if not isinstance(extra_kv, dict):
-                extra_kv = {}
-            try:
-                max_tool_calls = int(it.get("max_tool_calls") or 8)
-            except (TypeError, ValueError):
-                max_tool_calls = 8
-            clean.append({
-                "id": str(it.get("id") or "").strip() or f"cp_{int(time.time() * 1000)}_{idx}",
-                "name": name,
-                "base_url": base_url,
-                "api_key": api_key,
-                "model": model,
-                "extra_kv": extra_kv,
-                "max_tool_calls": max_tool_calls,
-            })
-        # 保留已有 provider 的 api_key（前端返回的是脱敏值，未修改时留空）
-        existing_by_id = {cp.get("id"): cp for cp in _read_custom_providers() if cp.get("id")}
-        for it in clean:
-            if not it["api_key"]:
-                old = existing_by_id.get(it["id"])
-                if old and old.get("api_key"):
-                    it["api_key"] = old["api_key"]
-        _write_custom_providers(clean)
-        return {"status": "ok", "count": len(clean)}
+        force = bool(body.get("force"))
+        record = {
+            "id": body.get("id"),
+            "name": body.get("name"),
+            "base_url": body.get("base_url"),
+            "api_key": body.get("api_key"),
+            "model": body.get("model"),
+            "supports_tools": body.get("supports_tools", False),
+            "max_tool_calls": body.get("max_tool_calls", 8),
+        }
+        store = _ai_store()
+        try:
+            prepared = store.prepare_custom_provider(record)
+        except AiServicesError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+        # 先测后存：测试失败且未强制时不写盘。
+        check = await run_provider_check(
+            base_url=prepared["base_url"],
+            api_key=prepared["api_key"],
+            model=prepared["model"],
+            mode="chat" if prepared["model"] else "models",
+        )
+        if not check.get("ok") and not force:
+            return JSONResponse(
+                {"error": check.get("detail") or "连通性测试失败，未保存", "check": check},
+                status_code=422,
+            )
+
+        saved = store.commit_custom_provider(prepared)
+        store.record_check(saved["id"], check)
+        _hot_reload_brain()
+        return {"status": "ok", "provider": _custom_provider_view(saved), "check": check}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.delete("/api/env/custom-providers/{provider_id}")
+async def env_custom_providers_delete(provider_id: str) -> dict:
+    """Delete one custom provider. Bindings referencing it are reset to defaults."""
+    try:
+        store = _ai_store()
+        deleted = store.delete_custom_provider(provider_id)
+        if not deleted:
+            return JSONResponse({"error": "provider_not_found"}, status_code=404)
+        from core.ai_services import DEFAULT_BINDINGS
+        for role, target in store.get_bindings().items():
+            if target.get("provider") == provider_id:
+                default = DEFAULT_BINDINGS[role]
+                store.set_binding(role, default["provider"], default["model"])
+        _hot_reload_brain()
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/env/bindable-providers")
+async def env_bindable_providers() -> dict:
+    """Configured providers selectable for functional role bindings."""
+    return {"providers": list_bindable_providers(_ai_store())}
+
+
 @app.get("/api/env/model-roles")
 async def env_model_roles_get() -> dict:
-    """返回模型功能点（role）的当前映射（对话 AI / 辅助 AI / 代码辅助 / 轻量辅助 / 语音转写）。"""
-    env = _read_env_file()
+    """返回功能点绑定（功能点 → 厂商 + 模型）与专用服务只读信息。"""
+    store = _ai_store()
+    bindings = store.get_bindings()
+    checks = store.get_checks()
     roles = []
-    for meta in _MODEL_ROLES:
+    for meta in ROLE_META:
+        target = bindings.get(meta["key"], {})
+        provider = target.get("provider", "")
+        model = target.get("model", "")
         roles.append({
             "key": meta["key"],
             "name": meta["name"],
             "desc": meta["desc"],
-            "env_key": meta["env_key"],
-            "model": env.get(meta["env_key"], ""),
+            "provider": provider,
+            "model": model,
+            "check": checks.get(f"binding:{meta['key']}", {}),
         })
-    return {"roles": roles}
+    env = _read_env_file()
+    special = []
+    for svc in SPECIAL_SERVICE_META:
+        special.append({
+            "key": svc["key"],
+            "name": svc["name"],
+            "desc": svc["desc"],
+            "model": env.get(svc["env_model"], svc["default_model"]),
+        })
+    return {"roles": roles, "special_services": special}
 
 
 @app.post("/api/env/model-roles")
 async def env_model_roles_save(request: Request) -> dict:
-    """保存模型功能点映射到 .env（热加载）。Body: {"roles": [{"key": "...", "model": "..."}]}"""
+    """保存功能点绑定（provider + model）。先测后存；force=True 允许测试失败仍保存。
+
+    Body: {"roles": [{"key", "provider", "model"}], "force"?: bool}
+    """
     try:
         body = await request.json()
         roles = body.get("roles") if isinstance(body, dict) else None
+        force = bool(isinstance(body, dict) and body.get("force"))
         if not isinstance(roles, list):
             return JSONResponse({"error": "invalid_roles", "errorCode": "invalid_roles"}, status_code=400)
-        env = _read_env_file()
-        changed_env: dict[str, str] = {}
+
+        normalized: list[dict] = []
         for item in roles:
             if not isinstance(item, dict):
                 continue
-            key = item.get("key")
-            model = str(item.get("model") or "").strip()
-            meta = next((m for m in _MODEL_ROLES if m["key"] == key), None)
-            if meta and model:
-                env[meta["env_key"]] = model
-                changed_env[meta["env_key"]] = model
-        _write_env_file(env)
-        # 热加载：更新进程内环境变量并重建对话 brain，使新模型立即生效，
-        # 无需重启后端。临时实例化的 LLMCaller / ASR 客户端会读取新 env。
-        if changed_env:
-            os.environ.update(changed_env)
+            normalized.append({
+                "key": str(item.get("key") or ""),
+                "provider": str(item.get("provider") or ""),
+                "model": str(item.get("model") or ""),
+            })
+
+        store = _ai_store()
+        # 第一步：纯校验，全部合法才继续（不落盘）。
+        for target in normalized:
             try:
-                comp = get_companion()
-                if comp and hasattr(comp, "brain"):
-                    from core.llm_caller import LLMCaller
-                    comp.brain = LLMCaller()
-            except Exception:
-                pass
-        return {"status": "ok", "hot_reloaded": list(changed_env.keys())}
+                store.validate_binding(target["key"], target["provider"], target["model"])
+            except AiServicesError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+
+        # 第二步：对每个目标做小流量 chat 探测（max_tokens=1）。
+        results: list[dict] = []
+        for target in normalized:
+            endpoint = resolve_provider(target["provider"], target["model"], store)
+            if endpoint is None or not endpoint.available:
+                check = {"ok": False, "detail": "该厂商尚未配置有效凭证，请先在上方填写并保存",
+                         "http_status": None, "latency_ms": 0, "mode": "chat"}
+            else:
+                check = await run_provider_check(
+                    base_url=endpoint.base_url,
+                    api_key=endpoint.api_key,
+                    model=endpoint.model,
+                    mode="chat",
+                )
+            results.append({"key": target["key"], "check": check})
+
+        failed = [r for r in results if not r["check"].get("ok")]
+        if failed and not force:
+            first = failed[0]["check"]
+            return JSONResponse(
+                {"error": first.get("detail") or "连通性测试失败，未保存绑定", "results": results},
+                status_code=422,
+            )
+
+        # 第三步：全部通过（或强制保存）才落盘 + 记录结果 + 热加载。
+        for target in normalized:
+            store.set_binding(target["key"], target["provider"], target["model"])
+        for r in results:
+            store.record_check(f"binding:{r['key']}", r["check"])
+        _hot_reload_brain()
+        return {"status": "ok", "results": results, "forced": bool(failed)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/env/provider-check")
+async def env_provider_check(request: Request) -> dict:
+    """Test credentials without saving.
+
+    Body: {"provider"?: builtin key, "model"?: str,
+           "custom"?: {"base_url", "api_key", "model"}, "mode"?: "models"|"chat"}
+    """
+    try:
+        body = await request.json()
+        mode = str(body.get("mode") or "models")
+        if mode not in ("models", "chat"):
+            mode = "models"
+        custom = body.get("custom")
+        if isinstance(custom, dict):
+            base_url = str(custom.get("base_url") or "")
+            api_key = str(custom.get("api_key") or "")
+            model = str(custom.get("model") or body.get("model") or "")
+        else:
+            provider_key = str(body.get("provider") or "")
+            model = str(body.get("model") or "")
+            endpoint = resolve_provider(provider_key, model, _ai_store())
+            if endpoint is None:
+                return JSONResponse({"error": "provider_not_configured"}, status_code=400)
+            base_url = endpoint.base_url
+            api_key = endpoint.api_key
+            model = endpoint.model
+        if _looks_like_masked(api_key):
+            return JSONResponse({"error": "API Key 仍是脱敏占位值，请输入真实密钥"}, status_code=400)
+        check = await run_provider_check(base_url=base_url, api_key=api_key, model=model, mode=mode)
+        return {"status": "ok", "check": check}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

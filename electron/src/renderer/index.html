@@ -688,7 +688,9 @@
                   <div id="napcat-qr-zone" class="napcat-qr-zone hidden">
                     <h3>请用手机QQ扫码登录</h3>
                     <img id="napcat-qr-img" src="" alt="QQ 登录二维码" class="napcat-qr-img">
+                    <p id="napcat-qr-hint" class="external-channel-hint hidden">二维码已过期，正在自动刷新…</p>
                     <button id="napcat-qr-refresh" class="btn btn-secondary btn-sm">刷新二维码</button>
+                    <div id="napcat-quick-login" class="napcat-quick-login"></div>
                   </div>
                   <h3 class="external-channel-log-title">运行日志</h3>
                   <pre id="napcat-logs" class="napcat-logs"></pre>
@@ -703,12 +705,22 @@
                   <div class="ilink-placeholder-state">
                     <div><span id="ilink-gateway-phase-dot" class="phase-dot phase-dot--idle"></span> <span id="ilink-gateway-phase-text">未启用</span></div>
                     <div class="external-channel-actions">
-                      <button id="ilink-gateway-start-btn" class="btn btn-primary">连接微信</button>
+                      <button id="ilink-login-btn" class="btn btn-primary">扫码登录微信</button>
+                      <button id="ilink-gateway-start-btn" class="btn btn-primary hidden">连接微信</button>
                       <button id="ilink-gateway-stop-btn" class="btn btn-secondary">停止</button>
                     </div>
                   </div>
-                  <p class="external-channel-hint">微信 Claw 支持文本连接；扫码、配对与媒体能力将在连接会话可用后显示。</p>
-                  <div id="ilink-gateway-qr-zone" class="ilink-gateway-qr-zone hidden"><img id="ilink-gateway-qr-img" src="" alt="微信登录二维码"></div>
+                  <div id="ilink-gateway-qr-zone" class="ilink-gateway-qr-zone hidden">
+                    <img id="ilink-gateway-qr-img" src="" alt="微信登录二维码">
+                    <p id="ilink-login-hint" class="external-channel-hint" role="status" aria-live="polite">请使用微信扫码登录</p>
+                    <button id="ilink-qr-refresh-btn" class="btn btn-secondary hidden">刷新二维码</button>
+                  </div>
+                  <div id="ilink-pairing-zone" class="ilink-pairing-zone hidden">
+                    <p class="external-channel-hint">微信已连接，但还没和你绑定。把下面的配对码发到微信对话里即可完成绑定：</p>
+                    <div id="ilink-pairing-code" class="ilink-pairing-code">--------</div>
+                    <p id="ilink-pairing-hint" class="external-channel-hint" role="status" aria-live="polite">正在生成配对码…</p>
+                    <button id="ilink-pairing-refresh-btn" class="btn btn-secondary">重新生成配对码</button>
+                  </div>
                   <h3 class="external-channel-log-title">微信运行日志</h3>
                   <pre id="ilink-gateway-logs" class="napcat-logs">等待连接</pre>
                 </div>
@@ -1809,7 +1821,7 @@
                 添加 AI 厂商并填入 API Key 就能开始对话。所有密钥只保存在本地，不会上传到任何地方。
               </div>
               <div style="display:flex; gap:8px; align-items:center; flex:0 0 auto;">
-                <button id="custom-api-toggle-btn" class="btn btn-secondary btn-sm" type="button">功能点映射</button>
+                <button id="custom-api-toggle-btn" class="btn btn-secondary btn-sm" type="button">功能点路由</button>
                 <button id="apikey-add-btn" class="btn btn-primary btn-sm" type="button" style="position:relative;">
                   ＋ 添加模型
                   <span id="apikey-add-badge" style="display:inline-flex; min-width:18px; height:18px; padding:0 5px; margin-left:6px; border-radius:9px; background:rgba(255,255,255,0.92); color:var(--accent,#ff5b9c); font-size:11px; font-weight:600; align-items:center; justify-content:center; box-sizing:border-box; vertical-align:middle;">0</span>
@@ -1839,7 +1851,7 @@
                 <!-- JS 动态渲染 -->
               </div>
               <div class="apikey-provider-actions">
-                <button type="button" id="custom-provider-save-btn" class="btn btn-primary btn-sm">保存并热加载 · Save</button>
+                <button type="button" id="custom-provider-save-btn" class="btn btn-primary btn-sm">测试并保存 · Test &amp; Save</button>
                 <span id="custom-provider-status" style="font-size:11px;color:var(--text-muted,#999);"></span>
               </div>
             </div>
@@ -1847,15 +1859,15 @@
               <div class="apikey-provider-header">
                 <div class="apikey-provider-name">
                   <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
-                  自定义模型功能点 · Model Roles
+                  功能点路由 · Model Roles
                 </div>
-                <div class="apikey-provider-status" style="font-size:11px;color:var(--text-muted,#999);">为每个功能点指定 AI 模型，保存后热加载</div>
+                <div class="apikey-provider-status" style="font-size:11px;color:var(--text-muted,#999);">为对话 / 子Agent / 代码 / 轻量任务分别指定厂商与模型，保存前自动小流量测试</div>
               </div>
               <div id="custom-api-role-list" class="apikey-provider-fields" style="display:flex;flex-direction:column;gap:10px;">
                 <!-- JS 动态渲染 -->
               </div>
               <div class="apikey-provider-actions">
-                <button type="button" id="custom-api-save-btn" class="btn btn-primary btn-sm">保存并热加载 · Save</button>
+                <button type="button" id="custom-api-save-btn" class="btn btn-primary btn-sm">测试并保存 · Test &amp; Save</button>
                 <span id="custom-api-status" style="font-size:11px;color:var(--text-muted,#999);"></span>
               </div>
             </div>

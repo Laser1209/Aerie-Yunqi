@@ -3094,6 +3094,33 @@ ipcMain.handle("napcat:stop", async () => {
   }
 });
 
+ipcMain.handle("napcat:refreshQrCode", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/napcat/qrcode/refresh" });
+    return r.data;
+  } catch (_) {
+    return { ok: false, message: "backend unreachable" };
+  }
+});
+
+ipcMain.handle("napcat:getQuickAccounts", async () => {
+  try {
+    const r = await apiRequest({ path: "/api/napcat/quick-login-list" });
+    return (r.data && r.data.accounts) || [];
+  } catch (_) {
+    return [];
+  }
+});
+
+ipcMain.handle("napcat:quickLogin", async (_event, uin) => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/napcat/quick-login", body: { uin: String(uin) } });
+    return r.data;
+  } catch (_) {
+    return { ok: false, message: "backend unreachable" };
+  }
+});
+
 ipcMain.handle("ilinkGateway:getStatus", async () => {
   try {
     const r = await apiRequest({ path: "/api/ilink/status" });
@@ -3118,6 +3145,33 @@ ipcMain.handle("ilinkGateway:stop", async () => {
     return r.data;
   } catch (_) {
     return { phase: "disabled", configured: false, connected: false, error_code: "backend_unreachable" };
+  }
+});
+
+ipcMain.handle("ilinkGateway:loginStart", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/ilink/login/start" });
+    return r.data;
+  } catch (_) {
+    return { phase: "error", qrcode_available: false, error_code: "backend_unreachable" };
+  }
+});
+
+ipcMain.handle("ilinkGateway:loginCancel", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/ilink/login/cancel" });
+    return r.data;
+  } catch (_) {
+    return { phase: "idle", qrcode_available: false };
+  }
+});
+
+ipcMain.handle("ilinkGateway:pairingCode", async () => {
+  try {
+    const r = await apiRequest({ method: "POST", path: "/api/ilink/pairing-code" });
+    return r.data;
+  } catch (_) {
+    return { error: "pairing_unavailable" };
   }
 });
 

@@ -657,10 +657,12 @@ body {
   border: 1px solid var(--color-border);
 }
 .napcat-phase { display: flex; align-items: center; gap: 10px; }
+.hidden { display: none !important; }
 .phase-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 .phase-dot--idle { background: var(--text-400); }
 .phase-dot--starting { background: var(--warning); animation: pulse 1.5s infinite; }
 .phase-dot--qr_pending { background: var(--warning); }
+.phase-dot--qr_expired { background: var(--color-danger, #e74c3c); animation: pulse 1.5s infinite; }
 .phase-dot--connected { background: var(--success); }
 .phase-dot--error { background: var(--color-danger, #e74c3c); }
 .phase-text { font-size: 14px; font-weight: 500; }
@@ -681,6 +683,19 @@ body {
   display: block;
   border-radius: 8px;
 }
+.napcat-quick-login {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+.napcat-quick-login .external-channel-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.napcat-quick-login-btn { white-space: nowrap; }
 .napcat-logs {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -834,7 +849,37 @@ body {
   line-height: 1.6;
 }
 .ilink-gateway-qr-zone.hidden { display: none; }
-.ilink-gateway-qr-zone img { display: block; max-width: 200px; margin: 12px auto; }
+.ilink-gateway-qr-zone {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.ilink-gateway-qr-zone img { display: block; max-width: 200px; margin: 0 auto 8px; border-radius: 8px; }
+.ilink-gateway-qr-zone .external-channel-hint { margin: 8px 0; }
+#ilink-qr-refresh-btn { margin: 4px auto 0; }
+.ilink-pairing-zone.hidden { display: none; }
+.ilink-pairing-zone {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.ilink-pairing-zone .external-channel-hint { margin: 8px 0; }
+.ilink-pairing-code {
+  margin: 6px auto;
+  padding: 10px 8px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 6px;
+  font-variant-numeric: tabular-nums;
+  user-select: all;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.12);
+}
+#ilink-pairing-refresh-btn { margin: 4px auto 0; }
 .primary-channel-selector {
   margin-top: 14px;
   padding: 14px;

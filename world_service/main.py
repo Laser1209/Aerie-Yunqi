@@ -39,6 +39,7 @@ class LocalWorldSidecarService:
         initial_enabled: bool = True,
         tick_interval_seconds: float = 1.0,
         checkpoint_interval_seconds: float = 60.0,
+        prune_interval_seconds: float = 300.0,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -57,11 +58,13 @@ class LocalWorldSidecarService:
         )
         self.tick_interval_seconds = max(0.05, float(tick_interval_seconds))
         self.checkpoint_interval_seconds = max(1.0, float(checkpoint_interval_seconds))
+        self.prune_interval_seconds = max(30.0, float(prune_interval_seconds))
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._loop_thread: threading.Thread | None = None
         self._idempotent_controls: dict[str, dict[str, Any]] = {}
         self._last_checkpoint_monotonic = 0.0
+        self._last_prune_monotonic = 0.0
 
         restored = self.store.load_runtime_state()
         if restored:
@@ -264,6 +267,9 @@ class LocalWorldSidecarService:
                     checkpoint_id=f"world-runtime-{snapshot.get('revision', 0)}",
                     state=snapshot,
                 )
+            # 保留窗口修剪：tick 每 1s 写两行且原本从不清理，一天 8.6 万行/表，
+            # 实测库到 1.07 GB 后拖死 Electron 启动握手（并卡住生图投递的世界闸门）。
+            self._maybe_prune(now_monotonic)
             self._persist_runtime_state()
             return {
                 "accepted": True,
@@ -352,6 +358,21 @@ class LocalWorldSidecarService:
                     )
             except Exception:
                 self.store.heartbeat(status="degraded", detail={"error": "tick_failed"})
+
+    def _maybe_prune(self, now_monotonic: float) -> None:
+        """按 prune_interval_seconds 触发一次保留窗口修剪（失败不影响 tick）。"""
+        if now_monotonic - self._last_prune_monotonic < self.prune_interval_seconds:
+            return
+        self._last_prune_monotonic = now_monotonic
+        self.store.prune()
+
+    def maintenance(self, *, vacuum: bool = False) -> dict[str, Any]:
+        """手动维护入口：立即修剪（可选重写整库回收磁盘）。"""
+        result = self.store.prune()
+        if vacuum:
+            self.store.vacuum()
+        result["vacuumed"] = bool(vacuum)
+        return result
 
     def _persist_runtime_state(self) -> None:
         snapshot = self.world.get_snapshot()
@@ -481,6 +502,11 @@ class WorldSidecarRequestHandler(BaseHTTPRequestHandler):
             )
         elif path == "/image-candidates":
             self._json(HTTPStatus.ACCEPTED, self.server.service.publish_image_candidate(body))
+        elif path == "/maintenance":
+            self._json(
+                HTTPStatus.OK,
+                self.server.service.maintenance(vacuum=body.get("vacuum") is True),
+            )
         elif path == "/shutdown":
             self._json(HTTPStatus.ACCEPTED, {"accepted": True})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -581,6 +607,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--tick-interval", type=float, default=1.0)
     parser.add_argument("--checkpoint-interval", type=float, default=60.0)
+    parser.add_argument("--prune-interval", type=float, default=300.0)
     return parser.parse_args()
 
 
@@ -593,6 +620,7 @@ def main() -> int:
         initial_enabled=True,
         tick_interval_seconds=args.tick_interval,
         checkpoint_interval_seconds=args.checkpoint_interval,
+        prune_interval_seconds=args.prune_interval,
     )
     server = create_http_server(
         service=service,

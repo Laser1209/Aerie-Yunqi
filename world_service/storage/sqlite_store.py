@@ -233,6 +233,81 @@ class WorldSidecarStore:
             ).fetchall()
             return {str(row["name"]) for row in rows}
 
+    def prune(
+        self,
+        *,
+        keep_snapshots: int = 200,
+        keep_outbox: int = 2000,
+    ) -> dict[str, int]:
+        """保留窗口修剪：把 world.db 从「无界增长」改为有界。
+
+        背景（2026-09-27 实测）：tick 默认 1s，每个 tick 都往
+        ``world_outbox`` 与 ``world_state_snapshot`` 各插一行且**从不清理**，
+        一天 8.6 万行/表，实测库已到 1.07 GB。Electron 的启动握手有超时，
+        GB 级库直接拖死 sidecar 启动，表现为「第二波起不来」，
+        同时把生图投递的世界闸门一起卡住。
+
+        修剪规则：
+          - ``world_state_snapshot``：只保留最近 ``keep_snapshots`` 条
+            （快照是「当前状态」的连续覆盖，历史价值低）
+          - ``world_outbox``：只删**所有消费者都已 ACK** 的那段
+            （``events_after`` 按 ``seq > cursor`` 读，删掉 ``seq <= 最小 cursor``
+            不影响任何消费者）；并始终保留最近 ``keep_outbox`` 条作为安全窗口。
+
+        不在此处 VACUUM：VACUUM 会重写整个文件，代价随库大小增长，
+        由调用方按更长的周期单独触发（见 :meth:`vacuum`）。
+        """
+        keep_snap = max(1, int(keep_snapshots))
+        keep_out = max(0, int(keep_outbox))
+        with self._connect() as conn:
+            snap = conn.execute(
+                """
+                DELETE FROM world_state_snapshot
+                WHERE seq NOT IN (
+                    SELECT seq FROM world_state_snapshot
+                    ORDER BY seq DESC LIMIT ?
+                )
+                """,
+                (keep_snap,),
+            )
+            floor_row = conn.execute(
+                "SELECT MIN(last_seq) AS floor FROM world_ack_cursor"
+            ).fetchone()
+            floor = floor_row["floor"] if floor_row else None
+            if floor is None:
+                # 没有任何消费者 ACK：只能按条数保留最近一段，避免无界增长。
+                out = conn.execute(
+                    """
+                    DELETE FROM world_outbox
+                    WHERE seq NOT IN (
+                        SELECT seq FROM world_outbox ORDER BY seq DESC LIMIT ?
+                    )
+                    """,
+                    (keep_out,),
+                )
+            else:
+                hi_row = conn.execute(
+                    "SELECT COALESCE(MAX(seq), 0) AS hi FROM world_outbox"
+                ).fetchone()
+                hi = int(hi_row["hi"] or 0)
+                # 双保险：既不超过 ACK 底线，也永远留住最近 keep_out 条。
+                cutoff = min(int(floor), max(0, hi - keep_out))
+                out = conn.execute(
+                    "DELETE FROM world_outbox WHERE seq <= ?", (cutoff,)
+                )
+            return {
+                "snapshots_deleted": max(0, snap.rowcount),
+                "outbox_deleted": max(0, out.rowcount),
+            }
+
+    def vacuum(self) -> None:
+        """回收被 prune 释放的磁盘空间（重写整库，按长周期调用）。"""
+        conn = sqlite3.connect(str(self.db_path), isolation_level=None)
+        try:
+            conn.execute("VACUUM")
+        finally:
+            conn.close()
+
     def _init_schema(self) -> None:
         with self._connect() as conn:
             conn.executescript(

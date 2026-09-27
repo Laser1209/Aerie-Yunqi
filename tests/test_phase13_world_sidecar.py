@@ -80,6 +80,131 @@ def test_world_sidecar_store_heartbeat_checkpoint_and_single_owner_tables(tmp_pa
     assert "secret text" not in json.dumps(checkpoint, ensure_ascii=False)
 
 
+# ══════════════════════════════════════════════════════
+# 保留窗口修剪（world.db 无界增长 → 有界）
+# 回归背景：tick 默认 1s，每个 tick 往 world_outbox 与 world_state_snapshot
+# 各插一行且从不清理，一天 8.6 万行/表，实测库到 1.07 GB 后拖死 Electron
+# 启动握手（也就是「世界第二波起不来」），并把生图投递的世界闸门一起卡住。
+# ══════════════════════════════════════════════════════
+
+def test_prune_caps_snapshot_and_outbox_growth(tmp_path):
+    from world_service.storage.sqlite_store import WorldSidecarStore
+
+    store = WorldSidecarStore(tmp_path / "world.db")
+    for i in range(300):
+        store.append_event(
+            topic="world.state",
+            event_type="world.snapshot.updated",
+            payload={"phase": "morning"},
+            idempotency_key=f"tick-{i}",
+        )
+
+    def counts():
+        import sqlite3
+
+        conn = sqlite3.connect(str(tmp_path / "world.db"))
+        try:
+            snap = conn.execute("SELECT COUNT(*) FROM world_state_snapshot").fetchone()[0]
+            out = conn.execute("SELECT COUNT(*) FROM world_outbox").fetchone()[0]
+        finally:
+            conn.close()
+        return snap, out
+
+    assert counts() == (300, 300)
+
+    store.prune(keep_snapshots=50, keep_outbox=80)
+    snap, out = counts()
+    assert snap == 50, f"snapshot 未被修剪: {snap}"
+    assert out == 80, f"outbox 未被修剪: {out}"
+
+    # 再跑一轮：有界，不随 tick 数继续增长
+    for i in range(300, 900):
+        store.append_event(
+            topic="world.state",
+            event_type="world.snapshot.updated",
+            payload={"phase": "morning"},
+            idempotency_key=f"tick-{i}",
+        )
+    store.prune(keep_snapshots=50, keep_outbox=80)
+    snap2, out2 = counts()
+    assert (snap2, out2) == (50, 80), f"修剪后仍有界失败: {snap2}, {out2}"
+
+
+def test_prune_never_drops_unacked_events(tmp_path):
+    """消费者未 ACK 的事件不能被删——否则 core 会漏事件（含生图候选）。"""
+    from world_service.storage.sqlite_store import WorldSidecarStore
+
+    store = WorldSidecarStore(tmp_path / "world.db")
+    for i in range(50):
+        store.append_event(
+            topic="world.state",
+            event_type="world.snapshot.updated",
+            payload={"phase": "morning"},
+            idempotency_key=f"tick-{i}",
+        )
+    store.ack(consumer_id="core", seq=10)
+
+    store.prune(keep_snapshots=5, keep_outbox=5)
+
+    # core 的游标是 10：seq>10 的事件必须全都还在
+    pending = store.events_after(consumer_id="core")
+    assert [e["seq"] for e in pending] == list(range(11, 51))
+
+
+def test_prune_without_ack_cursor_still_bounded(tmp_path):
+    """没有任何消费者 ACK 时也不能无界增长（按条数保留最近一段）。"""
+    from world_service.storage.sqlite_store import WorldSidecarStore
+
+    store = WorldSidecarStore(tmp_path / "world.db")
+    for i in range(200):
+        store.append_event(
+            topic="observations",
+            event_type="world.observation.recorded",
+            payload={"observation_type": "note"},
+            idempotency_key=f"obs-{i}",
+        )
+
+    store.prune(keep_snapshots=10, keep_outbox=30)
+
+    pending = store.events_after(consumer_id="core", last_seq=0)
+    assert len(pending) == 30, f"无 ACK 游标时未按条数兜底: {len(pending)}"
+
+
+def test_maintenance_prunes_through_service_and_http_route(tmp_path):
+    """服务维护入口可用（真机就地瘦身用）。
+
+    注意必须注入**递进时钟**：`WorldSimulation.tick()` 有秒级幂等
+    （同一秒内重复 tick 返回缓存快照），而 world.state 的幂等键由秒级 ts
+    参与生成。不加时钟时，紧密循环里 260 次 tick 落在同一秒，
+    只会写入 1 行——那是测试不真实，不是实现有问题。
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from world_service.main import LocalWorldSidecarService
+
+    base = datetime(2026, 9, 27, 12, 0, 0, tzinfo=timezone.utc)
+    state = {"n": 0}
+
+    def stepping_clock() -> datetime:
+        state["n"] += 1
+        return base + timedelta(seconds=state["n"])
+
+    service = LocalWorldSidecarService(
+        data_dir=tmp_path,
+        clock=stepping_clock,
+        prune_interval_seconds=9999,
+    )
+    for _ in range(260):
+        service.tick(force=True)
+
+    result = service.maintenance()
+    assert result["snapshots_deleted"] > 0, result
+    assert result["vacuumed"] is False
+
+    result2 = service.maintenance(vacuum=True)
+    assert result2["vacuumed"] is True
+
+
 @pytest.mark.asyncio
 async def test_remote_world_adapter_crash_degrades_without_blocking_chat(tmp_path):
     from core.world_adapters.remote import RemoteWorldAdapter

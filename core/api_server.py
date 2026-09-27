@@ -1413,6 +1413,17 @@ async def system_reload_config() -> dict:
                     comp.message_batcher, "reload_config", label="message_batcher"
                 )
 
+        # persona.yaml 编辑后需重载 PersonaHub 才生效（人设常驻内存，
+        # 只在启动时加载一次）。此前 docstring 声称会重载但实际未做。
+        try:
+            from core.persona_hub import get_persona_manager
+
+            n = get_persona_manager().reload()
+            results["reloaded"].append("persona.yaml")
+            results["updated"].append(f"persona_hub({n})")
+        except Exception as e:
+            log.warning("persona hub reload failed: %s", e)
+
         emit("config_reloaded", **results)
         log.info("config hot-reload complete: %s", results)
     except Exception as e:

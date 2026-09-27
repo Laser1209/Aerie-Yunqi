@@ -265,6 +265,16 @@ class PersonaManager:
             "prompt_overrides": {},
         }
 
+    def reload(self) -> int:
+        """从磁盘重新读取所有人设（热重载）。
+
+        人设只在实例化时加载一次并常驻内存，运行中直接编辑 data/personas/*.json
+        不会生效。此方法让 /api/system/reload-config 名副其实地重载人设，
+        无需重启后端。返回加载到的人设数量。
+        """
+        self._load_all()
+        return len(self._personas)
+
     def _load_all(self):
         """加载所有人设。"""
         with self._rw_lock:

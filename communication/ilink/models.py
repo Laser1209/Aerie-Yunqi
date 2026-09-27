@@ -47,6 +47,16 @@ def _mapping(value: Any, field: str) -> dict[str, Any]:
 
 
 def _string(value: Any, field: str, *, allow_empty: bool = False) -> str:
+    """取字符串字段；``allow_empty`` 时「空串」与「字段缺失」都算合法。
+
+    原实现只放行空串、仍对缺失（``None``）抛错——这与"空值可接受"的语义不符，
+    而且是同一类 bug 的温床：iLink 的成功响应经常**省略**可选字段
+    （``ret`` / ``get_updates_buf`` 实测都会缺），一旦把缺失当违规抛错，
+    整批解析就失败、游标不推进，外部表现就是「已连接却永远收不到」
+    （2026-09-27 定位的症状①根因之一）。
+    """
+    if value is None and allow_empty:
+        return ""
     if not isinstance(value, str) or (not allow_empty and not value):
         raise ILinkProtocolError(f"{field} must be a non-empty string")
     return value
@@ -194,9 +204,7 @@ class WeixinMessage:
             from_user_id=_string(data.get("from_user_id"), "from_user_id"),
             to_user_id=_string(data.get("to_user_id"), "to_user_id"),
             # client_id 仅参与去重键拼接，缺失/为空不该让一条真实用户消息整条被丢。
-            client_id=_string(data.get("client_id"), "client_id", allow_empty=True)
-            if data.get("client_id") is not None
-            else "",
+            client_id=_string(data.get("client_id"), "client_id", allow_empty=True),
             # create_time_ms 只用于展示与节奏；缺失时按 0 处理，同样不丢消息。
             create_time_ms=_optional_integer(data.get("create_time_ms"), "create_time_ms") or 0,
             message_type=_enum(data.get("message_type"), MessageType, "message_type"),

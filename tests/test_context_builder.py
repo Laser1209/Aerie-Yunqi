@@ -331,3 +331,54 @@ class TestExpressionHierarchyIntent:
         hint = builder._detect_image_intent("", [{"role": "user", "content": "发张你的照片"}])
         assert "层级[图片image]" in hint
         assert "发张你的" in hint
+
+
+class TestToolUsageCognition:
+    """1.1 工具使用认知：仅 FULL 注入判断原则，索引来自注入的 provider。"""
+
+    @pytest.fixture
+    def builder(self):
+        return ContextBuilder()
+
+    def test_full_mode_injects_tool_usage_cognition(self, builder):
+        system = builder.build(3998874040, "帮我建个文件夹", "FULL")[0]["content"]
+        assert "工具使用认知" in system
+        assert "倾向先动手" in system
+
+    def test_auto_and_basic_skip_tool_usage_cognition(self, builder):
+        for mode in ("AUTO", "BASIC"):
+            system = builder.build(3998874040, "你好", mode)[0]["content"]
+            assert "工具使用认知" not in system
+
+    def test_tool_index_provider_text_is_injected(self, builder):
+        builder.set_tool_index_provider(
+            lambda: "ToolRegistry: 2 tools total\n  - file: 2 tools (file_read, file_write)"
+        )
+        system = builder.build(3998874040, "你好", "FULL")[0]["content"]
+        assert "可用工具分组如下" in system
+        assert "file_read" in system
+
+    def test_missing_provider_still_injects_principles(self, builder):
+        system = builder.build(3998874040, "你好", "FULL")[0]["content"]
+        assert "工具使用认知" in system
+        assert "可用工具分组如下" not in system
+
+    def test_provider_failure_falls_back_to_principles_only(self, builder):
+        def boom():
+            raise RuntimeError("registry unavailable")
+
+        builder.set_tool_index_provider(boom)
+        system = builder.build(3998874040, "你好", "FULL")[0]["content"]
+        assert "工具使用认知" in system
+        assert "可用工具分组如下" not in system
+
+    def test_computer_control_off_skips_section(self, builder, monkeypatch):
+        import config.persona_loader as persona_loader
+
+        monkeypatch.setattr(
+            persona_loader,
+            "load_settings",
+            lambda: {"computer_control": {"mode": "off"}},
+        )
+        system = builder.build(3998874040, "你好", "FULL")[0]["content"]
+        assert "工具使用认知" not in system

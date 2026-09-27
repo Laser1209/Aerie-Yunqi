@@ -44,6 +44,10 @@ from core.emotion_state_store import EmotionStateStore
 from core.emotion_threshold import get_threshold_engine
 from core.internal_state import InternalStateEngine
 from core.ilink_credentials import ILinkCredentialsStore
+from core.ilink_auth_flow import (
+    DEFAULT_BASE_URL as DEFAULT_ILINK_BASE_URL,
+    ILinkLoginFlow,
+)
 from core.ilink_gateway import ILinkGateway
 from core.ilink_state import ILinkStateStore
 from core.feature_flags import FeatureFlags
@@ -881,6 +885,21 @@ def _ensure_selfie_pov(prompt: str, prompt_key: str) -> str:
 # 提示词接力时只把真正能呈现在画面里的数据注入，不把世界快照全部堆叠。
 _IMAGE_LIGHT_PROVIDER = "siliconflow-light"
 _IMAGE_LIGHT_RELAY_TIMEOUT = 8.0
+
+
+def _image_light_preference() -> tuple[str, str | None]:
+    """生图语义接力使用的轻量功能点（light_assist 绑定）。
+
+    绑定未配置时回退到内置 siliconflow-light。
+    """
+    try:
+        from core.ai_services import role_preference
+        provider, model = role_preference("light_assist")
+        if provider:
+            return provider, model
+    except Exception:
+        pass
+    return _IMAGE_LIGHT_PROVIDER, None
 # 主动发图同主题去重窗口：即使后端重启清空进程内存，同一视觉主题在此窗口内
 # 也不会被重复发布（读持久化审计存储判断），避免"每次重启生成一张一模一样的图"。
 # 4h：覆盖开发期跨重启间隔；视觉主题随时间相变化（morning/afternoon/evening...），
@@ -1129,11 +1148,18 @@ class Companion:
         primary_selection = self.get_primary_user_selection()
         self.qq = QQClient(qq_cfg)
         self.ilink_state_store = ILinkStateStore()
+        self.ilink_credentials_store = ILinkCredentialsStore()
+        ilink_cfg = self.settings.get("ilink", {}) if isinstance(self.settings, dict) else {}
         self.ilink_gateway = ILinkGateway(
-            ILinkCredentialsStore(),
+            self.ilink_credentials_store,
             self.ilink_state_store,
             primary_selection.user_id if primary_selection else -1,
             self._on_ilink_message,
+        )
+        self.ilink_auth_flow = ILinkLoginFlow(
+            self.ilink_credentials_store,
+            base_url=str(ilink_cfg.get("base_url") or DEFAULT_ILINK_BASE_URL),
+            on_confirmed=self._on_ilink_login_confirmed,
         )
         # v13.9: QQ whitelist manager
         self.qq_whitelist = QQWhitelistManager(self.db)
@@ -1205,6 +1231,11 @@ class Companion:
             self.pipeline.ctx_builder.set_topic_provider(self._topic_for_context)
         except Exception:
             logger.debug("topic provider bind failed", exc_info=True)
+        # 1.1 工具使用认知：注入工具分组索引提供器（仅 FULL 模式消费）。
+        try:
+            self.pipeline.ctx_builder.set_tool_index_provider(self._tool_index_summary)
+        except Exception:
+            logger.debug("tool index provider bind failed", exc_info=True)
         self.chat_request_queue_requested = self.feature_flags.is_enabled(
             "chat_request_queue_v1",
         )
@@ -2643,17 +2674,24 @@ class Companion:
         return "\n".join(lines)
 
     async def _start_ilink_gateway(self) -> None:
-        if not bool((self.settings.get("ilink", {}) or {}).get("enabled", False)):
-            return
+        # Saved credentials are the explicit user intent to connect; the
+        # ``enabled`` flag alone is meaningless before the first QR login.
         if not self.ilink_gateway.is_configured():
             logger.info("iLink credentials are not configured; gateway disabled")
             return
+        await self.ilink_gateway.start()
+
+    async def _on_ilink_login_confirmed(self, credentials) -> None:
+        # Bring the gateway online immediately after a successful scan.
         await self.ilink_gateway.start()
 
     async def _stop_ilink_gateway(self) -> None:
         if getattr(self, "_ilink_stopped", False):
             return
         self._ilink_stopped = True
+        auth_flow = getattr(self, "ilink_auth_flow", None)
+        if auth_flow is not None:
+            await auth_flow.cancel()
         await self.ilink_gateway.stop()
         self.ilink_state_store.close()
 
@@ -2815,7 +2853,13 @@ class Companion:
                     {"role": "system", "content": system},
                     {"role": "user", "content": f"回复：{reply_text[:200]}\n情绪：{emotion_label}"},
                 ]
-                call = chat(messages, preferred_provider=_IMAGE_LIGHT_PROVIDER, temperature=0.2)
+                _img_provider, _img_model = _image_light_preference()
+                call = chat(
+                    messages,
+                    preferred_provider=_img_provider,
+                    model_override=_img_model,
+                    temperature=0.2,
+                )
                 resp = await asyncio.wait_for(call, timeout=5.0)
                 text = (resp.text or "").strip()
                 if text.upper().startswith("YES"):
@@ -3770,7 +3814,13 @@ class Companion:
                 {"role": "system", "content": system},
                 {"role": "user", "content": f"指令：{raw[:120]}"},
             ]
-            call = chat(messages, preferred_provider=_IMAGE_LIGHT_PROVIDER, temperature=0.2)
+            _img_provider, _img_model = _image_light_preference()
+            call = chat(
+                messages,
+                preferred_provider=_img_provider,
+                model_override=_img_model,
+                temperature=0.2,
+            )
             resp = await asyncio.wait_for(call, timeout=_IMAGE_LIGHT_RELAY_TIMEOUT)
             obj = _extract_llm_json(getattr(resp, "text", "") or "")
             if not obj:
@@ -4229,7 +4279,13 @@ class Companion:
             {"role": "user", "content": user_msg},
         ]
         try:
-            call = chat(messages, preferred_provider=_IMAGE_LIGHT_PROVIDER, temperature=0.7)
+            _img_provider, _img_model = _image_light_preference()
+            call = chat(
+                messages,
+                preferred_provider=_img_provider,
+                model_override=_img_model,
+                temperature=0.7,
+            )
             resp = await asyncio.wait_for(call, timeout=_IMAGE_LIGHT_RELAY_TIMEOUT)
             text = (resp.text or "").strip().strip('"').strip("'")
             if 30 <= len(text) <= 4000 and ("写实" in text or "照片" in text):
@@ -4367,6 +4423,22 @@ class Companion:
         if active is None:
             return None
         return {"subject": active.subject, "turn_count": active.turn_count}
+
+    def _tool_index_summary(self) -> str:
+        """供 ContextBuilder 1.1「工具使用认知」段使用的工具分组索引。
+
+        工具在 ``Companion.__init__`` 注册，skills 另在 ``start()`` 并入；
+        provider 用 getattr 惰性读取，保证后注册的技能也能被索引到。
+        """
+        registry = getattr(self, "tool_registry", None)
+        summary = getattr(registry, "summary", None)
+        if not callable(summary):
+            return ""
+        try:
+            return str(summary() or "")
+        except Exception:
+            logger.debug("tool index summary failed", exc_info=True)
+            return ""
 
     async def _recent_dialogue_text(self, user_id: int, limit: int = 5) -> str:
         """取最近非主动消息对话文本（主动消息续接素材，失败返回空串）。

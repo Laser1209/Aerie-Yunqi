@@ -59,6 +59,8 @@ class ContextBuilder:
         self._last_context_audit: dict[str, Any] = {"enabled": False}
         # P0 topic system: 话题提供器（companion 注入），仅注入事实不注入指令。
         self._topic_provider: Any = None
+        # 1.1 工具使用认知: 工具分组索引提供器（companion 注入）。
+        self._tool_index_provider: Any = None
 
     def set_topic_provider(self, provider: Any) -> None:
         """注入话题提供器：callable() -> dict{subject, turn_count} | None。
@@ -66,6 +68,14 @@ class ContextBuilder:
         companion 在 pipeline 就绪后调用；provider 失败/缺省时不注入。
         """
         self._topic_provider = provider
+
+    def set_tool_index_provider(self, provider: Any) -> None:
+        """注入工具分组索引提供器：callable() -> str（即 tool_registry.summary()）。
+
+        companion 在 pipeline 就绪后调用；provider 失败或缺失时不注入索引，
+        但段落本身的「判断原则」仍会注入。
+        """
+        self._tool_index_provider = provider
 
     def build(
         self,
@@ -645,6 +655,11 @@ class ContextBuilder:
         if route_mode == "FULL" and self._operation_guide_enabled():
             parts.append(self._build_l5_system_operations())
 
+        # 1.1 · 工具使用认知（仅 FULL；与 computer_control.mode 联动）
+        # 修「模型不动手」：工具已装配却只口头答应。只加认知段，不扩关键词表。
+        if route_mode == "FULL" and self._tool_usage_cognition_enabled():
+            parts.append(self._build_tool_usage_cognition())
+
         # L6 · 图片能力认知（FULL/AUTO，独立能力段，告知她具备生图/发图能力）
         # 仅当 world_image_candidates_v1 开启时才注入，避免能力认知与实际链路脱节
         if route_mode in ("FULL", "AUTO"):
@@ -750,6 +765,57 @@ class ContextBuilder:
         except Exception:
             logger.debug("读取 operation_guide_enabled 配置失败，使用默认值 true")
         return True
+
+    def _tool_usage_cognition_enabled(self) -> bool:
+        """与 computer_control 启用状态联动（非独立 flag）。
+
+        `computer_control.mode` 为空或 off/disabled 时不注入——否则会让模型
+        「学会用工具」却在实际调用时被配置层拦下，体验更差。
+        """
+        try:
+            from config.persona_loader import load_settings
+
+            settings = load_settings()
+            if isinstance(settings, dict):
+                cfg = settings.get("computer_control", {})
+                if isinstance(cfg, dict):
+                    mode = str(cfg.get("mode") or "").strip().lower()
+                    return mode not in ("", "off", "disabled", "none")
+        except Exception:
+            logger.debug("读取 computer_control.mode 失败，默认注入工具认知段")
+        return True
+
+    def _build_tool_usage_cognition(self) -> str:
+        """1.1 · 工具使用认知层（仅 FULL）。
+
+        针对「工具已装配但模型只口头答应」的失效模式：给判断原则 + 选择线索，
+        不扩 `_detect_task` 关键词表（用自然语言对付关键词表是死路）。
+        """
+        lines = [
+            "【工具使用认知 · Tool Usage】",
+            "你手边是有真实工具可用的，不是只能说话。判断与执行原则：",
+            "1. 先判断他想要的是「一个结果」还是「只是想聊聊」：要结果就动手做，"
+            "只是想倾诉就好好陪他。**不确定时，倾向先动手**，做完再顺口告诉他一句。",
+            "2. 不要承诺完就停在这里。说了「我帮你弄」就要真把事情做完、确认结果，再回话；"
+            "只答应不动手，比不做更伤。",
+            "3. 工具名即能力名；不确定用哪个，就先看各自描述再选，不要凭猜硬凑。",
+        ]
+        index = self._tool_index_text()
+        if index:
+            lines.append("可用工具分组如下（名字即能力，细节见各自描述）：")
+            lines.append(index)
+        return "\n".join(lines)
+
+    def _tool_index_text(self) -> str:
+        """取工具分组索引文本；provider 缺失或失败时返回空串。"""
+        provider = getattr(self, "_tool_index_provider", None)
+        if provider is None:
+            return ""
+        try:
+            return str(provider() or "")
+        except Exception:
+            logger.debug("tool index provider failed", exc_info=True)
+            return ""
 
     @staticmethod
     def _build_expression_freedom() -> str:

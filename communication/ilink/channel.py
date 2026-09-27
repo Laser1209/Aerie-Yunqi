@@ -6,7 +6,13 @@ import time
 from collections.abc import Awaitable, Callable
 
 from communication.ilink.client import ILinkClient
-from communication.ilink.models import MessageItemType, MessageState, MessageType, WeixinMessage
+from communication.ilink.models import (
+    MessageItem,
+    MessageItemType,
+    MessageState,
+    MessageType,
+    WeixinMessage,
+)
 from communication.message import IncomingMessage
 from core.ilink_state import ILinkStateStore
 
@@ -21,6 +27,30 @@ _PAIRING_HINT_INTERVAL_SEC = 600.0
 
 
 TextCallback = Callable[[IncomingMessage], Awaitable[object] | object]
+
+
+def _describe_items(items: tuple[MessageItem, ...]) -> str:
+    """入站项的**只含字段名**结构描述，供诊断用。
+
+    媒体项（图片/语音/文件）当前不进入主链路。只记 ``items=1`` 时，
+    "用户发的文件到底去哪了"完全不可见；这里输出每项的类型与媒体子对象的
+    字段名，用来确认协议形状。
+
+    **绝不输出字段值**：``file_item`` 里的 ``encrypt_query_param`` 与
+    ``aes_key`` 是 CDN 凭据，落盘即等同于泄露。
+    """
+    if not items:
+        return "none"
+    parts: list[str] = []
+    for item in items:
+        name = getattr(item.type, "name", str(item.type))
+        for field in ("image", "voice", "file", "video"):
+            payload = getattr(item, field, None)
+            if isinstance(payload, dict):
+                name = f"{name}:{field}({','.join(sorted(payload.keys()))})"
+                break
+        parts.append(name)
+    return "; ".join(parts)
 
 
 class ILinkChannel:
@@ -62,12 +92,13 @@ class ILinkChannel:
             # 否则"连上了但收不到"无从定位。
             if message.message_type is MessageType.USER:
                 logger.info(
-                    "iLink user message skipped: bot=%s reason=%s state=%s group=%s items=%d",
+                    "iLink user message skipped: bot=%s reason=%s state=%s group=%s items=%d shape=%s",
                     self.bot_id,
                     skip_reason,
                     getattr(message.message_state, "name", message.message_state),
                     bool(message.group_id),
                     len(message.items),
+                    _describe_items(message.items),
                 )
             else:
                 logger.debug(

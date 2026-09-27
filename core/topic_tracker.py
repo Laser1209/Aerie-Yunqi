@@ -73,6 +73,12 @@ class Topic:
     summary: str = ""
     stub: str = ""
     closed_at: Optional[float] = None
+    # 阶段 4 生命周期扩容字段（只增不改；延续 state 的 active/closed 读取结构）：
+    # lifecycle 是独立于 state 的长期状态机维度，interest_score 随沉默轮次衰减。
+    lifecycle: str = "active"  # active | dormant | dead
+    interest_score: float = 1.0  # 0..1；沉默观察时按 1/demote_after_silent_turns 递减
+    dormancy_since: Optional[float] = None
+    last_context: str = ""
 
     def is_paused(self, now: float) -> bool:
         """paused 语义：active 且沉寂超过阈值。"""
@@ -293,6 +299,14 @@ class TopicTracker:
                 topic.summary = str(item.get("summary", ""))
                 topic.stub = str(item.get("stub", ""))
                 topic.closed_at = item.get("closed_at")
+                # 阶段 4 扩容字段：旧状态文件缺失时安全回退默认，读取结构不变。
+                topic.lifecycle = str(item.get("lifecycle") or "active")
+                try:
+                    topic.interest_score = float(item.get("interest_score", 1.0))
+                except (TypeError, ValueError):
+                    topic.interest_score = 1.0
+                topic.dormancy_since = item.get("dormancy_since")
+                topic.last_context = str(item.get("last_context") or "")
                 self.topics.append(topic)
             except (TypeError, ValueError):
                 continue
@@ -317,6 +331,10 @@ class TopicTracker:
             tmp.replace(self._state_path)
         except Exception:
             logger.warning("topic state could not be saved", exc_info=True)
+
+    def save(self) -> None:
+        """公开落盘入口：供状态机模块修改扩容字段后调用（读取结构不变）。"""
+        self._save()
 
     def snapshot(self) -> dict[str, Any]:
         return {"topics": [asdict(t) for t in self.topics]}

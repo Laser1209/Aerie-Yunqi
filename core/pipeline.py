@@ -2703,6 +2703,28 @@ class Pipeline:
         result["event_sequence"] = request_state.sequence
         return result
 
+    def _observe_topic_lifecycle(self, msg: Any) -> None:
+        """阶段 4：话题生命周期旁挂观察（只写状态，不触发任何行为）。
+
+        仅旁挂、不改主流程结构与顺序；任何异常必须被吞掉，不影响主链路。
+        开关由 TopicLifecycle 内部按 feature flag `topic_lifecycle_v1` 门控。
+        """
+        provider = getattr(self, "topic_lifecycle_provider", None)
+        if not callable(provider):
+            return
+        try:
+            lifecycle = provider()
+            if lifecycle is None:
+                return
+            lifecycle.observe(
+                {
+                    "text": str(getattr(msg, "content", "") or ""),
+                    "user_id": getattr(msg, "user_id", None),
+                }
+            )
+        except Exception:
+            logger.debug("topic lifecycle observe failed", exc_info=True)
+
     def _after_message_persisted(
         self,
         *,
@@ -2712,6 +2734,8 @@ class Pipeline:
         msg: IncomingMessage,
         request_context: RequestContext | None,
     ) -> str | None:
+        # 阶段 4：话题生命周期旁挂观察（只写状态，不触发行为；异常吞掉）。
+        self._observe_topic_lifecycle(msg)
         conversation_id = (
             canonical_result.get("conversation_id")
             if canonical_result is not None
@@ -3870,6 +3894,8 @@ class Pipeline:
                     )
 
                 all_user_row_ids.append(user_row_id)
+                # 阶段 4：批内逐条做话题生命周期旁挂观察（只写状态，异常吞掉）。
+                self._observe_topic_lifecycle(msg)
 
                 result = {
                     "reply": reply_text,

@@ -1,0 +1,9 @@
+# 话题生命周期状态机阈值（阶段 4）
+# 改动后运行时生效（mtime 热加载，无需重启）。
+# 说明：本文件不含 enabled 开关——是否启用由 feature flag `topic_lifecycle_v1`
+# （config/settings.yaml）统一控制，避免双开关。
+dormant_after_hours: 24          # active → dormant：沉寂超过该小时数
+dead_after_days: 30              # dormant → dead：沉寂超过该天数（且满足保守策略）
+similarity_threshold: 0.75       # 话题激活的语义相似阈值（简化判定：二元组包含度 + 子串命中）
+demote_after_silent_turns: 3     # 保守策略：连续无响应轮次达该值兴趣评分归零
+demote_after_inactive_days: 14   # 保守策略：沉寂超过该天数才允许降级

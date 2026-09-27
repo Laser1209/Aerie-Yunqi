@@ -30,6 +30,7 @@ window.OnboardingController = class OnboardingController {
 
     this.visible = false;
     this.skippable = false; // API 已配置后才允许跳过 / 关闭
+    this.solo = false; // 定向提示：只展示单个步骤（1.2a 办公目录引导）
     this.hasApiKey = false;
     this.current = 0;
     this.wikiOpen = false;
@@ -59,6 +60,18 @@ window.OnboardingController = class OnboardingController {
         body: () =>
           '<p class="onb-p">已为你打开 <b>人设（Persona Hub）</b>。你可以先看看预设身份，或创建一个专属人设。</p>'
           + '<p class="onb-hint">角色决定 Aerie 的语气、记忆与行为方式，随时可以回来调整。</p>',
+        primary: { label: "下一步", action: () => this.next() },
+      },
+      {
+        key: "office",
+        icon: "icon-ui-folder",
+        title: "设置办公文件位置",
+        subtitle: "Aerie 帮你整理的文件，默认放在一个固定的目录里。",
+        nav: () => this._navigateOfficeDir(),
+        body: () =>
+          '<p class="onb-p">已为你打开 <b>设置 → 常用 → 办公模式</b>，这里可以指定 AI 办公文件的保存位置。</p>'
+          + '<p class="onb-hint">默认位置是 <code>~/AerieOffice</code>；换到一个你随时找得到的目录，备份和整理都更方便。</p>'
+          + '<p class="onb-hint">该目录会作为「已授权工作区」之一：Aerie 只能在你允许的目录里写文件，越界会被拦下。</p>',
         primary: { label: "下一步", action: () => this.next() },
       },
       {
@@ -139,6 +152,10 @@ window.OnboardingController = class OnboardingController {
   }
 
   next() {
+    if (this.solo) {
+      this._hide();
+      return;
+    }
     if (this.current < this.steps.length - 1) {
       this.current += 1;
       this._render();
@@ -148,6 +165,7 @@ window.OnboardingController = class OnboardingController {
   }
 
   prev() {
+    if (this.solo) return;
     if (this.current > 0) {
       this.current -= 1;
       this._render();
@@ -176,6 +194,7 @@ window.OnboardingController = class OnboardingController {
   _hide() {
     if (!this.visible) return;
     this.visible = false;
+    this.solo = false;
     this.wikiOpen = false;
     if (this.wiki) this.wiki.classList.remove("is-open");
     if (this.root) this.root.classList.remove("is-visible");
@@ -252,6 +271,7 @@ window.OnboardingController = class OnboardingController {
   _renderDots() {
     if (!this._dots) return;
     this._dots.innerHTML = "";
+    if (this.solo) return; // 定向提示只展示单步，不显示进度圆点
     this.steps.forEach((_, i) => {
       const d = document.createElement("span");
       d.className = "onb-dot";
@@ -271,16 +291,17 @@ window.OnboardingController = class OnboardingController {
   }
 
   _renderFooter(step) {
-    if (this._prev) this._prev.style.display = this.current === 0 ? "none" : "";
+    if (this._prev) this._prev.style.display = this.current === 0 || this.solo ? "none" : "";
     if (this._primary) {
-      this._primary.textContent = step.primary.label;
+      this._primary.textContent = this.solo ? "知道了" : step.primary.label;
       this._primary.disabled = false;
       this._primary.onclick = () => step.primary.action();
     }
   }
 
   _applySkippable() {
-    if (this.skipBtn) this.skipBtn.style.display = this.skippable ? "" : "none";
+    const showSkip = this.skippable && !this.solo;
+    if (this.skipBtn) this.skipBtn.style.display = showSkip ? "" : "none";
     if (this.closeBtn) this.closeBtn.style.display = this.skippable ? "" : "none";
   }
 
@@ -338,6 +359,56 @@ window.OnboardingController = class OnboardingController {
         try { window.settingsPanel._switchMode(mode); } catch (_) {}
       }
     }, 220);
+  }
+
+  /* 打开「设置 → 常用 → 办公模式」，并把目录输入框滚到视野中央 */
+  _navigateOfficeDir() {
+    this._navigateSettings("form");
+    setTimeout(() => {
+      const input = document.getElementById("office-dir-input");
+      if (!input) return;
+      if (typeof input.scrollIntoView === "function") {
+        input.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      if (typeof input.focus === "function") input.focus();
+    }, 420);
+  }
+
+  /* 1.2a：办公目录一次性引导。
+     与教程主流程解耦：只看 settings.office.first_run_prompted，
+     为 true 时不再提示（localStorage 的教程完成标记不影响本步）。 */
+  async maybeShowOfficeStep() {
+    if (this.visible) return;
+    const api = window.aerie && window.aerie.api;
+    if (!api || typeof api.request !== "function") return;
+    let prompted = null;
+    try {
+      const r = await api.request({ method: "GET", path: "/api/settings" });
+      const office = (r && r.data && r.data.office) || null;
+      prompted = office ? office.first_run_prompted : null;
+    } catch (_) {
+      return; // 读不到设置就不打扰用户
+    }
+    if (prompted === true) return;
+    const index = this.steps.findIndex((s) => s.key === "office");
+    if (index < 0) return;
+    this._markOfficePrompted();
+    this.solo = true;
+    this.skippable = true; // 允许用右上角 × / Esc 关闭
+    this.show(index);
+  }
+
+  /* 标记「已提示过」：写回 settings.yaml（deep merge，不影响 office.dir） */
+  _markOfficePrompted() {
+    const api = window.aerie && window.aerie.api;
+    if (!api || typeof api.request !== "function") return;
+    try {
+      api.request({
+        method: "PUT",
+        path: "/api/settings",
+        body: { office: { first_run_prompted: true } },
+      });
+    } catch (_) {}
   }
 
   /* ── WIKI 覆盖层 ──────────────────────────────────── */

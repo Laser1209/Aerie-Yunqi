@@ -621,7 +621,14 @@ async function _runFirstRunSelfCheck() {
 
     // 主路径：交给新手教程接管（内部自行校验 has_api_key 并决定是否弹出）
     if (window.onboarding && typeof window.onboarding.maybeShow === "function") {
-      window.onboarding.maybeShow(version);
+      await window.onboarding.maybeShow(version);
+      // 1.2a：办公目录一次性引导（复用教程组件；教程正在显示时不叠加）。
+      if (
+        !window.onboarding.visible
+        && typeof window.onboarding.maybeShowOfficeStep === "function"
+      ) {
+        await window.onboarding.maybeShowOfficeStep();
+      }
       return;
     }
 

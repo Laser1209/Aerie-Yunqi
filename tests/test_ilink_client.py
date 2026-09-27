@@ -187,3 +187,81 @@ async def test_send_text_raises_on_explicit_nonzero_ret():
         client = ILinkClient("https://ilinkai.weixin.qq.com", "token", transport_client)
         with pytest.raises(ILinkProtocolError, match="ret=1001"):
             await client.send_text("wx-owner", "收到。", "context-1")
+
+
+@pytest.mark.asyncio
+async def test_send_file_posts_nested_media_file_item():
+    """文件项的 media 是**嵌套对象**，且 len 必须是字符串。
+
+    这两点是与官方 SDK（Go/Rust/Python/TS）核对出来的协议要求：
+    media 写成扁平字段、或 len 传 int，服务端只会回一个笼统的参数错误。
+    """
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"ret": 0, "errcode": 0})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as transport_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", transport_client)
+        sent = await client.send_file(
+            "wx-owner",
+            "context-1",
+            file_name="笔记.txt",
+            file_md5="d41d8cd98f00b204e9800998ecf8427e",
+            file_size=1024,
+            encrypt_query_param="param-abc",
+            aes_key="a2V5",
+        )
+
+    assert sent is True
+    assert requests[0].url.path == "/ilink/bot/sendmessage"
+    payload = json.loads(requests[0].content)
+    client_id = payload["msg"]["client_id"]
+    assert payload == {
+        "msg": {
+            "from_user_id": "",
+            "to_user_id": "wx-owner",
+            "client_id": client_id,
+            "message_type": 2,
+            "message_state": 2,
+            "item_list": [
+                {
+                    "type": 4,
+                    "file_item": {
+                        "media": {
+                            "encrypt_query_param": "param-abc",
+                            "aes_key": "a2V5",
+                        },
+                        "file_name": "笔记.txt",
+                        "md5": "d41d8cd98f00b204e9800998ecf8427e",
+                        "len": "1024",
+                    },
+                }
+            ],
+            "context_token": "context-1",
+        },
+        "base_info": {"channel_version": "2.1.1"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_send_file_shares_text_success_semantics():
+    """媒体与文本共用同一信封：成功判定不能分叉。"""
+
+    async def handler(request):
+        del request
+        return httpx.Response(200, json={"ret": -2, "errmsg": "invalid param"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as transport_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", transport_client)
+        with pytest.raises(ILinkProtocolError, match="ret=-2"):
+            await client.send_file(
+                "wx-owner",
+                "context-1",
+                file_name="a.txt",
+                file_md5="0" * 32,
+                file_size=1,
+                encrypt_query_param="param",
+                aes_key="key",
+            )

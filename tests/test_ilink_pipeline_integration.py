@@ -117,6 +117,59 @@ async def test_companion_sends_ilink_reply_with_original_address_using_gateway_s
 
 
 @pytest.mark.asyncio
+async def test_companion_ilink_delivers_file_paths_alongside_text():
+    """file_paths 必须真的发出：此前微信端只打 warning，等于静默丢件。"""
+    companion = Companion.__new__(Companion)
+    companion.ilink_gateway = SimpleNamespace(
+        send_text=AsyncMock(return_value=True),
+        send_file=AsyncMock(return_value=True),
+    )
+    reply = ilink_reply("给你写好了")
+    reply.file_paths = ["D:/out/笔记.txt"]
+
+    sent = await companion._send_to_ilink(reply)
+
+    assert sent is True
+    companion.ilink_gateway.send_text.assert_awaited_once_with("wx-owner", "给你写好了")
+    companion.ilink_gateway.send_file.assert_awaited_once_with("wx-owner", "D:/out/笔记.txt")
+
+
+@pytest.mark.asyncio
+async def test_companion_ilink_sends_file_only_reply_without_empty_text():
+    """只有文件、没有正文时不该发一条空文本，但文件必须发出去。"""
+    companion = Companion.__new__(Companion)
+    companion.ilink_gateway = SimpleNamespace(
+        send_text=AsyncMock(return_value=True),
+        send_file=AsyncMock(return_value=True),
+    )
+    reply = ilink_reply("")
+    reply.file_paths = ["D:/out/a.txt"]
+
+    sent = await companion._send_to_ilink(reply)
+
+    assert sent is True
+    companion.ilink_gateway.send_text.assert_not_awaited()
+    companion.ilink_gateway.send_file.assert_awaited_once_with("wx-owner", "D:/out/a.txt")
+
+
+@pytest.mark.asyncio
+async def test_companion_ilink_file_failure_keeps_text_result():
+    """附件失败不能回滚已发出的正文，也不能把异常抛进发送 worker。"""
+    companion = Companion.__new__(Companion)
+    companion.ilink_gateway = SimpleNamespace(
+        send_text=AsyncMock(return_value=True),
+        send_file=AsyncMock(side_effect=RuntimeError("upload failed")),
+    )
+    reply = ilink_reply("正文")
+    reply.file_paths = ["D:/out/broken.txt"]
+
+    sent = await companion._send_to_ilink(reply)
+
+    assert sent is True
+    companion.ilink_gateway.send_file.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_send_queue_delivers_ilink_batch_in_order():
     delivered = []
 

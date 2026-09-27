@@ -1,10 +1,12 @@
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 
 from communication.ilink.errors import ILinkHTTPError, ILinkRateLimitError, ILinkSessionExpired
+from communication.ilink.media import UploadedMedia
+from communication.ilink.models import MediaType
 from core.ilink_credentials import ILinkCredentials, ILinkCredentialsStore
 from core.ilink_gateway import ILinkGateway
 from core.ilink_state import ILinkStateStore
@@ -430,4 +432,78 @@ def test_gateway_create_pairing_code_requires_credentials(tmp_path):
 
     with pytest.raises(RuntimeError):
         gateway.create_pairing_code()
+    state_store.close()
+
+
+def _gateway_with_client(tmp_path, client):
+    credentials_store = ILinkCredentialsStore(tmp_path / "credentials.json")
+    credentials_store.save(
+        ILinkCredentials("token", "bot-1", "bot-user", "https://ilinkai.weixin.qq.com")
+    )
+    state_store = ILinkStateStore(tmp_path / "state.db")
+    state_store.set_context_token("bot-1", "latest-context")
+    gateway = ILinkGateway(
+        credentials_store,
+        state_store,
+        3998874040,
+        AsyncMock(),
+        client_factory=lambda _credentials: client,
+        channel_factory=lambda *_args: BlockingChannel(),
+    )
+    return gateway, state_store
+
+
+@pytest.mark.asyncio
+async def test_gateway_send_file_uploads_with_file_media_type_then_sends(tmp_path):
+    """发文件 = 先按 MediaType.FILE 上传，再把 CDN 凭据塞进 file_item 发出。"""
+    client = AsyncMock()
+    client.send_file.return_value = True
+    gateway, state_store = _gateway_with_client(tmp_path, client)
+    transfer = MagicMock(
+        upload=AsyncMock(
+            return_value=UploadedMedia(
+                encrypt_query_param="param-abc",
+                aes_key="a2V5",
+                length=2048,
+                md5="b" * 32,
+                ciphertext_length=2064,
+            )
+        )
+    )
+    gateway._media_transfer = transfer
+    source = tmp_path / "笔记.txt"
+    source.write_text("hi", encoding="utf-8")
+
+    await gateway.start()
+    try:
+        sent = await gateway.send_file("wx-owner", str(source))
+    finally:
+        await gateway.stop()
+        state_store.close()
+
+    assert sent is True
+    # 上传必须用 3（MediaType.FILE），不是消息项的 4
+    assert transfer.upload.await_args.kwargs["media_type"] == MediaType.FILE
+    assert transfer.upload.await_args.kwargs["to_user_id"] == "wx-owner"
+    # 文件名取磁盘 basename，长度与摘要用**明文**值
+    client.send_file.assert_awaited_once_with(
+        "wx-owner",
+        "latest-context",
+        file_name="笔记.txt",
+        file_md5="b" * 32,
+        file_size=2048,
+        encrypt_query_param="param-abc",
+        aes_key="a2V5",
+    )
+
+
+@pytest.mark.asyncio
+async def test_gateway_send_file_requires_running_gateway(tmp_path):
+    client = AsyncMock()
+    gateway, state_store = _gateway_with_client(tmp_path, client)
+    gateway._media_transfer = AsyncMock()
+
+    with pytest.raises(RuntimeError, match="not running"):
+        await gateway.send_file("wx-owner", str(tmp_path / "missing.txt"))
+    client.send_file.assert_not_awaited()
     state_store.close()

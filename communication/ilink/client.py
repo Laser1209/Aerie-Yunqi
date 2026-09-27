@@ -14,7 +14,12 @@ from communication.ilink.errors import (
     ILinkRateLimitError,
     ILinkSessionExpired,
 )
-from communication.ilink.models import AuthPollResult, GetUpdatesResponse, QRCodeChallenge
+from communication.ilink.models import (
+    AuthPollResult,
+    GetUpdatesResponse,
+    MessageItemType,
+    QRCodeChallenge,
+)
 
 
 class ILinkClient:
@@ -44,6 +49,11 @@ class ILinkClient:
 
     def set_base_url(self, value: str) -> None:
         self.base_url = self._normalize_base_url(value)
+
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        """媒体传输复用同一条连接池，避免每个附件都新建连接。"""
+        return self._http_client
 
     def common_headers(self) -> dict[str, str]:
         return {
@@ -93,6 +103,60 @@ class ILinkClient:
         return await self._post_json("/ilink/bot/getuploadurl", body)
 
     async def send_text(self, to_user_id: str, text: str, context_token: str) -> bool:
+        return await self._send_message(
+            to_user_id,
+            context_token,
+            [{"type": MessageItemType.TEXT, "text_item": {"text": text}}],
+        )
+
+    async def send_file(
+        self,
+        to_user_id: str,
+        context_token: str,
+        *,
+        file_name: str,
+        file_md5: str,
+        file_size: int,
+        encrypt_query_param: str,
+        aes_key: str,
+    ) -> bool:
+        """把已上传到 CDN 的文件作为文件消息发出。
+
+        文件项的 ``media`` 是**嵌套对象**（不是扁平字段），字段名与取值形态
+        已与官方 SDK（Go/Rust/Python/TS）逐项核对：``file_name`` 显示名、
+        ``md5`` 明文摘要、``len`` 明文长度。
+        """
+        return await self._send_message(
+            to_user_id,
+            context_token,
+            [
+                {
+                    "type": MessageItemType.FILE,
+                    "file_item": {
+                        "media": {
+                            "encrypt_query_param": encrypt_query_param,
+                            "aes_key": aes_key,
+                        },
+                        "file_name": file_name,
+                        "md5": file_md5,
+                        # 协议里 len 是**字符串**；传 int 会被判成参数错误。
+                        "len": str(file_size),
+                    },
+                }
+            ],
+        )
+
+    async def _send_message(
+        self,
+        to_user_id: str,
+        context_token: str,
+        item_list: list[dict[str, Any]],
+    ) -> bool:
+        """发一条 bot 已完成的私聊消息（文本与媒体共用同一信封）。
+
+        信封与成功判定集中在此处：``ret`` 语义的坑（成功响应常常省略 ret）
+        只允许有一个实现，否则文本通了、媒体又踩一遍。
+        """
         client_id = f"openclaw-weixin:{int(time.time() * 1000)}-{secrets.token_hex(4)}"
         data = await self._post_json(
             "/ilink/bot/sendmessage",
@@ -103,9 +167,7 @@ class ILinkClient:
                     "client_id": client_id,
                     "message_type": 2,
                     "message_state": 2,
-                    "item_list": [
-                        {"type": 1, "text_item": {"text": text}}
-                    ],
+                    "item_list": item_list,
                     "context_token": context_token,
                 }
             },

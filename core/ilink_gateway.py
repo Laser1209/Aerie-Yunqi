@@ -5,6 +5,7 @@ import logging
 import random
 import sqlite3
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -17,9 +18,12 @@ from communication.ilink.errors import (
     ILinkRateLimitError,
     ILinkSessionExpired,
 )
+from communication.ilink.media import ILinkMediaTransfer
+from communication.ilink.models import MediaType
 from core.ilink_credentials import ILinkCredentials, ILinkCredentialsStore
 from core.ilink_state import ILinkStateStore
 from core.model_output import sanitize_outbound_text
+from core.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,8 @@ class ILinkGateway:
         self.poll_task: asyncio.Task[None] | None = None
         self._client: ILinkClient | None = None
         self._bot_id: str | None = None
+        # 媒体通道按需创建：不用文件收发就不落目录、不建对象。
+        self._media_transfer: ILinkMediaTransfer | None = None
         self._stop_lock = asyncio.Lock()
 
     async def start(self) -> asyncio.Task[None]:
@@ -153,6 +159,7 @@ class ILinkGateway:
                     pass
             client = self._client
             self._client = None
+            self._media_transfer = None
             if client is not None:
                 await client.close()
 
@@ -168,6 +175,39 @@ class ILinkGateway:
         if not content:
             logger.warning("iLink send skipped: content empty after sanitization")
             return False
+        client, context_token = self._outbound_context()
+        return await client.send_text(channel_account_id, content, context_token)
+
+    async def send_file(self, channel_account_id: str, file_path: str | Path) -> bool:
+        """把本地文件加密上传到微信 CDN，再作为文件消息发给用户。
+
+        与文本走同一条 ``sendmessage`` 出口；差别只在于先要
+        ``getuploadurl`` + CDN 上传拿到 ``encrypt_query_param``。
+        ``media_type`` 用 ``MediaType.FILE``（=3）——注意**不是**消息项的 4。
+        """
+        client, context_token = self._outbound_context()
+        source = Path(file_path)
+        media = await self._get_media_transfer(client).upload(
+            client,
+            source,
+            to_user_id=channel_account_id,
+            media_type=MediaType.FILE,
+        )
+        return await client.send_file(
+            channel_account_id,
+            context_token,
+            file_name=source.name,
+            file_md5=media.md5,
+            file_size=media.length,
+            encrypt_query_param=media.encrypt_query_param,
+            aes_key=media.aes_key,
+        )
+
+    def _outbound_context(self) -> tuple[ILinkClient, str]:
+        """取出发所需的运行态（客户端 + context_token）；缺失即抛错。
+
+        三个前提的一致判定只留这一份，避免文本通了、文件又漏判某一项。
+        """
         if self._client is None:
             raise RuntimeError("iLink gateway is not running")
         if self._bot_id is None:
@@ -175,11 +215,14 @@ class ILinkGateway:
         context_token = self.state_store.get_context_token(self._bot_id)
         if not context_token:
             raise RuntimeError("iLink context token is required")
-        return await self._client.send_text(
-            channel_account_id,
-            content,
-            context_token,
-        )
+        return self._client, context_token
+
+    def _get_media_transfer(self, client: ILinkClient) -> ILinkMediaTransfer:
+        if self._media_transfer is None:
+            self._media_transfer = ILinkMediaTransfer(
+                client.http_client, data_dir() / "ilink_media"
+            )
+        return self._media_transfer
 
     async def _poll(self, channel: ILinkChannel, bot_id: str) -> None:
         failure_count = 0

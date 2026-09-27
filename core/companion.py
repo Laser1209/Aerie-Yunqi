@@ -2782,19 +2782,24 @@ class Companion:
         return sent
 
     async def _send_to_ilink(self, reply: OutgoingReply) -> bool:
-        # iLink 目前只接了文本：media 侧能加密上传到 CDN，但缺"发送媒体消息"
-        # 这最后一步。此处必须显式记录，否则在微信里让 Agent 发文件会静默丢件
-        # ——那就是又一次"本地以为成功、用户什么都没收到"。
-        pending = list(getattr(reply, "file_paths", None) or [])
-        if pending:
-            logger.warning(
-                "iLink 通道暂不支持文件投递，%d 个文件未发送: %s",
-                len(pending), pending,
+        # 文本与文件是两条独立消息：文本为空时跳过文本，文件照发；
+        # 文件失败也不回滚已经发出的文本（与 _send_to_qq 同一语义）。
+        sent = False
+        content = reply.content or ""
+        if content.strip():
+            sent = await self.ilink_gateway.send_text(
+                reply.channel_account_id,
+                content,
             )
-        return await self.ilink_gateway.send_text(
-            reply.channel_account_id,
-            reply.content,
-        )
+        for path in list(getattr(reply, "file_paths", None) or []):
+            try:
+                if await self.ilink_gateway.send_file(reply.channel_account_id, path):
+                    sent = True
+                else:
+                    logger.warning("微信文件未送达: %s", path)
+            except Exception:
+                logger.exception("微信文件发送异常: %s", path)
+        return sent
 
     def _notify_pending_approval(self, payload: dict) -> None:
         """把待审批事项推到最近一次会话通道（经发送队列异步投递，不阻塞工具调用）。

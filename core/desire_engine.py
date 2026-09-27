@@ -18,11 +18,13 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
+from core.behavior_sampler import emit_probability, sample_once
 from core.paths import data_dir
 
 logger = logging.getLogger(__name__)
@@ -114,6 +116,7 @@ class DesireEngine:
         behavior_cfg: dict | None = None,
         *,
         state_path: str | Path | None = None,
+        rng: Callable[[], float] = random.random,
     ) -> None:
         self.companion = companion
         cfg = (behavior_cfg or {}).get("desire", {}) or {}
@@ -124,6 +127,12 @@ class DesireEngine:
         )
         self.triggers = cfg.get("triggers", {"care": 50, "voice": 80, "cooldown_hours": 12})
         self.cooldown_hours = int(self.triggers.get("cooldown_hours", COOLDOWN_HOURS_DEFAULT))
+        # 阶段 5: 阈值阶梯 → 调制 p + 采样。采样温度 τ / 概率上下限从配置读取
+        # (persona_behavior.yaml → desire.triggers)，代码仅兜底；rng 可注入以固定 seed 复现。
+        self.sampling_tau = float(self.triggers.get("tau", 8.0))
+        self.p_floor = float(self.triggers.get("p_floor", 0.02))
+        self.p_ceiling = float(self.triggers.get("p_ceiling", 0.95))
+        self.rng = rng
         self.variables_cfg = cfg.get("variables", {}) or {}
         self.state_path = (
             Path(state_path) if state_path is not None else data_dir() / "desire_state.json"
@@ -137,6 +146,8 @@ class DesireEngine:
         # Last trigger ts to space identical triggers
         self._last_care_ts: float = 0.0
         self._last_voice_ts: float = 0.0
+        # 阶段 5: 采样放行标记 (scene, ts)，供 ProactiveJudge 复用决定、避免二次采样。
+        self._emit_grant: tuple[str, float] | None = None
 
     # ── Lifecycle ─────────────────────────────────────
     async def start(self) -> None:
@@ -210,33 +221,60 @@ class DesireEngine:
             self._save_state()
             return
 
-        # Trigger ladder: voice > care
-        care = float(self.triggers.get("care", 50))
-        voice = float(self.triggers.get("voice", 80))
-        # Anti-spam: identical trigger at most once per 30 minutes
+        # 阶段 5: 阈值阶梯 → 调制 p + 采样（唯一行为层采样点）。
         now = time.time()
-        if score >= voice and _in_voice_window() and (now - self._last_voice_ts) > 1800:
-            self._last_voice_ts = now
-            self.state["last_trigger"] = "voice_miss"
+        scene = self._decide_trigger(score, now)
+        if scene:
+            self.state["last_trigger"] = scene
             self._save_state()
-            await self._trigger_scene("voice_miss")
-            return
-        if score >= care and (now - self._last_care_ts) > 1800:
-            self._last_care_ts = now
-            self.state["last_trigger"] = "idle_care"
-            self._save_state()
-            await self._trigger_scene("idle_care")
+            await self._trigger_scene(scene)
             return
 
         self._save_state()
 
+    def _decide_trigger(self, score: float, now: float) -> str | None:
+        """由 score 得到触发场景；改为「调制 p + 采样」，固定 seed 可复现。
+
+        p = floor + (ceiling - floor) * sigmoid((score - care) / tau)：
+        care 是概率拐点，不再「score >= care 就发」——低于 care 仍有非零概率
+        (低分不被饿死)，高于 care 也可能不发射 (保留未发射样本)。采样只做一次。
+        """
+        care = float(self.triggers.get("care", 50))
+        voice = float(self.triggers.get("voice", 80))
+        p = emit_probability(
+            score,
+            reference=care,
+            tau=self.sampling_tau,
+            floor=self.p_floor,
+            ceiling=self.p_ceiling,
+        )
+        if not sample_once(p, self.rng):
+            return None
+        # Anti-spam: identical trigger at most once per 30 minutes.
+        if (
+            score >= voice
+            and _in_voice_window(datetime.fromtimestamp(now))
+            and (now - self._last_voice_ts) > 1800
+        ):
+            self._last_voice_ts = now
+            return "voice_miss"
+        if (now - self._last_care_ts) > 1800:
+            self._last_care_ts = now
+            return "idle_care"
+        return None
+
     async def _trigger_scene(self, scene_name: str) -> None:
+        # 采样已在 _decide_trigger 完成（本决策链唯一采样点）：用 emit_grant 标记
+        # 本次触发由欲望引擎放行，ProactiveJudge 复用该决定、不再二次采样。
+        self._emit_grant = (str(scene_name), time.time())
         try:
             if not self.companion or not self.companion.push_scheduler:
                 return
             await self.companion.push_scheduler.trigger(scene_name)
         except Exception:
             logger.exception("desire trigger scene %s failed", scene_name)
+        finally:
+            self._emit_grant = None
 
     # ── Variable readers ─────────────────────────────
     def _read_variables(self) -> dict[str, float]:

@@ -255,6 +255,27 @@ class TopicLifecycle:
             "similarity": round(best_score, 3),
         }
 
+    def reactivate(self, topic_id: str, now: Optional[float] = None) -> bool:
+        """把指定话题迁回 active（话题复现命中后由阶段 5 调用）。
+
+        只写状态、不触发行为：复现成功后重置生命周期与兴趣评分，
+        避免同一话题在沉寂池里被反复选中。返回是否命中并写盘。
+        """
+        if not self.is_enabled():
+            return False
+        moment = float(now) if now is not None else self._clock()
+        for topic in self._tracker.topics:
+            if topic.id != topic_id:
+                continue
+            topic.state = "active"
+            topic.lifecycle = "active"
+            topic.interest_score = 1.0
+            topic.dormancy_since = None
+            topic.last_active_at = moment
+            self._tracker.save()
+            return True
+        return False
+
     def _mark_active_context(self, text: str, now: float) -> None:
         """把当前 active 话题标记为活跃：重置生命周期与兴趣评分。"""
         active = self._tracker.active_topic(now)

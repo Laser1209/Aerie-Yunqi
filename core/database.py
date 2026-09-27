@@ -427,6 +427,8 @@ class Database:
             ("qq_message_id", "INTEGER DEFAULT NULL"),
             ("persona_id", "TEXT DEFAULT NULL"),
             ("deleted_at", "TEXT DEFAULT NULL"),
+            # 阶段 5: 区分「AI 自发起」（如话题复现）与「场景定时」主动消息。
+            ("self_initiated", "INTEGER DEFAULT 0"),
         ]
         for col, decl in migrations:
             if col not in existing:

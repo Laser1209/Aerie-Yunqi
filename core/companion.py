@@ -1331,7 +1331,11 @@ class Companion:
         # 心情 / 想法 / 用户上下文 before sending.
         try:
             from core.proactive_judge import ProactiveJudge
-            self.proactive_judge = ProactiveJudge(companion=self)
+            self.proactive_judge = ProactiveJudge(
+                companion=self,
+                # 阶段 5: 采样参数（τ / 概率上下限）从 proactive.yaml 读取，热加载走 reload_config。
+                sampling=(proactive_cfg.get("proactive") or {}).get("judge_sampling"),
+            )
             self.push_scheduler.judge = self.proactive_judge
         except Exception:
             logger.exception("ProactiveJudge init failed; push will run judge-less")
@@ -1386,6 +1390,19 @@ class Companion:
         except Exception:
             logger.exception("TopicLifecycle init failed")
             self.topic_lifecycle = None
+        # 阶段 5：话题复现触发源（dormant 话题 → 概率发射；采样在分派分支内单点完成）。
+        # 协作对象在读时通过 provider 取 topic_lifecycle，开关随阶段 4 flag 联动
+        # （lifecycle 关闭时 recall 返回空，天然不触发）。
+        try:
+            from core.topic_resurface import TopicResurface
+
+            self.topic_resurface = TopicResurface(
+                lifecycle_provider=lambda: getattr(self, "topic_lifecycle", None),
+            )
+            self.push_scheduler.cron.topic_resurface = self.topic_resurface
+        except Exception:
+            logger.exception("TopicResurface init failed")
+            self.topic_resurface = None
         try:
             from core.decision_log import DecisionLogger
 
@@ -4715,6 +4732,63 @@ class Companion:
             return content[:120]
         return ""
 
+    def _persist_proactive_chat_log(
+        self,
+        master_id: int,
+        content: str,
+        scene_name: str,
+        scene_cfg: dict,
+        channel: str = "desktop",
+    ) -> int | None:
+        """主动消息落库：chat_log 写入 + normalized messages 双写（阶段 5 抽公用）。
+
+        - 保留既有标记 msg_type=proactive / route_mode=PROACTIVE / scene；
+        - 新增 self_initiated（仅当 scene 标记为 AI 自发起时写入），与既有字段共存；
+        - 返回 chat_log 主键；写入失败返回 None（调用方自行兜底生成 id）。
+        """
+        fields: dict[str, Any] = {
+            "user_id": master_id,
+            "role": "assistant",
+            "content": content,
+            "msg_type": "proactive",
+            "route_mode": "PROACTIVE",
+            "scene": scene_name,
+            # 角色级隔离：主动推送归属当前激活角色，避免 NULL 共享行两个角色都看到
+            "persona_id": self._active_persona_id(),
+        }
+        if scene_cfg.get("self_initiated"):
+            fields["self_initiated"] = 1
+        try:
+            message_id = self.db.insert("chat_log", fields)
+        except Exception:
+            logger.warning(
+                "[Push] proactive persistence failed scene=%s",
+                scene_name,
+                exc_info=True,
+            )
+            return None
+        # 同步进 normalized messages 层，让管理平台聊天记录可见 + 级联删除覆盖
+        repository = getattr(self, "conversation_repository", None)
+        if repository is not None:
+            try:
+                actor_id, channel_name, account = self._proactive_channel_identity(channel)
+                repository.persist_proactive_message(
+                    user_id=int(master_id),
+                    actor_id=actor_id,
+                    channel=channel_name,
+                    channel_account_id=account,
+                    content=content,
+                    legacy_chat_log_id=int(message_id),
+                    persona_id=self._active_persona_id(),
+                )
+            except Exception:
+                logger.debug(
+                    "[Push] proactive normalized persist failed scene=%s",
+                    scene_name,
+                    exc_info=True,
+                )
+        return int(message_id)
+
     async def _dispatch_push(self, scene_name: str, scene_cfg: dict) -> bool:
         """Generate one proactive message and deliver it independently."""
         try:
@@ -4757,7 +4831,13 @@ class Companion:
             # 判定顺序：有活跃话题→continue；无但有 closed 存根→revive；再无→new。
             topic_mode = "new"
             dialogue_context = ""
-            if getattr(self, "topic_tracker", None) is not None:
+            # 阶段 5: 话题复现场景显式指定被复现话题作为再造上下文（revive），
+            # 优先于自动 continuation_plan，确保复现的是 dormant 话题本体。
+            resurface_topic = scene_cfg.get("resurface_topic")
+            if isinstance(resurface_topic, dict) and resurface_topic.get("context"):
+                topic_mode = "revive"
+                dialogue_context = str(resurface_topic.get("context"))
+            elif getattr(self, "topic_tracker", None) is not None:
                 try:
                     _plan = self.topic_tracker.continuation_plan()
                     _mode = str(_plan.get("mode", "new"))
@@ -4870,9 +4950,14 @@ class Companion:
                     logger.debug("[Push] decision log append failed", exc_info=True)
 
             if not delivery_v2:
+                # 阶段 5: 修复 legacy 缺口——关闭 proactive_delivery_v2 时不再"只发不落库"，
+                # 同样写 chat_log + normalized 双写（仍不发 SSE 事件，保持 legacy 语义）。
                 success = await self.qq.send_message(master_id, content)
                 if success:
-                    logger.info("[Push] Sent legacy QQ scene=%s", scene_name)
+                    self._persist_proactive_chat_log(
+                        master_id, content, scene_name, scene_cfg
+                    )
+                    logger.info("[Push] Sent legacy QQ scene=%s (persisted)", scene_name)
                 return success
 
             delivered = False
@@ -4894,46 +4979,11 @@ class Companion:
 
             from core import chat_events
 
-            message_id: int | str = generate_id("message")
-            try:
-                message_id = self.db.insert(
-                    "chat_log",
-                    {
-                        "user_id": master_id,
-                        "role": "assistant",
-                        "content": content,
-                        "msg_type": "proactive",
-                        "route_mode": "PROACTIVE",
-                        "scene": scene_name,
-                        # 角色级隔离：主动推送归属当前激活角色，避免 NULL 共享行两个角色都看到
-                        "persona_id": self._active_persona_id(),
-                    },
-                )
-            except Exception:
-                logger.warning(
-                    "[Push] proactive persistence failed scene=%s",
-                    scene_name,
-                    exc_info=True,
-                )
-            else:
-                # 同步进 normalized messages 层，让管理平台聊天记录可见 + 级联删除覆盖
-                try:
-                    actor_id, channel, account = self._proactive_channel_identity("desktop")
-                    self.conversation_repository.persist_proactive_message(
-                        user_id=int(master_id),
-                        actor_id=actor_id,
-                        channel=channel,
-                        channel_account_id=account,
-                        content=content,
-                        legacy_chat_log_id=int(message_id),
-                        persona_id=self._active_persona_id(),
-                    )
-                except Exception:
-                    logger.debug(
-                        "[Push] proactive normalized persist failed scene=%s",
-                        scene_name,
-                        exc_info=True,
-                    )
+            message_id: int | str = self._persist_proactive_chat_log(
+                master_id, content, scene_name, scene_cfg
+            )
+            if message_id is None:
+                message_id = generate_id("message")
 
             try:
                 chat_events.emit(

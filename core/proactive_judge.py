@@ -25,10 +25,13 @@ R7.5: 综合判断模块。在 ``push_scheduler._dispatch`` 之前调用,
 
 from __future__ import annotations
 import logging
+import random
 import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
+
+from core.behavior_sampler import emit_probability, sample_once
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +49,9 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 
 
 # ══════════════════════════════════════════════════
-# Scene 阈值 (不同场景的最低 score 门槛)
+# Scene 参考分 (阶段 5: 由「低于阈值即抑制」改为「调制 p 的拐点」)
+# 命名保留 SCENE_THRESHOLDS 以兼容既有 e2e；语义已从硬闸门变为
+# sigmoid 概率映射的中心分（score == reference 时 p 位于上下限中点）。
 # ══════════════════════════════════════════════════
 SCENE_THRESHOLDS: dict[str, int] = {
     "morning_brief": 30,        # 早安 + 简报 (早晨环境加成容易触发)
@@ -60,6 +65,29 @@ SCENE_THRESHOLDS: dict[str, int] = {
     "anniversary": 20,          # 纪念日 (低门槛,exempt_quiet)
     "emotion_comfort": 50,      # 情绪爆发安抚
 }
+
+
+# ══════════════════════════════════════════════════
+# 行为层采样参数 (阶段 5) — 可从 proactive.yaml 的 proactive.judge_sampling 读取
+# p = floor + (ceiling - floor) * sigmoid((score - reference) / tau)
+# ══════════════════════════════════════════════════
+DEFAULT_SAMPLING: dict[str, float] = {
+    "tau": 8.0,          # score 维度温度 (0-100 分制); 越小越接近硬阈值, 越大越随机
+    "p_floor": 0.02,     # 概率下限 (>0: 低分仍非零, 杜绝硬闸门)
+    "p_ceiling": 0.95,   # 概率上限 (<1: 高分也保留未发射样本)
+}
+
+
+def _coerce_sampling(cfg: dict | None) -> dict[str, float]:
+    out = dict(DEFAULT_SAMPLING)
+    if isinstance(cfg, dict):
+        for key in DEFAULT_SAMPLING:
+            if key in cfg:
+                try:
+                    out[key] = float(cfg[key])
+                except (TypeError, ValueError):
+                    continue
+    return out
 
 
 # ══════════════════════════════════════════════════
@@ -94,6 +122,9 @@ class Decision:
     suppress_reason: str = ""
     context_snapshot: dict = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
+    # 阶段 5: 行为层采样结果 (供审计；suppress_reason="sampled_out" 表示采样未发射)
+    emit_probability: float = 0.0
+    sampled: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -120,9 +151,18 @@ class ProactiveJudge:
         self,
         companion: Any = None,
         weights: dict[str, float] | None = None,
+        sampling: dict | None = None,
+        rng: Callable[[], float] = random.random,
     ) -> None:
         self.companion = companion
         self.weights = weights or dict(DEFAULT_WEIGHTS)
+        # 阶段 5: 采样参数 + 可注入 rng (固定 seed 复现)。
+        self.sampling = _coerce_sampling(sampling)
+        self.rng = rng
+
+    def set_sampling_config(self, cfg: dict | None) -> None:
+        """热加载采样参数 (由 PushScheduler.reload_config 调用)。"""
+        self.sampling = _coerce_sampling(cfg)
 
     # ── Public ─────────────────────────────────────
     def evaluate(
@@ -130,22 +170,37 @@ class ProactiveJudge:
         scene: str,
         context_override: dict | None = None,
     ) -> Decision:
-        """Compute the decision for a given scene."""
+        """Compute the decision for a given scene.
+
+        阶段 5 变更：score_below_threshold 硬闸门 → 调制 p + 采样。
+        - 硬闸门（合规保留、不采样化）：cooldown_active / user_recent_active；
+        - 其余情况由 p = floor + (ceiling-floor)*sigmoid((score-ref)/tau) 单点采样决定，
+          采样未命中则 suppress_reason="sampled_out"（不再是"低于阈值即抑制"）。
+        """
         components = self._read_components(context_override)
         score = self._compute_score(components)
-        threshold = SCENE_THRESHOLDS.get(scene, 40)
+        reference = SCENE_THRESHOLDS.get(scene, 40)
 
-        # Suppress if score below threshold
-        suppress_reason = ""
-        if score < threshold:
-            suppress_reason = f"score_below_threshold({score}<{threshold})"
-        # Suppress if cooldown too tight (handled by PushPolicy too,
-        # but judge also flags it for visibility)
-        elif components.get("cooldown_minutes_remaining", 0) > 0:
-            suppress_reason = "cooldown_active"
-        # Suppress if user is currently active (< 5 min)
-        elif components.get("user_minutes_since_last", 999) < 5:
-            suppress_reason = "user_recent_active"
+        # 硬闸门：资源 / 防撞车类，保留硬拦，不采样化。
+        suppress_reason = self.hard_gate_reason_from_components(components)
+        emit_p = 0.0
+        sampled = False
+        if not suppress_reason:
+            # 同一决策链只允许一个采样点：若本次触发已由欲望引擎采样放行
+            # (desire state 里存在新鲜 emit_grant)，则直接发射、不再复采。
+            if self._desire_emit_granted(scene):
+                emit_p = 1.0
+            else:
+                emit_p = emit_probability(
+                    score,
+                    reference=reference,
+                    tau=float(self.sampling["tau"]),
+                    floor=float(self.sampling["p_floor"]),
+                    ceiling=float(self.sampling["p_ceiling"]),
+                )
+                sampled = True
+                if not sample_once(emit_p, self.rng):
+                    suppress_reason = "sampled_out"
 
         # Tone selection
         tone = self._select_tone(components, scene)
@@ -155,7 +210,9 @@ class ProactiveJudge:
             "weights": dict(self.weights),
             "components": dict(components),
             "score": score,
-            "threshold": threshold,
+            "reference": reference,
+            "emit_probability": round(emit_p, 4),
+            "sampled": sampled,
             "ts": datetime.now().isoformat(timespec="seconds"),
         }
 
@@ -167,7 +224,43 @@ class ProactiveJudge:
             components=dict(components),
             suppress_reason=suppress_reason,
             context_snapshot=snapshot,
+            emit_probability=round(emit_p, 4),
+            sampled=sampled,
         )
+
+    def hard_gate_reason(self, context_override: dict | None = None) -> str:
+        """只判定硬闸门（cooldown / user_recent_active），不做采样。
+
+        供 ``defer_sampling`` 场景（话题复现）复用防撞车与冷却硬闸门，
+        把采样留给场景自己的分派分支，保证同一决策链只有一个采样点。
+        """
+        return self.hard_gate_reason_from_components(
+            self._read_components(context_override)
+        )
+
+    @staticmethod
+    def hard_gate_reason_from_components(components: dict) -> str:
+        """硬闸门判定（资源 / 防撞车，合规保留为硬拦）。"""
+        if components.get("cooldown_minutes_remaining", 0) > 0:
+            return "cooldown_active"
+        if components.get("user_minutes_since_last", 999) < 5:
+            return "user_recent_active"
+        return ""
+
+    def _desire_emit_granted(self, scene: str) -> bool:
+        """欲望引擎已在本轮采样放行 → judge 复用该决定、不再二次采样。"""
+        if self.companion is None:
+            return False
+        desire = getattr(self.companion, "desire", None)
+        grant = getattr(desire, "_emit_grant", None)
+        if not grant:
+            return False
+        try:
+            granted_scene = str(grant[0])
+            granted_at = float(grant[1])
+        except (TypeError, ValueError, IndexError):
+            return False
+        return granted_scene == scene and (time.time() - granted_at) < 30.0
 
     # ── Components ─────────────────────────────────
     def _read_components(self, override: dict | None) -> dict[str, float]:

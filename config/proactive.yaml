@@ -15,6 +15,14 @@ proactive:
     - anniversary
   timezone: "Asia/Shanghai"
 
+  # ── 阶段 5：行为层采样参数（ProactiveJudge 用；唯一映射见 core/behavior_sampler.py）──
+  # p = p_floor + (p_ceiling - p_floor) * sigmoid((score - 参考分) / tau)
+  # tau 越小越接近硬阈值、越大越随机；全部前端可调，改后 reload_config 热加载。
+  judge_sampling:
+    tau: 8                          # score 维度温度（0-100 分制）
+    p_floor: 0.02                   # 概率下限（>0：低分仍有非零概率，杜绝硬闸门）
+    p_ceiling: 0.95                 # 概率上限（<1：高分仍保留未发射样本）
+
   # ── v2: soft budget + hard-cap fuse + candidate pool + routine learning ──
   soft_budget: 0                           # 0 = fall back to max_per_day (advisory)
   hard_cap: 0                              # 0 = auto: max(max_per_day*1.5, 20)
@@ -117,6 +125,38 @@ scenes:
     trigger: "cumulative_threshold_break"
     mood_aware: true
     exempt_quiet: false
+
+  # ── 阶段 5：话题复现触发源 ──────────────────────────────────────────────
+  # 从阶段 4 的 dormant 话题池做「候选召回」，再由 m 得出概率 p、采样决定是否发射：
+  #   m = 兴趣评分^w_i × 沉寂时长^w_d × 上下文相关度^w_c（各因子归一化 0..1，权重和为 1）
+  # defer_sampling=true：ProactiveJudge 只做硬闸门（防撞车/冷却），采样在本 scene 的
+  # 分派分支内单点完成，保证同一决策链只有一个采样点。所有数值前端可调 + 热加载。
+  topic_resurface:
+    template: "想起你之前说的事，后来怎么样了？"
+    cron: "*/15 * * * *"           # 每 15 分钟自检一次（真正发射受频控/额度约束）
+    custom_dispatcher: "topic_resurface"
+    mood_aware: true
+    exempt_quiet: false
+    enabled: true
+    defer_sampling: true
+    self_initiated: true            # AI 自发起：落库标记，区别于场景定时
+    # m 的三因子权重（须和为 1；加权几何平均）
+    interest_weight: 0.4
+    dormancy_weight: 0.35
+    context_weight: 0.25
+    dormancy_cap_hours: 168         # 沉寂时长归一化上限（7 天，超出即视为“足够久”）
+    relevance_default: 0.5          # 无参考上下文时的中性相关度（>= 召回门槛）
+    context_candidate_floor: 0.15   # 阶段一候选召回门槛（低门槛、广撒网）
+    # 概率映射：p = p_floor + (p_ceiling - p_floor) * sigmoid((m - m_midpoint)/tau)
+    tau: 0.25                       # 采样温度 τ（越小越贪心）
+    m_midpoint: 0.5                 # 概率拐点
+    p_floor: 0.02                   # 低 m 概率下限（>0：低 m 不被饿死）
+    p_ceiling: 0.9                  # 高 m 概率上限（<1：高 m 也保留未发射样本）
+    # 低 m 单独子额度：高 m 用主额度、低 m 用子额度，互不挤占（前端可调）
+    low_m_threshold: 0.5            # m < 该值判为低 m
+    main_budget: 4                  # 主额度（高 m）
+    low_m_budget: 1                 # 低 m 子额度
+    replay_days: 7                  # 基线回放天数 N
 
 # Cumulative emotion thresholds (linked to auto-wake triggers).
 # R0.3.6: emotion_links moved to config/persona_behavior.yaml

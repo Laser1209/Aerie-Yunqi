@@ -438,6 +438,9 @@ class CronScheduler:
         # it before calling the user dispatcher; otherwise falls back to
         # the historical cron-only path.
         self.judge: Any = None
+        # 阶段 5: 话题复现触发源（dormant 话题 → 概率发射；采样在分派分支内单点完成）。
+        # 由 companion 在构造后注入 TopicResurface 协作对象。
+        self.topic_resurface: Any = None
         # Optional: last Decision snapshot for observability (e2e + tests).
         self.last_decision: Any = None
         # R9.0+: soft gate — pause all pushes when QQ is offline
@@ -704,23 +707,42 @@ class CronScheduler:
             )
             return False
 
+        # 阶段 5: scene 级开关（enabled: false 即停用；回退手册约定）。
+        if scene_cfg.get("enabled") is False:
+            logger.debug("[PushScheduler] Skipped %s: scene disabled", scene_name)
+            return False
+
         force = bool(scene_cfg.get("force"))
+        # 阶段 5: defer_sampling 场景（话题复现）把唯一采样点留在自己的分派分支，
+        # judge 只做硬闸门（防撞车 / 冷却），保证同一决策链只有一个采样点。
+        defer_sampling = bool(scene_cfg.get("defer_sampling"))
 
         # ── R7.5+: Proactive judge gate ──
         decision = None
         if self.judge is not None and not force:
             try:
-                decision = self.judge.evaluate(
-                    scene_name,
-                    context_override=scene_cfg.get("judge_override"),
-                )
-                self.last_decision = decision
-                if decision.suppress_reason:
-                    logger.debug(
-                        "[PushScheduler] Judge suppressed %s: %s (score=%s)",
-                        scene_name, decision.suppress_reason, decision.score,
+                if defer_sampling:
+                    gate = self.judge.hard_gate_reason(
+                        context_override=scene_cfg.get("judge_override"),
                     )
-                    return False
+                    if gate:
+                        logger.debug(
+                            "[PushScheduler] Judge hard-gate %s: %s",
+                            scene_name, gate,
+                        )
+                        return False
+                else:
+                    decision = self.judge.evaluate(
+                        scene_name,
+                        context_override=scene_cfg.get("judge_override"),
+                    )
+                    self.last_decision = decision
+                    if decision.suppress_reason:
+                        logger.debug(
+                            "[PushScheduler] Judge suppressed %s: %s (score=%s)",
+                            scene_name, decision.suppress_reason, decision.score,
+                        )
+                        return False
             except Exception:
                 logger.exception(
                     "[PushScheduler] ProactiveJudge failed; falling through"
@@ -749,6 +771,11 @@ class CronScheduler:
             # R7.5+: 应用启动后主动 QQ 推送
             return await self._dispatch_desire_text(
                 scene_name, scene_cfg, kind="care", decision=decision,
+            )
+        if cd == "topic_resurface":
+            # 阶段 5: 话题复现触发源（dormant 话题按概率发射；本分支为唯一采样点）。
+            return await self._dispatch_topic_resurface(
+                scene_name, scene_cfg, decision=decision,
             )
 
         if not self._dispatcher:
@@ -856,6 +883,71 @@ class CronScheduler:
         except Exception:
             logger.exception("_dispatch_desire_text failed")
             return False
+
+    async def _dispatch_topic_resurface(
+        self,
+        scene_name: str,
+        scene_cfg: dict,
+        decision: Any | None = None,
+    ) -> bool:
+        """阶段 5: 话题复现触发源。
+
+        两阶段：① 候选召回（dormant 话题 + 上下文相关度粗筛，确定性）；
+        ② 概率发射（m → p → **单点采样**，本决策链唯一采样点）。
+
+        额度：低 m 用单独子额度、高 m 用主额度，互不挤占；再由
+        ``PushPolicy.can_push`` 统一裁决全局约束（硬顶 / 间隔 / 静默），
+        本方法不复制任何频控判定。
+        """
+        resurface = getattr(self, "topic_resurface", None)
+        if resurface is None:
+            logger.debug("[PushScheduler] topic_resurface collaborator missing")
+            return False
+
+        params = resurface.resolve_params(scene_cfg)
+        proposal = resurface.decide(params)
+        if proposal is None:
+            return False
+        if not proposal.emitted:
+            logger.debug(
+                "[PushScheduler] topic_resurface sampled out (m=%.3f p=%.3f)",
+                proposal.m, proposal.p,
+            )
+            return False
+        if not resurface.budget_allows(proposal.is_low, params):
+            logger.debug(
+                "[PushScheduler] topic_resurface budget denied (low_m=%s)",
+                proposal.is_low,
+            )
+            return False
+
+        if not self._dispatcher:
+            logger.warning("[PushScheduler] No dispatcher set for %s", scene_name)
+            return False
+
+        forward_cfg = dict(scene_cfg)
+        forward_cfg["resurface_topic"] = {
+            "topic_id": proposal.topic_id,
+            "subject": proposal.subject,
+            "context": proposal.context,
+        }
+        if decision is not None:
+            forward_cfg["tone_hint"] = decision.tone
+        try:
+            success = await self._dispatcher(scene_name, forward_cfg)
+        except Exception:
+            logger.exception("[PushScheduler] topic_resurface dispatch error")
+            return False
+        if not success:
+            return False
+        self.policy.record(scene_name)
+        resurface.consume(proposal.is_low, params)
+        resurface.mark_resurfaced(proposal)
+        logger.info(
+            "[PushScheduler] topic_resurface emitted topic=%s (m=%.3f low_m=%s)",
+            proposal.topic_id, proposal.m, proposal.is_low,
+        )
+        return True
 
     @staticmethod
     def _parse_cron_field(field: str, lo: int, hi: int) -> tuple[set[int], bool]:
@@ -1045,6 +1137,16 @@ class PushScheduler:
         self.cron.config = new_config
         self.cron.scenes = new_config.get("scenes", {})
         self.cron.policy = PushPolicy(new_config)
+        # 阶段 5: 采样参数热加载（话题复现参数随 scenes 一起生效；
+        # judge 的 τ / 概率上下限随 proactive.judge_sampling 热更新）。
+        judge = getattr(self.cron, "judge", None)
+        if judge is not None and hasattr(judge, "set_sampling_config"):
+            try:
+                judge.set_sampling_config(
+                    (new_config.get("proactive") or {}).get("judge_sampling")
+                )
+            except Exception:
+                logger.debug("[PushScheduler] judge sampling reload failed", exc_info=True)
         if was_running:
             await self.cron.start()
         logger.info(

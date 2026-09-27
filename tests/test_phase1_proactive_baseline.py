@@ -86,7 +86,13 @@ async def test_inbound_message_records_event_engine_activity():
     companion.push_event_engine = SimpleNamespace(
         record_user_activity=MagicMock()
     )
-    message = SimpleNamespace(user_id=7, content="你好")
+    message = SimpleNamespace(
+        user_id=7,
+        content="你好",
+        source="qq",
+        channel="qq",
+        channel_account_id=None,
+    )
 
     await companion._on_qq_message(message)
 
@@ -266,7 +272,11 @@ async def test_v2_system_notification_can_be_disabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_flag_off_restores_legacy_qq_only_delivery(monkeypatch):
+async def test_flag_off_legacy_delivery_still_persists(monkeypatch):
+    """阶段 5 修复 legacy 缺口：proactive_delivery_v2 关闭时也落库（不再只发不落库）。
+
+    仍不发 SSE 事件（保持 legacy 语义），但必须写 chat_log。
+    """
     from core import chat_events
 
     companion = _make_push_companion(flag_enabled=False)
@@ -280,7 +290,19 @@ async def test_flag_off_restores_legacy_qq_only_delivery(monkeypatch):
         "proactive_delivery_v2"
     )
     companion.qq.send_message.assert_awaited_once_with(7, "记得休息。")
-    companion.db.insert.assert_not_called()
+    # 修复点：legacy 路径同样写 chat_log（与既有标记共存；idle_care 无 self_initiated）。
+    companion.db.insert.assert_called_once_with(
+        "chat_log",
+        {
+            "user_id": 7,
+            "role": "assistant",
+            "content": "记得休息。",
+            "msg_type": "proactive",
+            "route_mode": "PROACTIVE",
+            "scene": "idle_care",
+            "persona_id": "aerie_default",
+        },
+    )
     emitted.assert_not_called()
 
 

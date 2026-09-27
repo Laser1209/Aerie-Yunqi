@@ -2,7 +2,7 @@
 import sys
 sys.path.insert(0, "e:\\Agent_reply")
 
-from communication.qq_client import strip_thought_action_tags
+from communication.qq_client import strip_channel_markers, strip_thought_action_tags
 from core.model_output import strip_narration
 
 
@@ -118,6 +118,41 @@ def test_narration_pure_returns_empty():
     print("✅ 纯描写返回空串测试通过")
 
 
+def test_channel_markers_stripped_at_line_start():
+    """回归：模型模仿历史格式把 [桌面]/[QQ] 回显给用户，必须剥除"""
+    text = "[桌面] 照片我存了\n[QQ] 晚点发你"
+    result = strip_channel_markers(text)
+    assert "照片我存了" in result
+    assert "晚点发你" in result
+    for marker in ("[桌面]", "[QQ]", "[本地]", "[系统]"):
+        assert marker not in result
+    print("✅ 行首通道标记剥除测试通过")
+
+
+def test_channel_markers_keep_inline_brackets():
+    """只剥行首标记，正文中正当出现的方括号内容不误伤"""
+    text = "我看了[桌面]版的说明，还行"
+    assert strip_channel_markers(text) == text
+    print("✅ 正文方括号不误伤测试通过")
+
+
+def test_channel_markers_collapse_blank_lines():
+    """整行只有标记时，剥除后产生的多余空行应收敛为单空行"""
+    text = "第一句\n[本地] \n\n\n第二句"
+    result = strip_channel_markers(text)
+    assert "\n\n\n" not in result
+    assert "第一句" in result
+    assert "第二句" in result
+    print("✅ 多余空行收敛测试通过")
+
+
+def test_channel_markers_empty_input():
+    """空输入原样返回"""
+    assert strip_channel_markers("") == ""
+    assert strip_channel_markers(None) is None
+    print("✅ 通道标记空输入测试通过")
+
+
 if __name__ == "__main__":
     test_basic()
     test_multiline()
@@ -130,5 +165,9 @@ if __name__ == "__main__":
     test_narration_inline()
     test_narration_keeps_halfwidth()
     test_narration_pure_returns_empty()
+    test_channel_markers_stripped_at_line_start()
+    test_channel_markers_keep_inline_brackets()
+    test_channel_markers_collapse_blank_lines()
+    test_channel_markers_empty_input()
     print()
     print("🎉 所有测试通过！")

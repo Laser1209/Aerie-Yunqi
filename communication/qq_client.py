@@ -65,6 +65,26 @@ def strip_timestamp_markers(text: str) -> str:
     return _TIMESTAMP_MARKER_RE.sub("", text).strip()
 
 
+# 跨通道来源标记过滤：对话历史里跨通道的消息会带 `[QQ]` / `[桌面]` / `[本地]` /
+# `[系统]` 前缀（见 core/_hist_utils.py 的 channel_short），那是给模型感知"这条
+# 来自哪个端"的元信息。模型偶发把它当格式模仿、直接发给用户（2026-09-27 实测：
+# QQ 收到的回复里出现 `[桌面] 照片我存了…`）。这里做输出端兜底，只剥除
+# **行首**的这类标记，避免误伤正文中正当出现的方括号内容。
+_CHANNEL_MARKER_RE = re.compile(r"^[ \t]*\[(?:QQ|桌面|本地|系统)\][ \t]*", re.MULTILINE)
+
+
+def strip_channel_markers(text: str) -> str:
+    """剥除 LLM 模仿历史格式而回显的跨通道标记（如 `[桌面] `）。
+
+    仅匹配行首（含缩进），不做全文本替换；剥除后清理因此产生的多余空行。
+    """
+    if not text:
+        return text
+    cleaned = _CHANNEL_MARKER_RE.sub("", text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
 # 伪图片 markdown 过滤（P4 兜底）：LLM 偶发把"生图提示词"写进回复文本，形如
 # `[图片](一张局部特写。昏暗的光线下…)` 或 `![图片](描述)`。这些是给后台生图系统的
 # 输入，不该出现在 QQ 文本里。正则只剥 `[图片](...)` / `![图片](...)` 且括号内
@@ -520,6 +540,8 @@ class QQClient:
         content = strip_thought_action_tags(content)
         # 输出端兜底：剥离 LLM 回显的时间戳标记
         content = strip_timestamp_markers(content)
+        # 输出端兜底：剥离 LLM 模仿历史格式回显的跨通道标记（[QQ]/[桌面]/[本地]）
+        content = strip_channel_markers(content)
         # 输出端兜底：剥离 LLM 误写的伪图片 markdown（[图片](提示词)），防提示词外泄
         content = strip_fake_image_markdown(content)
         if not content:
@@ -786,6 +808,7 @@ class QQClient:
             if seg.get("type") == "text" and "text" in (seg.get("data") or {}):
                 cleaned = strip_thought_action_tags(seg["data"]["text"])
                 cleaned = strip_timestamp_markers(cleaned)
+                cleaned = strip_channel_markers(cleaned)
                 cleaned = strip_fake_image_markdown(cleaned)
                 cleaned_segments.append({**seg, "data": {**seg["data"], "text": cleaned}})
                 if cleaned:

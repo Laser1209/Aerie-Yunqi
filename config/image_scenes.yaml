@@ -1,0 +1,176 @@
+# 生图「生活记录」场景池 —— 按地域分组，室内/室外分离。
+# 开关：feature_flags.image_life_recording_v1（见 config/settings.yaml）
+# 采样参数可从本文件热加载（前端后续可调），代码里只保留兜底默认。
+default_region: chongqing
+
+# 采样默认值：temperature 越小分布越集中于高权重场景；affinity_boost 是
+# 话题关键词命中时对场景权重的乘数（只改权重，任何场景概率都不为 0）。
+temperature: 1.0
+affinity_boost: 2.5
+
+regions:
+  # 当前唯一地域；未来按人设地域补齐 = 只加分组，零代码改动。
+  chongqing:
+    indoor:
+      - id: wake_up
+        name: 刚醒
+        weight: 1.2
+        keywords: [刚醒, 起床, 醒了, 睡醒]
+        prompt: 她刚醒，半靠在枕头上睁眼，头发有点乱，晨光从窗帘缝里漏进卧室
+      - id: scrolling_in_bed
+        name: 赖床刷手机
+        weight: 1.3
+        keywords: [赖床, 刷手机, 被窝]
+        prompt: 她赖在床上刷手机，被子裹到腰，一只手举着手机，神情懒散
+      - id: washing_up
+        name: 洗漱
+        weight: 1.0
+        keywords: [洗漱, 刷牙, 洗脸]
+        prompt: 她站在浴室镜前洗漱，头发随意挽起，镜面蒙着一层薄薄的水汽
+      - id: skincare_makeup
+        name: 护肤化妆
+        weight: 1.0
+        keywords: [护肤, 化妆, 梳妆台]
+        prompt: 她坐在梳妆台前护肤化妆，台面摆着瓶瓶罐罐，暖灯打在侧脸上
+      - id: cooking
+        name: 厨房做饭
+        weight: 1.2
+        keywords: [做饭, 下厨, 厨房]
+        prompt: 她在厨房做饭，灶台上的锅冒着热气，她一只手握着锅铲
+      - id: kitchen_cleanup
+        name: 厨房收拾
+        weight: 0.8
+        keywords: [洗碗, 收拾, 晚饭后]
+        prompt: 她在厨房收拾碗筷，袖子挽到手肘，水槽里浮着一层泡沫
+      - id: breakfast_table
+        name: 餐桌早餐
+        weight: 1.0
+        keywords: [早餐, 早饭, 喝粥]
+        prompt: 她坐在餐桌前吃早餐，桌上是粥和小菜，晨光落在碗沿
+      - id: dinner_table
+        name: 餐桌晚饭
+        weight: 1.0
+        keywords: [晚饭, 晚餐, 吃饭]
+        prompt: 她坐在餐桌前吃晚饭，暖黄灯光下，碗筷和家常菜摆了一桌
+      - id: watching_drama_sofa
+        name: 沙发看剧
+        weight: 1.3
+        keywords: [看剧, 追剧, 沙发]
+        prompt: 她窝在沙发上看剧，双腿蜷起，遥控器放在扶手上，屏幕的光映在脸上
+      - id: reading_sofa
+        name: 沙发看书
+        weight: 1.1
+        keywords: [看书, 读书, 沙发]
+        prompt: 她窝在沙发上看书，膝盖支着书脊，旁边放着一杯热饮
+      - id: studio_work
+        name: 工作室工作
+        weight: 1.2
+        keywords: [工作, 干活, 电脑, 改稿]
+        prompt: 她坐在工作室书桌前对着电脑工作，屏幕亮着，桌上有设计稿和咖啡杯
+      - id: studio_drawing
+        name: 工作室画画
+        weight: 1.1
+        keywords: [画画, 数位板, 绘图]
+        prompt: 她在工作室握着数位笔画画，屏幕上是一张未完成的插画，手边散着彩笔
+      - id: window_spacing_out
+        name: 窗前发呆
+        weight: 1.2
+        keywords: [发呆, 出神, 窗前]
+        prompt: 她站在落地窗前发呆，侧脸对着光，目光落在远处的楼群上
+      - id: window_rain
+        name: 窗前听雨
+        weight: 1.0
+        keywords: [下雨, 听雨, 雨天]
+        prompt: 她靠在窗前听雨，雨丝打在玻璃上，室内光线偏暗，神情安静
+      - id: balcony_sunbathing
+        name: 阳台晒太阳
+        weight: 1.1
+        keywords: [晒太阳, 阳台, 午后]
+        prompt: 她在阳台的椅子上晒太阳，眯着眼，暖光铺在肩膀和地砖上
+      - id: balcony_laundry
+        name: 阳台收衣服
+        weight: 0.9
+        keywords: [收衣服, 晾衣服, 阳台]
+        prompt: 她在阳台收晾好的衣服，一只手臂举起来够衣架，衣服还带着洗衣液的味道
+      - id: entryway_shoes
+        name: 玄关换鞋
+        weight: 0.9
+        keywords: [换鞋, 出门, 玄关]
+        prompt: 她蹲在玄关换鞋准备出门，鞋柜上放着钥匙和包
+      - id: home_workout
+        name: 居家运动
+        weight: 0.9
+        keywords: [运动, 瑜伽, 健身]
+        prompt: 她在客厅的瑜伽垫上做拉伸，穿着运动背心，额头微微出汗
+
+    outdoor:
+      - id: noodle_shop
+        name: 楼下小吃店
+        weight: 1.3
+        keywords: [小面, 小吃店, 面馆, 重庆小面]
+        prompt: 她坐在重庆楼下的小吃店里吃一碗红油小面，塑料凳、不锈钢桌，辣得鼻尖发红
+      - id: street_bbq
+        name: 街边撸串
+        weight: 1.1
+        keywords: [撸串, 烧烤, 烤串]
+        prompt: 她蹲在重庆街边的烧烤摊前撸串，炭火烟气升起，竹签上还滴着油
+      - id: hongyadong_street
+        name: 风情街
+        weight: 1.0
+        keywords: [风情街, 洪崖洞, 坡坎]
+        prompt: 她走在洪崖洞式的坡坎风情街上，层层叠叠的吊脚楼亮着暖黄的灯，石阶上爬着青苔
+      - id: jialing_river_view
+        name: 江景
+        weight: 1.2
+        keywords: [江景, 嘉陵江, 江边, 黄昏]
+        prompt: 她靠在天桥栏杆上看嘉陵江黄昏，江面铺着橘红的光，对岸是楼群的剪影
+      - id: riverside_walk
+        name: 江边散步
+        weight: 1.2
+        keywords: [江边, 散步, 滨江路]
+        prompt: 她沿着嘉陵江滨江路散步，江风把头发吹乱，身后是重庆高低错落的桥与楼
+      - id: community_garden
+        name: 小区花园
+        weight: 0.9
+        keywords: [小区, 花园, 散步]
+        prompt: 她在重庆小区花园里慢慢走，绿植被雨水洗过，长椅上空着
+      - id: street_lamp_night
+        name: 小区路灯下
+        weight: 0.9
+        keywords: [路灯, 晚上, 夜里]
+        prompt: 她站在小区路灯下，暖黄灯光从头顶洒下来，影子被拉长，夏夜的蛾子绕着灯飞
+      - id: neighborhood_path
+        name: 小区小路
+        weight: 0.9
+        keywords: [小路, 楼下, 小区]
+        prompt: 她走过重庆小区的小路，两旁是坡上的老楼和晾在外面的衣服，石阶一级级往上
+      - id: street_stroll
+        name: 街头散步
+        weight: 1.0
+        keywords: [散步, 逛街, 街头]
+        prompt: 她在重庆街头散步，山城的坡道旁轻轨从头顶掠过，路边是烟火气的招牌
+      - id: cafe
+        name: 咖啡馆
+        weight: 1.0
+        keywords: [咖啡, 咖啡馆]
+        prompt: 她坐在街角咖啡馆的窗边，面前一杯拿铁，玻璃窗外是重庆起伏的街景
+      - id: convenience_store
+        name: 便利店
+        weight: 0.8
+        keywords: [便利店, 买水, 逛便利店]
+        prompt: 她在便利店冷柜前挑饮料，头顶的灯白得发亮，玻璃门外是重庆夜晚的街
+      - id: commute
+        name: 下班通勤
+        weight: 1.0
+        keywords: [通勤, 下班, 轻轨, 地铁]
+        prompt: 她下班坐轻轨穿过重庆，车厢灯光明亮，窗外是江与楼交替掠过的夜景
+      - id: wet_market
+        name: 菜市场
+        weight: 0.9
+        keywords: [菜市场, 买菜]
+        prompt: 她在重庆菜市场挑菜，摊上摆着青翠的蔬菜和红辣椒，地面有点湿
+      - id: rain_shelter
+        name: 雨天躲雨
+        weight: 0.9
+        keywords: [躲雨, 下雨, 雨天]
+        prompt: 她在重庆街边屋檐下躲雨，雨水顺着坡道往下淌，她把外套拢紧了些

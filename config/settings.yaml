@@ -15,7 +15,7 @@ brief_subscriptions:
 computer_control:
   blacklist: []
   custom_rules: {}
-  mode: full
+  mode: manual
   whitelist: []
 douyin:
   api_base_url: https://api.justoneapi.com
@@ -29,6 +29,7 @@ feature_flags:
   ilink_pairing_v1: true
   image_assets_v1: true
   image_edit_v1: true
+  image_life_recording_v1: true
   memory_write_validation_v1: true
   migration_framework_v1: true
   mobile_gateway_v1: true
@@ -38,6 +39,7 @@ feature_flags:
   recall_llm_instruction_v1: true
   self_evolve_l4_enabled: true
   thinking_trace_injection_v1: true
+  topic_lifecycle_v1: true
   world_image_candidates_v1: true
   world_inprocess_v1: true
   world_sidecar_v1: true
@@ -46,6 +48,8 @@ message_batching:
   base_interval_seconds: 0.5
   chars_per_second: 4
   enabled: true
+  first_message_cap_seconds: 8.0
+  first_message_idle_seconds: 3.0
   max_batch_size: 5
   max_interval_seconds: 5.0
   min_interval_seconds: 0.3

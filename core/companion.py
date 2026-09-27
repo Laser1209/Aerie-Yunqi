@@ -664,6 +664,10 @@ _IMAGE_NEGATIVE_PHRASE_ENV = (
 _REALISM_MARKER = "真实摄影质感"
 _NEGATIVE_MARKER = "反面约束"
 
+# 阶段2 · 生活记录：随手拍风格。生活照显式声明"不完美构图"，弱化摆拍感，
+# 让画面更像她随手举起手机记录的一刻（仅在生活记录场景池钩子生效时追加）。
+_LIFE_SNAP_STYLE_PHRASE = "随手拍风格：轻微倾斜、自然光、不完美构图，像随手举起手机记录下的一刻。"
+
 
 def _apply_focus_coverage(spec: dict[str, str]) -> dict[str, str]:
     """按 focus 协同覆盖：仅在用户未给姿态/机位时自动补齐缺省值。
@@ -1361,6 +1365,27 @@ class Companion:
         except Exception:
             logger.exception("TopicTracker init failed")
             self.topic_tracker = None
+        # 阶段 4：话题生命周期状态机（旁挂观察钩子；只写状态，不触发任何行为）。
+        # 开关走 feature flag `topic_lifecycle_v1`；存根归档回调接线 persist_stub。
+        try:
+            from core.topic_lifecycle import TopicLifecycle
+
+            self.topic_lifecycle = (
+                TopicLifecycle(
+                    tracker=self.topic_tracker,
+                    enabled_check=lambda: self.feature_flags.is_enabled(
+                        "topic_lifecycle_v1"
+                    ),
+                    store_stub=self._store_topic_stub,
+                )
+                if self.topic_tracker is not None
+                else None
+            )
+            if getattr(self, "pipeline", None) is not None and self.topic_lifecycle:
+                self.pipeline.topic_lifecycle_provider = lambda: self.topic_lifecycle
+        except Exception:
+            logger.exception("TopicLifecycle init failed")
+            self.topic_lifecycle = None
         try:
             from core.decision_log import DecisionLogger
 
@@ -3771,6 +3796,38 @@ class Companion:
         except Exception:
             logger.debug("image event memory store failed", exc_info=True)
 
+    async def _store_topic_stub(self, content: str, metadata: dict) -> str:
+        """阶段 4：dead 话题存根归档回调（写记忆库，非用户可见行为）。
+
+        显式 LONG_TERM + EXPERIENCE，不伪造 importance（保持 5.0）。
+        归属用户取主用户；persona 与当前激活角色一致；失败静默降级。
+        """
+        layered = getattr(self, "_layered_memory", None)
+        if layered is None:
+            return ""
+        from memory.layers.base import MemoryLayer, MemoryType
+
+        user_id = 0
+        try:
+            selection = self.get_primary_user_selection()
+            user_id = int(getattr(selection, "user_id", 0) or 0)
+        except Exception:
+            logger.debug("topic stub primary user lookup failed", exc_info=True)
+        try:
+            memory_id = await layered.store(
+                user_id=user_id,
+                content=str(content),
+                memory_type=MemoryType.EXPERIENCE,
+                importance=5.0,
+                layer=MemoryLayer.LONG_TERM,
+                metadata=dict(metadata or {}),
+                persona_id=self._active_persona_id(),
+            )
+            return str(memory_id or "")
+        except Exception:
+            logger.debug("topic stub memory store failed", exc_info=True)
+            return ""
+
     async def _semantic_photo_spec(self, user_raw: str) -> dict[str, str] | None:
         """轻量 LLM 语义自补：从用户指令推断画面维度 focus/pose/angle/scene/style。
 
@@ -3894,6 +3951,24 @@ class Companion:
         # 在 base 构造前回填，让身份锚定模块与下游 workflow 拿到同一份参考资产。
         if isinstance(candidate, dict) and self._is_persona_image(prompt_key):
             candidate["reference_assets"] = _reference_assets_for_spec(spec)
+        # ── 阶段2 · 生活记录场景池钩子（开关门控；异常完全不影响原流程）──
+        # 只对人物类图生效：在 base 构造前用 softmax 选一个场景写入 spec["scene"]，
+        # 并把场景画面描述暂存到 candidate，供 _compose_base_image_prompt 拼接使用。
+        scene_prompt = ""
+        if self._life_recording_enabled() and self._is_persona_image(prompt_key):
+            try:
+                from core.image_scene_pool import select_scene
+
+                topic_text = str((candidate or {}).get("user_raw") or "")
+                scene = select_scene(topic_text)
+                if scene.get("id"):
+                    spec = dict(spec or {})
+                    spec["scene"] = str(scene.get("name") or "")
+                    scene_prompt = str(scene.get("prompt") or "")
+            except Exception:
+                logger.debug("life recording scene pool failed; keep baseline prompt", exc_info=True)
+        if scene_prompt and isinstance(candidate, dict):
+            candidate["scene_prompt"] = scene_prompt
         base = self._compose_base_image_prompt(prompt_key, candidate, spec=spec)
         prompt = base
         light = ""
@@ -3922,6 +3997,17 @@ class Companion:
         from core.world_image_candidates import PERSONA_IMAGE_PROMPT_KEYS
 
         return str(prompt_key or "") in PERSONA_IMAGE_PROMPT_KEYS
+
+    @staticmethod
+    def _life_recording_enabled() -> bool:
+        """读取 image_life_recording_v1 开关；读取异常时按关闭处理（不影响原流程）。"""
+        try:
+            from core.feature_flags import FeatureFlags
+
+            return bool(FeatureFlags().is_enabled("image_life_recording_v1"))
+        except Exception:
+            logger.debug("读取 image_life_recording_v1 失败，按关闭处理", exc_info=True)
+            return False
 
     def _compose_base_image_prompt(self, prompt_key: str, candidate: dict[str, Any] | None = None, spec: dict[str, str] | None = None) -> str:
         """基础提示词：persona 外貌/身材 + 场景构图（不含世界上下文）。"""
@@ -4067,7 +4153,13 @@ class Companion:
             user_raw = str((candidate or {}).get("user_raw") or "").strip()
             if user_raw and not spec:
                 spec = _extract_photo_spec(user_raw)
-        return _compose_modular_prompt(full, _with_default_shot(spec, key))
+        merged = _compose_modular_prompt(full, _with_default_shot(spec, key))
+        # 阶段2 · 生活记录：拼接场景画面描述 + 随手拍风格。scene_prompt 仅由上面的
+        # 场景池钩子写入，开关关闭时为空 → 输出与改动前完全一致。
+        scene_prompt = str((candidate or {}).get("scene_prompt") or "").strip()
+        if scene_prompt:
+            merged = f"{merged}{scene_prompt}。{_LIFE_SNAP_STYLE_PHRASE}"
+        return merged
 
     def _image_world_context(self, candidate: dict[str, Any] | None = None) -> dict[str, Any]:
         """提取生图可用的世界上下文，只保留真实存在的数据。

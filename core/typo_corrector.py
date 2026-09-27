@@ -28,7 +28,14 @@ _MAX_CHARS = 200
 
 
 def _light_provider_available() -> bool:
-    """轻量 provider 配齐了才启用纠错，避免误用主模型。"""
+    """轻量功能点（light_assist 绑定）配齐了才启用纠错，避免误用主模型。"""
+    try:
+        from core.ai_services import role_preference
+        provider, _ = role_preference("light_assist")
+        if provider:
+            return True
+    except Exception:
+        pass
     return bool(os.getenv("SILICONFLOW_API_KEY")) and bool(
         os.getenv("SILICONFLOW_LIGHT_MODEL")
     )
@@ -69,6 +76,17 @@ async def correct_typos(
     if len(original) > _MAX_CHARS:
         logger.debug("[TypoCorrector] 文本过长(%d>%d)，跳过纠错", len(original), _MAX_CHARS)
         return original
+
+    model_override: str | None = None
+    try:
+        from core.ai_services import role_preference
+        bound_provider, bound_model = role_preference("light_assist")
+        if bound_provider:
+            provider = bound_provider
+            model_override = bound_model
+    except Exception:
+        pass
+
     if not _light_provider_available():
         logger.debug("[TypoCorrector] 轻量 provider 未配置，跳过纠错")
         return original
@@ -81,6 +99,7 @@ async def correct_typos(
         call = brain.chat(
             messages,
             preferred_provider=provider,
+            model_override=model_override,
             temperature=0.0,
         )
         resp = await asyncio.wait_for(call, timeout=timeout)

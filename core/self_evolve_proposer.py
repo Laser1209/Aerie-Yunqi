@@ -59,14 +59,28 @@ class SelfEvolveProposer:
         model: Optional[str] = None,
         keys: Optional[list[str]] = None,
     ) -> None:
-        self._base_url = (base_url or os.getenv("AERIE_WS_BASE_URL", "")).strip()
-        self._model = (model or os.getenv("AERIE_WS_CODE_MODEL", "kimi-k2.7-code")).strip()
-        if keys:
+        # 代码模型目标由「子Agent · 代码」功能点绑定决定（data/ai_services.json），
+        # 未配置凭证时回退到 AERIE_WS_* env（热加载通过重新实例化 brain 生效）。
+        bound = None
+        if not (base_url or model or keys):
+            try:
+                from core.ai_services import resolve_role
+                bound = resolve_role("subagent_code")
+            except Exception:
+                bound = None
+        if bound is not None and bound.available:
+            self._base_url = bound.base_url
+            self._model = bound.model
             from core.key_rotator import KeyRotator
-            self._rotator = KeyRotator(keys)
+            self._rotator = KeyRotator(list(bound.keys or (bound.api_key,)))
         else:
+            self._base_url = (base_url or os.getenv("AERIE_WS_BASE_URL", "")).strip()
+            self._model = (model or os.getenv("AERIE_WS_CODE_MODEL", "kimi-k2.7-code")).strip()
             from core.key_rotator import KeyRotator
-            self._rotator = KeyRotator.from_env("AERIE_WS_KEYS", "AERIE_WS_API_KEY")
+            self._rotator = (
+                KeyRotator(keys) if keys
+                else KeyRotator.from_env("AERIE_WS_KEYS", "AERIE_WS_API_KEY")
+            )
 
     @property
     def available(self) -> bool:

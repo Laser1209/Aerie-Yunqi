@@ -130,10 +130,19 @@ class MemoryFactValidator:
             last_error: Exception | None = None
             for attempt in range(self.max_retries + 1):
                 try:
+                    light_provider, light_model = ("siliconflow-light", None)
+                    try:
+                        from core.ai_services import role_preference
+                        bound_provider, bound_model = role_preference("light_assist")
+                        if bound_provider:
+                            light_provider, light_model = bound_provider, bound_model
+                    except Exception:
+                        pass
                     resp = await asyncio.wait_for(
                         llm.chat(
                             messages,
-                            preferred_provider="siliconflow-light",
+                            preferred_provider=light_provider,
+                            model_override=light_model,
                             temperature=0.0,
                         ),
                         timeout=self.timeout,

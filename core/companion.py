@@ -5308,8 +5308,18 @@ class Companion:
     # ── 主动消息内容守卫与多气泡派发（2026-09-27）──────────────────────
     @staticmethod
     def _split_proactive_bubbles(content: str) -> list[str]:
-        """把主动消息文本按行切成气泡序列（上限 _PROACTIVE_MAX_BUBBLES）。"""
-        lines = [ln.strip() for ln in str(content or "").splitlines() if ln.strip()]
+        """把主动消息文本按行切成气泡序列（上限 _PROACTIVE_MAX_BUBBLES）。
+
+        纯分隔符行（模型自报的消息边界）必须先剔除：这里按原始行切，
+        不像主链路那样过切分器，漏一步就会把 `---` 当成一条独立气泡发出去。
+        """
+        from communication.splitter import is_message_separator
+
+        lines = [
+            ln.strip()
+            for ln in str(content or "").splitlines()
+            if ln.strip() and not is_message_separator(ln)
+        ]
         return lines[:_PROACTIVE_MAX_BUBBLES]
 
     def _proactive_example_corpus(self) -> list[str]:

@@ -69,7 +69,20 @@ _MIN_FRAGMENT_LEN = 8
 # 选它的理由：模型对 Markdown 分隔线极熟（遵循率高）、单行零成本、中文正文
 # 里不会自然出现（比空行/编号更不容易误判），且万一解析漏了也只是多一行横线，
 # 不会像自定义标签那样把怪标记漏给用户。
-_INTENT_SEP_RE = re.compile(r"^[^\S\n]*-{3,}[^\S\n]*$", re.MULTILINE)
+_SEPARATOR_BODY = r"[^\S\n]*-{3,}[^\S\n]*"
+_INTENT_SEP_RE = re.compile(rf"^{_SEPARATOR_BODY}$", re.MULTILINE)
+# 单行判定：供「按行切气泡」的调用方复用同一套分隔符定义。
+# 主动消息的 _split_proactive_bubbles 曾自己按原始行切，完全不认分隔符，
+# 于是模型写在行首的那个 --- 会变成一条独立气泡发给用户（2026-09-28 实测：
+# chat_log 里真的落下两行内容为 "---" 的 assistant 记录，QQ 端可见）。
+# 分隔符语义只允许有一处定义，否则同一个约定会在不同路径上各自漂移。
+_SEPARATOR_LINE_RE = re.compile(rf"^{_SEPARATOR_BODY}$")
+
+
+def is_message_separator(line: str) -> bool:
+    """该行是否只是模型自报的消息边界（单独一行 3 个以上连字符）。"""
+    return bool(_SEPARATOR_LINE_RE.match(str(line or "")))
+
 # 围栏代码块：块内的 ---（YAML front matter / 正文分隔线）是代码内容，不是消息边界。
 # 末尾用 (?:```|\Z) 而非要求成对：未闭合围栏里的 --- 同样是代码内容，
 # 一旦按「没闭合就当普通文本」处理，就会把用户贴的代码从中间切开。
@@ -98,12 +111,24 @@ class SemanticMessageSplitter:
         intended = self._split_by_intent(text)
         if intended is not None:
             if len(intended) >= 2:
-                return self._cap_segments(self._expand_overlong(intended))
+                return self._drop_separators(
+                    self._cap_segments(self._expand_overlong(intended))
+                )
             # 只切出一条（或分隔符之外没有内容）：分隔符本身不是内容，剔除后走默认逻辑
             if not intended:
                 return []
             text = intended[0]
-        return self._cap_segments(self._split_uncapped(text))
+        return self._drop_separators(self._cap_segments(self._split_uncapped(text)))
+
+    @staticmethod
+    def _drop_separators(segments: list[str]) -> list[str]:
+        """丢掉「整条就是分隔符」的段。
+
+        分隔符若落在围栏代码块或原子段内，``_split_by_intent`` 会返回 None，
+        回退逻辑按行切分时就会把它切出来当成一条独立消息。**只丢整条即分隔符的**，
+        正文里含 ``---`` 的段（代码块内容等）必须原样保留，否则等于丢内容。
+        """
+        return [seg for seg in segments if not is_message_separator(seg.strip())]
 
     def _split_by_intent(self, text: str) -> list[str] | None:
         """按模型自报的边界（单独一行 ``---``）分条。

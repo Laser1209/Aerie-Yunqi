@@ -201,3 +201,65 @@ def test_persona_yaml_keeps_separator_convention():
     text = (_ROOT / "config" / "persona.yaml").read_text(encoding="utf-8")
     assert "输出铁律" in text
     assert "单独一行的 --- 隔开" in text
+
+
+# ══════════════════════════════════════════════════════════
+# 6. 主动消息气泡切分：同一份分隔符约定必须同样生效
+# ══════════════════════════════════════════════════════════
+
+def test_proactive_bubbles_drop_separator_lines():
+    """主动消息按行切气泡，但纯分隔符行不能被当成一条气泡发出去。
+
+    2026-09-28 实测：chat_log 里真的落下两行内容为 "---" 的 assistant
+    记录（id 4069/4071，channel 为 NULL —— 来自主动消息落库路径），
+    QQ 端用户看到两个只有横线的空气泡。根因是该路径自己按原始行切，
+    没有复用切分器的分隔符语义。
+    """
+    from core.companion import Companion
+
+    content = "---\n你那边也安静下来了吧\n---\n忽然想你了 傻瓜"
+    assert Companion._split_proactive_bubbles(content) == [
+        "你那边也安静下来了吧",
+        "忽然想你了 傻瓜",
+    ]
+
+
+def test_proactive_bubbles_keep_content_that_merely_contains_dashes():
+    """正文里的连字符（如破折号句、markdown 表格线）不算分隔符，不得误删。"""
+    from core.companion import Companion
+
+    content = "我刚到家。\n他说的那句——算了不说了。"
+    assert Companion._split_proactive_bubbles(content) == [
+        "我刚到家。",
+        "他说的那句——算了不说了。",
+    ]
+
+
+def test_is_message_separator_shapes():
+    from communication.splitter import is_message_separator
+
+    assert is_message_separator("---")
+    assert is_message_separator("----")
+    assert is_message_separator("  ---  ")
+    assert not is_message_separator("--")
+    assert not is_message_separator("正文 --- 后面还有字")
+    assert not is_message_separator("")
+
+
+def test_fallback_never_emits_a_lone_separator_as_message():
+    """回退路径也不得把「整条就是分隔符」的段发出去。
+
+    分隔符落在围栏内时 _split_by_intent 返回 None，回退按行切分会把它切出来。
+    这里只要求「没有整条即分隔符的段」；正文里含 --- 的段必须保留。
+    """
+    segs = _segments("```\ncode\n---\nmore")
+    assert all(seg.strip() != "---" for seg in segs), segs
+    # 内容不许丢
+    joined = "\n".join(segs)
+    assert "code" in joined and "more" in joined
+
+
+def test_fallback_keeps_separator_when_it_is_inside_content():
+    """正文里带连字符的段不得被误删。"""
+    segs = _segments("第一段里提到 --- 这个符号。\n第二段。")
+    assert any("---" in seg for seg in segs), segs

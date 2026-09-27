@@ -11,7 +11,7 @@ R8.1 三原则之「零回退」要求所有跟人格相关的参数都被守门
   1.  persona.yaml.big_five.extraversion == 0.78
   2.  persona.yaml.big_five.agreeableness == 0.85
   3.  persona.yaml.archetype 字符串含 "9/10" 和 "直球"
-  4.  persona.yaml.example_phrases 含直球措辞关键字
+  4.  persona.yaml.example_phrases 不以索要回应为主（≤1 条催促话术）
   5.  persona.yaml.system_prompt 含 "9/10"
   6.  persona_behavior.yaml.thresholds.patience.initial_value == 45
   7.  persona_behavior.yaml.thresholds.anxiety.initial_value == 25
@@ -94,20 +94,26 @@ def case_3_archetype_9_10_and_direct() -> bool:
     return ok_flag
 
 
-# ── Case 4: example_phrases has ≥ 3 direct keywords ──────────
+# ── Case 4: example_phrases 不得以"索要回应"为主 ──────────────
 def case_4_example_phrases_direct() -> bool:
+    """示例表必须留出"分享 / 观察 / 邀约"型样本，不得全是索要回应的话术。
+
+    2026-09-27 变更：原断言要求 ≥3 条直球催促（不许不接 / 立刻 / 现在就），
+    实测这会让主动消息反复复读同一句索求话术（如"刚关电脑又打开 看你回没回"），
+    用户明确反馈"他在索求、没有信息含量、我没法接"。示例的示范作用强于任何铁律，
+    所以这里改为约束"索取类话术最多 1 条"。
+    """
     cfg = load_persona() or {}
     speech = ((cfg.get("persona") or {}).get("speech") or {})
     phrases = speech.get("example_phrases") or []
     text = " ".join(phrases)
-    # 直球关键字列表（9/10 基线下的典型措辞）
-    direct_keywords = ["不许不接", "立刻", "马上", "不许", "必须", "现在就"]
-    found = [kw for kw in direct_keywords if kw in text]
-    ok_flag = len(found) >= 3
+    soliciting_keywords = ["不许不回", "立刻回我", "现在就回我", "不回我", "别让我等"]
+    soliciting = [kw for kw in soliciting_keywords if kw in text]
+    ok_flag = bool(phrases) and len(soliciting) <= 1
     _check(
-        "Case 4 · example_phrases 含 ≥ 3 个直球措辞关键字",
+        "Case 4 · example_phrases 不以索要回应为主（≤1 条催促话术）",
         ok_flag,
-        f"found={found} phrases_count={len(phrases)}",
+        f"soliciting={soliciting} phrases_count={len(phrases)}",
     )
     return ok_flag
 

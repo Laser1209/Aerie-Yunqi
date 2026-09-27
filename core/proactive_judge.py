@@ -47,6 +47,10 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "cooldown_penalty": 0.05,  # w5: 抑制惩罚 (daily count / interval)
 }
 
+# 用户刚说过话的静默保护窗（分钟）：窗口内任何非 force 场景都不主动推送。
+# 默认值可由 proactive.yaml 的 `proactive.user_active_guard_minutes` 覆盖。
+DEFAULT_USER_ACTIVE_GUARD_MINUTES: float = 15.0
+
 
 # ══════════════════════════════════════════════════
 # Scene 参考分 (阶段 5: 由「低于阈值即抑制」改为「调制 p 的拐点」)
@@ -153,16 +157,30 @@ class ProactiveJudge:
         weights: dict[str, float] | None = None,
         sampling: dict | None = None,
         rng: Callable[[], float] = random.random,
+        guard_minutes: float | None = None,
     ) -> None:
         self.companion = companion
         self.weights = weights or dict(DEFAULT_WEIGHTS)
         # 阶段 5: 采样参数 + 可注入 rng (固定 seed 复现)。
         self.sampling = _coerce_sampling(sampling)
         self.rng = rng
+        # 用户刚说过话的静默保护窗（分钟）。原为硬编码 5 分钟，太短：
+        # 用户 22:26 说话、22:30 就被主动消息打断（2026-09-27 实测）。
+        self.user_active_guard_minutes = float(
+            DEFAULT_USER_ACTIVE_GUARD_MINUTES
+            if guard_minutes is None
+            else guard_minutes
+        )
 
     def set_sampling_config(self, cfg: dict | None) -> None:
         """热加载采样参数 (由 PushScheduler.reload_config 调用)。"""
         self.sampling = _coerce_sampling(cfg)
+
+    def set_guard_minutes(self, minutes: float | None) -> None:
+        """热加载"用户刚说话"保护窗（分钟）。"""
+        if minutes is None:
+            return
+        self.user_active_guard_minutes = float(minutes)
 
     # ── Public ─────────────────────────────────────
     def evaluate(
@@ -238,12 +256,11 @@ class ProactiveJudge:
             self._read_components(context_override)
         )
 
-    @staticmethod
-    def hard_gate_reason_from_components(components: dict) -> str:
+    def hard_gate_reason_from_components(self, components: dict) -> str:
         """硬闸门判定（资源 / 防撞车，合规保留为硬拦）。"""
         if components.get("cooldown_minutes_remaining", 0) > 0:
             return "cooldown_active"
-        if components.get("user_minutes_since_last", 999) < 5:
+        if components.get("user_minutes_since_last", 999) < self.user_active_guard_minutes:
             return "user_recent_active"
         return ""
 

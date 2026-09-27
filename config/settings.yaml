@@ -35,8 +35,8 @@ feature_flags:
   mobile_gateway_v1: true
   multi_channel_identity_v1: true
   persona_hub_source_v1: true
-  promise_beats_v1: true
   proactive_delivery_v2: true
+  promise_beats_v1: true
   recall_llm_instruction_v1: true
   self_evolve_l4_enabled: true
   thinking_trace_injection_v1: true
@@ -49,8 +49,8 @@ message_batching:
   base_interval_seconds: 0.5
   chars_per_second: 4
   enabled: true
-  first_message_cap_seconds: 8.0
-  first_message_idle_seconds: 3.0
+  first_message_cap_seconds: 8
+  first_message_idle_seconds: 3
   max_batch_size: 5
   max_interval_seconds: 5.0
   min_interval_seconds: 0.3
@@ -69,7 +69,7 @@ proactive:
   outdoor_probability: 0.5
   outdoor_weather_event: true
   photo_min_interval_sec: 0
-  primary_channel: qq
+  primary_channel: ilink
   system_notifications: true
 promise_beats:
   max_delay_min: 180

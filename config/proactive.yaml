@@ -9,10 +9,17 @@ proactive:
   state_path: "proactive_policy_state.json" # Persist Phase 08 policy state under AERIE_DATA_DIR/data
   quiet_start: "23:30"                     # Quiet period start (HH:MM)
   quiet_end: "07:00"                       # Quiet period end (HH:MM)
-  exempt_scenes:                           # Scenes that bypass quiet period
+  exempt_scenes:                           # Scenes that bypass quiet period ONLY
     - morning_brief
     - goodnight
     - anniversary
+  # 「静默期豁免」与「最小间隔豁免」分开：上面 exempt_scenes 只跳过 quiet period，
+  # 仍受 min_interval_min 约束（用户刚聊完就不该被主动打扰）。
+  # 只有列在这里的场景才跳过最小间隔判定；留空即"全部场景都守间隔"。
+  interval_exempt_scenes: []
+  # 用户刚说过话的静默保护窗（分钟）：窗口内任何非 force 场景都不主动推送。
+  # 由 ProactiveJudge 的 user_recent_active 硬闸门执行。
+  user_active_guard_minutes: 15
   timezone: "Asia/Shanghai"
 
   # ── 阶段 5：行为层采样参数（ProactiveJudge 用；唯一映射见 core/behavior_sampler.py）──

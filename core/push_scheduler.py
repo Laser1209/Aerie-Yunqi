@@ -42,6 +42,11 @@ class PushPolicy:
         self.exempt_scenes = proactive.get("exempt_scenes", [
             "morning_brief", "goodnight", "anniversary",
         ])
+        # 「静默期豁免」与「最小间隔豁免」是两件事：goodnight 允许跨 23:30–07:00
+        # 的静默时段发送，但绝不该绕过"用户刚聊完别打扰"的最小间隔
+        # （2026-09-27 实测：用户 22:26 说话，goodnight 22:30 就推）。
+        # 默认严格：只有显式声明在此列表里的场景才跳过间隔判定。
+        self.interval_exempt_scenes = proactive.get("interval_exempt_scenes", [])
 
         # v2 soft budget: max_per_day is a soft target (状态驱动可上可下),
         # hard_cap is the unconditional fuse. pending_plans carry hourly
@@ -361,14 +366,14 @@ class PushPolicy:
             in_quiet = now_time >= self.quiet_start or now_time <= self.quiet_end
         if in_quiet and scene not in self.exempt_scenes:
             return False, "quiet_period"
-        if self.last_push_at and scene not in self.exempt_scenes:
+        if self.last_push_at and scene not in self.interval_exempt_scenes:
             elapsed = (now_dt - self.last_push_at).total_seconds() / 60
             if elapsed < self.min_interval_min:
                 return False, "interval"
         # 场景级最小间隔：非豁免场景默认为全局间隔的 2 倍
-        scene_min_interval = self.min_interval_min * 2 if scene not in self.exempt_scenes else 0
+        scene_min_interval = self.min_interval_min * 2 if scene not in self.interval_exempt_scenes else 0
         last_scene = self.scene_last_sent.get(scene)
-        if last_scene and scene not in self.exempt_scenes:
+        if last_scene and scene not in self.interval_exempt_scenes:
             elapsed_scene = (now_dt - last_scene).total_seconds() / 60
             if elapsed_scene < scene_min_interval:
                 return False, f"scene_interval:{scene}"
@@ -1114,6 +1119,21 @@ class PushScheduler:
     def paused_reason(self) -> str:
         return self.cron.paused_reason
 
+    @property
+    def judge(self) -> Any:
+        """ProactiveJudge 必须落在底层 CronScheduler 上，_dispatch 才看得到。
+
+        此前调用方写的是 `scheduler.judge = judge`，赋到的是本外壳对象，
+        底层 ``cron.judge`` 仍为 None → 硬闸门（冷却 / 用户刚说过话）整体
+        静默失效，任何场景都照发（2026-09-27 实测：goodnight 在用户发言
+        3.9 分钟后照样推送）。这里改转发属性，收口这一处易错的跨层赋值。
+        """
+        return self.cron.judge
+
+    @judge.setter
+    def judge(self, value: Any) -> None:
+        self.cron.judge = value
+
     async def start(self) -> None:
         await self.cron.start()
 
@@ -1147,6 +1167,13 @@ class PushScheduler:
                 )
             except Exception:
                 logger.debug("[PushScheduler] judge sampling reload failed", exc_info=True)
+        if judge is not None and hasattr(judge, "set_guard_minutes"):
+            try:
+                judge.set_guard_minutes(
+                    (new_config.get("proactive") or {}).get("user_active_guard_minutes")
+                )
+            except Exception:
+                logger.debug("[PushScheduler] judge guard reload failed", exc_info=True)
         if was_running:
             await self.cron.start()
         logger.info(

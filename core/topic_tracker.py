@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -58,6 +59,29 @@ CLOSURE_WORDS: tuple[str, ...] = (
 )
 # 存根上限：记忆库只保留最近 MAX_STUB_STORE 条话题存根
 MAX_STUB_STORE = 50
+# 话题摘要滚动保留的最近轮数 / 字符上限（供主动消息"接着聊"当素材）
+SUMMARY_TAIL_TURNS = 4
+SUMMARY_MAX_CHARS = 240
+
+
+def _roll_summary(
+    previous: str,
+    text: str,
+    *,
+    tail_turns: int = SUMMARY_TAIL_TURNS,
+    max_chars: int = SUMMARY_MAX_CHARS,
+) -> str:
+    """把本轮文本并入话题摘要，只保留最近若干轮原文。
+
+    不做 LLM 压缩（零成本、确定性）；超出上限时从尾部截断，保留最新内容。
+    """
+    incoming = str(text or "").strip()
+    if not incoming:
+        return str(previous or "")
+    parts = [p.strip() for p in str(previous or "").split("\n") if p.strip()]
+    parts.append(incoming)
+    joined = "\n".join(parts[-tail_turns:])
+    return joined if len(joined) <= max_chars else joined[-max_chars:]
 
 
 @dataclass
@@ -196,7 +220,11 @@ class TopicTracker:
         # ③ 活跃话题延续
         active.last_active_at = now
         active.turn_count += 1
-        active.summary = (text[:200] if not active.summary else active.summary)
+        # 摘要滚动刷新：原实现 `summary = text[:200] if not summary else summary`
+        # 只在首次写入，之后永不更新 —— 主动消息"接着聊"拿到的永远是话题第一句
+        # （2026-09-27 实测 summary 冻结在"刚刚上线"，注入后等于没有上下文）。
+        # 这里滚动保留最近几轮原文，不做 LLM 摘要，开销为零。
+        active.summary = _roll_summary(active.summary, text)
         self._save()
         return active
 
@@ -222,7 +250,10 @@ class TopicTracker:
                 return topics[0]
         except Exception:
             logger.debug("topic subject inference failed", exc_info=True)
-        return "日常"
+        # 兜底用本轮原文前 12 字当标签，而不是恒定返回"日常"——恒定标签会让
+        # 注入的 `[话题：日常]` 完全不带信息，等于没有话题（2026-09-27 实测）。
+        fallback = re.sub(r"\s+", "", str(text or ""))[:12]
+        return fallback or "日常"
 
     def _close_active(self, now: float, *, force_idle: bool = False) -> Optional[Topic]:
         """关闭最新的 active 话题（收尾信号直接关；force_idle 需沉默超时）。"""

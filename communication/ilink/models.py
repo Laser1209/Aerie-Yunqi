@@ -217,7 +217,7 @@ class GetUpdatesResponse:
         if not isinstance(raw_messages, list):
             raise ILinkProtocolError("msgs must be an array")
         return cls(
-            ret=_integer(data.get("ret"), "ret"),
+            ret=_optional_integer(data.get("ret"), "ret") or 0,
             errcode=_optional_integer(data.get("errcode"), "errcode"),
             errmsg=_optional_string(data.get("errmsg"), "errmsg"),
             messages=tuple(WeixinMessage.from_dict(message) for message in raw_messages),

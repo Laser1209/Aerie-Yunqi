@@ -35,6 +35,7 @@ feature_flags:
   mobile_gateway_v1: true
   multi_channel_identity_v1: true
   persona_hub_source_v1: true
+  promise_beats_v1: true
   proactive_delivery_v2: true
   recall_llm_instruction_v1: true
   self_evolve_l4_enabled: true
@@ -70,6 +71,11 @@ proactive:
   photo_min_interval_sec: 0
   primary_channel: qq
   system_notifications: true
+promise_beats:
+  max_delay_min: 180
+  max_pending: 2
+  min_delay_min: 60
+  poll_sec: 60
 qq:
   heartbeat_interval: 30
   heartbeat_timeout: 10

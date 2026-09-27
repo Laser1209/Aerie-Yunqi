@@ -11,7 +11,6 @@ from core.world_simulation import WorldSnapshot
 class ProactiveIntent(str, Enum):
     LIFE_SHARE = "life_share"
     CARE_FOLLOWUP = "care_followup"
-    UNFINISHED_TOPIC = "unfinished_topic"
     MOOD_SHIFT = "mood_shift"
     ATTENTION_ACK = "attention_ack"
 
@@ -91,19 +90,6 @@ class ProactiveCandidateScorer:
                 )
             )
 
-        for pending in state.pending_topics:
-            if not pending.done:
-                candidates.append(
-                    ProactiveCandidate(
-                        intent=ProactiveIntent.UNFINISHED_TOPIC,
-                        topic=pending.topic,
-                        score=0.0,
-                        source_snapshot_id=snapshot.world_snapshot_id,
-                        reasons=["pending_topic"],
-                    )
-                )
-                break
-
         mood_topic = _latest_mood_topic(state)
         if mood_topic:
             candidates.append(
@@ -136,16 +122,14 @@ class ProactiveCandidateScorer:
 
 _INTENT_ORDER: dict[ProactiveIntent, int] = {
     ProactiveIntent.CARE_FOLLOWUP: 0,
-    ProactiveIntent.UNFINISHED_TOPIC: 1,
-    ProactiveIntent.MOOD_SHIFT: 2,
-    ProactiveIntent.LIFE_SHARE: 3,
-    ProactiveIntent.ATTENTION_ACK: 4,
+    ProactiveIntent.MOOD_SHIFT: 1,
+    ProactiveIntent.LIFE_SHARE: 2,
+    ProactiveIntent.ATTENTION_ACK: 3,
 }
 
 _BASE_SCORES: dict[ProactiveIntent, float] = {
     ProactiveIntent.LIFE_SHARE: 0.26,
     ProactiveIntent.CARE_FOLLOWUP: 0.38,
-    ProactiveIntent.UNFINISHED_TOPIC: 0.32,
     ProactiveIntent.MOOD_SHIFT: 0.3,
     ProactiveIntent.ATTENTION_ACK: 0.25,
 }
@@ -173,8 +157,6 @@ def _relationship_relevance(stage: str, intent: ProactiveIntent) -> float:
     weight = _RELATIONSHIP_WEIGHTS.get(stage, 0.0)
     if intent is ProactiveIntent.CARE_FOLLOWUP:
         return weight + 0.06
-    if intent is ProactiveIntent.UNFINISHED_TOPIC:
-        return weight + 0.03
     if intent is ProactiveIntent.MOOD_SHIFT:
         return weight + 0.02
     return weight * 0.5

@@ -1534,6 +1534,9 @@ class Companion:
         # Phase 14: 主动发图节奏循环（世界模拟不产图片候选，由 Core 侧补发布源）。
         self._photo_loop_task = asyncio.create_task(self._run_proactive_photo_loop())
 
+        # Promise Beats：她本人承诺到期自动兑现（真实出门 + 出图，失败走解释文段）。
+        self._beat_loop_task = asyncio.create_task(self._start_promise_beat_loop())
+
         # Provider 余额/健康周期探测：欠费账户自动踢出轮询，恢复后自动回归。
         self._provider_health_task = asyncio.create_task(self._run_provider_health_loop())
 
@@ -2352,6 +2355,12 @@ class Companion:
             self._photo_loop_task.cancel()
             try:
                 await self._photo_loop_task
+            except asyncio.CancelledError:
+                pass
+        if getattr(self, "_beat_loop_task", None):
+            self._beat_loop_task.cancel()
+            try:
+                await self._beat_loop_task
             except asyncio.CancelledError:
                 pass
         if self.desire:
@@ -3349,6 +3358,92 @@ class Companion:
         return {"moved": True, "outdoor": True, "place": place,
                 "note": f"她把拖鞋随手一放，背上包出了门，说要去{place or '外面'}走走。"}
 
+    # ── Promise Beats：注入给 PromiseBeatsRunner 的端口 ──────────
+
+    async def _start_promise_beat_loop(self) -> None:
+        """构造承诺兑现 runner（端口接线）并进入看门狗轮询。"""
+        from core.promise_beats_runner import PromiseBeatsRunner
+
+        runner = PromiseBeatsRunner(
+            brain=self.brain,
+            feature_flags=self.feature_flags,
+            settings=self.settings,
+            world_action=self._promise_world_action,
+            world_snapshot=self._world_snapshot_for_context,
+            delivery_context=self._promise_delivery_context,
+            image_publisher=self.publish_image_candidate,
+            text_deliverer=self._deliver_promise_text,
+        )
+        await runner.run_forever()
+
+    def _promise_world_action(self, place: str) -> None:
+        """承诺兑现端口：她真的出门（世界状态改变），随后 tick 刷新快照。"""
+        world = getattr(getattr(self, "world_port", None), "world", None)
+        go_out = getattr(world, "go_out", None)
+        if not callable(go_out):
+            return
+        go_out(place=str(place or ""), source="self_promise")
+        wp = getattr(self, "world_port", None)
+        if wp and callable(getattr(wp, "tick", None)):
+            try:
+                wp.tick()
+            except Exception:
+                logger.debug("world tick after promise go_out failed", exc_info=True)
+
+    def _promise_delivery_context(self) -> dict:
+        """承诺兑现的投递上下文：主用户 id / 渠道 / 当前 persona。"""
+        primary = self.get_primary_user_selection()
+        master_id = str(getattr(primary, "user_id", "") or "")
+        channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
+        return {
+            "master_id": master_id,
+            "channel": channel,
+            "persona_id": self._active_persona_id(),
+        }
+
+    async def _deliver_promise_text(self, text: str) -> bool:
+        """承诺失败分流端口：解释文段按普通消息投递（QQ + 桌面），不发失败弹窗。"""
+        content = str(text or "").strip()
+        if not content:
+            return False
+        primary = self.get_primary_user_selection()
+        master_id = getattr(primary, "user_id", "") if primary is not None else ""
+
+        delivered = False
+        if master_id and getattr(self.qq, "is_logged_in", False):
+            try:
+                delivered = bool(await self.qq.send_message(master_id, content))
+            except Exception:
+                logger.warning("[BeatLoop] QQ fallback delivery failed", exc_info=True)
+
+        message_id: int | str | None = None
+        try:
+            message_id = self._persist_proactive_chat_log(
+                master_id, content, "promise_beat", {},
+            )
+        except Exception:
+            logger.warning("[BeatLoop] fallback persist failed", exc_info=True)
+        if message_id is None:
+            message_id = generate_id("message")
+
+        try:
+            from core import chat_events
+
+            chat_events.emit(
+                "assistant",
+                role="assistant",
+                id=message_id,
+                user_id=master_id,
+                content=content,
+                source="proactive",
+                scene="promise_beat",
+                channel="desktop",
+            )
+            delivered = True
+        except Exception:
+            logger.warning("[BeatLoop] desktop fallback delivery failed", exc_info=True)
+        return delivered
+
     def apply_movement_intent(self, text: str) -> Optional[dict]:
         """对话移动意图执行：识别「去X / 走到X / 坐到X」→ MovementManager.move_to()。
 
@@ -3565,7 +3660,7 @@ class Companion:
         世界模拟天然产出 ``available_visual_topics``（窗边/房间/物件等发图素材），
         但 P1-C 的 ProactiveCandidateScorer 从未接入生产（感知→决策断裂）。这里把
         "感知(WorldSnapshot) → 决策(candidate scorer) → 行动(发布 ImageCandidate)"
-        接起来：命中 life_share / attention_ack / unfinished_topic 且世界有视觉素材
+        接起来：命中 life_share / attention_ack 且世界有视觉素材
         时才发布候选。
 
         节奏策略（纯约束型）：
@@ -3638,7 +3733,7 @@ class Companion:
                     continue
                 chosen = candidates[0]
                 intent = chosen.intent.value
-                if intent not in ("life_share", "attention_ack", "unfinished_topic"):
+                if intent not in ("life_share", "attention_ack"):
                     continue
 
                 # 持久化同主题去重：同一视觉主题最近已成功发布（含跨后端重启）→ 跳过。

@@ -4,7 +4,6 @@
   - 创建 CompanionState 包含全部字段
   - add_pain_point / add_joy_point
   - add_pain_point 后自动调度 care_followup
-  - add_pending_topic / complete_pending_topic
   - check_due_followups 到期检查
   - 持久化 (JSON 原子写, AERIE_DATA_DIR 隔离)
   - relationship_stage 转换链路
@@ -25,7 +24,6 @@ def test_create_companion_state_has_all_fields():
     state = CompanionState()
     assert state.relationship_stage == "stranger"
     assert state.care_followups == []
-    assert state.pending_topics == []
     assert state.recent_pain_points == []
     assert state.recent_joy_points == []
 
@@ -59,25 +57,6 @@ def test_add_joy_point_appends_to_recent_joy_points():
     assert state.recent_joy_points[0].text == "考试通过了"
 
 
-# ── pending_topic ─────────────────────────────────
-def test_add_pending_topic():
-    from core.companion_state import CompanionState
-
-    state = CompanionState()
-    state.add_pending_topic("聊聊周末计划")
-    assert len(state.pending_topics) == 1
-    assert state.pending_topics[0].topic == "聊聊周末计划"
-
-
-def test_complete_pending_topic_removes_from_list():
-    from core.companion_state import CompanionState
-
-    state = CompanionState()
-    state.add_pending_topic("未完话题1")
-    state.complete_pending_topic("未完话题1")
-    assert len(state.pending_topics) == 0
-
-
 # ── care_followup 到期 ────────────────────────────
 def test_check_due_followups_returns_only_due():
     from core.companion_state import CompanionState
@@ -99,7 +78,6 @@ def test_persistence_save_and_reload_state_consistent(tmp_path, monkeypatch):
     state = CompanionState()
     state.add_pain_point("痛点A")
     state.add_joy_point("乐点B")
-    state.add_pending_topic("话题C")
     state.advance_relationship_stage()
     state.save()
 
@@ -109,8 +87,6 @@ def test_persistence_save_and_reload_state_consistent(tmp_path, monkeypatch):
     assert reloaded.recent_pain_points[0].text == "痛点A"
     assert len(reloaded.recent_joy_points) == 1
     assert reloaded.recent_joy_points[0].text == "乐点B"
-    assert len(reloaded.pending_topics) == 1
-    assert reloaded.pending_topics[0].topic == "话题C"
 
 
 def test_persistence_uses_aerie_data_dir(tmp_path, monkeypatch):

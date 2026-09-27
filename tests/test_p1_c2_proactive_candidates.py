@@ -17,7 +17,6 @@ def test_generates_all_deterministic_proactive_intent_types_without_model_calls(
     snapshot = _morning_snapshot()
     state = CompanionState(relationship_stage="close")
     state.schedule_care_followup("昨晚头痛", created_at=1000.0, due_at=1900.0)
-    state.add_pending_topic("继续聊旅行计划", created_at=1100.0)
     state.add_pain_point("今天有点累", created_at=1200.0)
 
     candidates = ProactiveCandidateScorer(now=2000.0).generate(snapshot, state)
@@ -25,7 +24,6 @@ def test_generates_all_deterministic_proactive_intent_types_without_model_calls(
 
     assert ProactiveIntent.LIFE_SHARE in intents
     assert ProactiveIntent.CARE_FOLLOWUP in intents
-    assert ProactiveIntent.UNFINISHED_TOPIC in intents
     assert ProactiveIntent.MOOD_SHIFT in intents
     assert ProactiveIntent.ATTENTION_ACK in intents
     assert [candidate.score for candidate in candidates] == sorted(
@@ -63,17 +61,25 @@ def test_recent_repetition_is_penalized_and_low_scores_are_filtered():
     from core.proactive_candidates import ProactiveCandidateScorer, ProactiveIntent
 
     snapshot = _morning_snapshot()
-    state = CompanionState(relationship_stage="stranger")
-    state.add_pending_topic("还没讲完的书", created_at=1000.0)
+    state = CompanionState(relationship_stage="close")
 
-    candidates = ProactiveCandidateScorer(
-        now=2000.0,
-        min_score=0.45,
-        recent_intents=[ProactiveIntent.UNFINISHED_TOPIC, "life_share"],
-    ).generate(snapshot, state)
+    fresh = {
+        candidate.intent: candidate.score
+        for candidate in ProactiveCandidateScorer(now=2000.0).generate(snapshot, state)
+    }
+    repeated = {
+        candidate.intent: candidate.score
+        for candidate in ProactiveCandidateScorer(
+            now=2000.0,
+            recent_intents=[ProactiveIntent.ATTENTION_ACK, "life_share"],
+        ).generate(snapshot, state)
+    }
 
-    intents = [candidate.intent for candidate in candidates]
-
-    assert ProactiveIntent.UNFINISHED_TOPIC not in intents
-    assert ProactiveIntent.LIFE_SHARE not in intents
-    assert all(candidate.score >= 0.45 for candidate in candidates)
+    # 未重复时正常产出；最近发过的意图被显著降分，低于阈值即被过滤。
+    assert ProactiveIntent.LIFE_SHARE in fresh
+    assert ProactiveIntent.ATTENTION_ACK in fresh
+    assert fresh[ProactiveIntent.LIFE_SHARE] > repeated.get(
+        ProactiveIntent.LIFE_SHARE, 0.0
+    )
+    assert ProactiveIntent.ATTENTION_ACK not in repeated
+    assert ProactiveIntent.LIFE_SHARE not in repeated

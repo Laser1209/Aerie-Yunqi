@@ -183,6 +183,9 @@ class Pipeline:
         self._summary_inflight: set[str] = set()
         # 用户明确要求照片时触发的后台生图任务（fire-and-forget，文本先发、图后到）。
         self._photo_tasks: set[asyncio.Task[Any]] = set()
+        # Promise Beats：她本人承诺的延迟排期（惰性构造，首次命中 flag 时才建）。
+        self._promise_extractor: Any = None
+        self._promise_store: Any = None
         # 分段器：优先复用 SendQueue 的实例，保证「落库/桌面分段」与「实际发出的
         # 分段」切点一致；拿不到才自建。上限来源 config: agent.max_segments_per_turn
         # （>0 时限制单轮条数，0=不限制）。
@@ -753,6 +756,7 @@ class Pipeline:
         # 分段：空结果 = 没有可外发内容（空文本 / 纯空白 / 去掉分隔符后什么都不剩）。
         # 绝不回退成原文——否则纯分隔符的回复会把裸 `---` 发给用户。
         segments = self._splitter.split(reply_text)
+        await self._observe_promise_beat(reply_text)
         self.cognition.record(trace, "split", {
             "segments": segments,
             "count": len(segments),
@@ -1229,6 +1233,60 @@ class Pipeline:
                 ))
             except Exception:
                 logger.exception("enqueue progress message error")
+
+    async def _observe_promise_beat(self, reply_text: str) -> None:
+        """她的回复落定后，提取"她本人可在 1-3 小时内兑现的承诺"并排期。
+
+        Promise Beats 子系统的入口：提取成功 → BeatStore 落盘，BeatLoop 到期后
+        自动兑现（真实出门 + 出图）。任何异常静默降级，绝不影响正常回复路径。
+        """
+        text = str(reply_text or "").strip()
+        if not text:
+            return
+        try:
+            if not FeatureFlags().is_enabled("promise_beats_v1"):
+                return
+            extractor, store = self._get_promise_parts()
+            match = await extractor.extract_from_reply(text)
+            if match is None:
+                return
+            store.schedule(
+                kind=match.kind,
+                topic=match.topic,
+                source_text=match.source_text,
+                delay_sec=match.delay_sec,
+                place_hint=match.place_hint,
+            )
+        except Exception:
+            logger.debug("promise beat observe failed", exc_info=True)
+
+    def _get_promise_parts(self) -> tuple[Any, Any]:
+        """惰性构造承诺提取器与共享 BeatStore（配置来自 settings.promise_beats）。"""
+        if self._promise_extractor is None:
+            from config.persona_loader import load_settings
+            from core.promise_extractor import (
+                PromiseExtractor,
+                SiliconFlowLightPromiseClient,
+            )
+            from core.scheduled_beats import BeatStore
+
+            cfg: dict[str, Any] = {}
+            try:
+                cfg = (load_settings() or {}).get("promise_beats", {}) or {}
+            except Exception:
+                pass
+            min_sec = float(cfg.get("min_delay_min", 60)) * 60.0
+            max_sec = float(cfg.get("max_delay_min", 180)) * 60.0
+            self._promise_extractor = PromiseExtractor(
+                l2_client=SiliconFlowLightPromiseClient(brain=self.brain),
+                default_delay_sec=(min_sec + max_sec) / 2.0,
+                delay_min_sec=min_sec,
+                delay_max_sec=max_sec,
+            )
+            self._promise_store = BeatStore(
+                max_pending=int(cfg.get("max_pending", 2)),
+            )
+        return self._promise_extractor, self._promise_store
 
     async def _resolve_chat_photo_intent(
         self,
@@ -2507,6 +2565,7 @@ class Pipeline:
 
         # 6. 语义拆分（空结果 = 无可外发内容；绝不回退成原文，防裸分隔符外泄）
         segments = self._splitter.split(reply_text)
+        await self._observe_promise_beat(reply_text)
         self.cognition.record(trace, "split", {
             "segments": segments,
             "count": len(segments),
@@ -3820,6 +3879,7 @@ class Pipeline:
 
                 # 空结果 = 该条回复没有可外发内容（纯分隔符/空白）；绝不回退成原文
                 segments = self._splitter.split(reply_text)
+                await self._observe_promise_beat(reply_text)
 
                 user_row_id = 0
                 try:

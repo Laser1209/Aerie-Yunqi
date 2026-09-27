@@ -1,12 +1,11 @@
 """Aerie · 云栖 v0.1.0-beta.1 — CompanionState: 陪伴状态模型 (Task P1-A.2).
 
-跟踪关系阶段、挂心事项、未完话题、近期痛点和近期乐点。
+跟踪关系阶段、挂心事项、近期痛点和近期乐点。
 是关系面板和主动关怀的前置依赖。
 
 字段:
   - relationship_stage: 关系阶段 (stranger → acquaintance → familiar → close → intimate)
   - care_followups: 挂心事项 (记录 pain_point 后自动调度)
-  - pending_topics: 未完话题
   - recent_pain_points: 近期痛点 (最近 10 条)
   - recent_joy_points: 近期乐点 (最近 10 条)
 
@@ -59,13 +58,6 @@ class JoyPoint:
 
 
 @dataclass
-class PendingTopic:
-    topic: str
-    created_at: float
-    done: bool = False
-
-
-@dataclass
 class CareFollowup:
     topic: str
     created_at: float
@@ -77,11 +69,10 @@ class CareFollowup:
 # ── 主状态 ─────────────────────────────────────────
 @dataclass
 class CompanionState:
-    """陪伴状态: 关系阶段 + 挂心事项 + 未完话题 + 近期痛点/乐点."""
+    """陪伴状态: 关系阶段 + 挂心事项 + 近期痛点/乐点."""
 
     relationship_stage: str = "stranger"
     care_followups: list[CareFollowup] = field(default_factory=list)
-    pending_topics: list[PendingTopic] = field(default_factory=list)
     recent_pain_points: list[PainPoint] = field(default_factory=list)
     recent_joy_points: list[JoyPoint] = field(default_factory=list)
     # P0 topic system: 统一沉寂时钟（time.time() epoch；0 = 从未记录）。
@@ -127,27 +118,6 @@ class CompanionState:
         if len(self.recent_joy_points) > self.MAX_RECENT:
             self.recent_joy_points = self.recent_joy_points[-self.MAX_RECENT:]
         return entry
-
-    # ── pending_topic ──────────────────────────────
-    def add_pending_topic(
-        self,
-        topic: str,
-        *,
-        created_at: float | None = None,
-    ) -> PendingTopic:
-        ts = float(created_at) if created_at is not None else time.time()
-        entry = PendingTopic(topic=str(topic), created_at=ts, done=False)
-        self.pending_topics.append(entry)
-        return entry
-
-    def complete_pending_topic(self, topic: str) -> bool:
-        """按文本匹配完成并移除一条未完话题。返回是否命中."""
-        target = str(topic)
-        for i, item in enumerate(self.pending_topics):
-            if item.topic == target:
-                self.pending_topics.pop(i)
-                return True
-        return False
 
     # ── care_followup ──────────────────────────────
     def schedule_care_followup(
@@ -209,7 +179,6 @@ class CompanionState:
         return {
             "relationship_stage": self.relationship_stage,
             "care_followups": [_followup_to_dict(f) for f in self.care_followups],
-            "pending_topics": [_pending_to_dict(p) for p in self.pending_topics],
             "recent_pain_points": [_pain_to_dict(p) for p in self.recent_pain_points],
             "recent_joy_points": [_joy_to_dict(j) for j in self.recent_joy_points],
             "last_user_active_at": self.last_user_active_at,
@@ -225,10 +194,6 @@ class CompanionState:
             care_followups=[
                 _followup_from_dict(item)
                 for item in (data.get("care_followups") or [])
-            ],
-            pending_topics=[
-                _pending_from_dict(item)
-                for item in (data.get("pending_topics") or [])
             ],
             recent_pain_points=[
                 _pain_from_dict(item)
@@ -288,18 +253,6 @@ def _joy_from_dict(data: dict[str, Any]) -> JoyPoint:
         text=str(data.get("text", "")),
         created_at=float(data.get("created_at", 0.0) or 0.0),
         note=str(data.get("note", "") or ""),
-    )
-
-
-def _pending_to_dict(p: PendingTopic) -> dict[str, Any]:
-    return {"topic": p.topic, "created_at": p.created_at, "done": p.done}
-
-
-def _pending_from_dict(data: dict[str, Any]) -> PendingTopic:
-    return PendingTopic(
-        topic=str(data.get("topic", "")),
-        created_at=float(data.get("created_at", 0.0) or 0.0),
-        done=bool(data.get("done", False)),
     )
 
 

@@ -10,6 +10,7 @@ Scope: markdown (docs/user-facing), html (renderer), yaml (config),
 Exits 0 when no forbidden term is found; non-zero otherwise.
 """
 from __future__ import annotations
+import re
 import sys
 from pathlib import Path
 
@@ -35,6 +36,11 @@ EXTS = {".md", ".html", ".yaml", ".yml", ".py", ".js"}
 # "主人" is the master prefix; "主人哲学" is the product concept name
 # and is allowed in dedicated design docs only (whitelisted below).
 FORBIDDEN_TERMS = ["主人", "陛下", "大王", "在下不才", "臣妾", "本王", "孤家", "寡人"]
+
+# 规则清单的裸列表项形状：整行只有 "- 术语"（可带缩进与行尾注释）。
+_BARE_RULE_ITEM_RE = re.compile(
+    r"^\s*-\s*(?:" + "|".join(FORBIDDEN_TERMS) + r")\s*(?:#.*)?$"
+)
 
 # Files that are allowed to contain these terms (product concept name
 # "主人哲学" appears in design docs and is part of the brand).
@@ -88,6 +94,10 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
         # Rule declarations may move as schemas evolve; do not rely solely on
         # brittle line numbers for the forbidden-term list itself.
         if "forbidden_user_terms" in line or "taboo_phrases" in line:
+            continue
+        # 规则清单里的裸列表项（整行只有一个 "- 术语"）是规则声明本身，不是
+        # 面向用户的文案。按行号白名单会被清单增删改直接打破，故按形状豁免。
+        if _BARE_RULE_ITEM_RE.match(line):
             continue
         for term in FORBIDDEN_TERMS:
             if term in line:

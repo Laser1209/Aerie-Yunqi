@@ -342,7 +342,14 @@ class QQClient:
         )
         try:
             from core.napcat_launcher import get_launcher
-            result = await get_launcher().start()
+
+            launcher = get_launcher()
+            if launcher.user_stopped:
+                # The user explicitly stopped NapCat; never relaunch it behind
+                # their back. A manual start clears the latch.
+                self._port_wait_started = None
+                return
+            result = await launcher.start()
             logger.info("QQ proactive NapCat launch result: %s", result.get("ok"))
         except Exception:
             logger.exception("QQ proactive NapCat launch failed")

@@ -7,14 +7,17 @@ from core import napcat_launcher as launcher_module
 from core.napcat_launcher import NapcatLauncher
 
 
-def test_status_does_not_expose_local_qrcode_path(monkeypatch):
+def test_status_ignores_stale_qrcode_file_without_live_webui(monkeypatch):
+    # A qrcode.png left on disk from a previous run must never be offered as a
+    # scannable code: without a live WebUI session the file is always stale.
     monkeypatch.setattr(launcher_module, "_port_is_open", lambda **_kwargs: False)
     launcher = NapcatLauncher()
     launcher.qrcode_path = SimpleNamespace(exists=lambda: True)
 
     status = launcher.get_status()
 
-    assert status["qrcode_available"] is True
+    assert status["phase"] == "idle"
+    assert status["qrcode_available"] is False
     assert "qrcode_path" not in status
 
 

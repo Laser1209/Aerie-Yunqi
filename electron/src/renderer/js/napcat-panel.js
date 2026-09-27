@@ -13,11 +13,16 @@ class NapcatPanel {
       logs: document.getElementById("napcat-logs"),
       qrZone: document.getElementById("napcat-qr-zone"),
       qrImg: document.getElementById("napcat-qr-img"),
+      qrHint: document.getElementById("napcat-qr-hint"),
       qrRefresh: document.getElementById("napcat-qr-refresh"),
+      quickLogin: document.getElementById("napcat-quick-login"),
       qqBadge: document.getElementById("status-qq-badge"),
     };
     this._interval = null;
     this._qrLoading = false;
+    this._qrFetchAt = 0;
+    this._autoRenewAt = 0;
+    this._accountsAt = 0;
     this._bindEvents();
     this._startPoll();
   }
@@ -36,7 +41,7 @@ class NapcatPanel {
       this._el.checkUpdateBtn.addEventListener("click", () => this.checkUpdate());
     }
     if (this._el.qrRefresh) {
-      this._el.qrRefresh.addEventListener("click", () => this._refreshQR(true));
+      this._el.qrRefresh.addEventListener("click", () => this._refreshQR(true, { forceRenew: true }));
     }
   }
 
@@ -75,8 +80,9 @@ class NapcatPanel {
     const phase = status.phase || "idle";
     const phases = {
       idle: "未连接",
-      starting: "启动中…",
+      starting: "登录中…",
       qr_pending: "等待扫码",
+      qr_expired: "二维码已过期",
       connected: status.owned === false ? "已连接（外部）" : "已连接",
       error: "连接错误",
     };
@@ -105,18 +111,32 @@ class NapcatPanel {
 
     // QR code
     if (this._el.qrZone) {
-      if (status.qrcode_available && phase === "qr_pending") {
+      if (status.qrcode_available && (phase === "qr_pending" || phase === "qr_expired")) {
         this._el.qrZone.classList.remove("hidden");
-        if (this._el.qrImg && !this._el.qrImg.getAttribute("src")) {
-          this._refreshQR(false);
+        const expired = phase === "qr_expired";
+        if (this._el.qrHint) this._el.qrHint.classList.toggle("hidden", !expired);
+        if (expired) {
+          // Ask NapCat for a brand-new QR once, then let normal polling
+          // redraw the image; throttle so the 3s poll cannot spam renewals.
+          const now = Date.now();
+          if (now - this._autoRenewAt > 30000) {
+            this._autoRenewAt = now;
+            this._refreshQR(false, { forceRenew: true });
+          }
+        } else {
+          this._ensureQrImage();
         }
-      } else if (phase !== "qr_pending") {
+        this._loadQuickAccounts();
+      } else if (phase !== "qr_pending" && phase !== "qr_expired") {
         this._el.qrZone.classList.add("hidden");
         if (this._el.qrImg) this._el.qrImg.removeAttribute("src");
+        if (this._el.qrHint) this._el.qrHint.classList.add("hidden");
+        if (this._el.quickLogin) this._el.quickLogin.innerHTML = "";
+        this._qrFetchAt = 0;
       }
     }
     if (this._el.startBtn) {
-      this._el.startBtn.disabled = ["starting", "qr_pending", "connected"].includes(phase);
+      this._el.startBtn.disabled = ["starting", "qr_pending", "qr_expired", "connected"].includes(phase);
     }
     if (this._el.downloadBtn) {
       const missing = phase === "error" && status.error_code === "launcher_not_found";
@@ -130,20 +150,78 @@ class NapcatPanel {
     }
   }
 
-  async _refreshQR(showLog) {
+  async _ensureQrImage() {
+    // Throttle redraws so the 3s status poll does not refetch every tick.
+    if (!this._el.qrImg || this._qrLoading) return;
+    const now = Date.now();
+    if (this._el.qrImg.getAttribute("src") && now - this._qrFetchAt < 5000) return;
+    await this._refreshQR(false);
+  }
+
+  async _refreshQR(showLog, options = {}) {
     if (!this._el.qrImg || this._qrLoading) return;
     this._qrLoading = true;
     try {
+      if (options.forceRenew && window.aerie.napcat.refreshQrCode) {
+        const renew = await window.aerie.napcat.refreshQrCode();
+        if (renew && renew.ok === false) {
+          throw new Error(renew.message || "qrcode_renew_failed");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
       const response = await window.aerie.napcat.getQrCode();
       if (!response || response.ok !== true || !response.dataUrl) {
         throw new Error(response && response.errorCode || "qrcode_unavailable");
       }
+      this._qrFetchAt = Date.now();
       this._el.qrImg.src = response.dataUrl;
+      if (this._el.qrHint) this._el.qrHint.classList.add("hidden");
       if (showLog) this._addLog("[系统] 二维码已刷新");
     } catch (error) {
       this._addLog("[错误] 二维码刷新失败: " + String(error && error.message || error));
     } finally {
       this._qrLoading = false;
+    }
+  }
+
+  async _loadQuickAccounts() {
+    if (!this._el.quickLogin || !window.aerie.napcat.getQuickAccounts) return;
+    const now = Date.now();
+    if (now - this._accountsAt < 60000) return;
+    this._accountsAt = now;
+    try {
+      const accounts = await window.aerie.napcat.getQuickAccounts();
+      const usable = (accounts || []).filter((item) => item.is_quick_login !== false && item.uin);
+      if (!usable.length) {
+        this._el.quickLogin.innerHTML = "";
+        return;
+      }
+      this._el.quickLogin.innerHTML =
+        '<p class="external-channel-hint">本机已登录账号可免扫码快捷登录：</p>'
+        + usable.map((item) => {
+          const label = item.nickname ? `${item.nickname}（${item.uin}）` : item.uin;
+          return `<button type="button" class="btn btn-secondary btn-sm napcat-quick-login-btn" data-uin="${item.uin}">${label}</button>`;
+        }).join("");
+      this._el.quickLogin.querySelectorAll(".napcat-quick-login-btn").forEach((btn) => {
+        btn.addEventListener("click", () => this._quickLogin(btn.dataset.uin));
+      });
+    } catch (_) {
+      /* quick login is an enhancement; ignore transient failures */
+    }
+  }
+
+  async _quickLogin(uin) {
+    this._addLog(`[系统] 正在请求快捷登录 ${uin}…`);
+    try {
+      const resp = await window.aerie.napcat.quickLogin(uin);
+      if (resp && resp.ok === false) {
+        this._addLog("[错误] 快捷登录失败: " + (resp.message || ""));
+        return;
+      }
+      this._addLog("[系统] 快捷登录请求已发送，请稍候");
+      await this._poll();
+    } catch (error) {
+      this._addLog("[错误] 快捷登录失败: " + String(error && error.message || error));
     }
   }
 

@@ -1,7 +1,7 @@
 """Aerie · 云栖 — NapCat 一键下载/解压服务。
 
-从官方 GitHub Release 下载 ``NapCat.Shell.zip``，解压到 ``data/napcat/``，
-定位 ``launcher-user.bat`` 所在目录后写入 ``data/napcat_dir.json``，供
+从官方 GitHub Release 下载 ``NapCat.Shell.Windows.Node.zip``，解压到 ``data/napcat/``，
+定位 ``napimain.exe`` 所在目录后写入 ``data/napcat_dir.json``，供
 ``napcat_launcher`` 读取定位。下载/解压均为阻塞操作，由 API 通过
 ``asyncio.to_thread`` 调用，避免卡住事件循环；进度与状态线程安全，供前端轮询。
 """
@@ -26,8 +26,8 @@ _DOWNLOAD_SOURCES = [
 _PER_SOURCE_TIMEOUT_SECONDS = 10 * 60  # 每个源 10 分钟（完整包较大）
 _ZIP_FILENAME = "napcat-shell.zip"
 
-# 解压后可能的启动器文件名（按优先级探测）。
-_LAUNCHER_CANDIDATES = ("launcher-user.bat", "launcher.bat", "napcat.bat")
+# 解压后可能的启动器标记文件（按优先级探测，覆盖 Framework v4.18+ 与旧版 Shell）。
+_LAUNCHER_CANDIDATES = ("napimain.exe", "napiLoader.bat", "launcher-user.bat", "launcher.bat", "napcat.bat")
 
 
 class NapcatDownloader:

@@ -136,9 +136,11 @@ class Harness:
         return beat.id
 
 
-_COMPLETED = {"status": "published",
-              "consumed": [{"status": "completed"}]}
-_FAILED = {"status": "published",
+# publish 返回的终态由 consumed 明细决定（2026-09-27 起 status 不再是 "published"）：
+# 有 completed 才算交付成功，否则为 failed —— 这两条 fixture 与真实契约保持一致。
+_COMPLETED = {"status": "completed",
+              "consumed": [{"status": "completed", "image_path": "/tmp/x.png"}]}
+_FAILED = {"status": "failed",
            "consumed": [{"status": "failed", "reason": "workflow_error"}]}
 
 

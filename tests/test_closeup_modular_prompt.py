@@ -1,8 +1,13 @@
 """验证 P4 模块化提示词：局部特写 vs 全身照的 base prompt 分支逻辑。
 
 背景：P4 引入 _CLOSEUP_FOCUS_SET，当用户指定 focus 命中局部特写集合时，
-base prompt 应走精简路线（「人物外貌以参考图为准」），不含身高/体重/三围/
-杯数/发色/眼色等全身数据；而全身/无 focus/默认场景应走完整人设路线。
+base prompt 应走精简路线，不含身高/体重/三围/杯数等**身材数据**。
+
+2026-09-27 修正：局部特写原先完全不写外貌，人物一致性硬依赖 three_view
+图生图。现用生图源没有 edits 端点（BigModel 返回 404）时自拍会变成随机面孔，
+故补一段**简短外貌锚点**（肤/发/眼，只取首个短句）。契约由此变为：
+局部特写 = 「人物外貌以参考图为准」+ 简短外貌锚点，仍然**不含身材数据**；
+全身/无 focus/默认场景仍走完整人设路线。
 
 本测试通过直接调用 Companion._compose_base_image_prompt（实例方法）验证各分支。
 """
@@ -14,6 +19,7 @@ from unittest.mock import patch, MagicMock
 
 from core.companion import (
     _CLOSEUP_FOCUS_SET,
+    _closeup_appearance_anchor,
     _extract_photo_spec,
     _compose_modular_prompt,
     Companion,
@@ -39,11 +45,14 @@ _FAKE_PERSONA = {
     }
 }
 
-# 不应出现在局部特写 base 中的关键词
+# 不应出现在局部特写 base 中的身材数据关键词
 _FORBIDDEN_CLOSEUP_KEYWORDS = [
     "伊塔", "身高", "三围", "杯", "体重", "体脂率",
-    "银灰色长发", "深灰蓝色眼睛",  # 发色、眼色
 ]
+
+# 局部特写 base 必须携带的简短外貌锚点（2026-09-27 修正后契约）：
+# 肤/发/眼各取首个短句，避免"生图能力被图生图单点绑定"。
+_REQUIRED_CLOSEUP_ANCHOR_KEYWORDS = ["健康肤色", "银灰色长发", "深灰蓝色"]
 
 
 def _call(prompt_key: str, candidate: dict | None = None, spec: dict | None = None) -> str:
@@ -105,6 +114,10 @@ class TestCloseupBasePrompt:
         # 应包含精简 base 关键短语
         assert "人物外貌以参考图为准" in result, "局部特写应包含「人物外貌以参考图为准」"
         assert f"画面重点聚焦在{expected_focus}" in result, f"应包含「画面重点聚焦在{expected_focus}」"
+
+        # 应携带简短外貌锚点（肤/发/眼），避免自拍生成陌生人
+        for kw in _REQUIRED_CLOSEUP_ANCHOR_KEYWORDS:
+            assert kw in result, f"局部特写应包含外貌锚点「{kw}」，实际输出: {result}"
 
         # 不应包含全身人设数据
         for kw in _FORBIDDEN_CLOSEUP_KEYWORDS:
@@ -190,6 +203,53 @@ class TestCloseupBasePrompt:
         # 不应有全身数据
         for kw in _FORBIDDEN_CLOSEUP_KEYWORDS:
             assert kw not in result
+
+    def test_every_closeup_focus_carries_appearance_anchor(self):
+        """全部局部特写 label 都必须带外貌锚点，且不得混入身材数据。
+
+        回归背景：生图源没有 edits 端点时，若 base 里完全没有人物依据，
+        "来一张自拍" 会生成随机面孔。
+        """
+        for focus in sorted(_CLOSEUP_FOCUS_SET):
+            spec = {"focus": focus, "pose": "", "angle": "", "scene": "", "style": ""}
+            candidate = {"scene": "local_send", "user_raw": f"看看{focus}"}
+            result = _call("role_selfie", candidate=candidate, spec=spec)
+            for kw in _REQUIRED_CLOSEUP_ANCHOR_KEYWORDS:
+                assert kw in result, f"focus={focus} 缺外貌锚点「{kw}」: {result}"
+            for kw in _FORBIDDEN_CLOSEUP_KEYWORDS:
+                assert kw not in result, f"focus={focus} 混入身材数据「{kw}」: {result}"
+
+
+# ══════════════════════════════════════════════════════
+# 2b. _closeup_appearance_anchor 取词与降级行为
+# ══════════════════════════════════════════════════════
+
+class TestCloseupAppearanceAnchor:
+    """锚点只取首个短句、缺名词时补名词、无字段时返回空串。"""
+
+    def test_takes_first_clause_only(self):
+        anchor = _closeup_appearance_anchor({
+            "hair": "银灰色长发，自然垂落至肩胛附近",
+            "eyes": "深灰蓝色，目光沉静；看陌生人略显冷淡",
+            "skin": "健康肤色，常年健身塑形",
+        })
+        assert "银灰色长发" in anchor
+        assert "深灰蓝色眼睛" in anchor
+        assert "健康肤色" in anchor
+        # 神态/身材等长尾描述不应被塞进锚点（会摊薄主体权重）
+        assert "目光沉静" not in anchor
+        assert "肩胛" not in anchor
+        assert "常年健身" not in anchor
+
+    def test_appends_noun_when_missing(self):
+        anchor = _closeup_appearance_anchor({"hair": "栗色", "eyes": "琥珀"})
+        assert "栗色头发" in anchor
+        assert "琥珀眼睛" in anchor
+
+    def test_returns_empty_without_fields(self):
+        assert _closeup_appearance_anchor({}) == ""
+        assert _closeup_appearance_anchor(None) == ""
+        assert _closeup_appearance_anchor({"hair": "  ", "eyes": ""}) == ""
 
 
 # ══════════════════════════════════════════════════════

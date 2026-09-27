@@ -1471,9 +1471,10 @@ class Pipeline:
         生图不经过 LLM 的 ``tool_results``，需独立记录，供大脑中枢 trace 展示
         "本次调用了图片工具"。失败也记录（success=False），便于追踪。
         """
-        success = result.get("status") in (
-            "ok", "success", "sent", "delivered", "published", "dispatched",
-        ) or bool(result.get("consumed"))
+        # 成功判据只认"图片真的产出并派发"：publish 层的 published/dispatched
+        # 仅代表事件入箱，consumer 明细里没有 completed 就仍是失败
+        # （2026-09-27 实测：provider 连接被重置却记 success=True，故障不可见）。
+        success = self._photo_result_delivered(result)
         image_path = (
             result.get("image_path") or result.get("file_path")
             or result.get("url") or result.get("path") or ""

@@ -15,7 +15,7 @@ def _make_companion(probability: float = 0.3, world_port_available: bool = True)
     comp = MagicMock(spec=Companion)
     comp.settings = {"proactive": {"companion_image_probability": probability}}
     comp._active_persona_id = MagicMock(return_value="ita-default")
-    comp.publish_image_candidate = AsyncMock(return_value={"status": "published"})
+    comp.publish_image_candidate = AsyncMock(return_value={"status": "completed"})
     comp._persist_image_event = AsyncMock()
 
     if world_port_available:
@@ -90,8 +90,10 @@ class TestCompanionImagePayload:
     @pytest.mark.asyncio
     async def test_successful_publish_records_image_event(self):
         comp = _make_companion(probability=1.0)
+        # 只认真正的产出终态：publish 层的 "published" 仅代表事件入箱，
+        # 图片可能因 provider 失败而根本没生成（2026-09-27 修正）。
         comp.publish_image_candidate = AsyncMock(
-            return_value={"status": "published", "image_path": "/tmp/test.jpg"}
+            return_value={"status": "completed", "image_path": "/tmp/test.jpg"}
         )
 
         with patch("core.companion.random") as mock_random, \

@@ -1012,13 +1012,12 @@ class LLMCaller:
             )
 
     @staticmethod
-    def _pick_best_candidate(text: str) -> str:
-        """Pick the first (best-ranked) candidate from one generate_push call.
+    def _extract_push_bubbles(text: str) -> str:
+        """把一次 generate_push 的原始输出规整成"要发的气泡序列"（换行分隔）。
 
-        The model is asked to emit 1-3 candidates ordered by naturalness,
-        formatted either as a JSON array (possibly fenced), a JSON object with
-        a list field, or as plain newline-separated lines. Robust fallbacks
-        keep the tail of the call chain deterministic.
+        模型被要求像真人打字一样一条接一条地发，条数由内容决定（1-5 条），
+        不是几个可互相替换的备选。输出可能是 JSON 数组 / 带 list 字段的 JSON
+        对象 / 直接的换行文本，三种形态都归一成同一形状，保证下游只需按行切分。
         """
         t = (text or "").strip()
         if not t:
@@ -1034,19 +1033,21 @@ class LLMCaller:
                 data = json.loads(fenced)
             except (ValueError, TypeError):
                 data = None
+        items: list[str] = []
         if isinstance(data, list):
             items = [str(x).strip() for x in data if str(x).strip()]
-            if items:
-                return items[0]
         elif isinstance(data, dict):
-            for key in ("candidates", "messages", "list", "items"):
+            for key in ("messages", "candidates", "list", "items"):
                 value = data.get(key)
-                if isinstance(value, list) and value:
+                if isinstance(value, list):
                     items = [str(x).strip() for x in value if str(x).strip()]
                     if items:
-                        return items[0]
-        lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
-        return lines[0] if lines else t
+                        break
+        if not items:
+            items = [ln.strip() for ln in t.splitlines() if ln.strip()]
+        if not items:
+            return t
+        return "\n".join(items)
 
     async def generate_push(
         self,
@@ -1221,9 +1222,15 @@ class LLMCaller:
         if knowledge_fragment:
             sys_parts.append(knowledge_fragment)
         sys_parts.append(
-            "任务：像真人刚拿起手机的样子，自然发起 1-3 条候选消息，你最想发的那条排在第一位。"
-            "如有多条，请用换行分隔。每条 ≤20 字，像真人打字一样短。\n"
-            "直接输出候选正文：不要加称呼、不要解释、不要引号、不要出现任何 '[MM-DD HH:MM]' 样式的时间戳。"
+            "任务：像真人刚拿起手机的样子，一条接一条地打字。\n"
+            "- 没有规定你必须发几条：想说的少就发 1 条，想说的多就接连发 2-5 条，"
+            "由你想说的内容自然决定，绝不要为了凑条数硬发。\n"
+            "- 后续每一条，都是你看到自己刚发出去的那条之后才想到的补充、延伸或改口，"
+            "不是几个可以互相替换的备选方案。\n"
+            "- 每条 ≤20 字，一条只讲一件事；不要写成一整段。\n"
+            "- 直接输出要发的正文，多条之间用换行分隔：不要加称呼、不要解释、不要引号、"
+            "不要写序号、不要出现任何 '[MM-DD HH:MM]' 样式的时间戳，"
+            "也不要写 '[QQ]'、'[桌面]' 这类通道标记。"
         )
         system_msg = "\n".join(part for part in sys_parts if part)
         user_msg = template.format(**kwargs) if kwargs else template
@@ -1238,7 +1245,7 @@ class LLMCaller:
             if resp.text and not resp.text.startswith("(伊塔"):
                 # 主动消息也是模型自由文本：与正常回合共用同一套输出净化，
                 # 否则括号里的动作/心理描写会从这条链路漏给用户。
-                return normalize_model_text(self._pick_best_candidate(resp.text))
+                return normalize_model_text(self._extract_push_bubbles(resp.text))
         except Exception:
             pass
 
@@ -2290,6 +2297,38 @@ def _brain_generate_image_edit(
             "mime_type": response_mime,
             "output_path": None,
             "external_id": str(first.get("revised_prompt") or ""),
+        }
+    except httpx.HTTPStatusError as exc:
+        status_code = int(exc.response.status_code)
+        if status_code in (401, 403):
+            error_code = "provider_auth_failed"
+        elif status_code == 429:
+            error_code = "provider_rate_limited"
+        elif status_code in (404, 405):
+            # 端点本身不存在/不允许：这才是真正的"不支持图生图"。
+            error_code = "image_edit_unsupported"
+        elif status_code >= 500:
+            error_code = "provider_http_5xx"
+        else:
+            error_code = "provider_http_error"
+        logger.warning("image edit provider returned HTTP %s", status_code)
+        return {
+            "status": "failed",
+            "provider": "openai_compatible_image",
+            "model": model,
+            "output_path": None,
+            "error_code": error_code,
+        }
+    except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError):
+        # 连接被重置/超时属于provider 不可用，不是"不支持图生图"。两者混为一谈
+        # 会让运维误判（2026-09-27 实测：端点重置连接却报 image_edit_unsupported）。
+        logger.warning("image edit provider network call failed", exc_info=True)
+        return {
+            "status": "failed",
+            "provider": "openai_compatible_image",
+            "model": model,
+            "output_path": None,
+            "error_code": "provider_network_error",
         }
     except Exception:
         logger.warning("image edit provider call failed", exc_info=True)

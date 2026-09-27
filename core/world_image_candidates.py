@@ -1026,6 +1026,20 @@ class WorldImageCandidateConsumer:
         idempotent_replay: bool = False,
     ) -> dict[str, Any]:
         workflow = workflow_result if isinstance(workflow_result, dict) else {}
+        # 资产引用：供上游工具日志 / 图片事件记忆记录"到底产出了哪张图"。
+        # 失败路径 workflow 为空，这里自然回落成空串，不会伪造成功信息。
+        workflow_asset = workflow.get("asset") if isinstance(workflow.get("asset"), dict) else {}
+        delivery_plan = (
+            workflow.get("delivery_plan")
+            if isinstance(workflow.get("delivery_plan"), dict)
+            else {}
+        )
+        image_path = str(
+            workflow_asset.get("url")
+            or workflow_asset.get("saved_as")
+            or delivery_plan.get("asset_url")
+            or ""
+        )
         return {
             "status": status,
             "reason": str(reason or ""),
@@ -1034,6 +1048,7 @@ class WorldImageCandidateConsumer:
             "sequence": _event_sequence(event),
             "candidate_id": (candidate or {}).get("candidate_id", ""),
             "prompt_key": (candidate or {}).get("prompt_key", ""),
+            "image_path": image_path,
             "acked": bool(acked),
             "idempotent_replay": bool(idempotent_replay),
             "side_effects": side_effects or dict(_NO_SIDE_EFFECTS),

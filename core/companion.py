@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -639,6 +640,41 @@ _IMAGE_IDENTITY_LOCK_PHRASE = (
     "人物外貌与身材一律以参考图为准。"
 )
 
+
+def _closeup_appearance_anchor(appearance: dict) -> str:
+    """局部特写用的简短外貌锚点（不含身材数据）。
+
+    存在的意义：局部特写分支刻意不堆身材数据，但**不能完全不留人物依据**。
+    参考图可用时它只是补充；生图源没有 edits 端点时（实测 BigModel 404），
+    它就是唯一的人物依据，避免"自拍生成一个陌生人"。
+    persona 里的 eyes/hair 是完整描述句（含"看陌生人略显冷淡"这类神态），
+    整句拼接会又长又杂、还会摊薄主体权重，故只取首个短句。
+    取不到任何字段时返回空串，保持原行为。
+    """
+
+    def _head(value: object) -> str:
+        text = str(value or "").strip()
+        for sep in ("，", ",", "；", ";", "。"):
+            text = text.split(sep, 1)[0].strip()
+        return text
+
+    try:
+        hair = _head((appearance or {}).get("hair"))
+        eyes = _head((appearance or {}).get("eyes"))
+        skin = _head((appearance or {}).get("skin"))
+    except Exception:
+        return ""
+    bits: list[str] = []
+    if skin:
+        bits.append(skin)
+    if hair:
+        bits.append(hair if "发" in hair else f"{hair}头发")
+    if eyes:
+        bits.append(eyes if "眼" in eyes else f"{eyes}眼睛")
+    if not bits:
+        return ""
+    return "她是一位28岁的中国女性，" + "，".join(bits) + "，五官清冷精致。"
+
 # 真实感：语料里的反 AI 味约束（真肤质/真发丝/真布料/非 CG）。人物类与景物类
 # 用两套措辞——人物图要压"AI 脸/塑料皮"，景物图只需要材质与光影层次。
 _IMAGE_REALISM_PHRASE = (
@@ -913,6 +949,27 @@ _IMAGE_TOPIC_DEDUP_SEC = 14400
 # 主动消息配图延迟：文本先到用户端后，图片延迟此秒数再投递，让消息时序更自然。
 # 测试时可 patch 为 0 跳过等待。
 _COMPANION_IMAGE_DELAY_SEC = 2.0
+
+# 主动消息气泡之间的间隔基准（秒），带 ±30% 抖动，模拟真人一条一条打字。
+# 测试时可 patch 为 0 跳过等待。
+_PROACTIVE_BUBBLE_GAP_SEC = 1.0
+
+# 主动消息单次最多发几条气泡（条数由内容决定，这里是上限而非目标值）。
+_PROACTIVE_MAX_BUBBLES = 5
+
+# 「伪造不存在的往返回合」检测：主动消息里不该出现"我看你回没回 / 你又不回我"
+# 这类暗示"用户欠了一次回复"的话术——主动消息之前并没有发过任何东西。
+# （2026-09-27 用户明确反馈："他说一个看我回不回消息，但他压根儿没有给我发消息"。）
+_FABRICATED_REPLY_PATTERNS: tuple[Any, ...] = (
+    re.compile(r"看你?回(没|不)回"),
+    re.compile(r"你(又|都|怎么|咋)?(不|没)(回|理)我"),
+    re.compile(r"是不是不想理我"),
+    re.compile(r"刚(给)?你?发(的)?(消息|信息)"),
+    re.compile(r"我(刚)?发的你(看|收)到了吗"),
+)
+
+# 比较用归一化：去掉空白与常见标点，避免仅靠空格/标点差异绕过查重。
+_COMPARE_STRIP_RE = re.compile(r"[\s，。！？、,.!?~～…·\"'“”‘’()（）\[\]【】]")
 
 from core.world_phase import (  # P1 单一真源：phase → 中文/光线
     TIME_OF_DAY_CN as _TIME_OF_DAY_CN,
@@ -1335,7 +1392,12 @@ class Companion:
                 companion=self,
                 # 阶段 5: 采样参数（τ / 概率上下限）从 proactive.yaml 读取，热加载走 reload_config。
                 sampling=(proactive_cfg.get("proactive") or {}).get("judge_sampling"),
+                guard_minutes=(proactive_cfg.get("proactive") or {}).get(
+                    "user_active_guard_minutes"
+                ),
             )
+            # 必须走 PushScheduler 的转发属性：直接给外壳赋 judge 会让底层
+            # CronScheduler.judge 仍为 None，硬闸门静默失效（2026-09-27 定位）。
             self.push_scheduler.judge = self.proactive_judge
         except Exception:
             logger.exception("ProactiveJudge init failed; push will run judge-less")
@@ -1741,15 +1803,43 @@ class Companion:
         except Exception:
             logger.warning("world image candidate consume failed after publish", exc_info=True)
             consumed = []
+        # 事件入箱 ≠ 图片产出。对外只暴露真正的终态，避免上游把 "published"
+        # 当成"图已发出"（2026-09-27 实测：provider 连接被重置、图片未产出，
+        # 却上报 published + 工具 success，故障因此不可见）。
+        status, reason, image_path = self._summarize_image_delivery(consumed)
         return {
-            "status": "published",
+            "status": status,
+            "reason": reason,
+            "image_path": image_path,
             "candidate_id": str(result.get("candidate_id") or ""),
             "channel": str(result.get("channel") or ""),
             "target": str(result.get("target") or ""),
             "sequence": int(result.get("sequence") or 0),
             "event_id": str(result.get("event_id") or ""),
+            # 保留"是否成功入箱"这一发布层事实，便于区分"没发布"与"发布了但没产出"。
+            "published": True,
             "consumed": consumed,
         }
+
+    @staticmethod
+    def _summarize_image_delivery(consumed: Any) -> tuple[str, str, str]:
+        """把消费者明细归约为 (终态, 原因, 资产引用)。
+
+        只有 consumer 明确回报 ``status == "completed"`` 才算真的产出并派发；
+        其余一律为 ``failed``，不把"事件已入箱"包装成成功。
+        """
+        items = consumed if isinstance(consumed, list) else []
+        for item in items:
+            if isinstance(item, dict) and str(item.get("status") or "") == "completed":
+                return "completed", "", str(item.get("image_path") or "")
+        if not items:
+            return "failed", "not_consumed", ""
+        first = next((item for item in items if isinstance(item, dict)), {})
+        return (
+            "failed",
+            str(first.get("reason") or first.get("status") or "delivery_failed"),
+            "",
+        )
 
     async def approve_world_image_candidate(
         self,
@@ -4139,15 +4229,19 @@ class Companion:
         orientation = _image_orientation_phrase(image_size)
         # ── P4 局部特写分支 ──
         # 用户明确要看某个部位（手/腿/脚/腰/肩颈/背影/头发/脸/眼睛）时，
-        # base 只写「人物外貌以参考图为准」，不写身高/体重/体脂率/杯数/三围/
-        # 发色/眼色等无关标签。由 three_view 图生图 + 参考图锁人物一致性，
-        # 文字层只描述对应部位的构图/姿态/机位。
+        # 文字层只描述对应部位的构图/姿态/机位，不做身材数据堆砌。
+        # 2026-09-27 修正：原先此处完全不写外貌，一致性**只**依赖 three_view
+        # 图生图。一旦所配生图源没有 edits 端点（实测 BigModel 返回 404、
+        # 旧的 image2.inon.one 更会挂起），自拍就会变成"随机一张脸"。
+        # 现在补一段简短文字锚点：参考图可用时它只是补充，参考图/图生图
+        # 不可用时它就是唯一的人物依据——解掉"生图能力被图生图单点绑定"。
         focus = str((spec or {}).get("focus") or "").strip()
         if focus and focus in _CLOSEUP_FOCUS_SET:
+            anchor = _closeup_appearance_anchor(appearance)
             # 只写媒介与色调定位：光线由光线模块（按 world/本地时刻）单独表达，
             # 真实感/负面约束由出口模块统一负责——这里再写一遍只会重复、互相摊薄权重。
             base = (
-                "一张写实照片，人物外貌以参考图为准。"
+                "一张写实照片，人物外貌以参考图为准。" + anchor +
                 "画面是手机随手拍的生活照，暖色调、生活化。"
             )
             full = f"{base}{orientation}。"
@@ -5022,6 +5116,15 @@ class Companion:
             if not content:
                 return False
 
+            # 生成后守卫（2026-09-27）：主动消息反复照抄 persona 的 few-shot 示例
+            # （"刚关电脑又打开 看你回没回"），并向用户索要一次并不存在的回应。
+            # 这里有且只在这里过滤：示例复读 / 伪造往返回合一律不发；
+            # 若全部气泡都被拒，宁可不发，也不打扰。
+            bubbles = self._sanitize_proactive_bubbles(content, scene_name)
+            if not bubbles:
+                return False
+            content = "\n".join(bubbles)
+
             # 决策埋点 1（单点写）：动机候选集 + 本次选择落盘。
             if getattr(self, "decision_log", None) is not None:
                 try:
@@ -5047,7 +5150,7 @@ class Companion:
             if not delivery_v2:
                 # 阶段 5: 修复 legacy 缺口——关闭 proactive_delivery_v2 时不再"只发不落库"，
                 # 同样写 chat_log + normalized 双写（仍不发 SSE 事件，保持 legacy 语义）。
-                success = await self.qq.send_message(master_id, content)
+                success = await self._send_proactive_bubbles(master_id, bubbles)
                 if success:
                     self._persist_proactive_chat_log(
                         master_id, content, scene_name, scene_cfg
@@ -5063,7 +5166,7 @@ class Companion:
             }
             if master_id and getattr(self.qq, "is_logged_in", False):
                 try:
-                    qq_sent = await self.qq.send_message(master_id, content)
+                    qq_sent = await self._send_proactive_bubbles(master_id, bubbles)
                     delivery_results["qq"] = "sent" if qq_sent else "failed"
                     delivered = bool(qq_sent)
                 except Exception:
@@ -5074,23 +5177,28 @@ class Companion:
 
             from core import chat_events
 
-            message_id: int | str = self._persist_proactive_chat_log(
-                master_id, content, scene_name, scene_cfg
-            )
-            if message_id is None:
-                message_id = generate_id("message")
+            # 每条气泡独立落库 + 独立推送：桌面端才显示成多条，与 QQ 端一致
+            # （原先无论生成几条都塞进一条消息，条数语义失真）。
+            bubble_ids: list[int | str] = []
+            for bubble in bubbles:
+                bid = self._persist_proactive_chat_log(
+                    master_id, bubble, scene_name, scene_cfg
+                )
+                bubble_ids.append(bid if bid is not None else generate_id("message"))
+            message_id: int | str = bubble_ids[0]
 
             try:
-                chat_events.emit(
-                    "assistant",
-                    role="assistant",
-                    id=message_id,
-                    user_id=master_id,
-                    content=content,
-                    source="proactive",
-                    scene=scene_name,
-                    channel="desktop",
-                )
+                for bid, bubble in zip(bubble_ids, bubbles):
+                    chat_events.emit(
+                        "assistant",
+                        role="assistant",
+                        id=bid,
+                        user_id=master_id,
+                        content=bubble,
+                        source="proactive",
+                        scene=scene_name,
+                        channel="desktop",
+                    )
                 delivery_results["desktop"] = "queued"
                 delivered = True
             except Exception:
@@ -5150,6 +5258,80 @@ class Companion:
             logger.exception("[Push] dispatch error: %s", scene_name)
             return False
 
+    # ── 主动消息内容守卫与多气泡派发（2026-09-27）──────────────────────
+    @staticmethod
+    def _split_proactive_bubbles(content: str) -> list[str]:
+        """把主动消息文本按行切成气泡序列（上限 _PROACTIVE_MAX_BUBBLES）。"""
+        lines = [ln.strip() for ln in str(content or "").splitlines() if ln.strip()]
+        return lines[:_PROACTIVE_MAX_BUBBLES]
+
+    def _proactive_example_corpus(self) -> list[str]:
+        """当前激活角色的 few-shot 示例原文，归一化后供生成结果查重。"""
+        try:
+            from core.persona_hub import get_persona_manager
+
+            persona = get_persona_manager().get_active() or {}
+        except Exception:
+            logger.debug("[Push] persona unavailable for example check", exc_info=True)
+            return []
+        examples = persona.get("speech_examples") or {}
+        corpus: list[str] = []
+        for key in ("phrases", "long_examples"):
+            value = examples.get(key)
+            if isinstance(value, list):
+                corpus.extend(str(v) for v in value if str(v).strip())
+        normalized = [_COMPARE_STRIP_RE.sub("", item) for item in corpus]
+        return [item for item in normalized if item]
+
+    def _proactive_bubble_problem(self, bubble: str) -> str:
+        """单条气泡不应发出的原因码；空串表示通过。确定性检查，不调 LLM。"""
+        norm = _COMPARE_STRIP_RE.sub("", str(bubble or ""))
+        if not norm:
+            return "empty"
+        for ref in self._proactive_example_corpus():
+            if norm == ref or (len(norm) >= 6 and norm in ref) or (
+                len(ref) >= 6 and ref in norm
+            ):
+                return "example_copy"
+        for pattern in _FABRICATED_REPLY_PATTERNS:
+            if pattern.search(str(bubble or "")):
+                return "fabricated_reply_demand"
+        return ""
+
+    def _sanitize_proactive_bubbles(self, content: str, scene_name: str) -> list[str]:
+        """过滤主动消息气泡：剔除示例复读与伪造往返回合，返回可发的气泡。
+
+        全部被拒时返回空列表（调用方据此不发），并留下可诊断日志。
+        """
+        kept: list[str] = []
+        rejected: list[tuple[str, str]] = []
+        for bubble in self._split_proactive_bubbles(content):
+            problem = self._proactive_bubble_problem(bubble)
+            if problem:
+                rejected.append((problem, bubble))
+            else:
+                kept.append(bubble)
+        if rejected:
+            logger.warning(
+                "[Push] proactive bubbles rejected scene=%s kept=%d rejected=%s",
+                scene_name,
+                len(kept),
+                [{"reason": r, "text": t[:40]} for r, t in rejected],
+            )
+        return kept
+
+    async def _send_proactive_bubbles(self, master_id: Any, bubbles: list[str]) -> bool:
+        """逐条发送主动消息气泡，任一条成功即视为已送达。"""
+        sent_any = False
+        for index, bubble in enumerate(bubbles):
+            if index and _PROACTIVE_BUBBLE_GAP_SEC > 0:
+                await asyncio.sleep(
+                    _PROACTIVE_BUBBLE_GAP_SEC * (0.7 + random.random() * 0.6)
+                )
+            if await self.qq.send_message(master_id, bubble):
+                sent_any = True
+        return sent_any
+
     def _maybe_attach_companion_image(
         self,
         master_id: int | str,
@@ -5194,7 +5376,9 @@ class Companion:
                     "persona_id": self._active_persona_id(),
                 })
                 status = str((result or {}).get("status", ""))
-                if status in ("published", "delivered", "sent", "ok", "success"):
+                # 只认真正的产出终态：publish 层的 "published" 仅代表事件入箱，
+                # 图片可能因 provider 失败而根本没生成（2026-09-27 实测）。
+                if status in ("completed", "delivered", "sent", "ok", "success"):
                     logger.info(
                         "[Push] companion image delivered scene=%s status=%s",
                         scene_name, status,

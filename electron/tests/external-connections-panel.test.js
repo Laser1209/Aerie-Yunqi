@@ -71,4 +71,7 @@ test("iLink bridge exposes only controlled status and lifecycle operations", () 
   assert.match(mainSource, /path: "\/api\/ilink\/start"/);
   assert.match(mainSource, /ipcMain\.handle\("ilinkGateway:stop"/);
   assert.match(mainSource, /path: "\/api\/ilink\/stop"/);
+  assert.match(preloadSource, /pairingCode: \(\) => ipcRenderer\.invoke\("ilinkGateway:pairingCode"\)/);
+  assert.match(mainSource, /ipcMain\.handle\("ilinkGateway:pairingCode"/);
+  assert.match(mainSource, /path: "\/api\/ilink\/pairing-code"/);
 });

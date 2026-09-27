@@ -210,6 +210,15 @@ class ILinkGateway:
             except (OSError, TimeoutError, httpx.TimeoutException):
                 failure_count += 1
                 await self.sleep(self._backoff(failure_count))
+            except Exception:
+                # 单轮轮询/单条消息处理失败（含对话主链路回调抛出的意外异常）
+                # 不得打死这条长轮询：否则外部表现正是"面板显示已连接、
+                # 实际再也不回复"。游标仅在解析成功后才推进，重试安全。
+                logger.exception(
+                    "iLink poll iteration failed; backing off and retrying"
+                )
+                failure_count += 1
+                await self.sleep(self._backoff(failure_count))
 
     def _backoff(self, failure_count: int) -> float:
         base = min(2 ** failure_count, 30)

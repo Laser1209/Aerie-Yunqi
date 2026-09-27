@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any
 from urllib.parse import urlparse
 
 from communication.ilink.errors import ILinkProtocolError
+
+logger = logging.getLogger(__name__)
 
 
 class AuthStatus(str, Enum):
@@ -190,8 +193,12 @@ class WeixinMessage:
             message_id=_integer(data.get("message_id"), "message_id"),
             from_user_id=_string(data.get("from_user_id"), "from_user_id"),
             to_user_id=_string(data.get("to_user_id"), "to_user_id"),
-            client_id=_string(data.get("client_id"), "client_id"),
-            create_time_ms=_integer(data.get("create_time_ms"), "create_time_ms"),
+            # client_id 仅参与去重键拼接，缺失/为空不该让一条真实用户消息整条被丢。
+            client_id=_string(data.get("client_id"), "client_id", allow_empty=True)
+            if data.get("client_id") is not None
+            else "",
+            # create_time_ms 只用于展示与节奏；缺失时按 0 处理，同样不丢消息。
+            create_time_ms=_optional_integer(data.get("create_time_ms"), "create_time_ms") or 0,
             message_type=_enum(data.get("message_type"), MessageType, "message_type"),
             message_state=_enum(data.get("message_state"), MessageState, "message_state"),
             items=tuple(MessageItem.from_dict(item) for item in raw_items),
@@ -209,6 +216,8 @@ class GetUpdatesResponse:
     messages: tuple[WeixinMessage, ...]
     cursor: str
     longpolling_timeout_ms: int | None = None
+    # 本批中被跳过（无法解析）的消息条数，供上层观测；不参与业务判定。
+    skipped_messages: int = 0
 
     @classmethod
     def from_dict(cls, value: Any) -> GetUpdatesResponse:
@@ -216,13 +225,38 @@ class GetUpdatesResponse:
         raw_messages = data.get("msgs")
         if not isinstance(raw_messages, list):
             raise ILinkProtocolError("msgs must be an array")
+        # 逐条容错：单条消息字段不符合预期（例如 client_id 为空、item_list 缺字段）
+        # 时只跳过该条，绝不让整批解析失败。原实现是 tuple(...) 一次性解析，
+        # 任何一条畸形消息都会抛错 → 游标不推进 → 每次轮询都重复失败，
+        # 外部表现正是「面板显示已连接、却永远收不到也不回复」（2026-09-27 定位）。
+        parsed: list[WeixinMessage] = []
+        skipped = 0
+        for index, raw in enumerate(raw_messages):
+            try:
+                parsed.append(WeixinMessage.from_dict(raw))
+            except ILinkProtocolError as exc:
+                skipped += 1
+                logger.warning(
+                    "iLink message dropped at parse stage: index=%d reason=%s keys=%s",
+                    index,
+                    exc,
+                    sorted(raw.keys()) if isinstance(raw, dict) else type(raw).__name__,
+                )
+        if skipped:
+            logger.warning(
+                "iLink poll batch: %d/%d message(s) skipped, %d usable",
+                skipped,
+                len(raw_messages),
+                len(parsed),
+            )
         return cls(
             ret=_optional_integer(data.get("ret"), "ret") or 0,
             errcode=_optional_integer(data.get("errcode"), "errcode"),
             errmsg=_optional_string(data.get("errmsg"), "errmsg"),
-            messages=tuple(WeixinMessage.from_dict(message) for message in raw_messages),
+            messages=tuple(parsed),
             cursor=_string(data.get("get_updates_buf"), "get_updates_buf", allow_empty=True),
             longpolling_timeout_ms=_optional_integer(
                 data.get("longpolling_timeout_ms"), "longpolling_timeout_ms"
             ),
+            skipped_messages=skipped,
         )

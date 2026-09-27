@@ -160,3 +160,30 @@ async def test_send_text_posts_finished_bot_message_with_context():
         },
         "base_info": {"channel_version": "2.1.1"},
     }
+
+
+@pytest.mark.asyncio
+async def test_send_text_treats_missing_ret_as_success():
+    """成功响应常不带 ret；缺 ret 不该被判失败（否则配对后依然发不出微信）。"""
+
+    async def handler(request):
+        del request
+        return httpx.Response(200, json={})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as transport_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", transport_client)
+        sent = await client.send_text("wx-owner", "收到。", "context-1")
+
+    assert sent is True
+
+
+@pytest.mark.asyncio
+async def test_send_text_raises_on_explicit_nonzero_ret():
+    async def handler(request):
+        del request
+        return httpx.Response(200, json={"ret": 1001, "errmsg": "rate limited"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as transport_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", transport_client)
+        with pytest.raises(ILinkProtocolError, match="ret=1001"):
+            await client.send_text("wx-owner", "收到。", "context-1")

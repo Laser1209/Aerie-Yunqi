@@ -110,8 +110,16 @@ class ILinkClient:
                 }
             },
         )
-        if data.get("ret") != 0 or data.get("errcode") not in (None, 0):
-            raise ILinkProtocolError("iLink business request failed")
+        # iLink 成功响应常常根本不带 ret 字段（与 getupdates 同一模式，实测确认过）。
+        # 原写法 `data.get("ret") != 0` 会把缺失的 ret 判成 None != 0 → 抛错，
+        # 于是配对成功后依然一条微信都发不出去（2026-09-27 定位）。
+        # 缺失即视为 0；只有显式非 0 或非 0 errcode 才算失败。
+        ret = data.get("ret")
+        errcode = data.get("errcode")
+        if (ret is not None and ret != 0) or (errcode not in (None, 0)):
+            raise ILinkProtocolError(
+                f"iLink send failed: ret={ret!r} errcode={errcode!r} keys={sorted(data.keys())}"
+            )
         return True
 
     async def _get_json(

@@ -32,11 +32,15 @@ Algorithm
 1. 先找模型自报的边界（``_INTENT_SEP_RE``；落在围栏代码块或原子段内的
    分隔符不算——它们分别是代码内容与原子段内容，绝不是消息边界）；
    命中 ≥2 条就按它分，超长单条再按下面的原子感知逻辑切。
-2. 没命中时回退标点切分：用 ``_ATOM_RE.finditer`` 定位所有原子 span。
+2. 没命中时回退标点切分：用 ``_protected_spans`` 定位所有不可切分跨度
+   （围栏代码块 + 原子段）。
 3. Walk the text, emitting text fragments (which may be split at 。！？)
-   and atomic spans (kept whole).
+   and spans (kept whole).
 4. Merge tiny fragments (< 8 chars) with their neighbors, capped at
    ``max_len``.
+
+围栏代码块与原子段一样**整块成条**：代码按行切会让缩进与续行关系全断，
+用户 2026-09-28 明确要求「代码块按一整块消息发」。
 
 ``split()`` 返回空列表 = 没有可外发内容（空文本 / 纯空白 / 去掉分隔符后
 什么都不剩）。调用方不得把空结果回退成原文，否则用户会看到裸 ``---``。
@@ -87,6 +91,33 @@ def is_message_separator(line: str) -> bool:
 # 末尾用 (?:```|\Z) 而非要求成对：未闭合围栏里的 --- 同样是代码内容，
 # 一旦按「没闭合就当普通文本」处理，就会把用户贴的代码从中间切开。
 _FENCE_RE = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
+
+
+def _protected_spans(text: str) -> list[tuple[int, int]]:
+    """不可切分跨度（围栏代码块 + 原子段），已排序且互不重叠。
+
+    两类都必须整体保留，但理由不同：
+
+    - **原子段**（``<action>`` / ``<thought>`` / ``【】``）是语义单位，切开会让
+      标签未闭合；
+    - **围栏代码块**是格式单位。代码按行切成一条条消息，既读不懂（缩进/续行
+      关系全断），也不像人在说话——用户 2026-09-28 明确要求「代码块按一整块发」。
+
+    重叠时取并集（围栏里可能嵌着 ``【】`` 之类的字面量），避免同一段被算两次。
+    """
+    spans = [m.span() for m in _FENCE_RE.finditer(text)]
+    spans += [m.span() for m in _ATOM_RE.finditer(text)]
+    if not spans:
+        return []
+    spans.sort()
+    merged = [spans[0]]
+    for start, end in spans[1:]:
+        last_start, last_end = merged[-1]
+        if start < last_end:  # 严格重叠才合并；仅相邻的两个跨度各自独立
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+    return merged
 
 
 class SemanticMessageSplitter:
@@ -142,8 +173,7 @@ class SemanticMessageSplitter:
         """
         if not text:
             return None
-        protected = [m.span() for m in _FENCE_RE.finditer(text)]
-        protected += [m.span() for m in _ATOM_RE.finditer(text)]
+        protected = _protected_spans(text)
         separators = [
             m for m in _INTENT_SEP_RE.finditer(text)
             if not any(start <= m.start() < end for start, end in protected)
@@ -172,26 +202,27 @@ class SemanticMessageSplitter:
         return expanded
 
     def _split_uncapped(self, text: str) -> list[str]:
-        if not text:
-            return [text] if text else []
+        """按不可切分跨度切开正文，跨度本身整块保留。
 
-        # Step 1: locate all atomic spans
-        atoms = list(_ATOM_RE.finditer(text))
-        if not atoms:
+        跨度 = 围栏代码块 + 原子段。代码块按行切会让缩进与续行关系全断，
+        因此它和原子段一样整块成条（用户 2026-09-28 的要求）。
+        """
+        if not text:
+            return []
+        spans = _protected_spans(text)
+        if not spans:
             return self._split_no_atoms(text)
 
-        # Step 2: walk through text, alternating fragments and atoms
         segments: list[str] = []
         cursor = 0
-        for atom in atoms:
-            # Fragment before this atom (may be empty)
-            if atom.start() > cursor:
-                fragment = text[cursor:atom.start()]
-                segments.extend(self._split_fragment(fragment))
-            # Atom itself (always kept whole)
-            segments.append(text[atom.start():atom.end()])
-            cursor = atom.end()
-        # Trailing fragment after the last atom
+        for start, end in spans:
+            # Fragment before this span (may be empty)
+            if start > cursor:
+                segments.extend(self._split_fragment(text[cursor:start]))
+            # Span itself (always kept whole)
+            segments.append(text[start:end])
+            cursor = end
+        # Trailing fragment after the last span
         if cursor < len(text):
             segments.extend(self._split_fragment(text[cursor:]))
 
@@ -204,6 +235,11 @@ class SemanticMessageSplitter:
         做法：按字符数把相邻段落就近收进 N 个桶（目标 = 总长度 / N），
         而不是把溢出全部塞进最后一条——后者会产出一面文字墙，等于把
         「分段发送」又退回成「一条长文」，正好是本次要修掉的反模式。
+
+        围栏代码块是**硬边界**：既不收进前一个桶，也不让后面的段落并进来。
+        否则会得到「开场一句。```python…」这种把正文粘在代码上的气泡——代码块
+        就不成其为「一整块消息」了。代价是含代码块时可能略超 ``max_segments``；
+        宁可多一条，也不切开或粘糊代码。
         """
         if self.max_segments <= 0 or len(segments) <= self.max_segments:
             return segments
@@ -213,6 +249,12 @@ class SemanticMessageSplitter:
         buckets: list[str] = []
         current = ""
         for seg in segments:
+            if _is_code_fence(seg):
+                if current:
+                    buckets.append(current)
+                    current = ""
+                buckets.append(seg)
+                continue
             if current and len(current) >= target and len(buckets) < self.max_segments - 1:
                 buckets.append(current)
                 current = ""
@@ -285,11 +327,12 @@ class SemanticMessageSplitter:
         for seg in segments[1:]:
             if not seg:
                 continue
-            # If this seg is tiny and the previous is not an atom, glue
+            # If this seg is tiny and the previous is not indivisible, glue
             if (
                 len(seg) < _MIN_FRAGMENT_LEN
                 and merged
-                and not _is_atom(merged[-1])
+                and not _is_indivisible(seg)
+                and not _is_indivisible(merged[-1])
                 and len(merged[-1] + seg) <= self.max_len
             ):
                 merged[-1] += seg
@@ -297,7 +340,8 @@ class SemanticMessageSplitter:
             # If the previous seg is mid-sentence and we can fit, glue
             if (
                 merged
-                and not _is_atom(merged[-1])
+                and not _is_indivisible(seg)
+                and not _is_indivisible(merged[-1])
                 and not _is_sentence_end(merged[-1])
                 and len(merged[-1] + seg) <= self.max_len
             ):
@@ -328,9 +372,22 @@ def _join_segments(head: str, tail: str) -> str:
     return head + " " + tail
 
 
-def _is_atom(text: str) -> bool:
-    """Check if text is an atomic span (must never be split)."""
-    return bool(text) and (
+def _is_code_fence(text: str) -> bool:
+    """该段是否是一个围栏代码块（以 ``` 开头，切分时整块保留）。"""
+    return bool(text) and text.startswith("```")
+
+
+def _is_indivisible(text: str) -> bool:
+    """该段是否不可切分（原子段或围栏代码块），因而不得与相邻段合并。
+
+    合并会把「正文 + 代码块」拼成同一条消息；代码块一旦被粘上前后文字，
+    就再也没法整块复制或阅读了，所以这里与切分时用同一套判断。
+    """
+    if not text:
+        return False
+    if _is_code_fence(text):
+        return True
+    return (
         text.startswith("<action>")
         or text.startswith("<thought>")
         or (text.startswith("【") and text.endswith("】"))

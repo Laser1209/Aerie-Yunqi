@@ -134,6 +134,42 @@ def test_separator_inside_unclosed_fence_is_content():
 
 
 # ══════════════════════════════════════════════════════════
+# 2b. 围栏代码块整块成条（2026-09-28 用户要求）
+# ══════════════════════════════════════════════════════════
+
+def test_code_fence_is_sent_as_one_whole_message():
+    """代码块整块成条：按行切会让缩进与续行关系全断，读不懂。"""
+    text = "```python\ndef f():\n    return 1\n```"
+    segs = _segments(text)
+    assert segs == [text]
+
+
+def test_code_fence_sits_alone_between_prose():
+    """正文与代码块各成一条，不把正文粘到代码上。"""
+    text = "先看这段：\n```python\ndef f():\n    return 1\n```\n就这些。"
+    segs = _segments(text)
+    assert segs == ["先看这段：", "```python\ndef f():\n    return 1\n```", "就这些。"]
+
+
+def test_code_fence_stays_whole_even_when_capping_segments():
+    """条数收敛时代码块是硬边界：不并进上一个桶，也不被切开。"""
+    text = "开场一句。\n---\n```\nline1\nline2\nline3\n```\n---\n收尾一句。"
+    segs = _segments(text, max_segments=2)
+    fences = [seg for seg in segs if seg.startswith("```")]
+    assert len(fences) == 1
+    assert fences[0] == "```\nline1\nline2\nline3\n```"
+    assert all("开场一句" not in seg for seg in fences), segs
+    assert all("收尾一句" not in seg for seg in fences), segs
+
+
+def test_code_fence_internal_dashes_are_not_separators():
+    """代码块里的 --- 是内容，不是消息边界（否则代码会被从中间截断）。"""
+    text = "```\na\n---\nb\n```\n正文一句。"
+    segs = _segments(text)
+    assert segs == ["```\na\n---\nb\n```", "正文一句。"]
+
+
+# ══════════════════════════════════════════════════════════
 # 3. 条数上限：模型少给就尊重，模型多给就收敛
 # ══════════════════════════════════════════════════════════
 

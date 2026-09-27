@@ -13,7 +13,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import secrets
 import socket
 import time
@@ -25,6 +24,7 @@ import websockets
 from websockets.asyncio.client import ClientConnection
 
 from communication.message import IncomingMessage
+from core.model_output import sanitize_outbound_text
 
 logger = logging.getLogger(__name__)
 
@@ -35,77 +35,12 @@ STATE_DISCONNECTED = "disconnected"
 STATE_WS_CONNECTED = "ws_connected"
 STATE_LOGGED_IN = "logged_in"
 
-# ── v13.9: thought/action 标签过滤 ──
-
-def strip_thought_action_tags(text: str) -> str:
-    """移除 <thought> 和 <action> 标签及其内容，QQ 只输出纯对话文本。"""
-    if not text:
-        return text
-    # 移除 <thought>...</thought>（支持跨行）
-    text = re.sub(r'<thought>.*?</thought>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    # 移除 <action>...</action>（支持跨行）
-    text = re.sub(r'<action>.*?</action>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    # 清理多余空行（连续多个换行合并为 2 个以内）
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    # 清理首尾空白
-    text = text.strip()
-    return text
-
-
-# 输出端兜底：剥离 LLM 回显的对话历史时间戳标记（开头/中间、带空格/不带、
-# 带年份/带秒），仅保留正文。与 core.pipeline._HIST_LABEL_RE 保持一致，确保
-# 任何来源（含主动消息/陪伴通道）发往 QQ 的内容都不漏 `[MM-DD HH:MM]`。
-_TIMESTAMP_MARKER_RE = re.compile(
-    r"\[\d{2,4}-\d{2}(?:-\d{2})? ?\d{2}:\d{2}(?::\d{2})?\]\s*"
-)
-
-
-def strip_timestamp_markers(text: str) -> str:
-    if not text:
-        return text
-    return _TIMESTAMP_MARKER_RE.sub("", text).strip()
-
-
-# 跨通道来源标记过滤：对话历史里跨通道的消息会带 `[QQ]` / `[桌面]` / `[本地]` /
-# `[系统]` 前缀（见 core/_hist_utils.py 的 channel_short），那是给模型感知"这条
-# 来自哪个端"的元信息。模型偶发把它当格式模仿、直接发给用户（2026-09-27 实测：
-# QQ 收到的回复里出现 `[桌面] 照片我存了…`）。这里做输出端兜底，只剥除
-# **行首**的这类标记，避免误伤正文中正当出现的方括号内容。
-_CHANNEL_MARKER_RE = re.compile(r"^[ \t]*\[(?:QQ|桌面|本地|系统)\][ \t]*", re.MULTILINE)
-
-
-def strip_channel_markers(text: str) -> str:
-    """剥除 LLM 模仿历史格式而回显的跨通道标记（如 `[桌面] `）。
-
-    仅匹配行首（含缩进），不做全文本替换；剥除后清理因此产生的多余空行。
-    """
-    if not text:
-        return text
-    cleaned = _CHANNEL_MARKER_RE.sub("", text)
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.strip()
-
-
-# 伪图片 markdown 过滤（P4 兜底）：LLM 偶发把"生图提示词"写进回复文本，形如
-# `[图片](一张局部特写。昏暗的光线下…)` 或 `![图片](描述)`。这些是给后台生图系统的
-# 输入，不该出现在 QQ 文本里。正则只剥 `[图片](...)` / `![图片](...)` 且括号内
-# **不是合法 http(s) URL** 的片段——真实图片消息 `![图片](http://127.0.0.1:7890/...)`
-# 是附件渲染语法，不受影响。与 strip_timestamp_markers 同为输出端兜底。
-_FAKE_IMAGE_MARKDOWN_RE = re.compile(
-    r"!?\[图片\]\((?!https?://)(?![^)]*https?://)[^)]*\)"
-)
-
-
-def strip_fake_image_markdown(text: str) -> str:
-    """剥除 LLM 误写的伪图片 markdown（`[图片](描述)` / `![图片](描述)`）。
-
-    仅匹配完整语法形态（含括号与"图片"字样），不误伤裸词"图片"；
-    括号内含 http(s) URL 的真实图片语法被负向前瞻排除，保留不动。
-    """
-    if not text:
-        return ""
-    cleaned = _FAKE_IMAGE_MARKDOWN_RE.sub("", text)
-    return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+# 输出端清洗统一由 core.model_output 提供（唯一实现，所有通道共用）：
+#   - strip_thought_action_tags：剥 <thought>/<action> 标签
+#   - sanitize_outbound_text    ：出站唯一闸门（标签 + 历史元信息标记 + 伪图片语法）
+# 此前 QQ 本地维护了 4 个剥离函数、iLink 一个都没有，两套实现各自演进，
+# 于是"桌面端正常、QQ/微信端露标记"的同类 bug 反复复发（2026-09-27）。
+# 正则不再在本地复制。
 
 
 def _port_is_open(host: str, port: int, timeout: float = 1.0) -> bool:
@@ -537,14 +472,9 @@ class QQClient:
             logger.warning("Cannot send: QQ WS not connected")
             return False
 
-        # v13.9: 过滤 thought/action 标签，QQ 只输出纯对话文本
-        content = strip_thought_action_tags(content)
-        # 输出端兜底：剥离 LLM 回显的时间戳标记
-        content = strip_timestamp_markers(content)
-        # 输出端兜底：剥离 LLM 模仿历史格式回显的跨通道标记（[QQ]/[桌面]/[本地]）
-        content = strip_channel_markers(content)
-        # 输出端兜底：剥离 LLM 误写的伪图片 markdown（[图片](提示词)），防提示词外泄
-        content = strip_fake_image_markdown(content)
+        # v13.9: 出站唯一闸门——剥 thought/action 标签、剥模型回显的历史元信息
+        # 标记（时间戳 / [桌面] 等跨通道前缀）、剥伪图片 markdown。QQ 只输出纯对话文本。
+        content = sanitize_outbound_text(content)
         if not content:
             logger.warning("QQ send: content empty after stripping tags, skip")
             return False
@@ -801,16 +731,12 @@ class QQClient:
         if not self.is_connected:
             return False
 
-        # v13.9: 过滤 text 类型 segment 中的 thought/action 标签
-        # 非 text 类型（image/face/reply 等）一律保留，不做过滤
+        # 出站唯一闸门：text 段同样过清洗，非 text 段（image/face/reply）原样保留
         cleaned_segments = []
         has_usable_content = False
         for seg in segments:
             if seg.get("type") == "text" and "text" in (seg.get("data") or {}):
-                cleaned = strip_thought_action_tags(seg["data"]["text"])
-                cleaned = strip_timestamp_markers(cleaned)
-                cleaned = strip_channel_markers(cleaned)
-                cleaned = strip_fake_image_markdown(cleaned)
+                cleaned = sanitize_outbound_text(seg["data"]["text"])
                 cleaned_segments.append({**seg, "data": {**seg["data"], "text": cleaned}})
                 if cleaned:
                     has_usable_content = True
@@ -852,7 +778,7 @@ class QQClient:
             return False
 
         segments: list[dict] = []
-        caption_clean = strip_thought_action_tags(caption or "")
+        caption_clean = sanitize_outbound_text(caption or "")
         if caption_clean:
             segments.append({"type": "text", "data": {"text": caption_clean}})
         segments.append({"type": "image", "data": {"file": image_ref}})

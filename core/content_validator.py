@@ -17,7 +17,7 @@ import logging
 import random
 from typing import Any
 
-from communication.qq_client import strip_thought_action_tags
+from core.model_output import sanitize_outbound_text
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,8 @@ FALLBACK_REPLIES: tuple[str, ...] = (
 def has_meaningful_content(text: str) -> bool:
     """Check if text contains non-whitespace content after stripping tags.
 
-    Uses the same tag-stripping logic as qq_client.strip_thought_action_tags
-    to ensure consistency between validation and final output filtering.
+    用与各通道出口**同一个**清洗实现（core.model_output.sanitize_outbound_text）
+    判定，保证「校验认为有内容」与「实际能发出去的内容」一致。
 
     Args:
         text: Raw LLM response text (may contain <thought>/<action> tags).
@@ -51,7 +51,7 @@ def has_meaningful_content(text: str) -> bool:
     """
     if not text:
         return False
-    stripped = strip_thought_action_tags(text)
+    stripped = sanitize_outbound_text(text)
     return bool(stripped and stripped.strip())
 
 
@@ -193,10 +193,9 @@ class ContentValidator:
                 messages.pop()
 
         try:
-            from communication.qq_client import strip_thought_action_tags as _strip
             resp = await self.brain.chat(messages)
             text = getattr(resp, "text", "") or ""
-            return _strip(text)
+            return sanitize_outbound_text(text)
         except Exception as e:
             self._metrics["brain_errors"] += 1
             logger.warning(

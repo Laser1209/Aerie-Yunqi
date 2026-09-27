@@ -19,6 +19,7 @@ from communication.ilink.errors import (
 )
 from core.ilink_credentials import ILinkCredentials, ILinkCredentialsStore
 from core.ilink_state import ILinkStateStore
+from core.model_output import sanitize_outbound_text
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,13 @@ class ILinkGateway:
         channel_account_id: str,
         content: str,
     ) -> bool:
+        # 出站唯一闸门（与 QQ 共用 core.model_output 的同一实现）：
+        # 微信端此前完全没有清洗，模型回显的历史元信息（`[00:05] [桌面] …`）
+        # 会原样发给用户，而桌面端看起来正常——典型的"只在一条通道上做了防护"。
+        content = sanitize_outbound_text(content)
+        if not content:
+            logger.warning("iLink send skipped: content empty after sanitization")
+            return False
         if self._client is None:
             raise RuntimeError("iLink gateway is not running")
         if self._bot_id is None:

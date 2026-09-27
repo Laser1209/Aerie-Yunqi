@@ -3338,29 +3338,10 @@ class Pipeline:
         import re
         return re.sub(r" thinking.*? response", "", text, flags=re.DOTALL).strip()
 
-    # 模型可能回显对话历史里的时间戳标记，形态多样：
-    #   [MM-DD HH:MM] / [MM-DD HH:MM:SS] / [YYYY-MM-DD HH:MM] / [YYYY-MM-DD HH:MM:SS]
-    # 年份可有可无，秒可有可无，日期与时间之间允许 0~1 个空格，尾部允许多余空格。
-    # 用 re.sub 全文替换（不只是行首），确保正文中间出现也被剥除。
-    _HIST_LABEL_RE = re.compile(
-        r"\[\d{2,4}-\d{2}(?:-\d{2})? ?\d{2}:\d{2}(?::\d{2})?\]\s*"
-    )
-
-    @classmethod
-    def _strip_leading_timestamp(cls, text: str) -> str:
-        """Strip any ``[MM-DD HH:MM] `` timestamp markers the model may echo.
-
-        History messages are prefixed with this label so the LLM can tell when
-        each turn happened (see context_builder._hist_label). Some models
-        imitate that format and sprinkle timestamps into their own reply
-        (leading and mid-text alike), which would otherwise leak into the
-        user-visible message. The ``[MM-DD HH:MM]`` shape is unique enough to
-        this injected marker that we remove every occurrence; the user's
-        companion text never legitimately uses this exact bracket format.
-        """
-        if not text:
-            return text
-        return cls._HIST_LABEL_RE.sub("", text).strip()
+    # 输出端元信息标记的剥离统一由 core.model_output.strip_internal_markers 负责
+    # （唯一实现，各通道出口共用）。此处原先另存一份 _HIST_LABEL_RE 与
+    # _strip_leading_timestamp，且从未被调用——重复正则正是"某条通道漏剥"的温床，
+    # 已在 2026-09-27 收敛删除。
 
     @staticmethod
     def _ensure_react_trace(

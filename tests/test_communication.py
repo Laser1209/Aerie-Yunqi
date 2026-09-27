@@ -128,7 +128,7 @@ class TestRecallManager:
 
 
 # ── P4：QQ 输出端伪图片 markdown 过滤（提示词外泄兜底） ──
-from communication.qq_client import strip_fake_image_markdown  # noqa: E402
+from core.model_output import strip_fake_image_markdown  # noqa: E402
 
 
 def test_strip_fake_image_markdown_removes_prompt_text():
@@ -160,7 +160,9 @@ def test_strip_fake_image_markdown_keeps_plain_word():
 
 def test_strip_fake_image_markdown_empty():
     assert strip_fake_image_markdown("") == ""
-    assert strip_fake_image_markdown(None) == ""
+    # 契约与 strip_thought_action_tags 统一：假值原样返回（None 进 None 出），
+    # 由调用方决定兜底，不再把 None 静默换成空串。
+    assert strip_fake_image_markdown(None) is None
 
 
 class _RpcSpy:

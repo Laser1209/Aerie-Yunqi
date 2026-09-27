@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from communication.send_queue import SendQueue
 from communication.message import OutgoingReply
-from communication.qq_client import strip_thought_action_tags
+from core.model_output import strip_thought_action_tags
 from config.persona_loader import get_message_batching_config
 
 _SEPARATED = "第一段在这里。\n---\n第二段在这里。\n---\n第三段在这里。"

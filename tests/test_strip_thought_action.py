@@ -1,9 +1,18 @@
-"""测试 QQ thought/action 标签过滤功能"""
+"""测试输出端净化：thought/action 标签、历史元信息标记、括号描写。
+
+回归背景（2026-09-27）：主动消息在 QQ/微信端发出 ``[00:05] [桌面] 怎么一直没动静…``。
+根因是旧实现只认「带日期的时间戳 + 行首第一个通道标记」，
+模型把日期砍掉后（``[00:05]``）整条清洗链就全失效。
+"""
 import sys
 sys.path.insert(0, "e:\\Agent_reply")
 
-from communication.qq_client import strip_channel_markers, strip_thought_action_tags
-from core.model_output import strip_narration
+from core.model_output import (
+    sanitize_outbound_text,
+    strip_internal_markers,
+    strip_narration,
+    strip_thought_action_tags,
+)
 
 
 def test_basic():
@@ -121,7 +130,7 @@ def test_narration_pure_returns_empty():
 def test_channel_markers_stripped_at_line_start():
     """回归：模型模仿历史格式把 [桌面]/[QQ] 回显给用户，必须剥除"""
     text = "[桌面] 照片我存了\n[QQ] 晚点发你"
-    result = strip_channel_markers(text)
+    result = strip_internal_markers(text)
     assert "照片我存了" in result
     assert "晚点发你" in result
     for marker in ("[桌面]", "[QQ]", "[本地]", "[系统]"):
@@ -130,16 +139,16 @@ def test_channel_markers_stripped_at_line_start():
 
 
 def test_channel_markers_keep_inline_brackets():
-    """只剥行首标记，正文中正当出现的方括号内容不误伤"""
-    text = "我看了[桌面]版的说明，还行"
-    assert strip_channel_markers(text) == text
+    """只剥元信息标记，正文中正当出现的方括号内容不误伤"""
+    text = "我看了[备注]版的说明，还行"
+    assert strip_internal_markers(text) == text
     print("✅ 正文方括号不误伤测试通过")
 
 
 def test_channel_markers_collapse_blank_lines():
     """整行只有标记时，剥除后产生的多余空行应收敛为单空行"""
     text = "第一句\n[本地] \n\n\n第二句"
-    result = strip_channel_markers(text)
+    result = strip_internal_markers(text)
     assert "\n\n\n" not in result
     assert "第一句" in result
     assert "第二句" in result
@@ -148,9 +157,86 @@ def test_channel_markers_collapse_blank_lines():
 
 def test_channel_markers_empty_input():
     """空输入原样返回"""
-    assert strip_channel_markers("") == ""
-    assert strip_channel_markers(None) is None
+    assert strip_internal_markers("") == ""
+    assert strip_internal_markers(None) is None
     print("✅ 通道标记空输入测试通过")
+
+
+# ══════════════════════════════════════════════════════
+# 回归：截图实证的泄露形态（2026-09-27）
+# ══════════════════════════════════════════════════════
+
+# 用户在微信/QQ 端实际收到的三条原文（截图）
+_SCREENSHOT_LEAKS = (
+    "[00:05] [桌面] 怎么一直没动静...肯定是累坏了",
+    "[00:05] [桌面] 那就乖乖去睡 别硬撑着回我了",
+    "[00:05] [桌面] 盖好被角 晚安傻瓜",
+)
+
+
+def test_screenshot_leak_is_now_cleaned():
+    """截图原文必须被清理干净——时间戳与通道标记都不许留。
+
+    旧实现下这两条正则对截图原文的匹配结果都是空（时间戳缺日期、
+    通道标记不在行首），因此这条测试在修复前必然失败。
+    """
+    for raw in _SCREENSHOT_LEAKS:
+        out = sanitize_outbound_text(raw)
+        assert "[00:05]" not in out, f"时间戳未剥离: {out!r}"
+        assert "[桌面]" not in out, f"通道标记未剥离: {out!r}"
+        assert "[" not in out and "]" not in out, f"仍有残留方括号: {out!r}"
+        assert "怎么一直没动静" in out or "那就乖乖去睡" in out or "盖好被角" in out
+    print("✅ 截图泄露形态已清理")
+
+
+def test_leading_marker_run_handles_merged_markers():
+    """连成一串的标记要整串吃掉，不能只剥第一个"""
+    out = sanitize_outbound_text("[00:05] [桌面] [QQ] 正文")
+    assert out == "正文", out
+    print("✅ 连续标记串整串剥除")
+
+
+def test_datetime_history_label_still_cleaned():
+    """既有覆盖不能丢：带日期的历史标签仍要剥除"""
+    out = sanitize_outbound_text("[09-27 00:05] [桌面] 正文")
+    assert out == "正文", out
+    out2 = sanitize_outbound_text("[2026-09-27 00:05:30] 正文")
+    assert out2 == "正文", out2
+    print("✅ 带日期历史标签仍剥除")
+
+
+def test_topic_prefix_cleaned():
+    """主动消息续接会带 [话题：xxx] 前缀，同样属于内部元信息"""
+    out = sanitize_outbound_text("[话题：日常] 今天楼下小吃店排队排到马路上")
+    assert "话题" not in out, out
+    assert "小吃店" in out
+    print("✅ 话题前缀剥除")
+
+
+def test_inline_channel_marker_cleaned():
+    """通道标记出现在正文中间也要剥"""
+    out = sanitize_outbound_text("照片我存了 [桌面] 晚点发你")
+    assert "[桌面]" not in out, out
+    assert "照片我存了" in out and "晚点发你" in out
+    print("✅ 正文中间通道标记剥除")
+
+
+def test_time_like_content_mid_text_is_kept():
+    """正文中间的 [00:05] 可能是正当内容，只在行首剥除——不误伤"""
+    out = sanitize_outbound_text("倒计时还剩 [00:05] 秒")
+    assert "[00:05]" in out, out
+    print("✅ 正文中间时间样式不误伤")
+
+
+def test_sanitize_composes_all_steps():
+    """唯一闸门必须一次做完：标签 + 元信息 + 伪图片语法"""
+    raw = "<thought>心里话</thought>[00:05] [桌面] 给你看这张 [图片](一张自拍，暖色调)"
+    out = sanitize_outbound_text(raw)
+    assert "心里话" not in out
+    assert "[00:05]" not in out and "[桌面]" not in out
+    assert "一张自拍" not in out
+    assert "给你看这张" in out
+    print("✅ 组合清洗通过")
 
 
 if __name__ == "__main__":
@@ -169,5 +255,12 @@ if __name__ == "__main__":
     test_channel_markers_keep_inline_brackets()
     test_channel_markers_collapse_blank_lines()
     test_channel_markers_empty_input()
+    test_screenshot_leak_is_now_cleaned()
+    test_leading_marker_run_handles_merged_markers()
+    test_datetime_history_label_still_cleaned()
+    test_topic_prefix_cleaned()
+    test_inline_channel_marker_cleaned()
+    test_time_like_content_mid_text_is_kept()
+    test_sanitize_composes_all_steps()
     print()
     print("🎉 所有测试通过！")

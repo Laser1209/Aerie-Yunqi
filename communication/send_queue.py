@@ -32,7 +32,7 @@ from collections import deque
 from typing import Any, Awaitable, Callable, Optional
 
 from communication.message import OutgoingReply
-from communication.qq_client import strip_thought_action_tags
+from core.model_output import sanitize_outbound_text
 from communication.splitter import SemanticMessageSplitter
 from config.persona_loader import get_message_batching_config
 from core.persona_pacing import compute_persona_interval
@@ -212,7 +212,7 @@ class SendQueue:
         min_interval = cfg["min_interval_seconds"]
         max_interval = cfg["max_interval_seconds"]
 
-        plain = strip_thought_action_tags(reply_content or "")
+        plain = sanitize_outbound_text(reply_content or "")
         char_count = len(plain)
 
         if not plain or char_count == 0:

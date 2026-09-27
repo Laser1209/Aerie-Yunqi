@@ -35,6 +35,9 @@ _DEFAULT_MESSAGE_BATCHING_CONFIG: dict[str, Any] = {
     "chars_per_second": 4,
     "min_interval_seconds": 0.3,
     "max_interval_seconds": 5.0,
+    # 首条聚合窗：T_idle=首条后静默派发；T_cap=聚合窗总上限（到点强制派发）。
+    "first_message_idle_seconds": 3.0,
+    "first_message_cap_seconds": 8.0,
 }
 
 def _load_yaml(filename: str) -> dict[str, Any]:
@@ -472,6 +475,8 @@ def get_message_batching_config() -> dict[str, Any]:
         chars_per_second (int): Reading/typing speed in characters per second
         min_interval_seconds (float): Minimum interval between replies
         max_interval_seconds (float): Maximum interval between replies
+        first_message_idle_seconds (float): T_idle — 首条消息后等待的静默期
+        first_message_cap_seconds (float): T_cap — 首条聚合窗总时长上限（>= T_idle）
 
     All values are coerced to correct types with safe fallbacks.
     """
@@ -504,6 +509,15 @@ def get_message_batching_config() -> dict[str, Any]:
         except (TypeError, ValueError):
             return default
 
+    idle_seconds = _float(
+        "first_message_idle_seconds",
+        _DEFAULT_MESSAGE_BATCHING_CONFIG["first_message_idle_seconds"],
+    )
+    cap_seconds = _float(
+        "first_message_cap_seconds",
+        _DEFAULT_MESSAGE_BATCHING_CONFIG["first_message_cap_seconds"],
+    )
+
     return {
         "enabled": _bool("enabled", _DEFAULT_MESSAGE_BATCHING_CONFIG["enabled"]),
         "window_seconds": _float("window_seconds", _DEFAULT_MESSAGE_BATCHING_CONFIG["window_seconds"]),
@@ -512,6 +526,9 @@ def get_message_batching_config() -> dict[str, Any]:
         "chars_per_second": _int("chars_per_second", _DEFAULT_MESSAGE_BATCHING_CONFIG["chars_per_second"]),
         "min_interval_seconds": _float("min_interval_seconds", _DEFAULT_MESSAGE_BATCHING_CONFIG["min_interval_seconds"]),
         "max_interval_seconds": _float("max_interval_seconds", _DEFAULT_MESSAGE_BATCHING_CONFIG["max_interval_seconds"]),
+        "first_message_idle_seconds": idle_seconds,
+        # T_cap 依赖 T_idle：配置被写成 cap < idle 时钳到 idle，保证聚合窗必然收敛。
+        "first_message_cap_seconds": max(idle_seconds, cap_seconds),
     }
 
 

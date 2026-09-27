@@ -1,10 +1,38 @@
-"""Tests for MessageBatcher: time windows, max batch size, conversation isolation."""
+"""Tests for MessageBatcher: 首条聚合窗, 运行中缓冲, 并发隔离.
+
+注: 阶段 3 把「首条零等待立即派发」改为「首条聚合窗」(T_idle 静默 / T_cap 上限),
+因此本文件内的时序断言同步更新为「静默窗结束后派发」。
+聚合窗本身的专项用例见 tests/test_message_batcher_aggregation.py。
+"""
 
 import asyncio
 import pytest
 
 from communication.message import IncomingMessage
 from core.message_batcher import MessageBatcher, get_message_batcher
+
+
+def _cfg(**overrides):
+    """构造 message_batching 配置 (含首条聚合窗键, 小值便于快速测试)。"""
+    cfg = {
+        "enabled": True,
+        "window_seconds": 1.5,
+        "max_batch_size": 10,
+        "base_interval_seconds": 0.5,
+        "chars_per_second": 4,
+        "min_interval_seconds": 0.3,
+        "max_interval_seconds": 5.0,
+        "first_message_idle_seconds": 0.1,
+        "first_message_cap_seconds": 5.0,
+    }
+    cfg.update(overrides)
+    return cfg
+
+
+def _patch_config(monkeypatch, cfg):
+    monkeypatch.setattr(
+        "core.message_batcher.get_message_batching_config", lambda: cfg
+    )
 
 
 class TestMessageBatcherSingleton:
@@ -68,18 +96,7 @@ class TestMessageBatcherCore:
     @pytest.mark.asyncio
     async def test_disabled_batching_sends_immediately(self, monkeypatch):
         """When enabled=False, messages should be dispatched as single batches immediately."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": False,
-                "window_seconds": 1.0,
-                "max_batch_size": 5,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        _patch_config(monkeypatch, _cfg(enabled=False, window_seconds=1.0))
         batcher = await MessageBatcher.get_instance()
         batcher.register_callback(self._collect_callback)
 
@@ -94,27 +111,17 @@ class TestMessageBatcherCore:
         assert len(bid) == 32
 
     @pytest.mark.asyncio
-    async def test_first_message_dispatches_immediately(self, monkeypatch):
-        """New semantics: first message dispatches immediately (no window delay)."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": True,
-                "window_seconds": 5.0,
-                "max_batch_size": 10,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+    async def test_first_message_waits_idle_then_dispatches(self, monkeypatch):
+        """首条消息进入聚合窗: T_idle 静默后才派发 (不再零等待)。"""
+        _patch_config(monkeypatch, _cfg(window_seconds=5.0))
         batcher = await MessageBatcher.get_instance()
         batcher.register_callback(self._collect_callback)
 
         await batcher.submit_message(self._make_message("msg1", user_id=222))
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.03)
+        assert len(self.received_batches) == 0, "首条不应立即派发"
 
-        # first message immediately dispatched as a single batch
+        await asyncio.sleep(0.2)
         assert len(self.received_batches) == 1
         assert [m.content for m in self.received_batches[0][0]] == ["msg1"]
         assert len(self.received_batches[0][1]) == 32
@@ -122,29 +129,21 @@ class TestMessageBatcherCore:
     @pytest.mark.asyncio
     async def test_buffer_flushed_on_batch_completed(self, monkeypatch):
         """Messages arriving while a batch is running are buffered, flushed on completion."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": True,
-                "window_seconds": 5.0,
-                "max_batch_size": 10,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        _patch_config(monkeypatch, _cfg(window_seconds=5.0))
         batcher = await MessageBatcher.get_instance()
         batcher.register_callback(self._collect_callback)
 
-        # first message -> immediate batch; following messages buffered
+        # first message -> aggregation window closes -> immediate single batch
         await batcher.submit_message(self._make_message("msg1", user_id=222))
+        await asyncio.sleep(0.2)
+        assert len(self.received_batches) == 1
+        assert [m.content for m in self.received_batches[0][0]] == ["msg1"]
+
+        # while that batch is running -> following messages buffered
         await batcher.submit_message(self._make_message("msg2", user_id=222))
         await batcher.submit_message(self._make_message("msg3", user_id=222))
         await asyncio.sleep(0.05)
-
         assert len(self.received_batches) == 1
-        assert [m.content for m in self.received_batches[0][0]] == ["msg1"]
 
         # current batch completes -> buffered messages flushed as a new batch
         await batcher.on_batch_completed("qq:222")
@@ -157,29 +156,21 @@ class TestMessageBatcherCore:
     @pytest.mark.asyncio
     async def test_conversation_isolation(self, monkeypatch):
         """Different conversations should have independent batches."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": True,
-                "window_seconds": 5.0,
-                "max_batch_size": 10,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        _patch_config(monkeypatch, _cfg(window_seconds=5.0))
         batcher = await MessageBatcher.get_instance()
         batcher.register_callback(self._collect_callback)
 
         await batcher.submit_message(self._make_message("u1-1", user_id=100))
         await batcher.submit_message(self._make_message("u2-1", user_id=200))
+        await asyncio.sleep(0.2)
+
+        # each conversation's first message dispatched as its own batch
+        assert len(self.received_batches) == 2
+
+        # while both run, second messages are buffered per conversation
         await batcher.submit_message(self._make_message("u1-2", user_id=100))
         await batcher.submit_message(self._make_message("u2-2", user_id=200))
         await asyncio.sleep(0.05)
-
-        # each conversation's first message dispatched immediately
-        assert len(self.received_batches) == 2
 
         # complete each conversation -> its own buffered message flushed separately
         await batcher.on_batch_completed("qq:100")
@@ -196,62 +187,44 @@ class TestMessageBatcherCore:
 
     @pytest.mark.asyncio
     async def test_flush_all_dispatches_all_buffered(self, monkeypatch):
-        """flush_all() should immediately dispatch all buffered messages."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": True,
-                "window_seconds": 5.0,
-                "max_batch_size": 100,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        """flush_all() should immediately dispatch all pending (aggregation) messages."""
+        _patch_config(monkeypatch, _cfg(window_seconds=5.0, first_message_idle_seconds=5.0))
         batcher = await MessageBatcher.get_instance()
         batcher.register_callback(self._collect_callback)
 
-        # f1 -> immediate; f2 (same conv) -> buffered
+        # both conversations sit in the aggregation window -> nothing dispatched yet
         await batcher.submit_message(self._make_message("f1", user_id=400))
-        await batcher.submit_message(self._make_message("f2", user_id=400))
+        await batcher.submit_message(self._make_message("f2", user_id=500))
         await asyncio.sleep(0.05)
 
-        assert len(self.received_batches) == 1
-        assert await batcher.get_active_batch_count() == 1
+        assert len(self.received_batches) == 0
+        assert await batcher.get_active_batch_count() == 2
 
         await batcher.flush_all()
         await asyncio.sleep(0.05)
 
         assert len(self.received_batches) == 2
         assert await batcher.get_active_batch_count() == 0
+        contents = {m.content for msgs, _ in self.received_batches for m in msgs}
+        assert contents == {"f1", "f2"}
 
     @pytest.mark.asyncio
     async def test_batch_after_flush_starts_new_batch(self, monkeypatch):
         """After flushing, new messages should start a fresh batch."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": True,
-                "window_seconds": 0.3,
-                "max_batch_size": 10,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        _patch_config(monkeypatch, _cfg(window_seconds=0.3))
         batcher = await MessageBatcher.get_instance()
         batcher.register_callback(self._collect_callback)
 
         await batcher.submit_message(self._make_message("first", user_id=600))
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.2)
+        assert len(self.received_batches) == 1
+
         await batcher.flush_all()
         await asyncio.sleep(0.05)
         assert len(self.received_batches) == 1
 
         await batcher.submit_message(self._make_message("second", user_id=600))
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
         assert len(self.received_batches) == 2
         assert len(self.received_batches[1][0]) == 1
         assert self.received_batches[1][0][0].content == "second"
@@ -259,18 +232,7 @@ class TestMessageBatcherCore:
     @pytest.mark.asyncio
     async def test_callback_exception_does_not_break_other_callbacks(self, monkeypatch):
         """If one callback raises, other callbacks should still run."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": False,
-                "window_seconds": 1.0,
-                "max_batch_size": 5,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        _patch_config(monkeypatch, _cfg(enabled=False, window_seconds=1.0))
         batcher = await MessageBatcher.get_instance()
 
         bad_called = []
@@ -321,18 +283,7 @@ class TestMessageBatcherCore:
 
     @pytest.mark.asyncio
     async def test_active_batch_count_and_conversations(self, monkeypatch):
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": True,
-                "window_seconds": 2.0,
-                "max_batch_size": 10,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        _patch_config(monkeypatch, _cfg(window_seconds=2.0))
         batcher = await MessageBatcher.get_instance()
 
         assert await batcher.get_active_batch_count() == 0
@@ -349,18 +300,7 @@ class TestMessageBatcherCore:
 
     @pytest.mark.asyncio
     async def test_unregister_callback_removes_it(self, monkeypatch):
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": False,
-                "window_seconds": 1.0,
-                "max_batch_size": 5,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+        _patch_config(monkeypatch, _cfg(enabled=False, window_seconds=1.0))
         batcher = await MessageBatcher.get_instance()
         called = []
 
@@ -375,42 +315,31 @@ class TestMessageBatcherCore:
         assert len(called) == 0
 
     @pytest.mark.asyncio
-    async def test_max_size_then_next_message_starts_new_batch(self, monkeypatch):
-        """After a buffered batch is flushed, the next message starts a new batch."""
-        monkeypatch.setattr(
-            "core.message_batcher.get_message_batching_config",
-            lambda: {
-                "enabled": True,
-                "window_seconds": 5.0,
-                "max_batch_size": 2,
-                "base_interval_seconds": 0.5,
-                "chars_per_second": 4,
-                "min_interval_seconds": 0.3,
-                "max_interval_seconds": 5.0,
-            },
-        )
+    async def test_sequential_batches_across_completions(self, monkeypatch):
+        """逐批串行: 上一批完成后, 下一条消息开启新一批并最终 flush 缓冲。"""
+        _patch_config(monkeypatch, _cfg(window_seconds=5.0, max_batch_size=2))
         batcher = await MessageBatcher.get_instance()
         batcher.register_callback(self._collect_callback)
 
-        # 1 -> immediate; 2 -> buffered
+        # "1" -> aggregation window closes -> batch 1
         await batcher.submit_message(self._make_message("1", user_id=888))
-        await batcher.submit_message(self._make_message("2", user_id=888))
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.2)
         assert len(self.received_batches) == 1
         assert [m.content for m in self.received_batches[0][0]] == ["1"]
 
-        # flush the buffered message as a new batch (running -> True again)
+        # batch 1 completes -> next message starts a new window
         await batcher.on_batch_completed("qq:888")
-        await asyncio.sleep(0.05)
+        await batcher.submit_message(self._make_message("2", user_id=888))
+        await asyncio.sleep(0.2)
         assert len(self.received_batches) == 2
         assert [m.content for m in self.received_batches[1][0]] == ["2"]
 
-        # 3 arrives while the flushed batch is running -> buffered, not dispatched
+        # "3" arrives while batch 2 runs -> buffered, not dispatched
         await batcher.submit_message(self._make_message("3", user_id=888))
         await asyncio.sleep(0.05)
         assert len(self.received_batches) == 2
 
-        # complete the running batch -> "3" flushed as a new batch
+        # complete batch 2 -> "3" flushed as a new batch
         await batcher.on_batch_completed("qq:888")
         await asyncio.sleep(0.05)
         assert len(self.received_batches) == 3

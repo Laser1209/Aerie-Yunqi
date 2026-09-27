@@ -1,4 +1,8 @@
-"""Simple standalone test for MessageBatcher without pytest dependency."""
+"""Simple standalone test for MessageBatcher without pytest dependency.
+
+注: 阶段 3 起首条消息走「聚合窗」(T_idle 静默 / T_cap 上限), 本文件的时序断言
+已同步更新; 聚合窗专项用例见 tests/test_message_batcher_aggregation.py。
+"""
 
 import asyncio
 import sys
@@ -23,8 +27,24 @@ def _make_msg(content, user_id=12345, channel="qq", channel_account_id=None):
     )
 
 
+def _config(**overrides):
+    cfg = {
+        "enabled": True,
+        "window_seconds": 1.5,
+        "max_batch_size": 10,
+        "base_interval_seconds": 0.5,
+        "chars_per_second": 4,
+        "min_interval_seconds": 0.3,
+        "max_interval_seconds": 5.0,
+        "first_message_idle_seconds": 0.1,
+        "first_message_cap_seconds": 5.0,
+    }
+    cfg.update(overrides)
+    return cfg
+
+
 @pytest.mark.asyncio
-async def test_all():
+async def test_all(monkeypatch=None):
     passed = 0
     failed = 0
 
@@ -36,6 +56,17 @@ async def test_all():
         else:
             print(f"  [FAIL] {name}: {detail}")
             failed += 1
+
+    def use_config(cfg):
+        target = lambda: cfg  # noqa: E731
+        if monkeypatch is not None:
+            monkeypatch.setattr(
+                "core.message_batcher.get_message_batching_config", target
+            )
+        else:
+            import core.message_batcher as _mb
+
+            _mb.get_message_batching_config = target
 
     # Test 1: Singleton
     print("\n=== Test 1: Singleton pattern ===")
@@ -55,16 +86,7 @@ async def test_all():
     async def cb1(msgs, bid):
         received.append((list(msgs), bid))
 
-    import core.message_batcher as mb_module
-    mb_module.get_message_batching_config = lambda: {
-        "enabled": False,
-        "window_seconds": 1.0,
-        "max_batch_size": 5,
-        "base_interval_seconds": 0.5,
-        "chars_per_second": 4,
-        "min_interval_seconds": 0.3,
-        "max_interval_seconds": 5.0,
-    }
+    use_config(_config(enabled=False, window_seconds=1.0))
     batcher = await MessageBatcher.get_instance()
     batcher.register_callback(cb1)
     await batcher.submit_message(_make_msg("hello", user_id=111))
@@ -74,23 +96,15 @@ async def test_all():
     check("content matches", received[0][0][0].content == "hello" if received else False)
     check("batch_id is 32 chars hex", len(received[0][1]) == 32 if received else False)
 
-    # Test 3: Time window collects multiple
-    print("\n=== Test 3: Time window collects multiple messages ===")
+    # Test 3: 首条聚合窗 - 窗口内的多条消息合并为一批
+    print("\n=== Test 3: Aggregation window merges rapid messages ===")
     MessageBatcher.reset_instance()
     received = []
 
     async def cb2(msgs, bid):
         received.append((list(msgs), bid))
 
-    mb_module.get_message_batching_config = lambda: {
-        "enabled": True,
-        "window_seconds": 0.3,
-        "max_batch_size": 10,
-        "base_interval_seconds": 0.5,
-        "chars_per_second": 4,
-        "min_interval_seconds": 0.3,
-        "max_interval_seconds": 5.0,
-    }
+    use_config(_config(first_message_idle_seconds=0.2))
     batcher = await MessageBatcher.get_instance()
     batcher.register_callback(cb2)
 
@@ -99,46 +113,33 @@ async def test_all():
     await batcher.submit_message(_make_msg("m2", user_id=222))
     await asyncio.sleep(0.05)
     await batcher.submit_message(_make_msg("m3", user_id=222))
-    check("first message dispatched immediately", len(received) == 1)
-    await batcher.on_batch_completed("qq:222")
-    await asyncio.sleep(0.05)
-    check("buffer dispatched on completion", len(received) == 2, f"got {len(received)}")
-    contents = [m.content for m in received[1][0]] if len(received) > 1 else []
-    check("buffer contents correct", contents == ["m2", "m3"], f"got {contents}")
+    check("not dispatched while aggregating", len(received) == 0, f"got {len(received)}")
+    await asyncio.sleep(0.3)
+    check("merged into one batch", len(received) == 1, f"got {len(received)}")
+    contents = [m.content for m in received[0][0]] if received else []
+    check("aggregated contents correct", contents == ["m1", "m2", "m3"], f"got {contents}")
 
-    # Test 4: Max batch size triggers immediate
-    print("\n=== Test 4: Max batch size triggers immediate dispatch ===")
+    # Test 4: T_idle 内新消息重置计时
+    print("\n=== Test 4: New message resets idle timer ===")
     MessageBatcher.reset_instance()
     received = []
 
     async def cb3(msgs, bid):
         received.append((list(msgs), bid))
 
-    mb_module.get_message_batching_config = lambda: {
-        "enabled": True,
-        "window_seconds": 2.0,
-        "max_batch_size": 3,
-        "base_interval_seconds": 0.5,
-        "chars_per_second": 4,
-        "min_interval_seconds": 0.3,
-        "max_interval_seconds": 5.0,
-    }
+    use_config(_config(first_message_idle_seconds=0.3))
     batcher = await MessageBatcher.get_instance()
     batcher.register_callback(cb3)
 
     await batcher.submit_message(_make_msg("a", user_id=333))
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.15)
     await batcher.submit_message(_make_msg("b", user_id=333))
-    await asyncio.sleep(0.01)
-    check("first message dispatched immediately", len(received) == 1)
-    await batcher.submit_message(_make_msg("c", user_id=333))
-    await asyncio.sleep(0.1)
-    check("buffer waits for completion", len(received) == 1, f"got {len(received)}")
-    await batcher.on_batch_completed("qq:333")
-    await asyncio.sleep(0.05)
-    check("buffer dispatched on completion", len(received) == 2, f"got {len(received)}")
-    contents = [m.content for m in received[1][0]] if len(received) > 1 else []
-    check("contents b,c", contents == ["b", "c"], f"got {contents}")
+    await asyncio.sleep(0.15)
+    check("timer reset keeps window open", len(received) == 0, f"got {len(received)}")
+    await asyncio.sleep(0.3)
+    check("dispatched after final idle", len(received) == 1, f"got {len(received)}")
+    contents = [m.content for m in received[0][0]] if received else []
+    check("contents a,b", contents == ["a", "b"], f"got {contents}")
 
     # Test 5: Conversation isolation
     print("\n=== Test 5: Conversation isolation ===")
@@ -148,25 +149,17 @@ async def test_all():
     async def cb4(msgs, bid):
         received.append((list(msgs), bid))
 
-    mb_module.get_message_batching_config = lambda: {
-        "enabled": True,
-        "window_seconds": 0.3,
-        "max_batch_size": 10,
-        "base_interval_seconds": 0.5,
-        "chars_per_second": 4,
-        "min_interval_seconds": 0.3,
-        "max_interval_seconds": 5.0,
-    }
+    use_config(_config(first_message_idle_seconds=0.1))
     batcher = await MessageBatcher.get_instance()
     batcher.register_callback(cb4)
 
     await batcher.submit_message(_make_msg("u1a", user_id=100))
     await batcher.submit_message(_make_msg("u2a", user_id=200))
-    await batcher.submit_message(_make_msg("u1b", user_id=100))
-    await batcher.submit_message(_make_msg("u2b", user_id=200))
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.25)
 
     check("first batches dispatched", len(received) == 2, f"got {len(received)}")
+    await batcher.submit_message(_make_msg("u1b", user_id=100))
+    await batcher.submit_message(_make_msg("u2b", user_id=200))
     await batcher.on_batch_completed("qq:100")
     await batcher.on_batch_completed("qq:200")
     await asyncio.sleep(0.05)
@@ -190,15 +183,7 @@ async def test_all():
     async def cb5(msgs, bid):
         received.append((list(msgs), bid))
 
-    mb_module.get_message_batching_config = lambda: {
-        "enabled": True,
-        "window_seconds": 5.0,
-        "max_batch_size": 100,
-        "base_interval_seconds": 0.5,
-        "chars_per_second": 4,
-        "min_interval_seconds": 0.3,
-        "max_interval_seconds": 5.0,
-    }
+    use_config(_config(window_seconds=5.0, first_message_idle_seconds=5.0))
     batcher = await MessageBatcher.get_instance()
     batcher.register_callback(cb5)
 
@@ -206,10 +191,10 @@ async def test_all():
     await batcher.submit_message(_make_msg("f2", user_id=500))
     await asyncio.sleep(0.05)
     check("active count 2 before flush", await batcher.get_active_batch_count() == 2)
-    check("first batch already dispatched", len(received) == 1)
+    check("nothing dispatched before flush", len(received) == 0)
     await batcher.flush_all()
     await asyncio.sleep(0.1)
-    check("buffer flushed", len(received) == 2, f"got {len(received)}")
+    check("buffered flushed", len(received) == 2, f"got {len(received)}")
     check("active count 0 after flush", await batcher.get_active_batch_count() == 0)
 
     # Test 7: get_conversation_id
@@ -230,41 +215,33 @@ async def test_all():
     cid2 = batcher.get_conversation_id(msg_no_channel)
     check("falls back to source:user_id", cid2 == "local:789", f"got {cid2}")
 
-    # Test 8: New batch after max_size
-    print("\n=== Test 8: New batch starts after max_size completion ===")
+    # Test 8: 上一批完成后开启新一批 + 聚合合并
+    print("\n=== Test 8: New batch starts after completion ===")
     MessageBatcher.reset_instance()
     received = []
 
     async def cb6(msgs, bid):
         received.append((list(msgs), bid))
 
-    mb_module.get_message_batching_config = lambda: {
-        "enabled": True,
-        "window_seconds": 0.3,
-        "max_batch_size": 2,
-        "base_interval_seconds": 0.5,
-        "chars_per_second": 4,
-        "min_interval_seconds": 0.3,
-        "max_interval_seconds": 5.0,
-    }
+    use_config(_config(first_message_idle_seconds=0.1))
     batcher = await MessageBatcher.get_instance()
     batcher.register_callback(cb6)
 
     await batcher.submit_message(_make_msg("1", user_id=888))
-    await batcher.submit_message(_make_msg("2", user_id=888))
-    await asyncio.sleep(0.05)
-    check("first batch dispatched", len(received) == 1)
+    await asyncio.sleep(0.25)
+    check("first batch dispatched", len(received) == 1, f"got {len(received)}")
 
+    await batcher.on_batch_completed("qq:888")
+    await batcher.submit_message(_make_msg("2", user_id=888))
     await batcher.submit_message(_make_msg("3", user_id=888))
     await batcher.submit_message(_make_msg("4", user_id=888))
-    await batcher.on_batch_completed("qq:888")
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.25)
     check("second batch dispatched", len(received) == 2, f"got {len(received)}")
-    check("different batch_ids", received[0][1] != received[1][1])
-    b1_contents = [m.content for m in received[0][0]]
-    b2_contents = [m.content for m in received[1][0]]
+    check("different batch_ids", len(received) == 2 and received[0][1] != received[1][1])
+    b1_contents = [m.content for m in received[0][0]] if len(received) > 0 else []
+    b2_contents = [m.content for m in received[1][0]] if len(received) > 1 else []
     check("batch1 is first message", b1_contents == ["1"], f"got {b1_contents}")
-    check("batch2 contains buffered messages", b2_contents == ["2", "3", "4"], f"got {b2_contents}")
+    check("batch2 contains aggregated messages", b2_contents == ["2", "3", "4"], f"got {b2_contents}")
 
     # Test 9: Callback exception doesn't break others
     print("\n=== Test 9: Callback exception isolation ===")
@@ -272,15 +249,7 @@ async def test_all():
     bad_called = []
     good_called = []
 
-    mb_module.get_message_batching_config = lambda: {
-        "enabled": False,
-        "window_seconds": 1.0,
-        "max_batch_size": 5,
-        "base_interval_seconds": 0.5,
-        "chars_per_second": 4,
-        "min_interval_seconds": 0.3,
-        "max_interval_seconds": 5.0,
-    }
+    use_config(_config(enabled=False, window_seconds=1.0))
     batcher = await MessageBatcher.get_instance()
 
     async def bad_cb(msgs, bid):
@@ -305,5 +274,5 @@ async def test_all():
 
 
 if __name__ == "__main__":
-    success = asyncio.run(test_all())
+    success = asyncio.run(test_all(None))
     sys.exit(0 if success else 1)

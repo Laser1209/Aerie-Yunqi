@@ -436,7 +436,13 @@ class SettingsPanel {
     added.forEach((p) => {
       let statusText = p.configured ? "已配置" : "未配置";
       let statusCls = "";
-      if (p.health_status === "banned") {
+      if (p.check && p.check.ok) {
+        statusText = "连通正常 " + (p.check.latency_ms || 0) + "ms";
+        statusCls = "success";
+      } else if (p.check && p.check.ok === false) {
+        statusText = "测试失败" + (p.check.http_status ? "(" + p.check.http_status + ")" : "");
+        statusCls = "danger";
+      } else if (p.health_status === "banned") {
         statusText = "余额耗尽";
         statusCls = "danger";
       } else if (p.health_status === "cooldown") {
@@ -480,7 +486,7 @@ class SettingsPanel {
         </div>
         <div class="apikey-provider-actions">
           <button type="button" class="btn btn-primary btn-sm apikey-save-btn" data-provider="${p.key}">
-            保存 · Save
+            测试并保存 · Test &amp; Save
           </button>
           <button type="button" class="btn btn-secondary btn-sm apikey-default-btn" data-provider="${p.key}">
             恢复默认 URL/模型
@@ -493,8 +499,18 @@ class SettingsPanel {
       list.appendChild(card);
     });
 
-    // 渲染自定义 API（用户添加的任意 OpenAI 兼容 API）
+    // 渲染自定义 API（用户添加的任意 OpenAI 兼容 API，可编辑/删除）
     this._customProviders.forEach((cp) => {
+      let checkText = "未测试";
+      let checkColor = "var(--text-muted, #999)";
+      if (cp.check && cp.check.ok) {
+        checkText = "连通正常 " + (cp.check.latency_ms || 0) + "ms";
+        checkColor = "var(--success,#2ecc71)";
+      } else if (cp.check && cp.check.ok === false) {
+        checkText = "测试失败" + (cp.check.http_status ? "(" + cp.check.http_status + ")" : "");
+        checkColor = "var(--danger,#e74c3c)";
+      }
+      const toolsText = cp.supports_tools ? "支持工具调用 · 上限 " + (cp.max_tool_calls || 8) : "不支持工具调用";
       const card = document.createElement("div");
       card.className = "apikey-provider-card configured";
       card.innerHTML = `
@@ -503,14 +519,15 @@ class SettingsPanel {
             <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
             ${cp.name || "自定义 API"}
           </div>
-          <div class="apikey-provider-status" style="color:var(--success,#2ecc71);">已添加</div>
+          <div class="apikey-provider-status" style="color:${checkColor};">${checkText}</div>
         </div>
         <div style="font-size:12px;color:var(--text-muted,#999);line-height:1.7;margin:0 0 8px;">
           Base URL：${cp.base_url || "-"}<br>
           模型：${cp.model || "-"}<br>
-          工具调用上限：${cp.max_tool_calls || 8}
+          ${toolsText}
         </div>
         <div class="apikey-provider-actions">
+          <button type="button" class="btn btn-secondary btn-sm custom-provider-edit-btn" data-id="${cp.id}">编辑</button>
           <button type="button" class="btn btn-secondary btn-sm custom-provider-remove-btn" data-id="${cp.id}">移除</button>
         </div>
       `;
@@ -550,11 +567,24 @@ class SettingsPanel {
         this._renderApiKeyList();
       });
     });
+    list.querySelectorAll(".custom-provider-edit-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const id = e.currentTarget.getAttribute("data-id");
+        this._editCustomProvider(id);
+      });
+    });
     list.querySelectorAll(".custom-provider-remove-btn").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
-        const id = e.target.getAttribute("data-id");
-        this._customProviders = this._customProviders.filter((c) => c.id !== id);
-        await this._saveCustomProviders();
+        const id = e.currentTarget.getAttribute("data-id");
+        if (!window.confirm("确定移除这个自定义 API？引用它的功能点绑定会恢复默认。")) return;
+        try {
+          await window.aerie.api.request({ method: "DELETE", path: "/api/env/custom-providers/" + id });
+        } catch (err) {
+          const st = document.getElementById("apikey-status");
+          if (st) { st.textContent = "移除失败: " + err.message; st.style.color = "var(--danger,#e74c3c)"; }
+          return;
+        }
+        await this._loadCustomProviders();
         this._renderApiKeyList();
       });
     });
@@ -668,98 +698,113 @@ class SettingsPanel {
     this._renderCustomProviderForm();
   }
 
-  _renderCustomProviderForm() {
+  // 编辑已有自定义厂商：打开表单并回填（API Key 留空表示保持不变）。
+  _editCustomProvider(id) {
+    const cp = this._customProviders.find((c) => c.id === id);
+    if (!cp) return;
+    this._openCustomProviderPanel();
+    this._renderCustomProviderForm(cp);
+    const panel = document.getElementById("custom-provider-panel");
+    if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  _renderCustomProviderForm(cp) {
     const form = document.getElementById("custom-provider-form");
     if (!form) return;
+    cp = cp || {};
+    const editing = !!cp.id;
+    form.dataset.editingId = cp.id || "";
     form.innerHTML = `
+      <input type="hidden" id="custom-provider-id" value="${cp.id || ""}">
       <label class="apikey-field">
         <span>名称 · Name</span>
-        <input type="text" id="custom-provider-name" class="apikey-input" placeholder="例如 TokenDance">
+        <input type="text" id="custom-provider-name" class="apikey-input" placeholder="例如 TokenDance" value="${cp.name || ""}">
       </label>
       <label class="apikey-field">
         <span>Base URL</span>
-        <input type="text" id="custom-provider-base-url" class="apikey-input" placeholder="例如 https://tokendance.space/v1">
+        <input type="text" id="custom-provider-base-url" class="apikey-input" placeholder="例如 https://tokendance.space/v1" value="${cp.base_url || ""}">
       </label>
       <label class="apikey-field">
-        <span>API Key</span>
-        <input type="password" id="custom-provider-api-key" class="apikey-input" placeholder="sk-...">
+        <span>API Key${editing ? "（留空保持不变）" : ""}</span>
+        <input type="password" id="custom-provider-api-key" class="apikey-input" placeholder="${editing ? "留空则继续使用已保存的 Key" : "sk-..."}">
       </label>
       <label class="apikey-field">
         <span>模型 · Model</span>
-        <input type="text" id="custom-provider-model" class="apikey-input" placeholder="例如 gpt-4o">
+        <input type="text" id="custom-provider-model" class="apikey-input" placeholder="例如 gpt-4o" value="${cp.model || ""}">
+      </label>
+      <label class="apikey-field" style="flex-direction:row;align-items:center;gap:8px;">
+        <input type="checkbox" id="custom-provider-supports-tools" ${cp.supports_tools ? "checked" : ""}>
+        <span>支持函数调用 / tools（勾选后可被「子Agent」功能点选用）</span>
       </label>
       <label class="apikey-field">
-        <span>上下文 KV 键值对（可选，每行一个 key=value）</span>
-        <textarea id="custom-provider-kv" class="apikey-input" rows="3" placeholder="temperature=0.7&#10;max_tokens=4096" style="resize:vertical;"></textarea>
-      </label>
-      <label class="apikey-field">
-        <span>工具调用次数上限（默认 8）</span>
-        <input type="number" id="custom-provider-max-tool-calls" class="apikey-input" value="8" min="1" max="50">
+        <span>工具调用次数上限（1-50，默认 8）</span>
+        <input type="number" id="custom-provider-max-tool-calls" class="apikey-input" value="${cp.max_tool_calls || 8}" min="1" max="50">
       </label>
     `;
+    const saveBtn = document.getElementById("custom-provider-save-btn");
+    if (saveBtn) saveBtn.textContent = editing ? "测试并保存修改 · Test & Save" : "测试并保存 · Test & Save";
   }
 
-  async saveCustomProvider() {
+  async saveCustomProvider(force) {
     const st = document.getElementById("custom-provider-status");
     const btn = document.getElementById("custom-provider-save-btn");
+    const form = document.getElementById("custom-provider-form");
+    const id = ((document.getElementById("custom-provider-id") || {}).value || "").trim();
     const name = (document.getElementById("custom-provider-name") || {}).value || "";
     const baseUrl = (document.getElementById("custom-provider-base-url") || {}).value || "";
     const apiKey = (document.getElementById("custom-provider-api-key") || {}).value || "";
     const model = (document.getElementById("custom-provider-model") || {}).value || "";
-    const kvText = (document.getElementById("custom-provider-kv") || {}).value || "";
+    const supportsTools = !!(document.getElementById("custom-provider-supports-tools") || {}).checked;
     const maxToolCalls = parseInt((document.getElementById("custom-provider-max-tool-calls") || {}).value || "8", 10);
 
     if (!name.trim() || !baseUrl.trim()) {
       if (st) { st.textContent = "请至少填写名称和 Base URL"; st.style.color = "var(--warning,#f39c12)"; }
       return;
     }
-    const extraKv = {};
-    kvText.split("\n").forEach((line) => {
-      const s = line.trim();
-      if (!s || s.indexOf("=") < 0) return;
-      const idx = s.indexOf("=");
-      const k = s.slice(0, idx).trim();
-      const v = s.slice(idx + 1).trim();
-      if (k) extraKv[k] = v;
-    });
+    if (!id && !apiKey.trim()) {
+      if (st) { st.textContent = "新增厂商必须填写 API Key"; st.style.color = "var(--warning,#f39c12)"; }
+      return;
+    }
 
-    const merged = this._customProviders.map((c) => ({
-      id: c.id, name: c.name, base_url: c.base_url, api_key: "",
-      model: c.model, extra_kv: c.extra_kv, max_tool_calls: c.max_tool_calls,
-    }));
-    merged.push({
-      id: "", name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim(),
-      model: model.trim(), extra_kv: extraKv, max_tool_calls: isNaN(maxToolCalls) ? 8 : maxToolCalls,
-    });
+    const body = {
+      id,
+      name: name.trim(),
+      base_url: baseUrl.trim(),
+      api_key: apiKey.trim(),
+      model: model.trim(),
+      supports_tools: supportsTools,
+      max_tool_calls: isNaN(maxToolCalls) ? 8 : maxToolCalls,
+      force: !!force,
+    };
 
     if (btn) btn.disabled = true;
-    if (st) { st.textContent = "保存中…"; st.style.color = "var(--text-muted,#999)"; }
+    if (st) { st.textContent = "测试并保存中…（先小流量验证，通过才写入）"; st.style.color = "var(--text-muted,#999)"; }
     try {
-      const r = await window.aerie.api.request({ method: "POST", path: "/api/env/custom-providers", body: { providers: merged } });
-      if (r && r.data && r.data.error) throw new Error(r.data.error);
-      if (st) { st.textContent = "保存成功"; st.style.color = "var(--success,#2ecc71)"; }
+      const r = await window.aerie.api.request({ method: "PUT", path: "/api/env/custom-providers", body });
+      if (r && r.data && r.data.error) {
+        if (r.status === 422 && !force && window.confirm((r.data.error || "连通性测试失败") + "\n\n仍要强制保存吗？（保存后该厂商可能无法正常调用）")) {
+          return this.saveCustomProvider(true);
+        }
+        throw new Error(r.data.error);
+      }
+      const check = r && r.data && r.data.check;
+      if (st) {
+        st.textContent = (id ? "已更新并热加载" : "已添加并热加载") + (check && check.ok ? "（连通 " + (check.latency_ms || 0) + "ms）" : "");
+        st.style.color = "var(--success,#2ecc71)";
+      }
       await this._loadCustomProviders();
       this._renderApiKeyList();
       const panel = document.getElementById("custom-provider-panel");
       if (panel) panel.style.display = "none";
       const menu = document.getElementById("apikey-add-menu");
       if (menu) menu.style.display = "none";
+      if (form) form.dataset.editingId = "";
     } catch (e) {
-      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
+      if (st) { st.textContent = "未保存: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
     } finally {
       if (btn) btn.disabled = false;
-      setTimeout(() => { if (st) st.textContent = ""; }, 5000);
+      setTimeout(() => { if (st) st.textContent = ""; }, 6000);
     }
-  }
-
-  async _saveCustomProviders() {
-    try {
-      const body = this._customProviders.map((c) => ({
-        id: c.id, name: c.name, base_url: c.base_url, api_key: "",
-        model: c.model, extra_kv: c.extra_kv, max_tool_calls: c.max_tool_calls,
-      }));
-      await window.aerie.api.request({ method: "POST", path: "/api/env/custom-providers", body: { providers: body } });
-    } catch (_) {}
   }
 
   // 配置数量提醒：少于 2 个 AI 厂商时提示主备容灾风险；
@@ -829,7 +874,17 @@ class SettingsPanel {
         body,
       });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
-      if (st) { st.textContent = "保存成功，已生效"; st.style.color = "var(--success, #2ecc71)"; }
+      const check = r && r.data && r.data.check;
+      if (check && check.ok) {
+        if (st) { st.textContent = "已保存并热加载 · 连通正常 " + (check.latency_ms || 0) + "ms"; st.style.color = "var(--success, #2ecc71)"; }
+      } else if (check && check.ok === false) {
+        if (st) {
+          st.textContent = "已保存，但连通性测试失败：" + (check.detail || ("HTTP " + (check.http_status || "?"))) + "。请检查 Key / Base URL / 模型名";
+          st.style.color = "var(--warning, #f39c12)";
+        }
+      } else if (st) {
+        st.textContent = "保存成功，已生效"; st.style.color = "var(--success, #2ecc71)";
+      }
       await this.loadApiKeys();
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
@@ -901,58 +956,91 @@ class SettingsPanel {
     const list = document.getElementById("custom-api-role-list");
     if (!list) return;
     try {
-      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/model-roles" });
-      const roles = (r && r.data && r.data.roles) || [];
+      const [rolesR, providersR] = await Promise.all([
+        window.aerie.api.request({ method: "GET", path: "/api/env/model-roles" }),
+        window.aerie.api.request({ method: "GET", path: "/api/env/bindable-providers" }),
+      ]);
+      const roles = (rolesR && rolesR.data && rolesR.data.roles) || [];
+      const providers = (providersR && providersR.data && providersR.data.providers) || [];
+      const special = (rolesR && rolesR.data && rolesR.data.special_services) || [];
+      this._bindableProviders = providers;
       list.innerHTML = "";
+
       roles.forEach((role) => {
-        const label = document.createElement("label");
-        label.className = "apikey-field";
-        const name = document.createElement("span");
-        name.textContent = role.name + " · " + role.desc;
-        const input = document.createElement("input");
-        input.type = "text";
-        input.className = "apikey-input";
-        input.dataset.role = role.key;
-        input.value = role.model || "";
-        input.placeholder = "模型名 / model";
-        label.appendChild(name);
-        label.appendChild(input);
-        list.appendChild(label);
+        const row = document.createElement("div");
+        row.style.cssText = "padding:10px 0;border-bottom:1px solid var(--border,rgba(0,0,0,0.06));";
+        const check = role.check || {};
+        let checkDot = '<span style="font-size:11px;color:var(--text-muted,#999);margin-left:8px;">未测试</span>';
+        if (check.ok) {
+          checkDot = '<span style="font-size:11px;color:var(--success,#2ecc71);margin-left:8px;">● 连通 ' + (check.latency_ms || 0) + 'ms</span>';
+        } else if (check.ok === false) {
+          checkDot = '<span title="' + (check.detail || "").replace(/"/g, "&quot;") + '" style="font-size:11px;color:var(--danger,#e74c3c);margin-left:8px;">● 测试失败' + (check.http_status ? "(" + check.http_status + ")" : "") + "</span>";
+        }
+        const selectHtml = providers.map((p) => {
+          const sel = p.key === role.provider ? " selected" : "";
+          return '<option value="' + p.key + '"' + sel + ">" + p.name + "</option>";
+        }).join("");
+        row.innerHTML = `
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">${role.name}${checkDot}</div>
+          <div style="font-size:11px;color:var(--text-muted,#999);margin-bottom:6px;">${role.desc}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select class="apikey-input" data-role-provider="${role.key}" style="flex:1 1 180px;min-width:160px;">${selectHtml}</select>
+            <input type="text" class="apikey-input" data-role-model="${role.key}" value="${role.model || ""}"
+                   placeholder="模型名 / model" style="flex:1 1 200px;min-width:180px;"
+                   ${role.key === "light_assist" ? "" : ""}>
+          </div>
+        `;
+        list.appendChild(row);
       });
+
+      if (special.length) {
+        const note = document.createElement("div");
+        note.style.cssText = "margin-top:12px;padding:10px;border-radius:8px;background:rgba(0,0,0,0.03);font-size:11px;color:var(--text-muted,#999);line-height:1.8;";
+        note.innerHTML = "<strong style=\"color:var(--text,#333);\">专用服务（在上方厂商卡片中配置）：</strong><br>" +
+          special.map((s) => s.name + " · " + s.desc + "：当前模型 " + (s.model || "默认")).join("<br>");
+        list.appendChild(note);
+      }
     } catch (e) {
       list.innerHTML = "<span style='font-size:12px;color:var(--danger,#e74c3c);'>加载失败: " + e.message + "</span>";
     }
   }
 
-  async saveModelRoles() {
+  async saveModelRoles(force) {
     const st = document.getElementById("custom-api-status");
     const btn = document.getElementById("custom-api-save-btn");
     const list = document.getElementById("custom-api-role-list");
     if (!list) return;
     const roles = [];
-    list.querySelectorAll("input[data-role]").forEach((input) => {
-      const v = input.value.trim();
-      if (v) roles.push({ key: input.dataset.role, model: v });
+    list.querySelectorAll("select[data-role-provider]").forEach((sel) => {
+      const key = sel.getAttribute("data-role-provider");
+      const modelInput = list.querySelector(`input[data-role-model="${key}"]`);
+      roles.push({ key, provider: sel.value, model: modelInput ? modelInput.value.trim() : "" });
     });
     if (!roles.length) {
-      if (st) { st.textContent = "请至少填写一个模型"; st.style.color = "var(--warning,#f39c12)"; }
+      if (st) { st.textContent = "暂无可保存的功能点"; st.style.color = "var(--warning,#f39c12)"; }
       return;
     }
     if (btn) btn.disabled = true;
-    if (st) { st.textContent = "保存并热加载中…"; st.style.color = "var(--text-muted,#999)"; }
+    if (st) { st.textContent = "小流量测试中…（每个功能点发一次 max_tokens=1 的探测请求）"; st.style.color = "var(--text-muted,#999)"; }
     try {
-      const r = await window.aerie.api.request({ method: "POST", path: "/api/env/model-roles", body: { roles } });
-      if (r && r.data && r.data.error) throw new Error(r.data.error);
-      // 热加载：触发后端重载配置（无需整机重启）
-      if (window.aerie && window.aerie.electron && window.aerie.electron.system && window.aerie.electron.system.reloadConfig) {
-        try { await window.aerie.electron.system.reloadConfig(); } catch (_) {}
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/env/model-roles",
+        body: { roles, force: !!force },
+      });
+      if (r && r.data && r.data.error) {
+        if (r.status === 422 && !force && window.confirm((r.data.error || "存在功能点测试失败") + "\n\n仍要强制保存全部绑定吗？")) {
+          return this.saveModelRoles(true);
+        }
+        throw new Error(r.data.error);
       }
-      if (st) { st.textContent = "已保存并热加载"; st.style.color = "var(--success,#2ecc71)"; }
+      if (st) { st.textContent = "全部通过，已保存并热加载"; st.style.color = "var(--success,#2ecc71)"; }
+      await this.loadModelRoles();
     } catch (e) {
-      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
+      if (st) { st.textContent = "未保存: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
     } finally {
       if (btn) btn.disabled = false;
-      setTimeout(() => { if (st) st.textContent = ""; }, 5000);
+      setTimeout(() => { if (st) st.textContent = ""; }, 6000);
     }
   }
 
@@ -1146,6 +1234,19 @@ class SettingsPanel {
         segEl.value = String([1, 2, 3, 4, 0].includes(maxSeg) ? maxSeg : 3);
       }
 
+      // 高级设置：消息合并首条聚合窗（T_idle / T_cap）双向绑定读取。
+      const mb = s.message_batching || {};
+      const batchIdleEl = document.getElementById("setting-batch-idle-seconds");
+      const batchCapEl = document.getElementById("setting-batch-cap-seconds");
+      if (batchIdleEl) {
+        const v = Number(mb.first_message_idle_seconds != null ? mb.first_message_idle_seconds : 3);
+        batchIdleEl.value = String(Number.isFinite(v) ? v : 3);
+      }
+      if (batchCapEl) {
+        const v = Number(mb.first_message_cap_seconds != null ? mb.first_message_cap_seconds : 8);
+        batchCapEl.value = String(Number.isFinite(v) ? v : 8);
+      }
+
       // R7.1: my-location picker.
       const cityInput = document.getElementById("setting-weather-city");
       const hint = document.getElementById("setting-weather-hint");
@@ -1212,6 +1313,33 @@ class SettingsPanel {
   }
 
   async save() {
+    // 高级设置：消息合并首条聚合窗（T_idle / T_cap）校验后再写入。
+    const batchIdleEl = document.getElementById("setting-batch-idle-seconds");
+    const batchCapEl = document.getElementById("setting-batch-cap-seconds");
+    const batchStatusEl = document.getElementById("setting-batch-status");
+    let batchIdle = null;
+    let batchCap = null;
+    if (batchIdleEl && batchCapEl) {
+      batchIdle = Number(batchIdleEl.value);
+      batchCap = Number(batchCapEl.value);
+      const fail = (msg) => {
+        if (batchStatusEl) {
+          batchStatusEl.textContent = msg;
+          batchStatusEl.className = "settings-hint office-dir-status--error";
+        }
+        const st = document.getElementById("settings-status");
+        if (st) { st.textContent = msg; st.style.color = "var(--error)"; }
+      };
+      if (!Number.isFinite(batchIdle) || batchIdle < 0 || !Number.isFinite(batchCap) || batchCap < 0) {
+        fail("消息合并参数必须是非负数字");
+        return;
+      }
+      if (batchCap < batchIdle) {
+        fail("聚合总时长上限 T_cap 不能小于首条静默时长 T_idle");
+        return;
+      }
+      if (batchStatusEl) { batchStatusEl.textContent = ""; batchStatusEl.className = "settings-hint"; }
+    }
     const cityRaw = (document.getElementById("setting-weather-city")?.value || "").trim();
     const data = {
       theme: {
@@ -1258,6 +1386,13 @@ class SettingsPanel {
         max_segments_per_turn: Number(document.getElementById("setting-max-segments")?.value ?? 3),
       },
     };
+    // 高级设置：消息合并首条聚合窗（后端 PUT /api/settings 热应用）。
+    if (batchIdle !== null && batchCap !== null) {
+      data.message_batching = {
+        first_message_idle_seconds: batchIdle,
+        first_message_cap_seconds: batchCap,
+      };
+    }
     try {
       const r = await window.aerie.api.request({ method: "PUT", path: "/api/settings", body: data });
       const st = document.getElementById("settings-status");

@@ -1211,6 +1211,10 @@
                     <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-microscope"/></svg>
                     <span>系统与维护</span>
                   </a>
+                  <a href="#setting-cat-advanced" class="settings-rail__link" data-settings-cat="advanced">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-settings"/></svg>
+                    <span>高级设置</span>
+                  </a>
                 </nav>
                 <p class="settings-rail__foot">点击分类可快速跳转 · 点分类标题收起 / 展开</p>
               </aside>
@@ -1753,6 +1757,38 @@
                     </div><!-- /settings-category__inner -->
                   </div><!-- /settings-category__body -->
                 </section><!-- /system -->
+
+                <!-- 高级设置 -->
+                <section class="settings-category" data-settings-cat="advanced" id="setting-cat-advanced">
+                  <button type="button" class="settings-category__toggle" aria-expanded="true" aria-controls="setting-cat-advanced-body">
+                    <svg class="icon icon--14 settings-category__chevron" aria-hidden="true"><use href="#icon-ui-play"/></svg>
+                    <svg class="icon icon--16 settings-category__icon" aria-hidden="true"><use href="#icon-ui-settings"/></svg>
+                    <span class="settings-category__name">高级设置</span>
+                    <span class="settings-category__desc">消息合并 · 首条聚合窗</span>
+                  </button>
+                  <div class="settings-category__body" id="setting-cat-advanced-body">
+                    <div class="settings-category__inner">
+            <div class="settings-group settings-group--advanced">
+              <h3 class="settings-section-title">消息合并 · Message Batching</h3>
+              <p class="settings-hint">两条消息发得快时合并成一次处理，减少重复回复 / Merge rapid messages into one turn</p>
+
+              <div class="settings-subgroup">
+                <label>首条静默时长 T_idle（秒）· First-message idle</label>
+                <input type="number" id="setting-batch-idle-seconds" class="apikey-input" min="0" step="0.5" placeholder="3.0">
+                <p class="settings-hint">首条消息发出后，等待这段静默时间再开始回复；期间再来消息会重新计时。</p>
+              </div>
+
+              <div class="settings-subgroup">
+                <label>聚合总时长上限 T_cap（秒）· Aggregation cap</label>
+                <input type="number" id="setting-batch-cap-seconds" class="apikey-input" min="0" step="0.5" placeholder="8.0">
+                <p class="settings-hint">聚合窗的总上限：即使消息不断，到点也会立即派发。必须 ≥ 首条静默时长。</p>
+              </div>
+
+              <p id="setting-batch-status" class="settings-hint" style="min-height:16px;"></p>
+            </div>
+                    </div><!-- /settings-category__inner -->
+                  </div><!-- /settings-category__body -->
+                </section><!-- /advanced -->
 
                 </div><!-- /settings-form-main -->
               </div><!-- /settings-form-shell -->

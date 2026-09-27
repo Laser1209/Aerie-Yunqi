@@ -1407,6 +1407,12 @@ async def system_reload_config() -> dict:
                 qq_cfg = new_settings.get("qq", {}) if isinstance(new_settings, dict) else {}
                 await _call_reload(comp.qq, "update_config", qq_cfg, label="qq_client")
 
+            if hasattr(comp, "message_batcher") and comp.message_batcher:
+                # 消息合并参数（首条聚合窗 T_idle/T_cap 等）随 settings.yaml 热重载。
+                await _call_reload(
+                    comp.message_batcher, "reload_config", label="message_batcher"
+                )
+
         emit("config_reloaded", **results)
         log.info("config hot-reload complete: %s", results)
     except Exception as e:
@@ -5671,6 +5677,18 @@ async def settings_put(request: Request) -> dict:
                     )
             except Exception:
                 logger.warning("settings_put: hot-apply l4 toggle failed", exc_info=True)
+        # 热更新：消息合并参数（首条聚合窗 T_idle/T_cap 等）→ 立即作用于
+        # 运行中的 MessageBatcher，无需重启（复用其 reload_config 读取新值）。
+        if isinstance(body, dict) and isinstance(body.get("message_batching"), dict):
+            try:
+                from core.companion import get_companion
+                _comp = get_companion()
+                _batcher = getattr(_comp, "message_batcher", None) if _comp else None
+                if _batcher is not None:
+                    _batcher.reload_config()
+                    logger.info("settings_put: message_batching hot-reloaded")
+            except Exception:
+                logger.warning("settings_put: hot-apply message_batching failed", exc_info=True)
         return {"status": "ok", "saved": list(body.keys())}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

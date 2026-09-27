@@ -191,13 +191,30 @@ class SemanticMessageSplitter:
             if current and len(current) >= target and len(buckets) < self.max_segments - 1:
                 buckets.append(current)
                 current = ""
-            current += seg
+            current = _join_segments(current, seg)
         if current:
             buckets.append(current)
         return buckets
 
     def _split_no_atoms(self, text: str) -> list[str]:
-        """Original split logic when there are no atomic spans."""
+        """无原子段时的切分。**换行是硬边界**，绝不被合并逻辑粘回去。
+
+        真人聊天用换行表达「这是另一条」。旧逻辑把换行当普通空白处理，
+        会把多条短句粘成一条没有标点的长文（文字墙）——正文取消句号后
+        这个缺陷会被放大（失去句号这个"句末"信号，片段全部落进合并分支），
+        所以这里先按行切开，再逐行做标点切分，不再跨行合并。
+        """
+        lines = [ln.strip() for ln in text.split("\n")]
+        lines = [ln for ln in lines if ln]
+        if len(lines) <= 1:
+            return self._split_by_punctuation(text)
+        out: list[str] = []
+        for ln in lines:
+            out.extend(self._split_by_punctuation(ln))
+        return out
+
+    def _split_by_punctuation(self, text: str) -> list[str]:
+        """单行内的标点切分（原 _split_no_atoms 逻辑）。"""
         for pattern in _SPLIT_PATTERNS:
             parts = pattern.split(text)
             if len(parts) > 1:
@@ -268,6 +285,22 @@ class SemanticMessageSplitter:
 def _is_sentence_end(text: str) -> bool:
     """Check if text ends with a sentence terminator."""
     return text and text[-1] in "。！？.!?\n"
+
+
+def _join_segments(head: str, tail: str) -> str:
+    """把相邻片段拼成一个气泡，不制造"无标点长文"。
+
+    真人聊天里相邻短句靠空格/换行分隔（"还没想好 今天还满课"）。直接把两段
+    首尾相接会得到一条没有分隔符的连读文字墙，所以这里补一个空格——仅当两侧
+    都没有可当分隔的标点时。
+    """
+    if not head:
+        return tail
+    if not tail:
+        return head
+    if head[-1] in "。！？.!?，、；:：\n " or tail[0] in "。！？.!?，、；:：":
+        return head + tail
+    return head + " " + tail
 
 
 def _is_atom(text: str) -> bool:

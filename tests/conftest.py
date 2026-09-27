@@ -51,6 +51,7 @@ def mock_qq_client():
     client.send_poke = AsyncMock(return_value=True)
     client.send_voice = AsyncMock(return_value=True)
     client.send_image = AsyncMock(return_value=True)
+    client.send_file = AsyncMock(return_value=True)
     client.recall_message = AsyncMock(return_value=True)
     client.close = AsyncMock()
     return client

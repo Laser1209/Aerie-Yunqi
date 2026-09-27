@@ -177,6 +177,9 @@ class OutgoingReply:
     reply_to_qq_message_id: int = 0
     # Phase 4: optional attachments echoed back
     attachments: list[dict] = field(default_factory=list)
+    # 出站文件：回复文本发完后逐个上送（QQ 走 upload_private_file）。
+    # 与 attachments 区分：那边是"回显用户发来的附件"，这里是"我要发文件给用户"。
+    file_paths: list[str] = field(default_factory=list)
     # Phase 9 Batch 7 (B7.2): link this reply to the originating
     # cognition_log row so SendQueue can append pacing decisions back
     # into the trace after the segments have actually been sent.

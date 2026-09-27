@@ -2770,9 +2770,27 @@ class Companion:
             return ""
 
     async def _send_to_qq(self, reply: OutgoingReply) -> bool:
-        return await self.qq.send_message(reply.user_id, reply.content)
+        sent = await self.qq.send_message(reply.user_id, reply.content)
+        # 文本与文件是两条独立消息：文本为空时 send_message 自行跳过，
+        # 文件照发；文件失败也不回滚已经发出的文本。
+        for path in list(getattr(reply, "file_paths", None) or []):
+            try:
+                if not await self.qq.send_file(reply.user_id, path):
+                    logger.warning("QQ 文件未送达: %s", path)
+            except Exception:
+                logger.exception("QQ 文件发送异常: %s", path)
+        return sent
 
     async def _send_to_ilink(self, reply: OutgoingReply) -> bool:
+        # iLink 目前只接了文本：media 侧能加密上传到 CDN，但缺"发送媒体消息"
+        # 这最后一步。此处必须显式记录，否则在微信里让 Agent 发文件会静默丢件
+        # ——那就是又一次"本地以为成功、用户什么都没收到"。
+        pending = list(getattr(reply, "file_paths", None) or [])
+        if pending:
+            logger.warning(
+                "iLink 通道暂不支持文件投递，%d 个文件未发送: %s",
+                len(pending), pending,
+            )
         return await self.ilink_gateway.send_text(
             reply.channel_account_id,
             reply.content,
@@ -2798,6 +2816,30 @@ class Companion:
             ))
         except Exception:
             logger.exception("推送审批通知失败 call_id=%s", payload.get("call_id"))
+
+    def _notify_file_delivery(self, payload: dict) -> None:
+        """把「这份文件发给用户」推到最近一次会话通道（同步回调，经发送队列投递）。
+
+        与审批通知同源：工具执行链是同步的、不能 await；也不能只落桌面端，
+        否则在 QQ / 微信里让 Agent 写文件会静默丢件。
+        """
+        path = str((payload or {}).get("path") or "").strip()
+        if not path:
+            return
+        target = self._last_inbound_target
+        if not target or not target.get("user_id"):
+            logger.info("文件 %s 已生成但当前无会话通道，仅桌面端可见", path)
+            return
+        try:
+            self.queue.enqueue(OutgoingReply(
+                user_id=int(target["user_id"]),
+                content=str((payload or {}).get("note") or ""),
+                channel=str(target.get("channel") or target.get("source") or "qq"),
+                channel_account_id=str(target.get("channel_account_id") or ""),
+                file_paths=[path],
+            ))
+        except Exception:
+            logger.exception("推送文件失败 path=%s", path)
 
     @staticmethod
     def _render_approval_notice(payload: dict) -> str:

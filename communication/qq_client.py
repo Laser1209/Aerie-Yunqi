@@ -18,6 +18,7 @@ import secrets
 import socket
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 import websockets
@@ -856,6 +857,39 @@ class QQClient:
             segments.append({"type": "text", "data": {"text": caption_clean}})
         segments.append({"type": "image", "data": {"file": image_ref}})
         return await self.send_message_with_segments(int(user_id), segments)
+
+    async def send_file(self, user_id: int, file_path: str, name: str = "") -> bool:
+        """Send a local file to a QQ private user via ``upload_private_file``.
+
+        ``file_path`` must be an absolute local path readable by NapCat.
+        ``name`` overrides the name the receiver sees (defaults to the
+        on-disk basename). Returns False instead of raising when QQ is
+        offline or the file is missing, so deliveries degrade gracefully.
+        """
+        if self._disabled or self._connectivity_test:
+            logger.info("QQ send_file skipped by process safety mode")
+            return False
+        if not self.is_connected:
+            logger.warning("Cannot send file: QQ WS not connected")
+            return False
+
+        path = Path(file_path)
+        if not path.is_file():
+            logger.warning("Cannot send file: not found: %s", file_path)
+            return False
+
+        resp = await self._rpc_call(
+            "upload_private_file",
+            {
+                "user_id": int(user_id),
+                "file": str(path.resolve()),
+                "name": str(name or path.name),
+            },
+            timeout=60,
+        )
+        if resp is None:
+            return False
+        return resp.get("status") == "ok"
 
     async def stop(self) -> None:
         self._running = False

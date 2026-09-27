@@ -37,6 +37,9 @@
 - weather_query       天气查询
 - translation         文本翻译
 - code_search         代码搜索
+
+【出站投递类（1个）】
+- send_file_to_user   把已生成的文件通过当前会话通道发给用户
 """
 
 from __future__ import annotations
@@ -1975,6 +1978,36 @@ def tool_doc_write(doc_type: str,
         return {"success": False, "error": str(e)}
 
 
+def tool_send_file_to_user(filepath: str, note: str = "") -> dict:
+    """把一份本地文件通过当前会话通道发给用户（QQ 走 upload_private_file）。
+
+    只允许发送授权根（已注册工作区 / AerieOffice）内的文件，避免把系统文件外发。
+    投递是异步入队，工具返回成功只代表"已排队"，不代表对方已收到。
+    """
+    try:
+        target = _resolve_write_target(filepath)
+        if target is None or not target.is_file():
+            return {
+                "success": False,
+                "error": f"文件不存在或不在允许发送的目录内: {filepath}",
+            }
+        from core.companion import get_companion
+
+        companion = get_companion()
+        if companion is None:
+            return {"success": False, "error": "当前无可用会话通道，文件未发送"}
+        companion._notify_file_delivery({"path": str(target), "note": str(note or "")})
+        return {
+            "success": True,
+            "queued": True,
+            "name": target.name,
+            "path": str(target),
+        }
+    except Exception as e:
+        logger.exception("send_file_to_user error")
+        return {"success": False, "error": str(e)}
+
+
 # ── 注册到 ToolRegistry ──────────────────────────
 
 _OFFICE_TOOL_SCHEMAS = {
@@ -2828,6 +2861,42 @@ _OFFICE_TOOL_SCHEMAS = {
             },
         },
     },
+    "send_file_to_user": {
+        "type": "function",
+        "function": {
+            "name": "send_file_to_user",
+            "description": """把一份已经存在的本地文件发给用户（通过当前会话通道，QQ 走文件上传）。
+
+使用场景：
+- 你刚生成的报告/表格/文档，用户要你"发过来"
+- 用户索要某个已存在的本地文件
+
+限制：
+- 只能发已注册工作区或 AerieOffice 目录内的文件，其他位置会被拒绝
+- 工具只负责投递，不改文件内容；不要再用文字重复文件全文
+
+参数：
+- filepath: 文件的绝对路径，或相对 AerieOffice 的路径
+- note: 可选，随文件一起发的一句话
+
+相关工具：document_create, doc_write, word_generate, csv_generate""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filepath": {
+                        "type": "string",
+                        "description": "要发送的文件路径（绝对路径，或相对 AerieOffice 的路径）",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "随文件一起发的一句话（可选）",
+                        "default": "",
+                    },
+                },
+                "required": ["filepath"],
+            },
+        },
+    },
 }
 
 
@@ -2873,6 +2942,8 @@ def register_office_tools(registry) -> int:
         "weather_query": tool_weather_query,
         "translation": tool_translation,
         "code_search": tool_code_search,
+        # 出站投递（把已生成的文件发给用户）
+        "send_file_to_user": tool_send_file_to_user,
     }
 
     count = 0

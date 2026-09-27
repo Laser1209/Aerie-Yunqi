@@ -69,7 +69,6 @@ def main():
         ("M5.3 文件整理",         "e2e_s5_file_organizer_verify.py"),
         ("M5.4 文档写作",         "e2e_s5_doc_writer_verify.py"),
         ("M5.5 自主 Skill 创建",  "e2e_s5_skill_creator_verify.py"),
-        ("M5.6 QQ 深耕",          "e2e_s5_qq_deepening_verify.py"),
     ]
 
     total_passed = 0

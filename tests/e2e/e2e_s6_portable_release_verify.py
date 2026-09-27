@@ -71,7 +71,6 @@ def main():
         "core/file_organizer.py",
         "core/doc_writer.py",
         "core/skill_creator.py",
-        "core/qq_deepening.py",
         "core/multimodal_input.py",
         "core/prompt_injection.py",
     ]
@@ -96,7 +95,6 @@ def main():
         "e2e_s5_file_organizer_verify.py",
         "e2e_s5_doc_writer_verify.py",
         "e2e_s5_skill_creator_verify.py",
-        "e2e_s5_qq_deepening_verify.py",
         "e2e_s6_cognition_panel_v2_verify.py",
     ]
     for i, s in enumerate(verify_scripts):

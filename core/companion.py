@@ -5310,17 +5310,34 @@ class Companion:
     def _split_proactive_bubbles(content: str) -> list[str]:
         """把主动消息文本按行切成气泡序列（上限 _PROACTIVE_MAX_BUBBLES）。
 
-        纯分隔符行（模型自报的消息边界）必须先剔除：这里按原始行切，
-        不像主链路那样过切分器，漏一步就会把 `---` 当成一条独立气泡发出去。
+        两条「不该独立成泡」的规则必须在这里兜住——本路径按原始行切，不像主链路
+        那样过切分器，漏一步就会错发：
+
+        - 纯分隔符行（模型自报的消息边界）：漏了就会发出只有 `---` 的空气泡；
+        - **围栏代码块内的行**：整块合成一条。代码逐行发出去缩进与续行关系全断。
+
+        未闭合的围栏（开头那三个反引号之后没有收尾）与主链路同语义：其后全部算代码。
         """
         from communication.splitter import is_message_separator
 
-        lines = [
-            ln.strip()
-            for ln in str(content or "").splitlines()
-            if ln.strip() and not is_message_separator(ln)
-        ]
-        return lines[:_PROACTIVE_MAX_BUBBLES]
+        bubbles: list[str] = []
+        fence: list[str] = []
+        for raw in str(content or "").splitlines():
+            stripped = raw.strip()
+            if fence:
+                fence.append(raw.rstrip())
+                if stripped.startswith("```"):
+                    bubbles.append("\n".join(fence).strip())
+                    fence = []
+                continue
+            if stripped.startswith("```"):
+                fence.append(raw.rstrip())
+                continue
+            if stripped and not is_message_separator(stripped):
+                bubbles.append(stripped)
+        if fence:  # 未闭合围栏：余下全算代码，整块成一条
+            bubbles.append("\n".join(fence).strip())
+        return bubbles[:_PROACTIVE_MAX_BUBBLES]
 
     def _proactive_example_corpus(self) -> list[str]:
         """当前激活角色的 few-shot 示例原文，归一化后供生成结果查重。"""

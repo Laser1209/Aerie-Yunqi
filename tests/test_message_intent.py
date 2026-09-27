@@ -282,6 +282,29 @@ def test_is_message_separator_shapes():
     assert not is_message_separator("")
 
 
+def test_proactive_bubbles_keep_code_fence_whole():
+    """主动消息也按一整块发代码：该路径按行切，围栏内各行必须合成一条。"""
+    from core.companion import Companion
+
+    content = "看这个：\n```python\ndef f():\n    return 1\n```\n好了。"
+    assert Companion._split_proactive_bubbles(content) == [
+        "看这个：",
+        "```python\ndef f():\n    return 1\n```",
+        "好了。",
+    ]
+
+
+def test_proactive_bubbles_unclosed_fence_swallows_rest():
+    """未闭合围栏与主链路同语义：其后全部算代码，整块成一条。"""
+    from core.companion import Companion
+
+    content = "先说一句。\n```\nline1\nline2"
+    assert Companion._split_proactive_bubbles(content) == [
+        "先说一句。",
+        "```\nline1\nline2",
+    ]
+
+
 def test_fallback_never_emits_a_lone_separator_as_message():
     """回退路径也不得把「整条就是分隔符」的段发出去。
 

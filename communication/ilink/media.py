@@ -15,6 +15,7 @@ import httpx
 from communication.ilink.client import ILinkClient
 from communication.ilink.errors import ILinkMediaError, ILinkProtocolError
 from communication.ilink.media_crypto import decrypt_media, encrypt_media
+from communication.ilink.models import MediaType
 
 
 TENCENT_CDN_HOSTS = frozenset({"novac2c.cdn.weixin.qq.com"})
@@ -98,7 +99,7 @@ class ILinkMediaTransfer:
         source = Path(source_path)
         if not source.is_file():
             raise ILinkMediaError("media source must be an existing file")
-        if media_type not in (1, 2, 3, 4):
+        if media_type not in tuple(int(item) for item in MediaType):
             raise ILinkMediaError("media type is invalid")
         if not isinstance(to_user_id, str) or not to_user_id:
             raise ILinkMediaError("media target user is required")
@@ -126,12 +127,15 @@ class ILinkMediaTransfer:
             if not isinstance(upload_url, str) or not upload_url:
                 raise ILinkProtocolError("iLink upload response must contain upload_full_url")
             _validate_cdn_url(upload_url)
-            with encrypted_path.open("rb") as encrypted_file:
-                response = await self._http_client.post(
-                    upload_url,
-                    content=_file_stream(encrypted_file),
-                    headers={"Content-Type": "application/octet-stream"},
-                )
+            # 必须**整块**上传（带 Content-Length）。用异步生成器会被 httpx 改成
+            # chunked 传输编码，CDN 直接回 500——同一个 URL 整块 200、流式 500，
+            # 2026-09-28 真机对照实测。官方 SDK 也一律 `data=ciphertext` 整块发。
+            ciphertext = encrypted_path.read_bytes()
+            response = await self._http_client.post(
+                upload_url,
+                content=ciphertext,
+                headers={"Content-Type": "application/octet-stream"},
+            )
             _raise_media_status(response)
             encrypted_param = response.headers.get("x-encrypted-param")
             if not encrypted_param:
@@ -150,11 +154,6 @@ class ILinkMediaTransfer:
         descriptor, value = tempfile.mkstemp(dir=self.storage_dir, prefix="ilink_", suffix=suffix)
         os.close(descriptor)
         return Path(value)
-
-
-async def _file_stream(source):
-    while chunk := source.read(STREAM_CHUNK_SIZE):
-        yield chunk
 
 
 def _validate_cdn_url(value: str) -> None:

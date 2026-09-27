@@ -145,6 +145,10 @@ async def test_upload_uses_official_post_contract_and_returns_encrypted_header(t
         assert request.method == "POST"
         assert request.headers["Content-Type"] == "application/octet-stream"
         assert request.content != source.read_bytes()
+        # CDN 只认**带 Content-Length 的整块**上传：改成流式（chunked）会被回 500。
+        # 真机对照实测：同一 URL 整块 200、流式 500，故把传输编码钉死在这。
+        assert "chunked" not in request.headers.get("Transfer-Encoding", "").lower()
+        assert int(request.headers["Content-Length"]) == len(request.content)
         return httpx.Response(200, headers={"x-encrypted-param": "download-reference"})
 
     monkeypatch.setattr("communication.ilink.media.secrets.token_bytes", lambda size: b"0123456789abcdef")

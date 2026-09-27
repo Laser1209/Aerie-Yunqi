@@ -40,6 +40,28 @@ class MessageItemType(IntEnum):
     VIDEO = 5
 
 
+class MediaType(IntEnum):
+    """``getuploadurl`` 的 ``media_type``。
+
+    **与 ``MessageItemType`` 是两套独立编号**，同名类型取值不同：
+
+    | 类型 | 上传 media_type | 消息项 type |
+    |------|----------------|------------|
+    | 图片 | 1              | 2          |
+    | 视频 | 2              | 5          |
+    | 文件 | **3**          | **4**      |
+    | 语音 | 4              | 3          |
+
+    上传文件时若顺手用消息项的 ``4``，服务端只会回一个笼统的参数错误，
+    因此这里显式命名，避免用魔数。取值已与官方 SDK（Go/Rust/Python/TS）核对一致。
+    """
+
+    IMAGE = 1
+    VIDEO = 2
+    FILE = 3
+    VOICE = 4
+
+
 def _mapping(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ILinkProtocolError(f"{field} must be an object")

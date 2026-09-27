@@ -6,11 +6,24 @@ from communication.ilink.models import (
     AuthStatus,
     GetUpdatesResponse,
     ILinkCredentials,
+    MediaType,
     MessageItemType,
     MessageState,
     MessageType,
     QRCodeChallenge,
 )
+
+
+def test_media_type_numbering_differs_from_message_item_type():
+    """上传 media_type 与消息项 type 是**两套编号**，文件分别是 3 与 4。
+
+    顺手把消息项的 4 当成上传的 media_type，服务端只会回一个笼统参数错误，
+    因此这组取值必须有测试钉住。
+    """
+    assert MediaType.FILE == 3
+    assert MessageItemType.FILE == 4
+    assert {int(item) for item in MediaType} == {1, 2, 3, 4}
+    assert {int(item) for item in MessageItemType} == {0, 1, 2, 3, 4, 5}
 
 
 def test_qrcode_challenge_requires_non_empty_strings():

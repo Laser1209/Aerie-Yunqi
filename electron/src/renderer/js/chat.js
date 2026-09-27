@@ -388,6 +388,10 @@ class ChatManager {
           this._handleComputerControlSignal(parsed);
           return;
         }
+        if (parsed && parsed.type === "write_auth_required") {
+          this._handleWriteAuthSignal(parsed);
+          return;
+        }
         this._ingestChatSignal(signal, "sse");
       });
     } catch (_) {
@@ -652,6 +656,102 @@ class ChatManager {
             statusEl.className = "cc-card__status cc-card__status--error";
           }
           disabled.forEach((b) => (b.disabled = false));
+        }
+      });
+    });
+  }
+
+  // ── 对话框内：越界写入授权卡片（1.2b） ─────────────
+  // 复用既有 cc-card 视觉；确认后调 /api/agent/write-approval，后端加工作区根并重试该次写入。
+
+  _handleWriteAuthSignal(payload) {
+    if (!payload || !payload.id) return;
+    this._upsertWriteAuthCard(payload);
+  }
+
+  _upsertWriteAuthCard(payload) {
+    if (!this._el.messages) return;
+    const domId = "wauth_" + payload.id;
+    let el = this._el.messages.querySelector(`[data-id="${domId}"]`);
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "chat-msg chat-msg--assistant chat-msg--approval";
+      el.setAttribute("data-id", domId);
+      el.setAttribute("data-write-approval-id", payload.id);
+      this._el.messages.appendChild(el);
+    }
+    el.innerHTML = this._buildWriteAuthCardHtml(payload);
+    this._bindWriteAuthCard(el, payload);
+    if (this._atBottom) this._el.messages.scrollTop = this._el.messages.scrollHeight;
+  }
+
+  _buildWriteAuthCardHtml(payload) {
+    const esc = (v) => this._escapeHtml(v == null ? "" : String(v));
+    return `
+      <div class="chat-msg__avatar-wrap">
+        <span class="chat-msg__avatar chat-msg__avatar--placeholder">A</span>
+      </div>
+      <div class="chat-msg__body">
+        <div class="chat-msg__name">Aerie Companion</div>
+        <div class="chat-bubble cc-card">
+          <div class="cc-card__head">
+            <span class="cc-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              </svg>
+            </span>
+            <div class="cc-card__titles">
+              <div class="cc-card__title">写入授权请求</div>
+              <div class="cc-card__sub">目标不在已授权工作区</div>
+            </div>
+            <span class="cc-card__risk cc-card__risk--medium">需确认</span>
+          </div>
+          <div class="cc-card__rows">
+            <div class="cc-card__row"><span>目录</span><code>${esc(payload.path)}</code></div>
+          </div>
+          <div class="cc-card__reason">允许后会把该目录加入工作区，并自动重试这次写入。</div>
+          <div class="cc-card__actions">
+            <button type="button" class="cc-card__btn cc-card__btn--approve" data-wa-act="approve">允许并重试</button>
+            <button type="button" class="cc-card__btn cc-card__btn--reject" data-wa-act="reject">拒绝</button>
+          </div>
+          <div class="cc-card__status" data-wa-status="pending">等待你的确认…</div>
+        </div>
+      </div>`;
+  }
+
+  _bindWriteAuthCard(el, payload) {
+    const id = payload.id;
+    el.querySelectorAll("[data-wa-act]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const approved = btn.dataset.waAct === "approve";
+        const buttons = el.querySelectorAll(".cc-card__btn");
+        buttons.forEach((b) => (b.disabled = true));
+        const statusEl = el.querySelector("[data-wa-status]");
+        try {
+          const r = window.aerie && window.aerie.api
+            ? await window.aerie.api.request({
+                method: "POST",
+                path: "/api/agent/write-approval",
+                body: { id, approved },
+              })
+            : { data: { error: "api unavailable" } };
+          const ok = r && r.data && r.data.status === "ok";
+          if (statusEl) {
+            if (ok) {
+              statusEl.textContent = approved ? "已允许该目录，正在重试写入…" : "已拒绝";
+              statusEl.className = "cc-card__status " + (approved ? "cc-card__status--ok" : "cc-card__status--reject");
+            } else {
+              statusEl.textContent = "该请求已失效或已处理";
+              statusEl.className = "cc-card__status cc-card__status--error";
+            }
+          }
+        } catch (e) {
+          console.warn("[chat] write approval action failed", e);
+          if (statusEl) {
+            statusEl.textContent = "操作失败，请稍后重试";
+            statusEl.className = "cc-card__status cc-card__status--error";
+          }
+          buttons.forEach((b) => (b.disabled = false));
         }
       });
     });

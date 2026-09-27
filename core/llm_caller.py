@@ -130,9 +130,20 @@ class LLMCaller:
         self._max_tokens = int(os.getenv("LLM_MAX_TOKENS", "2048"))
         # ws 多 Key 轮询池：同一域名下多个 Key 分摊并发。
         self._ws_rotator = KeyRotator.from_env("AERIE_WS_KEYS", "AERIE_WS_API_KEY")
+        self._role_bindings = self._load_role_bindings()
         self._providers = self._load_providers()
         self._health = ProviderHealthManager()
         self._entitlements = EntitlementStore()
+
+    @staticmethod
+    def _load_role_bindings() -> dict:
+        """Snapshot of feature-point → provider/model bindings at brain build."""
+        try:
+            from core.ai_services import get_store
+            return get_store().get_bindings()
+        except Exception:
+            logger.debug("role bindings load failed", exc_info=True)
+            return {}
 
     @staticmethod
     def _entitlements_enforced() -> bool:
@@ -286,7 +297,11 @@ class LLMCaller:
         # Light/cheap provider for fast lightweight tasks (e.g. brief greeting
         # refresh on every drawer open). Uses the same SiliconFlow key with a
         # separate model so expensive primary models are never touched here.
-        sf_light_model = os.getenv("SILICONFLOW_LIGHT_MODEL", "").strip()
+        light_binding = self._role_bindings.get("light_assist", {})
+        if light_binding.get("provider") == "siliconflow-light" and light_binding.get("model"):
+            sf_light_model = str(light_binding["model"]).strip()
+        else:
+            sf_light_model = os.getenv("SILICONFLOW_LIGHT_MODEL", "").strip()
         sf_key = os.getenv("SILICONFLOW_API_KEY", "").strip()
         if sf_light_model and sf_key:
             providers.append({
@@ -298,17 +313,59 @@ class LLMCaller:
             })
 
         # Aerie WS（阿里云百炼业务空间专属域名）：多 Key 轮询池，用于子 Agent /
-        # 轻量任务，分摊并发、防止单 Key 额度/并发占满。
+        # 轻量任务，分摊并发、防止单 Key 额度/并发占满。模型名由功能点绑定决定，
+        # 绑定指向其他厂商时回退 env 默认值（该条目仅作为轮询池备用）。
         ws_url = os.getenv("AERIE_WS_BASE_URL", "").strip()
         if ws_url and self._ws_rotator.size:
+            sub_binding = self._role_bindings.get("subagent", {})
+            ws_model = (
+                sub_binding.get("model")
+                if sub_binding.get("provider") == "aerie-ws" and sub_binding.get("model")
+                else (os.getenv("AERIE_WS_MODEL", "qwen3.7-flash").strip() or "qwen3.7-flash")
+            )
             providers.append({
                 "name": "aerie-ws",
                 "url": ws_url,
                 "key": self._ws_rotator.next() or "",
                 "keys": self._ws_rotator.keys,
-                "model": os.getenv("AERIE_WS_MODEL", "qwen3.7-flash").strip() or "qwen3.7-flash",
+                "model": ws_model,
                 "supports_tools": True,
             })
+
+        # 用户自定义 OpenAI 兼容厂商（data/ai_services.json）：保存即热加载，
+        # 可被任意功能点绑定，也进入主对话容灾链。
+        try:
+            from core.ai_services import get_store
+            for cp in get_store().list_custom_providers(include_key=True):
+                cp_key = (cp.get("api_key") or "").strip()
+                if not cp_key:
+                    continue
+                providers.append({
+                    "name": f"custom:{cp.get('id')}",
+                    "url": (cp.get("base_url") or "").strip().rstrip("/"),
+                    "key": cp_key,
+                    "model": (cp.get("model") or "").strip(),
+                    "supports_tools": bool(cp.get("supports_tools", False)),
+                    "max_tool_calls": int(cp.get("max_tool_calls") or 8),
+                })
+        except Exception:
+            logger.debug("custom providers load failed", exc_info=True)
+
+        # 主对话绑定（功能点 → provider + model）：把绑定目标以绑定模型置顶。
+        # 未配置/已失效的绑定不改变原有容灾顺序。
+        try:
+            from core.ai_services import resolve_role
+            target = resolve_role("main_chat")
+            if target is not None and target.available:
+                for i, p in enumerate(providers):
+                    if p["name"] == target.name and p["url"] == target.base_url:
+                        bound = dict(p)
+                        bound["model"] = target.model
+                        providers.pop(i)
+                        providers.insert(0, bound)
+                        break
+        except Exception:
+            logger.debug("main_chat binding apply failed", exc_info=True)
 
         if not providers:
             logger.warning("No LLM providers configured! Set OPENAI_API_KEY or DEEPSEEK_API_KEY.")
@@ -460,6 +517,7 @@ class LLMCaller:
         preferred_provider: str | None = None,
         temperature: float | None = None,
         on_tool_event: Any = None,
+        model_override: str | None = None,
     ) -> LLMCallerResponse:
         """Send chat completion request, try all providers in sequence.
 
@@ -516,7 +574,9 @@ class LLMCaller:
                     pref_idx = i
                     break
             if pref_idx is not None:
-                pref = providers.pop(pref_idx)
+                pref = dict(providers.pop(pref_idx))
+                if model_override:
+                    pref["model"] = model_override
                 providers.insert(0, pref)
                 logger.debug("provider reordered: %s promoted to first", preferred_provider)
 
@@ -524,6 +584,20 @@ class LLMCaller:
         # （用户指定的 preferred_provider 优先级仍最高）
         need_tools = tools is not None and tool_registry is not None and len(tools) > 0
         if need_tools and not preferred_provider:
+            # 子Agent（工具调用）功能点绑定：把绑定目标置于工具链首位。
+            try:
+                from core.ai_services import role_preference
+                sub_provider, sub_model = role_preference("subagent")
+                if sub_provider:
+                    for i, p in enumerate(providers):
+                        if p["name"] == sub_provider and p.get("supports_tools", False):
+                            pref = dict(providers.pop(i))
+                            if sub_model:
+                                pref["model"] = sub_model
+                            providers.insert(0, pref)
+                            break
+            except Exception:
+                logger.debug("subagent binding apply failed", exc_info=True)
             tool_providers = [p for p in providers if p.get("supports_tools", False)]
             other_providers = [p for p in providers if not p.get("supports_tools", False)]
             if tool_providers:
@@ -650,6 +724,12 @@ class LLMCaller:
                         except Exception as e:
                             result = {"error": str(e)}
                             success = False
+                        # 1.2b：越界写入 → 请求桌面端授权 → 放行则加工作区根并只重试该次调用。
+                        from core import write_approval
+
+                        result, success = await write_approval.maybe_retry_after_block(
+                            tool_registry, tc_name, tc_args, result, success
+                        )
                         tool_dur = int((time.monotonic() - t_tool) * 1000)
                         # result 不一定是 dict，取错误文案前先收敛类型。
                         err_text = (
@@ -1292,8 +1372,21 @@ class LLMCaller:
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
         ]
+        model_override: str | None = None
+        if preferred_provider == "siliconflow-light":
+            try:
+                from core.ai_services import role_preference
+                bound_provider, bound_model = role_preference("light_assist")
+                if bound_provider:
+                    preferred_provider, model_override = bound_provider, bound_model
+            except Exception:
+                pass
         try:
-            call = self.chat(messages, preferred_provider=preferred_provider)
+            call = self.chat(
+                messages,
+                preferred_provider=preferred_provider,
+                model_override=model_override,
+            )
             resp = await call if timeout is None else await asyncio.wait_for(call, timeout=timeout)
             if resp.text and resp.text.strip():
                 text = resp.text.strip().strip('"').strip("'")

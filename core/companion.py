@@ -32,6 +32,8 @@ from core.delivery_ledger import (
     describe_failure as describe_delivery_failure,
     get_ledger as _ledger,
 )
+from core import delivery_routing
+from core.delivery_routing import DeliveryContext
 from core.llm_caller import LLMCaller
 from core.qq_media import QQMediaPreprocessor
 from core.qq_sticker import QQStickerSender
@@ -1167,8 +1169,10 @@ class Companion:
         # Tool registry
         # v13.9: 全局共享的 ComputerController 单例，确保权限设置全局生效
         self.computer_controller = ComputerController()
-        # 最近一次会话通道：审批等异步通知需要知道回推到哪个用户/哪个通道
-        self._last_inbound_target: dict[str, Any] = {}
+        # 最近一次用户活跃端口（**含桌面端**）+ 时刻。
+        # 只服务于主动消息的端口策略（§九-b）；用户请求触发的投递一律走
+        # ``delivery_routing.current()`` 的请求级来源，不读这个全局记录。
+        self._recent_inbound: tuple[DeliveryContext, float] | None = None
         # v13.9: 细粒度权限管理器（目录授权 + 操作分类 + 高危确认）
         self.permission_manager = FineGrainedPermissionManager()
         self.tool_registry = ToolRegistry(self.db)
@@ -2903,60 +2907,81 @@ class Companion:
                 return str(entry.get("delivery_id") or "")
         return ""
 
-    def _notify_pending_approval(self, payload: dict) -> None:
-        """把待审批事项推到最近一次会话通道（经发送队列异步投递，不阻塞工具调用）。
+    def _proactive_delivery_channel(self) -> str:
+        """主动消息（无请求来源端口）该投到哪一端（§九-b 第 4 节）。
 
+        规则集中在 `core.delivery_routing.resolve_proactive_channel`：配置指定端口
+        优先；否则投**最近活跃端口（含桌面）**且需在时间窗内；窗口内无记录则落桌面端。
+        旧实现是 `"qq" if qq.is_logged_in else "local_chat"` —— 只要 QQ 在线就永远
+        投 QQ，完全忽略用户实际在哪一端。
+        """
+        mode, window_min = delivery_routing.proactive_channel_config(self.settings)
+        recent: DeliveryContext | None = None
+        recent_fresh = False
+        record = self._recent_inbound
+        if record is not None:
+            context, at = record
+            if (time.time() - at) <= window_min * 60.0:
+                recent, recent_fresh = context, True
+        return delivery_routing.resolve_proactive_channel(
+            configured=mode, recent=recent, recent_fresh=recent_fresh,
+        )
+
+    def _notify_pending_approval(self, payload: dict) -> None:
+        """把待审批事项推到**发起这次请求的那个端口**（经发送队列异步投递，不阻塞工具调用）。
+
+        §九-b：来源端口是**请求级**的（`delivery_routing`），不再读全局"最后一次入站"。
         同步回调：request_approval 发生在工具执行链里，不能 await。
         """
-        target = self._last_inbound_target
-        if not target or not target.get("user_id"):
+        origin = delivery_routing.current()
+        if origin is None:
+            # 不在请求轮次内（脚本直调等）：审批卡片本身长在桌面端 UI 上，
+            # 这里的"仅桌面端可见"是事实描述，不是丢件。
             logger.info(
-                "审批 %s 已创建但当前无会话通道，仅桌面端可见", payload.get("call_id"),
+                "审批 %s 不在请求轮次内，仅桌面端可见", payload.get("call_id"),
             )
             return
         try:
             self.queue.enqueue(OutgoingReply(
-                user_id=int(target["user_id"]),
+                user_id=origin.user_id,
                 content=self._render_approval_notice(payload),
-                channel=str(target.get("channel") or target.get("source") or "qq"),
-                channel_account_id=str(target.get("channel_account_id") or ""),
+                channel=origin.channel,
+                channel_account_id=origin.channel_account_id,
             ))
         except Exception:
             logger.exception("推送审批通知失败 call_id=%s", payload.get("call_id"))
 
     def _notify_file_delivery(self, payload: dict) -> None:
-        """把「这份文件发给用户」推到最近一次会话通道（同步回调，经发送队列投递）。
+        """把「这份文件发给用户」推到**发起这次请求的那个端口**（同步回调 → 队列投递）。
 
-        与审批通知同源：工具执行链是同步的、不能 await；也不能只落桌面端，
-        否则在 QQ / 微信里让 Agent 写文件会静默丢件。
+        §九-b：来源端口是**请求级**的，不再读全局"最后一次入站通道" —— 那会让
+        "在桌面端要文件"投到上一次的 QQ/微信，或干脆静默丢件。
+        也不能只落桌面端，否则在 QQ / 微信里让 Agent 写文件会静默丢件。
         """
         path = str((payload or {}).get("path") or "").strip()
         if not path:
             return
-        target = self._last_inbound_target
-        if not target or not target.get("user_id"):
-            logger.info("文件 %s 已生成但当前无会话通道，仅桌面端可见", path)
-            # 没有会话通道也是"没发出去"的一种：落一条回执，让模型下一轮别宣称已送达。
-            _ledger().record_pending(
-                user_id=0, channel="", path=path,
-                note=str((payload or {}).get("note") or ""),
-            )
+        note = str((payload or {}).get("note") or "")
+        origin = delivery_routing.current()
+        if origin is None:
+            # 没有来源端口 = 确实不知道发去哪。不静默丢件：记一条未决回执，
+            # 让模型下一轮知道"这次没发出去"（与 P0-2 的诚实底线合流）。
+            logger.warning("文件 %s 没有请求来源端口，未投递", path)
+            _ledger().record_pending(user_id=0, channel="", path=path, note=note)
             return
-        channel = str(target.get("channel") or target.get("source") or "qq")
-        user_id = int(target["user_id"])
         # 入队前先登记回执：发送结果在队列 worker 里产生，靠 delivery_id 对账回来。
         delivery_id = _ledger().record_pending(
-            user_id=user_id,
-            channel=channel,
+            user_id=origin.user_id,
+            channel=origin.channel,
             path=path,
-            note=str((payload or {}).get("note") or ""),
+            note=note,
         )
         try:
             self.queue.enqueue(OutgoingReply(
-                user_id=user_id,
-                content=str((payload or {}).get("note") or ""),
-                channel=channel,
-                channel_account_id=str(target.get("channel_account_id") or ""),
+                user_id=origin.user_id,
+                content=note,
+                channel=origin.channel,
+                channel_account_id=origin.channel_account_id,
                 file_paths=[path],
                 context={"deliveries": [{"delivery_id": delivery_id, "path": path}]},
             ))
@@ -3229,14 +3254,12 @@ class Companion:
         await self._submit_incoming_message(msg)
 
     async def _submit_incoming_message(self, msg: IncomingMessage) -> None:
-        # 记录最近一次会话通道，供审批等异步通知回推
-        if msg.user_id and msg.source in {"qq", "ilink"}:
-            self._last_inbound_target = {
-                "user_id": msg.user_id,
-                "source": msg.source,
-                "channel": msg.channel,
-                "channel_account_id": msg.channel_account_id,
-            }
+        # 记录"最近活跃端口"——**桌面端也记**（旧实现只在 qq/ilink 入站时记录，
+        # 于是桌面端发起的请求在投递侧完全不可见）。这个记录只服务于主动消息
+        # 的端口策略；请求触发的投递走 delivery_routing 的请求级来源。
+        recent = delivery_routing.context_from_message(msg)
+        if recent is not None:
+            self._recent_inbound = (recent, time.time())
         if self.message_batcher is not None:
             try:
                 await self.message_batcher.submit_message(msg)
@@ -4027,7 +4050,9 @@ class Companion:
                 reason_code = f"world_visual:{topic_id}" if topic_id else ""
 
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
-                channel = "qq" if getattr(self.qq, "is_logged_in", False) else "local_chat"
+                # §九-b：主动消息没有"来源端口"，按 proactive.delivery_channel 的
+                # 策略选端（默认 auto = 最近活跃端口且需在窗口内，否则落桌面端）。
+                channel = self._proactive_delivery_channel()
                 # P2：按素材类型决断模板——活动时刻话题（看书/咖啡等）→ 人物自拍
                 # 入镜（role_in_scene），物件/环境话题 → 第一人称环境照（environment_object）。
                 prompt_key = _prompt_key_for_visual_topic(topic_id)

@@ -171,15 +171,21 @@ class TestNotifyFileDelivery:
         comp = Companion.__new__(Companion)
         comp.queue = SimpleNamespace(enqueue=lambda reply: comp.queue.sent.append(reply))
         comp.queue.sent = []
-        comp._last_inbound_target = {
-            "user_id": 3489352115, "source": "qq",
-            "channel": "qq", "channel_account_id": "",
-        }
         return comp
 
     def test_enqueues_reply_with_file(self, tmp_path):
+        """§九-b：投递目标是**请求级来源端口**（由 pipeline 在工具执行窗口绑定）。"""
+        from core import delivery_routing
+
         comp = self._companion_with_queue()
-        comp._notify_file_delivery({"path": str(tmp_path / "r.docx"), "note": "给你"})
+        token = delivery_routing.bind(
+            delivery_routing.DeliveryContext(channel="qq", user_id=3489352115)
+        )
+        try:
+            comp._notify_file_delivery({"path": str(tmp_path / "r.docx"), "note": "给你"})
+        finally:
+            delivery_routing.unbind(token)
+
         assert len(comp.queue.sent) == 1
         reply = comp.queue.sent[0]
         assert reply.user_id == 3489352115
@@ -187,11 +193,18 @@ class TestNotifyFileDelivery:
         assert reply.file_paths == [str(tmp_path / "r.docx")]
         assert reply.content == "给你"
 
-    def test_no_target_does_not_enqueue(self, tmp_path):
+    def test_no_origin_does_not_enqueue_but_records_receipt(self, tmp_path):
+        """无来源端口 → 不投递，但**不静默丢件**：落一条未决回执让模型知道。"""
+        from core.delivery_ledger import get_ledger
+
+        ledger = get_ledger()
+        ledger.clear()
         comp = self._companion_with_queue()
-        comp._last_inbound_target = {}
         comp._notify_file_delivery({"path": str(tmp_path / "r.docx")})
+
         assert comp.queue.sent == []
+        assert ledger.has_pending(0) is True
+        ledger.clear()
 
     def test_blank_path_is_ignored(self):
         comp = self._companion_with_queue()
@@ -213,6 +226,8 @@ class TestSendFileToUserTool:
             result = office_tools.tool_send_file_to_user(str(outside))
         assert result["success"] is False
         assert "不在允许发送的目录内" in result["error"]
+        # 越界必须带 reason，否则 write_approval 的"弹审批→加根→重试"桥不会介入。
+        assert result["reason"] == "outside_workspace_roots"
 
     def test_rejects_missing_file(self):
         from core import office_tools
@@ -221,8 +236,21 @@ class TestSendFileToUserTool:
                           return_value=Path(r"C:\nope\missing.txt")):
             result = office_tools.tool_send_file_to_user("missing.txt")
         assert result["success"] is False
+        # 在授权根内但不存在：这是"文件不存在"，不是越界 —— 不该触发授权流程。
+        assert "reason" not in result
 
-    def test_success_enqueues_through_companion(self, tmp_path):
+    def test_blank_path_rejected(self):
+        from core import office_tools
+
+        result = office_tools.tool_send_file_to_user("   ")
+        assert result["success"] is False
+
+    def test_success_reports_queued_not_delivered(self, tmp_path):
+        """契约：成功只代表"已入队"，返回 status=queued，**不再有 success: True**。
+
+        历史 bug：回 success: True 让模型以为"已经发出去了"，投递失败时
+        照旧宣称已送达（假成功）。
+        """
         from core import office_tools
 
         target = tmp_path / "report.docx"
@@ -234,7 +262,9 @@ class TestSendFileToUserTool:
                 patch("core.companion.get_companion", return_value=fake):
             result = office_tools.tool_send_file_to_user(str(target), note="给你的")
 
-        assert result["success"] is True
+        assert result["status"] == "queued"
+        assert result["delivered"] is False
+        assert "success" not in result
         assert result["name"] == "report.docx"
         assert fake.calls == [{"path": str(target), "note": "给你的"}]
 

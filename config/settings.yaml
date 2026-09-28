@@ -62,7 +62,9 @@ office:
   first_run_prompted: true
   write_approval_timeout_sec: 60
 proactive:
+  auto_recent_window_min: 30
   companion_image_probability: 1
+  delivery_channel: auto
   enabled: true
   image_max_per_day: 0
   max_per_day: 0

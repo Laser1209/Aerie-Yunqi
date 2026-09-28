@@ -39,6 +39,7 @@ from core.ids import generate_id
 from core.model_output import normalize_model_text
 from core.tool_result import safe_json_dumps
 from core.delivery_ledger import build_feedback_note as build_delivery_feedback_note
+from core import delivery_routing
 from core.completion_claim_guard import guard_completion_claims
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
@@ -603,14 +604,21 @@ class Pipeline:
         on_tool_event = self._build_tool_progress_hook(
             msg, request_state, tools, task_verdict
         )
-        response = await self.brain.chat(
-            ctx_messages,
-            tools=tools,
-            tool_registry=self.tool_registry,
-            preferred_provider=preferred_provider,
-            on_tool_event=on_tool_event,
-            max_react_rounds=TASK_REACT_ROUNDS if task_verdict is not None else 6,
-        )
+        # §九-b：把「这条请求从哪来」绑定到当前执行上下文。工具执行期是同步、同协程的，
+        # 因此工具与投递端（_notify_file_delivery / 审批通知）都能读到请求级来源端口 ——
+        # 而不是去读一个全局的"最后一次入站通道"（多端并发时必然投错端）。
+        origin_token = delivery_routing.bind(delivery_routing.context_from_message(msg))
+        try:
+            response = await self.brain.chat(
+                ctx_messages,
+                tools=tools,
+                tool_registry=self.tool_registry,
+                preferred_provider=preferred_provider,
+                on_tool_event=on_tool_event,
+                max_react_rounds=TASK_REACT_ROUNDS if task_verdict is not None else 6,
+            )
+        finally:
+            delivery_routing.unbind(origin_token)
         self._checkpoint_cancel(request_state, "after_model")
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None)
@@ -3752,12 +3760,19 @@ class Pipeline:
         })
 
         self._checkpoint_cancel(request_state, "before_model")
-        response = await self.brain.chat(
-            ctx_messages,
-            tools=tools,
-            tool_registry=self.tool_registry,
-            preferred_provider=office_mgr.get_preferred_provider() if is_office else None,
+        # §九-b：批处理同样有工具执行，来源端口取批次首条消息（同一会话的连续消息）。
+        batch_origin = delivery_routing.bind(
+            delivery_routing.context_from_message(first_msg)
         )
+        try:
+            response = await self.brain.chat(
+                ctx_messages,
+                tools=tools,
+                tool_registry=self.tool_registry,
+                preferred_provider=office_mgr.get_preferred_provider() if is_office else None,
+            )
+        finally:
+            delivery_routing.unbind(batch_origin)
         self._checkpoint_cancel(request_state, "after_model")
         raw_text = getattr(response, "text", "") or ""
         react_trace = getattr(response, "react_trace", None)

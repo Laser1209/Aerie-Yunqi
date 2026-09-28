@@ -20,12 +20,16 @@ import hashlib
 import json
 import logging
 import re
+import tempfile
 import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+
+from core import jimeng_canvas
+from core import image_tiering
 
 logger = logging.getLogger(__name__)
 
@@ -442,6 +446,240 @@ class LLMCallerImageGenerationProvider:
 
 
 
+class JimengCanvasImageGenerationProvider:
+    """即梦画布 CLI 出图（人物类专用通道）。
+
+    只有它能同时给出竖构图（``--ratio 9:16``）与 i2i 一致人设；兼容中转
+    （gpt-image）忽略 ``size``、只出横图，且没有可用的图生图端点。
+
+    积分闸门：每次生成带 ``--credit-ceiling``（默认 16，见 ``JIMENG_CREDIT_CEILING``）。
+    报价超限时 CLI 在运行前停下、不扣分，这里如实返回 ``credit_exceeded``，
+    由上层决定是否向用户申请更高额度 —— 绝不静默抬价。
+    """
+
+    provider_id = "jimeng_canvas"
+
+    def __init__(self, model: str = "") -> None:
+        self.model = model or jimeng_canvas.default_model()
+
+    def generate(
+        self,
+        *,
+        prompt: str,
+        request_id: str,
+        owner_id: str,
+        metadata: dict[str, Any],
+    ) -> ImageGenerationResult:
+        metadata = dict(metadata or {})
+        # §八 分级路由：模型与分辨率由调用方（提示词层决断 → 候选 → metadata）给定，
+        # 缺省才用本 provider 的默认模型 —— 此前这里是唯一真源，等于"自拍和海报
+        # 用同一个模型、同一个分辨率"。
+        model = self._effective_model(metadata)
+        resolution = self._effective_resolution(metadata)
+        if not jimeng_canvas.available():
+            return ImageGenerationResult(
+                status="unavailable",
+                provider_id=self.provider_id,
+                model=model,
+                error_code="jimeng_cli_not_found",
+            )
+
+        project_id = jimeng_canvas.load_project_id()
+        canvas = jimeng_canvas.ensure_canvas(project_id)
+        if not canvas.get("ok"):
+            return ImageGenerationResult(
+                status="failed",
+                provider_id=self.provider_id,
+                model=model,
+                error_code=str(canvas.get("error_code") or "jimeng_canvas_failed"),
+            )
+
+        # 人物参考：三视图已同步到画布、且 i2i 未被熔断时走图生图锁脸；
+        # 否则退回纯文生图，由提示词里的外貌描写兜底。
+        reference_node_id = str(metadata.get("jimeng_reference_node_id") or "")
+        if not reference_node_id:
+            reference_node_id = self._persona_reference_node(metadata)
+        if reference_node_id and not jimeng_canvas.i2i_usable():
+            reference_node_id = ""
+
+        generated = self._generate_once(
+            prompt=prompt,
+            project_id=project_id,
+            metadata=metadata,
+            reference_node_id=reference_node_id,
+            model=model,
+            resolution=resolution,
+        )
+        # 实际生效的模式：降级后必须跟着改，否则上层审计会以为用的是 i2i。
+        used_mode = "i2i" if reference_node_id else "t2i"
+        # i2i 被服务端拒绝时如实熔断，并降级重试一次文生图 —— 否则用户要图会
+        # 直接落空。注意这次重试是**额外扣费**的：失败的 i2i 一样计费。
+        # 只在 status=failed 时降级：credit_exceeded 是额度未授权，
+        # 降级重试同样过不了闸门，重试只是白跑。
+        already_retried = False
+        if reference_node_id and str(generated.get("status")) == "failed":
+            jimeng_canvas.note_i2i_blocked(str(generated.get("error_code") or ""))
+            logger.warning(
+                "jimeng i2i rejected (%s), falling back to txt2img",
+                generated.get("error_code"),
+            )
+            generated = self._generate_once(
+                prompt=prompt,
+                project_id=project_id,
+                metadata=metadata,
+                reference_node_id="",
+                model=model,
+                resolution=resolution,
+            )
+            used_mode = "t2i"
+            already_retried = True
+
+        # 档位内失败 → 再试**下一档**（§8.5：不能因为省钱就让用户拿不到图）。
+        # 但即梦失败同样扣费，所以用 already_retried 把它限制在"每次 generate 至多
+        # 两次 provider 调用"，与配置里的 max_fallback_steps 同口径。
+        if str(generated.get("status")) == "failed" and not already_retried:
+            fallback = self._tier_fallback(metadata)
+            if fallback is not None:
+                logger.warning(
+                    "jimeng tier=%s model=%s failed (%s), retrying tier=%s model=%s",
+                    str(metadata.get("jimeng_tier") or ""), model,
+                    generated.get("error_code"), fallback.key, fallback.model,
+                )
+                model = fallback.model
+                resolution = fallback.resolution
+                generated = self._generate_once(
+                    prompt=prompt,
+                    project_id=project_id,
+                    metadata=metadata,
+                    reference_node_id=reference_node_id,
+                    model=model,
+                    resolution=resolution,
+                )
+
+        if generated.get("status") != "ok":
+            return ImageGenerationResult(
+                status=str(generated.get("status") or "failed"),
+                provider_id=self.provider_id,
+                model=model,
+                external_id=str(generated.get("submit_id") or ""),
+                error_code=str(generated.get("error_code") or "jimeng_generation_failed"),
+                metadata={"detail": str(generated.get("detail") or "")[:400]},
+            )
+
+        resource_id = str(generated.get("resource_id") or "")
+        if not resource_id:
+            return ImageGenerationResult(
+                status="failed",
+                provider_id=self.provider_id,
+                model=model,
+                external_id=str(generated.get("submit_id") or ""),
+                error_code="jimeng_missing_resource",
+            )
+        downloaded = jimeng_canvas.download_resource(
+            resource_id,
+            project_id=project_id,
+            output=str(Path(tempfile.gettempdir()) / f"{request_id}.png"),
+        )
+        if downloaded.get("status") != "ok":
+            return ImageGenerationResult(
+                status="failed",
+                provider_id=self.provider_id,
+                model=model,
+                external_id=resource_id,
+                error_code=str(downloaded.get("error_code") or "jimeng_download_failed"),
+            )
+        return ImageGenerationResult(
+            status="ok",
+            image_bytes=downloaded.get("image_bytes") or b"",
+            mime_type="image/png",
+            provider_id=self.provider_id,
+            model=model,
+            external_id=resource_id,
+            metadata={
+                "node_id": str(generated.get("node_id") or ""),
+                "mode": used_mode,
+                "tier": str(metadata.get("jimeng_tier") or ""),
+                "resolution": resolution,
+            },
+        )
+
+    def _effective_model(self, metadata: dict[str, Any]) -> str:
+        """本次生成实际使用的模型：调用方给的档位优先，缺省回落 provider 自身配置。
+
+        注意回落的是 ``self.model``（构造时已 = 显式入参 or 环境变量），
+        不能再读一次 ``default_model()`` —— 那会丢掉显式传入的模型。
+        """
+        return str((metadata or {}).get("jimeng_model") or "").strip() or self.model
+
+    @staticmethod
+    def _effective_resolution(metadata: dict[str, Any]) -> str:
+        """本次生成实际使用的分辨率：档位给定优先，缺省回落环境变量/CLI 默认。
+
+        注意即梦 CLI 的 ``--resolution`` 对所有图像模型都是 **required**，
+        所以这里必须有值；档位表里每一档都带分辨率。
+        """
+        return str((metadata or {}).get("jimeng_resolution") or "").strip() or jimeng_canvas.default_resolution()
+
+    @staticmethod
+    def _tier_fallback(metadata: dict[str, Any]) -> image_tiering.ImageTier | None:
+        """当前档失败后应改用的下一档；无档位信息/已禁用/降级用尽则返回 None。"""
+        tier_key = str((metadata or {}).get("jimeng_tier") or "").strip()
+        if not tier_key:
+            return None
+        try:
+            return image_tiering.fallback_target(image_tiering.tier(tier_key))
+        except Exception:
+            logger.debug("jimeng tier fallback lookup failed", exc_info=True)
+            return None
+
+    def _generate_once(
+        self,
+        *,
+        prompt: str,
+        project_id: str,
+        metadata: dict[str, Any],
+        reference_node_id: str,
+        model: str,
+        resolution: str,
+    ) -> dict[str, Any]:
+        return jimeng_canvas.generate_image(
+            prompt=prompt,
+            project_id=project_id,
+            image_size=str(metadata.get("size") or ""),
+            model=model,
+            resolution=resolution,
+            credit_ceiling=jimeng_canvas.credit_ceiling(),
+            reference_node_id=reference_node_id,
+            node_id=str(metadata.get("jimeng_node_id") or ""),
+            submit_id=str(metadata.get("jimeng_submit_id") or ""),
+        )
+
+    @staticmethod
+    def _persona_reference_node(metadata: dict[str, Any]) -> str:
+        """取该人设已同步到画布的人物参考节点；没有则返回空串（降级文生图）。
+
+        人设 id 优先取调用方显式传入的，其次回落到当前激活人设 —— 候选可能
+        来自不同路径（聊天要图 / 主动发图 / API 直调），不是每条都带 persona_id。
+        """
+        persona_id = str(metadata.get("persona_id") or "").strip()
+        if not persona_id:
+            try:
+                from core.persona_hub import get_persona_manager
+
+                persona_id = str(get_persona_manager().get_active_id() or "")
+            except Exception:
+                logger.debug("active persona lookup failed", exc_info=True)
+                return ""
+        if not persona_id:
+            return ""
+        try:
+            reference = jimeng_canvas.persona_reference(persona_id)
+        except Exception:
+            logger.debug("jimeng persona reference lookup failed", exc_info=True)
+            return ""
+        return str((reference or {}).get("element_node_id") or "")
+
+
 class LLMCallerImageVisionProvider:
     """Adapter around the legacy ``LLMCaller.see_image`` surface."""
 
@@ -555,6 +793,7 @@ class ImageWorkflow:
         upload_base: str | Path = "uploads",
         feature_enabled: bool = False,
         generation_provider: ImageGenerationProvider | None = None,
+        generation_providers: dict[str, ImageGenerationProvider] | None = None,
         vision_provider: ImageVisionProvider | None = None,
         safety_policy: ImageSafetyPolicy | None = None,
         store: JsonImageWorkflowStore | None = None,
@@ -569,6 +808,7 @@ class ImageWorkflow:
             self.upload_base = self.upload_base.resolve()
         self.feature_enabled = bool(feature_enabled)
         self.generation_provider = generation_provider or LLMCallerImageGenerationProvider(None)
+        self.generation_providers = dict(generation_providers or {})
         self.visual_intent_router = visual_intent_router
         self.vision_provider = vision_provider or LLMCallerImageVisionProvider(None)
         self.safety_policy = safety_policy or ImageSafetyPolicy()
@@ -577,6 +817,17 @@ class ImageWorkflow:
         )
         self.id_factory = id_factory or (lambda prefix: f"{prefix}_{uuid.uuid4().hex}")
         self.clock = clock or self._now
+
+    def _provider_for(self, metadata: dict[str, Any] | None) -> ImageGenerationProvider:
+        """按 ``metadata["provider"]`` 选生成通道，未注册的一律回落默认通道。
+
+        人物类（自拍 / 入镜 / 合影）由调用方打上 ``jimeng``，走即梦拿竖构图与
+        i2i 一致人设；其余场景留在兼容中转上。
+        """
+        key = str((metadata or {}).get("provider") or "").strip()
+        if key and key in self.generation_providers:
+            return self.generation_providers[key]
+        return self.generation_provider
 
     def generate_image(
         self,
@@ -648,7 +899,7 @@ class ImageWorkflow:
                 self._record_result(result, operation, idem, fingerprint, owner)
                 return result
 
-        provider = self.generation_provider
+        provider = self._provider_for(metadata)
         provider_id = str(getattr(provider, "provider_id", "unknown"))
         model = str(getattr(provider, "model", "unknown"))
         metadata_payload = {

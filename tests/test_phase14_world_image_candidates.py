@@ -991,9 +991,24 @@ async def test_edit_flag_off_uses_txt2img_for_role(tmp_path):
     assert workflow.edit_calls == []
 
 
+@pytest.fixture
+def relay_channel(monkeypatch):
+    """强制候选走**中转**生成通道。
+
+    这组用例测的是 relay ``/images/edits`` 那条路与其降级护栏，与档位无关。
+    §八 之后人像默认走即梦档位（``provider=jimeng``，即梦自带 i2i），relay 通道
+    只在 ``config/image_tiers.yaml`` 把该档 ``provider`` 配成 ``relay``、或分级
+    总开关关闭时才生效；这里直接用桩固定成 relay，让用例继续专注在降级护栏上。
+    """
+    monkeypatch.setattr(
+        "core.world_image_candidates._image_tier_hint",
+        lambda candidate: {"provider": "relay"},
+    )
+
+
 @pytest.mark.asyncio
-async def test_edit_flag_on_role_uses_img2img_with_reference(tmp_path):
-    """image_edit_v1 开启 + 角色类 → 走 generate_image_edit，并带 three_view:front 参考资产。"""
+async def test_edit_flag_on_role_uses_img2img_with_reference(tmp_path, relay_channel):
+    """image_edit_v1 开启 + 角色类 + 中转通道 → 走 generate_image_edit，并带 three_view:front 参考资产。"""
     workflow = EditWorkflowStub("completed")
     consumer = _role_edit_consumer(tmp_path, workflow, EditFlagStub(True))
     result = await consumer.process_event(
@@ -1006,7 +1021,7 @@ async def test_edit_flag_on_role_uses_img2img_with_reference(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_edit_failure_falls_back_to_txt2img(tmp_path):
+async def test_edit_failure_falls_back_to_txt2img(tmp_path, relay_channel):
     """edit 未产出 completed（缺参考资产/不支持）→ 优雅降级回文生图，用户要图不落空。"""
     workflow = EditWorkflowStub("missing_reference_asset")
     consumer = _role_edit_consumer(tmp_path, workflow, EditFlagStub(True))
@@ -1020,7 +1035,7 @@ async def test_edit_failure_falls_back_to_txt2img(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_environment_candidate_stays_txt2img(tmp_path):
+async def test_environment_candidate_stays_txt2img(tmp_path, relay_channel):
     """非人物画面（物件/风景）无对话人设可锁 → 必须走文生图，不挂参考图。"""
     workflow = EditWorkflowStub("completed")
     consumer = _role_edit_consumer(tmp_path, workflow, EditFlagStub(True))
@@ -1033,7 +1048,7 @@ async def test_environment_candidate_stays_txt2img(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_event_reconstruction_keeps_prompt_modules(tmp_path):
+async def test_event_reconstruction_keeps_prompt_modules(tmp_path, relay_channel):
     """事件重建必须保留 user_raw / reference_assets。
 
     这两项是提示词模块化的输入：丢了 user_raw，分部位/景别解析拿不到指令

@@ -4414,6 +4414,31 @@ class Companion:
                 logger.debug("life recording scene pool failed; keep baseline prompt", exc_info=True)
         if scene_prompt and isinstance(candidate, dict):
             candidate["scene_prompt"] = scene_prompt
+        # ── 档位决断（§八）──
+        # 按"画面里有多少信息要模型同时处理"分四档选模型/分辨率，不再一味用最高那档。
+        # 这里是唯一能看到 focus/shot/style（spec）的地方，所以由提示词层决断、
+        # 盖章到 candidate，再随 metadata 透传到 provider —— 两层拿到同一份档位。
+        try:
+            from core.image_tiering import decide as _decide_image_tier
+            from core.image_tiering import enabled as _image_tiering_enabled
+
+            if _image_tiering_enabled():
+                image_tier = _decide_image_tier(
+                    prompt_key=prompt_key,
+                    scene=str((candidate or {}).get("scene") or ""),
+                    spec=_photo_shot_fallback(spec or {}),
+                    user_raw=str((candidate or {}).get("user_raw") or ""),
+                    closeup_focus=_CLOSEUP_FOCUS_SET,
+                )
+                if isinstance(candidate, dict):
+                    candidate["image_tier"] = image_tier.as_payload()
+                logger.info(
+                    "[ImageTier] tier=%s model=%s resolution=%s provider=%s credits≈%s key=%s",
+                    image_tier.key, image_tier.model, image_tier.resolution,
+                    image_tier.provider, image_tier.credits, prompt_key,
+                )
+        except Exception:
+            logger.debug("image tier decision failed; keep provider default model", exc_info=True)
         base = self._compose_base_image_prompt(prompt_key, candidate, spec=spec)
         prompt = base
         light = ""

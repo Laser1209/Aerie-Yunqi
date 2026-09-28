@@ -1,0 +1,74 @@
+# 生图模型分级路由（§八）—— 按「画面信息量」四档选模型与分辨率。
+#
+# 为什么要有这张表：此前 default_model() 只读一个环境变量，全局唯一模型 ——
+# 自拍和海报用同一个模型、同一个分辨率，等于"一味用最高那一档"。
+#
+# 报价来自本机 `node create` + `node quote` 实测（不消耗积分）。
+# 分辨率取值必须落在该模型 model list 声明的集合内（2026-09-28 实测）：
+#   seedream_5.0_pro            → 1.5K / 2K / 4K
+#   high_aes_general_v50_flash  → 1.5K / 2K
+#   jm_image_model_yc_mj82      → 1K / 2K
+#   seedream_5.0_lite           → 2K / 4K
+enabled: true
+
+# 档位定义：模型 / 分辨率 / 生成通道都能在这里改，零代码改动。
+#   provider: jimeng = 即梦画布 CLI（支持 9:16 竖构图与 i2i 锁脸）
+#             relay  = gpt-image 中转（忽略 size、只出横图，兜底用）
+tiers:
+  t1_high:
+    label: 信息量高
+    model: seedream_5.0_pro
+    resolution: "2K"
+    provider: jimeng
+  t1_poster:
+    label: 海报/封面
+    model: seedream_5.0_pro
+    resolution: "4K"
+    provider: jimeng
+  t2_portrait:
+    label: 人像·日常
+    model: high_aes_general_v50_flash
+    resolution: "2K"
+    provider: jimeng
+  t3_artistic:
+    label: 人像·写真感
+    model: jm_image_model_yc_mj82
+    resolution: "2K"
+    provider: jimeng
+  t4_detail:
+    label: 低信息量·小部件
+    model: seedream_5.0_lite
+    resolution: "2K"
+    provider: jimeng
+
+# 参考报价（积分/张），只用于日志与审计，不参与判定。
+credit_table:
+  seedream_5.0_pro: { "1.5K": 6, "2K": 8, "4K": 12 }
+  high_aes_general_v50_flash: { "1.5K": 3, "2K": 3 }
+  jm_image_model_yc_mj82: { "1K": 5, "2K": 7 }
+  seedream_5.0_lite: { "2K": 3, "4K": 4 }
+
+# 用户显式指定（命中即 T1，且升级到 4K）—— 用户意图优先，压倒一切
+poster_keywords: [海报, 封面, 长图, 信息图, 宣传图, 设计稿, 图集, 排版]
+
+# 写真感风格（命中即从 T2 升到 T3）
+artistic_styles: [氛围感, 诱惑感, 慵懒]
+
+# 承载对话人设的画面（与 world_image_candidates.PERSONA_IMAGE_PROMPT_KEYS 一致，
+# 有单测钉住两者不漂移）
+persona_prompt_keys: [role_selfie, role_in_scene, couple_photo]
+
+# 环境/大场景类 prompt_key（命中即 T1）
+environment_prompt_keys: [environment_object]
+
+# 失败降级链：不能因为省钱就让用户拿不到图。
+# 但降级重试**会额外扣费**（实测：即梦失败同样计费），所以实际最多走一档，
+# 之后直接转中转（中转是包额度口径，不额外烧即梦积分）。
+fallback:
+  t1_poster: [t1_high, t2_portrait, relay]
+  t1_high: [t2_portrait, relay]
+  t3_artistic: [t2_portrait, relay]
+  t4_detail: [t2_portrait, t1_high, relay]
+  t2_portrait: [t1_high, relay]
+# 降级链最多额外尝试几档（0 = 一失败就直接转中转）
+max_fallback_steps: 1

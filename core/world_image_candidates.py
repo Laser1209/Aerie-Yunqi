@@ -50,8 +50,51 @@ PERSONA_IMAGE_PROMPT_KEYS = frozenset({"role_selfie", "role_in_scene", "couple_p
 # 兼容中转（gpt-image）忽略 size、只出横图。注册缺失时自动回落默认通道。
 _JIMENG_PROVIDER = "jimeng"
 
+# 未能从提示词层拿到档位时的兜底档（人像日常 = 最常用、最便宜、质量够日常）。
+_DEFAULT_TIER_KEY = "t2_portrait"
+
+
+def _image_tier_hint(candidate: dict[str, Any]) -> dict[str, Any]:
+    """档位 → 生成通道 + 即梦模型/分辨率（§八）。
+
+    优先用提示词层盖在候选上的 ``image_tier`` —— 只有那里能同时看到 focus/shot/style；
+    拿不到（例如直调 generate_image）时按候选可见字段兜底推断，再不行让 provider
+    用自身默认模型。返回的键直接摊进 metadata：``provider`` / ``jimeng_model`` /
+    ``jimeng_resolution`` / ``jimeng_tier`` / ``credits``。
+    """
+    try:
+        from core import image_tiering
+
+        if not image_tiering.enabled():
+            # 总开关关闭 → 回落"全局单模型"，且仍按人物类走即梦（旧行为）。
+            return {"provider": _image_provider_hint(str(candidate.get("prompt_key") or ""))}
+        decided = image_tiering.tier_from_candidate(candidate) or image_tiering.decide(
+            prompt_key=str(candidate.get("prompt_key") or ""),
+            scene=str(candidate.get("scene") or ""),
+            user_raw=str(candidate.get("user_raw") or ""),
+        )
+    except Exception:
+        logger.debug("image tier hint failed; fall back to default channel", exc_info=True)
+        return {"provider": _image_provider_hint(str(candidate.get("prompt_key") or ""))}
+
+    # "relay" 不在 generation_providers 里 → _provider_for 自然回落默认中转通道。
+    payload = {
+        "provider": decided.provider,
+        "jimeng_model": decided.model,
+        "jimeng_resolution": decided.resolution,
+        "jimeng_tier": decided.key,
+        "credits": decided.credits,
+    }
+    logger.info(
+        "[ImageTier] tier=%s model=%s resolution=%s provider=%s credits≈%s prompt_key=%s",
+        decided.key, decided.model, decided.resolution, decided.provider,
+        decided.credits, candidate.get("prompt_key"),
+    )
+    return payload
+
 
 def _image_provider_hint(prompt_key: str) -> str:
+    """旧口径（分级关闭时用）：只有人物类走即梦。"""
     return _JIMENG_PROVIDER if prompt_key in PERSONA_IMAGE_PROMPT_KEYS else ""
 
 
@@ -846,16 +889,21 @@ class WorldImageCandidateConsumer:
     ) -> dict[str, Any]:
         """按候选类型选择生图路径：人物类走图生图，其余走文生图。
 
-        承载对话人设的 prompt_key（自拍/生活场景/合影）→ generate_image_edit，
-        参考图由提示词层按画面模块选定（three_view 正/侧/背，见
-        ``_reference_assets_for_spec``）；edit 未产出 completed 时优雅降级回
-        generate_image，绝不让用户要图因 edit 失败而落空（能力探测 + 降级护栏）。
-        风景/物件/文档类不带参考图，直接文生图。
+        §八 起，档位（``candidate["image_tier"]``）是**生成通道的权威**：
+        档位 provider=jimeng 时直接走即梦 —— 它自带 i2i（人物参考节点 + 自身熔断/
+        降级），不再绕中转的 ``/images/edits``，否则"人像用第 2/第 3 个即梦模型"
+        这条根本落不了地（中转有它自己的模型，与即梦档位无关）。
+        档位 provider=relay（或分级关闭）时保持原逻辑：承载对话人设的 prompt_key
+        （自拍/生活场景/合影）走 ``generate_image_edit``，edit 未产出 completed 时
+        优雅降级回 ``generate_image``；风景/物件类直接文生图。
         """
         prompt_key = str(candidate.get("prompt_key") or "")
+        hint = _image_tier_hint(candidate)
+        if str(hint.get("provider") or "") == _JIMENG_PROVIDER:
+            return self._call_generate_image(prompt, candidate, hint=hint)
         use_edit = self._image_edit_enabled() and prompt_key in PERSONA_IMAGE_PROMPT_KEYS
         if not use_edit:
-            return self._call_generate_image(prompt, candidate)
+            return self._call_generate_image(prompt, candidate, hint=hint)
         reference_assets = candidate.get("reference_assets") or list(_DEFAULT_EDIT_REFERENCE)
         edit = self._call_generate_image_edit(prompt, candidate, reference_assets)
         if edit.get("status") != "completed":
@@ -863,7 +911,7 @@ class WorldImageCandidateConsumer:
                 "[WorldImage] role edit fell back to txt2img prompt_key=%s code=%s",
                 prompt_key, edit.get("error_code") or edit.get("status"),
             )
-            return self._call_generate_image(prompt, candidate)
+            return self._call_generate_image(prompt, candidate, hint=hint)
         return edit
 
     def _image_edit_enabled(self) -> bool:
@@ -872,7 +920,17 @@ class WorldImageCandidateConsumer:
         except Exception:
             return False
 
-    def _call_generate_image(self, prompt: str, candidate: dict[str, Any]) -> dict[str, Any]:
+    def _call_generate_image(
+        self,
+        prompt: str,
+        candidate: dict[str, Any],
+        *,
+        hint: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        # 档位（provider / jimeng_model / jimeng_resolution / jimeng_tier / credits）
+        # 直接摊进 metadata：provider 决定走哪个生成通道，其余由
+        # JimengCanvasImageGenerationProvider 读取为模型与分辨率覆盖值。
+        tier_meta = dict(hint) if hint is not None else _image_tier_hint(candidate)
         return self.image_workflow.generate_image(
             prompt=prompt,
             idempotency_key=f"world-image:{candidate['idempotency_key']}",
@@ -887,7 +945,7 @@ class WorldImageCandidateConsumer:
                 "prompt_key": candidate["prompt_key"],
                 "reason_code": candidate["reason_code"],
                 "size": candidate.get("size") or "",
-                "provider": _image_provider_hint(candidate["prompt_key"]),
+                **tier_meta,
                 # 人设 id 用于取画布上的人物参考节点（i2i 锁脸）；缺省时 provider
                 # 会回落到当前激活人设。
                 "persona_id": str(candidate.get("persona_id") or ""),

@@ -158,7 +158,7 @@ regions:
         name: 咖啡馆
         weight: 1.0
         keywords: [咖啡, 咖啡馆]
-        prompt: 她坐在街角咖啡馆的窗边，面前一杯拿铁，玻璃窗外是重庆起伏的街景
+        prompt: 她坐在街角咖啡馆门外的露天座位，面前一杯拿铁，身后是重庆起伏的街景
       - id: convenience_store
         name: 便利店
         weight: 0.8
@@ -168,7 +168,7 @@ regions:
         name: 下班通勤
         weight: 1.0
         keywords: [通勤, 下班, 轻轨, 地铁]
-        prompt: 她下班坐轻轨穿过重庆，车厢灯光明亮，窗外是江与楼交替掠过的夜景
+        prompt: 她下班走在重庆街头，穿楼的轻轨从头顶掠过，远处是江与楼交替的夜景
       - id: wet_market
         name: 菜市场
         weight: 0.9

@@ -26,6 +26,13 @@ from core.image_size import (
     orientation_phrase,
     size_for_prompt_key,
 )
+from core.image_shooting import (
+    DEVICE_EXCLUSION_CLAUSE as _IMAGE_DEVICE_EXCLUSION,
+    SELFIE_POV_PHRASE as _SELFIE_POV_PHRASE,
+    TOGETHER_SHOT_PHRASE as _TOGETHER_SHOT_PHRASE,
+    shooting_phrase as _shooting_phrase,
+    strip_device_props as _strip_device_props,
+)
 from core.tool_result import normalize_tool_result
 from core.delivery_ledger import (
     build_feedback_note as build_delivery_feedback_note,
@@ -400,17 +407,12 @@ def _photo_shot_fallback(spec: dict[str, str]) -> dict:
     return out
 
 
-# 手持自拍硬约束（POV）：所有人物类生图必须以此为前提——照片是伊塔本人手持
-# 手机拍的（前置自拍 / 后置对镜 / 支架定时），绝不出现第三方拍摄者视角。
-# 通过三个闸口保证：①基础 prompt 模板追加；②组合器机位措辞自拍化；
-
-# 手持自拍硬约束（POV）：所有人物类生图必须以此为前提——照片是伊塔本人手持
-# 手机拍的（前置自拍 / 后置对镜 / 支架定时），绝不出现第三方拍摄者视角。
-# 通过三个闸口保证：①基础提示词模板追加；②组合器机位措辞自拍化；
-# ③_ensure_selfie_pov 出口兜底。与 _PHOTO_POSE_PHRASE 等并列放在表定义区。
-_SELFIE_POV_PHRASE = (
-    "这张照片由她本人手持手机拍摄，画面角落可见她的手指或手机边缘，微微手持感，绝无他人拍摄。"
-)
+# 第一人称自拍硬约束（POV）：所有人物类生图都以"她自己的第一人称视角"为前提，
+# 绝不出现在场的第三方拍摄者。**画面中不得出现任何拍摄设备本体**（手机/相机/
+# 三脚架/自拍杆/握持设备的手）——设备只作为拍摄方式的说明（"用 iPhone 前置摄像头
+# 拍摄"），不成为画面元素。措辞与设备清洗的单一真源在 core.image_shooting。
+# 通过三个闸口保证：①基础提示词模板追加；②组合器机位措辞无设备化；
+# ③_ensure_selfie_pov 出口兜底 + 设备词清洗。与 _PHOTO_POSE_PHRASE 等并列放在表定义区。
 
 # POV 黑名单：LLM 接力（_light_relay_refine_prompt）的输出若出现任一关键词，
 # 说明它引入了"第三方拍摄"视角，拒绝采用，回退确定性兜底。仅用于校验输出，
@@ -434,18 +436,19 @@ _PHOTO_POSE_PHRASE: dict[str, str] = {
     "跷腿": "跷着腿",
 }
 
-# 机位标签 → 自拍化措辞（POV 约束）：保留关键词解析（_PHOTO_ANGLE_TABLE 不变），
-# 仅把"拍摄机位"的输出措辞重定义为"她本人手持手机"的自拍取景，杜绝"别人拍她"。
+# 机位标签 → 镜头语言（POV 约束 + 无设备化）：保留关键词解析（_PHOTO_ANGLE_TABLE 不变），
+# 仅把"拍摄机位"的输出措辞重定义为**不含任何入镜设备**的拍摄手法（镜头/机位/取景），
+# 让画面里只出现"从哪个距离、哪个角度取景"，而不是"她举着手机"这种设备入镜描述。
 _PHOTO_ANGLE_PHRASE: dict[str, str] = {
-    "仰视低角度": "她手持手机放低，从低处自拍取景",
-    "俯视高角度": "她举高手机，从上往下俯拍自己",
-    "平视": "她手持手机平视自拍",
-    "第一人称": "第一人称手持自拍视角",
-    "特写": "她手持手机近距离特写自拍",
-    "全身入镜": "她手持手机（或自拍杆）把全身收进画面",
-    # focus 协同覆盖（背影）补出的机位：后置对镜/举到身后的自拍取景，
+    "仰视低角度": "低机位仰拍，从低处往上取景",
+    "俯视高角度": "高机位俯拍，从上往下取景",
+    "平视": "眼平机位，平视取景",
+    "第一人称": "第一人称视角，镜头就是她的眼睛",
+    "特写": "近距离特写机位，约 85mm 定焦",
+    "全身入镜": "机位拉远，把全身收进画面，约 35mm 广角",
+    # focus 协同覆盖（背影）补出的机位：机位在她身后，从背后取景，
     # 避免"从后面"被理解成"别人从她背后拍她"。
-    "从后面": "她把手机举到身后，用后置摄像头拍自己的背影",
+    "从后面": "机位在她身后，从背后取景，约 50mm",
 }
 
 # focus → 构图协同覆盖规则（方向2）。focus 作为构图主轴，反向约束姿态/机位：
@@ -488,8 +491,10 @@ _PHOTO_FOCUS_PARENT: dict[str, str] = {
 
 
 # ── 模块化措辞表：每个维度 = 一个可替换的措辞源 ────────────────────
-# 与 documents/生图加强 语料对齐：媒介画幅 / 身份锚定 / 主体部位 / 景别镜头 /
-# 姿态 / 机位 / 服装 / 场景 / 氛围 / 真实感 / 负面约束。
+# 语料**已内化进代码**（运行时不读 documents/ 任何文件）：媒介画幅 / 身份锚定 /
+# 主体部位 / 景别镜头 / 姿态 / 机位 / 服装 / 场景 / 氛围 / 真实感 / 负面约束。
+# 景别镜头之外的"成组拍摄手法"（镜头/机位/取景/景深/质感，按类型配套）在
+# core.image_shooting，与本文件的维度表并列：这里管"画什么"，那里管"怎么拍"。
 # 组合器按固定顺序拼装，任一模块缺值即跳过（缺值即停防护），绝不产出空串。
 
 # 主体部位细节措辞：让"看看腿"这类局部特写出画面语言，而不是只写"聚焦在腿"。
@@ -676,15 +681,17 @@ _IMAGE_REALISM_PHRASE = (
     "轻微胶片颗粒，非 CG 渲染，不要动漫风。"
 )
 _IMAGE_REALISM_PHRASE_ENV = (
-    "真实摄影质感：材质与光影层次真实，手机拍摄的纪实感，"
+    "真实摄影质感：材质与光影层次真实，随手拍摄的纪实感，"
     "非 CG 渲染，不要动漫风。"
 )
 
 # 负面约束：人物类与景物类分开——人物图要压手指/关节/磨皮，景物图只压过曝与文字。
+# 人物类额外排除**拍摄设备入镜**（手机/相机/三脚架/自拍杆/握持的手）：设备只作为
+# 拍摄方式存在，绝不成为画面元素——这是"第一人称自拍但画面里没有手机"的关键一票。
 _IMAGE_NEGATIVE_PHRASE = (
     "反面约束：不自然的脸与视线、多余或残缺的手指、僵硬的关节、"
     "错误的远近法与透视、与光源矛盾的阴影、过度磨皮与塑料感皮肤、"
-    "AI 感五官、乱码文字、logo、水印。"
+    "AI 感五官、乱码文字、logo、水印、" + _IMAGE_DEVICE_EXCLUSION
 )
 _IMAGE_NEGATIVE_PHRASE_ENV = (
     "反面约束：过曝与白色飞溅、错误的透视、杂乱构图、乱码文字、logo、水印。"
@@ -694,8 +701,8 @@ _REALISM_MARKER = "真实摄影质感"
 _NEGATIVE_MARKER = "反面约束"
 
 # 阶段2 · 生活记录：随手拍风格。生活照显式声明"不完美构图"，弱化摆拍感，
-# 让画面更像她随手举起手机记录的一刻（仅在生活记录场景池钩子生效时追加）。
-_LIFE_SNAP_STYLE_PHRASE = "随手拍风格：轻微倾斜、自然光、不完美构图，像随手举起手机记录下的一刻。"
+# 让画面更像她随手记录的一刻（仅在生活记录场景池钩子生效时追加）。
+_LIFE_SNAP_STYLE_PHRASE = "随手拍风格：轻微倾斜、自然光、不完美构图，像随手记下的一刻。"
 
 
 def _apply_focus_coverage(spec: dict[str, str]) -> dict[str, str]:
@@ -884,7 +891,8 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
         parts.append(f"她{_PHOTO_POSE_PHRASE.get(pose, pose)}")
     angle = str(spec.get("angle") or "").strip()
     if angle:
-        # POV 约束：机位一律自拍化措辞，禁止"别人从某角度拍她"的第三方解读。
+        # POV 约束：机位一律用无设备的镜头语言，禁止"别人从某角度拍她"的第三方解读，
+        # 也禁止把手机/相机写成画面元素（设备只说明拍摄方式，不入镜）。
         parts.append(f"拍摄机位：{_PHOTO_ANGLE_PHRASE.get(angle, angle)}")
     outfit = str(spec.get("outfit") or "").strip()
     if outfit:
@@ -898,15 +906,25 @@ def _compose_modular_prompt(base: str, spec: dict[str, str]) -> str:
     return f"{base}{'，'.join(parts)}。"
 
 
-def _finalize_image_prompt(prompt: str, prompt_key: str, light: str = "") -> str:
-    """生图提示词出口模块（单一收口）：POV → 光线 → 质感 → 负面。
+def _finalize_image_prompt(prompt: str, prompt_key: str, light: str = "", shooting: str = "") -> str:
+    """生图提示词出口模块（单一收口）：设备清洗 → POV → 拍摄手法 → 光线 → 质感 → 负面。
 
     这些是"每张图都要有"的横切约束，与具体画面模块无关，所以只在出口加一次：
     base 与模块组合器不再各自重复同一句（否则同一条约束说两三遍，权重被摊薄）。
     每个模块都幂等（已含标记即跳过），因为提示词会经轻量 LLM 接力重写、
     也可能已由世界上下文兜底注入光线，出口再兜一次才能保证约束不丢不重。
+
+    ``shooting``：由 core.image_shooting 按画面类型（氛围/景别/用途/精力）配套出的
+    成组拍摄手法（镜头/机位/取景/景深/质感）。放在出口而非 base，是因为它会经 LLM
+    接力重写——出口追加才能保证"配套手法"这一层稳定落地。
     """
-    text = _ensure_selfie_pov(prompt, prompt_key)
+    # 设备清洗先做：LLM 接力可能把历史"手持手机"措辞带回画面，这里统一清洗成
+    # 无设备措辞，再由 POV/负面约束双重保证设备不入镜。
+    text = _strip_device_props(prompt) if str(prompt_key or "") != "environment_object" else str(prompt or "")
+    text = _ensure_selfie_pov(text, prompt_key)
+    shooting_text = str(shooting or "").strip()
+    if shooting_text and "拍摄手法：" not in text:
+        text = f"{text}{shooting_text}"
     light_text = str(light or "").strip()
     if light_text and light_text not in text:
         text = f"{text}光线：{light_text}。"
@@ -954,24 +972,24 @@ def _is_friendly_shot_exception(prompt: str) -> bool:
 
 
 def _ensure_selfie_pov(prompt: str, prompt_key: str) -> str:
-    """POV 出口兜底：人物类提示词若缺手持自拍前提，自动追加 _SELFIE_POV_PHRASE。
+    """POV 出口兜底：人物类提示词若缺第一人称自拍前提，自动追加 _SELFIE_POV_PHRASE。
 
-    幂等：已含手持类关键词（手持手机/自拍/前置摄像头/手机边缘）时不重复追加，
+    幂等：已含自拍类关键词（第一人称自拍/自拍视角/前置摄像头）时不重复追加，
     避免多次接力后约束叠加成噪音。environment_object（环境照）不强制带人物，
     第一人称视角由模板天然保证，跳过追加。
-    例外：出游/合影场景（见 _is_friendly_shot_exception）允许他人帮忙拍，
-    改用游玩同伴视角，而不追加"手持自拍"前提，避免把合影误渲染成她一个人自拍。
+    例外：出游/合影场景（见 _is_friendly_shot_exception）允许同行者视角，
+    改用同行者措辞（同样不含入镜设备），避免把合影误渲染成她一个人自拍。
     """
     text = str(prompt or "")
     key = str(prompt_key or "default")
     if key == "environment_object":
         return text
-    if any(kw in text for kw in ("手持手机", "自拍", "前置摄像头", "手机边缘")):
+    if any(kw in text for kw in ("第一人称自拍", "自拍视角", "前置摄像头", "后置摄像头")):
         return text
     if _is_friendly_shot_exception(text):
-        # 出游/合影：以同行者视角拍下，而非手持自拍。加一句互补，避免 POV 冲突。
+        # 出游/合影：以同行者视角拍下，而非第一人称自拍。加一句互补，避免 POV 冲突。
         if any(kw in text for kw in ("合影", "一起", "游", "公园", "景区")):
-            return f"{text}这张是出游时同行的人用她的手机替她按下快门的一张出行合影。"
+            return f"{text}{_TOGETHER_SHOT_PHRASE}"
         return text
     return f"{text}{_SELFIE_POV_PHRASE}"
 
@@ -1049,13 +1067,27 @@ _WEATHER_MOOD_CN: dict[str, str] = {
     "neutral": "",
 }
 
+# 世界 activity → 中文状态（状态一致性）：让"照片里的此刻"与她此刻在做的事对齐，
+# 取值覆盖 core.world_simulation._ACTIVITY_TOPIC_PREFIXES 的全部 activity。
+_ACTIVITY_CN: dict[str, str] = {
+    "waking_up": "刚睡醒、慢慢清醒过来",
+    "winding_down": "在收尾、准备休息",
+    "sleeping": "已经睡着",
+    "planning": "在做今天的计划",
+    "dining": "在吃饭",
+    "working": "在工作",
+    "relaxing": "在放松",
+    "idle": "闲着",
+}
+
 # 生图场景 → 世界数据相关性（确定性兜底，与轻量 LLM 接力同语义）：
 # 天气/光线只在真正影响画面的场景注入，室内自拍不塞天气。
 # location（§十 步骤6）：室外必须点明"她此刻在{地点}"，否则轻量 LLM 不可用时
 # 画面只剩 base 里的场景描述，容易出现"文字在街上、图在家里"的矛盾。
+# activity（状态一致性）：人物时刻图点明她此刻在做什么，与世界实时状态对齐。
 _IMAGE_WORLD_FALLBACK_RULES: dict[str, set[str]] = {
     "environment_object": {"weather", "light", "location"},
-    "role_in_scene": {"light", "weather", "room", "location"},
+    "role_in_scene": {"light", "weather", "room", "location", "activity"},
     "role_selfie": {"light", "room", "location"},
     "couple_photo": {"light", "room", "location"},
 }
@@ -4326,8 +4358,9 @@ class Companion:
             "2. 若语义暗示了姿态/机位但未明说，自行补全最合理的（如'看看腿'→pose=坐，angle=特写）。\n"
             "3. 提到环境填 scene，提到穿着填 outfit，提到情绪/氛围填 style，明确暗示横/方构图才填 orientation。\n"
             "4. 无法确定的键留空字符串，不要编造。只输出 JSON，不要任何额外文字；不要出现任何人的名字（如'伊塔'）。\n"
-            "硬性前提：这张照片由画中的女性本人手持手机拍摄的自拍（前置自拍/后置对镜/支架定时），"
-            "所有机位都是她自己的取景，不存在摄影师/他人拍摄。angle 只表达她从哪个方位/距离拍自己。"
+            "硬性前提：这张照片以画中女性本人的第一人称自拍视角拍下（用 iPhone 前置/后置摄像头说明拍摄方式），"
+            "所有机位都是她自己的取景，不存在摄影师/他人拍摄；画面中不出现手机、相机、三脚架、自拍杆等"
+            "任何拍摄设备，也不出现握持设备的手。angle 只表达她从哪个方位/距离取景。"
         )
         try:
             messages = [
@@ -4541,7 +4574,18 @@ class Companion:
                 prompt_key, exc_info=True,
             )
             prompt = base
-        return _finalize_image_prompt(prompt, prompt_key, light=light or _local_light_phrase())
+        # 拍摄手法（b2）：按画面类型（氛围风格 / 景别 / 用途）配套成组的镜头语言，
+        # 并与她此刻的状态（时段相 / 精力）同步——出口统一追加，LLM 接力冲不掉。
+        shooting = _shooting_phrase(
+            style=str((spec or {}).get("style") or ""),
+            prompt_key=prompt_key,
+            shot=str((spec or {}).get("shot") or ""),
+            phase=str(world_context.get("time_of_day") or ""),
+            energy=world_context.get("energy"),
+        )
+        return _finalize_image_prompt(
+            prompt, prompt_key, light=light or _local_light_phrase(), shooting=shooting,
+        )
 
     @staticmethod
     def _is_persona_image(prompt_key: str) -> bool:
@@ -4592,7 +4636,7 @@ class Companion:
             # 真实感/负面约束由出口模块统一负责——这里再写一遍只会重复、互相摊薄权重。
             base = (
                 "一张写实照片，人物外貌以参考图为准。" + anchor +
-                "画面是手机随手拍的生活照，暖色调、生活化。"
+                "画面像随手拍下的生活照，暖色调、生活化。"
             )
             full = f"{base}{orientation}。"
             full = f"{full}{_SELFIE_POV_PHRASE}"
@@ -4681,10 +4725,11 @@ class Companion:
             elif spec_drives_scene:
                 scene = "她在家里的随手自拍，像刚拍下这一刻发给恋人。"
             else:
-                scene = "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑直视镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
+                scene = "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑看着镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
         elif key == "role_in_scene":
-            # POV 约束：自拍视角，画面里能看出是她本人手持手机拍下的这一刻，
-            # 绝不能用"侧身望向镜头"这种第三方拍摄摆姿（那暗示存在一个拍摄者）。
+            # POV 约束：第一人称自拍视角，画面里能看出是她自己拍下的这一刻，
+            # 绝不能用"侧身望向镜头"这种第三方拍摄摆姿（那暗示存在一个拍摄者），
+            # 也绝不出现手机/相机等设备本体（设备只作为拍摄方式存在）。
             # P2 参数化：候选带活动时刻话题（reading_time 等）时，用话题中文描述
             # 替换固定场景，让"看书/咖啡/傍晚"这类人物时刻真正进画面。
             topic = str((candidate or {}).get("reason_code") or "")
@@ -4696,32 +4741,33 @@ class Companion:
             behind = f"身后是{world_outdoor}的街景" if world_outdoor else "身后是她重庆的家"
             if topic_zh and topic_zh != topic:
                 scene = (
-                    f"{topic_zh}，此刻举起手机前置摄像头对着自己，嘴角带笑，"
+                    f"{topic_zh}，此刻以第一人称自拍视角对着镜头，嘴角带笑，"
                     f"像刚拍下这一刻随手发给你，{behind}。"
                 )
             else:
                 backdrop = (
                     f"{world_outdoor}的街景" if world_outdoor else "重庆高层复式公寓落地窗"
                 )
-                scene = f"她举着手机前置摄像头对着自己，嘴角带笑，像刚拍下这一刻随手发给你，身后是{backdrop}。"
+                scene = f"她以第一人称自拍视角对着镜头，嘴角带笑，像刚拍下这一刻随手发给你，身后是{backdrop}。"
         elif key == "couple_photo":
             backdrop = (
                 f"{world_outdoor}的街景夜色" if world_outdoor else "暖色灯光下的客厅沙发"
             )
             scene = (
-                "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，"
+                "她与恋人的温馨合影，以广角前置机位把两人收进同一画面，"
                 f"背景是{backdrop}。"
                 if (world_outdoor or spec_drives_scene)
-                else "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，"
+                else "她与恋人的温馨合影，以广角前置机位把两人收进同一画面，"
                 "她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
             )
         elif world_outdoor:
-            scene = f"她在{world_outdoor}，她手持手机前置摄像头对着自己，神情放松地看着镜头。"
+            scene = f"她在{world_outdoor}，以第一人称自拍视角对着镜头，神情放松。"
         else:
-            scene = "她坐在重庆的家里，窗外是夜景，她手持手机前置摄像头对着自己，神情放松地看着镜头。"
+            scene = "她坐在重庆的家里，窗外是夜景，以第一人称自拍视角对着镜头，神情放松。"
         full = f"{base}{scene}{orientation}。"
-        # POV 硬约束：所有人物类（非环境照）在基础提示词阶段就追加手持自拍前提，
-        # 即便后续世界接力/模块化组合器未显式携带，也保证"她本人手持拍摄"成立。
+        # POV 硬约束：所有人物类（非环境照）在基础提示词阶段就追加第一人称自拍前提，
+        # 即便后续世界接力/模块化组合器未显式携带，也保证"她自己拍下这一刻"成立，
+        # 且画面中不出现任何拍摄设备（设备只说明拍摄方式）。
         full = f"{full}{_SELFIE_POV_PHRASE}"
         # 身份锚定模块：附了参考图的人物类必须显式声明"以参考图为准"，否则
         # 生成模型会把参考图当成配色参考，长相/身材随每张图漂移。
@@ -4791,10 +4837,14 @@ class Companion:
             nearby_objects = [str(x) for x in (snapshot.get("nearby_objects") or []) if str(x)]
             visual_topics = [str(x) for x in (snapshot.get("available_visual_topics") or []) if str(x)]
             city_events = [e for e in (snapshot.get("city_events") or []) if isinstance(e, dict) and e.get("title")]
+            # 精力（方向5 状态一致性）：她此刻的精力水平决定拍摄手法的柔和度——
+            # 低精力时用更松弛的机位与质感，让"照片里的此刻"与世界实时状态对齐。
+            energy = snapshot.get("energy")
         else:
             phase = iso_time = weather_mood = weather_detail = city = location = activity = ""
             floor = zone = position_desc = ""
             nearby_objects = visual_topics = city_events = []
+            energy = None
 
         # 时间兜底：候选事件时间 → 本地当前时间；时段缺省时按小时映射。
         clock_dt = None
@@ -4871,6 +4921,7 @@ class Companion:
             "outdoor_place": str(snapshot.get("outdoor_place") or "") if has_world else "",
             "holiday": holiday_name(clock_dt.date()),
             "activity": activity,
+            "energy": energy,
             "nearby_objects": nearby_objects[:6],
             "visual_topics": visual_topics[:6],
             "city_events": city_events[:3],
@@ -4924,7 +4975,11 @@ class Companion:
             place_x = str(context.get("outdoor_place") or "").strip()
             lines.append("状态：她此刻在室外" + (f"（{place_x}）" if place_x else "") + "，不在家里。")
         if activity and activity != "idle":
-            lines.append(f"她此刻在：{activity}")
+            # 翻译成中文状态，避免英文 token 经接力泄漏进最终提示词，同时与世界状态对齐。
+            lines.append(f"她此刻在：{_ACTIVITY_CN.get(activity, activity)}")
+        energy = context.get("energy")
+        if isinstance(energy, int | float) and not isinstance(energy, bool):
+            lines.append(f"她的精力：{float(energy):.2f}（0=疲惫，1=充沛）")
         if nearby:
             # 物件 id 翻译成自然描述再进上下文（环境/物件话题走 _visual_topic_zh）。
             lines.append("房间/周围可见物件：" + "、".join(_visual_topic_zh(o) for o in nearby))
@@ -4962,15 +5017,17 @@ class Companion:
             "你的任务：\n"
             "1. 判断哪些背景数据对这张照片的画面有实际影响，只把真正能呈现在画面里的写进提示词；\n"
             "2. 无关的数据不要写（例如室内自拍通常不需要天气、白天照片不要深夜光线），不要堆叠所有数据；\n"
-            "3. 保留基础提示词里的人物外貌、身材、风格与画幅方向（横构图/竖构图），只做上下文增强；\n"
+            "3. 保留基础提示词里的人物外貌、身材、风格、画幅方向（横构图/竖构图）与拍摄手法"
+            "（镜头/机位/取景/景深/质感），只做上下文增强；\n"
             "   但**地点优先级高于场景描述**：若世界背景数据表明她此刻在室外（或给出了具体地点），\n"
             "   而基础提示词写的是室内场景，必须按世界数据把场景改写成对应的户外/街头画面，\n"
             "   不得保留矛盾的室内元素（沙发、床、厨房、房间等）；\n"
             "   改写只允许替换场景与地点，**严禁改动人物的外貌、身材与服装**；\n"
             "4. 只用中文输出一条完整、自然、连贯的生图提示词本身，不要解释，不要JSON，不要加引号；\n"
             "5. 不要写任何人的名字或称呼（如'伊塔/Ita'），画面人物一律用'这个女性''她'等中性表述描述。\n"
-            "硬性前提：这张照片由画中的女性本人手持手机拍摄（前置自拍/后置对镜/支架定时），"
-            "必须保持这个自拍视角；绝对禁止出现拍摄者、第三人称旁观视角、摄影师、路人等"
+            "硬性前提：这张照片以画中女性本人的第一人称自拍视角拍下（用 iPhone 前置/后置摄像头说明拍摄方式），"
+            "必须保持这个第一人称自拍视角；画面中不得出现手机、相机、三脚架、自拍杆等任何拍摄设备，"
+            "也不出现握持设备的手；绝对禁止出现拍摄者、第三人称旁观视角、摄影师、路人等"
             "任何暗示'别人在拍她'的表述。"
         )
         user_msg = (
@@ -5036,6 +5093,11 @@ class Companion:
                     parts.append(f"所在的房间里有：{cn}")
         if "weather" in need and weather_desc:
             parts.append(weather_desc)
+        if "activity" in need:
+            # 状态一致性：点明她此刻在做什么，让照片与她此刻的世界状态对齐。
+            activity_cn = _ACTIVITY_CN.get(str(context.get("activity") or "").strip())
+            if activity_cn:
+                parts.append(f"她此刻{activity_cn}")
         if not parts:
             return base_prompt
         detail = "，".join(parts)

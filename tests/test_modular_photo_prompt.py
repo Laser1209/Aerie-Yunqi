@@ -82,9 +82,9 @@ def test_compose_bed_lying_angle():
     out = _compose_modular_prompt(base, _spec("在床上躺着，仰视低角度"))
     assert "场景是床上" in out
     assert "平躺" in out
-    # 机位措辞自拍化（POV 约束）：解析仍命中"仰视低角度"，但输出不再是
-    # 第三方"从下往上拍她"，而是"她手持手机放低自拍取景"。
-    assert "她手持手机放低，从低处自拍取景" in out
+    # 机位措辞无设备化（POV 约束）：解析仍命中"仰视低角度"，但输出不再是
+    # 第三方"从下往上拍她"，也不含任何入镜设备，而是"低机位仰拍，从低处往上取景"。
+    assert "低机位仰拍，从低处往上取景" in out
 
 
 # ── 缺值兜底：不命中任何维度 → 原样返回 base，绝不空串 ──────────
@@ -119,8 +119,8 @@ def test_explicit_pose_wins_over_coverage():
 
 def test_focus_back_auto_fills_angle():
     out = _compose_modular_prompt("base", _spec("给我看背影"))
-    # 背影机位自拍化：默认角度从"从后面"改为"她举手机到身后自拍背影"。
-    assert "拍摄机位：她把手机举到身后，用后置摄像头拍自己的背影" in out
+    # 背影机位无设备化：默认角度从"从后面"改为"机位在她身后，从背后取景"。
+    assert "拍摄机位：机位在她身后，从背后取景，约 50mm" in out
     assert "从后面" not in out.split("拍摄机位：", 1)[1]
 
 
@@ -178,35 +178,35 @@ def test_semantic_spec_compose_uses_llm_result():
     out = _compose_modular_prompt("base", spec)
     assert "画面重点聚焦在双腿" in out
     assert "她坐着" in out
-    # 机位措辞自拍化（POV 约束）："特写"输出为"她手持手机近距离特写自拍"。
-    assert "拍摄机位：她手持手机近距离特写自拍" in out
+    # 机位措辞无设备化（POV 约束）："特写"输出为"近距离特写机位，约 85mm 定焦"。
+    assert "拍摄机位：近距离特写机位，约 85mm 定焦" in out
 
 
-# ── POV 约束：手持自拍视角出口兜底 ─────────────────────────
+# ── POV 约束：第一人称自拍视角出口兜底 + 设备不入镜 ─────────
 def test_ensure_selfie_pov_appends_when_missing():
-    # 人物类提示词无手持约束 → 自动追加 _SELFIE_POV_PHRASE
+    # 人物类提示词无 POV 约束 → 自动追加 _SELFIE_POV_PHRASE
     out = _ensure_selfie_pov("一张写实生活照，人物是伊塔。", "role_selfie")
-    assert "她本人手持手机拍摄" in out
-    assert "绝无他人拍摄" in out
+    assert "第一人称自拍视角" in out
+    assert "不出现手机" in out
 
 
 def test_ensure_selfie_pov_idempotent_when_present():
-    # 已含手持关键词（如组合器已注入"手持手机"）→ 不重复追加，幂等
-    out = _ensure_selfie_pov("她手持手机前置自拍，人物是伊塔。", "role_in_scene")
-    assert out.count("她本人手持手机拍摄") == 0
-    assert out.count("手持手机") == 1
+    # 已含 POV 关键词（如组合器/base 已注入"第一人称自拍视角"）→ 不重复追加，幂等
+    out = _ensure_selfie_pov("她以第一人称自拍视角对着镜头，人物是伊塔。", "role_in_scene")
+    assert out.count("这张照片是她本人的第一人称自拍视角") == 0
+    assert out.count("第一人称自拍视角") == 1
 
 
 def test_ensure_selfie_pov_skips_environment_object():
     # 环境照不强制带人物，第一人称由模板保证，跳过追加
     out = _ensure_selfie_pov("一张写实照片，第一人称视角。", "environment_object")
-    assert "她本人手持手机拍摄" not in out
+    assert "这张照片是她本人的第一人称自拍视角" not in out
 
 
 def test_ensure_selfie_pov_accepts_selfie_phrase():
-    # 含"自拍"关键词（role_selfie 模板自带）→ 幂等不追加
+    # 仅含"自拍"字样（不含 POV 关键词）→ 仍需追加设备不入镜的 POV 前提
     out = _ensure_selfie_pov("她像在给恋人发自拍，桌面有数位板。", "role_selfie")
-    assert "绝无他人拍摄" not in out
+    assert "不出现手机" in out
 
 
 # ── P2：活动话题中文翻译 + 模板映射 ─────────────────────────
@@ -264,7 +264,7 @@ def test_role_in_scene_prompt_uses_topic_zh():
 
 
 def test_role_in_scene_prompt_fallback_without_topic():
-    """role_in_scene 无 topic → 回退默认自拍场景，且含 POV 约束。"""
+    """role_in_scene 无 topic → 回退默认自拍场景，且含 POV 约束（设备不入镜）。"""
     from core.companion import Companion
 
     comp = Companion.__new__(Companion)
@@ -272,8 +272,8 @@ def test_role_in_scene_prompt_fallback_without_topic():
         "role_in_scene",
         {"scene": "life_share"},
     )
-    assert "前置摄像头" in prompt
-    assert "绝无他人拍摄" in prompt
+    assert "第一人称自拍视角" in prompt
+    assert "不出现手机" in prompt
 
 
 def test_world_context_text_topics_translated():
@@ -577,21 +577,22 @@ def test_is_friendly_shot_exception_outdoor():
 
 
 def test_is_friendly_shot_exception_room_negative():
-    # 房间/常见场景不算例外，仍走手持自拍护栏
+    # 房间/常见场景不算例外，仍走第一人称自拍护栏
     assert _is_friendly_shot_exception("在床上躺着拍一张") is False
 
 
 def test_ensure_selfie_pov_outdoor_exception():
-    # 出游/合影场景 → 不再追加"手持自拍"，追加合影叙事
+    # 出游/合影场景 → 不再追加"第一人称自拍"，追加同行者叙事（同样无设备入镜）
     out = _ensure_selfie_pov("在游乐园拍一张合影", "role_in_scene")
-    assert "她本人手持手机拍摄" not in out
+    assert "这张照片是她本人的第一人称自拍视角" not in out
     assert "同行的人" in out
+    assert "不出现手机" in out
 
 
 def test_ensure_selfie_pov_home_premise_kept():
-    # 房间内普通请求 → 仍追加手持自拍前提（防第三方拍摄误读）
+    # 房间内普通请求 → 仍追加第一人称自拍前提（防第三方拍摄误读 + 设备不入镜）
     out = _ensure_selfie_pov("躺在床上拍一张", "role_selfie")
-    assert "她本人手持手机拍摄" in out
+    assert "这张照片是她本人的第一人称自拍视角" in out
 
 
 # ── 模块化补充：部位细节 / 服装 / 景别镜头语言 ─────────────────
@@ -717,6 +718,69 @@ def test_finalize_without_light_never_empty():
     out = _finalize_image_prompt("一张写实生活照。", "role_selfie", light="")
     assert "光线：" not in out
     assert "反面约束" in out
+
+
+# ── 拍摄手法模块（b2）：按类型配套 + 设备不入镜 + 状态同步 ─────────
+def test_finalize_appends_shooting_phrase():
+    out = _finalize_image_prompt("一张写实生活照。", "role_selfie", shooting="拍摄手法：iPhone 前置摄像头，约 50mm。")
+    assert "拍摄手法：iPhone 前置摄像头" in out
+
+
+def test_finalize_shooting_is_idempotent():
+    once = _finalize_image_prompt("一张写实生活照。", "role_selfie", shooting="拍摄手法：iPhone 前置摄像头，约 50mm。")
+    twice = _finalize_image_prompt(once, "role_selfie", shooting="拍摄手法：iPhone 前置摄像头，约 50mm。")
+    assert twice == once
+    assert twice.count("拍摄手法：") == 1
+
+
+def test_negative_carries_device_exclusion():
+    """人物类负面约束必须排除拍摄设备本体（手机/相机/三脚架/自拍杆）。"""
+    from core.companion import _IMAGE_NEGATIVE_PHRASE
+
+    assert "手机" in _IMAGE_NEGATIVE_PHRASE
+    assert "自拍杆" in _IMAGE_NEGATIVE_PHRASE
+
+
+def test_shooting_phrase_matches_type():
+    """拍摄手法按类型配套：惬意的慵懒用柔和机位，远景改用带环境的广角。"""
+    from core.image_shooting import shooting_phrase
+
+    cozy = shooting_phrase(style="慵懒", prompt_key="role_selfie")
+    far = shooting_phrase(prompt_key="role_in_scene", shot="远景")
+    assert "眼平略低的机位" in cozy
+    assert "35mm" in far
+    assert cozy != far
+
+
+def test_shooting_phrase_syncs_low_energy_and_night():
+    """状态同步：低精力 → 更松弛的柔和手法；夜间 → 补弱光颗粒。"""
+    from core.image_shooting import shooting_phrase
+
+    tired = shooting_phrase(prompt_key="role_selfie", energy=0.2)
+    night = shooting_phrase(prompt_key="role_selfie", phase="night")
+    assert "姿态松弛" in tired
+    assert "噪点" in night
+
+
+def test_shooting_phrase_skips_environment_object():
+    """环境照是物件视角，不套人物拍摄手法（缺值即停）。"""
+    from core.image_shooting import shooting_phrase
+
+    assert shooting_phrase(prompt_key="environment_object") == ""
+
+
+def test_strip_device_props_is_idempotent_and_protects_clauses():
+    """设备清洗幂等，且不误伤"排除设备"的自身约束（负面/POV 措辞）。"""
+    from core.companion import _IMAGE_NEGATIVE_PHRASE, _SELFIE_POV_PHRASE
+    from core.image_shooting import strip_device_props
+
+    text = f"她手持手机自拍。{_SELFIE_POV_PHRASE}{_IMAGE_NEGATIVE_PHRASE}"
+    once = strip_device_props(text)
+    twice = strip_device_props(once)
+    assert once == twice
+    assert "手持手机" not in once
+    assert _SELFIE_POV_PHRASE in once
+    assert _IMAGE_NEGATIVE_PHRASE in once
 
 
 def test_local_light_phrase_covers_every_phase():

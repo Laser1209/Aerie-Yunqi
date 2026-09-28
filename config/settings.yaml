@@ -3,7 +3,6 @@ agent:
   progress:
     max_messages: 4
     style: stage
-  # 首次运行播种的工作区根目录（之后以 data/workspace_roots.json 为准，可随时增删）
   workspace_default_roots:
   - D:\AerieOffice
 brief_subscriptions:
@@ -17,7 +16,7 @@ brief_subscriptions:
 computer_control:
   blacklist: []
   custom_rules: {}
-  mode: manual
+  mode: full
   whitelist: []
 douyin:
   api_base_url: https://api.justoneapi.com
@@ -64,7 +63,6 @@ office:
 proactive:
   auto_recent_window_min: 30
   companion_image_probability: 1
-  delivery_channel: auto
   enabled: true
   image_max_per_day: 0
   max_per_day: 0
@@ -73,7 +71,10 @@ proactive:
   outdoor_probability: 0.5
   outdoor_weather_event: true
   photo_min_interval_sec: 0
-  primary_channel: ilink
+  # 主动消息（无来源端口）投到哪一端：auto = 最近活跃端口（含桌面），窗口内无记录
+  # 则落桌面端；也可固定 qq / ilink / desktop。electron 的「外部连接」面板写的就是
+  # 这个键（此前 Python 侧没读，设置看得见但不生效，现已接回）。
+  primary_channel: auto
   system_notifications: true
 promise_beats:
   max_delay_min: 180

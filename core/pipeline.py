@@ -1364,14 +1364,19 @@ class Pipeline:
         if not turn_key:
             turn_key = hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
         idempotency_key = f"chat-photo:{user_id}:{turn_key}"
-        channel = "qq" if str(msg.channel or "") == "qq" else "local_chat"
+        # 生图结果发回**提问的那条通道**：QQ / 微信(iLink) / 桌面。
+        # 微信的会话账号是 iLink 的 from_user_id（不是主用户 id），必须按它寻址，
+        # 否则投递端只能回落到 QQ 主用户，微信永远收不到图。
+        inbound_channel = str(msg.channel or "")
+        channel = inbound_channel if inbound_channel in {"qq", "ilink"} else "local_chat"
+        target = str(msg.channel_account_id or "") if channel == "ilink" else user_id
         candidate = {
             "candidate_id": f"chat-photo-{user_id}-{int(time.time())}",
             "idempotency_key": idempotency_key,
             "scene": "local_send",
             "owner_id": user_id,
             "channel": channel,
-            "target": user_id,
+            "target": target,
             "prompt_key": intent,
             "reason_code": "user_requested",
             "source": "manual",

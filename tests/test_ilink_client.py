@@ -246,6 +246,61 @@ async def test_send_file_posts_nested_media_file_item():
 
 
 @pytest.mark.asyncio
+async def test_send_image_posts_nested_media_image_item():
+    """图片项与文件项同形态：``image_item.media`` 是嵌套对象，消息项 type 取 2。
+
+    图片项不带 ``file_name`` / ``len`` 这些文件专有字段——多塞会被判参数错误。
+    """
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"ret": 0, "errcode": 0})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as transport_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", transport_client)
+        sent = await client.send_image(
+            "wx-owner",
+            "context-1",
+            encrypt_query_param="param-abc",
+            aes_key="a2V5",
+        )
+
+    assert sent is True
+    payload = json.loads(requests[0].content)
+    assert payload["msg"]["item_list"] == [
+        {
+            "type": 2,
+            "image_item": {
+                "media": {
+                    "encrypt_query_param": "param-abc",
+                    "aes_key": "a2V5",
+                },
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_send_image_shares_text_success_semantics():
+    """图片与文本共用同一信封：成功判定不能分叉。"""
+
+    async def handler(request):
+        del request
+        return httpx.Response(200, json={"ret": -2, "errmsg": "invalid param"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as transport_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", transport_client)
+        with pytest.raises(ILinkProtocolError, match="ret=-2"):
+            await client.send_image(
+                "wx-owner",
+                "context-1",
+                encrypt_query_param="param",
+                aes_key="key",
+            )
+
+
+@pytest.mark.asyncio
 async def test_send_file_shares_text_success_semantics():
     """媒体与文本共用同一信封：成功判定不能分叉。"""
 

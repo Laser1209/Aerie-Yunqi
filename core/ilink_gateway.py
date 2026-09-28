@@ -203,6 +203,27 @@ class ILinkGateway:
             aes_key=media.aes_key,
         )
 
+    async def send_image(self, channel_account_id: str, image_path: str | Path) -> bool:
+        """把本地图片加密上传到微信 CDN，再作为图片消息发给用户。
+
+        与 ``send_file`` 同构，唯一的协议差别是上传 ``MediaType.IMAGE``（=1）
+        与消息项 ``image_item``（type=2）——两套编号不能混用。
+        """
+        client, context_token = self._outbound_context()
+        source = Path(image_path)
+        media = await self._get_media_transfer(client).upload(
+            client,
+            source,
+            to_user_id=channel_account_id,
+            media_type=MediaType.IMAGE,
+        )
+        return await client.send_image(
+            channel_account_id,
+            context_token,
+            encrypt_query_param=media.encrypt_query_param,
+            aes_key=media.aes_key,
+        )
+
     def _outbound_context(self) -> tuple[ILinkClient, str]:
         """取出发所需的运行态（客户端 + context_token）；缺失即抛错。
 

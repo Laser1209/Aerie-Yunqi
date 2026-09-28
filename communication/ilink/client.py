@@ -146,6 +146,36 @@ class ILinkClient:
             ],
         )
 
+    async def send_image(
+        self,
+        to_user_id: str,
+        context_token: str,
+        *,
+        encrypt_query_param: str,
+        aes_key: str,
+    ) -> bool:
+        """把已上传到 CDN 的图片作为图片消息发出。
+
+        ``image_item`` 与 ``file_item`` 是同一形态：``media`` 是**嵌套对象**，
+        字段名 ``encrypt_query_param`` / ``aes_key`` 一致；协议差别只在消息项
+        ``type`` 取 2（图片）。图片项**不**带 ``file_name`` / ``len`` 这类文件字段。
+        """
+        return await self._send_message(
+            to_user_id,
+            context_token,
+            [
+                {
+                    "type": MessageItemType.IMAGE,
+                    "image_item": {
+                        "media": {
+                            "encrypt_query_param": encrypt_query_param,
+                            "aes_key": aes_key,
+                        },
+                    },
+                }
+            ],
+        )
+
     async def _send_message(
         self,
         to_user_id: str,

@@ -906,7 +906,7 @@ class WorldImageCandidateConsumer:
         if not isinstance(plan, dict):
             return False
         channel = str(plan.get("channel") or "").lower()
-        if channel not in {"qq", "local_chat"}:
+        if channel not in {"qq", "ilink", "local_chat"}:
             return False
         # 把候选的语义字段注入 delivery plan，供 sender 生成图片事件描述（P3）：
         # 聊天要图 / 主动发图两条路径都汇聚到 consumer，发送端据此知道"发了张什么图"。

@@ -507,3 +507,58 @@ async def test_gateway_send_file_requires_running_gateway(tmp_path):
         await gateway.send_file("wx-owner", str(tmp_path / "missing.txt"))
     client.send_file.assert_not_awaited()
     state_store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_send_image_uploads_with_image_media_type_then_sends(tmp_path):
+    """发图片 = 先按 MediaType.IMAGE 上传，再把 CDN 凭据塞进 image_item 发出。
+
+    与发文件同构，但上传编号必须是 1（不是文件用的 3）——两套编号混用会被
+    服务端当成参数错误。
+    """
+    client = AsyncMock()
+    client.send_image.return_value = True
+    gateway, state_store = _gateway_with_client(tmp_path, client)
+    transfer = MagicMock(
+        upload=AsyncMock(
+            return_value=UploadedMedia(
+                encrypt_query_param="param-img",
+                aes_key="a2V5",
+                length=4096,
+                md5="c" * 32,
+                ciphertext_length=4112,
+            )
+        )
+    )
+    gateway._media_transfer = transfer
+    source = tmp_path / "自拍.png"
+    source.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    await gateway.start()
+    try:
+        sent = await gateway.send_image("wx-owner", str(source))
+    finally:
+        await gateway.stop()
+        state_store.close()
+
+    assert sent is True
+    assert transfer.upload.await_args.kwargs["media_type"] == MediaType.IMAGE
+    assert transfer.upload.await_args.kwargs["to_user_id"] == "wx-owner"
+    client.send_image.assert_awaited_once_with(
+        "wx-owner",
+        "latest-context",
+        encrypt_query_param="param-img",
+        aes_key="a2V5",
+    )
+
+
+@pytest.mark.asyncio
+async def test_gateway_send_image_requires_running_gateway(tmp_path):
+    client = AsyncMock()
+    gateway, state_store = _gateway_with_client(tmp_path, client)
+    gateway._media_transfer = AsyncMock()
+
+    with pytest.raises(RuntimeError, match="not running"):
+        await gateway.send_image("wx-owner", str(tmp_path / "missing.png"))
+    client.send_image.assert_not_awaited()
+    state_store.close()

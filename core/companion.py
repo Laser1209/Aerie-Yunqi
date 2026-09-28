@@ -2011,16 +2011,18 @@ class Companion:
             channel = str(plan.get("channel") or "").lower()
             if channel == "local_chat":
                 return await _deliver_local_chat_image(plan, workflow_result)
+            image_ref = _resolve_generated_asset_path(workflow_result)
+            if not image_ref:
+                logger.warning("[WorldImage] generated asset missing for delivery")
+                return False
+            if channel == "ilink":
+                return await _deliver_ilink_image(plan, image_ref)
             target = str(plan.get("target") or "").strip()
             if not target.isdigit():
                 primary = self.get_primary_user_selection()
                 target = str(getattr(primary, "user_id", "") or "") if primary else ""
             if not target.isdigit():
                 logger.warning("[WorldImage] no valid QQ target for delivery")
-                return False
-            image_ref = _resolve_generated_asset_path(workflow_result)
-            if not image_ref:
-                logger.warning("[WorldImage] generated asset missing for delivery")
                 return False
             sent = await self.qq.send_image(int(target), image_ref)
             if not sent:
@@ -2069,6 +2071,74 @@ class Companion:
                 )
             except Exception:
                 logger.debug("[WorldImage] qq image event record failed", exc_info=True)
+            return True
+
+        async def _deliver_ilink_image(plan: dict, image_ref: str) -> bool:
+            """把生成的图片经微信（iLink）发给用户。
+
+            与 QQ 分支同构，差别在通道：上传走 ``MediaType.IMAGE``、消息项是
+            ``image_item``（见 ``ILinkGateway.send_image``）。落库沿用聊天历史口径
+            （channel=ilink，微信用户 id 作会话账号），否则桌面面板与管理平台都
+            看不到"我发过这张图"，Agent 下一轮也会失去这段自我认知。
+            """
+            target = str(plan.get("target") or "").strip()
+            if not target:
+                logger.warning("[WorldImage] no iLink target for delivery")
+                return False
+            try:
+                sent = await self.ilink_gateway.send_image(target, image_ref)
+            except Exception:
+                logger.warning("[WorldImage] iLink image send failed", exc_info=True)
+                return False
+            if not sent:
+                return False
+            desc = _image_event_desc(plan)
+            scene = str(plan.get("scene") or "world_image")
+            persona_id = str(plan.get("persona_id") or "") or self._active_persona_id()
+            primary = self.get_primary_user_selection()
+            user_id_int = int(getattr(primary, "user_id", 0) or 0)
+            actor_id: str | None = None
+            try:
+                actor_id = self.identity_resolver.resolve("ilink", target).actor_id
+            except Exception:
+                logger.debug("[WorldImage] ilink identity resolve failed", exc_info=True)
+            try:
+                db = getattr(self, "db", None)
+                legacy_id: int | None = None
+                if db is not None and hasattr(db, "insert"):
+                    legacy_id = db.insert("chat_log", {
+                        "user_id": user_id_int,
+                        "role": "assistant",
+                        "content": f"[图片] {desc}",
+                        "msg_type": scene,
+                        "route_mode": "PROACTIVE",
+                        "scene": scene,
+                        "channel": "ilink",
+                        "persona_id": persona_id,
+                    })
+                if legacy_id is not None:
+                    self.conversation_repository.persist_proactive_message(
+                        user_id=user_id_int,
+                        actor_id=actor_id,
+                        channel="ilink",
+                        channel_account_id=target,
+                        content=f"[图片] {desc}",
+                        legacy_chat_log_id=int(legacy_id),
+                        persona_id=persona_id,
+                    )
+            except Exception:
+                logger.debug("[WorldImage] ilink image chat_log record failed", exc_info=True)
+            try:
+                import os as _os
+                rel = _os.path.relpath(image_ref, (Path.cwd() / "uploads").resolve())
+                stored = rel.replace("\\", "/") if not rel.startswith("..") else image_ref
+                await self._persist_image_event(
+                    user_id_int, desc, "ilink", image_path=stored,
+                    persona_id=persona_id or None,
+                )
+            except Exception:
+                logger.debug("[WorldImage] ilink image event record failed", exc_info=True)
+            logger.info("[WorldImage] delivered generated image to WeChat: %s", target)
             return True
 
         async def _deliver_local_chat_image(plan: dict, workflow_result: dict) -> bool:

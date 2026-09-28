@@ -1220,6 +1220,40 @@ async def test_deliver_without_candidate_keeps_plan_unchanged(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_deliver_accepts_ilink_channel_and_rejects_unknown(tmp_path):
+    """微信(iLink) 与 QQ 一样是可投递通道；未知通道仍被挡掉。"""
+    from core.world_image_candidates import (
+        JsonWorldImageCandidateStore,
+        WorldImageCandidateConsumer,
+    )
+
+    sender = _PlanCaptureSender()
+    consumer = WorldImageCandidateConsumer(
+        feature_flags=FlagStub(True),
+        image_workflow=WorkflowStub(),
+        world_port=WorldPortStub(),
+        push_policy=PolicyStub(),
+        proactive_judge=JudgeStub(),
+        store=JsonWorldImageCandidateStore(tmp_path / "deliver-channels.json"),
+        clock=_clock,
+        sender=sender,
+    )
+
+    ok = await consumer._deliver(
+        {"delivery_plan": {"channel": "ilink", "target": "wx-owner"}}
+    )
+    assert ok is True
+    assert sender.plan is not None and sender.plan["channel"] == "ilink"
+
+    sender.plan = None
+    ok = await consumer._deliver(
+        {"delivery_plan": {"channel": "telegram", "target": "x"}}
+    )
+    assert ok is False
+    assert sender.plan is None
+
+
+@pytest.mark.asyncio
 async def test_world_port_provider_tracks_runtime_replacement(tmp_path):
     """Scheme-3 回归：consumer 每次消费都取当前 world_port，运行中被替换
     （如 /api/world/runtime/bind 把 InProcess 换成 sidecar 适配器）后立即读到

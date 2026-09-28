@@ -170,6 +170,73 @@ async def test_companion_ilink_file_failure_keeps_text_result():
 
 
 @pytest.mark.asyncio
+async def test_chat_photo_in_wechat_targets_the_ilink_conversation(monkeypatch):
+    """微信里要图 → 图必须发回微信那条会话（channel=ilink，target=from_user_id）。
+
+    此前的映射是「非 QQ 一律 local_chat」，微信要图只会落在桌面端，
+    微信永远收不到图（2026-09-28 症状⑨）。
+    """
+    from core.pipeline import Pipeline
+
+    captured: dict = {}
+
+    async def fake_publish(candidate):
+        captured.update(candidate)
+        return {"status": "published", "consumed": [{"status": "completed"}]}
+
+    monkeypatch.setattr(
+        "core.companion.get_companion",
+        lambda: SimpleNamespace(publish_image_candidate=fake_publish),
+    )
+    pipe = Pipeline.__new__(Pipeline)
+    pipe._record_chat_photo_tool = MagicMock()
+    msg = SimpleNamespace(
+        user_id=3998874040,
+        content="给我看看你现在的样子",
+        channel="ilink",
+        channel_account_id="wx-owner",
+        source="ilink",
+    )
+
+    result = await pipe._deliver_chat_photo(msg, None, "role_selfie", None)
+
+    assert result["status"] == "published"
+    assert captured["channel"] == "ilink"
+    assert captured["target"] == "wx-owner"
+
+
+@pytest.mark.asyncio
+async def test_chat_photo_on_other_channels_still_targets_local_chat(monkeypatch):
+    """桌面端要图不受影响：仍落在 local_chat，target 是主用户 id。"""
+    from core.pipeline import Pipeline
+
+    captured: dict = {}
+
+    async def fake_publish(candidate):
+        captured.update(candidate)
+        return {"status": "published", "consumed": [{"status": "completed"}]}
+
+    monkeypatch.setattr(
+        "core.companion.get_companion",
+        lambda: SimpleNamespace(publish_image_candidate=fake_publish),
+    )
+    pipe = Pipeline.__new__(Pipeline)
+    pipe._record_chat_photo_tool = MagicMock()
+    msg = SimpleNamespace(
+        user_id=3998874040,
+        content="给我看看你现在的样子",
+        channel="desktop",
+        channel_account_id="local",
+        source="local",
+    )
+
+    await pipe._deliver_chat_photo(msg, None, "role_selfie", None)
+
+    assert captured["channel"] == "local_chat"
+    assert captured["target"] == "3998874040"
+
+
+@pytest.mark.asyncio
 async def test_send_queue_delivers_ilink_batch_in_order():
     delivered = []
 

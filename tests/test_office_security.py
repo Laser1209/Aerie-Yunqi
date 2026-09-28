@@ -255,3 +255,78 @@ def test_document_read_prefix_sibling_dir_rejected(office_dir, monkeypatch, tmp_
     )
     result = office_tools.tool_document_read(filepath=str(secret))
     assert result["success"] is False
+
+
+# ────────────────────────── #68 授权白名单单一真源（读/搜/写同一份名单）
+
+
+@pytest.fixture
+def ws_root(tmp_path, monkeypatch):
+    """把工作区管理器隔离到 tmp，并注册一个授权根。
+
+    修复前 document_read / file_search 各自硬编码"桌面/文档/下载/AerieOffice"，
+    完全无视用户在工作区里加的目录，于是出现过「E:\\ 在授权根里却读不了」。
+    """
+    import core.workspace as workspace
+
+    monkeypatch.setattr(workspace, "_ROOTS_STATE_FILE", tmp_path / "ws.json")
+    root = tmp_path / "authorized"
+    root.mkdir()
+    manager = workspace.WorkspaceManager(default_roots=[str(root)])
+    monkeypatch.setattr(workspace, "_workspace_manager", manager)
+    return root
+
+
+def test_document_read_allows_registered_workspace_root(office_dir, ws_root):
+    """工作区里授权过的目录，读取必须放行（§十四 #68 的核心症状）。"""
+    note = ws_root / "note.txt"
+    note.write_text("hello", encoding="utf-8")
+
+    result = office_tools.tool_document_read(filepath=str(note))
+
+    assert result["success"] is True
+    assert result["content"] == "hello"
+
+
+def test_document_read_rejects_unregistered_dir(office_dir, ws_root):
+    """既不在工作区、也不在办公目录/常用文档目录 → 仍拒绝，且给出可操作原因。"""
+    outside = ws_root.parent / "elsewhere"
+    outside.mkdir()
+    secret = outside / "secret.txt"
+    secret.write_text("secret", encoding="utf-8")
+
+    result = office_tools.tool_document_read(filepath=str(secret))
+
+    assert result["success"] is False
+    assert result["reason"] == "outside_workspace_roots"
+
+
+def test_file_search_covers_registered_workspace_root(office_dir, ws_root):
+    """默认搜索范围必须覆盖工作区授权根，否则"搜我 E 盘的文件"同样会落空。"""
+    (ws_root / "target_note.md").write_text("x", encoding="utf-8")
+
+    result = office_tools.tool_file_search(keyword="target_note")
+
+    assert result["success"] is True
+    assert any(item["name"] == "target_note.md" for item in result["files"])
+
+
+def test_file_search_rejects_explicit_dir_outside_roots(office_dir, ws_root):
+    """显式目录同样过白名单，不能成为绕开授权的后门。"""
+    outside = ws_root.parent / "elsewhere_search"
+    outside.mkdir()
+
+    result = office_tools.tool_file_search(keyword="x", directory=str(outside))
+
+    assert result["success"] is False
+    assert result["reason"] == "outside_workspace_roots"
+
+
+def test_read_write_share_one_authorization_source(office_dir, ws_root, no_controller):
+    """同一目录：读放行则写也放行，两者不得再各持一份名单。"""
+    note = ws_root / "note.txt"
+    note.write_text("hello", encoding="utf-8")
+    target = ws_root / "shared" / "out.txt"
+
+    assert office_tools.tool_document_read(filepath=str(note))["success"] is True
+    assert office_tools.guard_write_paths(destination=str(target)) is None

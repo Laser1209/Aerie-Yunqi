@@ -126,8 +126,13 @@ get_office_dir()
 #   1. 落在已授权工作区根或办公目录内（防路径逃逸）；
 #   2. 过电脑操控共用的 AccessPolicy（FULL 放行 / MANUAL 拒绝并提示 / 黑名单拦截）；
 #   3. 无论放行与否都写一条审计。
-def _allowed_write_roots() -> list[Path]:
-    """当前允许写入的根目录：已注册工作区 + 办公目录。"""
+def _allowed_roots() -> list[Path]:
+    """**授权根的单一口径**：已注册工作区 + 办公目录。
+
+    读（`document_read`）/ 搜（`file_search`）/ 写（`guard_write_paths`）三条路径
+    全部以本函数为准，不再各自维护一份名单——三份名单曾导致「用户在工作区里
+    加了 E:\\，读取仍被拒」（§十四 #68）。
+    """
     roots: list[Path] = []
     try:
         from core.workspace import get_workspace_manager
@@ -145,6 +150,27 @@ def _allowed_write_roots() -> list[Path]:
         if root not in unique:
             unique.append(root)
     return unique
+
+
+# 常用文档目录：读/搜默认覆盖，但**不**进写白名单。
+# 读比写宽是刻意的（读风险低），关键是两者都由 _allowed_roots() 派生，
+# 授权根变化会同时反映到两条路径上。
+_COMMON_DOC_DIRS: tuple[str, ...] = ("~/Desktop", "~/Documents", "~/Downloads")
+
+
+def _allowed_read_roots() -> list[Path]:
+    """读取/搜索可用的根：授权根 + 常用文档目录。"""
+    roots = _allowed_roots()
+    for pattern in _COMMON_DOC_DIRS:
+        resolved = Path(os.path.expanduser(pattern)).resolve()
+        if resolved not in roots:
+            roots.append(resolved)
+    return roots
+
+
+def _is_within(path: Path, roots: list[Path]) -> bool:
+    """路径是否落在任一授权根内（按路径段判定，避免 Desktop2 被 Desktop 误放行）。"""
+    return any(path == root or root in path.parents for root in roots)
 
 
 def _resolve_write_target(raw: str | os.PathLike) -> Optional[Path]:
@@ -165,7 +191,7 @@ def _resolve_write_target(raw: str | os.PathLike) -> Optional[Path]:
         return None
     return resolved if any(
         resolved == root or root in resolved.parents
-        for root in _allowed_write_roots()
+        for root in _allowed_roots()
     ) else None
 
 
@@ -335,21 +361,18 @@ def tool_document_read(filepath: str) -> dict:
         if not path.is_file():
             return {"success": False, "error": f"不是文件: {path}"}
 
-        # 安全检查：只允许读取办公目录和常见文档目录。
+        # 安全检查：只允许读取授权范围（工作区已授权目录 + 办公目录 + 常用文档目录）。
         # 用路径段包含判定，不能用 str.startswith（Desktop2 会被误认成 Desktop）
-        allowed_parents = [
-            office_dir.resolve(),
-            Path(os.path.expanduser("~/Desktop")).resolve(),
-            Path(os.path.expanduser("~/Documents")).resolve(),
-            Path(os.path.expanduser("~/Downloads")).resolve(),
-        ]
         resolved = path.resolve()
-        allowed = any(
-            resolved == parent or parent in resolved.parents
-            for parent in allowed_parents
-        )
-        if not allowed:
-            return {"success": False, "error": "出于安全考虑，仅允许读取桌面/文档/下载/AerieOffice 目录下的文件"}
+        if not _is_within(resolved, _allowed_read_roots()):
+            return {
+                "success": False,
+                "error": (
+                    f"读取目标不在已授权工作区内: {resolved}。"
+                    "请先在「工作区」里添加该目录，或把文件放到办公目录"
+                ),
+                "reason": "outside_workspace_roots",
+            }
 
         # 大小限制：10MB
         size = path.stat().st_size
@@ -476,7 +499,7 @@ def tool_file_search(
 
     Args:
         keyword: 文件名关键词
-        directory: 搜索目录（默认：桌面 + 文档 + 下载 + AerieOffice）
+        directory: 搜索目录（留空则搜索全部已授权目录）
         file_type: 限定文件类型（doc/excel/ppt/pdf/image/code/all）
         max_results: 最多返回结果数
 
@@ -484,18 +507,26 @@ def tool_file_search(
         匹配的文件列表
     """
     try:
-        # 搜索范围
+        # 搜索范围：默认遍历全部授权范围；显式 `directory` 也必须在授权范围内，
+        # 否则 file_search 就成了绕开白名单直接翻任意目录的后门（§十四 #68）。
+        read_roots = _allowed_read_roots()
         search_dirs = []
         if directory:
             p = Path(directory)
             if p.exists():
-                search_dirs.append(p.resolve())
+                resolved = p.resolve()
+                if not _is_within(resolved, read_roots):
+                    return {
+                        "success": False,
+                        "error": (
+                            f"搜索目录不在已授权工作区内: {resolved}。"
+                            "请先在「工作区」里添加该目录"
+                        ),
+                        "reason": "outside_workspace_roots",
+                    }
+                search_dirs.append(resolved)
         else:
-            for d in ["~/Desktop", "~/Documents", "~/Downloads"]:
-                p = Path(os.path.expanduser(d))
-                if p.exists():
-                    search_dirs.append(p.resolve())
-            search_dirs.append(get_office_dir().resolve())
+            search_dirs.extend(root for root in read_roots if root.exists())
 
         # 文件类型过滤
         ext_map = {
@@ -2091,7 +2122,7 @@ _OFFICE_TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "document_read",
-            "description": "读取本地文档内容（支持 md/txt/csv 等文本文件）。仅允许读取桌面/文档/下载/AerieOffice 目录下的文件。",
+            "description": "读取本地文档内容（支持 md/txt/csv 等文本文件）。仅允许读取「工作区」已授权目录、办公目录与桌面/文档/下载下的文件。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -2140,7 +2171,7 @@ _OFFICE_TOOL_SCHEMAS = {
                     },
                     "directory": {
                         "type": "string",
-                        "description": "指定搜索目录（留空则搜索默认位置）",
+                        "description": "指定搜索目录（必须在「工作区」已授权目录内，留空则搜索全部授权目录）",
                     },
                     "file_type": {
                         "type": "string",

@@ -414,7 +414,7 @@ def get_workspace_manager() -> WorkspaceManager:
 
     默认根 = ``agent.workspace_default_roots`` + ``office.dir``。
 
-    P1-1：办公目录本就是**无条件可写**的（见 ``office_tools._allowed_write_roots``
+    P1-1：办公目录本就是**无条件可写**的（见 ``office_tools._allowed_roots``
     把 office.dir 追加进白名单），却不出现在工作区面板里 —— 两个"根"语义打架，
     用户看到的授权范围与实际许可范围不一致。把它同时登记为工作区的一个默认成员，
     面板与 Agent 感知范围才对齐。

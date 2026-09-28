@@ -3,6 +3,7 @@ name: screenshot-qa
 description: 截图问答 / Screenshot Q&A
 provider_hint: vision-llava
 read_only: true
+requires_module: local_screenshot_qa
 ---
 
 # screenshot-qa / 截图问答

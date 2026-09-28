@@ -24,14 +24,16 @@ def _loader(registry: ToolRegistry | None = None) -> SkillLoader:
 def test_cloud_skills_are_discovered():
     loader = _loader()
     count = loader.discover()
-    assert count >= 77
+    # 声明了可用性前提（requires_module / requires_env）且前提不满足的 skill
+    # 不再被发现（§十四 #63），所以这里用下限而不是精确值。
+    assert count >= 60
 
     cloud = {
         name: meta
         for name, meta in loader.discovered.items()
         if meta["kind"] == "cloud"
     }
-    assert len(cloud) >= 59
+    assert len(cloud) >= 55
     assert "mcp-builder" in cloud
     assert "defuddle" in cloud
     # api_server 的 /api/skills/{name} 依赖 path/SKILL.md 存在
@@ -45,7 +47,68 @@ def test_data_and_local_skills_are_still_discovered():
     loader = _loader()
     loader.discover()
     assert loader.discovered["figma"]["kind"] == "data"
-    assert loader.discovered["tts"]["kind"] == "local"
+    # 用**本机真能用**的 local skill 断言（tts 已因 local_tts 缺失被闸掉）。
+    assert loader.discovered["markitdown"]["kind"] == "local"
+
+
+# ── 可用性闸门：跑不了的 skill 不进模型可见清单（§十四 #63） ──────────
+
+
+def test_skill_with_missing_module_is_not_discovered(tmp_path, monkeypatch):
+    local_dir = tmp_path / "local"
+    _write_skill(local_dir, "dead-skill", "dead-skill", "dead")
+    (local_dir / "dead-skill" / "SKILL.md").write_text(
+        "---\nname: dead-skill\ndescription: dead\n"
+        "requires_module: definitely_not_installed_xyz\n---\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(skill_loader_module, "_SKILL_ROOTS", ((local_dir, "local"),))
+
+    loader = _loader()
+    assert loader.discover() == 0
+    assert "dead-skill" not in loader.discovered
+
+
+def test_skill_with_missing_env_is_not_discovered(tmp_path, monkeypatch):
+    cloud_dir = tmp_path / "cloud"
+    _write_skill(cloud_dir, "no-token", "no-token", "no-token")
+    (cloud_dir / "no-token" / "SKILL.md").write_text(
+        "---\nname: no-token\ndescription: no-token\n"
+        "requires_env: AERIE_TEST_MISSING_ENV\n---\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("AERIE_TEST_MISSING_ENV", raising=False)
+    monkeypatch.setattr(skill_loader_module, "_SKILL_ROOTS", ((cloud_dir, "cloud"),))
+
+    loader = _loader()
+    assert loader.discover() == 0
+    assert "no-token" not in loader.discovered
+
+
+def test_skill_with_satisfied_requirement_is_discovered(tmp_path, monkeypatch):
+    """前提满足（json 是标准库，恒可导入）→ 照常发现，闸门不误伤。"""
+    local_dir = tmp_path / "local"
+    _write_skill(local_dir, "ok-skill", "ok-skill", "ok")
+    (local_dir / "ok-skill" / "SKILL.md").write_text(
+        "---\nname: ok-skill\ndescription: ok\nrequires_module: json\n---\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(skill_loader_module, "_SKILL_ROOTS", ((local_dir, "local"),))
+
+    loader = _loader()
+    assert loader.discover() == 1
+    assert "ok-skill" in loader.discovered
+
+
+def test_observed_unavailable_tools_are_gated_out(monkeypatch):
+    """真机实测反复失败的两个工具不再暴露给模型（§十四 #63）。"""
+    monkeypatch.delenv("SEEDREAM_KEY", raising=False)
+
+    loader = _loader()
+    loader.discover()
+
+    assert "txt2img" not in loader.discovered          # local_txt2img 未安装
+    assert "byted-seedream" not in loader.discovered   # SEEDREAM_KEY 未设
 
 
 def test_cloud_skills_register_into_tool_registry():
@@ -54,7 +117,7 @@ def test_cloud_skills_register_into_tool_registry():
     discovered = loader.discover()
     registered = loader.register_all()
 
-    assert discovered >= 77  # 59 cloud + 13 local + 5 data
+    assert discovered >= 60  # 可用性闸门会挡掉跑不了的 skill（§十四 #63）
     assert registered == discovered
     for name in ("mcp-builder", "defuddle"):
         entry = registry.get(name)
@@ -241,5 +304,5 @@ def test_s3_discover_is_idempotent():
     loader = _loader()
     first = loader.discover()
     second = loader.discover()
-    assert first == second >= 77
+    assert first == second >= 60
     assert len(loader.discovered) == first

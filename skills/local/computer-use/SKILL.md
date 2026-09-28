@@ -3,6 +3,7 @@ name: computer-use
 description: 系统状态查询 / System query
 provider_hint: shell-safe
 read_only: true
+requires_module: local_computer_use
 ---
 
 # computer-use / 系统状态查询

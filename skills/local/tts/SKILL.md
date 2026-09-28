@@ -3,6 +3,7 @@ name: tts
 description: 文字转语音 / Text to speech
 provider_hint: tts-openvino
 read_only: false
+requires_module: local_tts
 ---
 
 # tts / 文字转语音

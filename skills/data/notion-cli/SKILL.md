@@ -3,6 +3,7 @@ name: notion-cli
 description: Notion CLI 调用 / Notion CLI
 provider_hint: text
 read_only: true
+requires_module: notion_cli
 ---
 
 # notion-cli / Notion CLI 调用

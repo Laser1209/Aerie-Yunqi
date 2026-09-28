@@ -3,6 +3,7 @@ name: img2img
 description: 图像编辑 / Image-to-image
 provider_hint: image-sdxl
 read_only: false
+requires_module: local_img2img
 ---
 
 # img2img / 图像编辑

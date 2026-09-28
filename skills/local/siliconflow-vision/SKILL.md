@@ -3,6 +3,7 @@ name: siliconflow-vision
 description: 图片视觉理解 / Vision Q&A (SiliconFlow)
 provider_hint: text
 read_only: true
+requires_env: SILICONFLOW_API_KEY
 ---
 
 # siliconflow-vision / 图片视觉理解

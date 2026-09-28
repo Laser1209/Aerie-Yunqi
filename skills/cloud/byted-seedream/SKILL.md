@@ -3,6 +3,7 @@ name: byted-seedream
 description: Seedream 文生图 / Seedream image
 provider_hint: image-sdxl
 read_only: false
+requires_env: SEEDREAM_KEY
 ---
 
 # byted-seedream / Seedream 文生图

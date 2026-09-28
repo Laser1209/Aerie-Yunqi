@@ -3,6 +3,7 @@ name: asr
 description: 语音识别 / Speech recognition
 provider_hint: asr-whisper
 read_only: true
+requires_module: local_asr
 ---
 
 # asr / 语音识别

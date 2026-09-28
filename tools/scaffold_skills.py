@@ -1,9 +1,11 @@
-﻿"""Aerie · 云栖 v0.1.0-beta.1 — Skill scaffold generator (Block-4C R3.3 + Block-5B).
+"""Aerie · 云栖 v0.1.0-beta.1 — Skill scaffold generator (Block-4C R3.3 + Block-5B).
 
 Generates the 50 skeleton skills (12 local + 5 data + 33 cloud) under
 ``skills/{local,data,cloud}/<name>/``. Each skill gets:
 
-  - ``SKILL.md`` with YAML frontmatter (name / description / provider_hint / read_only)
+  - ``SKILL.md`` with YAML frontmatter (name / description / provider_hint / read_only,
+    以及可选的可用性声明 ``requires_module`` / ``requires_env``：声明的前提不满足时
+    SkillLoader **不注册**该 skill，模型看不到跑不了的工具)
   - ``run.py`` exporting ``run(args: dict) -> dict`` with a stub body
     that returns ``{"status": "stub", "error": "dependency_missing"}`` when
     the underlying native module is not installed.
@@ -942,12 +944,20 @@ def _skill_md(meta: dict) -> str:
         provider_hint: `{meta["provider_hint"]}`
         """
     ).strip() + "\n"
+    # 可用性声明：让"跑不了的 skill"不进模型可见的工具清单（§十四 #63）。
+    # 直接由 catalog 已有字段派生，避免同一事实写两处 —— 重新生成不会丢。
+    requires = ""
+    if meta.get("import_module"):
+        requires += f"requires_module: {meta['import_module']}\n"
+    if str(meta.get("env_var") or "").strip():
+        requires += f"requires_env: {meta['env_var']}\n"
     front = (
         "---\n"
         f"name: {meta['name']}\n"
         f"description: {meta['description']}\n"
         f"provider_hint: {meta['provider_hint']}\n"
         f"read_only: {str(meta['read_only']).lower()}\n"
+        f"{requires}"
         "---\n\n"
     )
     return front + body

@@ -3,6 +3,7 @@ name: vram
 description: 显存调整 / GPU VRAM limit
 provider_hint: shell-safe
 read_only: false
+requires_module: local_vram
 ---
 
 # vram / 显存调整

@@ -24,6 +24,7 @@ Security notes:
 from __future__ import annotations
 import importlib.util
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,33 @@ _SKILL_ROOTS: tuple[tuple[Path, str], ...] = (
     (_DATA_SKILLS_DIR, "data"),
 )
 _ALLOWED_BASES = tuple(base.resolve() for base, _kind in _SKILL_ROOTS)
+
+
+def _unsatisfied_requirement(meta: dict[str, Any]) -> str:
+    """SKILL.md 声明的可用性前提是否满足；不满足返回原因，满足返回空串。
+
+    两个可选声明（未声明 = 照常暴露，保持既有行为）：
+
+    * ``requires_module``：底层 Python 模块必须可导入（本地模型 / 后端）；
+    * ``requires_env``：环境变量必须非空（云端服务凭证）。
+
+    为什么要有这道闸：2026-09-29 真机里，模型在"要看图"时反复调 ``txt2img``
+    （``local_txt2img`` 未安装）与 ``byted-seedream``（``SEEDREAM_KEY`` 未设），
+    每次都必然失败，还顺带把失败文案播给用户（§十四 #63）。**不可用的能力
+    不该出现在模型可见的工具清单里**。
+    """
+    module = str(meta.get("requires_module") or "").strip()
+    if module:
+        try:
+            found = importlib.util.find_spec(module) is not None
+        except (ImportError, ValueError):
+            found = False
+        if not found:
+            return f"missing module: {module}"
+    env_name = str(meta.get("requires_env") or "").strip()
+    if env_name and not str(os.environ.get(env_name) or "").strip():
+        return f"missing env: {env_name}"
+    return ""
 
 
 class SkillLoader:
@@ -86,6 +114,12 @@ class SkillLoader:
                         logger.warning("skill %s: missing name in frontmatter", entry)
                         continue
                     name = str(meta["name"]).strip()
+                    # 可用性闸门放在同名遮蔽判定**之前**：否则一个跑不了的
+                    # local skill 会先把名字占住，把真正可用的同名 cloud skill 挡掉。
+                    missing = _unsatisfied_requirement(meta)
+                    if missing:
+                        logger.info("skill %s 未注册：%s", name, missing)
+                        continue
                     if name in self.discovered:
                         # First write wins (local > cloud > data precedence).
                         logger.debug(

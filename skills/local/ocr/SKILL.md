@@ -3,6 +3,7 @@ name: ocr
 description: 图像文字识别 / OCR
 provider_hint: ocr-pp
 read_only: true
+requires_module: local_ocr_npu
 ---
 
 # ocr / 图像文字识别

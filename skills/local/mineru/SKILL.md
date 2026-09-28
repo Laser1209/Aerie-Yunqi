@@ -3,6 +3,7 @@ name: mineru
 description: PDF/文档解析 / Document parse
 provider_hint: text
 read_only: true
+requires_module: local_mineru
 ---
 
 # mineru / PDF/文档解析

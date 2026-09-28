@@ -3,6 +3,7 @@ name: git-commit
 description: 提交信息生成 / Commit message gen
 provider_hint: text
 read_only: true
+requires_module: git_commit
 ---
 
 # git-commit / 提交信息生成

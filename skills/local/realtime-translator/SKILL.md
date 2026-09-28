@@ -3,6 +3,7 @@ name: realtime-translator
 description: 实时翻译 / Realtime translate
 provider_hint: text
 read_only: true
+requires_module: local_realtime_translator
 ---
 
 # realtime-translator / 实时翻译

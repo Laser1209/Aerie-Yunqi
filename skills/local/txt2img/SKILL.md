@@ -3,6 +3,7 @@ name: txt2img
 description: 文生图 / Text-to-image
 provider_hint: image-sdxl
 read_only: false
+requires_module: local_txt2img
 ---
 
 # txt2img / 文生图

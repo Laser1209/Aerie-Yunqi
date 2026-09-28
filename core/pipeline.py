@@ -39,6 +39,7 @@ from core.ids import generate_id
 from core.model_output import normalize_model_text
 from core.tool_result import safe_json_dumps
 from core.delivery_ledger import build_feedback_note as build_delivery_feedback_note
+from core.completion_claim_guard import guard_completion_claims
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
 from core.task_loop import TASK_REACT_ROUNDS, TaskVerdict, build_task_prompt
@@ -730,6 +731,19 @@ class Pipeline:
                 })
         except Exception:
             logger.exception("content_validator failed; using current text as-is")
+
+        # 完成态措辞守卫：本轮没有任何投递动作，却声称"已经发给你了" → 改写。
+        # 这是事实性问题（助手对自己行为的陈述），不是话题审查，与内容解放策略不冲突。
+        try:
+            reply_text, _claim_audit = guard_completion_claims(
+                reply_text,
+                tool_results=tool_results,
+                user_id=int(msg.user_id or 0),
+            )
+            if _claim_audit.get("claims"):
+                self.cognition.record(trace, "completion_claim_guard", _claim_audit)
+        except Exception:
+            logger.exception("completion claim guard failed; using text as-is")
 
         self.cognition.record(trace, "postprocess", {
             "tune_label": (emotion_info or {}).get("label"),
@@ -3881,6 +3895,22 @@ class Pipeline:
                         })
                 except Exception:
                     logger.exception("[Batch %s] content_validator failed for seq %d", batch_id, seq_idx)
+
+                # 完成态措辞守卫（与主路径同一语义）：批处理里也可能出现
+                # "喏 给你"却没有任何投递动作。
+                try:
+                    reply_text, _claim_audit = guard_completion_claims(
+                        reply_text, tool_results=tool_results,
+                        user_id=int(msg.user_id or 0),
+                    )
+                    if _claim_audit.get("claims"):
+                        self.cognition.record(trace, "completion_claim_guard", {
+                            **_claim_audit, "batch": True, "sequence_index": seq_idx,
+                        })
+                except Exception:
+                    logger.exception(
+                        "[Batch %s] completion claim guard failed for seq %d", batch_id, seq_idx,
+                    )
 
                 try:
                     vr = await self.validator.validate(

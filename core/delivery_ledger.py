@@ -174,6 +174,30 @@ class DeliveryLedger:
             )
             return sum(1 for b in buckets for r in b if r.ok is None)
 
+    def has_recent_success(self, user_id: int, *, within_seconds: float = 600.0) -> bool:
+        """该用户近期是否有**成功**的投递。
+
+        用于"声称已发"的事实核查：短时间内真的投递成功过，就不该拦截
+        模型的完成态表述（它说的是实情）。
+        """
+        cutoff = time.time() - max(1.0, float(within_seconds))
+        with self._lock:
+            for receipt in self._by_user.get(int(user_id or 0), []):
+                if receipt.ok is True and (receipt.resolved_at or receipt.created_at) >= cutoff:
+                    return True
+        return False
+
+    def has_pending(self, user_id: int) -> bool:
+        """该用户是否有"已入队、结果未定"的投递（在途）。
+
+        在途意味着"确实发了、只是还没结果"，此时模型的"我发过去了"是诚实的。
+        """
+        with self._lock:
+            for receipt in self._by_user.get(int(user_id or 0), []):
+                if receipt.ok is None:
+                    return True
+        return False
+
     def clear(self) -> None:
         """测试/停机清理。"""
         with self._lock:

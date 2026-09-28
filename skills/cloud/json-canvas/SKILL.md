@@ -3,6 +3,7 @@ name: json-canvas
 description: JSON Canvas / Canvas
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # json-canvas / JSON Canvas

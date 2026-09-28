@@ -3,6 +3,7 @@ name: canvas-design
 description: 海报/画布设计 / Canvas design
 provider_hint: image-sdxl
 read_only: false
+implemented: false
 ---
 
 # canvas-design / 海报/画布设计

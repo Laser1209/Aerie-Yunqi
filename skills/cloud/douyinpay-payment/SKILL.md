@@ -3,6 +3,7 @@ name: douyinpay-payment
 description: 抖音支付 / DouyinPay
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # douyinpay-payment / 抖音支付

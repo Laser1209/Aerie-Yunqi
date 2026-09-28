@@ -3,6 +3,7 @@ name: frontend-skill
 description: 前端着陆页设计 / Frontend skill
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # frontend-skill / 前端着陆页设计

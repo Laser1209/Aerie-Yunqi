@@ -3,6 +3,7 @@ name: gsap
 description: GSAP 动画 / GSAP
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # gsap / GSAP 动画

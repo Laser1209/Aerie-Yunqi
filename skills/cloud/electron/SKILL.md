@@ -3,6 +3,7 @@ name: electron
 description: Electron 自动化 / Electron
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # electron / Electron 自动化

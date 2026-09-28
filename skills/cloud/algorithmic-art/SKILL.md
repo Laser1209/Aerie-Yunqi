@@ -3,6 +3,7 @@ name: algorithmic-art
 description: 算法艺术 / Algorithmic art
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # algorithmic-art / 算法艺术

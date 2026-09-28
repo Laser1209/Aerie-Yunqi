@@ -3,6 +3,7 @@ name: byted-bp-cdn-pagesdeploy
 description: 字节边缘 Pages 部署 / BytePlus Pages
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # byted-bp-cdn-pagesdeploy / 字节边缘 Pages 部署

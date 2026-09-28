@@ -3,6 +3,7 @@ name: dashboard-page
 description: 本地离线仪表盘 / Dashboard
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # dashboard-page / 本地离线仪表盘

@@ -3,6 +3,7 @@ name: vercel-composition
 description: Vercel 组合模式 / Vercel composition
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # vercel-composition / Vercel 组合模式

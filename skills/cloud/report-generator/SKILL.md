@@ -3,6 +3,7 @@ name: report-generator
 description: 视频分析报告 / Report gen
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # report-generator / 视频分析报告

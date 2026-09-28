@@ -3,6 +3,7 @@ name: dogfood
 description: Bug 猎手 / Dogfood
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # dogfood / Bug 猎手

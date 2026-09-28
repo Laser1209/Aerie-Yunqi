@@ -3,6 +3,7 @@ name: iga-pages
 description: IGA Pages 部署 / IGA Pages
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # iga-pages / IGA Pages 部署

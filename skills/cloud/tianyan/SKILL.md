@@ -3,6 +3,7 @@ name: tianyan
 description: 天眼查企业信息 / Tianyancha
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # tianyan / 天眼查企业信息

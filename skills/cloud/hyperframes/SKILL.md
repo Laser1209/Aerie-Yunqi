@@ -3,6 +3,7 @@ name: hyperframes
 description: HyperFrames 视频合成 / HyperFrames
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # hyperframes / HyperFrames 视频合成

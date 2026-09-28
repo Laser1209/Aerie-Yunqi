@@ -3,6 +3,7 @@ name: doc-coauthoring
 description: 文档协作 / Doc coauthoring
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # doc-coauthoring / 文档协作

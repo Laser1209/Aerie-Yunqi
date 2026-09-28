@@ -7853,6 +7853,10 @@ async def skills_list() -> dict:
             "provider_hint": meta.get("hint", "text"),
             "read_only": meta.get("read_only", False),
             "description": meta.get("desc", ""),
+            # 可用性：面板可据此隐藏/标注"模型当前看不到这个工具"。
+            # 未注册 ≠ 不存在，SKILL.md 仍可读（见 /api/skills/{name}）。
+            "available": meta.get("available", True),
+            "unavailable_reason": meta.get("unavailable_reason", ""),
         })
     return {"skills": out, "count": len(out)}
 

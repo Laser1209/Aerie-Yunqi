@@ -3,6 +3,7 @@ name: douyin-interactive-publish
 description: 抖音互动空间发布 / Interact publish
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # douyin-interactive-publish / 抖音互动空间发布

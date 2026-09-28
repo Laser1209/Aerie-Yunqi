@@ -3,6 +3,7 @@ name: writing-plans
 description: 写实施计划 / Writing plans
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # writing-plans / 写实施计划

@@ -3,6 +3,7 @@ name: hyperframes-registry
 description: HyperFrames 块注册 / HF registry
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # hyperframes-registry / HyperFrames 块注册

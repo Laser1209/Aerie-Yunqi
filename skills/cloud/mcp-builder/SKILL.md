@@ -3,6 +3,7 @@ name: mcp-builder
 description: MCP 服务器构建 / MCP builder
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # mcp-builder / MCP 服务器构建

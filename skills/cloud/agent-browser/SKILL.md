@@ -3,6 +3,7 @@ name: agent-browser
 description: Agent 浏览器 / Agent browser
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # agent-browser / Agent 浏览器

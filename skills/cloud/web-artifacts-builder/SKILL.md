@@ -3,6 +3,7 @@ name: web-artifacts-builder
 description: 复杂 artifact 构建 / Web artifacts
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # web-artifacts-builder / 复杂 artifact 构建

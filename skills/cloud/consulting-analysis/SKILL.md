@@ -3,6 +3,7 @@ name: consulting-analysis
 description: 咨询级报告 / Consulting
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # consulting-analysis / 咨询级报告

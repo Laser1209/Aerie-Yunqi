@@ -3,6 +3,7 @@ name: internal-comms
 description: 内部沟通 / Internal comms
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # internal-comms / 内部沟通

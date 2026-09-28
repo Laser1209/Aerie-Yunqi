@@ -3,6 +3,7 @@ name: executing-plans
 description: 执行计划 / Executing plans
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # executing-plans / 执行计划

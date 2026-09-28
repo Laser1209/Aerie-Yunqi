@@ -3,6 +3,7 @@ name: notion-meeting-intelligence
 description: Notion 会议情报 / Meeting intelligence
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # notion-meeting-intelligence / Notion 会议情报

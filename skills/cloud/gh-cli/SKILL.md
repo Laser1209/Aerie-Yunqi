@@ -3,6 +3,7 @@ name: gh-cli
 description: GitHub CLI / gh
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # gh-cli / GitHub CLI

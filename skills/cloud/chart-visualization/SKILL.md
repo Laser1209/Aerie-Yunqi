@@ -3,6 +3,7 @@ name: chart-visualization
 description: 图表可视化 / Chart viz
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # chart-visualization / 图表可视化

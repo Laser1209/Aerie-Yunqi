@@ -3,6 +3,7 @@ name: notion-knowledge-capture
 description: Notion 知识捕获 / Knowledge capture
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # notion-knowledge-capture / Notion 知识捕获

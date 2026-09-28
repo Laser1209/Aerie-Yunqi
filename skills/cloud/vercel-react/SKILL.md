@@ -3,6 +3,7 @@ name: vercel-react
 description: Vercel React 最佳实践 / Vercel React
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # vercel-react / Vercel React 最佳实践

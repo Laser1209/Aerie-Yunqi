@@ -3,6 +3,7 @@ name: douyin-interact-creation
 description: 抖音互动 H5 / Interact creation
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # douyin-interact-creation / 抖音互动 H5

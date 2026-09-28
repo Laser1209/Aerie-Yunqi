@@ -3,6 +3,7 @@ name: brainstorming
 description: 需求探索 / Brainstorming
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # brainstorming / 需求探索

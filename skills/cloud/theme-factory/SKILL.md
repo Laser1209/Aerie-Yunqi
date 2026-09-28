@@ -3,6 +3,7 @@ name: theme-factory
 description: 主题工厂 / Theme factory
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # theme-factory / 主题工厂

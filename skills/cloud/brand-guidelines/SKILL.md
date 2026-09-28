@@ -3,6 +3,7 @@ name: brand-guidelines
 description: Anthropic 品牌指南 / Brand
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # brand-guidelines / Anthropic 品牌指南

@@ -3,6 +3,7 @@ name: notion-spec-to-impl
 description: Notion Spec→任务 / Spec to impl
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # notion-spec-to-impl / Notion Spec→任务

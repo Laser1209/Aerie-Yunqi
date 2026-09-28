@@ -3,6 +3,7 @@ name: hook-analyzer
 description: 视频前 3 秒钩子 / Hook analyzer
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # hook-analyzer / 视频前 3 秒钩子

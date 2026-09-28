@@ -3,6 +3,7 @@ name: frontend-design
 description: 前端组件设计 / Frontend design
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # frontend-design / 前端组件设计

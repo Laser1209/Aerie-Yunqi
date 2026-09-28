@@ -3,6 +3,7 @@ name: shadcn
 description: shadcn/ui 组件 / shadcn
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # shadcn / shadcn/ui 组件

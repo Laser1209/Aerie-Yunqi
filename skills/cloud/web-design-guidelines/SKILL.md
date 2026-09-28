@@ -3,6 +3,7 @@ name: web-design-guidelines
 description: Web 设计审查 / Web guidelines
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # web-design-guidelines / Web 设计审查

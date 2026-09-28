@@ -3,6 +3,7 @@ name: doc-page
 description: 可打印文档页 / Doc page
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # doc-page / 可打印文档页

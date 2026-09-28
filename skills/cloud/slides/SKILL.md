@@ -3,6 +3,7 @@ name: slides
 description: PowerPoint 幻灯片 / Slides
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # slides / PowerPoint 幻灯片

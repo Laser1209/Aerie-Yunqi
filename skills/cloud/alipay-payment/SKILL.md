@@ -3,6 +3,7 @@ name: alipay-payment
 description: 支付宝开放平台 / Alipay
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # alipay-payment / 支付宝开放平台

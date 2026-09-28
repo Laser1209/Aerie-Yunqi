@@ -48,19 +48,23 @@ _SKILL_ROOTS: tuple[tuple[Path, str], ...] = (
 _ALLOWED_BASES = tuple(base.resolve() for base, _kind in _SKILL_ROOTS)
 
 
-def _unsatisfied_requirement(meta: dict[str, Any]) -> str:
-    """SKILL.md 声明的可用性前提是否满足；不满足返回原因，满足返回空串。
+def _unavailability_reason(meta: dict[str, Any]) -> str:
+    """SKILL.md 声明的可用性前提是否满足；不可用返回原因，可用返回空串。
 
-    两个可选声明（未声明 = 照常暴露，保持既有行为）：
+    三个可选声明（都未声明 = 照常暴露，保持既有行为）：
 
+    * ``implemented: false``：该 skill 还是占位桩，调用必然返回 stub；
     * ``requires_module``：底层 Python 模块必须可导入（本地模型 / 后端）；
     * ``requires_env``：环境变量必须非空（云端服务凭证）。
 
-    为什么要有这道闸：2026-09-29 真机里，模型在"要看图"时反复调 ``txt2img``
-    （``local_txt2img`` 未安装）与 ``byted-seedream``（``SEEDREAM_KEY`` 未设），
-    每次都必然失败，还顺带把失败文案播给用户（§十四 #63）。**不可用的能力
-    不该出现在模型可见的工具清单里**。
+    为什么要有这道闸：2026-09-29 真机里，模型在"要看图"时反复调
+    ``txt2img``（``local_txt2img`` 未安装）、``byted-seedream``（``SEEDREAM_KEY``
+    未设）与 ``canvas-design``（scaffold 桩，恒返回 ``cloud_call_not_implemented``），
+    每次都必然失败，还顺带把失败文案播给用户（§十四 #63 / #74）。
+    **不可用的能力不该出现在模型可见的工具清单里**。
     """
+    if meta.get("implemented") is False:
+        return "not implemented (scaffold stub)"
     module = str(meta.get("requires_module") or "").strip()
     if module:
         try:
@@ -73,6 +77,27 @@ def _unsatisfied_requirement(meta: dict[str, Any]) -> str:
     if env_name and not str(os.environ.get(env_name) or "").strip():
         return f"missing env: {env_name}"
     return ""
+
+
+def _adapt_skill_entry(func: Any) -> Any:
+    """把 skill 的 ``run(args: dict)`` 适配成 registry 的 ``func(**kwargs)`` 调用形状。
+
+    registry 统一用 ``func(**args)`` 调用工具（office 等工具就是平铺参数的），
+    而 skill 契约是单个 ``args`` 字典。两种形状对不上时**必然抛 TypeError**：
+
+    * 模型不带参数      → ``run()`` → ``missing 1 required positional argument: 'args'``
+    * 模型平铺参数      → ``run(image_path=...)`` → ``unexpected keyword argument``
+
+    2026-09-29 真机实录：一次要图触发 4 次 skill 调用，4 次全部因此失败（§十四 #73）。
+    这里把两种形状都收进来（``args`` 内层 + 平铺 kwargs 合并），参数真的缺失时
+    由 run.py 自己给可读的 ``missing <key>``，而不是崩溃。
+    """
+    def _call(args: Any = None, **kwargs: Any) -> Any:
+        params: dict[str, Any] = dict(args) if isinstance(args, dict) else {}
+        params.update(kwargs)
+        return func(params)
+
+    return _call
 
 
 class SkillLoader:
@@ -95,6 +120,11 @@ class SkillLoader:
         """Scan all skill roots (priority order) and parse SKILL.md frontmatter.
 
         幂等：每次调用先清空 ``self.discovered``，重复调用返回同一结果。
+
+        **可用性不在这里过滤**：跑不了的 skill 也要被"发现"，否则
+        ``/api/skills/list`` / ``/api/skills/{name}`` 会把它们从面板上抹掉
+        （历史故障：`byted-seedream` 明明有 SKILL.md 却读不到）。是否暴露给
+        **模型**由 ``register_all()`` 决定，这里只标注 ``available``。
         """
         # 重新发现：先清空，否则第二次调用会因子典非空而全部走 first-write-wins 返回 0
         self.discovered.clear()
@@ -114,26 +144,33 @@ class SkillLoader:
                         logger.warning("skill %s: missing name in frontmatter", entry)
                         continue
                     name = str(meta["name"]).strip()
-                    # 可用性闸门放在同名遮蔽判定**之前**：否则一个跑不了的
-                    # local skill 会先把名字占住，把真正可用的同名 cloud skill 挡掉。
-                    missing = _unsatisfied_requirement(meta)
-                    if missing:
-                        logger.info("skill %s 未注册：%s", name, missing)
-                        continue
-                    if name in self.discovered:
-                        # First write wins (local > cloud > data precedence).
-                        logger.debug(
-                            "skill %s in %s shadowed by %s",
-                            name, kind, self.discovered[name]["kind"],
-                        )
-                        continue
-                    self.discovered[name] = {
+                    reason = _unavailability_reason(meta)
+                    record = {
                         "path": entry,
                         "kind": kind,
                         "hint": str(meta.get("provider_hint", "text") or "text"),
                         "read_only": bool(meta.get("read_only", kind == "data")),
                         "desc": str(meta.get("description", "") or ""),
+                        "available": not reason,
+                        "unavailable_reason": reason,
                     }
+                    existing = self.discovered.get(name)
+                    if existing is not None:
+                        # 同名优先级 local > cloud > data（先扫到的胜出）；
+                        # 但**跑不了的不得挡住跑得了的**：同名的可用 skill 可以顶掉
+                        # 先前那个不可用的（否则一个死掉的 local skill 会永久遮蔽
+                        # 同名的可用 cloud skill）。
+                        if not (existing["available"] is False and reason == ""):
+                            logger.debug(
+                                "skill %s in %s shadowed by %s",
+                                name, kind, existing["kind"],
+                            )
+                            continue
+                        logger.info(
+                            "skill %s: 先前发现的 %s 不可用（%s），改由 %s 提供",
+                            name, existing["kind"], existing["unavailable_reason"], kind,
+                        )
+                    self.discovered[name] = record
                     count += 1
             except Exception as e:
                 logger.warning("skill discovery error in %s: %s", base, e)
@@ -143,11 +180,18 @@ class SkillLoader:
         """For each discovered skill, dynamic-import run.py and register.
 
         Idempotent: re-running on the same SkillLoader is a no-op for
-        already-registered skills.
+        already-registered skills. ``available=False`` 的 skill 只发现、不注册
+        —— 模型看不到跑不了的工具（§十四 #63 / #74）。
         """
         n = 0
         for name, meta in self.discovered.items():
             if name in self._registered:
+                continue
+            if meta.get("available") is False:
+                logger.info(
+                    "skill %s 不注册（模型不可见）：%s",
+                    name, meta.get("unavailable_reason") or "unavailable",
+                )
                 continue
             run_py = meta["path"] / "run.py"
             if not run_py.exists():
@@ -191,7 +235,7 @@ class SkillLoader:
                     continue
                 self.registry.register(
                     name=name,
-                    func=func,
+                    func=_adapt_skill_entry(func),
                     schema={
                         "type": "function",
                         "function": {
@@ -202,7 +246,10 @@ class SkillLoader:
                                 "properties": {
                                     "args": {
                                         "type": "object",
-                                        "description": "Free-form args for the skill",
+                                        "description": (
+                                            "该 skill 的业务参数；也可把这些键"
+                                            "直接平铺在参数对象里"
+                                        ),
                                     },
                                 },
                                 "required": [],

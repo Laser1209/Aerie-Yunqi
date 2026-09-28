@@ -3,6 +3,7 @@ name: ppt-page
 description: HTML PPT 单页 / PPT page
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # ppt-page / HTML PPT 单页

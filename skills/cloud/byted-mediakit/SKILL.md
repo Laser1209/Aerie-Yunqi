@@ -3,6 +3,7 @@ name: byted-mediakit
 description: 字节 mediakit 多媒体处理 / ByteDance mediakit
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # byted-mediakit / 字节 mediakit 多媒体处理

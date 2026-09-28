@@ -3,6 +3,7 @@ name: defuddle
 description: Defuddle 网页抓取 / Defuddle
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # defuddle / Defuddle 网页抓取

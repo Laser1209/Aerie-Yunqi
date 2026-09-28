@@ -3,6 +3,7 @@ name: notion-research
 description: Notion 研究文档 / Research doc
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # notion-research / Notion 研究文档

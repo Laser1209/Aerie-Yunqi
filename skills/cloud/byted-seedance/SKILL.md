@@ -3,6 +3,7 @@ name: byted-seedance
 description: Seedance 文生视频 / Seedance video
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # byted-seedance / Seedance 文生视频

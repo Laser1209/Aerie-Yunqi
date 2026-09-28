@@ -3,6 +3,7 @@ name: volcengine-tos
 description: 火山引擎对象存储 / TOS
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # volcengine-tos / 火山引擎对象存储

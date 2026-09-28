@@ -3,6 +3,7 @@ name: vercel-react-native
 description: Vercel RN 最佳实践 / Vercel RN
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # vercel-react-native / Vercel RN 最佳实践

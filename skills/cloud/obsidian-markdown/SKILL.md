@@ -3,6 +3,7 @@ name: obsidian-markdown
 description: Obsidian Markdown / Obsidian MD
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # obsidian-markdown / Obsidian Markdown

@@ -3,6 +3,7 @@ name: hyperframes-media
 description: HyperFrames 媒体预处理 / HF media
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # hyperframes-media / HyperFrames 媒体预处理

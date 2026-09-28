@@ -3,6 +3,7 @@ name: report-page
 description: 源引用报告 / Report page
 provider_hint: text
 read_only: false
+implemented: false
 ---
 
 # report-page / 源引用报告

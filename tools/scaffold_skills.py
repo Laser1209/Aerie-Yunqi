@@ -912,7 +912,7 @@ CLOUD_SKILLS: list[dict] = [
 ]
 
 
-def _skill_md(meta: dict) -> str:
+def _skill_md(meta: dict, kind: str) -> str:
     """Build SKILL.md with YAML frontmatter + body."""
     is_cloud = "env_var" in meta
     env_line = (
@@ -944,9 +944,13 @@ def _skill_md(meta: dict) -> str:
         provider_hint: `{meta["provider_hint"]}`
         """
     ).strip() + "\n"
-    # 可用性声明：让"跑不了的 skill"不进模型可见的工具清单（§十四 #63）。
+    # 可用性声明：让"跑不了的 skill"不进模型可见的工具清单（§十四 #63 / #74）。
     # 直接由 catalog 已有字段派生，避免同一事实写两处 —— 重新生成不会丢。
+    # cloud 一律是 scaffold 桩（run.py 恒返 cloud_call_not_implemented），
+    # 因此声明 implemented: false：真实 SDK 调用接上后删掉这一行即可。
     requires = ""
+    if kind == "cloud":
+        requires += "implemented: false\n"
     if meta.get("import_module"):
         requires += f"requires_module: {meta['import_module']}\n"
     if str(meta.get("env_var") or "").strip():
@@ -1104,13 +1108,13 @@ def scaffold(dry_run: bool = False) -> int:
             continue
         seen.add(meta["name"])
         base = SKILLS_ROOT / "local" / meta["name"]
-        plans.append((base / "SKILL.md", base / "run.py", meta))
+        plans.append((base / "SKILL.md", base / "run.py", meta, "local"))
     for meta in DATA_SKILLS:
         if meta["name"] in seen:
             continue
         seen.add(meta["name"])
         base = SKILLS_ROOT / "data" / meta["name"]
-        plans.append((base / "SKILL.md", base / "run.py", meta))
+        plans.append((base / "SKILL.md", base / "run.py", meta, "data"))
     for meta in CLOUD_SKILLS:
         if meta.get("_is_dup"):
             continue  # 已在 local/data 里
@@ -1118,16 +1122,16 @@ def scaffold(dry_run: bool = False) -> int:
             continue
         seen.add(meta["name"])
         base = SKILLS_ROOT / "cloud" / meta["name"]
-        plans.append((base / "SKILL.md", base / "run.py", meta))
+        plans.append((base / "SKILL.md", base / "run.py", meta, "cloud"))
 
-    for skill_md, run_py, meta in plans:
+    for skill_md, run_py, meta, kind in plans:
         base = skill_md.parent
         if dry_run:
             print(f"[dry-run] would create: {base}")
             written += 1
             continue
         base.mkdir(parents=True, exist_ok=True)
-        skill_md.write_text(_skill_md(meta), encoding="utf-8")
+        skill_md.write_text(_skill_md(meta, kind), encoding="utf-8")
         run_py.write_text(_run_py(meta), encoding="utf-8")
         written += 1
     return written, len(plans)

@@ -3,6 +3,7 @@ name: screenshot
 description: 系统截图 / Screenshot
 provider_hint: text
 read_only: true
+implemented: false
 ---
 
 # screenshot / 系统截图

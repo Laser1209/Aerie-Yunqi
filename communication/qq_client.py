@@ -35,6 +35,10 @@ STATE_DISCONNECTED = "disconnected"
 STATE_WS_CONNECTED = "ws_connected"
 STATE_LOGGED_IN = "logged_in"
 
+# 携带媒体段的私聊消息要等 NapCat 先上传完才回响应，用长超时；纯文本 5s 足够。
+# 与 send_file 的 60s 取同一口径：都是"上传完才回话"的操作。
+_SEGMENT_UPLOAD_TIMEOUT_SEC = 60
+
 # 输出端清洗统一由 core.model_output 提供（唯一实现，所有通道共用）：
 #   - strip_thought_action_tags：剥 <thought>/<action> 标签
 #   - sanitize_outbound_text    ：出站唯一闸门（标签 + 历史元信息标记 + 伪图片语法）
@@ -747,10 +751,19 @@ class QQClient:
             logger.warning("QQ segments send: no usable content after stripping tags, skip")
             return False
 
+        # 超时按内容定：image/file 段要先上传到腾讯服务器才回响应，纯文本则是即时的。
+        # 实测 2026-09-28：3.3 MB 配图首发耗时超过 5s，RPC 在 5s 处放弃等待，
+        # 于是 send_image 返回 False、上层记成"未确认投递"——而消息其实已经送达
+        # （用户截图可见）。这与 send_file 用 60s 处理同类上传是同一条道理，
+        # 这里补齐，避免把"慢"误报成"失败"。
+        needs_upload = any(
+            seg.get("type") in ("image", "file", "record", "video")
+            for seg in cleaned_segments
+        )
         resp = await self._rpc_call(
             "send_private_msg",
             {"user_id": int(user_id), "message": cleaned_segments},
-            timeout=5,
+            timeout=_SEGMENT_UPLOAD_TIMEOUT_SEC if needs_upload else 5,
         )
         if resp is None:
             return False

@@ -171,7 +171,7 @@ class _RpcSpy:
         self.calls: list[dict] = []
 
     async def __call__(self, action: str, params: dict, timeout: float = 5.0) -> dict | None:
-        self.calls.append({"action": action, "params": params})
+        self.calls.append({"action": action, "params": params, "timeout": timeout})
         return self.resp
 
 
@@ -221,3 +221,31 @@ async def test_send_message_with_segments_keeps_real_image(monkeypatch):
     message = spy.calls[0]["params"]["message"]
     assert message[1]["type"] == "image"
     assert message[1]["data"]["file"] == "uploads/x.png"
+
+
+@pytest.mark.asyncio
+async def test_image_segment_gets_upload_budget_not_text_timeout(monkeypatch):
+    """带图片的消息要给上传留预算。
+
+    实测 2026-09-28：3.3 MB 配图首发超过 5s，RPC 在 5s 处放弃等待 → 上层记成
+    "未确认投递"，但消息其实已送达（用户截图可见）。纯文本没有上传环节，
+    保持 5s，避免把"发送慢"和"发送失败"混为一谈。
+    """
+    monkeypatch.setattr(qq_client_module, "_port_is_open", lambda *a, **k: True)
+    client = QQClient({"ws_port": 3001})
+    client._disabled = False
+    client._connected = True
+    spy = _RpcSpy({"status": "ok"})
+    client._rpc_call = spy
+
+    await client.send_message_with_segments(
+        12345,
+        [{"type": "image", "data": {"file": "uploads/x.png"}}],
+    )
+    assert spy.calls[0]["timeout"] == 60
+
+    spy.calls.clear()
+    await client.send_message_with_segments(
+        12345, [{"type": "text", "data": {"text": "在的"}}],
+    )
+    assert spy.calls[0]["timeout"] == 5

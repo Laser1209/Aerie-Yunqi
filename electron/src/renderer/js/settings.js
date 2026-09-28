@@ -5,10 +5,14 @@ class SettingsPanel {
   constructor() {
     this._currentMode = "form"; // "form" | "apikey" | "yaml"
     this._currentYamlFile = "settings.yaml";
-    this._apikeyProviders = [];
-    this._addedProviderKeys = new Set();
-    this._customProviders = [];
-    this._activeMenuTab = null;
+    // AI 厂商表（数据来自 GET /api/ai/providers）
+    this._providers = [];
+    this._availableBuiltins = [];
+    this._specialServices = [];
+    this._modelRoles = [];
+    this._bindableProviders = [];
+    this._providerSort = { key: "name", dir: 1 };
+    this._drawerState = null; // { mode, id, kind, enabled }
   }
 
   init() {
@@ -103,19 +107,46 @@ class SettingsPanel {
 
     // API Key view controls
     const reloadApiBtn = document.getElementById("apikey-reload-btn");
-    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => { this.loadEntitlement(); this.loadApiKeys(); this.loadBaiduMap(); this.loadModelRoles(); });
+    if (reloadApiBtn) reloadApiBtn.addEventListener("click", () => { this.loadEntitlement(); this.loadApiKeys(); this.loadBaiduMap(); });
     const baiduSaveBtn = document.getElementById("baidu-map-save-btn");
     if (baiduSaveBtn) baiduSaveBtn.addEventListener("click", () => this.saveBaiduMap());
-    const customApiToggle = document.getElementById("custom-api-toggle-btn");
-    if (customApiToggle) customApiToggle.addEventListener("click", () => this.toggleCustomApi());
-    const customApiSave = document.getElementById("custom-api-save-btn");
-    if (customApiSave) customApiSave.addEventListener("click", () => this.saveModelRoles());
-    const addBtn = document.getElementById("apikey-add-btn");
-    if (addBtn) addBtn.addEventListener("click", () => this.toggleAddMenu());
-    const customProviderSave = document.getElementById("custom-provider-save-btn");
-    if (customProviderSave) customProviderSave.addEventListener("click", () => this.saveCustomProvider());
+    const addProviderBtn = document.getElementById("apikey-add-btn");
+    if (addProviderBtn) addProviderBtn.addEventListener("click", () => this._openAddChooser());
+    const testAllBtn = document.getElementById("apikey-testall-btn");
+    if (testAllBtn) testAllBtn.addEventListener("click", () => this._testAllProviders());
+    const rolesSaveBtn = document.getElementById("model-roles-save-btn");
+    if (rolesSaveBtn) rolesSaveBtn.addEventListener("click", () => this.saveModelRoles());
+    const drawerSaveBtn = document.getElementById("apikey-drawer-save");
+    if (drawerSaveBtn) drawerSaveBtn.addEventListener("click", () => this._saveProvider());
+    const drawerTestBtn = document.getElementById("apikey-drawer-test");
+    if (drawerTestBtn) drawerTestBtn.addEventListener("click", () => this._testDrawerProvider());
+    const drawerCancelBtn = document.getElementById("apikey-drawer-cancel");
+    if (drawerCancelBtn) drawerCancelBtn.addEventListener("click", () => this._closeProviderDrawer());
+    const drawerCloseBtn = document.getElementById("apikey-drawer-close");
+    if (drawerCloseBtn) drawerCloseBtn.addEventListener("click", () => this._closeProviderDrawer());
+    const drawerMask = document.getElementById("apikey-drawer-mask");
+    if (drawerMask) drawerMask.addEventListener("click", () => this._closeProviderDrawer());
+    const drawerEyeBtn = document.getElementById("apikey-drawer-eye");
+    if (drawerEyeBtn) drawerEyeBtn.addEventListener("click", () => {
+      const input = document.getElementById("apikey-drawer-api-key");
+      if (input) input.type = input.type === "password" ? "text" : "password";
+    });
     const featureReloadBtn = document.getElementById("feature-api-reload-btn");
     if (featureReloadBtn) featureReloadBtn.addEventListener("click", () => this.loadFeatureApis());
+
+    // 模块中心（功能包 .aeriepack）
+    this._pluginProgress = new Map();
+    const pluginsReloadBtn = document.getElementById("plugins-reload-btn");
+    if (pluginsReloadBtn) pluginsReloadBtn.addEventListener("click", () => this.loadPlugins());
+    const pluginsLocalBtn = document.getElementById("plugins-install-local-btn");
+    if (pluginsLocalBtn) pluginsLocalBtn.addEventListener("click", () => this.installLocalPlugin());
+    const pluginsDirBtn = document.getElementById("plugins-open-dir-btn");
+    if (pluginsDirBtn) pluginsDirBtn.addEventListener("click", () => {
+      if (window.aerie && window.aerie.plugins) window.aerie.plugins.openDir();
+    });
+    if (window.aerie && window.aerie.plugins && window.aerie.plugins.onProgress) {
+      window.aerie.plugins.onProgress((p) => this._onPluginProgress(p));
+    }
 
     // 常用视图：分类折叠 + 右侧快速导航
     this._initFormNav();
@@ -287,10 +318,12 @@ class SettingsPanel {
     const formView = document.getElementById("settings-form-view");
     const apikeyView = document.getElementById("settings-apikey-view");
     const featureView = document.getElementById("settings-feature-view");
+    const pluginsView = document.getElementById("settings-plugins-view");
     const yamlView = document.getElementById("settings-yaml-view");
     if (formView) formView.style.display = mode === "form" ? "" : "none";
     if (apikeyView) apikeyView.style.display = mode === "apikey" ? "" : "none";
     if (featureView) featureView.style.display = mode === "feature" ? "" : "none";
+    if (pluginsView) pluginsView.style.display = mode === "plugins" ? "" : "none";
     if (yamlView) yamlView.style.display = mode === "yaml" ? "" : "none";
     this._syncModePill();
     if (mode === "form") {
@@ -301,10 +334,225 @@ class SettingsPanel {
       this.loadEntitlement();
       this.loadApiKeys();
       this.loadBaiduMap();
-      this.loadModelRoles();
     } else if (mode === "feature") {
       this.loadFeatureApis();
+    } else if (mode === "plugins") {
+      this.loadPlugins();
     }
+  }
+
+  // ── 模块中心：功能包目录 / 安装 / 移除 ─────────────────
+
+  _pluginStateLabel(state) {
+    return {
+      not_installed: "未安装",
+      loaded: "已启用",
+      awaiting_restart: "已安装 · 待重启",
+      broken: "已损坏",
+      incompatible: "不兼容",
+    }[state] || state;
+  }
+
+  _pluginProgressLabel(phase) {
+    return {
+      queued: "排队中…",
+      downloading: "下载中…",
+      verifying: "校验中…",
+      installing: "安装中…",
+      done: "完成",
+      idle: "",
+    }[phase] || "";
+  }
+
+  _setPluginsStatus(text, tone) {
+    const el = document.getElementById("plugins-status");
+    if (!el) return;
+    el.textContent = text || "";
+    el.style.color = tone === "warn"
+      ? "var(--warning, #f39c12)"
+      : tone === "error"
+        ? "var(--danger, #e74c3c)"
+        : "var(--text-muted, #999)";
+  }
+
+  async loadPlugins() {
+    if (!window.aerie || !window.aerie.plugins) {
+      this._setPluginsStatus("IPC 不可用", "error");
+      return;
+    }
+    const listEl = document.getElementById("plugins-list");
+    if (listEl) listEl.innerHTML = '<div class="plugins-empty">正在读取模块目录…</div>';
+    const r = await window.aerie.plugins.catalog();
+    if (!r || !r.ok) {
+      if (listEl) listEl.innerHTML = "";
+      this._setPluginsStatus((r && r.error) || "模块目录不可用", "error");
+      return;
+    }
+    this._pluginCatalog = r;
+    this.renderPlugins();
+    this._setPluginsStatus(
+      r.backendOnline ? "安装 / 移除后请重启后端生效。" : "后端离线：仅显示本地安装状态。",
+      r.backendOnline ? "muted" : "warn",
+    );
+  }
+
+  renderPlugins() {
+    const listEl = document.getElementById("plugins-list");
+    if (!listEl || !this._pluginCatalog) return;
+    const packs = this._pluginCatalog.packs || [];
+    listEl.innerHTML = "";
+
+    packs.forEach((pack) => {
+      const progress = this._pluginProgress.get(pack.id);
+      const card = document.createElement("div");
+      card.className = "plugin-card";
+      card.dataset.id = pack.id;
+
+      const stateLabel = this._pluginStateLabel(pack.state);
+      const sizeText = pack.sizeMb >= 1000
+        ? `${(pack.sizeMb / 1000).toFixed(1)} GB`
+        : `${pack.sizeMb} MB`;
+      // 版本属于已发布产物：未发布目录条目没有版本，已安装时以本地清单为准
+      const versionText = pack.installedVersion || pack.version || "";
+
+      const actions = this._renderPluginActions(pack, progress);
+
+      card.innerHTML = `
+        <div class="plugin-card__icon">
+          <svg class="icon icon--18" aria-hidden="true"><use href="#icon-ui-package"/></svg>
+        </div>
+        <div class="plugin-card__body">
+          <div class="plugin-card__head">
+            <span class="plugin-card__name"></span>
+            <span class="plugin-card__state plugin-card__state--${pack.state}">${stateLabel}</span>
+          </div>
+          <div class="plugin-card__desc"></div>
+          <div class="plugin-card__meta">
+            <span>${sizeText}</span>
+            ${versionText ? `<span>v${versionText}</span>` : ""}
+            ${pack.error ? `<span class="plugin-card__error" title="${this._escapeAttr(pack.error)}">${this._escapeHtml(pack.error)}</span>` : ""}
+          </div>
+          ${progress ? `
+            <div class="plugin-card__progress">
+              <div class="plugin-card__bar"><div class="plugin-card__bar-fill" style="width:${Math.round((progress.percent || 0) * 100)}%"></div></div>
+              <span class="plugin-card__progress-label">${this._pluginProgressLabel(progress.phase)} ${Math.round((progress.percent || 0) * 100)}%</span>
+            </div>` : ""}
+        </div>
+        <div class="plugin-card__actions"></div>
+      `;
+      // bilingual 文本经 textContent 注入，避免手工拼接 HTML
+      card.querySelector(".plugin-card__name").textContent =
+        `${pack.name.zh} · ${pack.name.en}`;
+      card.querySelector(".plugin-card__desc").textContent = pack.summary.zh;
+      const actionsSlot = card.querySelector(".plugin-card__actions");
+      actions.forEach((btn) => actionsSlot.appendChild(btn));
+      listEl.appendChild(card);
+    });
+  }
+
+  _renderPluginActions(pack, progress) {
+    const buttons = [];
+    const make = (label, kind, handler, disabled) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `btn btn-sm ${kind === "primary" ? "btn-primary" : "btn-secondary"} plugin-card__btn`;
+      btn.textContent = label;
+      btn.disabled = !!disabled;
+      btn.addEventListener("click", handler);
+      return btn;
+    };
+
+    if (progress && progress.phase !== "idle" && progress.phase !== "done") {
+      buttons.push(make("取消", "secondary", () => this.cancelPluginInstall(pack.id)));
+      return buttons;
+    }
+
+    switch (pack.state) {
+      case "not_installed":
+        if (pack.available) {
+          buttons.push(make("安装", "primary", () => this.installPlugin(pack.id)));
+        } else {
+          buttons.push(make("即将推出", "secondary", () => {}, true));
+        }
+        break;
+      case "loaded":
+      case "awaiting_restart":
+      case "broken":
+      case "incompatible":
+        buttons.push(make("移除", "secondary", () => this.removePlugin(pack.id)));
+        break;
+    }
+    return buttons;
+  }
+
+  _onPluginProgress(p) {
+    if (!p || !p.id) return;
+    if (p.phase === "idle" || p.phase === "done") {
+      if (p.phase === "done") this._pluginProgress.delete(p.id);
+      else this._pluginProgress.set(p.id, p);
+    } else {
+      this._pluginProgress.set(p.id, p);
+    }
+    this.renderPlugins();
+  }
+
+  async installPlugin(id) {
+    this._setPluginsStatus("开始下载…", "muted");
+    const r = await window.aerie.plugins.install(id);
+    await this.loadPlugins();
+    if (r && r.ok) {
+      this._setPluginsStatus("安装完成，重启后端后生效。", "warn");
+      this._offerRestart();
+    } else {
+      this._setPluginsStatus((r && r.error) || "安装失败", "error");
+    }
+  }
+
+  async cancelPluginInstall(id) {
+    await window.aerie.plugins.cancel(id);
+    this._pluginProgress.delete(id);
+    this.renderPlugins();
+    this._setPluginsStatus("已取消下载（已下载部分将在下次续传）。", "muted");
+  }
+
+  async removePlugin(id) {
+    if (!confirm("确定移除该模块吗？\nRemove this module?\n（重启后端后生效 / takes effect after backend restart）")) return;
+    const r = await window.aerie.plugins.remove(id);
+    await this.loadPlugins();
+    if (r && r.ok) {
+      this._setPluginsStatus("已移除，重启后端后生效。", "warn");
+      this._offerRestart();
+    } else {
+      this._setPluginsStatus("移除失败", "error");
+    }
+  }
+
+  async installLocalPlugin() {
+    const r = await window.aerie.plugins.installLocal();
+    if (r && r.canceled) return;
+    await this.loadPlugins();
+    if (r && r.ok) {
+      this._setPluginsStatus(`本地模块 ${r.id}@${r.version} 已安装，重启后端后生效。`, "warn");
+      this._offerRestart();
+    } else {
+      this._setPluginsStatus((r && r.error) || "本地安装失败", "error");
+    }
+  }
+
+  _offerRestart() {
+    if (confirm("立即重启后端让模块生效吗？\nRestart the backend now?")) {
+      this.restartBackend();
+    }
+  }
+
+  _escapeHtml(text) {
+    return String(text || "").replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+
+  _escapeAttr(text) {
+    return this._escapeHtml(text);
   }
 
   async loadEntitlement() {
@@ -407,501 +655,592 @@ class SettingsPanel {
     }
   }
 
+  // ── AI 厂商表：加载 / 渲染 / 行内操作 ─────────────────
   async loadApiKeys() {
     const st = document.getElementById("apikey-status");
     try {
       if (st) { st.textContent = "加载中…"; st.style.color = "var(--text-muted, #999)"; }
-      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/providers" });
-      if (r && r.data && r.data.error) throw new Error(r.data.error);
-      this._apikeyProviders = (r && r.data && r.data.providers) || [];
-      this._apikeyProviders.forEach((p) => {
-        if (p.configured) this._addedProviderKeys.add(p.key);
-      });
-      await this._loadCustomProviders();
-      this._renderApiKeyList();
-      this._renderAddBadge();
+      const [provR, rolesR, bindR] = await Promise.all([
+        window.aerie.api.request({ method: "GET", path: "/api/ai/providers" }),
+        window.aerie.api.request({ method: "GET", path: "/api/env/model-roles" }),
+        window.aerie.api.request({ method: "GET", path: "/api/env/bindable-providers" }),
+      ]);
+      const pd = (provR && provR.data) || {};
+      if (pd.error) throw new Error(pd.error);
+      this._providers = pd.providers || [];
+      this._availableBuiltins = pd.available_builtins || [];
+      this._specialServices = pd.special_services || [];
+      const rd = (rolesR && rolesR.data) || {};
+      this._modelRoles = rd.roles || [];
+      if (Array.isArray(rd.special_services) && rd.special_services.length) {
+        this._specialServices = rd.special_services;
+      }
+      this._bindableProviders = (bindR && bindR.data && bindR.data.providers) || [];
+      this._renderApiKeyStatusBar();
+      this._renderModelRolesCard();
+      this._renderProviderTable();
+      this._renderSpecialServices();
       if (st) { st.textContent = ""; }
     } catch (e) {
       if (st) { st.textContent = "加载失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     }
   }
 
-  _renderApiKeyList() {
-    const list = document.getElementById("apikey-provider-list");
-    if (!list) return;
-    list.innerHTML = "";
-
-    // 只渲染用户已添加的固定厂商（configured 或通过下拉菜单主动添加）
-    const added = this._apikeyProviders.filter((p) => this._addedProviderKeys.has(p.key));
-    added.forEach((p) => {
-      let statusText = p.configured ? "已配置" : "未配置";
-      let statusCls = "";
-      if (p.check && p.check.ok) {
-        statusText = "连通正常 " + (p.check.latency_ms || 0) + "ms";
-        statusCls = "success";
-      } else if (p.check && p.check.ok === false) {
-        statusText = "测试失败" + (p.check.http_status ? "(" + p.check.http_status + ")" : "");
-        statusCls = "danger";
-      } else if (p.health_status === "banned") {
-        statusText = "余额耗尽";
-        statusCls = "danger";
-      } else if (p.health_status === "cooldown") {
-        statusText = "限流冷却";
-        statusCls = "warning";
-      } else if (p.balance != null && p.balance !== "") {
-        statusText = "余额 ¥" + p.balance;
-        statusCls = "success";
-      }
-      const card = document.createElement("div");
-      card.className = "apikey-provider-card" + (p.configured ? " configured" : "");
-      card.innerHTML = `
-        <div class="apikey-provider-header">
-          <div class="apikey-provider-name">
-            <span class="apikey-provider-dot" style="background: ${p.configured ? 'var(--success, #2ecc71)' : 'var(--text-muted, #999)'}"></span>
-            ${p.name}
-          </div>
-          <div class="apikey-provider-status" style="${statusCls === 'danger' ? 'color:var(--danger,#e74c3c);' : statusCls === 'success' ? 'color:var(--success,#2ecc71);' : statusCls === 'warning' ? 'color:var(--warning,#f39c12);' : ''}">${statusText}</div>
-        </div>
-        <div class="apikey-provider-fields">
-          <label class="apikey-field">
-            <span>API Key</span>
-            <div class="apikey-input-row">
-              <input type="password" class="apikey-input" data-provider="${p.key}" data-field="api_key"
-                     value="${p.configured ? p.api_key_masked : ''}" placeholder="请输入 API Key">
-              <button type="button" class="apikey-toggle-btn" data-provider="${p.key}" title="显示/隐藏">
-                <svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-eye"/></svg>
-              </button>
-            </div>
-          </label>
-          <label class="apikey-field">
-            <span>Base URL</span>
-            <input type="text" class="apikey-input" data-provider="${p.key}" data-field="base_url"
-                   value="${p.base_url || ''}" placeholder="${p.default_url}">
-          </label>
-          <label class="apikey-field">
-            <span>模型 · Model</span>
-            <input type="text" class="apikey-input" data-provider="${p.key}" data-field="model"
-                   value="${p.model || ''}" placeholder="${p.default_model}">
-          </label>
-        </div>
-        <div class="apikey-provider-actions">
-          <button type="button" class="btn btn-primary btn-sm apikey-save-btn" data-provider="${p.key}">
-            测试并保存 · Test &amp; Save
-          </button>
-          <button type="button" class="btn btn-secondary btn-sm apikey-default-btn" data-provider="${p.key}">
-            恢复默认 URL/模型
-          </button>
-          <button type="button" class="btn btn-secondary btn-sm apikey-remove-btn" data-provider="${p.key}">
-            移除
-          </button>
-        </div>
-      `;
-      list.appendChild(card);
-    });
-
-    // 渲染自定义 API（用户添加的任意 OpenAI 兼容 API，可编辑/删除）
-    this._customProviders.forEach((cp) => {
-      let checkText = "未测试";
-      let checkColor = "var(--text-muted, #999)";
-      if (cp.check && cp.check.ok) {
-        checkText = "连通正常 " + (cp.check.latency_ms || 0) + "ms";
-        checkColor = "var(--success,#2ecc71)";
-      } else if (cp.check && cp.check.ok === false) {
-        checkText = "测试失败" + (cp.check.http_status ? "(" + cp.check.http_status + ")" : "");
-        checkColor = "var(--danger,#e74c3c)";
-      }
-      const toolsText = cp.supports_tools ? "支持工具调用 · 上限 " + (cp.max_tool_calls || 8) : "不支持工具调用";
-      const card = document.createElement("div");
-      card.className = "apikey-provider-card configured";
-      card.innerHTML = `
-        <div class="apikey-provider-header">
-          <div class="apikey-provider-name">
-            <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
-            ${cp.name || "自定义 API"}
-          </div>
-          <div class="apikey-provider-status" style="color:${checkColor};">${checkText}</div>
-        </div>
-        <div style="font-size:12px;color:var(--text-muted,#999);line-height:1.7;margin:0 0 8px;">
-          Base URL：${cp.base_url || "-"}<br>
-          模型：${cp.model || "-"}<br>
-          ${toolsText}
-        </div>
-        <div class="apikey-provider-actions">
-          <button type="button" class="btn btn-secondary btn-sm custom-provider-edit-btn" data-id="${cp.id}">编辑</button>
-          <button type="button" class="btn btn-secondary btn-sm custom-provider-remove-btn" data-id="${cp.id}">移除</button>
-        </div>
-      `;
-      list.appendChild(card);
-    });
-
-    if (!added.length && !this._customProviders.length) {
-      list.innerHTML = '<div style="font-size:12px;color:var(--text-muted,#999);padding:12px 0;">尚未添加任何 AI 厂商，点击上方「＋ 添加模型」开始。</div>';
-    }
-
-    // Bind events
-    list.querySelectorAll(".apikey-save-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const provider = e.target.getAttribute("data-provider");
-        this._saveApiKey(provider);
-      });
-    });
-    list.querySelectorAll(".apikey-default-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const provider = e.target.getAttribute("data-provider");
-        this._resetToDefault(provider);
-      });
-    });
-    list.querySelectorAll(".apikey-toggle-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const provider = e.target.getAttribute("data-provider");
-        const input = list.querySelector(`.apikey-input[data-provider="${provider}"][data-field="api_key"]`);
-        if (input) {
-          input.type = input.type === "password" ? "text" : "password";
-        }
-      });
-    });
-    list.querySelectorAll(".apikey-remove-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const provider = e.target.getAttribute("data-provider");
-        this._addedProviderKeys.delete(provider);
-        this._renderApiKeyList();
-      });
-    });
-    list.querySelectorAll(".custom-provider-edit-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const id = e.currentTarget.getAttribute("data-id");
-        this._editCustomProvider(id);
-      });
-    });
-    list.querySelectorAll(".custom-provider-remove-btn").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        const id = e.currentTarget.getAttribute("data-id");
-        if (!window.confirm("确定移除这个自定义 API？引用它的功能点绑定会恢复默认。")) return;
-        try {
-          await window.aerie.api.request({ method: "DELETE", path: "/api/env/custom-providers/" + id });
-        } catch (err) {
-          const st = document.getElementById("apikey-status");
-          if (st) { st.textContent = "移除失败: " + err.message; st.style.color = "var(--danger,#e74c3c)"; }
-          return;
-        }
-        await this._loadCustomProviders();
-        this._renderApiKeyList();
-      });
-    });
-
-    this._renderApiKeyCountReminder();
-    this._renderAddBadge();
-  }
-
-  // ── 添加模型下拉菜单 ────────────────────────────────
-  toggleAddMenu() {
-    const menu = document.getElementById("apikey-add-menu");
-    if (!menu) return;
-    const willShow = menu.style.display === "none";
-    if (willShow) {
-      this._renderAddMenu();
-      menu.style.display = "";
-    } else {
-      menu.style.display = "none";
-    }
-  }
-
-  _renderAddMenu() {
-    const tabsEl = document.getElementById("apikey-menu-tabs");
-    const panelEl = document.getElementById("apikey-menu-panel");
-    if (!tabsEl || !panelEl) return;
-    tabsEl.innerHTML = "";
-
-    const tabs = [
-      ...this._apikeyProviders.map((p) => ({ type: "provider", key: p.key, name: p.name })),
-      { type: "custom", key: "__custom__", name: "自定义 API" },
-    ];
-    if (!this._activeMenuTab) this._activeMenuTab = tabs[0].key;
-
-    tabs.forEach((t) => {
-      const active = t.key === this._activeMenuTab;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = t.name;
-      btn.style.cssText =
-        "text-align:left;padding:8px 10px;border-radius:8px;border:none;background:" +
-        (active ? "var(--accent,#ff5b9c)" : "transparent") +
-        ";color:" +
-        (active ? "#fff" : "var(--text,#333)") +
-        ";font-size:13px;cursor:pointer;";
-      btn.addEventListener("click", () => {
-        this._activeMenuTab = t.key;
-        this._renderAddMenu();
-      });
-      tabsEl.appendChild(btn);
-    });
-
-    this._renderMenuPanel(panelEl);
-  }
-
-  _renderMenuPanel(panelEl) {
-    panelEl.innerHTML = "";
-    if (this._activeMenuTab === "__custom__") {
-      this._openCustomProviderPanel();
-      const hint = document.createElement("div");
-      hint.style.cssText = "font-size:12px;color:var(--text-muted,#999);line-height:1.6;";
-      hint.textContent = "已打开下方「自定义 API」配置面板，可添加任意 OpenAI 兼容 API（如 TokenDance）。";
-      panelEl.appendChild(hint);
-      return;
-    }
-    const p = this._apikeyProviders.find((x) => x.key === this._activeMenuTab);
-    if (!p) return;
-    const models = (p.models && p.models.length) ? p.models : [p.default_model];
-    models.forEach((m) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = m;
-      btn.style.cssText =
-        "display:block;width:100%;text-align:left;padding:8px 10px;margin:0 0 6px;border-radius:8px;border:1px solid var(--border,rgba(0,0,0,0.08));background:transparent;color:var(--text,#333);font-size:12px;cursor:pointer;";
-      btn.addEventListener("click", () => this._addProvider(p.key, m));
-      panelEl.appendChild(btn);
-    });
-  }
-
-  _addProvider(key, model) {
-    this._addedProviderKeys.add(key);
-    this._activeMenuTab = null;
-    const menu = document.getElementById("apikey-add-menu");
-    if (menu) menu.style.display = "none";
-    this._renderApiKeyList();
-    if (model) {
-      const input = document.querySelector(`.apikey-input[data-provider="${key}"][data-field="model"]`);
-      if (input) input.value = model;
-    }
-  }
-
-  _renderAddBadge() {
-    const badge = document.getElementById("apikey-add-badge");
-    if (!badge) return;
-    badge.textContent = String(this._addedProviderKeys.size + this._customProviders.length);
-  }
-
-  // ── 自定义 API（添加任意 OpenAI 兼容 API）────────────
-  async _loadCustomProviders() {
+  // 统一请求封装：把非 2xx 的 {error, check} 响应转成异常，便于统一处理。
+  async _apiCall(method, path, body) {
+    let r;
     try {
-      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/custom-providers" });
-      this._customProviders = (r && r.data && r.data.providers) || [];
+      r = await window.aerie.api.request(body === undefined
+        ? { method, path }
+        : { method, path, body });
     } catch (e) {
-      this._customProviders = [];
+      if (!e.status && e.data && e.data.status) e.status = e.data.status;
+      throw e;
     }
-  }
-
-  _openCustomProviderPanel() {
-    const panel = document.getElementById("custom-provider-panel");
-    if (!panel) return;
-    panel.style.display = "";
-    this._renderCustomProviderForm();
-  }
-
-  // 编辑已有自定义厂商：打开表单并回填（API Key 留空表示保持不变）。
-  _editCustomProvider(id) {
-    const cp = this._customProviders.find((c) => c.id === id);
-    if (!cp) return;
-    this._openCustomProviderPanel();
-    this._renderCustomProviderForm(cp);
-    const panel = document.getElementById("custom-provider-panel");
-    if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
-  _renderCustomProviderForm(cp) {
-    const form = document.getElementById("custom-provider-form");
-    if (!form) return;
-    cp = cp || {};
-    const editing = !!cp.id;
-    form.dataset.editingId = cp.id || "";
-    form.innerHTML = `
-      <input type="hidden" id="custom-provider-id" value="${cp.id || ""}">
-      <label class="apikey-field">
-        <span>名称 · Name</span>
-        <input type="text" id="custom-provider-name" class="apikey-input" placeholder="例如 TokenDance" value="${cp.name || ""}">
-      </label>
-      <label class="apikey-field">
-        <span>Base URL</span>
-        <input type="text" id="custom-provider-base-url" class="apikey-input" placeholder="例如 https://tokendance.space/v1" value="${cp.base_url || ""}">
-      </label>
-      <label class="apikey-field">
-        <span>API Key${editing ? "（留空保持不变）" : ""}</span>
-        <input type="password" id="custom-provider-api-key" class="apikey-input" placeholder="${editing ? "留空则继续使用已保存的 Key" : "sk-..."}">
-      </label>
-      <label class="apikey-field">
-        <span>模型 · Model</span>
-        <input type="text" id="custom-provider-model" class="apikey-input" placeholder="例如 gpt-4o" value="${cp.model || ""}">
-      </label>
-      <label class="apikey-field" style="flex-direction:row;align-items:center;gap:8px;">
-        <input type="checkbox" id="custom-provider-supports-tools" ${cp.supports_tools ? "checked" : ""}>
-        <span>支持函数调用 / tools（勾选后可被「子Agent」功能点选用）</span>
-      </label>
-      <label class="apikey-field">
-        <span>工具调用次数上限（1-50，默认 8）</span>
-        <input type="number" id="custom-provider-max-tool-calls" class="apikey-input" value="${cp.max_tool_calls || 8}" min="1" max="50">
-      </label>
-    `;
-    const saveBtn = document.getElementById("custom-provider-save-btn");
-    if (saveBtn) saveBtn.textContent = editing ? "测试并保存修改 · Test & Save" : "测试并保存 · Test & Save";
-  }
-
-  async saveCustomProvider(force) {
-    const st = document.getElementById("custom-provider-status");
-    const btn = document.getElementById("custom-provider-save-btn");
-    const form = document.getElementById("custom-provider-form");
-    const id = ((document.getElementById("custom-provider-id") || {}).value || "").trim();
-    const name = (document.getElementById("custom-provider-name") || {}).value || "";
-    const baseUrl = (document.getElementById("custom-provider-base-url") || {}).value || "";
-    const apiKey = (document.getElementById("custom-provider-api-key") || {}).value || "";
-    const model = (document.getElementById("custom-provider-model") || {}).value || "";
-    const supportsTools = !!(document.getElementById("custom-provider-supports-tools") || {}).checked;
-    const maxToolCalls = parseInt((document.getElementById("custom-provider-max-tool-calls") || {}).value || "8", 10);
-
-    if (!name.trim() || !baseUrl.trim()) {
-      if (st) { st.textContent = "请至少填写名称和 Base URL"; st.style.color = "var(--warning,#f39c12)"; }
-      return;
+    const d = (r && r.data) || {};
+    if (d && d.error) {
+      const err = new Error(d.error);
+      err.status = (r && r.status) || 0;
+      err.data = d;
+      throw err;
     }
-    if (!id && !apiKey.trim()) {
-      if (st) { st.textContent = "新增厂商必须填写 API Key"; st.style.color = "var(--warning,#f39c12)"; }
-      return;
-    }
+    return d;
+  }
 
-    const body = {
-      id,
-      name: name.trim(),
-      base_url: baseUrl.trim(),
-      api_key: apiKey.trim(),
-      model: model.trim(),
-      supports_tools: supportsTools,
-      max_tool_calls: isNaN(maxToolCalls) ? 8 : maxToolCalls,
-      force: !!force,
+  // 连通性测试失败可 force 重发：422 或响应体带 check/results 均可强制保存。
+  // 主进程 IPC 会把非 2xx 归一成 {status:0, data:{error}}，故再用后端
+  // run_provider_check 的失败文案兜底识别，避免误伤 400 参数校验错误。
+  _isForceable(err) {
+    if (!err) return false;
+    if (err.status === 422) return true;
+    const d = err.data || {};
+    if (d.check && typeof d.check === "object") return true;
+    if (Array.isArray(d.results) && d.results.some((r) => r && r.check)) return true;
+    return /连通性测试失败|尚未配置有效凭证|鉴权失败|接口或模型不存在|触发限流|服务端错误|网络不可达|请求超时|Base URL 或 API Key 为空/.test(String(err.message || ""));
+  }
+
+  _esc(value) {
+    return this._escapeHtml(value);
+  }
+
+  _setApiKeyStatus(text, tone) {
+    const st = document.getElementById("apikey-status");
+    if (!st) return;
+    st.textContent = text || "";
+    st.style.color = tone === "error" ? "var(--danger, #e74c3c)"
+      : tone === "warn" ? "var(--warning, #f39c12)"
+        : tone === "ok" ? "var(--success, #2ecc71)"
+          : "var(--text-muted, #999)";
+  }
+
+  _providerKindLabel(kind) {
+    return kind === "builtin" ? "内置" : kind === "local_cli" ? "本地 CLI" : "自定义";
+  }
+
+  _providerDisplayName(key) {
+    if (!key) return "默认";
+    const p = this._providers.find((x) => x.id === key || x.key === key)
+      || this._bindableProviders.find((x) => x.key === key);
+    return p ? (p.name || key) : key;
+  }
+
+  _providerStatusInfo(p) {
+    if (p.enabled === false) return { text: "已停用", tone: "muted", dot: "var(--text-muted, #999)" };
+    const check = p.check || {};
+    if (check.ok === true) return { text: "连通正常 " + (check.latency_ms || 0) + "ms", tone: "ok", dot: "var(--success, #2ecc71)" };
+    if (check.ok === false) return { text: "测试失败" + (check.http_status ? "(" + check.http_status + ")" : ""), tone: "error", dot: "var(--danger, #e74c3c)" };
+    if (p.health_status === "banned") return { text: "余额耗尽", tone: "warn", dot: "var(--warning, #f39c12)" };
+    if (p.health_status === "cooldown") return { text: "限流冷却", tone: "warn", dot: "var(--warning, #f39c12)" };
+    if (p.balance != null && p.balance !== "") return { text: "余额 ¥" + p.balance, tone: "ok", dot: "var(--success, #2ecc71)" };
+    return { text: "未测试", tone: "muted", dot: "var(--text-muted, #999)" };
+  }
+
+  _providerStatusColor(tone) {
+    return tone === "ok" ? "var(--success, #2ecc71)"
+      : tone === "error" ? "var(--danger, #e74c3c)"
+        : tone === "warn" ? "var(--warning, #f39c12)"
+          : "var(--text-muted, #999)";
+  }
+
+  _providerStatusRank(p) {
+    if (p.enabled === false) return 4;
+    const check = p.check || {};
+    if (check.ok === true) return 0;
+    if (check.ok === false) return 1;
+    if (p.health_status === "banned" || p.health_status === "cooldown") return 2;
+    return 3;
+  }
+
+  _sortedProviders() {
+    const { key, dir } = this._providerSort || { key: "name", dir: 1 };
+    const value = (p) => {
+      if (key === "kind") return p.kind || "";
+      if (key === "status") return this._providerStatusRank(p);
+      return String(p.name || p.id || "").toLowerCase();
     };
+    return this._providers.slice().sort((a, b) => {
+      const va = value(a);
+      const vb = value(b);
+      if (va < vb) return -dir;
+      if (va > vb) return dir;
+      return 0;
+    });
+  }
 
-    if (btn) btn.disabled = true;
-    if (st) { st.textContent = "测试并保存中…（先小流量验证，通过才写入）"; st.style.color = "var(--text-muted,#999)"; }
+  _providerRoleTags(p) {
+    const tags = [];
+    (this._modelRoles || []).forEach((r) => {
+      if (r.provider && (r.provider === p.id || r.provider === p.key)) tags.push(r.name || r.key);
+    });
+    (this._specialServices || []).forEach((s) => {
+      if (s.provider && (s.provider === p.id || s.provider === p.key)) tags.push(s.name || s.key);
+    });
+    return tags;
+  }
+
+  _renderApiKeyStatusBar() {
+    const countEl = document.getElementById("apikey-online-count");
+    if (countEl) {
+      const total = this._providers.length;
+      const online = this._providers.filter((p) => p.enabled !== false && p.check && p.check.ok === true).length;
+      countEl.textContent = "● 在线 " + online + " / 共 " + total;
+      countEl.style.color = total === 0 ? "var(--text-muted, #999)"
+        : online > 0 ? "var(--success, #2ecc71)" : "var(--danger, #e74c3c)";
+    }
+    const sumEl = document.getElementById("apikey-role-summary");
+    if (!sumEl) return;
+    const parts = [];
+    (this._modelRoles || []).forEach((r) => {
+      if (r.provider) parts.push((r.name || r.key) + " → " + this._providerDisplayName(r.provider));
+    });
+    (this._specialServices || []).forEach((s) => {
+      if (s.model) parts.push((s.name || s.key) + " → " + s.model);
+    });
+    sumEl.textContent = parts.length ? parts.join(" · ") : "尚未绑定功能点";
+  }
+
+  _renderProviderTable() {
+    const wrap = document.getElementById("apikey-provider-list");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    const rows = this._sortedProviders();
+    const arrow = (k) => this._providerSort.key === k ? (this._providerSort.dir > 0 ? " ▲" : " ▼") : "";
+    const table = document.createElement("table");
+    table.className = "apikey-table";
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th class="sortable" data-sort="name">厂商${arrow("name")}</th>
+          <th class="sortable" data-sort="kind">类型${arrow("kind")}</th>
+          <th>模型</th>
+          <th class="sortable" data-sort="status">状态${arrow("status")}</th>
+          <th>角色</th>
+          <th style="text-align:right;">操作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = table.querySelector("tbody");
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 6;
+      td.className = "apikey-empty";
+      td.textContent = "还没有任何 AI 厂商。点击右上角「＋ 添加厂商」开始：可添加内置厂商（自动预填默认地址与模型），或任意 OpenAI 兼容的自定义厂商。";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+    rows.forEach((p) => {
+      const info = this._providerStatusInfo(p);
+      const tags = this._providerRoleTags(p);
+      const tagsHtml = tags.length
+        ? tags.map((t) => '<span class="apikey-role-tag">' + this._esc(t) + "</span>").join("")
+        : '<span style="color:var(--text-muted,#999);">-</span>';
+      const kind = p.kind || "custom";
+      const tr = document.createElement("tr");
+      tr.dataset.id = p.id || "";
+      tr.innerHTML = `
+        <td>
+          <span class="apikey-provider-cell">
+            <span class="apikey-provider-dot" style="background:${info.dot};box-shadow:none;"></span>
+            ${this._esc(p.name || p.id || "")}
+          </span>
+        </td>
+        <td><span class="apikey-badge apikey-badge--${this._esc(kind)}">${this._esc(this._providerKindLabel(kind))}</span></td>
+        <td>${this._esc(p.model || "-")}</td>
+        <td style="color:${this._providerStatusColor(info.tone)};white-space:nowrap;">${this._esc(info.text)}</td>
+        <td>${tagsHtml}</td>
+        <td>
+          <div class="apikey-row-actions">
+            <button type="button" class="apikey-icon-btn" data-act="edit" title="编辑">编辑</button>
+            <button type="button" class="apikey-icon-btn" data-act="test" title="测试连通性">测试</button>
+            <button type="button" class="apikey-icon-btn" data-act="more" title="更多操作">更多</button>
+          </div>
+        </td>
+      `;
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest("button")) return;
+        this._openProviderDrawer({ mode: "edit", provider: p });
+      });
+      tr.querySelector('[data-act="edit"]').addEventListener("click", () => this._openProviderDrawer({ mode: "edit", provider: p }));
+      tr.querySelector('[data-act="test"]').addEventListener("click", () => this._testProvider(p));
+      tr.querySelector('[data-act="more"]').addEventListener("click", (e) => this._openRowMenu(e.currentTarget, p));
+      tbody.appendChild(tr);
+    });
+    wrap.appendChild(table);
+    table.querySelectorAll("th.sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.getAttribute("data-sort");
+        if (this._providerSort.key === key) this._providerSort.dir *= -1;
+        else this._providerSort = { key, dir: 1 };
+        this._renderProviderTable();
+      });
+    });
+  }
+
+  _openRowMenu(anchor, p) {
+    this._closeRowMenu();
+    const menu = document.createElement("div");
+    menu.className = "apikey-more-menu";
+    menu.id = "apikey-row-menu";
+    const enabled = p.enabled !== false;
+    menu.innerHTML = `
+      <button type="button" data-act="toggle">${enabled ? "停用" : "启用"}</button>
+      <button type="button" data-act="copy">复制</button>
+      <button type="button" data-act="delete" class="danger">删除</button>
+    `;
+    document.body.appendChild(menu);
+    const rect = anchor.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + "px";
+    menu.style.left = Math.max(8, Math.min(rect.right - 128, window.innerWidth - 140)) + "px";
+    menu.querySelector('[data-act="toggle"]').addEventListener("click", () => { this._closeRowMenu(); this._toggleProvider(p); });
+    menu.querySelector('[data-act="copy"]').addEventListener("click", () => { this._closeRowMenu(); this._copyProvider(p); });
+    menu.querySelector('[data-act="delete"]').addEventListener("click", () => { this._closeRowMenu(); this._deleteProvider(p); });
+    setTimeout(() => {
+      document.addEventListener("click", this._rowMenuOutside = (ev) => {
+        if (!menu.contains(ev.target)) this._closeRowMenu();
+      });
+    }, 0);
+  }
+
+  _closeRowMenu() {
+    const menu = document.getElementById("apikey-row-menu");
+    if (menu) menu.remove();
+    if (this._rowMenuOutside) { document.removeEventListener("click", this._rowMenuOutside); this._rowMenuOutside = null; }
+  }
+
+  async _testProvider(p) {
+    if (!p || !p.id) return;
+    this._setApiKeyStatus("正在测试「" + (p.name || p.id) + "」…", "muted");
     try {
-      const r = await window.aerie.api.request({ method: "PUT", path: "/api/env/custom-providers", body });
-      if (r && r.data && r.data.error) {
-        if (r.status === 422 && !force && window.confirm((r.data.error || "连通性测试失败") + "\n\n仍要强制保存吗？（保存后该厂商可能无法正常调用）")) {
-          return this.saveCustomProvider(true);
-        }
-        throw new Error(r.data.error);
-      }
-      const check = r && r.data && r.data.check;
-      if (st) {
-        st.textContent = (id ? "已更新并热加载" : "已添加并热加载") + (check && check.ok ? "（连通 " + (check.latency_ms || 0) + "ms）" : "");
-        st.style.color = "var(--success,#2ecc71)";
-      }
-      await this._loadCustomProviders();
-      this._renderApiKeyList();
-      const panel = document.getElementById("custom-provider-panel");
-      if (panel) panel.style.display = "none";
-      const menu = document.getElementById("apikey-add-menu");
-      if (menu) menu.style.display = "none";
-      if (form) form.dataset.editingId = "";
+      const d = await this._apiCall("POST", "/api/ai/providers/" + encodeURIComponent(p.id) + "/check");
+      p.check = d.check || p.check;
+      this._setApiKeyStatus("「" + (p.name || p.id) + "」" + (d.check && d.check.ok ? "连通正常 " + (d.check.latency_ms || 0) + "ms" : "测试失败"), d.check && d.check.ok ? "ok" : "error");
     } catch (e) {
-      if (st) { st.textContent = "未保存: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
+      this._setApiKeyStatus("测试失败: " + e.message, "error");
+    }
+    this._renderProviderTable();
+    this._renderApiKeyStatusBar();
+  }
+
+  async _testAllProviders() {
+    const btn = document.getElementById("apikey-testall-btn");
+    const list = this._providers.slice();
+    if (!list.length) { this._setApiKeyStatus("没有可测试的厂商", "warn"); return; }
+    if (btn) btn.disabled = true;
+    let okCount = 0;
+    for (let i = 0; i < list.length; i += 1) {
+      const p = list[i];
+      this._setApiKeyStatus("测速中 " + (i + 1) + "/" + list.length + "：" + (p.name || p.id), "muted");
+      try {
+        const d = await this._apiCall("POST", "/api/ai/providers/" + encodeURIComponent(p.id) + "/check");
+        p.check = d.check || p.check;
+        if (d.check && d.check.ok) okCount += 1;
+      } catch (_) { /* 单项失败跳过，继续下一项 */ }
+      this._renderProviderTable();
+    }
+    this._renderApiKeyStatusBar();
+    this._setApiKeyStatus("全部测速完成：连通正常 " + okCount + " / " + list.length, okCount === list.length ? "ok" : "warn");
+    if (btn) btn.disabled = false;
+  }
+
+  async _toggleProvider(p) {
+    if (!p || !p.id) return;
+    const next = !(p.enabled !== false);
+    try {
+      const d = await this._apiCall("POST", "/api/ai/providers/" + encodeURIComponent(p.id) + "/enabled", { enabled: next });
+      p.enabled = d.provider ? d.provider.enabled !== false : next;
+      this._setApiKeyStatus("「" + (p.name || p.id) + "」已" + (p.enabled ? "启用" : "停用"), "ok");
+    } catch (e) {
+      this._setApiKeyStatus("操作失败: " + e.message, "error");
+    }
+    this._renderProviderTable();
+    this._renderApiKeyStatusBar();
+  }
+
+  _copyProvider(p) {
+    if (!p) return;
+    const kind = p.kind === "local_cli" ? "local_cli" : "custom";
+    this._openProviderDrawer({
+      mode: "create",
+      kind,
+      name: (p.name || p.id || "厂商") + " 副本",
+      base_url: p.base_url || "",
+      model: p.model || "",
+      models: p.models || [],
+      supports_tools: !!p.supports_tools,
+      max_tool_calls: p.max_tool_calls,
+      title: "复制厂商",
+    });
+  }
+
+  async _deleteProvider(p) {
+    if (!p || !p.id) return;
+    const msg = "删除「" + (p.name || p.id) + "」？\n\n"
+      + (p.kind === "builtin"
+        ? "这是内置厂商，删除会同时清掉 .env 里的凭据，引用它的功能点会回落默认。\n"
+        : "引用它的功能点绑定会回落默认。\n")
+      + "此操作不可撤销。";
+    if (!window.confirm(msg)) return;
+    try {
+      await this._apiCall("DELETE", "/api/ai/providers/" + encodeURIComponent(p.id));
+      this._setApiKeyStatus("已删除「" + (p.name || p.id) + "」", "ok");
+    } catch (e) {
+      this._setApiKeyStatus("删除失败: " + e.message, "error");
+      return;
+    }
+    await this.loadApiKeys();
+  }
+
+  // ── 添加厂商：内置 / 自定义选择器 ─────────────────────
+  _openAddChooser() {
+    const existing = document.getElementById("apikey-add-chooser");
+    if (existing) { this._closeAddChooser(); return; }
+    const btn = document.getElementById("apikey-add-btn");
+    const box = document.createElement("div");
+    box.id = "apikey-add-chooser";
+    box.className = "apikey-add-chooser";
+    const builtins = this._availableBuiltins || [];
+    const html = ['<div class="apikey-add-chooser__group">内置厂商</div>'];
+    if (builtins.length) {
+      builtins.forEach((b, i) => {
+        html.push('<button type="button" class="apikey-add-chooser__item" data-idx="' + i + '">'
+          + this._esc(b.name || b.key) + "</button>");
+      });
+    } else {
+      html.push('<div class="apikey-add-chooser__group">内置厂商已全部添加</div>');
+    }
+    html.push('<div class="apikey-add-chooser__group">其它</div>');
+    html.push('<button type="button" class="apikey-add-chooser__item" data-custom="1">＋ 自定义厂商（任意 OpenAI 兼容 API）</button>');
+    box.innerHTML = html.join("");
+    document.body.appendChild(box);
+    const rect = btn ? btn.getBoundingClientRect() : { bottom: 200, left: 200 };
+    box.style.top = (rect.bottom + 6) + "px";
+    box.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 260)) + "px";
+    box.querySelectorAll("button[data-idx]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const item = builtins[Number.parseInt(b.dataset.idx, 10)];
+        this._closeAddChooser();
+        this._addBuiltinProvider(item);
+      });
+    });
+    const customBtn = box.querySelector("button[data-custom]");
+    if (customBtn) customBtn.addEventListener("click", () => {
+      this._closeAddChooser();
+      this._openProviderDrawer({ mode: "create", kind: "custom", title: "添加自定义厂商" });
+    });
+    setTimeout(() => {
+      document.addEventListener("click", this._addChooserOutside = (ev) => {
+        if (!box.contains(ev.target) && ev.target !== btn) this._closeAddChooser();
+      });
+    }, 0);
+  }
+
+  _closeAddChooser() {
+    const box = document.getElementById("apikey-add-chooser");
+    if (box) box.remove();
+    if (this._addChooserOutside) {
+      document.removeEventListener("click", this._addChooserOutside);
+      this._addChooserOutside = null;
+    }
+  }
+
+  _addBuiltinProvider(b) {
+    if (!b) return;
+    this._openProviderDrawer({
+      mode: "create",
+      kind: "builtin",
+      id: b.key,
+      name: b.name || b.key,
+      base_url: b.default_url || "",
+      model: b.default_model || "",
+      models: b.models || [],
+      title: "添加内置厂商 · " + (b.name || b.key),
+    });
+  }
+
+  // ── 编辑抽屉 ─────────────────────────────────────────
+  _openProviderDrawer(opts) {
+    const drawer = document.getElementById("apikey-drawer");
+    const mask = document.getElementById("apikey-drawer-mask");
+    if (!drawer || !mask) return;
+    const o = opts || {};
+    const isEdit = o.mode === "edit";
+    const p = o.provider || {};
+    this._drawerState = {
+      mode: isEdit ? "edit" : "create",
+      id: o.id || p.id || "",
+      kind: o.kind || p.kind || "custom",
+      enabled: isEdit ? p.enabled !== false : o.enabled !== false,
+    };
+    const setVal = (id, value) => { const el = document.getElementById(id); if (el) el.value = value == null ? "" : value; };
+    const title = document.getElementById("apikey-drawer-title");
+    if (title) title.textContent = o.title || (isEdit ? "编辑厂商 · " + (p.name || p.id) : "添加厂商");
+    const kindEl = document.getElementById("apikey-drawer-kind");
+    if (kindEl) kindEl.value = this._providerKindLabel(this._drawerState.kind);
+    setVal("apikey-drawer-name", o.name != null ? o.name : p.name);
+    setVal("apikey-drawer-base-url", o.base_url != null ? o.base_url : p.base_url);
+    setVal("apikey-drawer-model", o.model != null ? o.model : p.model);
+    const apiKeyInput = document.getElementById("apikey-drawer-api-key");
+    if (apiKeyInput) {
+      apiKeyInput.value = "";
+      apiKeyInput.type = "password";
+      apiKeyInput.placeholder = isEdit ? "留空则继续使用已保存的 Key" : "sk-...";
+    }
+    const tools = document.getElementById("apikey-drawer-supports-tools");
+    if (tools) tools.checked = isEdit ? !!p.supports_tools : !!o.supports_tools;
+    const maxCalls = document.getElementById("apikey-drawer-max-tool-calls");
+    if (maxCalls) maxCalls.value = String(p.max_tool_calls || o.max_tool_calls || 8);
+    const models = o.models || p.models || [];
+    const dl = document.getElementById("apikey-drawer-model-list");
+    if (dl) dl.innerHTML = models.map((m) => '<option value="' + this._esc(m) + '"></option>').join("");
+    const urlField = document.getElementById("apikey-drawer-base-url-field");
+    if (urlField) urlField.style.display = this._drawerState.kind === "local_cli" ? "none" : "";
+    const testBtn = document.getElementById("apikey-drawer-test");
+    if (testBtn) testBtn.disabled = !isEdit;
+    const saveBtn = document.getElementById("apikey-drawer-save");
+    if (saveBtn) saveBtn.disabled = false;
+    const adv = document.getElementById("apikey-drawer-advanced");
+    if (adv) adv.open = false;
+    const st = document.getElementById("apikey-drawer-status");
+    if (st) st.textContent = "";
+    drawer.style.display = "flex";
+    mask.style.display = "";
+    setTimeout(() => { const n = document.getElementById("apikey-drawer-name"); if (n) n.focus(); }, 0);
+  }
+
+  _closeProviderDrawer() {
+    const drawer = document.getElementById("apikey-drawer");
+    const mask = document.getElementById("apikey-drawer-mask");
+    if (drawer) drawer.style.display = "none";
+    if (mask) mask.style.display = "none";
+    this._drawerState = null;
+  }
+
+  async _testDrawerProvider() {
+    const state = this._drawerState;
+    if (!state || !state.id) return;
+    const st = document.getElementById("apikey-drawer-status");
+    const btn = document.getElementById("apikey-drawer-test");
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "测试中…"; st.style.color = "var(--text-muted, #999)"; }
+    try {
+      const d = await this._apiCall("POST", "/api/ai/providers/" + encodeURIComponent(state.id) + "/check");
+      const check = d.check || {};
+      if (st) {
+        st.textContent = check.ok
+          ? "连通正常 " + (check.latency_ms || 0) + "ms"
+          : "测试失败：" + (check.detail || ("HTTP " + (check.http_status || "?")));
+        st.style.color = check.ok ? "var(--success, #2ecc71)" : "var(--danger, #e74c3c)";
+      }
+    } catch (e) {
+      if (st) { st.textContent = "测试失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     } finally {
       if (btn) btn.disabled = false;
-      setTimeout(() => { if (st) st.textContent = ""; }, 6000);
     }
   }
 
-  // 配置数量提醒：少于 2 个 AI 厂商时提示主备容灾风险；
-  // 达到 2 个及以上时切换为正常状态。loadApiKeys 与 _saveApiKey 保存后
-  // 都会经 _renderApiKeyList 触发本方法，实现实时刷新。
-  _renderApiKeyCountReminder() {
-    const el = document.getElementById("apikey-count-reminder");
-    if (!el) return;
-    const count = this._apikeyProviders.filter((p) => p.configured === true).length;
-    const ok = count >= 2;
-    const accent = ok ? "var(--success, #2ecc71)" : "var(--warning, #f39c12)";
+  async _saveProvider(force) {
+    const state = this._drawerState;
+    if (!state) return;
+    const st = document.getElementById("apikey-drawer-status");
+    const btn = document.getElementById("apikey-drawer-save");
+    const get = (id) => document.getElementById(id);
+    const nameEl = get("apikey-drawer-name");
+    const urlEl = get("apikey-drawer-base-url");
+    const keyEl = get("apikey-drawer-api-key");
+    const modelEl = get("apikey-drawer-model");
+    const toolsEl = get("apikey-drawer-supports-tools");
+    const maxEl = get("apikey-drawer-max-tool-calls");
+    const name = nameEl ? nameEl.value.trim() : "";
+    const baseUrl = urlEl ? urlEl.value.trim() : "";
+    const apiKey = keyEl ? keyEl.value.trim() : "";
+    const model = modelEl ? modelEl.value.trim() : "";
+    const supportsTools = !!(toolsEl && toolsEl.checked);
+    const parsedMax = Number.parseInt(maxEl ? maxEl.value : "8", 10);
+    const isLocalCli = state.kind === "local_cli";
+    const isCreate = state.mode === "create";
+    const fail = (text) => { if (st) { st.textContent = text; st.style.color = "var(--warning, #f39c12)"; } };
 
-    el.style.display = "flex";
-    el.style.alignItems = "flex-start";
-    el.style.gap = "8px";
-    el.style.margin = "0 0 14px";
-    el.style.padding = "10px 12px";
-    el.style.borderRadius = "10px";
-    el.style.fontSize = "12px";
-    el.style.lineHeight = "1.6";
-    el.style.color = "var(--text-muted, #999)";
-    el.style.background = ok ? "rgba(46, 204, 113, 0.10)" : "rgba(243, 156, 18, 0.12)";
-    el.style.border = "1px solid " + (ok ? "rgba(46, 204, 113, 0.30)" : "rgba(243, 156, 18, 0.35)");
+    if (!name) { fail("请填写名称"); return; }
+    if (!isLocalCli && !baseUrl) { fail("请填写 Base URL"); return; }
+    if (isCreate && !isLocalCli && !apiKey) { fail("新增厂商必须填写 API Key"); return; }
 
-    const dot = '<span style="flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:' + accent + ';margin-top:5px;"></span>';
-    const countHtml = '<span style="color:' + accent + ';font-weight:600;">' + count + '</span>';
-    const text = ok
-      ? "已配置 " + countHtml + " 个 AI 厂商，主备容灾已就绪。"
-      : "当前仅配置了 " + countHtml + " 个 AI 厂商。为保证对话稳定（主模型 + 备用模型容灾），建议至少配置 2 个 AI API。推荐：TokenDance（tokendance.space）或阿里云 DashScope（百炼），两者注册均有免费额度。";
-    el.innerHTML = dot + "<span>" + text + "</span>";
-  }
+    const body = {
+      kind: state.kind,
+      name,
+      model,
+      supports_tools: supportsTools,
+      max_tool_calls: Number.isNaN(parsedMax) ? 8 : Math.min(50, Math.max(1, parsedMax)),
+      enabled: state.enabled !== false,
+      force: !!force,
+    };
+    if (state.id) body.id = state.id;
+    if (!isLocalCli) body.base_url = baseUrl;
+    if (apiKey) body.api_key = apiKey;
 
-  async _saveApiKey(providerKey) {
-    const st = document.getElementById("apikey-status");
-    const list = document.getElementById("apikey-provider-list");
-    const saveBtn = list.querySelector(`.apikey-save-btn[data-provider="${providerKey}"]`);
-    const p = this._apikeyProviders.find((x) => x.key === providerKey);
-    if (!p) return;
-
-    const apiKeyInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="api_key"]`);
-    const baseUrlInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="base_url"]`);
-    const modelInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="model"]`);
-
-    const apiKeyVal = apiKeyInput ? apiKeyInput.value.trim() : "";
-    const baseUrlVal = baseUrlInput ? baseUrlInput.value.trim() : "";
-    const modelVal = modelInput ? modelInput.value.trim() : "";
-
-    if (!apiKeyVal && !p.configured) {
-      if (st) { st.textContent = "请输入 API Key"; st.style.color = "var(--warning, #f39c12)"; }
-      return;
-    }
-
-    if (saveBtn) saveBtn.disabled = true;
-    if (st) { st.textContent = "保存中…"; st.style.color = "var(--text-muted, #999)"; }
-
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "测试并保存中…（先小流量验证，通过才写入）"; st.style.color = "var(--text-muted, #999)"; }
     try {
-      const body = { provider_key: providerKey };
-      if (apiKeyVal && apiKeyVal !== p.api_key_masked) {
-        body.api_key = apiKeyVal;
-      }
-      if (baseUrlVal) body.base_url = baseUrlVal;
-      if (modelVal) body.model = modelVal;
-
-      const r = await window.aerie.api.request({
-        method: "POST",
-        path: "/api/env/save",
-        body,
-      });
-      if (r && r.data && r.data.error) throw new Error(r.data.error);
-      const check = r && r.data && r.data.check;
-      if (check && check.ok) {
-        if (st) { st.textContent = "已保存并热加载 · 连通正常 " + (check.latency_ms || 0) + "ms"; st.style.color = "var(--success, #2ecc71)"; }
-      } else if (check && check.ok === false) {
-        if (st) {
-          st.textContent = "已保存，但连通性测试失败：" + (check.detail || ("HTTP " + (check.http_status || "?"))) + "。请检查 Key / Base URL / 模型名";
-          st.style.color = "var(--warning, #f39c12)";
-        }
-      } else if (st) {
-        st.textContent = "保存成功，已生效"; st.style.color = "var(--success, #2ecc71)";
-      }
+      const d = await this._apiCall("PUT", "/api/ai/providers", body);
+      const check = d.check;
+      this._closeProviderDrawer();
+      this._setApiKeyStatus((isCreate ? "已添加并热加载" : "已保存并热加载")
+        + (check && check.ok ? "（连通 " + (check.latency_ms || 0) + "ms）" : ""), "ok");
       await this.loadApiKeys();
     } catch (e) {
-      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
-    } finally {
-      if (saveBtn) saveBtn.disabled = false;
+      if (this._isForceable(e) && !force) {
+        if (window.confirm("连通性测试失败：" + (e.message || "") + "。仍然保存？")) {
+          return this._saveProvider(true);
+        }
+        if (st) { st.textContent = "已取消保存"; st.style.color = "var(--warning, #f39c12)"; }
+        if (btn) btn.disabled = false;
+        return;
+      }
+      if (st) { st.textContent = "未保存: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+      if (btn) btn.disabled = false;
     }
   }
 
-  _resetToDefault(providerKey) {
-    const list = document.getElementById("apikey-provider-list");
-    const p = this._apikeyProviders.find((x) => x.key === providerKey);
-    if (!p) return;
-    const baseUrlInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="base_url"]`);
-    const modelInput = list.querySelector(`.apikey-input[data-provider="${providerKey}"][data-field="model"]`);
-    if (baseUrlInput) baseUrlInput.value = p.default_url;
-    if (modelInput) modelInput.value = p.default_model;
+  // 自定义厂商的增删改已统一由抽屉（_saveProvider / _deleteProvider）处理。
+
+  // ── 专用服务（ASR / 生图 / TTS）：只读展示，凭据在 .env ──
+  _renderSpecialServices() {
+    const wrap = document.getElementById("special-services-table");
+    if (!wrap) return;
+    const list = this._specialServices || [];
+    if (!list.length) {
+      wrap.innerHTML = '<div class="apikey-empty">暂无专用服务。</div>';
+      return;
+    }
+    wrap.innerHTML = '<table class="apikey-table"><thead><tr><th>服务</th><th>模型</th></tr></thead><tbody>'
+      + list.map((s) => "<tr><td>" + this._esc(s.name || s.key)
+        + (s.desc ? '<div style="font-size:11px;color:var(--text-muted,#999);margin-top:2px;">' + this._esc(s.desc) + "</div>" : "")
+        + "</td><td>" + this._esc(s.model || "默认") + "</td></tr>").join("")
+      + "</tbody></table>";
   }
+
+  // 内置厂商的 Key/Base URL/模型修改已统一由抽屉 + PUT /api/ai/providers 处理。
 
   async loadBaiduMap() {
     const dot = document.getElementById("baidu-map-dot");
@@ -943,77 +1282,76 @@ class SettingsPanel {
     }
   }
 
-  // ── 自定义 API：模型功能点配置面板 ────────────────────
-  toggleCustomApi() {
-    const panel = document.getElementById("custom-api-panel");
-    if (!panel) return;
-    const willShow = panel.style.display === "none";
-    panel.style.display = willShow ? "" : "none";
-    if (willShow) this.loadModelRoles();
-  }
-
-  async loadModelRoles() {
-    const list = document.getElementById("custom-api-role-list");
-    if (!list) return;
-    try {
-      const [rolesR, providersR] = await Promise.all([
-        window.aerie.api.request({ method: "GET", path: "/api/env/model-roles" }),
-        window.aerie.api.request({ method: "GET", path: "/api/env/bindable-providers" }),
-      ]);
-      const roles = (rolesR && rolesR.data && rolesR.data.roles) || [];
-      const providers = (providersR && providersR.data && providersR.data.providers) || [];
-      const special = (rolesR && rolesR.data && rolesR.data.special_services) || [];
-      this._bindableProviders = providers;
-      list.innerHTML = "";
-
-      roles.forEach((role) => {
-        const row = document.createElement("div");
-        row.style.cssText = "padding:10px 0;border-bottom:1px solid var(--border,rgba(0,0,0,0.06));";
-        const check = role.check || {};
-        let checkDot = '<span style="font-size:11px;color:var(--text-muted,#999);margin-left:8px;">未测试</span>';
-        if (check.ok) {
-          checkDot = '<span style="font-size:11px;color:var(--success,#2ecc71);margin-left:8px;">● 连通 ' + (check.latency_ms || 0) + 'ms</span>';
-        } else if (check.ok === false) {
-          checkDot = '<span title="' + (check.detail || "").replace(/"/g, "&quot;") + '" style="font-size:11px;color:var(--danger,#e74c3c);margin-left:8px;">● 测试失败' + (check.http_status ? "(" + check.http_status + ")" : "") + "</span>";
-        }
-        const selectHtml = providers.map((p) => {
-          const sel = p.key === role.provider ? " selected" : "";
-          return '<option value="' + p.key + '"' + sel + ">" + p.name + "</option>";
-        }).join("");
-        row.innerHTML = `
-          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">${role.name}${checkDot}</div>
-          <div style="font-size:11px;color:var(--text-muted,#999);margin-bottom:6px;">${role.desc}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <select class="apikey-input" data-role-provider="${role.key}" style="flex:1 1 180px;min-width:160px;">${selectHtml}</select>
-            <input type="text" class="apikey-input" data-role-model="${role.key}" value="${role.model || ""}"
-                   placeholder="模型名 / model" style="flex:1 1 200px;min-width:180px;"
-                   ${role.key === "light_assist" ? "" : ""}>
-          </div>
-        `;
-        list.appendChild(row);
-      });
-
-      if (special.length) {
-        const note = document.createElement("div");
-        note.style.cssText = "margin-top:12px;padding:10px;border-radius:8px;background:rgba(0,0,0,0.03);font-size:11px;color:var(--text-muted,#999);line-height:1.8;";
-        note.innerHTML = "<strong style=\"color:var(--text,#333);\">专用服务（在上方厂商卡片中配置）：</strong><br>" +
-          special.map((s) => s.name + " · " + s.desc + "：当前模型 " + (s.model || "默认")).join("<br>");
-        list.appendChild(note);
-      }
-    } catch (e) {
-      list.innerHTML = "<span style='font-size:12px;color:var(--danger,#e74c3c);'>加载失败: " + e.message + "</span>";
+  // ── 功能点路由卡片：功能点 / 厂商下拉 / 模型输入 ──────
+  _renderModelRolesCard() {
+    const wrap = document.getElementById("model-roles-table");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    const roles = this._modelRoles || [];
+    if (!roles.length) {
+      wrap.innerHTML = '<div class="apikey-empty">暂无功能点配置。</div>';
+      return;
     }
+    const providers = this._bindableProviders || [];
+    const models = [];
+    providers.forEach((p) => {
+      (p.models || []).forEach((m) => { if (models.indexOf(m) < 0) models.push(m); });
+      if (p.model && models.indexOf(p.model) < 0) models.push(p.model);
+    });
+    const table = document.createElement("table");
+    table.className = "apikey-table";
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th style="width:170px;">功能点</th>
+          <th>厂商</th>
+          <th>模型</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = table.querySelector("tbody");
+    roles.forEach((role) => {
+      const optionsHtml = providers.map((p) => {
+        const suffix = (p.virtual || p.multi_key) ? "（多 Key 池）" : "";
+        const selected = p.key === role.provider ? " selected" : "";
+        return '<option value="' + this._esc(p.key) + '"' + selected + ">"
+          + this._esc((p.name || p.key) + suffix) + "</option>";
+      }).join("");
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <span style="font-weight:600;">${this._esc(role.name || role.key)}</span>
+          ${role.desc ? '<div style="font-size:11px;color:var(--text-muted,#999);margin-top:2px;">' + this._esc(role.desc) + "</div>" : ""}
+        </td>
+        <td><select class="apikey-input" data-role-provider="${this._esc(role.key)}">${optionsHtml}</select></td>
+        <td><input type="text" class="apikey-input" data-role-model="${this._esc(role.key)}" list="model-roles-model-list" value="${this._esc(role.model || "")}" placeholder="模型名 / model"></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    wrap.appendChild(table);
+    wrap.insertAdjacentHTML("beforeend", '<datalist id="model-roles-model-list">'
+      + models.map((m) => '<option value="' + this._esc(m) + '"></option>').join("")
+      + "</datalist>");
+    wrap.querySelectorAll("select[data-role-provider]").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const key = sel.getAttribute("data-role-provider");
+        const input = wrap.querySelector('input[data-role-model="' + key + '"]');
+        const p = providers.find((x) => x.key === sel.value);
+        if (input && !input.value.trim() && p && p.model) input.value = p.model;
+      });
+    });
   }
 
   async saveModelRoles(force) {
-    const st = document.getElementById("custom-api-status");
-    const btn = document.getElementById("custom-api-save-btn");
-    const list = document.getElementById("custom-api-role-list");
-    if (!list) return;
+    const st = document.getElementById("model-roles-status");
+    const btn = document.getElementById("model-roles-save-btn");
+    const wrap = document.getElementById("model-roles-table");
+    if (!wrap) return;
     const roles = [];
-    list.querySelectorAll("select[data-role-provider]").forEach((sel) => {
+    wrap.querySelectorAll("select[data-role-provider]").forEach((sel) => {
       const key = sel.getAttribute("data-role-provider");
-      const modelInput = list.querySelector(`input[data-role-model="${key}"]`);
+      const modelInput = wrap.querySelector(`input[data-role-model="${key}"]`);
       roles.push({ key, provider: sel.value, model: modelInput ? modelInput.value.trim() : "" });
     });
     if (!roles.length) {
@@ -1023,21 +1361,19 @@ class SettingsPanel {
     if (btn) btn.disabled = true;
     if (st) { st.textContent = "小流量测试中…（每个功能点发一次 max_tokens=1 的探测请求）"; st.style.color = "var(--text-muted,#999)"; }
     try {
-      const r = await window.aerie.api.request({
-        method: "POST",
-        path: "/api/env/model-roles",
-        body: { roles, force: !!force },
-      });
-      if (r && r.data && r.data.error) {
-        if (r.status === 422 && !force && window.confirm((r.data.error || "存在功能点测试失败") + "\n\n仍要强制保存全部绑定吗？")) {
+      await this._apiCall("POST", "/api/env/model-roles", { roles, force: !!force });
+      if (st) { st.textContent = "全部通过，已保存并热加载"; st.style.color = "var(--success,#2ecc71)"; }
+      await this.loadApiKeys();
+    } catch (e) {
+      if (this._isForceable(e) && !force) {
+        if (window.confirm("存在功能点测试失败：" + (e.message || "") + "。仍然保存全部绑定？")) {
           return this.saveModelRoles(true);
         }
-        throw new Error(r.data.error);
+        if (st) { st.textContent = "已取消保存"; st.style.color = "var(--warning,#f39c12)"; }
+      } else if (st) {
+        st.textContent = "未保存: " + e.message;
+        st.style.color = "var(--danger,#e74c3c)";
       }
-      if (st) { st.textContent = "全部通过，已保存并热加载"; st.style.color = "var(--success,#2ecc71)"; }
-      await this.loadModelRoles();
-    } catch (e) {
-      if (st) { st.textContent = "未保存: " + e.message; st.style.color = "var(--danger,#e74c3c)"; }
     } finally {
       if (btn) btn.disabled = false;
       setTimeout(() => { if (st) st.textContent = ""; }, 6000);

@@ -12,6 +12,90 @@
 <link rel="stylesheet" href="styles/world-dashboard.css">
 <link rel="stylesheet" id="theme-css" href="styles/themes/yita-pink.css">
 <link rel="stylesheet" href="styles/onboarding.css">
+<style>
+/* API Key 视图：数据表 + 抽屉式增删改查 */
+.apikey-statusbar {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  flex-wrap: wrap; margin: 0 0 16px; padding: 12px 14px; border-radius: 10px;
+  background: var(--bg-elevated, #fff); border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+}
+.apikey-statusbar__left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted, #999); }
+.apikey-statusbar__count { font-weight: 600; white-space: nowrap; }
+.apikey-statusbar__roles { line-height: 1.6; }
+.apikey-statusbar__actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.apikey-table-card { margin-bottom: 16px; }
+.apikey-table-wrap { overflow-x: auto; }
+.apikey-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.apikey-table th {
+  text-align: left; font-weight: 600; color: var(--text-muted, #999);
+  padding: 8px 10px; border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  white-space: nowrap; user-select: none; background: transparent;
+}
+.apikey-table th.sortable { cursor: pointer; }
+.apikey-table th.sortable:hover { color: var(--accent, #ff5b9c); }
+.apikey-table td {
+  padding: 9px 10px; border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+  vertical-align: middle; color: var(--text, #333);
+}
+.apikey-table tbody tr:hover { background: rgba(127, 127, 127, 0.06); }
+.apikey-provider-cell { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.apikey-badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; line-height: 1.7; white-space: nowrap; }
+.apikey-badge--builtin { background: rgba(91, 141, 255, 0.12); color: #5b8dff; }
+.apikey-badge--custom { background: rgba(255, 91, 156, 0.12); color: var(--accent, #ff5b9c); }
+.apikey-badge--local_cli { background: rgba(153, 153, 153, 0.15); color: var(--text-muted, #999); }
+.apikey-role-tag {
+  display: inline-block; margin: 2px 3px 2px 0; padding: 1px 6px; border-radius: 8px;
+  font-size: 11px; background: rgba(0, 0, 0, 0.05); color: var(--text-muted, #999);
+}
+.apikey-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.apikey-icon-btn {
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  padding: 3px 6px; font-size: 12px; color: var(--text-muted, #999); cursor: pointer;
+}
+.apikey-icon-btn:hover { color: var(--accent, #ff5b9c); border-color: var(--border, rgba(0, 0, 0, 0.08)); background: var(--bg-elevated, #fff); }
+.apikey-empty { padding: 18px 10px; font-size: 12px; color: var(--text-muted, #999); text-align: center; line-height: 1.8; }
+.apikey-more-menu {
+  position: fixed; z-index: 1200; min-width: 128px; padding: 4px;
+  background: var(--bg-elevated, #fff); border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  border-radius: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+.apikey-more-menu button {
+  display: block; width: 100%; text-align: left; padding: 6px 10px; border: none;
+  background: transparent; border-radius: 6px; font-size: 12px; color: var(--text, #333); cursor: pointer;
+}
+.apikey-more-menu button:hover { background: rgba(127, 127, 127, 0.1); }
+.apikey-more-menu button.danger { color: var(--danger, #e74c3c); }
+.apikey-more-menu button.danger:hover { background: rgba(231, 76, 60, 0.12); }
+.apikey-add-chooser {
+  position: fixed; z-index: 1200; min-width: 240px; max-height: 340px; overflow-y: auto; padding: 6px;
+  background: var(--bg-elevated, #fff); border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  border-radius: 10px; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16);
+}
+.apikey-add-chooser__group { padding: 6px 10px 2px; font-size: 11px; color: var(--text-muted, #999); }
+.apikey-add-chooser__item {
+  display: block; width: 100%; text-align: left; padding: 8px 10px; border: none;
+  background: transparent; border-radius: 8px; font-size: 12px; color: var(--text, #333); cursor: pointer;
+}
+.apikey-add-chooser__item:hover { background: rgba(127, 127, 127, 0.1); }
+.apikey-drawer-mask { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 1300; }
+.apikey-drawer {
+  position: fixed; top: 0; right: 0; height: 100%; width: 480px; max-width: 92vw; z-index: 1301;
+  display: flex; flex-direction: column; background: var(--bg-elevated, #fff);
+  border-left: 1px solid var(--border, rgba(0, 0, 0, 0.1)); box-shadow: -8px 0 30px rgba(0, 0, 0, 0.18);
+}
+.apikey-drawer__head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08)); }
+.apikey-drawer__title { font-size: 14px; font-weight: 600; color: var(--text, #333); }
+.apikey-drawer__close { background: transparent; border: none; font-size: 20px; line-height: 1; color: var(--text-muted, #999); cursor: pointer; padding: 0 4px; }
+.apikey-drawer__close:hover { color: var(--accent, #ff5b9c); }
+.apikey-drawer__body { flex: 1; overflow-y: auto; padding: 16px 18px; }
+.apikey-drawer__foot { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border, rgba(0, 0, 0, 0.08)); }
+.apikey-drawer__foot .apikey-drawer__spacer { flex: 1; }
+.apikey-drawer__status { font-size: 11px; color: var(--text-muted, #999); line-height: 1.5; }
+.apikey-advanced { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border, rgba(0, 0, 0, 0.1)); }
+.apikey-advanced > summary { cursor: pointer; font-size: 12px; color: var(--text-muted, #999); }
+.apikey-field--row { flex-direction: row; align-items: center; gap: 8px; }
+.apikey-input[readonly] { color: var(--text-muted, #999); cursor: default; }
+</style>
 </head>
 <body>
 <!-- Phase 7: Icon sprite (inlined for offline / file:// protocol support) -->
@@ -1158,6 +1242,10 @@
               <span class="is-mode-tab__dot"></span>
               <span class="is-mode-tab__label">功能 API</span>
             </button>
+            <button class="settings-mode-tab is-mode-tab" role="tab" aria-selected="false" data-mode="plugins" id="tab-settings-plugins" aria-controls="settings-plugins-view">
+              <span class="is-mode-tab__dot"></span>
+              <span class="is-mode-tab__label">模块中心</span>
+            </button>
             <button class="settings-mode-tab is-mode-tab" role="tab" aria-selected="false" data-mode="yaml" id="tab-settings-yaml" aria-controls="settings-yaml-view">
               <span class="is-mode-tab__dot"></span>
               <span class="is-mode-tab__label">高级 (YAML)</span>
@@ -1851,65 +1939,116 @@
                 软件订阅与第三方 API 费用分开；未配置平台代付时，API 费用由你的供应商直接收取。
               </div>
             </div>
-            <div class="settings-apikey-intro" style="margin: 8px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,91,156,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(255,91,156,0.25); font-size: 13px; line-height: 1.6; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-              <div>
-                <strong style="color: var(--accent, #ff5b9c);">AI 服务配置</strong><br>
-                添加 AI 厂商并填入 API Key 就能开始对话。所有密钥只保存在本地，不会上传到任何地方。
+            <div id="apikey-statusbar" class="apikey-statusbar">
+              <div class="apikey-statusbar__left">
+                <span id="apikey-online-count" class="apikey-statusbar__count">● 在线 0 / 共 0</span>
+                <span id="apikey-role-summary" class="apikey-statusbar__roles">正在读取功能点绑定…</span>
               </div>
-              <div style="display:flex; gap:8px; align-items:center; flex:0 0 auto;">
-                <button id="custom-api-toggle-btn" class="btn btn-secondary btn-sm" type="button">功能点路由</button>
-                <button id="apikey-add-btn" class="btn btn-primary btn-sm" type="button" style="position:relative;">
-                  ＋ 添加模型
-                  <span id="apikey-add-badge" style="display:inline-flex; min-width:18px; height:18px; padding:0 5px; margin-left:6px; border-radius:9px; background:rgba(255,255,255,0.92); color:var(--accent,#ff5b9c); font-size:11px; font-weight:600; align-items:center; justify-content:center; box-sizing:border-box; vertical-align:middle;">0</span>
-                </button>
+              <div class="apikey-statusbar__actions">
+                <button id="apikey-add-btn" class="btn btn-primary btn-sm" type="button">＋ 添加厂商</button>
+                <button id="apikey-testall-btn" class="btn btn-secondary btn-sm" type="button">⇅ 全部测速</button>
               </div>
             </div>
-            <div id="apikey-add-menu" style="display:none; margin:0 0 16px; padding:12px; border-radius:12px; background:var(--bg-elevated,#ffffff); border:1px solid var(--border,rgba(0,0,0,0.08)); box-shadow:0 10px 34px rgba(0,0,0,0.10);">
-              <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <div id="apikey-menu-tabs" style="display:flex; flex-direction:column; gap:4px; min-width:150px; flex:1 1 150px;">
-                  <!-- JS 动态渲染 -->
-                </div>
-                <div id="apikey-menu-panel" style="flex:1 1 240px; min-width:220px; max-height:340px; overflow-y:auto;">
-                  <!-- JS 动态渲染 -->
-                </div>
-              </div>
-            </div>
-            <div id="apikey-count-reminder" style="display:none;"></div>
-            <div id="custom-provider-panel" class="apikey-provider-card" style="display:none; margin-bottom:16px;">
-              <div class="apikey-provider-header">
-                <div class="apikey-provider-name">
-                  <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
-                  自定义 API · Custom API
-                </div>
-                <div class="apikey-provider-status" style="font-size:11px;color:var(--text-muted,#999);">任意 OpenAI 兼容 API（如 TokenDance）</div>
-              </div>
-              <div id="custom-provider-form" class="apikey-provider-fields" style="display:flex;flex-direction:column;gap:10px;">
-                <!-- JS 动态渲染 -->
-              </div>
-              <div class="apikey-provider-actions">
-                <button type="button" id="custom-provider-save-btn" class="btn btn-primary btn-sm">测试并保存 · Test &amp; Save</button>
-                <span id="custom-provider-status" style="font-size:11px;color:var(--text-muted,#999);"></span>
-              </div>
-            </div>
-            <div id="custom-api-panel" class="apikey-provider-card" style="display:none; margin-bottom:16px;">
+
+            <div class="apikey-provider-card apikey-table-card">
               <div class="apikey-provider-header">
                 <div class="apikey-provider-name">
                   <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
                   功能点路由 · Model Roles
                 </div>
-                <div class="apikey-provider-status" style="font-size:11px;color:var(--text-muted,#999);">为对话 / 子Agent / 代码 / 轻量任务分别指定厂商与模型，保存前自动小流量测试</div>
+                <div class="apikey-provider-status" style="font-size:11px;">为对话 / 辅助 / 生图等功能点指定厂商与模型</div>
               </div>
-              <div id="custom-api-role-list" class="apikey-provider-fields" style="display:flex;flex-direction:column;gap:10px;">
+              <div id="model-roles-table" class="apikey-table-wrap">
                 <!-- JS 动态渲染 -->
               </div>
               <div class="apikey-provider-actions">
-                <button type="button" id="custom-api-save-btn" class="btn btn-primary btn-sm">测试并保存 · Test &amp; Save</button>
-                <span id="custom-api-status" style="font-size:11px;color:var(--text-muted,#999);"></span>
+                <button type="button" id="model-roles-save-btn" class="btn btn-primary btn-sm">测试并保存 · Test &amp; Save</button>
+                <span id="model-roles-status" style="font-size:11px;color:var(--text-muted,#999);"></span>
               </div>
             </div>
-            <div id="apikey-provider-list" class="apikey-provider-list">
-              <!-- JS 动态渲染 -->
+
+            <div class="apikey-provider-card apikey-table-card">
+              <div class="apikey-provider-header">
+                <div class="apikey-provider-name">
+                  <span class="apikey-provider-dot" style="background: var(--accent, #ff5b9c)"></span>
+                  AI 厂商 · Providers
+                </div>
+                <div class="apikey-provider-status" style="font-size:11px;">点行或「编辑」修改；密钥仅存本地</div>
+              </div>
+              <div id="apikey-provider-list" class="apikey-table-wrap">
+                <!-- JS 动态渲染 -->
+              </div>
             </div>
+
+            <div class="apikey-provider-card apikey-table-card">
+              <div class="apikey-provider-header">
+                <div class="apikey-provider-name">
+                  <span class="apikey-provider-dot" style="background: var(--text-muted, #999)"></span>
+                  专用服务 · Special Services
+                </div>
+                <div class="apikey-provider-status" style="font-size:11px;">凭据在 .env 中管理</div>
+              </div>
+              <div id="special-services-table" class="apikey-table-wrap">
+                <!-- JS 动态渲染 -->
+              </div>
+            </div>
+
+            <!-- 厂商编辑抽屉 -->
+            <div id="apikey-drawer-mask" class="apikey-drawer-mask" style="display:none;"></div>
+            <aside id="apikey-drawer" class="apikey-drawer" role="dialog" aria-modal="true" aria-labelledby="apikey-drawer-title" style="display:none;">
+              <div class="apikey-drawer__head">
+                <div id="apikey-drawer-title" class="apikey-drawer__title">添加厂商</div>
+                <button type="button" id="apikey-drawer-close" class="apikey-drawer__close" aria-label="关闭">×</button>
+              </div>
+              <div class="apikey-drawer__body">
+                <div class="apikey-provider-fields">
+                  <label class="apikey-field">
+                    <span>名称 · Name</span>
+                    <input type="text" id="apikey-drawer-name" class="apikey-input" placeholder="例如 TokenDance">
+                  </label>
+                  <label class="apikey-field">
+                    <span>类型 · Kind</span>
+                    <input type="text" id="apikey-drawer-kind" class="apikey-input" value="自定义" readonly>
+                  </label>
+                  <label class="apikey-field" id="apikey-drawer-base-url-field">
+                    <span>Base URL</span>
+                    <input type="text" id="apikey-drawer-base-url" class="apikey-input" placeholder="https://example.com/v1">
+                  </label>
+                  <label class="apikey-field">
+                    <span>API Key</span>
+                    <div class="apikey-input-row">
+                      <input type="password" id="apikey-drawer-api-key" class="apikey-input" placeholder="sk-...">
+                      <button type="button" id="apikey-drawer-eye" class="apikey-toggle-btn" title="显示/隐藏">
+                        <svg class="icon icon--14" aria-hidden="true"><use href="#icon-ui-eye"/></svg>
+                      </button>
+                    </div>
+                  </label>
+                  <label class="apikey-field">
+                    <span>模型 · Model</span>
+                    <input type="text" id="apikey-drawer-model" class="apikey-input" list="apikey-drawer-model-list" placeholder="模型名 / model（可自由输入）">
+                    <datalist id="apikey-drawer-model-list"></datalist>
+                  </label>
+                  <details class="apikey-advanced" id="apikey-drawer-advanced">
+                    <summary>高级 · Advanced</summary>
+                    <label class="apikey-field apikey-field--row" style="margin-top:10px;">
+                      <input type="checkbox" id="apikey-drawer-supports-tools">
+                      <span>支持工具调用 / tools（可被「子Agent」等功能点选用）</span>
+                    </label>
+                    <label class="apikey-field" style="margin-top:8px;">
+                      <span>工具调用上限（1-50，默认 8）</span>
+                      <input type="number" id="apikey-drawer-max-tool-calls" class="apikey-input" value="8" min="1" max="50">
+                    </label>
+                  </details>
+                </div>
+              </div>
+              <div class="apikey-drawer__foot">
+                <button type="button" id="apikey-drawer-test" class="btn btn-secondary btn-sm">测试连接</button>
+                <span id="apikey-drawer-status" class="apikey-drawer__status"></span>
+                <span class="apikey-drawer__spacer"></span>
+                <button type="button" id="apikey-drawer-cancel" class="btn btn-secondary btn-sm">取消</button>
+                <button type="button" id="apikey-drawer-save" class="btn btn-primary btn-sm">保存</button>
+              </div>
+            </aside>
             <div id="baidu-map-block" class="apikey-provider-card" style="margin-top:14px;">
               <div class="apikey-provider-header">
                 <div class="apikey-provider-name">
@@ -1954,6 +2093,26 @@
             <div class="settings-actions" style="margin-top:16px;">
               <button id="feature-api-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
             </div>
+          </div>
+
+          <!-- 模块中心 plugins 视图 -->
+          <div id="settings-plugins-view" role="tabpanel" aria-labelledby="tab-settings-plugins" tabindex="0" style="display:none;">
+            <div class="plugins-intro">
+              <svg class="icon icon--16 plugins-intro__icon" aria-hidden="true"><use href="#icon-ui-package"/></svg>
+              <div>
+                <strong>模块中心 · Module Center</strong>
+                <div class="plugins-intro__sub">核心保持精简，浏览器内核、本地语音、向量知识库等重能力按需下载。安装或移除后需重启后端生效。</div>
+              </div>
+            </div>
+            <div id="plugins-list" class="plugins-list">
+              <!-- JS 动态渲染 -->
+            </div>
+            <div class="plugins-footer">
+              <button id="plugins-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
+              <button id="plugins-install-local-btn" class="btn btn-secondary" type="button">本地安装 · Install from file</button>
+              <button id="plugins-open-dir-btn" class="btn btn-secondary" type="button">打开目录 · Open folder</button>
+            </div>
+            <div id="plugins-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
           </div>
 
           <!-- 高级 YAML 视图 -->

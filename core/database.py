@@ -293,6 +293,43 @@ SCHEMA_SQL: list[str] = [
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
     """,
+    # AI 厂商配置（内置 / 自定义 / 本地 CLI）。参数即真源，.env 是派生镜像。
+    """
+    CREATE TABLE IF NOT EXISTS ai_providers (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        base_url TEXT NOT NULL DEFAULT '',
+        api_key TEXT NOT NULL DEFAULT '',
+        model TEXT NOT NULL DEFAULT '',
+        models TEXT NOT NULL DEFAULT '[]',
+        supports_tools INTEGER NOT NULL DEFAULT 0,
+        max_tool_calls INTEGER NOT NULL DEFAULT 8,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_role_bindings (
+        role TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_provider_checks (
+        target TEXT PRIMARY KEY,
+        ok INTEGER NOT NULL DEFAULT 0,
+        http_status INTEGER,
+        latency_ms INTEGER NOT NULL DEFAULT 0,
+        mode TEXT NOT NULL DEFAULT '',
+        detail TEXT NOT NULL DEFAULT '',
+        checked_at TEXT NOT NULL
+    );
+    """,
 ]
 
 

@@ -2351,6 +2351,7 @@ def _is_image_upload(filename: str, content_type: str | None) -> bool:
 
 def _build_image_workflow():
     from core.image_service import (
+        JimengCanvasImageGenerationProvider,
         LLMCallerImageGenerationProvider,
         LLMCallerImageVisionProvider,
         ImageWorkflow,
@@ -2361,6 +2362,8 @@ def _build_image_workflow():
         upload_base=_upload_root(),
         feature_enabled=_image_assets_enabled(),
         generation_provider=LLMCallerImageGenerationProvider(brain),
+        # 人物类走即梦：只有它给得了竖构图与 i2i 一致人设。
+        generation_providers={"jimeng": JimengCanvasImageGenerationProvider()},
         vision_provider=LLMCallerImageVisionProvider(brain),
     )
 
@@ -5779,7 +5782,16 @@ def _ws() -> Any:
     """延迟获取工作区管理器单例(避免模块导入时读 YAML)。"""
     from core.workspace import get_workspace_manager
 
-    return get_workspace_manager()
+    ws = get_workspace_manager()
+    # 注入与电脑操控共用的 AccessPolicy:两侧读写同一份权限状态。
+    # 不注入时 ws._access_policy 恒为 None,/api/workspace/permission 永远回落
+    # manual —— 用户切到「完全访问」后会被轮询拉回「手动审批」。
+    # 在此处绑定而非单例创建时:请求期 companion 已就绪,拿到的才是权威控制器实例。
+    try:
+        ws.bind_access_policy(_get_computer_controller().permission)
+    except Exception:
+        logger.debug("注入工作区访问策略失败", exc_info=True)
+    return ws
 
 
 @app.get("/api/workspace/roots")
@@ -5979,52 +5991,6 @@ _FEATURE_APIS = [
 ]
 
 
-def _env_file_path() -> Path:
-    """Return path to .env file (same directory as main.py)."""
-    return Path(__file__).resolve().parent.parent / ".env"
-
-
-def _read_env_file() -> dict[str, str]:
-    """Parse .env file into a dict. Returns empty dict if file doesn't exist."""
-    env_path = _env_file_path()
-    result: dict[str, str] = {}
-    if not env_path.exists():
-        return result
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        result[k.strip()] = v.strip()
-    return result
-
-
-def _write_env_file(data: dict[str, str]) -> None:
-    """Write env dict back to .env file, preserving comments and order where possible."""
-    env_path = _env_file_path()
-    existing_lines: list[str] = []
-    if env_path.exists():
-        existing_lines = env_path.read_text(encoding="utf-8").splitlines()
-
-    updated = set()
-    new_lines: list[str] = []
-    for line in existing_lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            k = stripped.split("=", 1)[0].strip()
-            if k in data:
-                new_lines.append(f"{k}={data[k]}")
-                updated.add(k)
-                continue
-        new_lines.append(line)
-
-    for k, v in data.items():
-        if k not in updated:
-            new_lines.append(f"{k}={v}")
-
-    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
-
 # provider key 到健康状态名的别名映射（provider_health.json 使用运行时的 provider name）
 _HEALTH_ALIAS = {"siliconflow": "siliconflow-light"}
 
@@ -6054,6 +6020,7 @@ def _mask_secret(value: str) -> str:
 
 
 from core.ai_services import (
+    KIND_LOCAL_CLI,
     ROLE_META,
     SPECIAL_SERVICE_META,
     AiServicesError,
@@ -6061,6 +6028,10 @@ from core.ai_services import (
     list_bindable_providers,
     resolve_provider,
     run_provider_check,
+)
+from core.env_file import (
+    read_env_file as _read_env_file,
+    write_env_file as _write_env_file,
 )
 
 
@@ -6079,38 +6050,71 @@ def _hot_reload_brain() -> None:
         logger.debug("provider config hot-reload failed", exc_info=True)
 
 
-@app.get("/api/env/providers")
-async def env_providers() -> dict:
-    """Return list of AI providers with config status (keys masked) + 余额/健康状态。"""
+# ── AI 厂商（SQLite 表驱动，统一 CRUD）──
+
+
+def _provider_view(provider: dict, checks: dict[str, Any]) -> dict:
+    """厂商记录 → 前端视图：密钥脱敏，附最近一次连通性探测结果。"""
+    return {
+        "id": provider.get("id", ""),
+        "kind": provider.get("kind", "custom"),
+        "name": provider.get("name", ""),
+        "base_url": provider.get("base_url", ""),
+        "api_key_masked": _mask_secret(provider.get("api_key", "")),
+        "model": provider.get("model", ""),
+        "models": list(provider.get("models") or []),
+        "supports_tools": bool(provider.get("supports_tools", False)),
+        "max_tool_calls": provider.get("max_tool_calls", 8),
+        "enabled": bool(provider.get("enabled", True)),
+        "check": checks.get(provider.get("id", ""), {}),
+    }
+
+
+def _special_service_views() -> list[dict]:
+    """设置页只读展示的专用服务（凭据仍在 .env，不进厂商表）。"""
     env = _read_env_file()
+    return [
+        {
+            "key": svc["key"],
+            "name": svc["name"],
+            "desc": svc["desc"],
+            "model": env.get(svc["env_model"], svc["default_model"]),
+        }
+        for svc in SPECIAL_SERVICE_META
+    ]
+
+
+def _available_builtin_providers(store) -> list[dict]:
+    """表里还没有的内置厂商——供「添加厂商」重新加回被删掉的条目。"""
+    from core.ai_services import card_provider_metas
+
+    present = {p["id"] for p in store.list_providers()}
+    return [m for m in card_provider_metas() if m["key"] not in present]
+
+
+@app.get("/api/ai/providers")
+async def ai_providers_list() -> dict:
+    """全部厂商（内置 / 自定义 / 本地 CLI），含探测结果与余额健康状态。"""
+    store = _ai_store()
+    checks = store.get_checks()
     health = _read_provider_health_state()
-    checks = _ai_store().get_checks()
     providers = []
-    for meta in _PROVIDER_META:
-        key_val = env.get(meta["env_key"], "")
-        h = health.get(meta["key"]) or health.get(_HEALTH_ALIAS.get(meta["key"], "")) or {}
-        check = checks.get(meta["key"]) or {}
+    for record in store.list_providers(include_key=True):
+        h = health.get(record["id"]) or health.get(_HEALTH_ALIAS.get(record["id"], "")) or {}
         providers.append({
-            "key": meta["key"],
-            "name": meta["name"],
-            "configured": bool(key_val),
-            "api_key_masked": "•" * 8 + key_val[-4:] if len(key_val) > 4 else ("•" * len(key_val) if key_val else ""),
-            "base_url": env.get(meta["env_url"], meta["default_url"]),
-            "model": env.get(meta["env_model"], meta["default_model"]),
-            "env_key": meta["env_key"],
-            "env_url": meta["env_url"],
-            "env_model": meta["env_model"],
-            "default_url": meta["default_url"],
-            "default_model": meta["default_model"],
-            "models": meta.get("models", [meta["default_model"]]),
+            **_provider_view(record, checks),
             "balance": h.get("balance"),
             "health_status": h.get("status", "unknown"),
             "health_reason": h.get("reason", ""),
-            "check": check,
         })
     return {
         "providers": providers,
-        "configured_count": sum(1 for p in providers if p["configured"]),
+        "special_services": _special_service_views(),
+        "available_builtins": _available_builtin_providers(store),
+        "configured_count": sum(
+            1 for p in providers
+            if p["enabled"] and (p["api_key_masked"] or p["kind"] == "local_cli")
+        ),
     }
 
 
@@ -6173,152 +6177,115 @@ def _looks_like_masked(value: str) -> bool:
     return bool(v) and any(marker in v for marker in ("•", "·", "●"))
 
 
-@app.post("/api/env/save")
-async def env_save(request: Request) -> dict:
-    """Save built-in provider credentials to .env, then run a connectivity check.
+@app.put("/api/ai/providers")
+async def ai_providers_upsert(request: Request) -> dict:
+    """新增 / 编辑一个厂商，落库前做一次小流量连通性测试。
 
-    Body: {"provider_key": "deepseek", "api_key": "...", "base_url": "...", "model": "..."}
-    A masked placeholder (••••) as api_key is rejected server-side.
-    """
-    try:
-        body = await request.json()
-        provider_key = body.get("provider_key", "")
-        meta = next((m for m in _PROVIDER_META if m["key"] == provider_key), None)
-        if not meta:
-            return JSONResponse({"error": "Unknown provider: " + provider_key}, status_code=400)
-
-        api_key = body.get("api_key")
-        if api_key is not None and _looks_like_masked(str(api_key)):
-            return JSONResponse(
-                {"error": "API Key 仍是脱敏占位值，请输入真实密钥后再保存"},
-                status_code=400,
-            )
-
-        env = _read_env_file()
-        changed: dict[str, str] = {}
-        if api_key is not None:
-            env[meta["env_key"]] = api_key
-            changed[meta["env_key"]] = api_key
-        base_url = body.get("base_url")
-        if base_url is not None:
-            env[meta["env_url"]] = base_url
-            changed[meta["env_url"]] = base_url
-        model = body.get("model")
-        if model is not None:
-            env[meta["env_model"]] = model
-            changed[meta["env_model"]] = model
-
-        _write_env_file(env)
-        if changed:
-            os.environ.update(changed)
-
-        # 保存即测：对新凭证做轻量 /models 探测，结果落 ai_services.json + jsonl。
-        check: dict = {}
-        current_key = env.get(meta["env_key"], "")
-        if current_key:
-            check = await run_provider_check(
-                base_url=env.get(meta["env_url"], meta["default_url"]),
-                api_key=current_key,
-                mode="models",
-            )
-            _ai_store().record_check(provider_key, check)
-
-        _hot_reload_brain()
-        return {
-            "status": "ok",
-            "provider": provider_key,
-            "hot_reloaded": list(changed.keys()),
-            "check": check,
-        }
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-# ── Custom OpenAI-compatible providers (file-backed) ──
-
-
-def _custom_provider_view(cp: dict) -> dict:
-    return {
-        "id": cp.get("id", ""),
-        "name": cp.get("name", ""),
-        "base_url": cp.get("base_url", ""),
-        "api_key_masked": _mask_secret(cp.get("api_key", "")),
-        "model": cp.get("model", ""),
-        "supports_tools": bool(cp.get("supports_tools", False)),
-        "max_tool_calls": cp.get("max_tool_calls", 8),
-        "check": _ai_store().get_checks().get(cp.get("id", ""), {}),
-    }
-
-
-@app.get("/api/env/custom-providers")
-async def env_custom_providers_get() -> dict:
-    """Return user-added custom API providers (keys masked)."""
-    providers = [_custom_provider_view(cp) for cp in _ai_store().list_custom_providers(include_key=True)]
-    return {"providers": providers}
-
-
-@app.put("/api/env/custom-providers")
-async def env_custom_providers_upsert(request: Request) -> dict:
-    """Create or update one custom provider, then check connectivity.
-
-    Body: {"id"?: "...", "name", "base_url", "api_key", "model",
-           "supports_tools"?: bool, "max_tool_calls"?: int, "force"?: bool}
-    On update, empty api_key keeps the stored key.
+    Body: {"id"?, "kind": builtin|custom|local_cli, "name", "base_url", "api_key",
+           "model", "models"?, "supports_tools"?, "max_tool_calls"?, "enabled"?, "force"?}
+    编辑时不传 api_key 则沿用库里的旧值；测试失败且 force 未置真时不写盘。
     """
     try:
         body = await request.json()
         force = bool(body.get("force"))
         record = {
             "id": body.get("id"),
+            "kind": body.get("kind") or "custom",
             "name": body.get("name"),
             "base_url": body.get("base_url"),
             "api_key": body.get("api_key"),
             "model": body.get("model"),
+            "models": body.get("models"),
             "supports_tools": body.get("supports_tools", False),
             "max_tool_calls": body.get("max_tool_calls", 8),
+            "enabled": body.get("enabled", True),
         }
         store = _ai_store()
         try:
-            prepared = store.prepare_custom_provider(record)
+            prepared = store.prepare_provider(record)
         except AiServicesError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
 
-        # 先测后存：测试失败且未强制时不写盘。
-        check = await run_provider_check(
-            base_url=prepared["base_url"],
-            api_key=prepared["api_key"],
-            model=prepared["model"],
-            mode="chat" if prepared["model"] else "models",
-        )
-        if not check.get("ok") and not force:
-            return JSONResponse(
-                {"error": check.get("detail") or "连通性测试失败，未保存", "check": check},
-                status_code=422,
+        # 先测后存：本地 CLI 厂商不走网络探测。
+        if prepared["kind"] == KIND_LOCAL_CLI:
+            check = {"ok": True, "latency_ms": 0, "mode": "local", "detail": "本地 CLI，跳过网络探测"}
+        else:
+            check = await run_provider_check(
+                base_url=prepared["base_url"],
+                api_key=prepared["api_key"],
+                model=prepared["model"],
+                mode="chat" if prepared["model"] else "models",
             )
+            if not check.get("ok") and not force:
+                return JSONResponse(
+                    {"error": check.get("detail") or "连通性测试失败，未保存", "check": check},
+                    status_code=422,
+                )
 
-        saved = store.commit_custom_provider(prepared)
+        saved = store.commit_provider(prepared)
         store.record_check(saved["id"], check)
         _hot_reload_brain()
-        return {"status": "ok", "provider": _custom_provider_view(saved), "check": check}
+        return {
+            "status": "ok",
+            "provider": _provider_view(saved, {}),
+            "check": check,
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@app.delete("/api/env/custom-providers/{provider_id}")
-async def env_custom_providers_delete(provider_id: str) -> dict:
-    """Delete one custom provider. Bindings referencing it are reset to defaults."""
+@app.delete("/api/ai/providers/{provider_id}")
+async def ai_providers_delete(provider_id: str) -> dict:
+    """删除一个厂商（内置厂商同时清掉 .env 凭据）。引用它的功能点回落默认。"""
     try:
         store = _ai_store()
-        deleted = store.delete_custom_provider(provider_id)
-        if not deleted:
+        if not store.delete_provider(provider_id):
             return JSONResponse({"error": "provider_not_found"}, status_code=404)
         from core.ai_services import DEFAULT_BINDINGS
+
         for role, target in store.get_bindings().items():
             if target.get("provider") == provider_id:
                 default = DEFAULT_BINDINGS[role]
                 store.set_binding(role, default["provider"], default["model"])
         _hot_reload_brain()
         return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/ai/providers/{provider_id}/enabled")
+async def ai_providers_set_enabled(provider_id: str, request: Request) -> dict:
+    """启用 / 停用。停用只清 .env 凭据，库里的 Key 保留，随时可恢复。"""
+    try:
+        body = await request.json()
+        saved = _ai_store().set_enabled(provider_id, bool(body.get("enabled", True)))
+        if saved is None:
+            return JSONResponse({"error": "provider_not_found"}, status_code=404)
+        _hot_reload_brain()
+        return {"status": "ok", "provider": _provider_view(saved, {})}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/ai/providers/{provider_id}/check")
+async def ai_providers_check(provider_id: str) -> dict:
+    """单独探测一个厂商的连通性（表格行内「测试」）。"""
+    try:
+        store = _ai_store()
+        record = store.get_provider(provider_id)
+        if record is None:
+            return JSONResponse({"error": "provider_not_found"}, status_code=404)
+        if record["kind"] == KIND_LOCAL_CLI:
+            check = {"ok": True, "latency_ms": 0, "mode": "local", "detail": "本地 CLI，跳过网络探测"}
+        else:
+            check = await run_provider_check(
+                base_url=record["base_url"],
+                api_key=record["api_key"],
+                model=record["model"],
+                mode="chat" if record["model"] else "models",
+            )
+        store.record_check(provider_id, check)
+        return {"status": "ok", "check": check}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -7048,6 +7015,48 @@ async def persona_avatar_get() -> Response:
 # ── 三视图（辅助生图参考图）──
 # 每套人设独立存 front/side/back 三张参考图，用于图生图锁定角色外观。
 # 数据层由 persona_manager 的 three_view_* 方法负责（data_dir/personas/three_views/）。
+#
+# 上传/删除后会把三视图同步到即梦画布：人物类生图走即梦的 i2i，靠画布上的
+# Element 节点锁脸（见 core.jimeng_canvas.sync_persona_reference）。没有三视图时
+# 该步骤无操作，生图自动降级为纯文生图 + 外貌描写。
+
+
+def _sync_jimeng_reference(persona_id: str) -> None:
+    """把该人设的三视图同步到即梦画布（尽力而为，失败只记日志）。
+
+    同步一张 8MB 的三视图要几十秒，绝不能挂在 HTTP 请求里 —— 由上传接口
+    fire-and-forget 地丢到线程池，不阻塞用户看到「上传成功」。
+    """
+    try:
+        from core import jimeng_canvas
+
+        if not jimeng_canvas.available():
+            logger.debug("jimeng reference sync skipped: CLI not installed")
+            return
+        views: dict[str, bytes] = {}
+        for view in jimeng_canvas.VIEW_ORDER:
+            pair = _persona_mgr.load_three_view(persona_id, view)
+            if pair:
+                views[view] = pair[0]
+        if not views:
+            jimeng_canvas.clear_persona_reference(persona_id)
+            return
+        result = jimeng_canvas.sync_persona_reference(persona_id, views)
+        logger.info(
+            "jimeng reference sync persona=%s ok=%s changed=%s reason=%s",
+            persona_id, result.get("ok"), result.get("changed"), result.get("reason", ""),
+        )
+    except Exception:
+        logger.warning("jimeng reference sync failed persona=%s", persona_id, exc_info=True)
+
+
+def _schedule_jimeng_reference_sync(persona_id: str) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _sync_jimeng_reference, persona_id)
+    except RuntimeError:
+        # 无运行中的事件循环（如测试或脚本调用）：同步执行，保持行为可预期。
+        _sync_jimeng_reference(persona_id)
 
 
 def _three_view_max_bytes() -> int:
@@ -7168,6 +7177,8 @@ async def persona_three_view_upload(
         if pair:
             import base64 as _b64
             dataurl = "data:" + pair[1] + ";base64," + _b64.b64encode(pair[0]).decode("ascii")
+        # 上传即刻同步到即梦画布，后续人物类生图即可 i2i 锁脸。
+        _schedule_jimeng_reference_sync(persona_id)
         return {
             "status": "ok",
             "persona_id": persona_id,
@@ -7187,6 +7198,9 @@ async def persona_three_view_delete(persona_id: str, view: str) -> dict:
         ok, msg = _persona_mgr.delete_three_view(persona_id, view)
         if not ok:
             return JSONResponse({"error": msg}, status_code=400)
+        # 三视图变了就重新同步；整套删完时同步函数会清掉参考记录，
+        # 生图随即回落为纯文生图 + 外貌描写。
+        _schedule_jimeng_reference_sync(persona_id)
         return {"status": "ok", "persona_id": persona_id, "view": view}
     except Exception as e:
         logger.exception("persona three-view delete error")

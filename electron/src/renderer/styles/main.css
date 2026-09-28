@@ -3944,3 +3944,190 @@ body {
 *::-webkit-scrollbar-corner {
   background: var(--scrollbar-track);
 }
+
+/* ── 模块中心（功能包 .aeriepack） ─────────────────────────────
+   小字号、非粗体、柔和圆角浅粉，与设置页其余卡片保持同一视觉语言。 */
+
+.plugins-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 8px 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 91, 156, 0.10), rgba(155, 89, 182, 0.10));
+  border: 1px solid rgba(255, 91, 156, 0.22);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text, #333);
+}
+
+.plugins-intro__icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--color-primary, #ff5b9c);
+}
+
+.plugins-intro__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #999);
+}
+
+.plugins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plugins-empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted, #999);
+}
+
+.plugin-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e5ea);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.plugin-card:hover {
+  border-color: rgba(255, 91, 156, 0.45);
+  box-shadow: 0 4px 14px rgba(255, 91, 156, 0.10);
+}
+
+.plugin-card__icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 91, 156, 0.10);
+  color: var(--color-primary, #ff5b9c);
+}
+
+.plugin-card__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.plugin-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plugin-card__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text, #333);
+}
+
+.plugin-card__state {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 400;
+  padding: 2px 10px;
+  border-radius: 20px;
+  background: rgba(153, 153, 153, 0.12);
+  color: var(--color-text-muted, #999);
+}
+
+.plugin-card__state--loaded {
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--color-success, #34c759);
+}
+
+.plugin-card__state--awaiting_restart {
+  background: rgba(255, 149, 0, 0.12);
+  color: var(--warning, #ff9500);
+}
+
+.plugin-card__state--broken,
+.plugin-card__state--incompatible {
+  background: rgba(255, 59, 48, 0.10);
+  color: var(--error, #ff3b30);
+}
+
+.plugin-card__desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary, #777);
+}
+
+.plugin-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--color-text-muted, #999);
+}
+
+.plugin-card__error {
+  color: var(--error, #ff3b30);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-card__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.plugin-card__bar {
+  flex: 1 1 auto;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--color-border, #e5e5ea);
+  overflow: hidden;
+}
+
+.plugin-card__bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--color-accent-pink, #ff7eb6), var(--color-primary, #ff5b9c));
+  transition: width 0.2s ease;
+}
+
+.plugin-card__progress-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--color-text-muted, #999);
+}
+
+.plugin-card__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.plugin-card__btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 400;
+  border-radius: 8px;
+}
+
+.plugins-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}

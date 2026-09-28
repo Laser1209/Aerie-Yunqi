@@ -3,18 +3,22 @@ import pytest
 
 import core.ai_services as ai_services
 from core.ai_services import AiServicesStore
+from core.database import Database
 from core.llm_caller import LLMCaller, LLMCallerResponse
 
 
 @pytest.fixture
 def isolated_store(tmp_path, monkeypatch):
-    store = AiServicesStore(tmp_path / "data" / "ai_services.json")
+    Database.reset_instance()
+    store = AiServicesStore(Database(tmp_path / "llm-bindings.db"))
     monkeypatch.setattr(ai_services, "get_store", lambda: store)
-    return store
+    yield store
+    Database.reset_instance()
 
 
 def _custom(store, *, supports_tools=False, model="gpt-bound"):
-    return store.commit_custom_provider(store.prepare_custom_provider({
+    return store.commit_provider(store.prepare_provider({
+        "kind": "custom",
         "name": "RelayOne",
         "base_url": "https://relay.example.com/v1",
         "api_key": "sk-relay-123456",

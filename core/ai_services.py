@@ -1,21 +1,20 @@
-"""AI services registry — custom providers, role bindings, connectivity checks.
+"""AI services registry — providers, role bindings, connectivity checks.
 
-Single responsibility module that separates three concerns previously squeezed
-into ``.env``:
+厂商配置（内置 / 自定义 / 本地 CLI）与功能点绑定统一落在 ``data/aerie.db``：
 
-* **Credentials** of built-in providers stay in ``.env`` (key / base url / model).
-* **Custom OpenAI-compatible providers** live in ``data/ai_services.json``.
-* **Role bindings** ("which provider+model serves 对话/子Agent/轻量") live in the
-  same JSON file and never overwrite provider credential variables.
+* ``ai_providers``       厂商表
+* ``ai_role_bindings``   功能点 → 厂商 + 模型
+* ``ai_provider_checks`` 最近一次连通性探测结果
 
-The JSON file is the only persisted state of this module. Writes are atomic
-(tmp file + ``os.replace``) and guarded by a process-local lock; reads cache by
-mtime so external edits / restarts are picked up automatically.
+内置厂商的凭据在写库的同时回写 ``.env`` 与 ``os.environ``：``llm_caller``、
+``voice``、``qq_media`` 等旁路仍直接读环境变量，回写是它们继续可用的前提。
+因此 ``.env`` 是**派生镜像**而非真源；首次启动用 ``.env`` 现值 seed 一次。
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -27,7 +26,10 @@ from typing import Any, Optional
 
 import httpx
 
-from core.paths import data_dir
+from core.database import Database
+from core.env_file import read_env_file, write_env_file
+
+logger = logging.getLogger(__name__)
 
 # ── Built-in provider registry ─────────────────────────────────────────────
 # card=True  -> shown as a credential card in settings UI
@@ -149,6 +151,14 @@ def card_provider_metas() -> list[dict[str, Any]]:
         if m.card
     ]
 
+
+# ── Provider kinds ─────────────────────────────────────────────────────────
+
+KIND_BUILTIN = "builtin"
+KIND_CUSTOM = "custom"
+KIND_LOCAL_CLI = "local_cli"
+PROVIDER_KINDS = (KIND_BUILTIN, KIND_CUSTOM, KIND_LOCAL_CLI)
+
 # ── Role (functional point) bindings ───────────────────────────────────────
 
 ROLE_MAIN_CHAT = "main_chat"
@@ -175,7 +185,7 @@ SPECIAL_SERVICE_META = [
     {"key": "asr", "name": "语音转写 ASR", "env_model": "AERIE_WS_ASR_MODEL",
      "default_model": "qwen3-asr-flash", "desc": "Aerie WS 主链路，DashScope 备用"},
     {"key": "image", "name": "生图 Image", "env_model": "IMAGE_GEN_MODEL",
-     "default_model": "gpt-image-2", "desc": "gpt-image 兼容图像生成接口"},
+     "default_model": "gpt-image-2.5-flare", "desc": "gpt-image 兼容图像生成接口"},
     {"key": "tts", "name": "语音合成 TTS", "env_model": "MINIMAX_MODEL",
      "default_model": "speech-01", "desc": "MiniMax TTS"},
     {"key": "decision", "name": "结构化解策", "env_model": "AERIE_TYPESAFE_MODEL",
@@ -186,6 +196,7 @@ SPECIAL_SERVICE_META = [
 STORE_VERSION = 1
 _MAX_TOOL_CALLS_MIN = 1
 _MAX_TOOL_CALLS_MAX = 50
+_DEFAULT_MAX_TOOL_CALLS = 8
 _MASK_MARKERS = ("•", "·", "*", "●")
 
 
@@ -221,213 +232,300 @@ def _provider_label(name: str) -> str:
     return meta.name if meta else name
 
 
-# ── Store ──────────────────────────────────────────────────────────────────
+def _now_iso() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+# ── Store（SQLite）──────────────────────────────────────────────────────────
 
 
 class AiServicesStore:
-    """File-backed store for custom providers / role bindings / check results."""
+    """SQLite-backed store for providers / role bindings / check results."""
 
-    def __init__(self, path: Optional[Path] = None) -> None:
-        self._path = path or (data_dir() / "ai_services.json")
-        self._log_path = self._path.parent / "provider_checks.jsonl"
-        self._lock = threading.RLock()
-        self._mtime: float | None = None
-        self._data: dict[str, Any] = self._empty_data()
-        self._ensure_loaded(force=True)
+    def __init__(self, db: Optional[Database] = None) -> None:
+        self._db = db or Database()
+        # 审计流水跟着库走：生产落 data/provider_checks.jsonl，测试落临时目录。
+        self._log_path = Path(self._db.db_path).parent / "provider_checks.jsonl"
+        self._seed_builtin_providers()
+
+    # ── seed ──
+
+    def _seed_builtin_providers(self) -> None:
+        """首次启动把内置厂商写入表。
+
+        凭据取 ``.env`` 现值（缺失则留空，等用户在设置页填）。只补不覆盖：
+        已存在的行一律保留，避免把用户在设置页的修改拉回默认。
+        """
+        try:
+            existing = {row["id"] for row in self._db.query("SELECT id FROM ai_providers")}
+        except Exception:
+            logger.warning("ai_providers seed skipped: table unavailable", exc_info=True)
+            return
+        now = _now_iso()
+        for order, meta in enumerate(_PROVIDER_REGISTRY.values()):
+            if meta.virtual or meta.key in existing:
+                continue
+            try:
+                self._db.insert("ai_providers", {
+                    "id": meta.key,
+                    "kind": KIND_BUILTIN,
+                    "name": meta.name,
+                    "base_url": (os.getenv(meta.env_url) or meta.default_url).strip().rstrip("/"),
+                    "api_key": (os.getenv(meta.env_key) or "").strip(),
+                    "model": (os.getenv(meta.env_model) or meta.default_model).strip(),
+                    "models": json.dumps(list(meta.models), ensure_ascii=False),
+                    "supports_tools": 1 if _env_true(meta.env_tools) else 0,
+                    "max_tool_calls": _DEFAULT_MAX_TOOL_CALLS,
+                    "enabled": 1,
+                    "sort_order": order,
+                    "created_at": now,
+                    "updated_at": now,
+                })
+            except Exception:
+                logger.warning("builtin provider seed failed: %s", meta.key, exc_info=True)
+
+    # ── 内部辅助 ──
 
     @staticmethod
-    def _empty_data() -> dict[str, Any]:
+    def _builtin_meta(provider_id: str) -> ProviderMeta | None:
+        meta = _PROVIDER_REGISTRY.get(provider_id)
+        return meta if meta and not meta.virtual else None
+
+    @staticmethod
+    def _is_registry_provider(provider_id: str) -> bool:
+        """是否为注册表里的提供方（含 virtual 组合型）。"""
+        return provider_id in _PROVIDER_REGISTRY
+
+    def _sync_env(
+        self,
+        provider_id: str,
+        *,
+        api_key: str,
+        base_url: str,
+        model: str,
+        enabled: bool,
+    ) -> None:
+        """把内置厂商凭据回写 ``.env`` 与 ``os.environ``；禁用时写空值。"""
+        meta = self._builtin_meta(provider_id)
+        if meta is None:
+            return
+        changes: dict[str, str] = {}
+        if meta.env_key:
+            changes[meta.env_key] = api_key if enabled else ""
+        if meta.env_url and base_url:
+            changes[meta.env_url] = base_url
+        if meta.env_model and model:
+            changes[meta.env_model] = model
+        if not changes:
+            return
+        try:
+            env = read_env_file()
+            env.update(changes)
+            write_env_file(env)
+        except OSError:
+            logger.warning("provider env write-through failed: %s", provider_id, exc_info=True)
+        os.environ.update(changes)
+
+    def _next_sort_order(self) -> int:
+        row = self._db.query_one("SELECT COALESCE(MAX(sort_order), -1) AS m FROM ai_providers")
+        return int((row or {}).get("m", -1)) + 1
+
+    @staticmethod
+    def _row_to_provider(row: dict) -> dict:
+        try:
+            parsed = json.loads(row.get("models") or "[]")
+            models = [str(x) for x in parsed] if isinstance(parsed, list) else []
+        except (TypeError, ValueError):
+            models = []
         return {
-            "version": STORE_VERSION,
-            "custom_providers": [],
-            "bindings": {k: dict(v) for k, v in DEFAULT_BINDINGS.items()},
-            "checks": {},
+            "id": str(row.get("id") or ""),
+            "kind": str(row.get("kind") or KIND_CUSTOM),
+            "name": str(row.get("name") or ""),
+            "base_url": str(row.get("base_url") or ""),
+            "api_key": str(row.get("api_key") or ""),
+            "model": str(row.get("model") or ""),
+            "models": models,
+            "supports_tools": bool(row.get("supports_tools")),
+            "max_tool_calls": int(row.get("max_tool_calls") or _DEFAULT_MAX_TOOL_CALLS),
+            "enabled": bool(row.get("enabled")),
+            "sort_order": int(row.get("sort_order") or 0),
+            "created_at": str(row.get("created_at") or ""),
+            "updated_at": str(row.get("updated_at") or ""),
         }
 
-    @property
-    def path(self) -> Path:
-        return self._path
+    # ── 读取 ──
 
-    def _ensure_loaded(self, force: bool = False) -> None:
-        with self._lock:
-            if not self._path.exists():
-                self._data = self._empty_data()
-                self._mtime = None
-                return
-            try:
-                mtime = self._path.stat().st_mtime
-            except OSError:
-                return
-            if not force and self._mtime is not None and mtime <= self._mtime:
-                return
-            try:
-                raw = json.loads(self._path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                # Corrupted file must not crash startup; keep defaults and let
-                # the next successful save repair the file atomically.
-                self._data = self._empty_data()
-                self._mtime = mtime
-                return
-            data = self._empty_data()
-            if isinstance(raw, dict):
-                customs = raw.get("custom_providers")
-                if isinstance(customs, list):
-                    for item in customs:
-                        if isinstance(item, dict):
-                            data["custom_providers"].append(item)
-                bindings = raw.get("bindings")
-                if isinstance(bindings, dict):
-                    for role, target in bindings.items():
-                        if role in DEFAULT_BINDINGS and isinstance(target, dict):
-                            data["bindings"][role] = {
-                                "provider": str(target.get("provider") or ""),
-                                "model": str(target.get("model") or ""),
-                            }
-                checks = raw.get("checks")
-                if isinstance(checks, dict):
-                    data["checks"] = checks
-            self._data = data
-            self._mtime = mtime
+    def list_providers(
+        self,
+        *,
+        include_key: bool = False,
+        enabled_only: bool = False,
+    ) -> list[dict]:
+        sql = "SELECT * FROM ai_providers"
+        if enabled_only:
+            sql += " WHERE enabled = 1"
+        sql += " ORDER BY sort_order, name"
+        result = []
+        for row in self._db.query(sql):
+            record = self._row_to_provider(dict(row))
+            if not include_key:
+                record.pop("api_key", None)
+            result.append(record)
+        return result
 
-    def reload(self) -> None:
-        self._ensure_loaded(force=True)
+    def get_provider(self, provider_id: str) -> dict | None:
+        row = self._db.query_one("SELECT * FROM ai_providers WHERE id = ?", (provider_id,))
+        return self._row_to_provider(dict(row)) if row else None
 
-    def _write_locked(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(self._data, ensure_ascii=False, indent=2)
-        tmp = self._path.with_name(f"{self._path.name}.tmp")
-        tmp.write_text(payload, encoding="utf-8")
-        os.replace(tmp, self._path)
-        self._mtime = self._path.stat().st_mtime
+    # ── 写入 ──
 
-    # ── custom providers ──
-
-    def list_custom_providers(self, *, include_key: bool = False) -> list[dict]:
-        self._ensure_loaded()
-        with self._lock:
-            result = []
-            for item in self._data["custom_providers"]:
-                record = dict(item)
-                if not include_key:
-                    record.pop("api_key", None)
-                result.append(record)
-            return result
-
-    def get_custom_provider(self, provider_id: str) -> dict | None:
-        self._ensure_loaded()
-        with self._lock:
-            for item in self._data["custom_providers"]:
-                if item.get("id") == provider_id:
-                    return dict(item)
-        return None
-
-    def _validate_custom(self, record: dict, *, exclude_id: str | None = None) -> dict:
+    def _validate_provider(self, record: dict, *, exclude_id: str | None = None) -> dict:
+        kind = str(record.get("kind") or KIND_CUSTOM).strip()
+        if kind not in PROVIDER_KINDS:
+            raise AiServicesError(f"未知的厂商类型: {kind}")
         name = str(record.get("name") or "").strip()
         base_url = str(record.get("base_url") or "").strip()
         api_key = str(record.get("api_key") or "").strip()
         model = str(record.get("model") or "").strip()
         if not name:
             raise AiServicesError("厂商名称不能为空")
-        if not base_url:
-            raise AiServicesError("Base URL 不能为空")
-        if not (base_url.startswith("http://") or base_url.startswith("https://")):
-            raise AiServicesError("Base URL 必须以 http:// 或 https:// 开头")
+        if kind != KIND_LOCAL_CLI:
+            if not base_url:
+                raise AiServicesError("Base URL 不能为空")
+            if not (base_url.startswith("http://") or base_url.startswith("https://")):
+                raise AiServicesError("Base URL 必须以 http:// 或 https:// 开头")
         if _is_masked_secret(api_key):
             raise AiServicesError("API Key 仍是脱敏占位值，请输入真实密钥")
         try:
-            max_tool_calls = int(record.get("max_tool_calls") or 8)
+            max_tool_calls = int(record.get("max_tool_calls") or _DEFAULT_MAX_TOOL_CALLS)
         except (TypeError, ValueError):
-            max_tool_calls = 8
+            max_tool_calls = _DEFAULT_MAX_TOOL_CALLS
         max_tool_calls = max(_MAX_TOOL_CALLS_MIN, min(_MAX_TOOL_CALLS_MAX, max_tool_calls))
 
         lowered = name.lower()
-        builtin_conflict = next(
-            (m.name for m in _PROVIDER_REGISTRY.values() if m.name.lower() == lowered),
-            None,
-        )
-        if builtin_conflict:
-            raise AiServicesError(f"名称与内置厂商「{builtin_conflict}」冲突，请换一个名称")
-        self._ensure_loaded()
-        for item in self._data["custom_providers"]:
-            if exclude_id and item.get("id") == exclude_id:
+        for row in self._db.query("SELECT id, name FROM ai_providers"):
+            if exclude_id and row["id"] == exclude_id:
                 continue
-            if str(item.get("name") or "").lower() == lowered:
-                raise AiServicesError(f"已存在同名自定义厂商「{name}」")
+            if str(row["name"]).lower() == lowered:
+                raise AiServicesError(f"已存在同名厂商「{name}」")
+
+        models = record.get("models")
+        if not isinstance(models, list) or not models:
+            models = [model] if model else []
         return {
+            "kind": kind,
             "name": name,
-            "base_url": base_url.rstrip("/"),
+            "base_url": base_url.rstrip("/") if base_url else "",
             "api_key": api_key,
             "model": model,
+            "models": [str(m) for m in models if str(m).strip()],
             "supports_tools": bool(record.get("supports_tools", False)),
             "max_tool_calls": max_tool_calls,
+            "enabled": bool(record.get("enabled", True)),
         }
 
-    def prepare_custom_provider(self, record: dict) -> dict:
-        """Validate + normalize a custom provider record WITHOUT persisting.
+    def prepare_provider(self, record: dict) -> dict:
+        """校验 + 归一化一条厂商记录，**不落库**。
 
-        Assigns a new id on create, preserves stored key on key-less update.
-        Call ``commit_custom_provider`` after external checks (e.g. connectivity)
-        pass.
+        新建时分配 id；编辑时不传 ``api_key`` 则沿用库里旧值。返回值交给
+        ``commit_provider`` 落库 + 回写 ``.env``。
         """
-        self._ensure_loaded()
-        with self._lock:
-            provider_id = str(record.get("id") or "").strip()
-            existing = None
-            if provider_id:
-                existing = self.get_custom_provider(provider_id)
-                if existing is None:
-                    raise AiServicesError("待编辑的自定义厂商不存在")
-            clean = self._validate_custom(record, exclude_id=provider_id or None)
-            if existing is not None and not clean["api_key"]:
-                clean["api_key"] = existing.get("api_key", "")
-            if not clean["api_key"]:
-                raise AiServicesError("API Key 不能为空")
-            clean["id"] = provider_id or f"cp_{uuid.uuid4().hex[:12]}"
-            return {
-                "id": clean["id"],
-                "name": clean["name"],
-                "base_url": clean["base_url"],
-                "api_key": clean["api_key"],
-                "model": clean["model"],
-                "supports_tools": clean["supports_tools"],
-                "max_tool_calls": clean["max_tool_calls"],
-            }
+        provider_id = str(record.get("id") or "").strip()
+        existing = None
+        if provider_id:
+            existing = self.get_provider(provider_id)
+            if existing is None:
+                raise AiServicesError("待编辑的厂商不存在")
+        clean = self._validate_provider(record, exclude_id=provider_id or None)
+        if existing is not None and not clean["api_key"]:
+            clean["api_key"] = existing.get("api_key", "")
+        if clean["kind"] != KIND_LOCAL_CLI and not clean["api_key"]:
+            raise AiServicesError("API Key 不能为空")
+        if existing is None:
+            provider_id = provider_id or f"cp_{uuid.uuid4().hex[:12]}"
+            clean["sort_order"] = self._next_sort_order()
+        else:
+            clean["sort_order"] = int(existing.get("sort_order") or 0)
+        clean["id"] = provider_id
+        return clean
 
-    def commit_custom_provider(self, clean: dict) -> dict:
-        """Persist a record previously produced by prepare_custom_provider."""
-        self._ensure_loaded()
-        with self._lock:
-            provider_id = clean["id"]
-            records = self._data["custom_providers"]
-            for i, item in enumerate(records):
-                if item.get("id") == provider_id:
-                    records[i] = dict(clean)
-                    self._write_locked()
-                    return dict(clean)
-            records.append(dict(clean))
-            self._write_locked()
-            return dict(clean)
+    def commit_provider(self, clean: dict) -> dict:
+        """落库一条 ``prepare_provider`` 产出的记录，并回写内置厂商的 .env。"""
+        now = _now_iso()
+        existing = self.get_provider(clean["id"])
+        payload = {
+            "id": clean["id"],
+            "kind": clean["kind"],
+            "name": clean["name"],
+            "base_url": clean["base_url"],
+            "api_key": clean["api_key"],
+            "model": clean["model"],
+            "models": json.dumps(list(clean.get("models") or []), ensure_ascii=False),
+            "supports_tools": 1 if clean.get("supports_tools") else 0,
+            "max_tool_calls": int(clean.get("max_tool_calls") or _DEFAULT_MAX_TOOL_CALLS),
+            "enabled": 1 if clean.get("enabled", True) else 0,
+            "sort_order": int(clean.get("sort_order") or 0),
+            "updated_at": now,
+        }
+        if existing is None:
+            payload["created_at"] = now
+            self._db.insert("ai_providers", payload)
+        else:
+            self._db.update("ai_providers", payload, "id = ?", (clean["id"],))
+        if clean["kind"] == KIND_BUILTIN:
+            self._sync_env(
+                clean["id"],
+                api_key=clean["api_key"],
+                base_url=clean["base_url"],
+                model=clean["model"],
+                enabled=bool(clean.get("enabled", True)),
+            )
+        return self.get_provider(clean["id"]) or {}
 
-    def delete_custom_provider(self, provider_id: str) -> bool:
-        self._ensure_loaded()
-        with self._lock:
-            before = len(self._data["custom_providers"])
-            self._data["custom_providers"] = [
-                item
-                for item in self._data["custom_providers"]
-                if item.get("id") != provider_id
-            ]
-            changed = len(self._data["custom_providers"]) != before
-            if changed:
-                self._write_locked()
-            return changed
+    def delete_provider(self, provider_id: str) -> bool:
+        """硬删除：删表行；内置厂商同时清掉 ``.env`` 里的凭据键。"""
+        existing = self.get_provider(provider_id)
+        if existing is None:
+            return False
+        self._db.delete("ai_providers", "id = ?", (provider_id,))
+        if existing["kind"] == KIND_BUILTIN:
+            self._sync_env(
+                provider_id, api_key="", base_url="", model="", enabled=False,
+            )
+        return True
+
+    def set_enabled(self, provider_id: str, enabled: bool) -> dict | None:
+        """启用 / 停用。停用只清 ``.env`` 凭据、保留库里的 Key，随时可恢复。"""
+        existing = self.get_provider(provider_id)
+        if existing is None:
+            return None
+        self._db.update(
+            "ai_providers",
+            {"enabled": 1 if enabled else 0, "updated_at": _now_iso()},
+            "id = ?",
+            (provider_id,),
+        )
+        if existing["kind"] == KIND_BUILTIN:
+            self._sync_env(
+                provider_id,
+                api_key=existing["api_key"],
+                base_url=existing["base_url"],
+                model=existing["model"],
+                enabled=enabled,
+            )
+        return self.get_provider(provider_id)
 
     # ── bindings ──
 
     def get_bindings(self) -> dict[str, dict[str, str]]:
-        self._ensure_loaded()
-        with self._lock:
-            return {k: dict(v) for k, v in self._data["bindings"].items()}
+        stored = {
+            row["role"]: {"provider": row["provider"], "model": row["model"] or ""}
+            for row in self._db.query("SELECT role, provider, model FROM ai_role_bindings")
+        }
+        return {
+            role: dict(stored.get(role) or default)
+            for role, default in DEFAULT_BINDINGS.items()
+        }
 
     def validate_binding(self, role: str, provider: str, model: str) -> None:
         """Validate a binding target without persisting it."""
@@ -437,7 +535,7 @@ class AiServicesStore:
         model = (model or "").strip()
         if not provider:
             raise AiServicesError("请选择厂商")
-        if not _is_known_provider(provider) and self.get_custom_provider(provider) is None:
+        if not self._is_registry_provider(provider) and self.get_provider(provider) is None:
             raise AiServicesError("所选厂商不存在，请先添加并保存")
         if role != ROLE_LIGHT_ASSIST and not model:
             raise AiServicesError("模型名不能为空")
@@ -446,35 +544,60 @@ class AiServicesStore:
         self.validate_binding(role, provider, model)
         provider = (provider or "").strip()
         model = (model or "").strip()
-        self._ensure_loaded()
-        with self._lock:
-            self._data["bindings"][role] = {"provider": provider, "model": model}
-            self._write_locked()
-            return {"provider": provider, "model": model}
+        self._db.execute(
+            "INSERT INTO ai_role_bindings (role, provider, model, updated_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(role) DO UPDATE SET provider = excluded.provider, "
+            "model = excluded.model, updated_at = excluded.updated_at",
+            (role, provider, model, _now_iso()),
+        )
+        return {"provider": provider, "model": model}
 
     # ── check results ──
 
     def get_checks(self) -> dict[str, Any]:
-        self._ensure_loaded()
-        with self._lock:
-            return dict(self._data.get("checks") or {})
+        result: dict[str, Any] = {}
+        for row in self._db.query("SELECT * FROM ai_provider_checks"):
+            result[str(row["target"])] = {
+                "ok": bool(row["ok"]),
+                "http_status": row["http_status"],
+                "latency_ms": int(row["latency_ms"] or 0),
+                "mode": str(row["mode"] or ""),
+                "detail": str(row["detail"] or ""),
+                "checked_at": str(row["checked_at"] or ""),
+            }
+        return result
 
     def record_check(self, target_key: str, result: dict[str, Any]) -> None:
-        self._ensure_loaded()
-        with self._lock:
-            self._data.setdefault("checks", {})[target_key] = result
-            self._write_locked()
-            entry = {"target": target_key, **result}
+        self._db.execute(
+            "INSERT INTO ai_provider_checks "
+            "(target, ok, http_status, latency_ms, mode, detail, checked_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(target) DO UPDATE SET ok = excluded.ok, "
+            "http_status = excluded.http_status, latency_ms = excluded.latency_ms, "
+            "mode = excluded.mode, detail = excluded.detail, checked_at = excluded.checked_at",
+            (
+                target_key,
+                1 if result.get("ok") else 0,
+                result.get("http_status"),
+                int(result.get("latency_ms") or 0),
+                str(result.get("mode") or ""),
+                str(result.get("detail") or ""),
+                str(result.get("checked_at") or ""),
+            ),
+        )
+        try:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
             with self._log_path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                fh.write(json.dumps({"target": target_key, **result}, ensure_ascii=False) + "\n")
+        except OSError:
+            logger.debug("provider check audit append failed", exc_info=True)
 
 
 # ── Resolution ─────────────────────────────────────────────────────────────
 
 
-def _is_known_provider(provider: str) -> bool:
-    return provider in _PROVIDER_REGISTRY
+def _env_true(name: str) -> bool:
+    return bool(name) and os.getenv(name, "").strip().lower() == "true"
 
 
 def _resolve_builtin(name: str, model_override: str = "") -> Endpoint | None:
@@ -486,14 +609,9 @@ def _resolve_builtin(name: str, model_override: str = "") -> Endpoint | None:
         return None
     base_url = (os.getenv(meta.env_url) or meta.default_url).strip().rstrip("/")
     model = (model_override or os.getenv(meta.env_model) or meta.default_model).strip()
-    supports_tools = (
-        os.getenv(meta.env_tools, "false").strip().lower() == "true"
-        if meta.env_tools
-        else False
-    )
     return Endpoint(
         name=name, base_url=base_url, model=model, api_key=api_key,
-        supports_tools=supports_tools,
+        supports_tools=_env_true(meta.env_tools),
     )
 
 
@@ -530,24 +648,28 @@ def resolve_provider(
     model_override: str = "",
     store: AiServicesStore | None = None,
 ) -> Endpoint | None:
-    """Resolve a provider id (built-in / virtual / custom) to a call endpoint."""
+    """Resolve a provider id (built-in / virtual / table row) to a call endpoint."""
     if provider in _PROVIDER_REGISTRY:
         meta = _PROVIDER_REGISTRY[provider]
         if meta.virtual:
             return _resolve_virtual(provider, model_override)
         return _resolve_builtin(provider, model_override)
     store = store or get_store()
-    record = store.get_custom_provider(provider)
-    if record is None:
+    record = store.get_provider(provider)
+    if record is None or not record.get("enabled"):
+        return None
+    if record.get("kind") != KIND_LOCAL_CLI and not record.get("api_key"):
         return None
     model = (model_override or record.get("model") or "").strip()
     return Endpoint(
+        # 与 LLMCaller 容灾链里的 provider 命名保持同一前缀，否则功能点绑定
+        # 无法把绑定目标提升到链首。
         name=f"custom:{record['id']}",
-        base_url=record["base_url"].rstrip("/"),
+        base_url=str(record.get("base_url") or "").rstrip("/"),
         model=model,
         api_key=record.get("api_key", ""),
-        supports_tools=bool(record.get("supports_tools", False)),
-        max_tool_calls=int(record.get("max_tool_calls") or 8),
+        supports_tools=bool(record.get("supports_tools")),
+        max_tool_calls=int(record.get("max_tool_calls") or _DEFAULT_MAX_TOOL_CALLS),
         custom=True,
     )
 
@@ -592,26 +714,21 @@ def list_bindable_providers(store: AiServicesStore | None = None) -> list[dict]:
             "virtual": meta.virtual,
             "multi_key": bool(endpoint.keys),
         })
-    for record in store.list_custom_providers():
+    for record in store.list_providers(enabled_only=True):
+        if record["kind"] == KIND_BUILTIN:
+            continue
+        if record["kind"] != KIND_LOCAL_CLI and not record.get("api_key"):
+            continue
         result.append({
             "key": record["id"],
-            "name": str(record.get("name") or "自定义 API"),
+            "name": record["name"] or "自定义 API",
             "model": record.get("model", ""),
-            "models": [record.get("model", "")] if record.get("model") else [],
+            "models": list(record.get("models") or []),
             "virtual": False,
             "custom": True,
+            "kind": record["kind"],
         })
-    # Custom records are masked; availability needs the stored key. Drop
-    # entries whose stored record lacks a key.
-    available = []
-    for item in result:
-        if not item.get("custom"):
-            available.append(item)
-            continue
-        raw = store.get_custom_provider(item["key"])
-        if raw and raw.get("api_key"):
-            available.append(item)
-    return available
+    return result
 
 
 # ── Connectivity check ─────────────────────────────────────────────────────
@@ -650,7 +767,7 @@ async def run_provider_check(
         "http_status": None,
         "latency_ms": 0,
         "mode": mode,
-        "checked_at": datetime.now().isoformat(timespec="seconds"),
+        "checked_at": _now_iso(),
         "detail": "",
     }
     if not base_url or not api_key:

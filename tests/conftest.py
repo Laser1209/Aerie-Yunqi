@@ -44,6 +44,16 @@ def isolate_optional_provider_credentials(monkeypatch):
     monkeypatch.delenv("AERIE_TYPESAFE_API_KEY", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def isolate_dotenv_file(tmp_path, monkeypatch):
+    """厂商保存会把凭据回写 .env —— 测试里指向临时文件，绝不碰仓库真 .env。"""
+    import core.env_file as env_file
+
+    target = tmp_path / ".env.test"
+    monkeypatch.setattr(env_file, "env_file_path", lambda: target)
+    return target
+
+
 @pytest.fixture
 def mock_qq_client():
     """Mock QQClient with no real WebSocket."""

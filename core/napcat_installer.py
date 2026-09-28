@@ -37,10 +37,14 @@ logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# ── 下载源（与官方 OneKey 引导器 NapCatInstaller.exe 内置的地址一致）──────
-# QQ 走腾讯官方 CDN 的**固定版本**安装包：不用 Beta 通道，也不会自动升级。
-QQ_INSTALLER_URL = "https://dldir1.qq.com/qqfile/qq/QQNT/be71d851/QQ9.9.26.44498_x64.exe"
-QQ_INSTALLER_FILENAME = "QQ9.9.26.44498_x64.exe"
+# ── 下载源 ────────────────────────────────────────────────────
+# 【实测结论 2026-09-28】腾讯官方 CDN 对**非浏览器直连返回 403**（防盗链），
+# 且旧版 hash 路径（OneKey 引导器内置的那个）已是 404。因此：
+#   1. **本地安装包优先** —— 用户用浏览器下载后放进受控目录即可（最可靠）；
+#   2. 远程下载仅"尽力而为"，失败时给出明确原因（不会静默降级）。
+# 版本号写死在文件名里，换版本只需改这两行。
+QQ_INSTALLER_URL = "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.36/release/e8e54bbb/QQ_9.9.36_260924_x86_01.exe"
+QQ_INSTALLER_FILENAME = "QQ_9.9.36_260924_x86_01.exe"
 
 # NapCat Shell 本体：官方源 → 镜像源，依次尝试（与 napcat_downloader 同源）。
 NAPCAT_SHELL_SOURCES: tuple[str, ...] = (
@@ -86,6 +90,30 @@ def bundled_boot_exe() -> Path | None:
     return candidate if candidate.exists() else None
 
 
+def installer_drop_dir(settings: dict | None = None) -> Path:
+    """本地安装包投放目录：用户用浏览器下载 QQ 安装包后放这里即可离线安装。
+
+    为什么不直接下载：腾讯官方 CDN 对非浏览器直连返回 403（实测），
+    而浏览器下载是用户手上最可靠的途径 —— 所以把"投递点"固定下来，
+    由程序负责静默安装与目录收口，这正是"内置引导器 + 规定下载位置"的落地形态。
+    """
+    return runtime_root(settings) / "installer"
+
+
+def find_local_installer(settings: dict | None = None) -> Path | None:
+    """找本地 QQ 安装包：显式配置 > 投放目录里的第一个 QQ*.exe。"""
+    explicit = os.environ.get("AERIE_QQ_INSTALLER") or (settings or {}).get("napcat", {}).get("qq_installer")
+    if explicit:
+        candidate = Path(str(explicit)).expanduser()
+        if candidate.exists():
+            return candidate
+    drop = installer_drop_dir(settings)
+    if drop.exists():
+        for candidate in sorted(drop.glob("QQ*.exe")):
+            return candidate
+    return None
+
+
 def resolve_qq_exe(settings: dict | None = None) -> Path | None:
     """在受控目录里找 QQ.exe（安装产物可能嵌在版本子目录，故递归查找）。"""
     root = qq_target_dir(settings)
@@ -123,6 +151,7 @@ class NapcatInstaller:
 
     def status(self) -> dict:
         qq_exe = resolve_qq_exe(self.settings)
+        local = find_local_installer(self.settings)
         with self._lock:
             state, progress, message, error = (
                 self._state, round(self._progress, 3), self._message, self._error,
@@ -136,6 +165,9 @@ class NapcatInstaller:
             "qq_exe": str(qq_exe) if qq_exe else "",
             "runtime_dir": str(self.root),
             "installer_embedded": bundled_installer_path() is not None,
+            # 本地投放的安装包与投放目录：面板据此告诉用户"把安装包放这里"。
+            "local_installer": str(local) if local else "",
+            "installer_drop_dir": str(installer_drop_dir(self.settings)),
         }
 
     def is_running(self) -> bool:
@@ -149,9 +181,15 @@ class NapcatInstaller:
             return {"ok": False, "message": "安装已在进行中", "error_code": "already_running"}
         try:
             self.root.mkdir(parents=True, exist_ok=True)
-            installer = self.root / QQ_INSTALLER_FILENAME
-            self._set("downloading", "正在下载官方 QQ 安装包…", progress=0.0)
-            self._download(QQ_INSTALLER_URL, installer)
+            # 本地安装包优先：腾讯 CDN 对直连返回 403，浏览器下载才是可靠途径。
+            local = find_local_installer(self.settings)
+            if local is not None:
+                installer = local
+                self._set("installing", f"使用本地安装包：{installer.name}", progress=0.5)
+            else:
+                installer = self.root / QQ_INSTALLER_FILENAME
+                self._set("downloading", "正在从腾讯官方 CDN 下载 QQ 安装包…", progress=0.0)
+                self._download(QQ_INSTALLER_URL, installer)
 
             self._set("installing", "正在静默安装 QQ 到受控目录…", progress=0.75)
             if not self._silent_install(installer):
@@ -164,10 +202,12 @@ class NapcatInstaller:
                 self._error = "qq_exe_not_found"
                 return {"ok": False, "message": "未能在受控目录中找到 QQ.exe", "error_code": "qq_exe_not_found"}
 
-            try:
-                installer.unlink(missing_ok=True)
-            except OSError:
-                pass
+            # 只清理"我们下载的那一份"，用户自己投放的安装包保持原样（可复用）。
+            if local is None:
+                try:
+                    installer.unlink(missing_ok=True)
+                except OSError:
+                    pass
             self._set("done", f"QQ 运行时已就绪：{qq_exe}", progress=1.0)
             logger.info("[NapCat] controlled QQ runtime installed at %s", qq_exe)
             return {"ok": True, "message": "QQ 运行时安装完成", "qq_exe": str(qq_exe)}

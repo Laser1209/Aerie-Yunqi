@@ -93,7 +93,11 @@ class NapcatPanel {
     } else if (data && data.state === "error") {
       hint = data.error || data.message || "安装失败";
     } else if (!installed) {
-      hint = "尚未安装受控 QQ：将下载腾讯官方固定版本 QQ 到程序数据目录，避免系统 Beta QQ 触发风控。";
+      // 腾讯 CDN 对程序直连返回 403，所以给出"本地投放"这条可靠路径。
+      const drop = String((data && (data.installer_drop_dir || data.installerDropDir)) || "");
+      hint = "尚未安装受控 QQ。可把从腾讯官网下载的 QQ 安装包放进："
+        + (drop || "data/napcat-runtime/installer/")
+        + "（程序会自动静默安装到受控目录），或直接点上方按钮尝试在线安装。";
     }
     this._el.runtimeHint.textContent = hint;
     this._el.runtimeHint.classList.toggle("hidden", !hint);

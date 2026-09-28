@@ -5022,6 +5022,10 @@ class Companion:
         if not context_text or context_text == "（暂无世界数据）":
             return None
         key = str(context.get("prompt_key") or (candidate or {}).get("prompt_key") or "default")
+        # 主体（物件/人物）是用户这一轮明确要的东西，接力模型最容易在这里"顺手改写"：
+        # 它会按世界上下文把"床头柜"改写成"工作台前的一角"，主体就此丢失（§十四 #66）。
+        # 因此既要显式告知，也要在出口校验——校验失败就退回确定性兜底。
+        subject = str((candidate or {}).get("subject") or "").strip()
         system_msg = (
             "你是一名专业的图像提示词优化助手。用户提供一条基础生图提示词"
             "（一位女性的生活照/场景照，人物外貌、身材与画面风格已确定），"
@@ -5042,8 +5046,16 @@ class Companion:
             "也不出现握持设备的手；绝对禁止出现拍摄者、第三人称旁观视角、摄影师、路人等"
             "任何暗示'别人在拍她'的表述。"
         )
+        subject_rule = (
+            f"【顶级硬约束 · 主体不可改】\n这张照片的主角是「{subject}」，"
+            "它必须**逐字**出现在你输出的提示词里；不得替换成别的物件，"
+            "不得改写成不含它的泛化描述（如'工作台前的一角'），"
+            "也不得把它删除。你只能增强它周围的光线与环境，不能动它本身。\n\n"
+            if subject else ""
+        )
         user_msg = (
             f"【基础提示词】\n{base_prompt}\n\n"
+            f"{subject_rule}"
             f"【可选世界背景数据】\n{context_text}\n\n"
             f"请判断画面需要哪些数据，输出增强后的完整生图提示词。"
         )
@@ -5067,6 +5079,12 @@ class Companion:
                     logger.debug(
                         "world image prompt light relay rejected (POV blacklist hit) key=%s",
                         key,
+                    )
+                    return None
+                if subject and subject not in text:
+                    logger.debug(
+                        "world image prompt light relay rejected (subject dropped) key=%s subject=%s",
+                        key, subject,
                     )
                     return None
                 logger.debug("world image prompt refined by light relay (key=%s)", key)

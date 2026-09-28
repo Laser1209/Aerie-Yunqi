@@ -264,6 +264,137 @@ def test_pov_object_prompt_keeps_first_person_view():
     assert "第一人称视角" in prompt
 
 
+# ── 5 · 接力重写：不许把主体"顺手改写"掉 ──────────────────────────────
+#
+# 真机事故（2026-09-29 00:54:21）：同一条链路，00:56:27 保住了「你床头柜」，
+# 00:54:21 却把它写成了「她工作台前的一角」——差别只在那一轮走了 LLM 接力。
+# 接力的 system prompt 当时只声明"保留人物外貌/身材/风格/画幅/拍摄手法"，
+# 对"主体（物件）"一字未提，于是模型按世界上下文自由发挥，主体丢失。
+# 修法：显式告知 + 出口校验，校验不过退回确定性兜底。
+
+_SUBJECT = "你床头柜上摆的东西"
+
+
+class _RelayBrain:
+    """假 brain：按预设文本返回，用来模拟接力模型的输出。"""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.messages: list[dict] | None = None
+
+    async def chat(self, messages, **kwargs):
+        self.messages = messages
+        text = self.text
+
+        class _Resp:
+            pass
+
+        resp = _Resp()
+        resp.text = text
+        return resp
+
+
+def _relay_context() -> dict:
+    return {
+        "prompt_key": "environment_object",
+        "time_of_day_light": "深夜，屋内暖灯亮着",
+        "outdoor": False,
+        "city": "重庆",
+    }
+
+
+def _relay_candidate() -> dict:
+    return {
+        "prompt_key": "environment_object",
+        "subject": _SUBJECT,
+        "subject_form": "closeup",
+    }
+
+
+def _relay_comp(relay_text: str, monkeypatch):
+    from core.companion import Companion
+
+    monkeypatch.setattr("core.companion._image_light_preference", lambda: (None, None))
+    comp = Companion.__new__(Companion)
+    brain = _RelayBrain(relay_text)
+    comp.brain = brain
+    return comp, brain
+
+
+def test_relay_rejects_output_that_dropped_the_subject(monkeypatch):
+    """接力把主体改写成"工作台前的一角" → 判定不合格，退回确定性兜底。"""
+    dropped = (
+        "一张写实真实感照片，竖构图，近距离取景，画面主角是她工作台前的一角，"
+        "细节清晰可辨。这是她用手机在深夜拍下来给恋人确认的一角，画面自然、生活化。"
+    )
+    comp, _brain = _relay_comp(dropped, monkeypatch)
+
+    refined = asyncio.run(
+        comp._light_relay_refine_prompt(
+            "一张写实真实感照片，画面主角是你床头柜上摆的东西，细节清晰可辨。",
+            _relay_context(),
+            _relay_candidate(),
+        )
+    )
+
+    assert refined is None
+
+
+def test_relay_accepts_output_that_keeps_the_subject(monkeypatch):
+    kept = (
+        "一张写实真实感照片，竖构图，近距离取景，画面主角是你床头柜上摆的东西，"
+        "细节清晰可辨，暖灯下的材质纹理真实。画面中不出现人物。"
+    )
+    comp, _brain = _relay_comp(kept, monkeypatch)
+
+    refined = asyncio.run(
+        comp._light_relay_refine_prompt(
+            "一张写实真实感照片，画面主角是你床头柜上摆的东西，细节清晰可辨。",
+            _relay_context(),
+            _relay_candidate(),
+        )
+    )
+
+    assert refined == kept
+
+
+def test_relay_prompt_declares_subject_as_hard_constraint(monkeypatch):
+    """光校验不够：接力 prompt 必须显式点名主体是"不可改"的。"""
+    comp, brain = _relay_comp(
+        "一张写实真实感照片，画面主角是你床头柜上摆的东西，细节清晰。",
+        monkeypatch,
+    )
+
+    asyncio.run(
+        comp._light_relay_refine_prompt(
+            "一张写实真实感照片，画面主角是你床头柜上摆的东西。",
+            _relay_context(),
+            _relay_candidate(),
+        )
+    )
+
+    user_msg = str(brain.messages[1]["content"])
+    assert _SUBJECT in user_msg
+    assert "主体不可改" in user_msg
+
+
+def test_subject_survives_when_relay_drops_it(monkeypatch):
+    """端到端口径（§14.6 #66）：接力吞掉主体时，最终提示词里主体必须还在。"""
+    comp, _brain = _relay_comp(
+        "一张写实真实感照片，竖构图，画面主角是她工作台前的一角，暖灯下材质清晰。",
+        monkeypatch,
+    )
+    candidate = _relay_candidate()
+    context = _relay_context()
+    base = comp._compose_base_image_prompt("environment_object", candidate)
+
+    refined = asyncio.run(comp._light_relay_refine_prompt(base, context, candidate))
+    prompt = refined or comp._inject_world_context_fallback(base, context, candidate)
+
+    assert _SUBJECT in prompt
+    assert "工作台" not in prompt
+
+
 def test_object_prompt_without_subject_keeps_world_topic_fallback():
     """主动发图/世界话题那条路（没有 subject）行为不变。"""
     prompt = _compose(

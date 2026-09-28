@@ -1005,6 +1005,12 @@ _IMAGE_LIGHT_RELAY_TIMEOUT = 8.0
 # （local_chat）目前只有文本与图片通道，入队取发送器时必然 KeyError。
 _FILE_CAPABLE_CHANNELS: frozenset[str] = frozenset({"qq", "ilink"})
 
+# 生图消费侧的**非失败**终态：没有图，但也不是故障。归约时必须原样传出，
+# 否则终端日志与工具记录会把"刻意停下"报成"失败"（§十四 #65）。
+_NON_FAILURE_IMAGE_STATUSES: frozenset[str] = frozenset(
+    {"dry_run", "dedup_skipped", "workflow_disabled"}
+)
+
 
 def _image_light_preference() -> tuple[str, str | None]:
     """生图语义接力使用的轻量功能点（light_assist 绑定）。
@@ -1939,9 +1945,14 @@ class Companion:
         if not items:
             return "failed", "not_consumed", ""
         first = next((item for item in items if isinstance(item, dict)), {})
+        first_status = str(first.get("status") or "")
+        if first_status in _NON_FAILURE_IMAGE_STATUSES:
+            # 干跑闸门停在提示词 / 图像工作流被关 / 同类图去重跳过 —— 都不是故障，
+            # 原样传出终态（§十四 #65：曾一律塌成 failed，日志与工具记录因此失真）。
+            return first_status, str(first.get("reason") or first_status), ""
         return (
             "failed",
-            str(first.get("reason") or first.get("status") or "delivery_failed"),
+            str(first.get("reason") or first_status or "delivery_failed"),
             "",
         )
 

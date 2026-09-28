@@ -495,3 +495,35 @@ def test_pending_bubble_not_marked_failed_on_dryrun():
 
     assert emitted and emitted[0]["status"] == "ready"
     assert emitted[0]["retry_text"] == ""
+
+
+# ── 6 · 干跑终态不得被归约成 failed（§十四 #65） ───────────────────────
+
+
+def test_summarize_image_delivery_passes_dry_run_through():
+    """`[ChatPhoto] delivered status=%s reason=prompt_dryrun` 里的 status
+    不能再是 failed —— 归约层要把非失败终态原样传出。"""
+    from core.companion import Companion
+
+    summarize = Companion._summarize_image_delivery
+
+    assert summarize([{"status": "dry_run", "reason": "prompt_dryrun"}]) == (
+        "dry_run", "prompt_dryrun", "",
+    )
+    assert summarize([{"status": "workflow_disabled"}])[0] == "workflow_disabled"
+    assert summarize([{"status": "dedup_skipped"}])[0] == "dedup_skipped"
+
+
+def test_summarize_image_delivery_still_fails_loudly():
+    """真正的失败不能被放过，完成态仍优先于一切。"""
+    from core.companion import Companion
+
+    summarize = Companion._summarize_image_delivery
+
+    assert summarize([]) == ("failed", "not_consumed", "")
+    assert summarize([{"status": "failed", "reason": "workflow_error"}]) == (
+        "failed", "workflow_error", "",
+    )
+    assert summarize([{"status": "dry_run"}, {"status": "completed", "image_path": "a.png"}]) == (
+        "completed", "", "a.png",
+    )

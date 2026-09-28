@@ -511,10 +511,10 @@ async def test_gateway_send_file_requires_running_gateway(tmp_path):
 
 @pytest.mark.asyncio
 async def test_gateway_send_image_uploads_with_image_media_type_then_sends(tmp_path):
-    """发图片 = 先按 MediaType.IMAGE 上传，再把 CDN 凭据塞进 image_item 发出。
+    """发图片 = 先按 MediaType.IMAGE 上传，再把 CDN 凭据**与密文尺寸**塞进 image_item 发出。
 
-    与发文件同构，但上传编号必须是 1（不是文件用的 3）——两套编号混用会被
-    服务端当成参数错误。
+    上传编号必须是 1（不是文件用的 3）——两套编号混用会被服务端当成参数错误；
+    ``mid_size`` 必须取**密文**尺寸（ciphertext_length），传明文尺寸客户端会拒绝渲染。
     """
     client = AsyncMock()
     client.send_image.return_value = True
@@ -549,6 +549,7 @@ async def test_gateway_send_image_uploads_with_image_media_type_then_sends(tmp_p
         "latest-context",
         encrypt_query_param="param-img",
         aes_key="a2V5",
+        mid_size=4112,
     )
 
 

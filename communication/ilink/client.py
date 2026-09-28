@@ -153,12 +153,20 @@ class ILinkClient:
         *,
         encrypt_query_param: str,
         aes_key: str,
+        mid_size: int,
     ) -> bool:
         """把已上传到 CDN 的图片作为图片消息发出。
 
-        ``image_item`` 与 ``file_item`` 是同一形态：``media`` 是**嵌套对象**，
-        字段名 ``encrypt_query_param`` / ``aes_key`` 一致；协议差别只在消息项
-        ``type`` 取 2（图片）。图片项**不**带 ``file_name`` / ``len`` 这类文件字段。
+        ``image_item`` 的 ``media`` 与 ``file_item`` 同形（嵌套对象），但有**两处
+        图片专有字段**，缺任意一处微信客户端都渲染不出图 —— 服务端照样回
+        ``message_id``，所以只看 HTTP 状态码会误判成"已送达"（2026-09-28 真机：
+        三条文字到了、图没到，服务端全程 200）：
+
+        * ``media.encrypt_type = 1``：``0`` 表示"只加密 fileid"，``1`` 才是
+          "打包缩略图/中图等信息"。默认 0 → 客户端手里只有一个文件 id，没有可
+          展示的图。**图片必须为 1**（文件不渲染，保持默认即可）。
+        * ``mid_size``：**密文**字节数（AES-128-ECB + PKCS7 之后的大小，不是明文
+          大小）。客户端按它校验/挑选要展示的那张。
         """
         return await self._send_message(
             to_user_id,
@@ -170,7 +178,9 @@ class ILinkClient:
                         "media": {
                             "encrypt_query_param": encrypt_query_param,
                             "aes_key": aes_key,
+                            "encrypt_type": 1,
                         },
+                        "mid_size": int(mid_size),
                     },
                 }
             ],

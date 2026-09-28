@@ -247,8 +247,12 @@ async def test_send_file_posts_nested_media_file_item():
 
 @pytest.mark.asyncio
 async def test_send_image_posts_nested_media_image_item():
-    """图片项与文件项同形态：``image_item.media`` 是嵌套对象，消息项 type 取 2。
+    """图片项：嵌套 ``media`` + 图片专有字段。
 
+    ``media.encrypt_type`` 必须为 1、``mid_size`` 必须是**密文**尺寸——官方实现
+    （``@tencent-weixin/openclaw-weixin`` 的 ``sendImageMessageWeixin``）两项都带。
+    缺任意一项服务端照样回 ``message_id``，但微信客户端渲染不出图（2026-09-28
+    真机：文字到了、图没到，服务端全程 200）。
     图片项不带 ``file_name`` / ``len`` 这些文件专有字段——多塞会被判参数错误。
     """
     requests = []
@@ -264,6 +268,7 @@ async def test_send_image_posts_nested_media_image_item():
             "context-1",
             encrypt_query_param="param-abc",
             aes_key="a2V5",
+            mid_size=3466320,
         )
 
     assert sent is True
@@ -275,7 +280,9 @@ async def test_send_image_posts_nested_media_image_item():
                 "media": {
                     "encrypt_query_param": "param-abc",
                     "aes_key": "a2V5",
+                    "encrypt_type": 1,
                 },
+                "mid_size": 3466320,
             },
         }
     ]
@@ -297,6 +304,7 @@ async def test_send_image_shares_text_success_semantics():
                 "context-1",
                 encrypt_query_param="param",
                 aes_key="key",
+                mid_size=1,
             )
 
 

@@ -449,8 +449,11 @@ class LLMCallerImageGenerationProvider:
 class JimengCanvasImageGenerationProvider:
     """即梦画布 CLI 出图（人物类专用通道）。
 
-    只有它能同时给出竖构图（``--ratio 9:16``）与 i2i 一致人设；兼容中转
-    （gpt-image）忽略 ``size``、只出横图，且没有可用的图生图端点。
+    它比中转多出的能力是**多视角参考**：三视图作为 Element 节点一次带上正/侧/背，
+    并有 i2i 熔断与降级兜底。
+    中转（gpt-image / mysubapi）的 ``/images/edits`` 实测**可用**（2026-09-28：HTTP 200、
+    锁脸正常、且尊重 ``size=1024x1536`` 竖构图）—— 但只吃**单张**参考图；
+    中转的**文生图**端点才是不认 ``size``、只出横图的那个。
 
     积分闸门：每次生成带 ``--credit-ceiling``（默认 16，见 ``JIMENG_CREDIT_CEILING``）。
     报价超限时 CLI 在运行前停下、不扣分，这里如实返回 ``credit_exceeded``，
@@ -613,12 +616,18 @@ class JimengCanvasImageGenerationProvider:
 
     @staticmethod
     def _effective_resolution(metadata: dict[str, Any]) -> str:
-        """本次生成实际使用的分辨率：档位给定优先，缺省回落环境变量/CLI 默认。
+        """本次生成实际使用的分辨率：档位给定 → 环境变量 → **2K**。
 
-        注意即梦 CLI 的 ``--resolution`` 对所有图像模型都是 **required**，
-        所以这里必须有值；档位表里每一档都带分辨率。
+        即梦 CLI 的 ``--resolution`` 对所有图像模型都是 **required**，所以这里必须
+        有值（档位表里每一档都带分辨率，正常不会走到兜底）。兜底取 2K 是因为它落在
+        **每个模型**允许的集合内（实测 model list：Pro 1.5K/2K/4K、Flash 1.5K/2K、
+        美学V8.2 1K/2K、Lite 2K/4K），空值会让 CLI 直接以 required 报错。
         """
-        return str((metadata or {}).get("jimeng_resolution") or "").strip() or jimeng_canvas.default_resolution()
+        return (
+            str((metadata or {}).get("jimeng_resolution") or "").strip()
+            or jimeng_canvas.default_resolution()
+            or "2K"
+        )
 
     @staticmethod
     def _tier_fallback(metadata: dict[str, Any]) -> image_tiering.ImageTier | None:

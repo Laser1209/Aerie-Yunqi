@@ -1,8 +1,9 @@
 """即梦（Dreamina）画布 CLI 适配层 —— 用本地 ``dreamina-canvas`` 出图。
 
-为什么需要它：gpt-image 中转（mysubapi）忽略 ``size`` 参数、只出横图，也没有
-可用的图生图端点，于是「竖屏自拍」和「同一个人」这两个诉求都做不到。即梦的
-seedream 系列同时支持 ``--ratio 9:16`` 与 i2i（``--ref node:<id>``），正好补上。
+为什么需要它：gpt-image 中转（mysubapi）的**文生图**端点忽略 ``size`` 参数、只出横图；
+而它的 ``/images/edits`` 虽然可用（实测尊重 size 且能锁脸），却只吃**单张**参考图。
+即梦的 seedream 系列同时支持 ``--ratio 9:16`` 与 i2i（``--ref node:<id>``），
+还能把三视图作为 Element 节点做多视角锁脸，正好补上。
 
 **积分闸门**：每次生成都带 ``--credit-ceiling``。报价超过上限时 CLI 会在运行前
 停下、不扣分，我们把 ``credit_exceeded`` 如实上报，由调用方决定是否提高上限 ——

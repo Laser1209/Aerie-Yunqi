@@ -285,6 +285,20 @@ def test_provider_without_tier_keeps_its_own_default(monkeypatch):
     assert calls[0]["model"] == "legacy_default"
 
 
+def test_provider_resolution_falls_back_to_2k(monkeypatch):
+    """档位/环境变量都没给分辨率时兜底 2K —— CLI 的 --resolution 是 required。
+
+    2K 落在每个模型允许的集合内（Pro 1.5K/2K/4K、Flash 1.5K/2K、美学V8.2 1K/2K、
+    Lite 2K/4K），空值会让 CLI 直接以 required 报错。
+    """
+    calls = _stub_jimeng(monkeypatch, [{"status": "ok", "resource_id": "r1", "node_id": "n1"}])
+    provider = JimengCanvasImageGenerationProvider(model="legacy_default")
+
+    provider.generate(prompt="p", request_id="req", owner_id="master", metadata={})
+
+    assert calls[0]["resolution"] == "2K"
+
+
 def test_provider_falls_back_to_next_tier_on_failure(monkeypatch):
     """指定档失败 → 降级到下一档重试一次，用户最终拿到图（§8.7 验收 5）。"""
     calls = _stub_jimeng(monkeypatch, [

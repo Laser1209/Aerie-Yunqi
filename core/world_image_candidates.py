@@ -46,8 +46,9 @@ _MANUAL_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
 # （中转站不支持 /images/edits）时降级回文生图，保证用户要图不落空。
 PERSONA_IMAGE_PROMPT_KEYS = frozenset({"role_selfie", "role_in_scene", "couple_photo"})
 
-# 人物类专用生成通道：只有即梦给得了竖构图与 i2i 一致人设，
-# 兼容中转（gpt-image）忽略 size、只出横图。注册缺失时自动回落默认通道。
+# 即梦生成通道（**通道由 image_tiers.yaml::routing 决定**，这里只是它的名字）。
+# 即梦相对中转多的是多视角参考（三视图 Element 节点）与更稳的竖构图；
+# 中转的 edits 端点实测可用且也能锁脸（单张参考图）。注册缺失时自动回落默认通道。
 _JIMENG_PROVIDER = "jimeng"
 
 # 未能从提示词层拿到档位时的兜底档（人像日常 = 最常用、最便宜、质量够日常）。

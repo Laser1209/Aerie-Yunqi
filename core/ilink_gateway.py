@@ -95,6 +95,22 @@ class ILinkGateway:
             "pairing": self._pairing_status(),
         }
 
+    def bound_user_id(self) -> str:
+        """已绑定的微信用户 id（主动投递目标）；未启动/未绑定返回空串。
+
+        iLink 的绑定是"每个 bot 一个用户"（``ilink_bindings.ilink_user_id`` UNIQUE），
+        所以主动消息不需要调用方再传目标——绑定本身就是目标。放在这里，是为了让
+        "微信端投给谁"只有这一份定义，发送侧不必各自去翻状态库。
+        """
+        if self._bot_id is None:
+            return ""
+        try:
+            binding = self.state_store.get_binding(self._bot_id)
+        except sqlite3.Error:
+            logger.debug("iLink binding lookup failed", exc_info=True)
+            return ""
+        return str(binding.ilink_user_id) if binding is not None else ""
+
     def create_pairing_code(self) -> dict[str, Any]:
         """生成（或重置）配对码：面板展示给用户，用户发到微信即完成绑定。"""
         bot_id = self._current_bot_id()

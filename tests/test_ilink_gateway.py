@@ -562,3 +562,45 @@ async def test_gateway_send_image_requires_running_gateway(tmp_path):
         await gateway.send_image("wx-owner", str(tmp_path / "missing.png"))
     client.send_image.assert_not_awaited()
     state_store.close()
+
+
+# ── 主动投递目标：绑定本身就是目标 ────────────────────────────────────────
+#
+# 主动消息没有"来源端口"，微信端要投给谁必须由绑定决定。iLink 的绑定是
+# "每个 bot 一个用户"（ilink_bindings.ilink_user_id UNIQUE），所以网关自己就能
+# 回答这个问题，调用方不必去翻状态库（实测 2026-09-28：主动消息投不进微信）。
+
+
+def test_bound_user_id_is_empty_before_start(tmp_path):
+    client = AsyncMock()
+    gateway, state_store = _gateway_with_client(tmp_path, client)
+    try:
+        assert gateway.bound_user_id() == ""
+    finally:
+        state_store.close()
+
+
+@pytest.mark.asyncio
+async def test_bound_user_id_is_empty_when_unbound(tmp_path):
+    client = AsyncMock()
+    gateway, state_store = _gateway_with_client(tmp_path, client)
+    await gateway.start()
+    try:
+        assert gateway.bound_user_id() == ""
+    finally:
+        await gateway.stop()
+        state_store.close()
+
+
+@pytest.mark.asyncio
+async def test_bound_user_id_returns_bound_wechat_user(tmp_path):
+    client = AsyncMock()
+    gateway, state_store = _gateway_with_client(tmp_path, client)
+    await gateway.start()
+    try:
+        code = gateway.create_pairing_code()["code"]
+        assert state_store.verify_pairing("bot-1", "wx-owner", code, 3998874040) is True
+        assert gateway.bound_user_id() == "wx-owner"
+    finally:
+        await gateway.stop()
+        state_store.close()

@@ -29,13 +29,65 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_NAPCAT_DIR = _PROJECT_ROOT / "NapCat" / "NapCat.Shell"
 
+# ── 两种启动形态 ────────────────────────────────────────────────
+# **无头（headless）**：``NapCatWinBootMain.exe <QQ.exe> <Hook.dll> [QQ号]``。
+#   注入后由 Hook **终止 QQ 的 GUI 主进程**（二进制内含
+#   "[NapCat Backend] Terminate Main Process."），只保留无窗口的后端进程 ——
+#   这是"启动 NapCat 时不弹出 QQ 登录窗口"的唯一实现方式。
+# **有头（framework）**：``napimain.exe <QQ.exe> <napiloader.dll> <nativeLoader.cjs>``。
+#   注入后 QQ 客户端进程继续存活，窗口会显示出来。
+# 两个形态的素材互不通用（一个靠 qqnt.json 改写 QQ 入口，一个靠 nativeLoader），
+# 因此按**目录整体**选择，不混搭。
+_HEADLESS_MARKERS = (
+    "NapCatWinBootMain.exe",
+    "NapCatWinBootHook.dll",
+    "napcat.mjs",
+    "qqnt.json",
+    # 注意：不含 loadNapCat.js —— 它是**运行时生成物**（由 _prepare_headless_loader
+    # 指向当前 payload），依赖它的存在会让"删掉生成文件"误判成素材不全。
+)
+_FRAMEWORK_MARKERS = ("napimain.exe", "napiloader.dll", "nativeLoader.cjs")
+
+
+def _has_headless_boot(napcat_dir: Path) -> bool:
+    """目录里是否具备完整的无头启动素材。"""
+    return all((napcat_dir / name).exists() for name in _HEADLESS_MARKERS)
+
+
+def _has_framework_boot(napcat_dir: Path) -> bool:
+    """目录里是否具备完整的有头（framework）启动素材。"""
+    return all((napcat_dir / name).exists() for name in _FRAMEWORK_MARKERS)
+
+
+def boot_mode_of(napcat_dir: Path) -> str:
+    """该部署的启动形态：``headless`` / ``framework`` / ``""``（素材都不全）。"""
+    if _has_headless_boot(napcat_dir):
+        return "headless"
+    if _has_framework_boot(napcat_dir):
+        return "framework"
+    return ""
+
+
+def _headless_enabled(settings: dict | None) -> bool:
+    """是否优先使用无头形态（默认开；``napcat.headless: false`` 可回退有头）。"""
+    value = (settings or {}).get("napcat", {}).get("headless")
+    if value is None:
+        value = os.environ.get("AERIE_NAPCAT_HEADLESS")
+    if value is None:
+        return True
+    return str(value).strip().lower() not in ("0", "false", "no", "off")
+
 
 def _resolve_napcat_dir(settings: dict | None) -> Path:
-    """Resolve NapCat 目录：环境变量 > settings.napcat.dir > 下载配置 > 项目根默认。
+    """Resolve NapCat 目录：环境变量 > settings.napcat.dir > 无头部署 > 下载配置 > 默认。
 
     打包后 ``__file__`` 的父目录不再是仓库根，``_DEFAULT_NAPCAT_DIR`` 会落空；
     因此必须允许通过环境变量 / settings 显式指定，或读取「一键下载」落盘的
     ``data/napcat_dir.json``（下载解压后写入，重启后仍能定位）。
+
+    显式指定的目录一律尊重；未指定时**优先挑选自带无头素材的部署** ——
+    用户明确要求"启动 NapCat 不弹 QQ 登录窗口"，而下载器装的那份用的是有头
+    启动器（``napimain.exe``），会让 QQ 窗口冒出来。
     """
     env_dir = os.environ.get("NAPCAT_DIR") or os.environ.get("AERIE_NAPCAT_DIR")
     if env_dir:
@@ -44,7 +96,13 @@ def _resolve_napcat_dir(settings: dict | None) -> Path:
     if cfg_dir:
         return Path(str(cfg_dir)).expanduser()
     marker_dir = _read_download_marker()
-    if marker_dir:
+    if _headless_enabled(settings):
+        # 仓库自带的无头部署优先；它成套（启动器/Hook/payload/补丁描述齐全）。
+        if _has_headless_boot(_DEFAULT_NAPCAT_DIR):
+            return _DEFAULT_NAPCAT_DIR
+        if marker_dir is not None and _has_headless_boot(marker_dir):
+            return marker_dir
+    if marker_dir is not None:
         return marker_dir
     return _DEFAULT_NAPCAT_DIR
 
@@ -116,33 +174,64 @@ def resolve_qq_exe(settings: dict | None = None) -> tuple[Path | None, str]:
     return None, ""
 
 
-def _build_launch_command(napcat_dir: Path, qq_exe: Path | None) -> list[str] | None:
-    """Build the napimain.exe argv for NapCat Framework v4.18+.
+def _prepare_headless_loader(napcat_dir: Path) -> None:
+    """按 ``launcher-user.bat`` 的写法生成 ``loadNapCat.js``。
 
-    Layout: ``napimain.exe <QQ.exe> <napiloader.dll> <nativeLoader.cjs>``.
-    Returns None when any component is missing (caller surfaces a setup error).
+    该文件内容是"import 真正的 payload"这一句 —— QQ 被 ``qqnt.json`` 改写入口后
+    会先加载它。原 .bat 在每次启动前覆写，这里保持同样行为（payload 路径可能变）。
     """
-    if sys.platform != "win32":
+    payload = (napcat_dir / "napcat.mjs").as_posix()
+    (napcat_dir / "loadNapCat.js").write_text(
+        f'(async () => {{await import("file:///{payload}")}})()',
+        encoding="utf-8",
+    )
+
+
+def _build_launch_command(napcat_dir: Path, qq_exe: Path | None) -> list[str] | None:
+    """按部署形态构造启动 argv；无头优先。
+
+    * **无头**（``NapCatWinBootMain.exe <QQ.exe> <Hook.dll>``）：注入后终止 QQ 的
+      GUI 主进程 → 不弹 QQ 窗口。用户要求的形态。
+    * **有头**（``napimain.exe <QQ.exe> <napiloader.dll> <nativeLoader.cjs>``）：
+      兼容旧的下载器部署；QQ 窗口会显示。
+    Returns None when the components for either form are missing.
+    """
+    if sys.platform != "win32" or qq_exe is None:
         return None
-    boot_main = napcat_dir / "napimain.exe"
-    inject_dll = napcat_dir / "napiloader.dll"
-    loader_cjs = napcat_dir / "nativeLoader.cjs"
-    if not all(p.exists() for p in (boot_main, inject_dll, loader_cjs)) or qq_exe is None:
+    if _has_headless_boot(napcat_dir):
+        return [
+            str(napcat_dir / "NapCatWinBootMain.exe"),
+            str(qq_exe),
+            str(napcat_dir / "NapCatWinBootHook.dll"),
+        ]
+    if not _has_framework_boot(napcat_dir):
         return None
     # NapCat's own loader scripts pass the CJS entry with forward slashes and
     # export NAPCAT_* env vars; napimain resolves the injection target through
     # them, so argv alone leaves coreReady=false forever.
     return [
-        str(boot_main),
+        str(napcat_dir / "napimain.exe"),
         str(qq_exe),
-        str(inject_dll),
-        loader_cjs.as_posix(),
+        str(napcat_dir / "napiloader.dll"),
+        (napcat_dir / "nativeLoader.cjs").as_posix(),
     ]
 
 
 def _napcat_env(napcat_dir: Path) -> dict[str, str]:
-    """Environment variables NapCat's napiLoader exports before napimain."""
+    """启动 NapCat 时注入的环境变量（按启动形态给对应的一套）。"""
     env = dict(os.environ)
+    if _has_headless_boot(napcat_dir):
+        # 与 launcher-user.bat 完全一致：路径由环境变量告诉 Hook 和 payload。
+        env.update(
+            {
+                "NAPCAT_PATCH_PACKAGE": str(napcat_dir / "qqnt.json"),
+                "NAPCAT_LOAD_PATH": str(napcat_dir / "loadNapCat.js"),
+                "NAPCAT_INJECT_PATH": str(napcat_dir / "NapCatWinBootHook.dll"),
+                "NAPCAT_LAUNCHER_PATH": str(napcat_dir / "NapCatWinBootMain.exe"),
+                "NAPCAT_MAIN_PATH": (napcat_dir / "napcat.mjs").as_posix(),
+            }
+        )
+        return env
     env.update(
         {
             "NAPCAT_INJECT_PATH": str(napcat_dir / "napiloader.dll"),
@@ -169,7 +258,15 @@ def _port_is_open(host: str = "127.0.0.1", port: int = 3001) -> bool:
 
 
 def _list_qq_pids() -> set[int]:
-    """Enumerate running QQ.exe PIDs via tasklist (Windows only)."""
+    """Enumerate running QQ.exe PIDs via tasklist (Windows only).
+
+    健壮性（2026-09-28 实测）：Electron 以 ``stdio: ["ignore", "pipe", "pipe"]``
+    启动后端（stdin 无效），此环境下 ``subprocess.run(capture_output=True)`` 可能
+    返回 ``stdout=None``。旧实现直接 ``completed.stdout.splitlines()`` 会抛
+    AttributeError，把 ``_spawn()`` 整条打断 —— 表现为"NapCat 永远起不来"。
+    这里显式给 stdin 接 DEVNULL，并对 None/空输出降级为空集合：PID 枚举只是
+    看护用的辅助信息，绝不该成为启动的阻塞点。
+    """
     if sys.platform != "win32":
         return set()
     try:
@@ -177,12 +274,14 @@ def _list_qq_pids() -> set[int]:
             ["tasklist", "/FI", "IMAGENAME eq QQ.exe", "/FO", "CSV", "/NH"],
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=10,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, ValueError):
         return set()
+    output = completed.stdout or ""
     pids: set[int] = set()
-    for line in completed.stdout.splitlines():
+    for line in output.splitlines():
         columns = line.split('","')
         if len(columns) < 2:
             continue
@@ -288,12 +387,7 @@ class NapcatLauncher:
 
     def _setup_error_code(self) -> str:
         """启动命令不可用时区分"缺 NapCat 本体"与"缺 QQ 宿主"，便于面板给对提示。"""
-        components = (
-            self.napcat_dir / "napimain.exe",
-            self.napcat_dir / "napiloader.dll",
-            self.napcat_dir / "nativeLoader.cjs",
-        )
-        if not all(p.exists() for p in components):
+        if boot_mode_of(self.napcat_dir) == "":
             return "launcher_not_found"
         return "qq_not_found" if self._qq_exe is None else "launcher_not_found"
 
@@ -358,6 +452,8 @@ class NapcatLauncher:
             # 若它是 Beta 通道就有风控风险 —— 面板据此提示切换到受控运行时。
             "qq_source": self._qq_source,
             "qq_ready": self._qq_exe is not None,
+            # 启动形态（可观测性）：headless = 不弹 QQ 窗口；framework = 会弹。
+            "boot_mode": boot_mode_of(self.napcat_dir),
         }
 
     def get_logs(self, limit: int = 50) -> list[str]:
@@ -469,9 +565,16 @@ class NapcatLauncher:
             }
 
     def _spawn(self) -> None:
-        """Launch napimain.exe (injects NapCat into the system QQ process)."""
+        """启动 NapCat（无头部署会终止 QQ 的 GUI 主进程，不弹窗口）。"""
         if self._launch_cmd is None:
             raise RuntimeError("napcat launch command unavailable")
+        if _has_headless_boot(self.napcat_dir):
+            # 无头形态需要在启动前把 loadNapCat.js 指向当前 payload
+            # （launcher-user.bat 每次启动都覆写，这里保持同样语义）。
+            try:
+                _prepare_headless_loader(self.napcat_dir)
+            except OSError:
+                logger.warning("prepare headless loader failed", exc_info=True)
         existing_qq = _list_qq_pids()
         self._proc = subprocess.Popen(
             self._launch_cmd,

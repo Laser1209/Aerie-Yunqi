@@ -28,11 +28,108 @@ def _make_qq_runtime(root: Path) -> Path:
 
 
 def _make_napcat_dir(root: Path) -> Path:
-    """造一个含 Framework v4.18 三件套的 NapCat 目录。"""
+    """造一个含 Framework v4.18 三件套的 NapCat 目录（有头形态）。"""
     root.mkdir(parents=True, exist_ok=True)
     for name in ("napimain.exe", "napiloader.dll", "nativeLoader.cjs"):
         (root / name).write_bytes(b"x")
     return root
+
+
+def _make_headless_dir(root: Path) -> Path:
+    """造一个含无头素材的 NapCat 目录（NapCat.Shell 形态）。
+
+    注意不预置 ``loadNapCat.js``：它是运行时生成物，不应作为素材判据。
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    for name in ("NapCatWinBootMain.exe", "NapCatWinBootHook.dll", "napcat.mjs", "qqnt.json"):
+        (root / name).write_bytes(b"x")
+    return root
+
+
+# ── 无头 / 有头形态识别 ───────────────────────────────────────
+def test_boot_mode_detects_headless_and_framework(tmp_path):
+    assert launcher_module.boot_mode_of(_make_headless_dir(tmp_path / "hl")) == "headless"
+    assert launcher_module.boot_mode_of(_make_napcat_dir(tmp_path / "fw")) == "framework"
+    assert launcher_module.boot_mode_of(tmp_path / "absent") == ""
+
+
+def test_repo_bundled_shell_is_headless():
+    """仓库自带的 NapCat.Shell 必须是完整的无头部署（不弹 QQ 窗口的前提）。"""
+    bundled = launcher_module._DEFAULT_NAPCAT_DIR
+    assert launcher_module.boot_mode_of(bundled) == "headless"
+
+
+def test_build_launch_command_prefers_headless(monkeypatch, tmp_path):
+    """同一目录同时具备两套素材时，必须选无头（用户要求不弹 QQ 窗口）。"""
+    napcat_dir = _make_headless_dir(tmp_path / "both")
+    for name in ("napimain.exe", "napiloader.dll", "nativeLoader.cjs"):
+        (napcat_dir / name).write_bytes(b"x")
+    qq_exe = tmp_path / "QQ.exe"
+    qq_exe.write_bytes(b"MZ")
+
+    command = launcher_module._build_launch_command(napcat_dir, qq_exe)
+
+    assert command is not None
+    assert command[0].endswith("NapCatWinBootMain.exe")
+    assert command[1] == str(qq_exe)
+    assert command[2].endswith("NapCatWinBootHook.dll")
+
+
+def test_build_launch_command_none_without_qq(monkeypatch, tmp_path):
+    """无头形态同样需要 QQ 宿主；缺 QQ 时不得返回命令。"""
+    napcat_dir = _make_headless_dir(tmp_path / "hl")
+    assert launcher_module._build_launch_command(napcat_dir, None) is None
+
+
+def test_headless_env_carries_napcat_paths(tmp_path):
+    napcat_dir = _make_headless_dir(tmp_path / "hl")
+    env = launcher_module._napcat_env(napcat_dir)
+
+    assert env["NAPCAT_INJECT_PATH"].endswith("NapCatWinBootHook.dll")
+    assert env["NAPCAT_MAIN_PATH"].endswith("napcat.mjs")
+    assert env["NAPCAT_PATCH_PACKAGE"].endswith("qqnt.json")
+    assert env["NAPCAT_LOAD_PATH"].endswith("loadNapCat.js")
+
+
+def test_prepare_headless_loader_points_at_payload(tmp_path):
+    napcat_dir = _make_headless_dir(tmp_path / "hl")
+    launcher_module._prepare_headless_loader(napcat_dir)
+
+    text = (napcat_dir / "loadNapCat.js").read_text(encoding="utf-8")
+
+    assert "import(" in text
+    assert "napcat.mjs" in text
+    # 与 launcher-user.bat 一致：必须是 file:/// + 正斜杠，Windows 反斜杠会 import 失败
+    assert "file:///" in text
+    assert "\\" not in text
+
+
+def test_resolve_napcat_dir_prefers_headless_over_download_marker(monkeypatch, tmp_path):
+    """下载标记指向有头部署时，仍应优先自带的无头部署（否则 QQ 窗口会冒出来）。"""
+    framework = _make_napcat_dir(tmp_path / "fw")
+    monkeypatch.setattr(launcher_module, "_read_download_marker", lambda: framework)
+
+    resolved = launcher_module._resolve_napcat_dir({})
+
+    assert launcher_module.boot_mode_of(resolved) == "headless"
+
+
+def test_resolve_napcat_dir_respects_explicit_config(monkeypatch, tmp_path):
+    """显式指定目录一律尊重，不被无头偏好覆盖。"""
+    framework = _make_napcat_dir(tmp_path / "explicit")
+
+    resolved = launcher_module._resolve_napcat_dir({"napcat": {"dir": str(framework)}})
+
+    assert resolved == framework
+
+
+def test_headless_can_be_disabled_by_config(monkeypatch, tmp_path):
+    framework = _make_napcat_dir(tmp_path / "fw")
+    monkeypatch.setattr(launcher_module, "_read_download_marker", lambda: framework)
+
+    resolved = launcher_module._resolve_napcat_dir({"napcat": {"headless": False}})
+
+    assert resolved == framework
 
 
 # ── 受控目录解析 ─────────────────────────────────────────────
@@ -60,6 +157,8 @@ def test_installer_status_shape(monkeypatch, tmp_path):
     assert status["installed"] is False
     assert status["runtime_dir"] == str(tmp_path)
     assert isinstance(status["installer_embedded"], bool)
+    assert status["installer_drop_dir"] == str(tmp_path / "installer")
+    assert status["local_installer"] == ""
 
 
 def test_bundled_installer_is_committed_with_repo():
@@ -68,7 +167,52 @@ def test_bundled_installer_is_committed_with_repo():
     assert path is not None and path.exists()
     boot = installer_module.bundled_boot_exe()
     assert boot is not None and boot.exists()
-    assert installer_module.QQ_INSTALLER_URL.startswith("https://dldir1.qq.com/")
+    assert installer_module.QQ_INSTALLER_URL.startswith("https://")
+
+
+def test_local_installer_preferred_over_download(monkeypatch, tmp_path):
+    """本地投放的安装包优先于远程下载（腾讯 CDN 直连实测 403）。"""
+    monkeypatch.setenv("AERIE_NAPCAT_RUNTIME_DIR", str(tmp_path))
+    assert installer_module.find_local_installer({}) is None
+
+    drop = installer_module.installer_drop_dir({})
+    drop.mkdir(parents=True, exist_ok=True)
+    local = drop / "QQ_9.9.36_260924_x86_01.exe"
+    local.write_bytes(b"MZ")
+
+    assert installer_module.find_local_installer({}) == local
+
+
+def test_local_installer_explicit_config_wins(monkeypatch, tmp_path):
+    monkeypatch.setenv("AERIE_NAPCAT_RUNTIME_DIR", str(tmp_path / "runtime"))
+    explicit = tmp_path / "elsewhere" / "QQ_setup.exe"
+    explicit.parent.mkdir(parents=True, exist_ok=True)
+    explicit.write_bytes(b"MZ")
+
+    found = installer_module.find_local_installer({"napcat": {"qq_installer": str(explicit)}})
+
+    assert found == explicit
+
+
+def test_install_reports_local_installer_progress(monkeypatch, tmp_path):
+    """走本地安装包时不应尝试联网下载。"""
+    monkeypatch.setenv("AERIE_NAPCAT_RUNTIME_DIR", str(tmp_path))
+    drop = installer_module.installer_drop_dir({})
+    drop.mkdir(parents=True, exist_ok=True)
+    (drop / "QQ_setup.exe").write_bytes(b"MZ")
+
+    def _no_download(*_args, **_kwargs):
+        raise AssertionError("local installer present; must not download")
+
+    monkeypatch.setattr(NapcatInstaller, "_download", _no_download)
+    monkeypatch.setattr(NapcatInstaller, "_silent_install", lambda self, p: False)
+    monkeypatch.setattr(NapcatInstaller, "_seven_zip_extract", lambda self, p, t: None)
+
+    result = NapcatInstaller({}).install_qq_runtime()
+
+    # 安装器不可用时如实报错，但绝没有走下载分支
+    assert result["ok"] is False
+    assert result["error_code"] == "qq_exe_not_found"
 
 
 # ── launcher：QQ 来源优先级 ───────────────────────────────────
@@ -173,3 +317,51 @@ def test_status_exposes_qq_source(monkeypatch, tmp_path):
 
     assert status["qq_source"] == ""
     assert status["qq_ready"] is False
+
+
+# ── 回归：tasklist stdout 为 None 不得打断启动 ────────────────
+def test_list_qq_pids_tolerates_none_stdout(monkeypatch):
+    """Electron 以 stdio=["ignore","pipe","pipe"] 启动后端时，tasklist 的
+    stdout 可能是 None。旧实现直接 .splitlines() 抛 AttributeError，导致
+    NapCat 永远起不来（实测：napcat_start_failed + NapCat start error）。
+    """
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(launcher_module.sys, "platform", "win32")
+    monkeypatch.setattr(
+        launcher_module.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout=None, stderr=None),
+    )
+
+    assert launcher_module._list_qq_pids() == set()
+
+
+def test_list_qq_pids_parses_normal_output(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(launcher_module.sys, "platform", "win32")
+    csv = '"QQ.exe","4242","Console","1","100,000 K"\n'
+    monkeypatch.setattr(
+        launcher_module.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout=csv, stderr=""),
+    )
+
+    assert launcher_module._list_qq_pids() == {4242}
+
+
+def test_list_qq_pids_passes_devnull_stdin(monkeypatch):
+    """必须显式接 DEVNULL stdin，否则父进程 stdin 无效会污染子进程。"""
+    seen: dict = {}
+
+    def _capture(*_args, **kwargs):
+        seen.update(kwargs)
+        return type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
+
+    monkeypatch.setattr(launcher_module.sys, "platform", "win32")
+    monkeypatch.setattr(launcher_module.subprocess, "run", _capture)
+
+    launcher_module._list_qq_pids()
+
+    assert seen.get("stdin") == launcher_module.subprocess.DEVNULL

@@ -1979,7 +1979,7 @@ def tool_doc_write(doc_type: str,
 
 
 def tool_send_file_to_user(filepath: str, note: str = "") -> dict:
-    """把一份本地文件通过当前会话通道发给用户（QQ 走 upload_private_file）。
+    """把一份本地文件通过当前会话通道发给用户（QQ 与微信都有出站实现）。
 
     只允许发送授权根（已注册工作区 / AerieOffice）内的文件，避免把系统文件外发。
     投递是异步入队，工具返回成功只代表"已排队"，不代表对方已收到。
@@ -2865,7 +2865,7 @@ _OFFICE_TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "send_file_to_user",
-            "description": """把一份已经存在的本地文件发给用户（通过当前会话通道，QQ 走文件上传）。
+            "description": """把一份已经存在的本地文件发给用户（自动走当前会话通道，QQ 与微信都已支持发文件）。
 
 使用场景：
 - 你刚生成的报告/表格/文档，用户要你"发过来"
@@ -2874,6 +2874,7 @@ _OFFICE_TOOL_SCHEMAS = {
 限制：
 - 只能发已注册工作区或 AerieOffice 目录内的文件，其他位置会被拒绝
 - 工具只负责投递，不改文件内容；不要再用文字重复文件全文
+- 用户说"发过来/发给我"时**直接调用本工具投递**；不要用文字回答自己发不了
 
 参数：
 - filepath: 文件的绝对路径，或相对 AerieOffice 的路径

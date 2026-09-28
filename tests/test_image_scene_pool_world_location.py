@@ -110,6 +110,28 @@ def test_none_constraint_matches_unfiltered_pool():
     }
 
 
+# ── 5b · 文本地点线索补位（world 沉默时） ──────────────────────────────
+
+
+def test_text_outdoor_hint_reads_place_words_only():
+    """文本地点词 → True；不提地点 → None（给不出 False：那会把"没说"当成"在家"）。"""
+    assert pool.text_outdoor_hint("一抬头发现自己在步行街站了半小时") is True
+    assert pool.text_outdoor_hint("我在江边站了一会儿") is True
+    assert pool.text_outdoor_hint("今天有点累") is None
+    assert pool.text_outdoor_hint("") is None
+
+
+def test_world_location_wins_over_text_hint():
+    """world 明确说在家时，闲聊里提到"步行街"也不该翻成室外 —— world 才是真源。"""
+    assert pool.resolve_outdoor_hint(False, "一抬头发现自己在步行街站了半小时") is False
+    assert pool.resolve_outdoor_hint(True, "今天有点累") is True
+
+
+def test_text_hint_fills_in_when_world_is_silent():
+    assert pool.resolve_outdoor_hint(None, "一抬头发现自己在步行街站了半小时") is True
+    assert pool.resolve_outdoor_hint(None, "今天有点累") is None
+
+
 # ── 6 · 回退开关 ─────────────────────────────────────────────────────
 
 

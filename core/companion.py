@@ -4437,15 +4437,33 @@ class Companion:
         # 它是纯读取（world 快照 + 时间兜底），没有副作用。必须排在场景池之前：
         # 场景池若不知道"她此刻在哪"，就只是一个与世隔绝的随机数生成器 ——
         # 文字说"在步行街"、图却配成"家里窗边"，就是这么来的（实测 55% 概率）。
+        # world 不知道地点时，用话题文本的地点词补位（否则会出现"场景在风情街、
+        # 光照却写洒进落地窗"的自相矛盾）。
+        topic_text = str((candidate or {}).get("user_raw") or "")
+        location_hint: bool | None = None
+        try:
+            from core.image_scene_pool import text_outdoor_hint
+
+            location_hint = text_outdoor_hint(topic_text)
+        except Exception:
+            logger.debug("location hint from text failed", exc_info=True)
         world_context: dict[str, Any] = {}
         try:
-            world_context = self._image_world_context(candidate) or {}
+            world_context = self._image_world_context(
+                candidate, outdoor_hint=location_hint,
+            ) or {}
         except Exception:
             logger.warning(
                 "world image context failed; scene pool runs without location constraint (key=%s)",
                 prompt_key, exc_info=True,
             )
             world_context = {}
+        # 把世界地点盖到候选上，供 base 构造器使用：`_compose_base_image_prompt`
+        # 里那些写死的室内场景（"坐在工作室书桌前""她在家里的随手自拍"）必须知道
+        # 她此刻在外面，否则它与后面追加的户外场景会同时出现在提示词里（实测）。
+        if isinstance(candidate, dict) and isinstance(world_context, dict):
+            candidate["world_outdoor"] = world_context.get("outdoor")
+            candidate["world_place"] = str(world_context.get("outdoor_place") or "")
         # ── 阶段2 · 生活记录场景池钩子（开关门控；异常完全不影响原流程）──
         # 只对人物类图生效：在 base 构造前用 softmax 选一个场景写入 spec["scene"]，
         # 并把场景画面描述暂存到 candidate，供 _compose_base_image_prompt 拼接使用。
@@ -4626,28 +4644,44 @@ class Companion:
                 topic = topic.split("world_visual:", 1)[1].replace("object_", "").strip()
             else:
                 topic = ""
+            # §十：在室外拍环境照时，"公寓里/窗前"是矛盾的 —— 换成她所在的地点。
+            outdoor = bool(isinstance(candidate, dict) and candidate.get("world_outdoor") is True)
+            place = str((candidate or {}).get("world_place") or "").strip() if outdoor else ""
+            where = f"户外的{place}" if place else ("户外" if outdoor else "重庆的家/窗边")
             if topic:
                 # P2：统一走 _visual_topic_zh 翻译（活动时刻话题 + 物件话题全覆盖），
                 # 杜绝英文 token（如 reading_time）直接进生图提示词。
                 translated = _visual_topic_zh(topic)
                 return (
-                    f"一张写实照片，第一人称视角，{orientation}，她在重庆的家/窗边随手拍下眼前的一角：{translated}。"
+                    f"一张写实照片，第一人称视角，{orientation}，她在{where}随手拍下眼前的一角：{translated}。"
                     "画面自然、生活化、暖色调，微微的随手感。"
                 )
             return (
-                f"一张写实照片，第一人称视角，{orientation}，她在重庆的复式公寓里，窗前/工作室一角。"
+                f"一张写实照片，第一人称视角，{orientation}，她在{where}随手拍下眼前的一角。"
                 "画面自然、生活化、暖色调，微微的随手感。"
             )
         # 用户指令已给出画面模块时，base 的固定场景让位（否则会与模块互相矛盾：
         # 用户要"床上躺着"，提示词却仍写"坐在书桌前托腮"）。无指令（主动发图 /
         # world 生活场景）时保留固定场景作为画面主轴。
+        #
+        # §十：世界数据说她**此刻在外面**时，固定场景里的"家里 / 工作室 / 客厅 /
+        # 落地窗 / 公寓"一律作废 —— 那些是室内措辞，与"她在步行街"直接打架，
+        # 而生成模型会同时看到两句矛盾指令（实测就是这样出图的）。
         spec_drives_scene = _spec_drives_scene(spec)
+        world_outdoor = world_place = ""
+        if isinstance(candidate, dict):
+            world_place = str(candidate.get("world_place") or "").strip()
+            if candidate.get("world_outdoor") is True:
+                # 地点名缺失（world 不知道、只有文本地点线索）时用"户外"兜底，
+                # 具体场景由场景池的 scene_prompt 给足。
+                world_outdoor = world_place or "户外"
         if key == "role_selfie":
-            scene = (
-                "她在家里的随手自拍，像刚拍下这一刻发给恋人。"
-                if spec_drives_scene
-                else "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑直视镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
-            )
+            if world_outdoor:
+                scene = f"她在{world_outdoor}的随手自拍，像刚拍下这一刻发给恋人。"
+            elif spec_drives_scene:
+                scene = "她在家里的随手自拍，像刚拍下这一刻发给恋人。"
+            else:
+                scene = "她穿着宽松的家居T恤坐在工作室书桌前，左手托腮，微微带笑直视镜头，像在给恋人发自拍，桌面有数位板和设计稿。"
         elif key == "role_in_scene":
             # POV 约束：自拍视角，画面里能看出是她本人手持手机拍下的这一刻，
             # 绝不能用"侧身望向镜头"这种第三方拍摄摆姿（那暗示存在一个拍摄者）。
@@ -4659,19 +4693,30 @@ class Companion:
             else:
                 topic = ""
             topic_zh = _visual_topic_zh(topic) if topic and not spec_drives_scene else ""
+            behind = f"身后是{world_outdoor}的街景" if world_outdoor else "身后是她重庆的家"
             if topic_zh and topic_zh != topic:
                 scene = (
                     f"{topic_zh}，此刻举起手机前置摄像头对着自己，嘴角带笑，"
-                    "像刚拍下这一刻随手发给你，身后是她重庆的家。"
+                    f"像刚拍下这一刻随手发给你，{behind}。"
                 )
             else:
-                scene = "她举着手机前置摄像头对着自己，嘴角带笑，像刚拍下这一刻随手发给你，身后是重庆高层复式公寓落地窗。"
+                backdrop = (
+                    f"{world_outdoor}的街景" if world_outdoor else "重庆高层复式公寓落地窗"
+                )
+                scene = f"她举着手机前置摄像头对着自己，嘴角带笑，像刚拍下这一刻随手发给你，身后是{backdrop}。"
         elif key == "couple_photo":
-            scene = (
-                "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，背景是暖色灯光下的客厅。"
-                if spec_drives_scene
-                else "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
+            backdrop = (
+                f"{world_outdoor}的街景夜色" if world_outdoor else "暖色灯光下的客厅沙发"
             )
+            scene = (
+                "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，"
+                f"背景是{backdrop}。"
+                if (world_outdoor or spec_drives_scene)
+                else "她与恋人的温馨自拍合影，她手持手机举在两人面前前置自拍，"
+                "她微微低头看着对方，眼神温柔带占有欲，背景是暖色灯光下的客厅沙发。"
+            )
+        elif world_outdoor:
+            scene = f"她在{world_outdoor}，她手持手机前置摄像头对着自己，神情放松地看着镜头。"
         else:
             scene = "她坐在重庆的家里，窗外是夜景，她手持手机前置摄像头对着自己，神情放松地看着镜头。"
         full = f"{base}{scene}{orientation}。"
@@ -4699,14 +4744,30 @@ class Companion:
             merged = f"{merged}{scene_prompt}。{_LIFE_SNAP_STYLE_PHRASE}"
         return merged
 
-    def _image_world_context(self, candidate: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _image_world_context(
+        self,
+        candidate: dict[str, Any] | None = None,
+        *,
+        outdoor_hint: bool | None = None,
+    ) -> dict[str, Any]:
         """提取生图可用的世界上下文，只保留真实存在的数据。
 
         时间优先取 WorldSnapshot（world 的时间），world 关闭/快照不可用时退回
         候选事件时间或本地当前时间；天气/地点/物件只在 world 有真实数据时才进入。
+
+        ``outdoor_hint``：world 不知道地点时（快照不可用/过期）的地点补位线索
+        （通常来自话题文本的地点词）。补位后光照与基础场景跟场景池拿到同一个
+        室内/室外结论，不会出现"图里在风情街、光照却写洒进落地窗"的自相矛盾。
         """
         snapshot = self._world_snapshot_for_context()
         has_world = isinstance(snapshot, dict) and bool(snapshot)
+        # 她此刻在不在室外：None = 不知道（world 关掉/无快照）。三态很重要 ——
+        # 给 False 会被当成"她在家"，把"world 关掉"误伤成"硬过滤到室内"。
+        outdoor_state = bool(snapshot.get("outdoor")) if has_world else None
+        outdoor_from_text = False
+        if outdoor_state is None and outdoor_hint is not None:
+            outdoor_state = outdoor_hint
+            outdoor_from_text = True
         if has_world:
             phase = str(snapshot.get("phase") or "")
             iso_time = str(snapshot.get("iso_time") or snapshot.get("created_at") or "")
@@ -4769,7 +4830,10 @@ class Companion:
         # 产出"太阳刚出/鱼肚白/太阳高度约X度/日落余晖"等逐日差异描述，
         # 替代粗粒度的按小时查表。月相用本地朔望月计算（无网络、瞬时、缓存）。
         prompt_key = str((candidate or {}).get("prompt_key") or "default")
-        fine = solar_time.fine_time_descriptor(clock_dt, prompt_key)
+        # §十：室外时改用天光措辞，不再写"洒进落地窗/屋内暖灯/窗外是…"。
+        fine = solar_time.fine_time_descriptor(
+            clock_dt, prompt_key, outdoor=outdoor_state is True,
+        )
         time_cn = str(fine.get("time_cn") or "").strip()
         light_cn = str(fine.get("light_cn") or "").strip()
         moon = moon_phase(clock_dt)
@@ -4802,7 +4866,8 @@ class Companion:
             # 无 world 快照时为 None（而不是 False）：场景池据此**不施加**室内/室外
             # 约束。若这里给 False，会被当成"她此刻在家"，把"world 关掉"误伤成
             # "硬过滤到室内"—— 那正是 §十 要修的那种矛盾。
-            "outdoor": bool(snapshot.get("outdoor")) if has_world else None,
+            "outdoor": outdoor_state,
+            "outdoor_from_text": outdoor_from_text,
             "outdoor_place": str(snapshot.get("outdoor_place") or "") if has_world else "",
             "holiday": holiday_name(clock_dt.date()),
             "activity": activity,

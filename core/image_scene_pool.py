@@ -223,6 +223,29 @@ def respect_world_location() -> bool:
     return bool(_load_config().get("respect_world_location", _DEFAULT_RESPECT_WORLD_LOCATION))
 
 
+def text_outdoor_hint(topic_text: str) -> bool | None:
+    """话题文本里的地点线索：明确提到户外地点词 → True；没提到 → None（不知道）。
+
+    给不出 False —— "文本里没提地点"不等于"她在家"，那正是把"world 关掉"误判成
+    室内的错误来源。
+    """
+    text = str(topic_text or "")
+    if not text:
+        return None
+    return True if any(word in text for word in _OUTDOOR_HINT_WORDS) else None
+
+
+def resolve_outdoor_hint(world_outdoor: Any, topic_text: str = "") -> bool | None:
+    """世界地点优先；世界不知道时用**文本地点线索**补位，否则 None。
+
+    为什么需要文本补位：世界快照不可用/过期时 ``outdoor`` 是 None，于是场景池会
+    选出户外场景、而光照/基础场景仍写室内（"洒进落地窗"），同一张图里自相矛盾。
+    """
+    if isinstance(world_outdoor, bool):
+        return world_outdoor
+    return text_outdoor_hint(topic_text)
+
+
 def _resolve_region(config: dict[str, Any], region: str) -> str:
     """解析目标地域：显式指定优先，找不到回退 default_region。"""
     regions = config.get("regions") or {}

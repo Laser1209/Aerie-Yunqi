@@ -6,6 +6,8 @@
   5.   无 world 快照 → outdoor=None（不约束，不回归）
   6.   轻量 LLM 接力不可用时，确定性兜底仍能表达"她在室外"
   + 接力 system prompt 里"地点优先级高于场景描述"的授权确实存在
+  + **端到端**：用真实方法（非桩）走完 base→世界上下文→场景池→兜底，
+    断言整条提示词里不再出现与"她在室外"矛盾的室内措辞。
 """
 
 from __future__ import annotations
@@ -16,6 +18,10 @@ import pytest
 
 from core import image_scene_pool as pool
 from core.companion import Companion
+
+# 室内措辞：室外场景里出现任何一个，都是用户报过的"图文矛盾"。
+_INDOOR_MARKERS = ("家里的", "工作室书桌前", "落地窗", "屋内", "窗外", "客厅")
+_WALKING_STREET_TOPIC = "一抬头发现自己在步行街站了半小时 你说我是不是该找个地方坐坐 不对 我是想问你有空了吗"
 
 
 def _outdoor_names() -> set[str]:
@@ -229,3 +235,116 @@ async def test_relay_prompt_gives_location_priority(monkeypatch):
     # 世界数据确实被喂给了接力（否则"以 world 为准"无从谈起）
     user_msg = str(comp.brain.messages[1]["content"])
     assert "她此刻在室外（步行街）" in user_msg
+
+
+# ── 端到端：整条提示词不得自相矛盾（真实方法，非桩） ────────────────────
+# 背景：只把 outdoor 传给场景池是不够的 —— base 里写死的室内场景
+# （"坐在工作室书桌前""她在家里的随手自拍"）与太阳光的室内措辞
+# （"洒进南偏东(SE)的落地窗"）会把"她在步行街"当场推翻，生成模型同时收到
+# 两句矛盾指令。以下用例用**真实** _compose_base_image_prompt /
+# _image_world_context / _inject_world_context_fallback 钉住这一条。
+
+
+def _real_prompt_companion(snapshot):
+    """只把外部依赖打桩，其余全用真实实现。"""
+    comp = Companion.__new__(Companion)
+    comp._compose_base_image_prompt = Companion._compose_base_image_prompt.__get__(comp)
+    comp._image_world_context = Companion._image_world_context.__get__(comp)
+    comp._inject_world_context_fallback = Companion._inject_world_context_fallback.__get__(comp)
+    comp._is_persona_image = staticmethod(Companion._is_persona_image)
+    comp._life_recording_enabled = staticmethod(Companion._life_recording_enabled)
+    comp._world_snapshot_for_context = lambda **kw: snapshot
+    comp._semantic_photo_spec = AsyncMock(return_value={})          # 语义自补失败 → 关键词兜底
+    comp._light_relay_refine_prompt = AsyncMock(return_value=None)  # 接力不可用 → 确定性兜底
+    return comp
+
+
+async def _walking_street_prompt(snapshot) -> str:
+    comp = _real_prompt_companion(snapshot)
+    candidate = {
+        "prompt_key": "role_selfie",
+        "scene": "local_send",
+        "candidate_id": "t",
+        "user_raw": _WALKING_STREET_TOPIC,
+    }
+    prompt = await comp._image_prompt_for_impl("role_selfie", candidate)
+    assert candidate["scene_meta"]["group"] == "outdoor", "室外场景必须选到 outdoor 组"
+    return prompt
+
+
+@pytest.mark.asyncio
+async def test_outdoor_prompt_contains_no_indoor_wording():
+    """world 说在步行街 → 整条提示词里不出现任何室内措辞（用户报的那个矛盾）。"""
+    prompt = await _walking_street_prompt({
+        "phase": "afternoon",
+        "iso_time": "2026-09-28T15:55:00+08:00",
+        "outdoor": True,
+        "outdoor_place": "步行街",
+        "city": "重庆",
+        "location": "outdoor",
+    })
+
+    leaked = [m for m in _INDOOR_MARKERS if m in prompt]
+    assert not leaked, f"室外提示词里仍有室内措辞：{leaked}"
+    assert "步行街" in prompt
+
+
+@pytest.mark.asyncio
+async def test_text_location_hint_fills_in_when_world_is_silent():
+    """world 快照不可用、但话题明确说了"步行街"时，也要走户外（不再 15% 漏到室内）。
+
+    否则会出现更隐蔽的矛盾：场景池选出**户外**场景，光照/基础场景却仍是室内
+    （实测："场景是风情街" + "洒进落地窗"）。
+    """
+    comp = _real_prompt_companion(None)
+    candidate = {
+        "prompt_key": "role_selfie",
+        "scene": "local_send",
+        "candidate_id": "t",
+        "user_raw": _WALKING_STREET_TOPIC,
+    }
+    prompt = await comp._image_prompt_for_impl("role_selfie", candidate)
+
+    assert candidate["scene_meta"]["group"] == "outdoor"
+    assert candidate["scene_meta"]["outdoor"] is True
+    leaked = [m for m in _INDOOR_MARKERS if m in prompt]
+    assert not leaked, f"文本地点线索补位后仍有室内措辞：{leaked}"
+
+
+@pytest.mark.asyncio
+async def test_indoor_world_is_not_outdoorized():
+    """反向不回归：world 说在家 → 保留室内场景与室内光照，不被户外化。"""
+    comp = _real_prompt_companion({
+        "phase": "night",
+        "iso_time": "2026-09-28T22:10:00+08:00",
+        "outdoor": False,
+        "location": "home",
+        "city": "重庆",
+    })
+    candidate = {
+        "prompt_key": "role_selfie",
+        "scene": "local_send",
+        "candidate_id": "t",
+        "user_raw": _WALKING_STREET_TOPIC,   # 即便闲聊里提了"步行街"，world 才是真源
+    }
+    prompt = await comp._image_prompt_for_impl("role_selfie", candidate)
+
+    assert candidate["scene_meta"]["group"] == "indoor"
+    assert "家里的" in prompt
+    assert "屋内" in prompt or "窗外" in prompt
+
+
+def test_indoor_and_outdoor_light_are_different_wording():
+    """光照措辞两套：室内写窗外/屋内，室外只写天光街灯。"""
+    from datetime import datetime
+
+    from core import solar_time
+
+    when = datetime(2026, 9, 28, 15, 55)
+    indoor = solar_time.fine_time_descriptor(when, "role_selfie", outdoor=False)["light_cn"]
+    outdoor = solar_time.fine_time_descriptor(when, "role_selfie", outdoor=True)["light_cn"]
+
+    assert "落地窗" in indoor
+    assert not any(m in outdoor for m in ("落地窗", "屋内", "窗外", "房间"))
+    assert outdoor.strip()
+

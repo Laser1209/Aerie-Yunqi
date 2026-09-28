@@ -163,12 +163,16 @@ def _to_local(dt: datetime) -> datetime:
 def fine_time_descriptor(
     dt: datetime,
     prompt_key: str = "environment_object",
+    outdoor: bool = False,
 ) -> dict[str, str]:
     """Day-specific fine time + light description for the fixed apartment.
 
-    Returns ``time_cn`` (精细时段 + 太阳高度) and ``light_cn`` (房间光线与窗外，
-    结合公寓固定朝向).  Chosen so the light relay / deterministic fallback can
-    drop either directly into an image prompt.
+    ``light_cn`` 按**她此刻在不在室外**分两套措辞：室内结合公寓固定朝向写
+    "阳光洒进落地窗 / 窗外是…"；室外只写天光、街灯与夕阳（§十：她在步行街时
+    再写"屋内暖灯""落地窗"就是把那句话当场推翻）。
+
+    Returns ``time_cn`` (精细时段 + 太阳高度) and ``light_cn``.  Chosen so the
+    light relay / deterministic fallback can drop either directly into a prompt.
     """
     dt = _to_local(dt)
     pos = solar_position(dt)
@@ -216,19 +220,25 @@ def fine_time_descriptor(
         time_cn = f"{hhmm}，太阳已升起，光线明亮（太阳高度约{round(alt)}°）"
 
     # ── 房间光线与窗外（结合固定朝向）──
-    room = _ROOM_KEY.get(prompt_key, "living_room")
-    room_cfg = APARTMENT_LAYOUT.get(room, APARTMENT_LAYOUT["living_room"])
-    outside = str(room_cfg.get("window_view") or "")
-    if alt < 0.0:
-        light_cn = f"屋内暖灯亮着，窗外是{outside}的夜色"
-    elif alt < 20.0 and not rising:
-        light_cn = f"暖橘色的夕阳余晖洒进{room_cfg['window']}的落地窗，窗外是{outside}的江上日落"
-    elif 150.0 <= az <= 290.0 and alt >= 20.0:
-        light_cn = f"午后的阳光直直洒进{room_cfg['window']}的落地窗，窗外是{outside}"
-    elif 60.0 <= az < 150.0 and alt >= 5.0:
-        light_cn = f"柔和的晨光斜斜照进{room_cfg['window']}的窗外，窗外是{outside}"
+    # §十：她在**室外**时不能用室内措辞 —— "屋内暖灯亮着""洒进落地窗""窗外是…"
+    # 会把"她在步行街"这句话当场推翻（实测图文矛盾的直接来源）。室外改用
+    # 与环境一致的天光/街灯描述，不出现房间、窗、屋内。
+    if outdoor:
+        light_cn = _outdoor_light(alt, az, rising)
     else:
-        light_cn = f"明亮的自然光从{room_cfg['window']}的窗外照进来，窗外是{outside}"
+        room = _ROOM_KEY.get(prompt_key, "living_room")
+        room_cfg = APARTMENT_LAYOUT.get(room, APARTMENT_LAYOUT["living_room"])
+        outside = str(room_cfg.get("window_view") or "")
+        if alt < 0.0:
+            light_cn = f"屋内暖灯亮着，窗外是{outside}的夜色"
+        elif alt < 20.0 and not rising:
+            light_cn = f"暖橘色的夕阳余晖洒进{room_cfg['window']}的落地窗，窗外是{outside}的江上日落"
+        elif 150.0 <= az <= 290.0 and alt >= 20.0:
+            light_cn = f"午后的阳光直直洒进{room_cfg['window']}的落地窗，窗外是{outside}"
+        elif 60.0 <= az < 150.0 and alt >= 5.0:
+            light_cn = f"柔和的晨光斜斜照进{room_cfg['window']}的窗外，窗外是{outside}"
+        else:
+            light_cn = f"明亮的自然光从{room_cfg['window']}的窗外照进来，窗外是{outside}"
 
     return {
         "time_cn": time_cn,
@@ -237,3 +247,20 @@ def fine_time_descriptor(
         "sunset": sunset or "",
         "sun_altitude_deg": str(round(alt)),
     }
+
+
+def _outdoor_light(alt: float, az: float, rising: bool) -> str:
+    """室外天光描述：只写天空、太阳、街灯与风，绝不出现房间/窗/屋内。"""
+    if alt < -18.0:
+        return "夜色很深，路灯的光是画面里主要的亮源"
+    if alt < -6.0:
+        return "天已经完全黑了，街灯与远处灯牌亮着"
+    if alt < 0.0:
+        return "天光将尽，天边还剩一点灰蓝，街灯已经亮起来"
+    if alt < 20.0 and not rising:
+        return "暖橘色的夕阳落在建筑与江面上，天色由橘转紫"
+    if 150.0 <= az <= 290.0 and alt >= 20.0:
+        return "午后的阳光直直照下来，影子清晰，光线明亮"
+    if 60.0 <= az < 150.0 and alt >= 5.0:
+        return "清晨的光斜斜铺在地面上，空气清爽"
+    return "白昼的自然光均匀洒下，环境通透"

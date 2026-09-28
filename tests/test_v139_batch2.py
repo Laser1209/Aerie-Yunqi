@@ -244,7 +244,7 @@ def test_file_management_tools():
         from core.workspace import get_workspace_manager
 
         ws = get_workspace_manager()
-        ws.add_temp_root(tmpdir)
+        ws.add_root(tmpdir)
         try:
             # 1. 列目录
             result = tool_directory_list(tmpdir)
@@ -274,7 +274,7 @@ def test_file_management_tools():
             assert os.path.exists(os.path.join(tmpdir, "renamed.txt"))
             print(f"  ✅ 文件重命名成功")
         finally:
-            ws.remove_temp_root(tmpdir)
+            ws.remove_root(tmpdir)
 
     print("  🎉 文件管理工具测试全部通过!\n")
 

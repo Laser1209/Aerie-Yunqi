@@ -121,7 +121,7 @@ def register_write_root(target: str) -> str | None:
             return None
         from core.workspace import get_workspace_manager
 
-        if get_workspace_manager().add_temp_root(str(root)):
+        if get_workspace_manager().add_root(str(root)):
             return str(root)
     except Exception:
         logger.exception("register_write_root failed: %s", raw)

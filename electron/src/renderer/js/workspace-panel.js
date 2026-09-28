@@ -16,7 +16,6 @@
     root: "",            // 当前根目录
     openDirs: new Set(), // 已展开的目录路径
     pollTimer: null,
-    rootsInfo: [],       // [{path, source}] 来源标记(自定义目录可删)
     permMode: "",        // 写操作权限模式(与电脑操控共用): manual/auto/full/custom
   };
 
@@ -126,18 +125,15 @@
     const select = $("workspace-root-select");
     if (!select) return;
     let roots = [];
-    let rootsInfo = [];
     let activeRoot = "";
     try {
       const res = await request({ path: "/api/workspace/roots" });
       roots = (res.data && res.data.roots) || [];
-      rootsInfo = (res.data && res.data.roots_info) || [];
       activeRoot = (res.data && res.data.active_root) || "";
     } catch (e) {
       renderTreeError("无法连接后端");
       return;
     }
-    state.rootsInfo = rootsInfo;
     // 优先恢复后端记录的激活工作区(跨重启保留)
     const current = activeRoot || state.root || roots[0] || "";
     select.innerHTML = "";
@@ -148,7 +144,7 @@
       select.appendChild(opt);
     });
     if (roots.length === 0) {
-      renderTreeError("暂无工作区目录");
+      renderTreeError("暂无工作区目录，点「添加」选一个文件夹");
       return;
     }
     select.value = current;
@@ -170,16 +166,15 @@
     } catch (_) {}
   }
 
+  // 所有工作区根目录都可移除（用户要求不锁死）
   function updateRemoveButton() {
     const btn = $("workspace-root-remove");
     if (!btn) return;
-    const info = (state.rootsInfo || []).find((r) => r.path === state.root);
-    const removable = info && info.source === "custom";
-    btn.disabled = !removable;
-    btn.title = removable ? "移除该自定义目录" : "预设目录不可移除";
+    btn.disabled = !state.root;
+    btn.title = state.root ? "移除该工作区目录" : "请先选择一个目录";
   }
 
-  async function addCustomRoot() {
+  async function addRoot() {
     let path = "";
     const input = $("workspace-root-input");
     // 优先弹系统文件夹选择框;Electron 环境(preload 注入 dialog)可用。
@@ -202,12 +197,11 @@
 
     try {
       const res = await request({
-        path: "/api/workspace/roots/temp",
+        path: "/api/workspace/roots",
         method: "POST",
         body: { path },
       });
       const added = res.data && res.data.added;
-      state.rootsInfo = (res.data && res.data.roots_info) || [];
       if (input) input.value = "";
       if (!added) {
         if (input) input.placeholder = "该目录已存在，换个路径试试";
@@ -224,18 +218,16 @@
     } catch (_) {}
   }
 
-  async function removeCustomRoot() {
+  async function removeRoot() {
     if (!state.root) return;
-    const info = (state.rootsInfo || []).find((r) => r.path === state.root);
-    if (!info || info.source !== "custom") return;
     try {
-      const res = await request({
+      await request({
         path: "/api/workspace/roots/remove",
         method: "POST",
         body: { path: state.root },
       });
-      state.rootsInfo = (res.data && res.data.roots_info) || [];
       state.openDirs.clear();
+      state.root = "";
       await loadRoots();
     } catch (_) {}
   }
@@ -465,13 +457,13 @@
     const closeBtn = $("workspace-sidebar-close");
     if (closeBtn) closeBtn.addEventListener("click", close);
     const addBtn = $("workspace-root-add-btn");
-    if (addBtn) addBtn.addEventListener("click", addCustomRoot);
+    if (addBtn) addBtn.addEventListener("click", addRoot);
     const addInput = $("workspace-root-input");
     if (addInput) addInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") addCustomRoot();
+      if (e.key === "Enter") addRoot();
     });
     const removeBtn = $("workspace-root-remove");
-    if (removeBtn) removeBtn.addEventListener("click", removeCustomRoot);
+    if (removeBtn) removeBtn.addEventListener("click", removeRoot);
     const select = $("workspace-root-select");
     if (select) select.addEventListener("change", () => {
       state.root = select.value;

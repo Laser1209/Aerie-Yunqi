@@ -227,7 +227,7 @@ class Pipeline:
         if self._workspace is not None:
             try:
                 for path in _extract_paths(text):
-                    self._workspace.add_temp_root(path)
+                    self._workspace.add_root(path)
                 self._workspace.add_activity(
                     kind="info",
                     detail=f"收到任务: {text[:60]}",

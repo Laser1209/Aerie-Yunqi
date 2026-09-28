@@ -3,7 +3,9 @@ agent:
   progress:
     max_messages: 4
     style: stage
-  workspace_roots: []
+  # 首次运行播种的工作区根目录（之后以 data/workspace_roots.json 为准，可随时增删）
+  workspace_default_roots:
+  - D:\AerieOffice
 brief_subscriptions:
   enabled: true
   sources:

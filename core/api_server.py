@@ -5784,10 +5784,9 @@ def _ws() -> Any:
 
 @app.get("/api/workspace/roots")
 async def workspace_roots() -> dict:
-    """列出全部工作区根目录 + 当前激活目录(带来源标记)。"""
+    """列出全部工作区根目录 + 当前激活目录。"""
     return {
         "roots": _ws().roots(),
-        "roots_info": _ws().roots_info(),
         "active_root": _ws().active_root(),
         "activities": _ws().activities(limit=10),
     }
@@ -5895,26 +5894,29 @@ async def workspace_activities_clear() -> dict:
     return {"ok": True}
 
 
-@app.post("/api/workspace/roots/temp")
-async def workspace_add_temp(request: Request) -> dict:
-    """手动把某目录注册为自定义工作区(持久化)。"""
+@app.post("/api/workspace/roots")
+async def workspace_add_root(request: Request) -> dict:
+    """把某目录注册为工作区根目录(持久化)。
+
+    目标必须是真实存在的目录；其余安全判定在 ``WorkspaceManager.add_root``。
+    """
     body = await request.json()
     path = str(body.get("path", "")).strip()
     if not path:
         return {"ok": False, "error": "path required"}
-    added = _ws().add_temp_root(path)
-    return {"ok": True, "added": added, "roots_info": _ws().roots_info()}
+    added = _ws().add_root(path)
+    return {"ok": True, "added": added, "roots": _ws().roots()}
 
 
 @app.post("/api/workspace/roots/remove")
-async def workspace_remove_temp(request: Request) -> dict:
-    """移除一个自定义工作区目录(预设根不可移除)。"""
+async def workspace_remove_root(request: Request) -> dict:
+    """移除一个工作区根目录(任何根都可移除，不锁死)。"""
     body = await request.json()
     path = str(body.get("path", "")).strip()
     if not path:
         return {"ok": False, "error": "path required"}
-    removed = _ws().remove_temp_root(path)
-    return {"ok": True, "removed": removed, "roots_info": _ws().roots_info()}
+    removed = _ws().remove_root(path)
+    return {"ok": True, "removed": removed, "roots": _ws().roots()}
 
 
 @app.post("/api/settings/reset")
@@ -7858,6 +7860,10 @@ async def skills_call(name: str, request: Request) -> dict:
 
 
 async def start_api(host: str = "127.0.0.1", port: int = 7890) -> Any:
+    # 功能包统一 API 挂点：包路由在 Companion 初始化（discover）时已就位，
+    # 此处只挂一次，晚于 discover、早于 uvicorn 起服。
+    from core import plugin_host
+    app.include_router(plugin_host.get_host().router)
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)
     # R7.5: Intercept uvicorn's default SystemExit on bind failure so the

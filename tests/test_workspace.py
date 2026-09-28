@@ -14,16 +14,20 @@ from core.computer_control import (
     PolicyEntryType,
 )
 from core.pipeline import _extract_paths
-from core.workspace import WorkspaceManager, _TEMP_ROOTS_FILE
+from core.workspace import WorkspaceManager, _ROOTS_STATE_FILE
 
 
 @pytest.fixture
 def ws(tmp_path, monkeypatch):
     # 隔离持久化文件,避免测试污染真实 data/workspace_roots.json
-    monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "workspace_roots.json")
-    # L4：add_temp_root 要求目录真实存在，测试统一预建常用临时根
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "workspace_roots.json")
+    root_a = tmp_path / "root_a"
+    root_b = tmp_path / "root_b"
+    root_a.mkdir(parents=True, exist_ok=True)   # 默认根只播种真实存在的目录
+    root_b.mkdir(parents=True, exist_ok=True)
+    # L4：add_root 要求目录真实存在，测试统一预建常用根
     (tmp_path / "temp_x").mkdir(parents=True, exist_ok=True)
-    return WorkspaceManager(preset_roots=[str(tmp_path / "root_a"), str(tmp_path / "root_b")])
+    return WorkspaceManager(default_roots=[str(root_a), str(root_b)])
 
 
 @pytest.fixture
@@ -65,74 +69,91 @@ def test_extract_paths_dedup():
 # --------------------------------------------------------------------- 工作区根目录
 
 
-def test_roots_from_preset(ws, tmp_path):
+def test_roots_seeded_from_defaults(ws, tmp_path):
     roots = ws.roots()
     assert len(roots) == 2
     assert str(tmp_path / "root_a") in roots
 
 
-def test_add_temp_root(ws, tmp_path):
-    assert ws.add_temp_root(str(tmp_path / "temp_x")) is True
-    assert ws.add_temp_root(str(tmp_path / "temp_x")) is False  # 去重
+def test_seed_skips_nonexistent_default_dirs(tmp_path, monkeypatch):
+    """默认根里不存在的目录不播种——进白名单毫无意义。"""
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "ws.json")
+    real = tmp_path / "real"
+    real.mkdir()
+    manager = WorkspaceManager(default_roots=[str(real), str(tmp_path / "ghost")])
+    assert manager.roots() == [str(real)]
+
+
+def test_add_root(ws, tmp_path):
+    assert ws.add_root(str(tmp_path / "temp_x")) is True
+    assert ws.add_root(str(tmp_path / "temp_x")) is False  # 去重
     assert str(tmp_path / "temp_x") in ws.roots()
 
 
-def test_remove_temp_root(ws, tmp_path):
-    # 自定义目录可移除
-    ws.add_temp_root(str(tmp_path / "temp_x"))
-    assert ws.remove_temp_root(str(tmp_path / "temp_x")) is True
+def test_remove_root_allows_any_root(ws, tmp_path):
+    """任何根都可移除（用户要求不锁死），包括默认播种的那个。"""
+    ws.add_root(str(tmp_path / "temp_x"))
+    assert ws.remove_root(str(tmp_path / "temp_x")) is True
     assert str(tmp_path / "temp_x") not in ws.roots()
-    # 预设根不可移除
-    assert ws.remove_temp_root(str(tmp_path / "root_a")) is False
-    assert str(tmp_path / "root_a") in ws.roots()
+    assert ws.remove_root(str(tmp_path / "root_a")) is True
+    assert str(tmp_path / "root_a") not in ws.roots()
     # 未注册的目录移除返回 False
-    assert ws.remove_temp_root(str(tmp_path / "nope")) is False
+    assert ws.remove_root(str(tmp_path / "nope")) is False
 
 
-def test_roots_info_source(ws, tmp_path):
-    ws.add_temp_root(str(tmp_path / "temp_x"))
-    info = ws.roots_info()
-    by_path = {r["path"]: r["source"] for r in info}
-    assert by_path[str(tmp_path / "root_a")] == "preset"
-    assert by_path[str(tmp_path / "temp_x")] == "custom"
+def test_removed_default_is_not_reseeded_on_restart(tmp_path, monkeypatch):
+    """默认根被移除后重启不得自动加回，否则「想移除哪个就移除哪个」是空话。"""
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "ws.json")
+    root_a = tmp_path / "root_a"
+    root_a.mkdir()
+    ws1 = WorkspaceManager(default_roots=[str(root_a)])
+    assert ws1.remove_root(str(root_a)) is True
+
+    ws2 = WorkspaceManager(default_roots=[str(root_a)])
+    assert ws2.roots() == []
 
 
-def test_temp_roots_persist_across_reload(tmp_path, monkeypatch):
-    """自定义目录持久化:重建实例后仍保留;预设根不持久化(来自配置)。"""
-    monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "ws.json")
+def test_removing_active_root_falls_back(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "ws.json")
+    root_a = tmp_path / "root_a"
+    root_b = tmp_path / "root_b"
+    root_a.mkdir()
+    root_b.mkdir()
+    manager = WorkspaceManager(default_roots=[str(root_a), str(root_b)])
+    manager.set_active_root(str(root_b))
+    manager.remove_root(str(root_b))
+    assert manager.active_root() == str(root_a)
+
+
+def test_roots_persist_across_reload(tmp_path, monkeypatch):
+    """增删都持久化:重建实例后与文件一致。"""
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "ws.json")
     (tmp_path / "temp_x").mkdir(parents=True, exist_ok=True)
-    ws1 = WorkspaceManager(preset_roots=[str(tmp_path / "root_a")])
-    ws1.add_temp_root(str(tmp_path / "temp_x"))
+    ws1 = WorkspaceManager(default_roots=[])
+    ws1.add_root(str(tmp_path / "temp_x"))
 
-    ws2 = WorkspaceManager(preset_roots=[str(tmp_path / "root_a")])
-    assert str(tmp_path / "temp_x") in ws2.roots()  # 自定义目录重启后保留
-    assert len(ws2.roots()) == 2
+    ws2 = WorkspaceManager(default_roots=[])
+    assert str(tmp_path / "temp_x") in ws2.roots()  # 新增重启后保留
+    assert len(ws2.roots()) == 1
 
-
-def test_remove_persists_across_reload(tmp_path, monkeypatch):
-    monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "ws.json")
-    (tmp_path / "temp_x").mkdir(parents=True, exist_ok=True)
-    ws1 = WorkspaceManager(preset_roots=[])
-    ws1.add_temp_root(str(tmp_path / "temp_x"))
-    ws1.remove_temp_root(str(tmp_path / "temp_x"))
-
-    ws2 = WorkspaceManager(preset_roots=[])
-    assert str(tmp_path / "temp_x") not in ws2.roots()  # 移除也持久化
+    ws2.remove_root(str(tmp_path / "temp_x"))
+    ws3 = WorkspaceManager(default_roots=[])
+    assert ws3.roots() == []  # 移除也持久化
 
 
-def test_add_temp_root_rejects_missing_dir(ws, tmp_path):
+def test_add_root_rejects_missing_dir(ws, tmp_path):
     """L4：不存在的目录不能注册为授权根。"""
     ghost = tmp_path / "does_not_exist"
     assert ghost.exists() is False
-    assert ws.add_temp_root(str(ghost)) is False
+    assert ws.add_root(str(ghost)) is False
     assert str(ghost) not in ws.roots()
 
 
-def test_add_temp_root_rejects_file(ws, tmp_path):
+def test_add_root_rejects_file(ws, tmp_path):
     """L4：文件路径不能注册为工作区根。"""
     file_path = tmp_path / "a_file.txt"
     file_path.write_text("x")
-    assert ws.add_temp_root(str(file_path)) is False
+    assert ws.add_root(str(file_path)) is False
 
 
 # --------------------------------------------------------------------- 激活工作区
@@ -143,7 +164,7 @@ def test_active_root_defaults_to_first(ws, tmp_path):
 
 
 def test_set_active_root(ws, tmp_path):
-    ws.add_temp_root(str(tmp_path / "temp_x"))
+    ws.add_root(str(tmp_path / "temp_x"))
     assert ws.set_active_root(str(tmp_path / "temp_x")) == str(tmp_path / "temp_x")
     assert ws.active_root() == str(tmp_path / "temp_x")
 
@@ -155,19 +176,23 @@ def test_set_active_root_rejects_unregistered(ws, tmp_path):
 
 
 def test_active_root_falls_back_when_removed(ws, tmp_path):
-    ws.add_temp_root(str(tmp_path / "temp_x"))
+    ws.add_root(str(tmp_path / "temp_x"))
     ws.set_active_root(str(tmp_path / "temp_x"))
-    ws.remove_temp_root(str(tmp_path / "temp_x"))
+    ws.remove_root(str(tmp_path / "temp_x"))
     assert ws.active_root() == str(tmp_path / "root_a")  # 回退首个根
 
 
 def test_active_root_persists_across_reload(tmp_path, monkeypatch):
-    monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "ws.json")
-    ws1 = WorkspaceManager(preset_roots=[str(tmp_path / "root_a"), str(tmp_path / "root_b")])
-    ws1.set_active_root(str(tmp_path / "root_b"))
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "ws.json")
+    root_a = tmp_path / "root_a"
+    root_b = tmp_path / "root_b"
+    root_a.mkdir()
+    root_b.mkdir()
+    ws1 = WorkspaceManager(default_roots=[str(root_a), str(root_b)])
+    ws1.set_active_root(str(root_b))
 
-    ws2 = WorkspaceManager(preset_roots=[str(tmp_path / "root_a"), str(tmp_path / "root_b")])
-    assert ws2.active_root() == str(tmp_path / "root_b")  # 重启后保留激活状态
+    ws2 = WorkspaceManager(default_roots=[str(root_a), str(root_b)])
+    assert ws2.active_root() == str(root_b)  # 重启后保留激活状态
 
 
 def test_resolve_within(root_a, ws, tmp_path):
@@ -197,8 +222,8 @@ def test_resolve_within_relative_nonexistent_inside(root_a, ws):
 
 
 def test_resolve_within_no_roots(tmp_path, monkeypatch):
-    monkeypatch.setattr("core.workspace._TEMP_ROOTS_FILE", tmp_path / "empty.json")
-    empty_ws = WorkspaceManager(preset_roots=[])
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "empty.json")
+    empty_ws = WorkspaceManager(default_roots=[])
     assert empty_ws.resolve_within("anything.txt") is None
 
 

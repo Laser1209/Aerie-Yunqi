@@ -99,7 +99,7 @@ async def test_approved_adds_root_and_retries_once(monkeypatch, tmp_path):
     emitted: list[tuple] = []
 
     class _Workspace:
-        def add_temp_root(self, root):
+        def add_root(self, root):
             added.append(root)
             return True
 
@@ -161,7 +161,7 @@ async def test_root_registration_failure_keeps_original_error(monkeypatch, tmp_p
     monkeypatch.setattr("core.chat_events.emit", lambda event_type, **payload: None)
 
     class _Workspace:
-        def add_temp_root(self, root):
+        def add_root(self, root):
             return False
 
     monkeypatch.setattr("core.workspace.get_workspace_manager", lambda: _Workspace())

@@ -960,6 +960,7 @@ class ContextBuilder:
 【办公类 office】· 办公场景高级工具
   文件管理：document_create、document_read、file_search、directory_list、
            file_copy、file_move、file_rename、directory_create、file_write
+  发送文件：send_file_to_user（把本地文件发给用户；用户说"发给我"时直接用它）
   文档处理：text_summary、document_convert、word_generate、
            spreadsheet_analyze、csv_generate
   系统操作：calendar_list、calendar_create、system_info、
@@ -999,6 +1000,13 @@ class ContextBuilder:
 2. 执行操作（复制/移动/重命名等）
 3. directory_list → 验证操作结果
 4. 重要操作前先备份
+
+【把文件发给用户】
+1. 用户给了明确路径 → 直接 send_file_to_user(filepath=...)，不要先翻默认目录做 file_search
+2. 用户没给路径 → file_search / directory_list 定位到文件，再 send_file_to_user
+3. 返回 reason="outside_workspace_roots" = 该路径还没授权：系统会自动弹审批并在放行后重试，
+   你**不要**改用 file_copy / directory_create / shell_execute 去绕路（会被安全闸拒绝）
+4. 返回 status="queued" 只代表已提交投递队列，**不要说**"你应该已经收到了"
 
 【在指定路径建目录 / 写文件（最常用！）】
 1. 建目录：directory_create(directory="D:\\想你的夜")

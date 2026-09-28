@@ -140,10 +140,19 @@ class WorkspaceManager:
         """把用户指定路径注册为工作区根目录(已存在则返回 False)。
 
         与对话自动提取共用:任何来源的目录都会持久化,重启后保留。
-        目标必须是真实存在的目录（L4：防止把任意/伪造路径变成授权根）。
+
+        接受的形态（L4：目标必须真实存在，防止把任意/伪造路径变成授权根）：
+        * **目录** → 注册它本身；
+        * **文件** → 注册其**父目录**。"给一个文件路径"是用户最自然的表达，
+          不该因为它不是目录就变成死路（P1-1）。
         """
         norm = self._normalize(root)
-        if norm is None or not Path(norm).is_dir():
+        if norm is None:
+            return False
+        target = Path(norm)
+        if target.is_file():
+            norm = str(target.parent)
+        elif not target.is_dir():
             return False
         if norm in self._roots:
             return False
@@ -401,19 +410,32 @@ _workspace_manager: WorkspaceManager | None = None
 
 
 def get_workspace_manager() -> WorkspaceManager:
-    """全局单例(与 get_companion 同模式)。首次调用时读取默认根目录。"""
+    """全局单例(与 get_companion 同模式)。首次调用时读取默认根目录。
+
+    默认根 = ``agent.workspace_default_roots`` + ``office.dir``。
+
+    P1-1：办公目录本就是**无条件可写**的（见 ``office_tools._allowed_write_roots``
+    把 office.dir 追加进白名单），却不出现在工作区面板里 —— 两个"根"语义打架，
+    用户看到的授权范围与实际许可范围不一致。把它同时登记为工作区的一个默认成员，
+    面板与 Agent 感知范围才对齐。
+    """
     global _workspace_manager
     if _workspace_manager is None:
         roots: list[str] = []
         try:
             from config.persona_loader import load_settings
 
-            agent_cfg = (load_settings() or {}).get("agent") or {}
+            cfg = load_settings() or {}
+            agent_cfg = cfg.get("agent") or {}
             for root in agent_cfg.get("workspace_default_roots") or []:
                 if isinstance(root, str) and root.strip():
                     roots.append(root.strip())
+            office_dir = str((cfg.get("office") or {}).get("dir") or "").strip()
+            if office_dir:
+                # WorkspaceManager 内部按 _normalize 去重，这里不重复判断。
+                roots.append(office_dir)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("[workspace] 读取 agent.workspace_default_roots 失败: %s", exc)
+            logger.warning("[workspace] 读取工作区默认根失败: %s", exc)
         _workspace_manager = WorkspaceManager(default_roots=roots)
         logger.info("[workspace] 工作区管理器初始化,根目录=%d", len(_workspace_manager.roots()))
     return _workspace_manager

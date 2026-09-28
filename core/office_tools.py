@@ -1982,15 +1982,35 @@ def tool_send_file_to_user(filepath: str, note: str = "") -> dict:
     """把一份本地文件通过当前会话通道发给用户（QQ 与微信都有出站实现）。
 
     只允许发送授权根（已注册工作区 / AerieOffice）内的文件，避免把系统文件外发。
-    投递是异步入队，工具返回成功只代表"已排队"，不代表对方已收到。
+
+    **返回语义（不要误读）**：投递是**异步入队**，成功返回的是 ``status="queued"``
+    —— 只代表"已提交投递队列"，**不代表对方已收到**。历史上这里返回
+    ``success: True``，模型于是理解成"已经发出去了"，并在投递失败时照旧宣称
+    已送达（"假成功"）。改用 ``status`` 是为了不给模型这个错误暗示。
+
+    越界时按 ``guard_write_paths`` 的同一口径带 ``reason``，好让
+    ``core/write_approval.py`` 的"弹审批 → 加根 → 重试"桥生效。
     """
     try:
-        target = _resolve_write_target(filepath)
-        if target is None or not target.is_file():
+        raw = str(filepath or "").strip().strip('"').strip("'")
+        if not raw:
+            return {"success": False, "error": "未提供文件路径"}
+
+        target = _resolve_write_target(raw)
+        if target is None:
+            # 越界：必须带 reason，否则授权桥不会介入（reason 是它唯一的触发依据）。
+            logger.warning("[send_file_to_user] 路径越界，拒绝 %r", raw)
             return {
                 "success": False,
-                "error": f"文件不存在或不在允许发送的目录内: {filepath}",
+                "reason": "outside_workspace_roots",
+                "error": (
+                    f"文件不在允许发送的目录内: {raw}。"
+                    "请先在「工作区」里添加该目录，或把文件放到办公目录"
+                ),
             }
+        if not target.is_file():
+            return {"success": False, "error": f"文件不存在: {raw}"}
+
         from core.companion import get_companion
 
         companion = get_companion()
@@ -1998,8 +2018,9 @@ def tool_send_file_to_user(filepath: str, note: str = "") -> dict:
             return {"success": False, "error": "当前无可用会话通道，文件未发送"}
         companion._notify_file_delivery({"path": str(target), "note": str(note or "")})
         return {
-            "success": True,
-            "queued": True,
+            "status": "queued",
+            "delivered": False,
+            "note": "已提交投递队列，送达结果稍后回报；此刻并不代表对方已收到",
             "name": target.name,
             "path": str(target),
         }
@@ -2875,6 +2896,14 @@ _OFFICE_TOOL_SCHEMAS = {
 - 只能发已注册工作区或 AerieOffice 目录内的文件，其他位置会被拒绝
 - 工具只负责投递，不改文件内容；不要再用文字重复文件全文
 - 用户说"发过来/发给我"时**直接调用本工具投递**；不要用文字回答自己发不了
+
+【投递语义 — 必须遵守】
+- 本工具是**异步入队**：返回 status="queued" 只表示"已提交投递队列"，
+  **不代表对方已经收到**。
+- 因此调用后请说"我发过去了/正在发送"，**不要**断言"你应该已经收到了"。
+  投递结果若有失败，会在后续轮次回报给你。
+- 若返回 success=false，请看 error 与 reason：reason="outside_workspace_roots"
+  表示路径越界（会触发授权流程，无需你自己换路径重试）。
 
 参数：
 - filepath: 文件的绝对路径，或相对 AerieOffice 的路径

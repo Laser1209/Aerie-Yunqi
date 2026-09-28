@@ -149,11 +149,55 @@ def test_add_root_rejects_missing_dir(ws, tmp_path):
     assert str(ghost) not in ws.roots()
 
 
-def test_add_root_rejects_file(ws, tmp_path):
-    """L4：文件路径不能注册为工作区根。"""
-    file_path = tmp_path / "a_file.txt"
+def test_add_root_from_file_registers_parent_dir(ws, tmp_path):
+    """P1-1：给一个文件路径 → 注册其父目录（而非拒绝）。
+
+    "把 D:\\a\\b.pptx 发给我" 是用户最自然的表达；旧实现要求 is_dir()，
+    这条路直接是死路。
+    """
+    nested = tmp_path / "granted_parent"
+    nested.mkdir()
+    file_path = nested / "a_file.txt"
     file_path.write_text("x")
-    assert ws.add_root(str(file_path)) is False
+    assert ws.add_root(str(file_path)) is True
+    assert str(nested) in ws.roots()
+
+
+def test_add_root_from_file_is_deduped_by_parent(ws, tmp_path):
+    """同一目录下的两个文件 → 只注册一次父目录。"""
+    nested = tmp_path / "granted_parent"
+    nested.mkdir()
+    (nested / "one.txt").write_text("1")
+    (nested / "two.txt").write_text("2")
+    assert ws.add_root(str(nested / "one.txt")) is True
+    assert ws.add_root(str(nested / "two.txt")) is False
+    assert ws.roots().count(str(nested)) == 1
+
+
+def test_get_workspace_manager_seeds_office_dir(tmp_path, monkeypatch):
+    """P1-1：office.dir 也是工作区的默认成员，两套"根"口径统一。
+
+    办公目录本就无条件可写，却不出现在工作区面板里；不登记它，用户看到的
+    授权范围和实际许可范围就是两码事。
+    """
+    ws_root = tmp_path / "ws_root"
+    office = tmp_path / "office"
+    ws_root.mkdir()
+    office.mkdir()
+    monkeypatch.setattr("core.workspace._ROOTS_STATE_FILE", tmp_path / "ws.json")
+    monkeypatch.setattr("core.workspace._workspace_manager", None)
+    monkeypatch.setattr(
+        "config.persona_loader.load_settings",
+        lambda: {
+            "agent": {"workspace_default_roots": [str(ws_root)]},
+            "office": {"dir": str(office)},
+        },
+    )
+    from core.workspace import get_workspace_manager
+
+    roots = get_workspace_manager().roots()
+    assert str(ws_root) in roots
+    assert str(office) in roots
 
 
 # --------------------------------------------------------------------- 激活工作区

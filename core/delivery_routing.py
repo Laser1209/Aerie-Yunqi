@@ -39,6 +39,20 @@ DEFAULT_RECENT_WINDOW_MIN = 30.0
 
 FALLBACK_CHANNEL = "local_chat"
 
+# 配置里写的端口别名 → 内部端口枚举。
+# `primary_channel` 是既有键（electron 的「外部连接」面板就在写它），历史上 Python 侧
+# 早就不读了 —— 于是那个设置"看得见但不生效"。这里把它接回来，并支持 `auto`：
+# 一个键 = 一个真源，不再新造第二个键。
+_PROACTIVE_CHANNEL_ALIASES = {
+    "desktop": "local_chat",
+    "local": "local_chat",
+    "local_chat": "local_chat",
+    "qq": "qq",
+    "ilink": "ilink",
+    "wechat": "ilink",
+    "auto": "auto",
+}
+
 
 @dataclass(frozen=True)
 class DeliveryContext:
@@ -106,10 +120,16 @@ def current() -> DeliveryContext | None:
 
 
 def proactive_channel_config(settings: Any) -> tuple[str, float]:
-    """读 ``proactive.delivery_channel`` / ``proactive.auto_recent_window_min``。"""
+    """读 ``proactive.primary_channel`` / ``proactive.auto_recent_window_min``。
+
+    ``primary_channel`` 取值：``auto``（默认）/ ``qq`` / ``ilink`` / ``desktop``。
+    别名（desktop / local / wechat）在这里归一，未知值一律按 ``auto`` —— 宁可按
+    "最近活跃端口"投，也不要因为写错一个词就投到没人看的端口。
+    """
     cfg = (settings or {}).get("proactive") if isinstance(settings, dict) else None
     cfg = cfg if isinstance(cfg, dict) else {}
-    mode = str(cfg.get("delivery_channel") or DEFAULT_PROACTIVE_CHANNEL).strip().lower()
+    raw_mode = str(cfg.get("primary_channel") or "").strip().lower()
+    mode = _PROACTIVE_CHANNEL_ALIASES.get(raw_mode, DEFAULT_PROACTIVE_CHANNEL)
     try:
         window_min = float(cfg.get("auto_recent_window_min", DEFAULT_RECENT_WINDOW_MIN))
     except (TypeError, ValueError):

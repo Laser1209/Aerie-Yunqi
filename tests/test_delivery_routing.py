@@ -83,9 +83,28 @@ def test_proactive_config_defaults_and_overrides():
     assert dr.proactive_channel_config({}) == ("auto", dr.DEFAULT_RECENT_WINDOW_MIN)
     assert dr.proactive_channel_config(None) == ("auto", dr.DEFAULT_RECENT_WINDOW_MIN)
     mode, window = dr.proactive_channel_config(
-        {"proactive": {"delivery_channel": "ilink", "auto_recent_window_min": 10}}
+        {"proactive": {"primary_channel": "ilink", "auto_recent_window_min": 10}}
     )
     assert (mode, window) == ("ilink", 10.0)
+
+
+@pytest.mark.parametrize(
+    "configured,expected",
+    [
+        ("auto", "auto"),
+        ("qq", "qq"),
+        ("ilink", "ilink"),
+        # electron「外部连接」面板写的是 desktop / wechat 这类别名，要能认出来
+        ("desktop", "local_chat"),
+        ("wechat", "ilink"),
+        # 写错一个词不该把主动消息投到没人看的端口 → 按 auto 处理
+        ("telegram", "auto"),
+        ("", "auto"),
+    ],
+)
+def test_proactive_config_normalizes_aliases(configured, expected):
+    mode, _ = dr.proactive_channel_config({"proactive": {"primary_channel": configured}})
+    assert mode == expected
 
 
 def test_proactive_explicit_channel_wins():
@@ -128,7 +147,7 @@ def test_submit_incoming_records_desktop_too():
 
 
 def test_proactive_channel_prefers_fresh_recent_then_desktop():
-    comp = _bare_companion(settings={"proactive": {"delivery_channel": "auto"}})
+    comp = _bare_companion(settings={"proactive": {"primary_channel": "auto"}})
     # 无记录 → 桌面端
     assert comp._proactive_delivery_channel() == "local_chat"
     # 30 分钟窗口内刚在 QQ 活跃 → 投 QQ
@@ -143,9 +162,16 @@ def test_proactive_channel_prefers_fresh_recent_then_desktop():
 
 
 def test_proactive_channel_honours_explicit_config():
-    comp = _bare_companion(settings={"proactive": {"delivery_channel": "ilink"}})
+    comp = _bare_companion(settings={"proactive": {"primary_channel": "ilink"}})
     comp._recent_inbound = (DeliveryContext(channel="qq", user_id=1), time.time())
     assert comp._proactive_delivery_channel() == "ilink"
+
+
+def test_proactive_channel_accepts_electron_panel_desktop_alias():
+    """electron「外部连接」面板写 desktop → 归一为桌面端（此前 Python 侧根本没读）。"""
+    comp = _bare_companion(settings={"proactive": {"primary_channel": "desktop"}})
+    comp._recent_inbound = (DeliveryContext(channel="qq", user_id=1), time.time())
+    assert comp._proactive_delivery_channel() == "local_chat"
 
 
 # ── 文件投递回到来源端口（验收 1/2/3/4） ──────────────────────────────

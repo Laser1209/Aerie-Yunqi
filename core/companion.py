@@ -4050,7 +4050,7 @@ class Companion:
                 reason_code = f"world_visual:{topic_id}" if topic_id else ""
 
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
-                # §九-b：主动消息没有"来源端口"，按 proactive.delivery_channel 的
+                # §九-b：主动消息没有"来源端口"，按 proactive.primary_channel 的
                 # 策略选端（默认 auto = 最近活跃端口且需在窗口内，否则落桌面端）。
                 channel = self._proactive_delivery_channel()
                 # P2：按素材类型决断模板——活动时刻话题（看书/咖啡等）→ 人物自拍

@@ -1649,6 +1649,10 @@
   gap: 8px;
   padding: 10px 12px 12px;
 }
+/* 世界模拟状态区块：4 个状态格按 2×2 排布，窄面板里也读得清。 */
+.brief-drawer__section--world .brief-drawer__astro-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
 .brief-drawer__astro-cell {
   display: flex;
   align-items: center;

@@ -62,6 +62,25 @@ const SECTION_META = {
 
 const PRIORITY_LABELS = { high: "高", medium: "中", low: "低" };
 
+/* 世界模拟状态的中文映射（与后端 world_phase / world_simulation 对齐）。
+   前端不 import Python，故此处镜像一份只读文案表；未知值原样回显。 */
+const WORLD_PHASE_LABELS = {
+  dawn: "清晨", morning: "上午", noon: "正午", afternoon: "下午",
+  evening: "傍晚", late_evening: "夜深", night: "深夜", unknown: "未知",
+};
+const WORLD_ACTIVITY_LABELS = {
+  waking_up: "刚醒，慢慢清醒", winding_down: "收尾准备休息", sleeping: "已睡下",
+  planning: "做今天的计划", dining: "在吃饭", working: "在工作中",
+  relaxing: "在放松", idle: "闲着",
+};
+const WORLD_LOCATION_LABELS = { home: "在家", study: "工作室", outdoor: "在外面" };
+const WORLD_WEATHER_LABELS = {
+  clear: "晴朗", sunny: "晴朗", partly_cloudy: "多云", cloudy: "阴天",
+  overcast: "阴天", rain: "下雨", drizzle: "细雨", shower: "阵雨",
+  thunderstorm: "雷雨", snow: "下雪", windy: "有风", fog: "有雾",
+  haze: "有霾", neutral: "",
+};
+
 /* ── class ─────────────────────────────────────────────────── */
 class BriefDrawer {
   constructor(root) {
@@ -259,6 +278,7 @@ class BriefDrawer {
                   : {};
       this._cached = Object.assign({}, data, { _ts: Date.now() });
       this._cached._limit = 3;
+      this._cached.world = await this._fetchWorld();
       this._renderData(this._cached);
       this._refreshGreeting();
     } catch (e) {
@@ -321,6 +341,26 @@ class BriefDrawer {
 
   _api() {
     return (window.aerie && window.aerie.api && window.aerie.api.request) || null;
+  }
+
+  /* 世界模拟实时状态（外显）：与生图用的同一份 worldSummary —— 她此刻在哪、
+     在做什么、精力如何、天气如何。取不到时返回 null，区块整块跳过（缺值即停）。 */
+  async _fetchWorld() {
+    const api = this._api();
+    if (!api) return null;
+    try {
+      const r = await api({ method: "GET", path: "/api/world/dashboard/snapshot" });
+      const data = (r && r.data) || {};
+      const status = String(data.status || "");
+      // 失败/未启用态不展示（区块整块跳过）；成功态可能是 ok/running/unknown。
+      if (["disabled", "unavailable", "backend_unavailable", "failed"].includes(status)) return null;
+      const ws = data.worldSummary || data.world_summary || null;
+      if (!ws || typeof ws !== "object") return null;
+      return ws;
+    } catch (e) {
+      console.warn("brief-drawer: world snapshot fetch failed", e);
+      return null;
+    }
   }
 
   /* Location popover helpers */
@@ -458,6 +498,10 @@ class BriefDrawer {
 
     /* 2. Todos (core section) */
     fragment.appendChild(this._renderTodoSection(data));
+
+    /* 2b. 世界模拟实时状态（外显）：她此刻在哪 / 在做什么 / 精力 / 天气 */
+    const worldSection = this._renderWorldSection(data.world);
+    if (worldSection) fragment.appendChild(worldSection);
 
     /* 3. Trends */
     fragment.appendChild(this._renderTrendSection(data.trends || []));
@@ -776,6 +820,85 @@ class BriefDrawer {
     }
   }
 
+  /* ── Section 2b: 世界模拟实时状态（外显） ───────────── */
+  /* 她此刻的世界：与生图用的同一份 worldSummary —— 时段 / 地点 / 在做什么 /
+     精力 / 天气 / 身边物件。数据缺失时整块不渲染（缺值即停）。 */
+  _renderWorldSection(w) {
+    if (!w || typeof w !== "object") return null;
+
+    const phase = WORLD_PHASE_LABELS[w.phase] || "";
+    const activity = WORLD_ACTIVITY_LABELS[w.activity] || String(w.activity || "");
+    const zone = String(w.zone || "").trim();
+    const positionDesc = String(w.positionDesc || "").trim();
+    const location = WORLD_LOCATION_LABELS[w.location] || String(w.location || "");
+    let place = "";
+    if (positionDesc && zone && !positionDesc.includes(zone)) place = `${zone}·${positionDesc}`;
+    else place = positionDesc || zone || location;
+
+    const energyNum = Number(w.energy);
+    const energyPct = Number.isFinite(energyNum)
+      ? Math.round(Math.max(0, Math.min(1, energyNum)) * 100) : null;
+
+    const weatherLabel = String(w.weatherDetail || "").trim()
+      || WORLD_WEATHER_LABELS[w.weatherMood] || WORLD_WEATHER_LABELS[w.weather] || "";
+    const city = String(w.city || "").trim();
+
+    const nearby = (Array.isArray(w.nearbyObjects) ? w.nearbyObjects : [])
+      .map((o) => String(o || "").trim())
+      .filter((o) => /[\u4e00-\u9fff]/.test(o));
+
+    const whenWhere = [phase, place].filter(Boolean).join(" · ");
+    const weatherText = [city, weatherLabel].filter(Boolean).join(" ");
+    if (!whenWhere && !activity && energyPct === null && !weatherText) return null;
+
+    const cell = (icon, label, value) => `
+      <div class="brief-drawer__astro-cell">
+        <span class="brief-drawer__astro-cell-icon">${icon}</span>
+        <div class="brief-drawer__astro-cell-body">
+          <span class="brief-drawer__astro-cell-label">${_esc(label)}</span>
+          <span class="brief-drawer__astro-cell-value">${_esc(value || "—")}</span>
+        </div>
+      </div>
+    `;
+
+    const section = _el("section", { class: "brief-drawer__section brief-drawer__section--world" });
+    const header = _el("div", { class: "brief-drawer__section-header" });
+    header.innerHTML = `
+      <div class="brief-drawer__section-title">
+        ${_ICONS.sparkles} <span>她此刻的世界</span>
+        <span class="brief-drawer__section-badge">实时</span>
+      </div>
+    `;
+    section.appendChild(header);
+
+    const grid = _el("div", { class: "brief-drawer__astro-grid" });
+    grid.innerHTML = [
+      cell(_ICONS.clock, "此刻", whenWhere),
+      cell(_ICONS.sparkles, "在做什么", activity),
+      cell(_ICONS.sun, "精力", energyPct === null ? "" : `${energyPct}%`),
+      cell(_ICONS.pin, "天气", weatherText),
+    ].join("");
+    section.appendChild(grid);
+
+    if (energyPct !== null) {
+      const bar = _el("div", { class: "brief-drawer__progress-wrap" });
+      bar.innerHTML = `
+        <div class="brief-drawer__progress-bar">
+          <div class="brief-drawer__progress-fill" style="width: ${energyPct}%"></div>
+        </div>
+      `;
+      section.appendChild(bar);
+    }
+
+    if (nearby.length) {
+      const chips = _el("div", { class: "brief-drawer__astro-events" });
+      chips.innerHTML = nearby.slice(0, 6)
+        .map((o) => `<span class="brief-drawer__astro-event">${_esc(o)}</span>`).join("");
+      section.appendChild(chips);
+    }
+    return section;
+  }
+
   /* ── Section 3: Trends ────────────────────────────── */
   _renderTrendSection(trends) {
     const section = _el("section", { class: "brief-drawer__section brief-drawer__section--trends" });
@@ -1050,6 +1173,7 @@ class BriefDrawer {
                   : {};
       this._expandedData = Object.assign({}, data, { _ts: Date.now() });
       this._expandedData._limit = 8;
+      this._expandedData.world = (this._cached && this._cached.world) || await this._fetchWorld();
       this._renderData(this._expandedData);
     } catch (e) {
       console.warn("brief-drawer: expand failed", e);

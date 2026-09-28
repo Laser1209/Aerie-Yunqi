@@ -58,17 +58,18 @@
   }
 
   /* ── 配置 ── */
-  const VALID_CAPSULE = new Set(["companion", "status", "notifications", "quickChat", "media", "system"]);
-  const VALID_EXPANDED = new Set(["quickActions", "notifList", "companionDetail", "mediaControl", "systemStatus"]);
+  const VALID_CAPSULE = new Set(["companion", "status", "notifications", "quickChat", "media", "system", "world"]);
+  const VALID_EXPANDED = new Set(["quickActions", "notifList", "companionDetail", "mediaControl", "systemStatus", "worldStatus"]);
 
   let config = {
     theme: "dark",
     interaction: "click",
     hoverDelay: 300,
     longPressDuration: 500,
-    // v2: 胶囊默认 3 组件与设置面板一致；展开默认 5 模块（快捷操作/媒体控制/陪伴详情/通知/系统）
+    // v2: 胶囊默认 3 组件与设置面板一致；展开默认 6 模块
+    // （快捷操作/媒体控制/陪伴详情/她的世界/通知/系统）
     capsuleComponents: ["companion", "status", "notifications"],
-    expandedComponents: ["quickActions", "mediaControl", "companionDetail", "notifList", "systemStatus"],
+    expandedComponents: ["quickActions", "mediaControl", "companionDetail", "worldStatus", "notifList", "systemStatus"],
   };
 
   let uiState = {
@@ -78,7 +79,26 @@
     notifications: { count: 0, items: [] },
     system: { cpu: 0, mem: 0, net: null },
     media: { playing: false, title: "", artist: "", progress: 0, duration: 0, thumbnail: "" },
+    // 世界模拟实时状态（外显）：与每日简报/生图用同一份 worldSummary。
+    world: null,
     companionStartTime: Date.now(),
+  };
+
+  /* 世界状态中文映射（镜像后端 world_phase / world_simulation；未知值原样回显）。 */
+  const WORLD_PHASE_LABELS = {
+    dawn: "清晨", morning: "上午", noon: "正午", afternoon: "下午",
+    evening: "傍晚", late_evening: "夜深", night: "深夜",
+  };
+  const WORLD_ACTIVITY_LABELS = {
+    waking_up: "刚醒", winding_down: "准备休息", sleeping: "已睡下",
+    planning: "做计划", dining: "在吃饭", working: "工作中",
+    relaxing: "在放松", idle: "闲着",
+  };
+  const WORLD_LOCATION_LABELS = { home: "在家", study: "工作室", outdoor: "在外面" };
+  const WORLD_WEATHER_LABELS = {
+    clear: "晴朗", sunny: "晴朗", partly_cloudy: "多云", cloudy: "阴天",
+    overcast: "阴天", rain: "雨", drizzle: "细雨", shower: "阵雨",
+    thunderstorm: "雷雨", snow: "雪", windy: "有风", fog: "雾", haze: "霾",
   };
 
   let hoverTimer = null;
@@ -223,7 +243,37 @@
       api.mediaGetState?.().then((r) => {
         if (r?.ok && r.data) { uiState.media = r.data; renderExpanded(); renderCapsule(); syncMediaTick(); }
       }).catch(() => {});
+      fetchWorld();
+      startWorldTick();
     } catch (_) {}
+  }
+
+  /* ── 世界模拟实时状态（外显） ──
+     与每日简报 / 生图共用同一份 worldSummary；世界变化慢，5 分钟轮询一次即可。 */
+  async function fetchWorld() {
+    if (!api?.api) return;
+    try {
+      const r = await api.api({ method: "GET", path: "/api/world/dashboard/snapshot" });
+      const data = r?.data || {};
+      const status = String(data.status || "");
+      if (["disabled", "unavailable", "backend_unavailable", "failed"].includes(status)) return;
+      const ws = data.worldSummary || data.world_summary;
+      if (!ws || typeof ws !== "object") return;
+      uiState.world = ws;
+      renderCapsule();
+      if (diEl.classList.contains("open")) renderExpanded();
+    } catch (_) {}
+  }
+
+  let worldTickTimer = null;
+  function startWorldTick() {
+    if (worldTickTimer) return;
+    // 链式 setTimeout（保留性能守卫：灵动岛不得引入常驻 setInterval 循环）。
+    const tick = () => {
+      fetchWorld();
+      worldTickTimer = setTimeout(tick, 300000);
+    };
+    worldTickTimer = setTimeout(tick, 300000);
   }
 
   /* ── 胶囊渲染 ── */
@@ -267,6 +317,8 @@
       center = renderMediaMini();
     } else if (comps.includes("system")) {
       center = renderSystemMini();
+    } else if (comps.includes("world") && uiState.world) {
+      center = renderWorldMini();
     } else if (comps.includes("status")) {
       center = renderStatusText();
     } else {
@@ -280,6 +332,10 @@
     } else if (center.includes("cap-notif")) {
       setMainText(statusMain, plainCenter.trim(), false);
       statusSub.textContent = "";
+    } else if (center.includes("cap-world")) {
+      const w = worldTexts(uiState.world);
+      setMainText(statusMain, w.headline, false);
+      statusSub.textContent = w.subline;
     } else if (plainCenter.includes("CPU")) {
       setMainText(statusMain, plainCenter.trim(), false);
       statusSub.textContent = "";
@@ -287,6 +343,37 @@
       setMainText(statusMain, uiState.statusText, false);
       statusSub.textContent = uiState.statusScene;
     }
+  }
+
+  /* 世界状态 → 展示文案（胶囊与展开面板共用同一份翻译）。 */
+  function worldTexts(w) {
+    const src = w || {};
+    const phase = WORLD_PHASE_LABELS[src.phase] || "";
+    const activity = WORLD_ACTIVITY_LABELS[src.activity] || "";
+    const zone = String(src.zone || "").trim();
+    const pos = String(src.positionDesc || "").trim();
+    const place = (pos && zone && !pos.includes(zone)) ? `${zone}·${pos}`
+      : (pos || zone || WORLD_LOCATION_LABELS[src.location] || "");
+    const weather = String(src.weatherDetail || "").trim()
+      || WORLD_WEATHER_LABELS[src.weatherMood] || WORLD_WEATHER_LABELS[src.weather] || "";
+    const city = String(src.city || "").trim();
+    const energyNum = Number(src.energy);
+    const energyPct = Number.isFinite(energyNum)
+      ? Math.round(Math.max(0, Math.min(1, energyNum)) * 100) : null;
+    return {
+      phase, activity, place,
+      weather: [city, weather].filter(Boolean).join(" "),
+      energyPct,
+      headline: [phase, place].filter(Boolean).join(" · ") || "此刻",
+      subline: [activity, energyPct === null ? "" : `精力 ${energyPct}%`].filter(Boolean).join(" · "),
+    };
+  }
+
+  function renderWorldMini() {
+    const w = worldTexts(uiState.world);
+    return `<span class="cap-status cap-world">${ICON("ui-home", 12)}${escapeHtml(
+      [w.headline, w.activity].filter(Boolean).join(" · ")
+    )}</span>`;
   }
 
   function renderStatusText() {
@@ -349,6 +436,7 @@
         case "companionDetail": html += renderCompanionDetail(); break;
         case "mediaControl": html += renderMediaControl(); break;
         case "systemStatus": html += renderSystemStatus(); break;
+        case "worldStatus": html += renderWorldStatus(); break;
       }
     }
     expandedBody.innerHTML = html;
@@ -429,6 +517,29 @@
           <div class="cell"><span class="k">${ICON("ui-cpu", 10)} CPU</span><span class="v">${Math.round(s.cpu)}<small>%</small></span><span class="g"><i></i></span></div>
           <div class="cell"><span class="k">${ICON("ui-memory", 10)} 内存</span><span class="v">${Math.round(s.mem)}<small>%</small></span><span class="g"><i></i></span></div>
           <div class="cell"><span class="k">${ICON("ui-wifi", 10)} 网络</span><span class="v">${Number.isFinite(s.net) ? Math.round(s.net) + "<small>KB/s</small>" : "--"}</span><span class="g"><i></i></span></div>
+        </div>
+      </section>`;
+  }
+
+  /* 展开面板 · 她此刻的世界：与每日简报共用同一份 worldSummary。 */
+  function renderWorldStatus() {
+    const w = worldTexts(uiState.world);
+    if (!uiState.world) {
+      return `
+      <section class="card card--world">
+        <h2 class="card-title">她此刻的世界</h2>
+        <div class="notifs"><div class="empty">世界模拟暂未就绪</div></div>
+      </section>`;
+    }
+    const cell = (k, v) => `<div class="cell"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(v || "—")}</span></div>`;
+    return `
+      <section class="card card--world">
+        <h2 class="card-title">她此刻的世界</h2>
+        <div class="sys">
+          ${cell("此刻", [w.phase, w.place].filter(Boolean).join(" · "))}
+          ${cell("在做什么", w.activity)}
+          ${cell("精力", w.energyPct === null ? "" : `${w.energyPct}%`)}
+          ${cell("天气", w.weather)}
         </div>
       </section>`;
   }
@@ -566,6 +677,7 @@
     capsuleEl.setAttribute("aria-expanded", "true");
     try { api?.setState?.(true)?.catch(() => {}); } catch (_) {}
     syncMediaTick();
+    fetchWorld();
     applyIgnore();
   }
 

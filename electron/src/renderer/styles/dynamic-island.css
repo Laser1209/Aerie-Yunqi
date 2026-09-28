@@ -315,6 +315,10 @@ button {
 .sys .cell:nth-child(2) .g i { width: 43%; background: linear-gradient(90deg, #7ed9c4, #8fe1ce); }
 .sys .cell:nth-child(3) .g i { width: 62%; background: linear-gradient(90deg, #ff8a80, #ffb3ab); }
 
+/* 她的世界卡片：4 个状态格 2×2 排布，文字用正文字体、允许换行 */
+.card--world .sys { grid-template-columns: repeat(2, 1fr); }
+.card--world .sys .v { font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1.35; text-align: center; word-break: break-word; }
+
 /* 通知列表 */
 .notifs { display: flex; flex-direction: column; gap: 2px; padding: 7px 8px 9px; }
 .notifs .item { display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 11px; cursor: pointer; transition: background .2s ease; }

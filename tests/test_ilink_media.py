@@ -188,3 +188,139 @@ async def test_upload_rejects_invalid_protocol_results_and_cleans_temporary_file
             await transfer.upload(client, source, to_user_id="owner@im.wechat", media_type=3)
 
     assert list((tmp_path / "media").iterdir()) == []
+
+
+# ── 出站上传的两道闸门：专用超时 + 体积上限 ────────────────────────────
+# 背景（计划 §5.2-P0-3）：出站体积上限无公开数字、失败无错误码。整块上传是 CDN 的
+# 硬要求（流式已被真机否掉，见上），也就是密文必须整体进内存 —— 所以必须有体积
+# 闸门，把"超大"变成一条**可回报**的失败原因，而不是 45s 超时后用户只看到"没收到"。
+
+
+def test_upload_limits_defaults():
+    from communication.ilink.media import upload_limits
+
+    timeout_sec, max_bytes = upload_limits()
+    assert timeout_sec == 300.0
+    assert max_bytes == 512 * 1024 * 1024
+
+
+def test_upload_limits_read_from_settings(monkeypatch):
+    from communication.ilink import media
+
+    monkeypatch.setattr(
+        "config.persona_loader.load_settings",
+        lambda: {"ilink": {"media_upload_timeout_sec": 600, "media_upload_max_mib": 64}},
+    )
+    assert media.upload_limits() == (600.0, 64 * 1024 * 1024)
+
+
+def test_upload_limits_fall_back_on_garbage(monkeypatch):
+    """配置写坏了不能拒绝服务：回落默认值。"""
+    from communication.ilink import media
+
+    monkeypatch.setattr(
+        "config.persona_loader.load_settings",
+        lambda: {"ilink": {"media_upload_timeout_sec": "abc", "media_upload_max_mib": None}},
+    )
+    assert media.upload_limits() == (media._DEFAULT_UPLOAD_TIMEOUT_SEC, int(media._DEFAULT_MAX_UPLOAD_MIB * 1024 * 1024))
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_oversize_before_touching_cdn(tmp_path, monkeypatch):
+    """超限 → 明确报 too large，且**不请求** getuploadurl（不消耗配额、不占内存）。"""
+    from communication.ilink import media
+
+    monkeypatch.setattr(media, "upload_limits", lambda: (300.0, 4))
+    source = tmp_path / "big.bin"
+    source.write_bytes(b"x" * 1024)
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"upload_full_url": "https://novac2c.cdn.weixin.qq.com/upload"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", http_client)
+        transfer = ILinkMediaTransfer(http_client, tmp_path / "media")
+        with pytest.raises(ILinkMediaError) as excinfo:
+            await transfer.upload(client, source, to_user_id="owner@im.wechat", media_type=3)
+
+    # describe_failure 只认 "too large"，据此渲染成"文件超出通道体积上限"
+    assert "too large" in str(excinfo.value)
+    assert requests == []
+    assert list((tmp_path / "media").iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_upload_uses_dedicated_timeout_not_client_default(tmp_path, monkeypatch):
+    """上传用专用超时（默认 300s），不复用日常 RPC 的 45s 读超时。"""
+    from communication.ilink import media
+
+    monkeypatch.setattr(media, "upload_limits", lambda: (777.0, 512 * 1024 * 1024))
+    monkeypatch.setattr("communication.ilink.media.secrets.token_bytes", lambda size: b"0123456789abcdef")
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"outbound media payload")
+    seen: dict = {}
+
+    async def handler(request):
+        if request.url.path == "/ilink/bot/getuploadurl":
+            return httpx.Response(
+                200,
+                json={"upload_full_url": "https://novac2c.cdn.weixin.qq.com/c2c/upload?signed=opaque"},
+            )
+        seen["timeout"] = request.extensions.get("timeout")
+        return httpx.Response(200, headers={"x-encrypted-param": "ref"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", http_client)
+        transfer = ILinkMediaTransfer(http_client, tmp_path / "media")
+        await transfer.upload(client, source, to_user_id="owner@im.wechat", media_type=3)
+
+    assert seen["timeout"]["read"] == 777.0
+    assert seen["timeout"]["write"] == 777.0
+
+
+def test_streaming_upload_is_off_by_default(monkeypatch):
+    """流式默认关：生产走已真机验证的整块路径。"""
+    from communication.ilink import media
+
+    monkeypatch.setattr("config.persona_loader.load_settings", lambda: {"ilink": {}})
+    assert media.streaming_upload_enabled() is False
+    monkeypatch.setattr(
+        "config.persona_loader.load_settings",
+        lambda: {"ilink": {"media_upload_streaming": True}},
+    )
+    assert media.streaming_upload_enabled() is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_upload_sends_explicit_content_length(tmp_path, monkeypatch):
+    """开关打开 → 分块发送但**显式**给 Content-Length（不能退化成 chunked）。"""
+    from communication.ilink import media
+
+    monkeypatch.setattr(media, "streaming_upload_enabled", lambda: True)
+    monkeypatch.setattr("communication.ilink.media.secrets.token_bytes", lambda size: b"0123456789abcdef")
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"streamed outbound payload")
+    seen: dict = {}
+
+    async def handler(request):
+        if request.url.path == "/ilink/bot/getuploadurl":
+            return httpx.Response(
+                200,
+                json={"upload_full_url": "https://novac2c.cdn.weixin.qq.com/c2c/upload?signed=opaque"},
+            )
+        seen["headers"] = dict(request.headers)
+        seen["body"] = request.content
+        return httpx.Response(200, headers={"x-encrypted-param": "ref"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = ILinkClient("https://ilinkai.weixin.qq.com", "token", http_client)
+        transfer = ILinkMediaTransfer(http_client, tmp_path / "media")
+        result = await transfer.upload(client, source, to_user_id="owner@im.wechat", media_type=3)
+
+    assert result.encrypt_query_param == "ref"
+    assert "chunked" not in seen["headers"].get("transfer-encoding", "").lower()
+    assert int(seen["headers"]["content-length"]) == len(seen["body"])
+    # 分块发出去的内容与整块路径完全一致（同一个加密临时文件）
+    assert seen["body"] == encrypted_payload(source.read_bytes(), b"0123456789abcdef")

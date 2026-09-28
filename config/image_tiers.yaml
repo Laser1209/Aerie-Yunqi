@@ -11,35 +11,46 @@
 #   seedream_5.0_lite           → 2K / 4K
 enabled: true
 
-# 档位定义：模型 / 分辨率 / 生成通道都能在这里改，零代码改动。
-#   provider: jimeng = 即梦画布 CLI（支持 9:16 竖构图与 i2i 锁脸）
-#             relay  = gpt-image 中转（忽略 size、只出横图，兜底用）
+# 档位定义：模型 / 分辨率 —— 都能在这里改，零代码改动。
+# 「档 → 生成通道」单独放在下面 routing 里（一张表看得清谁走哪条路）。
 tiers:
   t1_high:
     label: 信息量高
     model: seedream_5.0_pro
     resolution: "2K"
-    provider: jimeng
   t1_poster:
     label: 海报/封面
     model: seedream_5.0_pro
     resolution: "4K"
-    provider: jimeng
   t2_portrait:
     label: 人像·日常
     model: high_aes_general_v50_flash
     resolution: "2K"
-    provider: jimeng
   t3_artistic:
     label: 人像·写真感
     model: jm_image_model_yc_mj82
     resolution: "2K"
-    provider: jimeng
   t4_detail:
     label: 低信息量·小部件
     model: seedream_5.0_lite
     resolution: "2K"
-    provider: jimeng
+
+# 生成通道（2026-09-28 用户修订）：
+#   jimeng = 即梦画布 CLI（海报设计做得最好；支持 9:16 竖构图与 i2i 锁脸）
+#   relay  = gpt-image 中转（聊天型够用，且不额外烧即梦积分）
+#
+#   海报类（有设计需求）→ 即梦 Pro
+#   其余场景 / 聊天型    → 中转即可
+routing:
+  t1_poster: jimeng
+  t1_high: relay
+  t2_portrait: relay
+  t3_artistic: relay
+  t4_detail: relay
+
+# 通道用尽（中转没出图）时落回的通道 —— "分量不够再落回即梦"。
+# 留空 = 不升级（直接如实报失败）。
+escalate_provider: jimeng
 
 # 参考报价（积分/张），只用于日志与审计，不参与判定。
 credit_table:

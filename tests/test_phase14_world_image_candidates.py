@@ -996,9 +996,8 @@ def relay_channel(monkeypatch):
     """强制候选走**中转**生成通道。
 
     这组用例测的是 relay ``/images/edits`` 那条路与其降级护栏，与档位无关。
-    §八 之后人像默认走即梦档位（``provider=jimeng``，即梦自带 i2i），relay 通道
-    只在 ``config/image_tiers.yaml`` 把该档 ``provider`` 配成 ``relay``、或分级
-    总开关关闭时才生效；这里直接用桩固定成 relay，让用例继续专注在降级护栏上。
+    §七-8 之后「谁走哪条通道」由 ``config/image_tiers.yaml::routing`` 决定
+    （海报类→即梦，其余→中转），这里用桩固定成 relay，让用例不随配置漂移。
     """
     monkeypatch.setattr(
         "core.world_image_candidates._image_tier_hint",
@@ -1095,6 +1094,63 @@ async def test_event_reconstruction_keeps_prompt_modules(tmp_path, relay_channel
     assert workflow.edit_calls[0]["reference_assets"] == ["three_view:back", "three_view:front"]
     # 画幅也必须随候选走到 provider（edit 通道默认 1:1，不透传就丢 9:16）。
     assert workflow.edit_calls[0]["metadata"]["size"] == "768x1344"
+
+
+class _EscalatingWorkflow:
+    """第一次失败、第二次成功的中转桩：用来验证"落回即梦"。"""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def generate_image(self, **kwargs) -> dict:
+        self.calls.append(kwargs)
+        if len(self.calls) == 1:
+            return {
+                "status": "failed",
+                "request_id": "relay-1",
+                "error_code": "relay_down",
+                "side_effects": {"provider_called": False, "asset_created": False, "delivery_created": False},
+                "delivery_plan": None,
+            }
+        return {
+            "status": "completed",
+            "request_id": "jimeng-1",
+            "side_effects": {"provider_called": True, "asset_created": True, "delivery_created": True},
+            "delivery_plan": {"delivery_plan_id": "jm-delivery", "status": "planned"},
+        }
+
+    def generate_image_edit(self, **kwargs) -> dict:
+        return {
+            "status": "failed",
+            "request_id": "img2img",
+            "error_code": "image_edit_unsupported",
+            "side_effects": {"provider_called": False, "asset_created": False, "delivery_created": False},
+            "delivery_plan": None,
+        }
+
+
+@pytest.mark.asyncio
+async def test_relay_failure_escalates_back_to_jimeng(tmp_path, relay_channel):
+    """中转没出图 → 落回即梦再试一次（用户："分量不够再落回即梦"）。
+
+    关键点：升级调用必须用**不同的幂等键**，否则会被上一次失败结果按
+    (operation, idem) 原样重放（`_replay_if_existing` 不区分成功/失败），
+    升级请求根本发不出去。
+    """
+    workflow = _EscalatingWorkflow()
+    consumer = _role_edit_consumer(tmp_path, workflow, EditFlagStub(True))
+
+    result = await consumer.process_event(
+        _candidate_event(prompt_key="role_selfie", reason_code="user_requested")
+    )
+
+    assert result["status"] == "completed"
+    assert len(workflow.calls) == 2
+    assert workflow.calls[0]["metadata"]["provider"] == "relay"
+    assert workflow.calls[1]["metadata"]["provider"] == "jimeng"
+    assert workflow.calls[1]["idempotency_key"] != workflow.calls[0]["idempotency_key"]
+    # 档位模型随升级一起带过去（落回即梦时用的是同一档的模型）
+    assert workflow.calls[1]["metadata"]["jimeng_model"]
 
 
 # ── 方向4：时间光线 + 房间物件恒注入（room 键） ─────────────────

@@ -79,13 +79,15 @@ def test_unknown_prompt_key_falls_back_to_daily_tier():
     assert image_tiering.decide(prompt_key="something_new").key == "t2_portrait"
 
 
-def test_tier_carries_model_resolution_provider_and_credits():
+def test_tier_carries_model_resolution_channel_and_credits():
     """每档都带齐模型/分辨率/通道/参考报价，供 metadata 透传与审计。"""
     decided = image_tiering.tier("t2_portrait")
     assert decided.model == "high_aes_general_v50_flash"
     assert decided.resolution == "2K"
-    assert decided.provider == "jimeng"
     assert decided.credits == 3
+    # 通道来自 image_tiers.yaml::routing（2026-09-28 用户修订：聊天型走中转即可）
+    assert decided.provider == "relay"
+    assert decided.kind == "chat"
 
 
 # ── 配置与代码不漂移 ───────────────────────────────────────────────────
@@ -128,26 +130,59 @@ def test_fallback_chain_excludes_relay_sentinel():
     assert [t.key for t in chain] == ["t2_portrait"]
 
 
-# ── 候选 → 通道路由 ───────────────────────────────────────────────────
+def test_escalate_target_switches_channel_only():
+    """通道用尽 → 落回即梦：换的只是通道，模型仍是该档的模型。"""
+    chat = image_tiering.tier("t2_portrait")
+    assert chat.provider == "relay"
+    escalated = image_tiering.escalate_target(chat)
+    assert escalated is not None
+    assert escalated.provider == "jimeng"
+    assert escalated.model == chat.model
+    assert escalated.resolution == chat.resolution
+    assert escalated.key == chat.key
 
 
-def test_persona_candidate_routes_to_jimeng_with_tier_model():
-    """人像候选带档位 → 走即梦，并带上档位模型/分辨率（§8.4 接线）。"""
+def test_escalate_target_is_none_when_already_on_escalation_channel():
+    """已经在即梦上 → 没有可升级的通道。"""
+    poster = image_tiering.tier("t1_poster")
+    assert poster.provider == "jimeng"
+    assert image_tiering.escalate_target(poster) is None
+
+
+# ── 候选 → 通道路由（§七-8 用户修订） ─────────────────────────────────
+
+
+def test_poster_candidate_routes_to_jimeng():
+    """海报类（有设计需求）→ 即梦 Pro（即梦的海报设计最好）。"""
+    hint = _image_tier_hint({
+        "prompt_key": "role_selfie",
+        "scene": "local_send",
+        "user_raw": "帮我做一张海报",
+    })
+    assert hint["provider"] == "jimeng"
+    assert hint["jimeng_model"] == "seedream_5.0_pro"
+    assert hint["jimeng_resolution"] == "4K"
+    assert hint["image_kind"] == "work"
+
+
+def test_chat_portrait_routes_to_relay_with_tier_model():
+    """聊天型人像 → 中转即可（不额外烧即梦积分）；档位模型随行备用。"""
     hint = _image_tier_hint({
         "prompt_key": "role_selfie",
         "scene": "local_send",
         "image_tier": {"tier": "t2_portrait"},
     })
-    assert hint["provider"] == "jimeng"
+    assert hint["provider"] == "relay"
+    assert hint["image_kind"] == "chat"
     assert hint["jimeng_model"] == "high_aes_general_v50_flash"
     assert hint["jimeng_resolution"] == "2K"
-    assert hint["jimeng_tier"] == "t2_portrait"
 
 
-def test_environment_candidate_routes_to_jimeng_pro():
-    """"拍一下桌上的西瓜"（环境/物件）→ T1 Pro（走即梦，能出 9:16 竖构图）。"""
+def test_environment_candidate_routes_to_relay():
+    """"拍一下桌上的西瓜"（其余场景）→ 中转。"""
     hint = _image_tier_hint({"prompt_key": "environment_object"})
-    assert hint["provider"] == "jimeng"
+    assert hint["provider"] == "relay"
+    assert hint["image_kind"] == "work"
     assert hint["jimeng_model"] == "seedream_5.0_pro"
 
 

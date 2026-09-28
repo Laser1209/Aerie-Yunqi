@@ -54,42 +54,77 @@ _JIMENG_PROVIDER = "jimeng"
 _DEFAULT_TIER_KEY = "t2_portrait"
 
 
-def _image_tier_hint(candidate: dict[str, Any]) -> dict[str, Any]:
-    """档位 → 生成通道 + 即梦模型/分辨率（§八）。
+def _decide_tier(candidate: dict[str, Any]) -> Any:
+    """取候选的档位：优先用提示词层盖章的 ``image_tier``，否则按可见字段兜底推断。
 
-    优先用提示词层盖在候选上的 ``image_tier`` —— 只有那里能同时看到 focus/shot/style；
-    拿不到（例如直调 generate_image）时按候选可见字段兜底推断，再不行让 provider
-    用自身默认模型。返回的键直接摊进 metadata：``provider`` / ``jimeng_model`` /
-    ``jimeng_resolution`` / ``jimeng_tier`` / ``credits``。
+    拿不到即梦档位信息（分级关闭 / 模块异常）时返回 None，调用方回落旧口径。
     """
     try:
         from core import image_tiering
 
         if not image_tiering.enabled():
-            # 总开关关闭 → 回落"全局单模型"，且仍按人物类走即梦（旧行为）。
-            return {"provider": _image_provider_hint(str(candidate.get("prompt_key") or ""))}
-        decided = image_tiering.tier_from_candidate(candidate) or image_tiering.decide(
+            return None
+        return image_tiering.tier_from_candidate(candidate) or image_tiering.decide(
             prompt_key=str(candidate.get("prompt_key") or ""),
             scene=str(candidate.get("scene") or ""),
             user_raw=str(candidate.get("user_raw") or ""),
         )
     except Exception:
-        logger.debug("image tier hint failed; fall back to default channel", exc_info=True)
+        logger.debug("image tier decision failed", exc_info=True)
+        return None
+
+
+def _image_tier_hint(candidate: dict[str, Any]) -> dict[str, Any]:
+    """档位 → 生成通道 + 即梦模型/分辨率（§八 + §七-8 用户修订）。
+
+    「海报类（有设计需求）→ 即梦 Pro；其余场景/聊天型 → 中转」这张表在
+    ``config/image_tiers.yaml::routing`` 里，改一行即换。
+
+    返回的键直接摊进 metadata：``provider`` / ``image_kind`` / ``jimeng_model`` /
+    ``jimeng_resolution`` / ``jimeng_tier`` / ``credits``。
+    """
+    decided = _decide_tier(candidate)
+    if decided is None:
+        # 分级关闭 / 拿不到档位 → 回落旧口径：只有人物类走即梦。
         return {"provider": _image_provider_hint(str(candidate.get("prompt_key") or ""))}
 
     # "relay" 不在 generation_providers 里 → _provider_for 自然回落默认中转通道。
     payload = {
         "provider": decided.provider,
+        "image_kind": decided.kind,
         "jimeng_model": decided.model,
         "jimeng_resolution": decided.resolution,
         "jimeng_tier": decided.key,
         "credits": decided.credits,
     }
     logger.info(
-        "[ImageTier] tier=%s model=%s resolution=%s provider=%s credits≈%s prompt_key=%s",
-        decided.key, decided.model, decided.resolution, decided.provider,
+        "[ImageTier] tier=%s kind=%s channel=%s model=%s resolution=%s credits≈%s prompt_key=%s",
+        decided.key, decided.kind, decided.provider, decided.model, decided.resolution,
         decided.credits, candidate.get("prompt_key"),
     )
+    return payload
+
+
+def _tier_escalation(candidate: dict[str, Any]) -> dict[str, Any] | None:
+    """首选通道没出图时，落回升级通道（用户："分量不够再落回即梦"）。
+
+    返回新的 metadata 覆盖（provider 换成升级通道，模型仍是该档的模型）；
+    不需要/不能升级时返回 None。
+    """
+    decided = _decide_tier(candidate)
+    if decided is None:
+        return None
+    try:
+        from core import image_tiering
+
+        escalated = image_tiering.escalate_target(decided)
+    except Exception:
+        logger.debug("image tier escalation lookup failed", exc_info=True)
+        return None
+    if escalated is None:
+        return None
+    payload = escalated.as_payload()
+    payload["escalated_from"] = decided.provider
     return payload
 
 
@@ -887,32 +922,46 @@ class WorldImageCandidateConsumer:
     def _generate_workflow_result(
         self, prompt: str, candidate: dict[str, Any]
     ) -> dict[str, Any]:
-        """按候选类型选择生图路径：人物类走图生图，其余走文生图。
+        """按档位选生成路径（§八 + §七-8 用户修订）。
 
-        §八 起，档位（``candidate["image_tier"]``）是**生成通道的权威**：
-        档位 provider=jimeng 时直接走即梦 —— 它自带 i2i（人物参考节点 + 自身熔断/
-        降级），不再绕中转的 ``/images/edits``，否则"人像用第 2/第 3 个即梦模型"
-        这条根本落不了地（中转有它自己的模型，与即梦档位无关）。
-        档位 provider=relay（或分级关闭）时保持原逻辑：承载对话人设的 prompt_key
-        （自拍/生活场景/合影）走 ``generate_image_edit``，edit 未产出 completed 时
-        优雅降级回 ``generate_image``；风景/物件类直接文生图。
+        通道由 ``config/image_tiers.yaml::routing`` 决定：海报类（有设计需求）走即梦
+        Pro，其余场景/聊天型走中转即可。即梦通道自带 i2i（人物参考节点 + 熔断降级），
+        不绕中转 ``/images/edits``；中转通道下人物类仍优先走 edits 锁脸。
+        两条路都没出图时，再**落回即梦**（用户："分量不够再落回即梦"）。
         """
         prompt_key = str(candidate.get("prompt_key") or "")
         hint = _image_tier_hint(candidate)
         if str(hint.get("provider") or "") == _JIMENG_PROVIDER:
             return self._call_generate_image(prompt, candidate, hint=hint)
-        use_edit = self._image_edit_enabled() and prompt_key in PERSONA_IMAGE_PROMPT_KEYS
-        if not use_edit:
-            return self._call_generate_image(prompt, candidate, hint=hint)
-        reference_assets = candidate.get("reference_assets") or list(_DEFAULT_EDIT_REFERENCE)
-        edit = self._call_generate_image_edit(prompt, candidate, reference_assets)
-        if edit.get("status") != "completed":
+
+        if self._image_edit_enabled() and prompt_key in PERSONA_IMAGE_PROMPT_KEYS:
+            reference_assets = candidate.get("reference_assets") or list(_DEFAULT_EDIT_REFERENCE)
+            edit = self._call_generate_image_edit(prompt, candidate, reference_assets)
+            if edit.get("status") == "completed":
+                return edit
             logger.info(
                 "[WorldImage] role edit fell back to txt2img prompt_key=%s code=%s",
                 prompt_key, edit.get("error_code") or edit.get("status"),
             )
-            return self._call_generate_image(prompt, candidate, hint=hint)
-        return edit
+
+        relayed = self._call_generate_image(prompt, candidate, hint=hint)
+        if relayed.get("status") == "completed":
+            return relayed
+
+        escalation = _tier_escalation(candidate)
+        if escalation is None:
+            return relayed
+        logger.warning(
+            "[ImageTier] 中转未出图（%s）→ 落回 %s tier=%s model=%s",
+            relayed.get("error_code") or relayed.get("status"),
+            escalation.get("provider"), escalation.get("tier"),
+            escalation.get("jimeng_model"),
+        )
+        # 用独立的幂等键：否则会被上一次失败结果按 (operation, idem) 原样重放，
+        # 升级调用根本不会真的发出去（_replay_if_existing 不区分成功/失败）。
+        return self._call_generate_image(
+            prompt, candidate, hint=escalation, idempotency_suffix=":escalated",
+        )
 
     def _image_edit_enabled(self) -> bool:
         try:
@@ -926,6 +975,7 @@ class WorldImageCandidateConsumer:
         candidate: dict[str, Any],
         *,
         hint: dict[str, Any] | None = None,
+        idempotency_suffix: str = "",
     ) -> dict[str, Any]:
         # 档位（provider / jimeng_model / jimeng_resolution / jimeng_tier / credits）
         # 直接摊进 metadata：provider 决定走哪个生成通道，其余由
@@ -933,7 +983,7 @@ class WorldImageCandidateConsumer:
         tier_meta = dict(hint) if hint is not None else _image_tier_hint(candidate)
         return self.image_workflow.generate_image(
             prompt=prompt,
-            idempotency_key=f"world-image:{candidate['idempotency_key']}",
+            idempotency_key=f"world-image:{candidate['idempotency_key']}{idempotency_suffix}",
             owner_id=candidate["owner_id"],
             delivery={
                 "channel": candidate["channel"],

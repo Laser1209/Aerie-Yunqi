@@ -19,8 +19,11 @@
 | T3 | 人像·写真感 | 人像类 + ``style ∈ artistic_styles``（氛围感/诱惑感/慵懒） |
 | T4 | 低信息量·小部件 | ``focus`` 命中局部特写（手/腿/脚/腰/肩颈/背影/头发/脸/眼睛…） |
 
-判定优先级见 :func:`decide`；规则与报价全部外置在 ``config/image_tiers.yaml``，
-改一行即可换模型，零代码改动；``enabled: false`` 一键回落到"全局单模型"。
+判定优先级见 :func:`decide`；**通道（即梦 / 中转）单独一张表**见
+``config/image_tiers.yaml::routing`` —— 海报类（有设计需求）走即梦 Pro，其余场景与
+聊天型走中转即可；中转没出图时再由 :func:`escalate_target` 落回即梦。
+规则与报价全部外置在 ``config/image_tiers.yaml``，改一行即可换模型/换通道，
+零代码改动；``enabled: false`` 一键回落到"全局单模型"。
 
 本模块**纯函数 + 热加载配置**，不 import companion / world_image_candidates，
 避免循环依赖；需要特写部位集合时由调用方传入（见 :func:`decide` 的
@@ -44,6 +47,11 @@ _CONFIG_PATH = _PROJECT_ROOT / "config" / "image_tiers.yaml"
 RELAY_PROVIDER = "relay"
 JIMENG_PROVIDER = "jimeng"
 
+# 画面性质（用户的说法）：工作型 = 工具调用产出（海报/设计稿/环境图），
+# 聊天型 = 对话里顺手要的图（自拍/生活照/局部特写）。
+WORK_KIND = "work"
+CHAT_KIND = "chat"
+
 # 兜底档位（配置缺失/解析失败时用）：人像日常 = 最常用、最便宜、质量够日常。
 _DEFAULT_TIER_KEY = "t2_portrait"
 _FALLBACK_TIER_KEYS = ("t2_portrait", "t1_high", "t3_artistic", "t4_detail", "t1_poster")
@@ -51,12 +59,21 @@ _FALLBACK_TIER_KEYS = ("t2_portrait", "t1_high", "t3_artistic", "t4_detail", "t1
 _BUILTIN_CONFIG: dict[str, Any] = {
     "enabled": True,
     "tiers": {
-        "t1_high": {"label": "信息量高", "model": "seedream_5.0_pro", "resolution": "2K", "provider": JIMENG_PROVIDER},
-        "t1_poster": {"label": "海报/封面", "model": "seedream_5.0_pro", "resolution": "4K", "provider": JIMENG_PROVIDER},
-        "t2_portrait": {"label": "人像·日常", "model": "high_aes_general_v50_flash", "resolution": "2K", "provider": JIMENG_PROVIDER},
-        "t3_artistic": {"label": "人像·写真感", "model": "jm_image_model_yc_mj82", "resolution": "2K", "provider": JIMENG_PROVIDER},
-        "t4_detail": {"label": "低信息量·小部件", "model": "seedream_5.0_lite", "resolution": "2K", "provider": JIMENG_PROVIDER},
+        "t1_high": {"label": "信息量高", "model": "seedream_5.0_pro", "resolution": "2K"},
+        "t1_poster": {"label": "海报/封面", "model": "seedream_5.0_pro", "resolution": "4K"},
+        "t2_portrait": {"label": "人像·日常", "model": "high_aes_general_v50_flash", "resolution": "2K"},
+        "t3_artistic": {"label": "人像·写真感", "model": "jm_image_model_yc_mj82", "resolution": "2K"},
+        "t4_detail": {"label": "低信息量·小部件", "model": "seedream_5.0_lite", "resolution": "2K"},
     },
+    # 档 → 生成通道（2026-09-28 用户修订）：海报类走即梦，其余走中转。
+    "routing": {
+        "t1_poster": JIMENG_PROVIDER,
+        "t1_high": RELAY_PROVIDER,
+        "t2_portrait": RELAY_PROVIDER,
+        "t3_artistic": RELAY_PROVIDER,
+        "t4_detail": RELAY_PROVIDER,
+    },
+    "escalate_provider": JIMENG_PROVIDER,
     "credit_table": {},
     "poster_keywords": ["海报", "封面", "长图", "信息图", "宣传图", "设计稿", "图集", "排版"],
     "artistic_styles": ["氛围感", "诱惑感", "慵懒"],
@@ -87,10 +104,16 @@ class ImageTier:
     label: str
     credits: int = 0
 
+    @property
+    def kind(self) -> str:
+        """工作型 / 聊天型（t1_* = 工作型，其余 = 聊天型）。"""
+        return WORK_KIND if self.key.startswith("t1_") else CHAT_KIND
+
     def as_payload(self) -> dict[str, Any]:
         """写进 candidate / metadata 的结构（键名固定，便于透传与审计）。"""
         return {
             "tier": self.key,
+            "kind": self.kind,
             "label": self.label,
             "provider": self.provider,
             "jimeng_model": self.model,
@@ -112,14 +135,26 @@ def _normalize_tier(key: str, raw: Any) -> dict[str, Any] | None:
     model = str(raw.get("model") or "").strip()
     if not model:
         return None
-    resolution = str(raw.get("resolution") or "").strip()
-    provider = str(raw.get("provider") or JIMENG_PROVIDER).strip().lower()
     return {
         "label": str(raw.get("label") or key).strip(),
         "model": model,
-        "resolution": resolution,
-        "provider": provider if provider else JIMENG_PROVIDER,
+        "resolution": str(raw.get("resolution") or "").strip(),
     }
+
+
+def _normalize_provider(raw: Any, default: str) -> str:
+    """归一通道取值：只认 jimeng / relay，其余回落默认。"""
+    value = str(raw or "").strip().lower()
+    return value if value in (JIMENG_PROVIDER, RELAY_PROVIDER) else default
+
+
+def _normalize_routing(raw: Any, tier_keys: list[str]) -> dict[str, str]:
+    """归一「档 → 生成通道」表；缺失的档回落 relay（聊天型够用）。"""
+    out: dict[str, str] = {}
+    source = raw if isinstance(raw, dict) else {}
+    for key in tier_keys:
+        out[key] = _normalize_provider(source.get(key), RELAY_PROVIDER)
+    return out
 
 
 def _normalize_fallback(raw: Any, tier_keys: list[str]) -> dict[str, list[str]]:
@@ -158,6 +193,8 @@ def _normalize_config(raw: Any) -> dict[str, Any] | None:
     return {
         "enabled": bool(raw.get("enabled", True)),
         "tiers": tiers,
+        "routing": _normalize_routing(raw.get("routing"), list(tiers)),
+        "escalate_provider": _normalize_provider(raw.get("escalate_provider"), ""),
         "credit_table": credit_table if isinstance(credit_table, dict) else {},
         "poster_keywords": _str_list(raw.get("poster_keywords"), _BUILTIN_CONFIG["poster_keywords"]),
         "artistic_styles": _str_list(raw.get("artistic_styles"), _BUILTIN_CONFIG["artistic_styles"]),
@@ -212,18 +249,43 @@ def _credits(config: dict[str, Any], model: str, resolution: str) -> int:
 
 
 def tier(key: str) -> ImageTier:
-    """按 key 取档位；未知 key 回落默认档。"""
+    """按 key 取档位（含该档应走的生成通道）；未知 key 回落默认档。"""
     config = _load_config()
     tiers = config.get("tiers") or {}
-    raw = tiers.get(key) or tiers.get(_DEFAULT_TIER_KEY) or _BUILTIN_CONFIG["tiers"][_DEFAULT_TIER_KEY]
     actual_key = key if key in tiers else _DEFAULT_TIER_KEY
+    raw = tiers.get(actual_key) or _BUILTIN_CONFIG["tiers"][_DEFAULT_TIER_KEY]
+    routing = config.get("routing") or {}
+    provider = _normalize_provider(
+        routing.get(actual_key), _BUILTIN_CONFIG["routing"].get(actual_key, RELAY_PROVIDER)
+    )
     return ImageTier(
         key=actual_key,
         model=str(raw.get("model") or ""),
         resolution=str(raw.get("resolution") or ""),
-        provider=str(raw.get("provider") or JIMENG_PROVIDER),
+        provider=provider,
         label=str(raw.get("label") or actual_key),
         credits=_credits(config, str(raw.get("model") or ""), str(raw.get("resolution") or "")),
+    )
+
+
+def escalate_target(current: ImageTier) -> ImageTier | None:
+    """通道用尽（首选通道没出图）时该落回哪一档。
+
+    用户的说法是"分量不够再落回即梦"：中转是聊天型的默认（便宜、够用），
+    但一旦没出图，就用同一档的模型去即梦再试一次。
+    返回 None 表示不升级（``escalate_provider`` 留空，或本来就在即梦上）。
+    """
+    config = _load_config()
+    provider = _normalize_provider(config.get("escalate_provider"), "")
+    if not provider or provider == current.provider:
+        return None
+    return ImageTier(
+        key=current.key,
+        model=current.model,
+        resolution=current.resolution,
+        provider=provider,
+        label=current.label,
+        credits=current.credits,
     )
 
 

@@ -339,10 +339,21 @@ class SendQueue:
         """Legacy single-reply path with semantic segment splitting."""
         segments = self._splitter.split(reply.content)
         if not segments:
-            # 纯分隔符/空白：没有可发内容，直接收口（绝不把分隔符原文发出去）
-            logger.info(
-                "skip empty reply for user %s (no outbound content)", reply.user_id
-            )
+            # 纯分隔符/空白：没有可发文本。但**若有文件附件，文件仍必须发出去** ——
+            # 此前这里直接 return，"只发文件、不带 note"的投递会被静默丢弃
+            # （文件没发、也没人知道），与"投递失败必须可感知"直接冲突。
+            if getattr(reply, "file_paths", None):
+                logger.info(
+                    "reply for user %s has no text but carries %d file(s); sending files only",
+                    reply.user_id, len(reply.file_paths),
+                )
+                reply.content = ""
+                await self._sender_for(reply)(reply)
+            else:
+                # 既无文本也无附件：没有可发内容，收口（绝不把分隔符原文发出去）
+                logger.info(
+                    "skip empty reply for user %s (no outbound content)", reply.user_id
+                )
             return
         first_in_batch = True
         use_segments_sender = (

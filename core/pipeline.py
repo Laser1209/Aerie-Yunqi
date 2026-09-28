@@ -38,6 +38,7 @@ from core.image_output_guard import strip_llm_image_artifacts
 from core.ids import generate_id
 from core.model_output import normalize_model_text
 from core.tool_result import safe_json_dumps
+from core.delivery_ledger import build_feedback_note as build_delivery_feedback_note
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
 from core.task_loop import TASK_REACT_ROUNDS, TaskVerdict, build_task_prompt
@@ -522,6 +523,18 @@ class Pipeline:
             if note:
                 sys_content = ctx_messages[0].get("content", "")
                 ctx_messages[0]["content"] = sys_content + "\n\n[世界事件] " + note
+        # 投递回执注入：上一次的文件/图片到底发出去没。
+        # 投递是异步入队的，工具只回 "queued"；失败若不回灌，模型下一轮会照旧
+        # 宣称"已经发给你了"——它没有撒谎的动机，只是没有渠道知道失败。
+        if ctx_messages:
+            try:
+                delivery_note = build_delivery_feedback_note(int(msg.user_id or 0))
+            except Exception:
+                delivery_note = ""
+            if delivery_note:
+                ctx_messages[0]["content"] = (
+                    str(ctx_messages[0].get("content", "")) + "\n\n" + delivery_note
+                )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
         # 任务循环：判定这条消息是不是一件必须动手完成的事。
@@ -2456,6 +2469,17 @@ class Pipeline:
             attachment_snippets=attachment_snippets,
             request_context=request_state.context,
         )
+        # 投递回执注入：轻量路径也可能接住"你发给我了吗"这类追问，
+        # 同样需要知道上一次投递其实失败了。
+        if ctx_messages:
+            try:
+                delivery_note = build_delivery_feedback_note(int(msg.user_id or 0))
+            except Exception:
+                delivery_note = ""
+            if delivery_note:
+                ctx_messages[0]["content"] = (
+                    str(ctx_messages[0].get("content", "")) + "\n\n" + delivery_note
+                )
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0
         context_record = {
@@ -3659,6 +3683,17 @@ class Pipeline:
             attachment_snippets=attachment_snippets,
             request_context=None,
         )
+        # 投递回执注入（与主处理路径同一语义）：批处理也是"下一轮"，
+        # 上一批的文件/图片失败同样必须让模型知道。
+        if ctx_messages:
+            try:
+                delivery_note = build_delivery_feedback_note(int(first_msg.user_id or 0))
+            except Exception:
+                delivery_note = ""
+            if delivery_note:
+                ctx_messages[0]["content"] = (
+                    str(ctx_messages[0].get("content", "")) + "\n\n" + delivery_note
+                )
         tools = self.tool_registry.get_openai_schema() if route_mode == "FULL" else None
 
         system_chars = len(ctx_messages[0]["content"]) if ctx_messages else 0

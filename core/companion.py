@@ -27,6 +27,11 @@ from core.image_size import (
     size_for_prompt_key,
 )
 from core.tool_result import normalize_tool_result
+from core.delivery_ledger import (
+    build_feedback_note as build_delivery_feedback_note,
+    describe_failure as describe_delivery_failure,
+    get_ledger as _ledger,
+)
 from core.llm_caller import LLMCaller
 from core.qq_media import QQMediaPreprocessor
 from core.qq_sticker import QQStickerSender
@@ -2841,11 +2846,18 @@ class Companion:
         # 文本与文件是两条独立消息：文本为空时 send_message 自行跳过，
         # 文件照发；文件失败也不回滚已经发出的文本。
         for path in list(getattr(reply, "file_paths", None) or []):
+            delivery_id = self._delivery_id_for(reply, path)
             try:
-                if not await self.qq.send_file(reply.user_id, path):
+                if await self.qq.send_file(reply.user_id, path):
+                    _ledger().record_outcome(delivery_id, ok=True)
+                else:
                     logger.warning("QQ 文件未送达: %s", path)
-            except Exception:
+                    _ledger().record_outcome(delivery_id, ok=False, detail="平台未确认送达")
+            except Exception as exc:
                 logger.exception("QQ 文件发送异常: %s", path)
+                _ledger().record_outcome(
+                    delivery_id, ok=False, detail=describe_delivery_failure(exc),
+                )
         return sent
 
     async def _send_to_ilink(self, reply: OutgoingReply) -> bool:
@@ -2859,14 +2871,35 @@ class Companion:
                 content,
             )
         for path in list(getattr(reply, "file_paths", None) or []):
+            delivery_id = self._delivery_id_for(reply, path)
             try:
                 if await self.ilink_gateway.send_file(reply.channel_account_id, path):
                     sent = True
+                    _ledger().record_outcome(delivery_id, ok=True)
                 else:
                     logger.warning("微信文件未送达: %s", path)
-            except Exception:
+                    _ledger().record_outcome(delivery_id, ok=False, detail="平台未确认送达")
+            except Exception as exc:
+                # 失败必须落回执：只进日志的话，模型下一轮照旧宣称"已经发过去了"。
                 logger.exception("微信文件发送异常: %s", path)
+                _ledger().record_outcome(
+                    delivery_id, ok=False, detail=describe_delivery_failure(exc),
+                )
         return sent
+
+    @staticmethod
+    def _delivery_id_for(reply: OutgoingReply, path: str) -> str:
+        """从 reply 上下文里取出该文件对应的投递回执 id。
+
+        ``_notify_file_delivery`` 入队时把 ``[{delivery_id, path}]`` 写进
+        ``reply.context``；这里按路径回查。取不到就返回空串（record_outcome
+        会静默忽略），不影响发送本身。
+        """
+        entries = (getattr(reply, "context", None) or {}).get("deliveries") or []
+        for entry in entries:
+            if isinstance(entry, dict) and str(entry.get("path") or "") == str(path or ""):
+                return str(entry.get("delivery_id") or "")
+        return ""
 
     def _notify_pending_approval(self, payload: dict) -> None:
         """把待审批事项推到最近一次会话通道（经发送队列异步投递，不阻塞工具调用）。
@@ -2901,17 +2934,35 @@ class Companion:
         target = self._last_inbound_target
         if not target or not target.get("user_id"):
             logger.info("文件 %s 已生成但当前无会话通道，仅桌面端可见", path)
+            # 没有会话通道也是"没发出去"的一种：落一条回执，让模型下一轮别宣称已送达。
+            _ledger().record_pending(
+                user_id=0, channel="", path=path,
+                note=str((payload or {}).get("note") or ""),
+            )
             return
+        channel = str(target.get("channel") or target.get("source") or "qq")
+        user_id = int(target["user_id"])
+        # 入队前先登记回执：发送结果在队列 worker 里产生，靠 delivery_id 对账回来。
+        delivery_id = _ledger().record_pending(
+            user_id=user_id,
+            channel=channel,
+            path=path,
+            note=str((payload or {}).get("note") or ""),
+        )
         try:
             self.queue.enqueue(OutgoingReply(
-                user_id=int(target["user_id"]),
+                user_id=user_id,
                 content=str((payload or {}).get("note") or ""),
-                channel=str(target.get("channel") or target.get("source") or "qq"),
+                channel=channel,
                 channel_account_id=str(target.get("channel_account_id") or ""),
                 file_paths=[path],
+                context={"deliveries": [{"delivery_id": delivery_id, "path": path}]},
             ))
-        except Exception:
+        except Exception as exc:
             logger.exception("推送文件失败 path=%s", path)
+            _ledger().record_outcome(
+                delivery_id, ok=False, detail=describe_delivery_failure(exc),
+            )
 
     @staticmethod
     def _render_approval_notice(payload: dict) -> str:

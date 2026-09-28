@@ -392,6 +392,54 @@ def test_orientation_to_size_mapping():
     assert _image_orientation_for_size("未定义", fallback=_IMAGE_SIZE_PORTRAIT) == _IMAGE_SIZE_PORTRAIT
 
 
+# ── 关键词误命中（登记制守卫）：普通闲聊不能被切成"部位特写" ────────────
+# 实测背景（2026-09-28 主动消息配图）：整句闲聊被当作"用户要图指令"解析，
+#   ① "一抬**头发**现在步行街站了半小时" → 含「头发」→ 整张图变头发特写（85mm 特写）；
+#   ② "找个地**方**坐坐" → 含「方」→ 判成方图，且出口把方图谎报成"横构图 16:9"。
+
+
+def test_plain_chatter_is_not_parsed_as_closeup():
+    """普通闲聊：不产生 focus / orientation / shot（本次事故的原始句子）。"""
+    spec = _extract_photo_spec(
+        "一抬头发现自己在步行街站了半小时 你说我是不是该找个地方坐坐 不对 我是想问你有空了吗"
+    )
+    assert spec["focus"] == ""
+    assert spec["orientation"] == ""
+    assert spec["shot"] == ""
+
+
+def test_cross_word_substring_does_not_match_focus():
+    """跨词误命中：「抬头发现」「低头发现」里的"头发"不算；真说头发才算。"""
+    assert _extract_photo_spec("低下头发现鞋带开了")["focus"] == ""
+    assert _extract_photo_spec("你的头发乱了")["focus"] == "头发"
+
+
+def test_direction_word_in_prose_does_not_set_orientation():
+    """「方法」里的"方"不算方向；真说方向才算。"""
+    assert _extract_photo_spec("找个地方坐坐")["orientation"] == ""
+    assert _extract_photo_spec("方构图来一张")["orientation"] == "方"
+
+
+def test_bare_part_word_needs_verb_or_whole_utterance():
+    """裸单字部位词：紧邻拍照动作/整句就是它才算；正文里的不算。"""
+    assert _extract_photo_spec("腿")["focus"] == "双腿"
+    assert _extract_photo_spec("拍腿")["focus"] == "双腿"
+    assert _extract_photo_spec("在床上躺着，仰视低角度拍腿，要诱惑感")["focus"] == "双腿"
+    # 正文描述身体状态 → 不是要图指令，不该变成部位特写
+    assert _extract_photo_spec("我看到她腿上有个包")["focus"] == ""
+    assert _extract_photo_spec("腿上青了一块")["focus"] == ""
+
+
+def test_square_size_phrase_is_not_reported_as_landscape():
+    """方图必须说方构图：原先 width>=height 把 1024x1024 说成"横构图 16:9"。"""
+    from core.image_size import orientation_phrase
+
+    assert "方构图" in orientation_phrase("1024x1024")
+    assert "横" not in orientation_phrase("1024x1024")
+    assert "横构图" in orientation_phrase("1344x768")
+    assert "竖构图" in orientation_phrase("768x1344")
+
+
 # ── 三档尺寸的"场景自决"：候选漏填 size 时由 prompt_key 决定 ──
 def _prompt_stub():
     """最小 Companion 桩：只喂 _image_prompt_for_impl 需要的外部依赖。"""

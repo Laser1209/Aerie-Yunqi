@@ -261,15 +261,17 @@ def _image_event_desc(plan: dict) -> str:
 # 完整人物+固定场景为基准。这里用确定性关键词分维度提取，命中即写进画面：
 #   focus（主体特写） / pose（姿态） / angle（机位） / scene（环境）
 # 未命中的维度返回空串，由组合器兜底为默认，绝不让缺值中断生图（缺值即停防护）。
+# 注意：裸单字（腿/脚/腰/肩/脸）**保留在表里**，但由 `_keyword_hits` 限制成
+# "整句就是这个词"才算 —— 删掉它们会让"用户只打一个字"这种极简指令失配。
 _PHOTO_FOCUS_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("双腿", ("看看腿", "你的腿", "大腿", "腿", "腿部", "美腿", "长腿", "腿照")),
-    ("双脚", ("看看脚", "你的脚", "脚", "美脚", "脚丫")),
+    ("双腿", ("看看腿", "看腿", "露腿", "你的腿", "大腿", "腿部", "美腿", "长腿", "腿照", "腿")),
+    ("双脚", ("看看脚", "看脚", "露脚", "你的脚", "美脚", "脚丫", "脚")),
     ("手", ("看看手", "你的手", "手部", "玉手")),
-    ("腰", ("看看腰", "你的腰", "腰", "细腰")),
-    ("肩颈锁骨", ("锁骨", "肩", "脖子")),
+    ("腰", ("看看腰", "看腰", "露腰", "你的腰", "细腰", "腰线", "腰")),
+    ("肩颈锁骨", ("锁骨", "肩膀", "肩线", "露肩", "脖子", "肩")),
     ("背影", ("背影", "从后面", "背对着")),
     ("头发", ("头发", "发丝", "长发")),
-    ("脸庞", ("看脸", "你的脸", "脸", "正脸")),
+    ("脸庞", ("看脸", "脸蛋", "你的脸", "正脸", "脸庞", "脸")),
     ("眼睛", ("眼睛", "双眼", "眼神")),
     ("全身", ("全身", "全身照", "整个你")),
 )
@@ -340,9 +342,9 @@ _PHOTO_STYLE_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
 # orientation 维度（第 2 条）：生图横竖/方方向。LLM 语义自补或关键词都可产出，
 # 首选中文 tag（竖/横/方）回落；命中后由 _image_orientation_size 做成 3 档尺寸。
 _PHOTO_ORIENTATION_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("横", ("横", "横屏", "横构图", "横拍", "横向")),
-    ("方", ("方", "方形", "方构图", "正方形")),
-    ("竖", ("竖", "竖屏", "竖构图", "竖拍", "纵向")),
+    ("横", ("横屏", "横构图", "横拍", "横向", "横着", "横幅")),
+    ("方", ("方形", "方图", "方构图", "正方形", "1:1")),
+    ("竖", ("竖屏", "竖构图", "竖拍", "纵向", "竖版", "竖向", "竖着", "竖幅")),
 )
 _PHOTO_ORIENTATION_SIZE: dict[str, str] = {
     "横": IMAGE_SIZE_LANDSCAPE,
@@ -719,13 +721,76 @@ def _apply_focus_coverage(spec: dict[str, str]) -> dict[str, str]:
     return out
 
 
+# ── 关键词误命中守卫（登记制）────────────────────────────────────────
+# 关键词表用的是朴素子串匹配，而中文没有词边界：普通句子会被切出假部位词。
+# 已实测的两类（都出现在**主动消息的整句闲聊**里，而不是用户要图指令）：
+#   ① "一抬**头发**现在步行街站了半小时" → "抬头发现" 里含「头发」→ 整张图被判成
+#      头发特写（85mm 特写 + "画面重点聚焦在头发"），连构图都跑偏了；
+#   ② "找个地**方**坐坐"、"用**方**法" 里的「方」→ 被判成方图。
+# 处理办法（三层，都不放松匹配规则本身）：
+#   ① 裸单字只在"整句就是这个词"时才认 → `_FOCUS_BARE_TERMS`；
+#   ② 仍会长在别的词里的关键词，登记其禁止的左邻/右邻字 → `_FOCUS_EDGE_GUARD`；
+#   ③ 画幅方向表不再收单字（LLM 输出走 `_normalize_spec_value` 的 exact-label
+#      分支，不依赖关键词表）。
+# **以后再发现误命中，往这两张表加一行即可**，不要改成会漏掉真命中的宽松规则。
+_FOCUS_BARE_TERMS: frozenset[str] = frozenset({"腿", "脚", "腰", "肩", "脸"})
+
+# 裸单字额外放行条件：紧邻的字是"拍照动作/量词/所属"时也算真命中
+# （"拍腿""看看你_的_腿""腿_给_我看看"）。
+# 刻意**不含** 你/她/我 —— 那类所属词在闲聊里太常见（"我看到她腿上有个包"），
+# 放进来就会重新引入正文误判。
+_FOCUS_BARE_CONTEXT: frozenset[str] = frozenset(
+    {"拍", "看", "露", "摸", "照", "给", "来", "把", "的", "双", "两", "只", "光"}
+)
+
+_FOCUS_EDGE_GUARD: dict[str, tuple[frozenset[str], frozenset[str]]] = {
+    # 关键词 → (禁止左邻字, 禁止右邻字)
+    # 「头发」：抬/低/回/摇/点…头 + 发（现/挥/生…）跨词拼出来的一律不算。
+    "头发": (
+        frozenset({"抬", "低", "回", "摇", "点", "歪", "扭", "甩", "伸", "缩"}),
+        frozenset({"现"}),
+    ),
+}
+
+
+def _keyword_hits(haystack: str, keyword: str) -> bool:
+    """关键词是否作为"一个词"命中，而不是被相邻汉字拼成别的词。"""
+    if keyword in _FOCUS_BARE_TERMS:
+        # 裸单字：整句就是它，或紧邻拍照动作/量词才算（"看看腿""你的腿" 走各自完整关键词）。
+        if haystack.strip() == keyword:
+            return True
+        start = 0
+        while True:
+            idx = haystack.find(keyword, start)
+            if idx < 0:
+                return False
+            left = haystack[idx - 1] if idx > 0 else ""
+            end = idx + len(keyword)
+            right = haystack[end] if end < len(haystack) else ""
+            if left in _FOCUS_BARE_CONTEXT or right in _FOCUS_BARE_CONTEXT:
+                return True
+            start = idx + 1
+    left_block, right_block = _FOCUS_EDGE_GUARD.get(keyword, (frozenset(), frozenset()))
+    start = 0
+    while True:
+        idx = haystack.find(keyword, start)
+        if idx < 0:
+            return False
+        left = haystack[idx - 1] if idx > 0 else ""
+        end = idx + len(keyword)
+        right = haystack[end] if end < len(haystack) else ""
+        if left not in left_block and right not in right_block:
+            return True
+        start = idx + 1
+
+
 def _match_photo_spec(text: str, table: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
     """在用户指令里按优先级返回第一个命中的维度标签；无命中返回空串。"""
     haystack = str(text or "")
     if not haystack:
         return ""
     for label, keywords in table:
-        if any(kw in haystack for kw in keywords):
+        if any(_keyword_hits(haystack, kw) for kw in keywords):
             return label
     return ""
 

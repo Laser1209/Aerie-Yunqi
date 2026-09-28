@@ -34,11 +34,18 @@ def size_for_prompt_key(prompt_key: str) -> str:
 
 
 def orientation_phrase(image_size: str) -> str:
-    """把尺寸转成写进生图 prompt 的构图方向提示（让生成模型配合构图）。"""
+    """把尺寸转成写进生图 prompt 的构图方向提示（让生成模型配合构图）。
+
+    方图必须单独成一档：原先 ``width >= height`` 把 1024x1024 也判成
+    "横构图（手机横拍 16:9 比例）"—— 提示词说的比例与真正传下去的 size 打架，
+    生成模型收到的是一份自相矛盾的指令。
+    """
     try:
         width, height = (int(part.strip()) for part in str(image_size).lower().split("x"))
     except (ValueError, AttributeError):
         return "竖构图（手机竖拍 9:16 比例）"
-    if width >= height:
+    if width == height:
+        return "方构图（手机方图 1:1 比例）"
+    if width > height:
         return "横构图（手机横拍 16:9 比例）"
     return "竖构图（手机竖拍 9:16 比例）"

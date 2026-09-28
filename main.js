@@ -2995,7 +2995,7 @@ ipcMain.handle("shell:openExternal", async (_event, url) => {
 // 开场动画：返回视频 / LOGO 的绝对路径（已 encodeURI，渲染层拼 file://）
 ipcMain.handle("splash:get-config", () => {
   return {
-    videoPath: toFileUriPath(getSplashAssetPath("start-video.mp4")),
+    videoPath: toFileUriPath(getSplashAssetPath("AERIE_OpenVideo.mp4")),
     logoPath: toFileUriPath(getSplashAssetPath("Aerie.png")),
     playVideo: _splashMode === "video",
   };
@@ -3118,27 +3118,19 @@ ipcMain.handle("startup:set", async (_event, options) => {
 
 // R6.6: backend self-restart.
 //
-// FIXED: The primary restart path is now Electron-parent-level
-// `_forceRestartPythonBackend()` (see definition above).  We no longer depend
-// on the Python-side /api/system/restart HTTP endpoint because that endpoint
-// is unreachable in the exact scenario users complain about: the backend is
-// OFFLINE and the user clicks "重启后端".
+// The ONLY restart path is Electron-parent-level `_forceRestartPythonBackend()`
+// (see definition above). We deliberately do NOT call the Python-side
+// /api/system/restart endpoint any more.
 //
-// We still fire a best-effort POST to /api/system/restart BEFORE the hard
-// kill, so:
-//   - If the backend is still alive, it can flush caches / write a clean
-//     "i am restarting" line to logs / trigger its helper (harmless backup);
-//   - If the backend is already dead, the HTTP failure is caught & ignored,
-//     and the Electron hard restart proceeds anyway.
+// Why not: that endpoint spawns tools/restart_helper.ps1, which kills the
+// backend and starts a NEW backend as an orphan process. Combined with the
+// Electron-level restart below, two backends race for port 7890 — and the
+// orphan (carrying the OLD instance id) can win, so `healthCheck()` fails
+// forever and the UI is stuck on "后端离线" even though a backend is running.
+// The remaining path is race-free: it kills the child, rolls a fresh instance
+// id, and respawns through the SAME path as cold boot.
 function restartBackend() {
-  // (A) Best-effort polite notification to a still-alive backend.
-  //      Fire & forget — no await, no throw on failure.
-  try {
-    apiRequest({ method: "POST", path: "/api/system/restart", timeoutMs: 700 })
-      .catch(() => {});
-  } catch (_) {}
-
-  // (B) Broadcast to renderers immediately (don't wait for step A).
+  // (A) Broadcast to renderers immediately.
   const wins = BrowserWindow.getAllWindows();
   for (const w of wins) {
     if (w && !w.isDestroyed()) {
@@ -3146,9 +3138,8 @@ function restartBackend() {
     }
   }
 
-  // (C) The real restart. Runs regardless of step A succeeding.
-  //     This is the line that fixes the "backend offline, restart button
-  //     does nothing" user complaint.
+  // (B) The real restart. This is the line that fixes the "backend offline,
+  //     restart button does nothing" user complaint.
   try { _forceRestartPythonBackend(); } catch (err) {
     console.error("[main] _forceRestartPythonBackend threw:", err && err.message);
   }

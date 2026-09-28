@@ -106,6 +106,12 @@ _CHAT_FAILURE_BY_REASON: tuple[tuple[tuple[str, ...], str], ...] = (
         "这条路我这边还缺配置，暂时走不通，我换个办法。",
     ),
     (
+        # 工具调用契约问题：参数没带全 / 签名不匹配（tool_signature、missing <key>）。
+        # 与"超时/断网"是两回事，给的话也该不一样（§十四 #73）。
+        ("tool_signature", "missing "),
+        "我这边没拿到要用的东西，我再理一下。",
+    ),
+    (
         ("outside_workspace_roots", "permission", "denied", "拒绝"),
         "那个位置我还没拿到授权，我先换个地方。",
     ),

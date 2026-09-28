@@ -35,6 +35,11 @@ def _client(tmp_path: Path, *, connected: bool = True) -> QQClient:
 # ══════════════════════════════════════════════════════
 
 class TestQQClientSendFile:
+    @pytest.fixture(autouse=True)
+    def open_napcat_port(self):
+        with patch("communication.qq_client._port_is_open", return_value=True) as port_probe:
+            yield port_probe
+
     def test_missing_file_short_circuits(self, tmp_path):
         client = _client(tmp_path)
         client._rpc_call = AsyncMock()
@@ -47,6 +52,15 @@ class TestQQClientSendFile:
         target.write_text("x", encoding="utf-8")
         client = _client(tmp_path, connected=False)
         client._rpc_call = AsyncMock()
+        assert asyncio.run(client.send_file(123, str(target))) is False
+        client._rpc_call.assert_not_awaited()
+
+    def test_closed_port_returns_false(self, tmp_path, open_napcat_port):
+        target = tmp_path / "a.txt"
+        target.write_text("x", encoding="utf-8")
+        client = _client(tmp_path)
+        client._rpc_call = AsyncMock(return_value={"status": "ok"})
+        open_napcat_port.return_value = False
         assert asyncio.run(client.send_file(123, str(target))) is False
         client._rpc_call.assert_not_awaited()
 

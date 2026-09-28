@@ -19,6 +19,14 @@ from communication.router import Router
 from communication.send_queue import SendQueue
 from communication.splitter import SemanticMessageSplitter
 from config.persona_loader import load_behavior_config
+from core.image_size import (
+    IMAGE_SIZE_LANDSCAPE,
+    IMAGE_SIZE_PORTRAIT,
+    IMAGE_SIZE_SQUARE,
+    orientation_phrase,
+    size_for_prompt_key,
+)
+from core.tool_result import normalize_tool_result
 from core.llm_caller import LLMCaller
 from core.qq_media import QQMediaPreprocessor
 from core.qq_sticker import QQStickerSender
@@ -236,32 +244,8 @@ def _image_event_desc(plan: dict) -> str:
 
 
 # ── 生图构图：手机拍摄比例（横 16:9 / 竖 9:16），横竖由伊塔按场景自决 ──
-# 自拍/人像/合影 → 竖屏 9:16；环境/物件/风景 → 横屏 16:9。
-# 尺寸满足中转站规则（边长 512~4096 且为 64 的倍数），1344x768 ≈ 16:9、768x1344 ≈ 9:16。
-_IMAGE_SIZE_LANDSCAPE = "1344x768"
-_IMAGE_SIZE_PORTRAIT = "768x1344"
-_IMAGE_SIZE_BY_PROMPT_KEY: dict[str, str] = {
-    "role_selfie": _IMAGE_SIZE_PORTRAIT,
-    "role_in_scene": _IMAGE_SIZE_PORTRAIT,
-    "couple_photo": _IMAGE_SIZE_PORTRAIT,
-    "environment_object": _IMAGE_SIZE_LANDSCAPE,
-}
-
-
-def _image_size_for_prompt_key(prompt_key: str) -> str:
-    """按发图场景决断手机拍摄的横竖比例（16:9 / 9:16），即伊塔的构图自决。"""
-    return _IMAGE_SIZE_BY_PROMPT_KEY.get(str(prompt_key or ""), _IMAGE_SIZE_PORTRAIT)
-
-
-def _image_orientation_phrase(image_size: str) -> str:
-    """把尺寸转成写进生图 prompt 的构图方向提示（让生成模型配合构图）。"""
-    try:
-        width, height = (int(part.strip()) for part in str(image_size).lower().split("x"))
-    except (ValueError, AttributeError):
-        return "竖构图（手机竖拍 9:16 比例）"
-    if width >= height:
-        return "横构图（手机横拍 16:9 比例）"
-    return "竖构图（手机竖拍 9:16 比例）"
+# 尺寸档与"场景 → 尺寸/构图短语"的映射统一由 core.image_size 提供，生图链路的
+# 最后一层兜底（core.llm_caller）也读同一份，避免两处各写一套导致走偏。
 
 
 # ── 模块化生图规格：从用户原始指令解析出可组合的画面模块 ─────────
@@ -354,13 +338,13 @@ _PHOTO_ORIENTATION_TABLE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("竖", ("竖", "竖屏", "竖构图", "竖拍", "纵向")),
 )
 _PHOTO_ORIENTATION_SIZE: dict[str, str] = {
-    "横": _IMAGE_SIZE_LANDSCAPE,
-    "方": "1024x1024",
-    "竖": _IMAGE_SIZE_PORTRAIT,
+    "横": IMAGE_SIZE_LANDSCAPE,
+    "方": IMAGE_SIZE_SQUARE,
+    "竖": IMAGE_SIZE_PORTRAIT,
 }
 
 
-def _image_orientation_for_size(orientation: str, fallback: str = _IMAGE_SIZE_PORTRAIT) -> str:
+def _image_orientation_for_size(orientation: str, fallback: str = IMAGE_SIZE_PORTRAIT) -> str:
     """把 orientation（竖/横/方）映射为具体像素尺寸档，未命中回退 fallback。"""
     size = _PHOTO_ORIENTATION_SIZE.get(str(orientation or "").strip())
     return size if size else fallback
@@ -1184,6 +1168,9 @@ class Companion:
         # ⚠️ 重要：必须在 register_all_tools 之前设置 _COMPANION，
         # 否则 compute_tools 等通过 get_companion() 获取依赖的工具会注册失败
         _COMPANION = self
+        # 功能包先注册、核心工具后注册：同名工具核心赢（ToolRegistry.register 拒绝覆盖）
+        from core import plugin_host
+        plugin_host.discover_and_register(self.tool_registry)
         register_all_tools(self.tool_registry)
         # 异步任务管理器：承载文档生成等后台任务，对外有独立 API 与进度回调
         from core.async_task_manager import AsyncTaskManager
@@ -1684,6 +1671,10 @@ class Companion:
         await self._start_mcp()
         await self._start_thinking_loop()
 
+        # 功能包生命周期：核心与 MCP 就绪后启动，失败在宿主内隔离不阻断主流程
+        from core import plugin_host
+        await plugin_host.start_all(self)
+
         self._started = True
         logger.info("Companion started (qq_ready=%s)", qq_ready)
 
@@ -1949,6 +1940,7 @@ class Companion:
             return existing
 
         from core.image_service import (
+            JimengCanvasImageGenerationProvider,
             LLMCallerImageGenerationProvider,
             LLMCallerImageVisionProvider,
             ImageWorkflow,
@@ -1969,6 +1961,8 @@ class Companion:
             upload_base=(Path.cwd() / "uploads").resolve(),
             feature_enabled=self.feature_flags.is_enabled("image_assets_v1"),
             generation_provider=LLMCallerImageGenerationProvider(getattr(self, "brain", None)),
+            # 人物类走即梦：只有它给得了竖构图与 i2i 一致人设。
+            generation_providers={"jimeng": JimengCanvasImageGenerationProvider()},
             vision_provider=LLMCallerImageVisionProvider(getattr(self, "brain", None)),
         )
 
@@ -2360,16 +2354,15 @@ class Companion:
             await asyncio.sleep(0.3)
 
             progress_cb(40, f"生成 {fmt} 格式文档中...", "生成内容", 2, 3)
-            tool_result = self.tool_registry.execute_sync(
-                "document_create",
-                {"title": title, "content": content, "format": fmt}
-            ) if hasattr(self.tool_registry, "execute_sync") else {}
-
-            # 用同步方式调用
+            # 直调工具函数（execute 是 async，此处同步流程不便 await）—— 结果必须
+            # 归一化：异步任务结果会经 API 返回，不可序列化会让接口直接失败。
+            tool_result: dict = {}
             entry = self.tool_registry.get("document_create")
             if entry and entry.get("func"):
                 try:
-                    tool_result = entry["func"](title=title, content=content, format=fmt)
+                    tool_result = normalize_tool_result(
+                        entry["func"](title=title, content=content, format=fmt)
+                    )
                 except Exception as e:
                     tool_result = {"success": False, "error": str(e)}
 
@@ -2390,7 +2383,7 @@ class Companion:
             result = {}
             if entry and entry.get("func"):
                 try:
-                    result = entry["func"](dataset)
+                    result = normalize_tool_result(entry["func"](dataset))
                 except Exception as e:
                     result = {"success": False, "error": str(e)}
             await asyncio.sleep(0.2)
@@ -2418,7 +2411,7 @@ class Companion:
             entry = self.tool_registry.get("directory_list")
             if entry and entry.get("func"):
                 try:
-                    dir_result = entry["func"](target_dir)
+                    dir_result = normalize_tool_result(entry["func"](target_dir))
                 except Exception as e:
                     dir_result = {"success": False, "error": str(e)}
             else:
@@ -2556,6 +2549,10 @@ class Companion:
         # MCP / 后台思考循环收尾（幂等；未接线时为 no-op）。
         await self._stop_thinking_loop()
         await self._stop_mcp()
+
+        # 功能包收尾：释放包内资源（音频流/浏览器等）
+        from core import plugin_host
+        await plugin_host.stop_all()
 
         self._started = False
         logger.info("Companion stopped")
@@ -3992,7 +3989,7 @@ class Companion:
                     "reason_code": reason_code,
                     "source": "generated",
                     "score": round(float(chosen.score), 2),
-                    "size": _image_size_for_prompt_key(prompt_key),
+                    "size": size_for_prompt_key(prompt_key),
                     # 角色级隔离：图片归属当前激活角色，投递端按此写 chat_log persona_id
                     "persona_id": self._active_persona_id(),
                 })
@@ -4256,6 +4253,15 @@ class Companion:
         # 让 base 构造器能感知 focus 并分支——局部特写走精简 base，
         # 全身/非特写保留完整人设。旧实现只做了语义优先，失败后未在这里兜底，
         # 导致 base 构造阶段拿不到 focus。
+        # 尺寸档必须先落定：候选没带 size 时按场景（prompt_key）决断，与 orientation
+        # 一起构成三档（16:9 / 1:1 / 9:16）。此前只有个别发布方自己填 size，漏填的
+        # （如主动配图 _maybe_attach_companion_image）会一路掉到上游默认的 1:1 ——
+        # 于是"按场景决断的横/竖构图"在那条路上永远出不来（症状⑧）。
+        # 位置必须在语义自补之前：_semantic_photo_spec 要打轻量 LLM，一旦它抛异常，
+        # 整个解析会退回 _default_prompt_for_candidate，后面的回填就再也执行不到，
+        # size 会一路空到 provider 侧落成 1:1。
+        if isinstance(candidate, dict) and not str(candidate.get("size") or "").strip():
+            candidate["size"] = size_for_prompt_key(prompt_key)
         spec: dict[str, str] | None = None
         if (candidate or {}).get("scene") == "local_send":
             user_raw = str((candidate or {}).get("user_raw") or "").strip()
@@ -4263,12 +4269,6 @@ class Companion:
                 spec = await self._semantic_photo_spec(user_raw)
                 if not spec:
                     spec = _extract_photo_spec(user_raw)
-        # 尺寸档：候选没带 size 时**按场景（prompt_key）决断**，与 orientation
-        # 一起构成三档（16:9 / 1:1 / 9:16）。此前只有个别发布方自己填 size，
-        # 漏填的（如主动配图 _maybe_attach_companion_image）会一路掉到上游默认
-        # 的 1:1 —— 于是"按场景决断的横/竖构图"在那条路上永远出不来（症状⑧）。
-        if isinstance(candidate, dict) and not str(candidate.get("size") or "").strip():
-            candidate["size"] = _image_size_for_prompt_key(prompt_key)
         # orientation（第 2 条）：语义自补产出方向时，回填 candidate.size 为三档之一，
         # 让下游 base 构图方向、workflow metadata、图生图尺寸统一用同一方向。
         if spec and isinstance(candidate, dict) and str(spec.get("orientation") or "").strip():
@@ -4352,8 +4352,8 @@ class Companion:
         key = str(prompt_key or "default")
         # 构图方向：优先用候选自带 size（发布时已由伊塔按场景决断），
         # 否则按 prompt_key 场景映射 16:9 / 9:16。横竖屏由伊塔自决。
-        image_size = str((candidate or {}).get("size") or "").strip() or _image_size_for_prompt_key(key)
-        orientation = _image_orientation_phrase(image_size)
+        image_size = str((candidate or {}).get("size") or "").strip() or size_for_prompt_key(key)
+        orientation = orientation_phrase(image_size)
         # ── P4 局部特写分支 ──
         # 用户明确要看某个部位（手/腿/脚/腰/肩颈/背影/头发/脸/眼睛）时，
         # 文字层只描述对应部位的构图/姿态/机位，不做身材数据堆砌。
@@ -5371,9 +5371,16 @@ class Companion:
                 logger.info("[Push] Delivered scene=%s", scene_name)
                 # P4 companion image: 文本投递成功后，有概率配一张衔接图片。
                 # fire-and-forget：不阻塞主动消息主流程，失败静默降级。
+                # 配图端口 = 文本实际投到的端口：文本进了 QQ 和桌面，图片就都发，
+                # 否则用户会在其中一个端看到"有文字没配图"。
+                image_channels = []
+                if delivery_results.get("qq") == "sent":
+                    image_channels.append("qq")
+                if delivery_results.get("desktop") in ("queued", "sent"):
+                    image_channels.append("local_chat")
                 try:
                     self._maybe_attach_companion_image(
-                        master_id, content, scene_name,
+                        master_id, content, scene_name, channels=image_channels,
                     )
                 except Exception:
                     logger.debug(
@@ -5491,6 +5498,7 @@ class Companion:
         master_id: int | str,
         content: str,
         scene_name: str,
+        channels: list[str] | None = None,
     ) -> None:
         """主动消息配图：文本投递成功后，按概率触发一张衔接图片。
 
@@ -5498,6 +5506,10 @@ class Companion:
         图片复用 local_send 路径——把文本内容当 user_raw，走完整的图片生成工作流
         （模块化提示词 + three_view 图生图 + 世界上下文接力）。
         fire-and-forget：create_task 异步执行，不阻塞消息投递，失败仅 debug 日志。
+
+        ``channels`` 是**文本实际投递到的端口**（如 QQ 与桌面）。配图必须跟到同样的
+        端口：实测 2026-09-28 文本两端都到、图片只到桌面，因为这里曾把 channel
+        写死为 ``local_chat``。缺省时回落桌面端。
         """
         proactive = self.settings.get("proactive", {}) if isinstance(self.settings, dict) else {}
         probability = float(proactive.get("companion_image_probability", 0.3))
@@ -5511,6 +5523,15 @@ class Companion:
         if not content:
             return
 
+        from core.world_image_candidates import _DELIVERY_CHANNELS
+
+        delivery_channels = [
+            str(c).strip().lower() for c in (channels or []) if str(c).strip()
+        ]
+        delivery_channels = [c for c in delivery_channels if c in _DELIVERY_CHANNELS]
+        if not delivery_channels:
+            delivery_channels = ["local_chat"]
+
         async def _fire() -> None:
             # 延迟让文本先到用户端，图片紧随其后更自然。
             await asyncio.sleep(_COMPANION_IMAGE_DELAY_SEC)
@@ -5521,7 +5542,8 @@ class Companion:
                     "scene": "local_send",
                     "user_raw": content,
                     "owner_id": master_id,
-                    "channel": "local_chat",
+                    "channel": delivery_channels[0],
+                    "delivery_channels": delivery_channels,
                     "target": master_id,
                     "prompt_key": "role_in_scene",
                     "reason_code": f"proactive_companion:{scene_name}",

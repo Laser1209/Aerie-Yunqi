@@ -45,8 +45,21 @@ _MANUAL_APPROVAL_ACTIONS = {"approve", "reject", "postpone"}
 # 非人物画面走文生图。由 image_edit_v1 作为总开关（kill switch），edit 通道不可用
 # （中转站不支持 /images/edits）时降级回文生图，保证用户要图不落空。
 PERSONA_IMAGE_PROMPT_KEYS = frozenset({"role_selfie", "role_in_scene", "couple_photo"})
+
+# 人物类专用生成通道：只有即梦给得了竖构图与 i2i 一致人设，
+# 兼容中转（gpt-image）忽略 size、只出横图。注册缺失时自动回落默认通道。
+_JIMENG_PROVIDER = "jimeng"
+
+
+def _image_provider_hint(prompt_key: str) -> str:
+    return _JIMENG_PROVIDER if prompt_key in PERSONA_IMAGE_PROMPT_KEYS else ""
+
+
 _DEFAULT_EDIT_REFERENCE = ("three_view:front",)
 _IMAGE_EDIT_FLAG = "image_edit_v1"
+
+# 允许的投递端口。主动消息可同时投多个（QQ + 桌面），配图跟随同样的端口集合。
+_DELIVERY_CHANNELS = frozenset({"qq", "ilink", "local_chat"})
 
 # 视觉场景判重的参考窗口：最近该时段内成功生成的图才作为"参考图"。用于跨路径
 # （主动发图 / 聊天要图）同画面判重——两条路径都汇聚到消费者，统一按"画面意思"
@@ -631,6 +644,13 @@ class WorldImageCandidateConsumer:
             "scene": scene,
             "owner_id": _safe_value(payload.get("owner_id") or "master"),
             "channel": _safe_value(payload.get("channel") or "local_chat"),
+            # 多端口投递意图必须随事件重建：主动消息的文本可能同时发往 QQ 与桌面，
+            # 配图要跟到同样的端口集合。这是显式白名单，漏了字段就会被静默丢弃。
+            "delivery_channels": [
+                _safe_value(item).lower()
+                for item in (payload.get("delivery_channels") or [])
+                if isinstance(item, str) and item.strip()
+            ],
             "target": _safe_value(payload.get("target") or ""),
             "prompt_key": prompt_key,
             "reason_code": _safe_value(payload.get("reason_code") or ""),
@@ -867,6 +887,10 @@ class WorldImageCandidateConsumer:
                 "prompt_key": candidate["prompt_key"],
                 "reason_code": candidate["reason_code"],
                 "size": candidate.get("size") or "",
+                "provider": _image_provider_hint(candidate["prompt_key"]),
+                # 人设 id 用于取画布上的人物参考节点（i2i 锁脸）；缺省时 provider
+                # 会回落到当前激活人设。
+                "persona_id": str(candidate.get("persona_id") or ""),
             },
         )
 
@@ -905,9 +929,24 @@ class WorldImageCandidateConsumer:
         plan = workflow_result.get("delivery_plan")
         if not isinstance(plan, dict):
             return False
-        channel = str(plan.get("channel") or "").lower()
-        if channel not in {"qq", "ilink", "local_chat"}:
+
+        # 多端口投递：主动消息的文本会同时发往多个端口（QQ + 桌面），配图必须跟到
+        # 同样的端口 —— 否则用户只在其中一个端看到图。实测 2026-09-28：文本在 QQ 与
+        # 桌面都到，图片只到桌面（因为发送方把 channel 写死成 local_chat）。
+        channels: list[str] = []
+        if isinstance(candidate, dict):
+            raw_channels = candidate.get("delivery_channels")
+            if isinstance(raw_channels, (list, tuple)):
+                channels = [
+                    str(c).strip().lower() for c in raw_channels if str(c).strip()
+                ]
+        if not channels:
+            # 未声明多端口（聊天要图等单端口路径）：沿用 delivery plan 里的单一渠道。
+            channels = [str(plan.get("channel") or "").lower()]
+        channels = [c for c in channels if c in _DELIVERY_CHANNELS]
+        if not channels:
             return False
+
         # 把候选的语义字段注入 delivery plan，供 sender 生成图片事件描述（P3）：
         # 聊天要图 / 主动发图两条路径都汇聚到 consumer，发送端据此知道"发了张什么图"。
         # persona_id 一并注入：chat_log 补写时按产出归属角色落 persona_id，
@@ -917,14 +956,29 @@ class WorldImageCandidateConsumer:
             plan.setdefault("prompt_key", str(candidate.get("prompt_key") or ""))
             plan.setdefault("scene", str(candidate.get("scene") or ""))
             plan.setdefault("persona_id", str(candidate.get("persona_id") or ""))
-        try:
-            result = self.sender(plan, workflow_result)
-            if hasattr(result, "__await__"):
-                result = await result
-            return bool(result)
-        except Exception:
-            logger.debug("world image candidate delivery failed", exc_info=True)
-            return False
+
+        delivered = False
+        for channel in channels:
+            # 每端用独立副本：sender 按 channel 分派并各自落库，
+            # 共享同一个 dict 会让后一个端口读到被改写的 channel。
+            per_channel = dict(plan)
+            per_channel["channel"] = channel
+            try:
+                result = self.sender(per_channel, workflow_result)
+                if hasattr(result, "__await__"):
+                    result = await result
+                if result:
+                    delivered = True
+                else:
+                    logger.warning(
+                        "[WorldImage] delivery not confirmed channel=%s", channel,
+                    )
+            except Exception:
+                # 单端失败不阻断其余端口 —— 一个通道的问题不该让整张图丢掉。
+                logger.warning(
+                    "world image delivery failed channel=%s", channel, exc_info=True,
+                )
+        return delivered
 
     def _record_push(self, scene: str) -> None:
         if self.push_policy is None or not hasattr(self.push_policy, "record"):

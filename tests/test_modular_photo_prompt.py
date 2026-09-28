@@ -390,6 +390,71 @@ def test_orientation_to_size_mapping():
     assert _image_orientation_for_size("未定义", fallback=_IMAGE_SIZE_PORTRAIT) == _IMAGE_SIZE_PORTRAIT
 
 
+# ── 三档尺寸的"场景自决"：候选漏填 size 时由 prompt_key 决定 ──
+def _prompt_stub():
+    """最小 Companion 桩：只喂 _image_prompt_for_impl 需要的外部依赖。"""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from core.companion import Companion
+
+    comp = Companion.__new__(Companion)
+    comp._semantic_photo_spec = AsyncMock(return_value={})
+    comp._is_persona_image = MagicMock(return_value=False)
+    comp._life_recording_enabled = MagicMock(return_value=False)
+    comp._compose_base_image_prompt = MagicMock(return_value="base")
+    comp._image_world_context = MagicMock(return_value={})
+    return comp
+
+
+def test_prompt_layer_fills_scene_size_when_candidate_omits_it():
+    """候选没带 size 时按场景决断尺寸，不再一路掉到上游默认的 1:1。
+
+    主动配图 _maybe_attach_companion_image 此前就不带 size，于是
+    「按场景决断的横/竖构图」在它这条路上永远出不来（2026-09-28 症状⑧）。
+    """
+    import asyncio
+
+    comp = _prompt_stub()
+
+    portrait = {"prompt_key": "role_in_scene", "scene": "local_send", "user_raw": "早安"}
+    asyncio.run(comp._image_prompt_for_impl("role_in_scene", portrait))
+    assert portrait["size"] == _IMAGE_SIZE_PORTRAIT
+
+    landscape = {"prompt_key": "environment_object", "scene": "local_send", "user_raw": "窗边"}
+    asyncio.run(comp._image_prompt_for_impl("environment_object", landscape))
+    assert landscape["size"] == _IMAGE_SIZE_LANDSCAPE
+
+
+def test_prompt_layer_keeps_explicit_size_and_lets_orientation_override():
+    """显式 size 不被覆盖；语义方向（方）优先级最高，三档都能落地。"""
+    import asyncio
+
+    from unittest.mock import AsyncMock
+
+    comp = _prompt_stub()
+    comp._semantic_photo_spec = AsyncMock(return_value={"orientation": "方"})
+
+    explicit = {
+        "prompt_key": "role_in_scene",
+        "scene": "local_send",
+        "user_raw": "横着拍一张",
+        "size": _IMAGE_SIZE_LANDSCAPE,
+    }
+    asyncio.run(comp._image_prompt_for_impl("role_in_scene", explicit))
+    # 语义给了方向 → 以语义为准（这里是"方"），不是"谁先谁后"的含糊地带
+    assert explicit["size"] == "1024x1024"
+
+    no_spec = {
+        "prompt_key": "role_selfie",
+        "scene": "local_send",
+        "user_raw": "拍一张",
+        "size": _IMAGE_SIZE_LANDSCAPE,
+    }
+    comp._semantic_photo_spec = AsyncMock(return_value={})
+    asyncio.run(comp._image_prompt_for_impl("role_selfie", no_spec))
+    assert no_spec["size"] == _IMAGE_SIZE_LANDSCAPE, "调用方显式给的尺寸不该被默认值顶掉"
+
+
 # ── 方案A 细分子部位（父部位 → 子部位回退） ──────────────────
 def test_focus_detail_prefers_child_over_parent():
     # 细表优先：提到"脚踝" → 子标签"脚踝"，而非父"双脚"

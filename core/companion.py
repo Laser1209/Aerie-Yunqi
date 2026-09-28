@@ -4259,6 +4259,12 @@ class Companion:
                 spec = await self._semantic_photo_spec(user_raw)
                 if not spec:
                     spec = _extract_photo_spec(user_raw)
+        # 尺寸档：候选没带 size 时**按场景（prompt_key）决断**，与 orientation
+        # 一起构成三档（16:9 / 1:1 / 9:16）。此前只有个别发布方自己填 size，
+        # 漏填的（如主动配图 _maybe_attach_companion_image）会一路掉到上游默认
+        # 的 1:1 —— 于是"按场景决断的横/竖构图"在那条路上永远出不来（症状⑧）。
+        if isinstance(candidate, dict) and not str(candidate.get("size") or "").strip():
+            candidate["size"] = _image_size_for_prompt_key(prompt_key)
         # orientation（第 2 条）：语义自补产出方向时，回填 candidate.size 为三档之一，
         # 让下游 base 构图方向、workflow metadata、图生图尺寸统一用同一方向。
         if spec and isinstance(candidate, dict) and str(spec.get("orientation") or "").strip():

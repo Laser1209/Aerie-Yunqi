@@ -188,7 +188,6 @@ class PromiseBeatsRunner:
             "reason_code": f"promise_beat:{beat.id}",
             "source": "promise",
             "score": 0.8,
-            "size": "portrait_4_3",
             "user_raw": beat.topic or beat.source_text,
         }
         if persona_id:

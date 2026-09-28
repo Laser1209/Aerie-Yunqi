@@ -45,6 +45,48 @@ def isolate_optional_provider_credentials(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def isolate_host_dotenv(monkeypatch):
+    """宿主 .env 不得流进测试进程。
+
+    某些模块在**运行期**调 `load_dotenv(<真实 .env>)`（如
+    `scripts/mobile_accounts.py::_store()`），把 .env 里**全部键**灌进
+    `os.environ`。于是开发者往 .env 加一个运维开关，就会静默改写一批无关
+    测试的前置条件 —— 2026-09-29 实测：新增 `AERIE_PHOTO_PROMPT_DRYRUN=1` 后，
+    `test_phase14_world_image_candidates.py` 等 17 个生图用例从 completed 变
+    成 dry_run 而集体失败（测试没坏，是环境被污染）。
+
+    只 patch `dotenv.load_dotenv` 属性**挡不住**：这些模块用的是
+    `from dotenv import load_dotenv`，收集期 import 时就把真实函数绑定到了自己
+    的命名空间。因此这里直接按"宿主 .env 里出现了哪些键"逐个隔离 —— 无论注入
+    来自哪条路径都拦得住。测试若真需要某个变量，自己 `monkeypatch.setenv`。
+    """
+    import dotenv
+
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False, raising=False)
+    for key in _host_dotenv_keys():
+        monkeypatch.delenv(key, raising=False)
+
+
+_HOST_DOTENV_KEYS: list[str] | None = None
+
+
+def _host_dotenv_keys() -> list[str]:
+    """读取宿主 .env 的键名（只读文件，不写环境）；进程内缓存一次。"""
+    global _HOST_DOTENV_KEYS
+    if _HOST_DOTENV_KEYS is None:
+        import dotenv
+
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+        try:
+            _HOST_DOTENV_KEYS = (
+                list(dotenv.dotenv_values(env_path).keys()) if env_path.exists() else []
+            )
+        except Exception:
+            _HOST_DOTENV_KEYS = []
+    return _HOST_DOTENV_KEYS
+
+
+@pytest.fixture(autouse=True)
 def isolate_dotenv_file(tmp_path, monkeypatch):
     """厂商保存会把凭据回写 .env —— 测试里指向临时文件，绝不碰仓库真 .env。"""
     import core.env_file as env_file

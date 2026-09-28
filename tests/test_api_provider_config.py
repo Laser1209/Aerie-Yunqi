@@ -126,22 +126,36 @@ def test_put_local_cli_skips_network_check(isolated_store, monkeypatch):
     mock.assert_not_called()
 
 
-def test_enabled_toggle_keeps_key_and_clears_env(isolated_store, check_ok, monkeypatch):
-    """停用只清 .env 凭据，库里的 Key 保留；重新启用后原样恢复。"""
+def test_enabled_toggle_keeps_key_and_clears_env(tmp_path, monkeypatch, check_ok):
+    """停用只清 .env 凭据，库里的 Key 保留；重新启用后原样恢复。
+
+    凭据显式声明：seed 读的是 `os.environ`，此前"能读到"只是因为宿主 `.env`
+    被别的模块顺手灌进了环境（见 conftest::isolate_host_dotenv）——
+    测试不该依赖这种偶发污染，否则 .env 一改结果就变。
+    """
     import os
 
-    stored_key = isolated_store.get_provider("deepseek")["api_key"]
-    assert stored_key, "内置厂商 seed 后应带上 .env 里的既有凭据"
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-seed-key")
 
-    r = client.post("/api/ai/providers/deepseek/enabled", json={"enabled": False})
-    assert r.status_code == 200
-    assert r.json()["provider"]["enabled"] is False
-    assert isolated_store.get_provider("deepseek")["api_key"] == stored_key
-    assert os.environ["DEEPSEEK_API_KEY"] == ""
+    Database.reset_instance()
+    store = AiServicesStore(Database(tmp_path / "provider-api.db"))
+    monkeypatch.setattr(api_server, "_ai_store", lambda: store)
+    monkeypatch.setattr(api_server, "_hot_reload_brain", lambda: None)
+    try:
+        stored_key = store.get_provider("deepseek")["api_key"]
+        assert stored_key == "ds-seed-key", "内置厂商 seed 应带上 os.environ 里的既有凭据"
 
-    r = client.post("/api/ai/providers/deepseek/enabled", json={"enabled": True})
-    assert r.status_code == 200
-    assert os.environ["DEEPSEEK_API_KEY"] == stored_key
+        r = client.post("/api/ai/providers/deepseek/enabled", json={"enabled": False})
+        assert r.status_code == 200
+        assert r.json()["provider"]["enabled"] is False
+        assert store.get_provider("deepseek")["api_key"] == stored_key
+        assert os.environ["DEEPSEEK_API_KEY"] == ""
+
+        r = client.post("/api/ai/providers/deepseek/enabled", json={"enabled": True})
+        assert r.status_code == 200
+        assert os.environ["DEEPSEEK_API_KEY"] == stored_key
+    finally:
+        Database.reset_instance()
 
 
 def test_delete_clears_row_and_resets_binding(isolated_store, check_ok, monkeypatch):

@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import re
+import string
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -2129,46 +2130,23 @@ class Companion:
             sent = await self.qq.send_image(int(target), image_ref)
             if not sent:
                 return False
-            # P3 发图自我认知：QQ 通道补写 chat_log（含中文内容描述）+ 落 EVENT 记忆，
-            # 让"我发了张什么图"进入对话历史与记忆召回，用户追问时能接住。
-            # 角色级隔离：chat_log 必须带 persona_id，否则 NULL 共享行会被两个角色同时看到。
+            # P3 发图自我认知：QQ 通道**只做原生发送 + 落 EVENT 记忆，不写聊天历史**。
+            # 聊天历史由桌面端那一条记录统一承担（`_deliver_local_chat_image`）：
+            # 每个端口各写一行，桌面端（历史是跨端口合并的）会把同一张图显示两遍，
+            # 而且原生行没有 attachments，渲染层只能降级成裂图 —— 实测 2026-09-28。
             try:
                 desc = _image_event_desc(plan)
-                db = getattr(self, "db", None)
-                persona_id = str(plan.get("persona_id") or "") or self._active_persona_id()
-                legacy_id: int | None = None
-                if db is not None and hasattr(db, "insert"):
-                    legacy_id = db.insert("chat_log", {
-                        "user_id": int(target),
-                        "role": "assistant",
-                        "content": f"[图片] {desc}",
-                        "msg_type": str(plan.get("scene") or "world_image"),
-                        "route_mode": "PROACTIVE",
-                        "scene": str(plan.get("scene") or "world_image"),
-                        "channel": "qq",
-                        "persona_id": persona_id,
-                    })
-                if legacy_id is not None:
-                    # 同步进 normalized messages 层，保证管理平台可见 + 级联删除覆盖
-                    actor_id, channel, account = self._proactive_channel_identity("qq")
-                    self.conversation_repository.persist_proactive_message(
-                        user_id=int(target),
-                        actor_id=actor_id,
-                        channel=channel,
-                        channel_account_id=account,
-                        content=f"[图片] {desc}",
-                        legacy_chat_log_id=int(legacy_id),
-                        persona_id=persona_id,
-                    )
+                stored = image_ref
                 try:
                     import os as _os
+
                     rel = _os.path.relpath(image_ref, (Path.cwd() / "uploads").resolve())
                     if not rel.startswith(".."):
-                        image_ref = rel.replace("\\", "/")
+                        stored = rel.replace("\\", "/")
                 except Exception:
                     pass
                 await self._persist_image_event(
-                    int(target), desc, "qq", image_path=str(image_ref),
+                    int(target), desc, "qq", image_path=str(stored),
                     persona_id=str(plan.get("persona_id") or "") or None,
                 )
             except Exception:
@@ -2178,12 +2156,11 @@ class Companion:
         async def _deliver_ilink_image(plan: dict, image_ref: str) -> bool:
             """把生成的图片经微信（iLink）发给用户。
 
-            与 QQ 分支同构，差别在通道：上传走 ``MediaType.IMAGE``、消息项是
-            ``image_item``（见 ``ILinkGateway.send_image``）。落库沿用聊天历史口径
-            （channel=ilink，微信用户 id 作会话账号），否则桌面面板与管理平台都
-            看不到"我发过这张图"，Agent 下一轮也会失去这段自我认知。
+            与 QQ 分支同构：原生发送 + EVENT 记忆，聊天历史同样交给桌面端那一条记录。
+            目标取 iLink 绑定（一个 bot 绑定一个微信用户），不看 plan 里的 target ——
+            那里的 target 是主用户 QQ 号，直接当微信用户 id 用会投错人。
             """
-            target = str(plan.get("target") or "").strip()
+            target = self._ilink_delivery_target()
             if not target:
                 logger.warning("[WorldImage] no iLink target for delivery")
                 return False
@@ -2195,41 +2172,9 @@ class Companion:
             if not sent:
                 return False
             desc = _image_event_desc(plan)
-            scene = str(plan.get("scene") or "world_image")
             persona_id = str(plan.get("persona_id") or "") or self._active_persona_id()
             primary = self.get_primary_user_selection()
             user_id_int = int(getattr(primary, "user_id", 0) or 0)
-            actor_id: str | None = None
-            try:
-                actor_id = self.identity_resolver.resolve("ilink", target).actor_id
-            except Exception:
-                logger.debug("[WorldImage] ilink identity resolve failed", exc_info=True)
-            try:
-                db = getattr(self, "db", None)
-                legacy_id: int | None = None
-                if db is not None and hasattr(db, "insert"):
-                    legacy_id = db.insert("chat_log", {
-                        "user_id": user_id_int,
-                        "role": "assistant",
-                        "content": f"[图片] {desc}",
-                        "msg_type": scene,
-                        "route_mode": "PROACTIVE",
-                        "scene": scene,
-                        "channel": "ilink",
-                        "persona_id": persona_id,
-                    })
-                if legacy_id is not None:
-                    self.conversation_repository.persist_proactive_message(
-                        user_id=user_id_int,
-                        actor_id=actor_id,
-                        channel="ilink",
-                        channel_account_id=target,
-                        content=f"[图片] {desc}",
-                        legacy_chat_log_id=int(legacy_id),
-                        persona_id=persona_id,
-                    )
-            except Exception:
-                logger.debug("[WorldImage] ilink image chat_log record failed", exc_info=True)
             try:
                 import os as _os
                 rel = _os.path.relpath(image_ref, (Path.cwd() / "uploads").resolve())
@@ -3023,6 +2968,44 @@ class Companion:
         return delivery_routing.resolve_proactive_channel(
             configured=mode, recent=recent, recent_fresh=recent_fresh,
         )
+
+    def _proactive_image_channels(self) -> list[str]:
+        """主动发图的投递端口集合：所有已连接端 + 桌面端。
+
+        用户 2026-09-28 拍板：主动消息（含配图）**发往所有已连接端**——
+        在哪一端都能被找到。桌面端恒在列，因为它是这张图唯一的聊天历史记录
+        （QQ / 微信只做原生发送）。`proactive.primary_channel` 不再决定"只发哪一端"，
+        只决定 `channel` 字段（主端口径，进工具日志）。
+        """
+        channels: list[str] = []
+        if getattr(self.qq, "is_logged_in", False):
+            channels.append("qq")
+        if self._ilink_delivery_target():
+            channels.append("ilink")
+        channels.append("local_chat")
+        return channels
+
+    def _ilink_delivery_target(self) -> str:
+        """微信端当前可投递目标；未连接或未绑定返回空串（调用方据此跳过该端）。
+
+        主动消息只发"连得上且绑好了"的端：没连接时硬发只会抛错刷日志，
+        没绑定时更是无从投起。判定集中在网关（``ILinkGateway.bound_user_id``），
+        调用方不必自己知道绑定表长什么样。
+        """
+        gateway = getattr(self, "ilink_gateway", None)
+        if gateway is None:
+            return ""
+        try:
+            if not gateway.get_status().get("connected"):
+                return ""
+        except Exception:
+            logger.debug("[Push] ilink status unavailable", exc_info=True)
+            return ""
+        try:
+            return gateway.bound_user_id()
+        except Exception:
+            logger.debug("[Push] ilink binding unavailable", exc_info=True)
+            return ""
 
     def _notify_pending_approval(self, payload: dict) -> None:
         """把待审批事项推到**发起这次请求的那个端口**（经发送队列异步投递，不阻塞工具调用）。
@@ -4147,8 +4130,10 @@ class Companion:
                 reason_code = f"world_visual:{topic_id}" if topic_id else ""
 
                 # ── 行动：发布图片候选，交由消费者审批/生成/派发 ──
-                # §九-b：主动消息没有"来源端口"，按 proactive.primary_channel 的
-                # 策略选端（默认 auto = 最近活跃端口且需在窗口内，否则落桌面端）。
+                # §九-b + R9：主动消息没有"来源端口"。投递口径（用户 2026-09-28 拍板）：
+                # **所有已连接端都发**。channel 仍是"主端"（进工具日志/进程内记录），
+                # 真正的投递集合由 delivery_channels 给出，两端必须一起带上——
+                # 只给 channel 会让消费端回落到单一端口。
                 channel = self._proactive_delivery_channel()
                 # P2：按素材类型决断模板——活动时刻话题（看书/咖啡等）→ 人物自拍
                 # 入镜（role_in_scene），物件/环境话题 → 第一人称环境照（environment_object）。
@@ -4159,6 +4144,7 @@ class Companion:
                     "scene": intent,
                     "owner_id": master_id,
                     "channel": channel,
+                    "delivery_channels": self._proactive_image_channels(),
                     "target": master_id,
                     "prompt_key": prompt_key,
                     "reason_code": reason_code,
@@ -5542,10 +5528,26 @@ class Companion:
             # scenes. Resolve the values here so a missing location/provider
             # degrades to readable copy instead of raising KeyError in the
             # shared template formatter.
-            template_kwargs = {
+            #
+            # 2026-09-28 修正：上面这条意图此前**只对 weather_push 生效**，
+            # 而 boot_greeting 的模板还含 {todo_count} —— 未提供 → KeyError →
+            # 整条推送直接失败（实测：一条主动消息都发不出去）。
+            # 现改为**按模板实际用到的占位符按需取值**，缺什么给安全默认：
+            # 模板来自 proactive.yaml、取值来自本函数，两者不同源，必然可能不同步。
+            template_text = str(scene_cfg.get("template") or "")
+            try:
+                wanted = {
+                    name.split(".")[0].split("[")[0]
+                    for _, name, _, _ in string.Formatter().parse(template_text)
+                    if name
+                }
+            except ValueError:
+                wanted = set()
+
+            template_kwargs: dict[str, Any] = {
                 "date": datetime.now().strftime("%Y年%m月%d日"),
             }
-            if scene_name == "weather_push":
+            if wanted & {"city", "weather", "temp", "suggestion"}:
                 template_kwargs.update({
                     "city": "你所在的城市",
                     "weather": "天气暂无",
@@ -5567,6 +5569,16 @@ class Companion:
                         })
                 except Exception:
                     logger.info("[Push] weather context unavailable; using fallback", exc_info=True)
+            if "todo_count" in wanted:
+                try:
+                    from core.brief_fetcher import get_todo_stats
+
+                    template_kwargs["todo_count"] = int(
+                        (get_todo_stats() or {}).get("remaining", 0) or 0
+                    )
+                except Exception:
+                    logger.debug("[Push] todo stats unavailable; defaulting to 0", exc_info=True)
+                    template_kwargs["todo_count"] = 0
 
             # ---- v2: memory evoke (旧事唤起，仅 new 模式 + 冷却/额度预筛) ----
             memory_fragment = ""
@@ -5635,6 +5647,7 @@ class Companion:
             delivered = False
             delivery_results = {
                 "qq": "offline",
+                "ilink": "offline",
                 "desktop": "failed",
                 "notification": "failed",
             }
@@ -5648,6 +5661,34 @@ class Companion:
                     logger.warning("[Push] QQ delivery failed scene=%s", scene_name, exc_info=True)
             elif not master_id:
                 delivery_results["qq"] = "skipped"
+
+            # 微信（iLink）与 QQ 同为"原生端"：已连接且已绑定就投一份。
+            # 主动消息没有来源端口，用户的期待是"在哪一端都能被找到" —— 只投 QQ
+            # 会让微信端永远收不到任何主动消息（实测 2026-09-28）。逐泡发送，与 QQ
+            # 端的多气泡形态保持一致。
+            if master_id:
+                ilink_target = self._ilink_delivery_target()
+                if not ilink_target:
+                    delivery_results["ilink"] = "skipped"
+                else:
+                    try:
+                        ilink_sent = False
+                        for bubble in bubbles:
+                            ilink_sent = await self._send_to_ilink(OutgoingReply(
+                                user_id=int(master_id) if str(master_id).isdigit() else 0,
+                                content=bubble,
+                                channel="ilink",
+                                channel_account_id=ilink_target,
+                            )) or ilink_sent
+                        delivery_results["ilink"] = "sent" if ilink_sent else "failed"
+                        delivered = delivered or bool(ilink_sent)
+                    except Exception:
+                        delivery_results["ilink"] = "failed"
+                        logger.warning(
+                            "[Push] iLink delivery failed scene=%s", scene_name, exc_info=True,
+                        )
+            else:
+                delivery_results["ilink"] = "skipped"
 
             from core import chat_events
 
@@ -5723,6 +5764,8 @@ class Companion:
                 image_channels = []
                 if delivery_results.get("qq") == "sent":
                     image_channels.append("qq")
+                if delivery_results.get("ilink") == "sent":
+                    image_channels.append("ilink")
                 if delivery_results.get("desktop") in ("queued", "sent"):
                     image_channels.append("local_chat")
                 try:

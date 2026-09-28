@@ -8,6 +8,7 @@ import logging
 import mimetypes
 import os
 import re
+import string
 import time
 import uuid
 from dataclasses import dataclass
@@ -36,6 +37,45 @@ def _env_flag(name: str) -> bool:
     if name == "AERIE_DISABLE_MODEL_CALLS":
         return model_calls_disabled()
     return os.environ.get(name, "").strip().lower() in _TRUE_ENV_VALUES
+
+
+def _format_template_tolerant(template: str, values: dict[str, Any]) -> str:
+    """格式化主动消息模板：**未提供的占位符降级为空串，绝不抛异常**。
+
+    为什么必须容错：模板来自 ``config/proactive.yaml`` 的每个场景，取值由
+    ``Companion._dispatch_push`` 按场景自行拼装 —— 两者不同源，永远可能不同步。
+    实测事故：``boot_greeting`` 的模板含 ``{todo_count}`` 而 kwargs 未提供 →
+    ``KeyError`` → 整条推送直接失败（用户一条主动消息都收不到）。
+
+    因此这里做两件事：
+    1. 缺键降级为空串（保证消息能发出去），并把缺了哪些键写进 WARNING，
+       让配置不同步在日志里**可见**，而不是静默或崩溃；
+    2. 模板本身非法（如落单的 ``{``）时原样返回，不把异常抛给调用方。
+    """
+    if not template:
+        return ""
+    try:
+        names = {
+            field_name
+            for _, field_name, _, _ in string.Formatter().parse(template)
+            if field_name
+        }
+    except ValueError:
+        # 模板语法本身有问题（例如未闭合的 "{"）→ 原样返回，不阻断推送。
+        logger.warning("proactive template is malformed; using as-is: %.80s", template)
+        return template
+    missing = sorted(n for n in names if n.split(".")[0].split("[")[0] not in values)
+    if missing:
+        logger.warning(
+            "proactive template placeholders missing (degraded to empty): %s | template=%.80s",
+            missing, template,
+        )
+    filled = {name: values.get(name, "") for name in names}
+    try:
+        return template.format(**filled)
+    except (KeyError, ValueError, IndexError):
+        logger.warning("proactive template format failed; using as-is: %.80s", template)
+        return template
 
 
 # ══════════════════════════════════════════════════
@@ -1243,7 +1283,7 @@ class LLMCaller:
             "也不要写 '[QQ]'、'[桌面]' 这类通道标记。"
         )
         system_msg = "\n".join(part for part in sys_parts if part)
-        user_msg = template.format(**kwargs) if kwargs else template
+        user_msg = _format_template_tolerant(template, kwargs)
 
         messages = [
             {"role": "system", "content": system_msg},
@@ -1259,11 +1299,9 @@ class LLMCaller:
         except Exception:
             pass
 
-        # Fallback: plain template fill
-        try:
-            return template.format(**kwargs)
-        except (KeyError, ValueError):
-            return template
+        # Fallback: plain template fill (same tolerant formatter as the main path —
+        # 之前主路径裸调 format、兜底反而有 except，防御只写在一处，实测因此崩溃)
+        return _format_template_tolerant(template, kwargs)
 
     # ── Daily Brief (Block-4A R1.2) ────────────────────────────
     async def compose_brief(self, sections: dict) -> str:

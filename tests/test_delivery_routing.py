@@ -174,6 +174,38 @@ def test_proactive_channel_accepts_electron_panel_desktop_alias():
     assert comp._proactive_delivery_channel() == "local_chat"
 
 
+# ── 主动发图的投递集合：所有已连接端 + 桌面（用户 2026-09-28 拍板） ────────
+
+
+def _image_channel_companion(*, qq_online: bool, ilink_target: str) -> Companion:
+    comp = _bare_companion()
+    comp.qq = SimpleNamespace(is_logged_in=qq_online)
+    comp.ilink_gateway = SimpleNamespace(
+        get_status=lambda: {"connected": bool(ilink_target)},
+        bound_user_id=lambda: ilink_target,
+    )
+    return comp
+
+
+def test_proactive_image_channels_fan_out_to_all_connected_ports():
+    comp = _image_channel_companion(qq_online=True, ilink_target="wx-owner")
+    assert comp._proactive_image_channels() == ["qq", "ilink", "local_chat"]
+
+
+def test_proactive_image_channels_keeps_desktop_when_only_one_port_is_live():
+    qq_only = _image_channel_companion(qq_online=True, ilink_target="")
+    assert qq_only._proactive_image_channels() == ["qq", "local_chat"]
+
+    wechat_only = _image_channel_companion(qq_online=False, ilink_target="wx-owner")
+    assert wechat_only._proactive_image_channels() == ["ilink", "local_chat"]
+
+
+def test_proactive_image_channels_falls_back_to_desktop_alone():
+    """两端都不在线时仍要投桌面端：它是这张图的唯一历史记录。"""
+    comp = _image_channel_companion(qq_online=False, ilink_target="")
+    assert comp._proactive_image_channels() == ["local_chat"]
+
+
 # ── 文件投递回到来源端口（验收 1/2/3/4） ──────────────────────────────
 
 

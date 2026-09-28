@@ -130,7 +130,9 @@ def test_proactive_config_keeps_single_idle_care_definition():
     assert config_text.count("\n  idle_care:\n") == 1
 
 
-def _make_push_companion(*, flag_enabled: bool, qq_online: bool = True):
+def _make_push_companion(
+    *, flag_enabled: bool, qq_online: bool = True, ilink_target: str = "",
+):
     from core.companion import Companion
 
     companion = Companion.__new__(Companion)
@@ -153,6 +155,12 @@ def _make_push_companion(*, flag_enabled: bool, qq_online: bool = True):
         is_logged_in=qq_online,
         self_id=7,
         send_message=AsyncMock(return_value=qq_online),
+    )
+    # 微信端：ilink_target 非空时视为"已连接且已绑定"，否则该端整轮跳过。
+    companion.ilink_gateway = SimpleNamespace(
+        get_status=MagicMock(return_value={"connected": bool(ilink_target)}),
+        bound_user_id=MagicMock(return_value=ilink_target),
+        send_text=AsyncMock(return_value=True),
     )
     companion.emotion = SimpleNamespace(
         get_state=MagicMock(return_value={"label": "neutral"})
@@ -218,6 +226,7 @@ async def test_v2_delivery_attempts_qq_bubble_and_notification(monkeypatch):
         scene="idle_care",
         results={
             "qq": "sent",
+            "ilink": "skipped",
             "desktop": "queued",
             "notification": "queued",
         },
@@ -244,6 +253,7 @@ async def test_v2_delivery_succeeds_locally_when_qq_is_offline(monkeypatch):
     ]
     assert emitted.call_args_list[2].kwargs["results"] == {
         "qq": "offline",
+        "ilink": "skipped",
         "desktop": "queued",
         "notification": "queued",
     }
@@ -266,8 +276,60 @@ async def test_v2_system_notification_can_be_disabled(monkeypatch):
     assert proactive_event.kwargs["notify_system"] is False
     assert emitted.call_args_list[2].kwargs["results"] == {
         "qq": "sent",
+        "ilink": "skipped",
         "desktop": "queued",
         "notification": "disabled",
+    }
+
+
+@pytest.mark.asyncio
+async def test_v2_delivery_fans_out_to_wechat_when_connected_and_bound(monkeypatch):
+    """微信已连接且已绑定 → 主动消息同样投一份，并计入配图端口。
+
+    真机事故 2026-09-28：`_dispatch_push` 只有 QQ + 桌面两条投递分支，微信端
+    永远收不到主动消息（用户反馈"微信界面没有发出任何东西来"）。
+    """
+    from core import chat_events
+
+    companion = _make_push_companion(flag_enabled=True, ilink_target="wx-owner")
+    emitted = MagicMock()
+    monkeypatch.setattr(chat_events, "emit", emitted)
+    attach = MagicMock()
+    monkeypatch.setattr(companion, "_maybe_attach_companion_image", attach)
+
+    result = await companion._dispatch_push("idle_care", {"template": "在干嘛。"})
+
+    assert result is True
+    companion.ilink_gateway.send_text.assert_awaited_once_with("wx-owner", "记得休息。")
+    assert emitted.call_args_list[2].kwargs["results"] == {
+        "qq": "sent",
+        "ilink": "sent",
+        "desktop": "queued",
+        "notification": "queued",
+    }
+    # 配图必须跟到文本实际投到的三个端
+    assert attach.call_args.kwargs["channels"] == ["qq", "ilink", "local_chat"]
+
+
+@pytest.mark.asyncio
+async def test_v2_wechat_failure_does_not_block_qq_and_desktop(monkeypatch):
+    """微信发送抛错不能拖垮其它端：一条通道的问题不该让整条推送失败。"""
+    from core import chat_events
+
+    companion = _make_push_companion(flag_enabled=True, ilink_target="wx-owner")
+    companion.ilink_gateway.send_text = AsyncMock(side_effect=RuntimeError("wechat down"))
+    emitted = MagicMock()
+    monkeypatch.setattr(chat_events, "emit", emitted)
+
+    result = await companion._dispatch_push("idle_care", {"template": "在干嘛。"})
+
+    assert result is True
+    companion.qq.send_message.assert_awaited_once_with(7, "记得休息。")
+    assert emitted.call_args_list[2].kwargs["results"] == {
+        "qq": "sent",
+        "ilink": "failed",
+        "desktop": "queued",
+        "notification": "queued",
     }
 
 

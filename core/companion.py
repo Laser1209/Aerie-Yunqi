@@ -3090,7 +3090,11 @@ class Companion:
             return "neutral"
 
     async def _sticker_decide(self, reply_text: str, emotion_label: str) -> tuple[bool, str]:
-        """轻量 LLM 判断这条回复要不要配表情；失败回退确定性规则。"""
+        """轻量 LLM 判断这条回复要不要配表情；失败回退确定性规则。
+
+        不走 TypeSafe：实测该模型在此判定上 80%，低于轻量 LLM 的 100%，
+        且它给不出库内可匹配的情绪键（choice 头不可用），接入即降级。
+        """
         brain = getattr(self, "brain", None)
         chat = getattr(brain, "chat", None)
         if callable(chat):

@@ -41,6 +41,7 @@ def isolate_optional_provider_credentials(monkeypatch):
     """Prevent host .env credentials from changing call-count contracts."""
     monkeypatch.delenv("SILICONFLOW_API_KEY", raising=False)
     monkeypatch.delenv("SILICONFLOW_LIGHT_MODEL", raising=False)
+    monkeypatch.delenv("AERIE_TYPESAFE_API_KEY", raising=False)
 
 
 @pytest.fixture

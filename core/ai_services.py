@@ -178,6 +178,9 @@ SPECIAL_SERVICE_META = [
      "default_model": "gpt-image-2", "desc": "gpt-image 兼容图像生成接口"},
     {"key": "tts", "name": "语音合成 TTS", "env_model": "MINIMAX_MODEL",
      "default_model": "speech-01", "desc": "MiniMax TTS"},
+    {"key": "decision", "name": "结构化解策", "env_model": "AERIE_TYPESAFE_MODEL",
+     "default_model": "bocha-jev-v1",
+     "desc": "TypeSafe noul 二元判定（记忆写入校验）"},
 ]
 
 STORE_VERSION = 1

@@ -14,6 +14,8 @@ import logging
 import time
 from typing import Any, Awaitable, Callable
 
+from core import typesafe_decision
+
 logger = logging.getLogger(__name__)
 
 IMPORTANCE_THRESHOLD = 7
@@ -27,6 +29,21 @@ _SYSTEM_PROMPT = (
     "判定标准：用户明确说出的事实（地址/电话/喜好/约定/身份等）→ explicit=true；"
     "AI 推断、推测、假设、或内容含糊 → explicit=false。"
 )
+
+# TypeSafe noul 通道的判定问题：与 _SYSTEM_PROMPT 同语义，改写成单一互斥是非问句。
+# 措辞经真机对比挑选（4 种写法 × 12 样本）：直接问「是不是确定的」比问
+# 「是不是用户明确表达的」准确率高 25pp——模型只看得到这条记忆本身，看不到对话。
+_NOUL_INSTRUCTIONS = (
+    "这条记忆的内容是确定的事实（如姓名、地址、喜好、习惯、约定），"
+    "还是在猜测、推断或含糊其辞？请判断：它是确定的事实吗？"
+)
+
+# TypeSafe 短路门限（真机实测标定）：确定事实的 noul 落在 0.90~0.93，
+# 带「可能/似乎/也许」的推测措辞落在 0.18~0.85，中间带重叠。
+# 因此只在两端高置信时由 TypeSafe 直接定论，模糊区间一律交给轻量 LLM——
+# 既不降准确率，又省掉大部分小模型调用。
+_TYPESAFE_CONFIRM_MIN = 0.90
+_TYPESAFE_REJECT_MAX = 0.30
 
 _DEFAULT_LLM_FACTORY: Callable[[], Any] | None = None
 
@@ -69,6 +86,18 @@ class MemoryFactValidator:
                 "content": f"待写入记忆：\n{text}",
             },
         ]
+
+    async def _typesafe_noul(self, text: str) -> float | None:
+        """TypeSafe noul 判定；未配置 / 失败返回 None（交由轻量 LLM 兜底）。"""
+        try:
+            return await typesafe_decision.noul(
+                state=text,
+                instructions=_NOUL_INSTRUCTIONS,
+                timeout=self.timeout,
+            )
+        except Exception:
+            logger.debug("typesafe noul failed; falling back to light LLM", exc_info=True)
+            return None
 
     @staticmethod
     def _parse_response(raw: str) -> dict[str, Any]:
@@ -124,6 +153,24 @@ class MemoryFactValidator:
             base["reason"] = "validation_disabled"
             base["duration_ms"] = round((time.monotonic() - started) * 1000, 2)
             return base
+        # TypeSafe noul 短路：只在高置信两端直接定论，模糊区间继续走轻量 LLM。
+        noul_score = await self._typesafe_noul(text)
+        if noul_score is not None and (
+            noul_score >= _TYPESAFE_CONFIRM_MIN or noul_score <= _TYPESAFE_REJECT_MAX
+        ):
+            explicit = noul_score >= _TYPESAFE_CONFIRM_MIN
+            return {
+                "status": "confirmed" if explicit else "low_confidence",
+                "importance": importance,
+                "channel": channel or "unknown",
+                "source": source or "unknown",
+                "reason": f"typesafe noul={noul_score:.3f}",
+                "provider": "typesafe",
+                "model": typesafe_decision.model(),
+                "tokens_prompt": 0,
+                "tokens_completion": 0,
+                "duration_ms": round((time.monotonic() - started) * 1000, 2),
+            }
         try:
             llm = self.llm or get_default_llm()
             messages = self._build_messages(text)

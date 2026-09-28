@@ -37,8 +37,26 @@ class TestToolRegistry:
         def my_tool(value=42, **kwargs):
             return f"got {value}"
         registry.register("my_tool", my_tool, schema={"description": "test"})
+        # 契约：execute 恒返回 dict（标量包在 result 键下），保证可 JSON 序列化。
         result = await registry.execute("my_tool", {"value": 99})
-        assert result == "got 99"
+        assert result == {"result": "got 99"}
+
+    @pytest.mark.asyncio
+    async def test_execute_normalizes_non_serializable_object(self, registry):
+        """回归：工具返回 @dataclass（如 ControlResult）时不得让下游 json.dumps 炸。"""
+        import dataclasses
+        import json
+
+        @dataclasses.dataclass
+        class _ControlResult:
+            success: bool = True
+            action: str = "shell_execute"
+            error: str = ""
+
+        registry.register("shell_like", lambda **kw: _ControlResult(), schema={"description": "x"})
+        result = await registry.execute("shell_like", {})
+        assert result["action"] == "shell_execute"
+        json.dumps(result, ensure_ascii=False)  # 不得抛 TypeError
 
     @pytest.mark.asyncio
     async def test_execute_unknown_tool_returns_error(self, registry):
@@ -53,7 +71,7 @@ class TestToolRegistry:
         registry.register("overwrite", v1, schema={"description": "v1"})
         registry.register("overwrite", v2, schema={"description": "v2"})
         result = await registry.execute("overwrite", {})
-        assert result == "v2"
+        assert result == {"result": "v2"}
 
     def test_get_openai_schema_format(self, registry):
         registry.register("test_tool", lambda **kw: "ok", schema={

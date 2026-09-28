@@ -37,6 +37,7 @@ from core.feature_flags import FeatureFlags
 from core.image_output_guard import strip_llm_image_artifacts
 from core.ids import generate_id
 from core.model_output import normalize_model_text
+from core.tool_result import safe_json_dumps
 from core.office_mode import get_office_mode_manager, OfficeMode
 from core.response_validator import ResponseValidator
 from core.task_loop import TASK_REACT_ROUNDS, TaskVerdict, build_task_prompt
@@ -638,8 +639,8 @@ class Pipeline:
                     "ts": int(__import__("time").time() * 1000),
                     "user_id": msg.user_id,
                     "tool_name": tr.get("name", "unknown"),
-                    "arguments": json.dumps(tr.get("arguments", {}), ensure_ascii=False),
-                    "result": json.dumps(tr.get("result", {}), ensure_ascii=False)[:2000],
+                    "arguments": safe_json_dumps(tr.get("arguments", {})),
+                    "result": safe_json_dumps(tr.get("result", {}))[:2000],
                     "success": 1 if tr.get("success", True) else 0,
                     "duration_ms": tr.get("duration_ms", 0),
                 })
@@ -1350,7 +1351,8 @@ class Pipeline:
         调用，已在线程池执行，不阻塞事件循环。用户主动要求（scene=local_send）
         不占用主动发图每日额度。失败/超时不会抛异常，由调用方决定放行文本。
         """
-        from core.companion import get_companion, _image_size_for_prompt_key
+        from core.companion import get_companion
+        from core.image_size import size_for_prompt_key
 
         comp = get_companion()
         publisher = getattr(comp, "publish_image_candidate", None)
@@ -1381,7 +1383,7 @@ class Pipeline:
             "reason_code": "user_requested",
             "source": "manual",
             "score": 1.0,
-            "size": _image_size_for_prompt_key(intent),
+            "size": size_for_prompt_key(intent),
             # 方向3：角色/合影类走图生图时的参考资产（three_view:front 锁定人物外貌）。
             # 仅在角色类意图附带；非角色类（environment_object 等）不附带，保持文生图。
             "reference_assets": (

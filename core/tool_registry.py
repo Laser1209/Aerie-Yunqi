@@ -21,6 +21,8 @@ import logging
 from copy import deepcopy
 from typing import Any, Callable
 
+from core.tool_result import normalize_tool_result
+
 logger = logging.getLogger(__name__)
 
 ToolFn = Callable[..., dict]
@@ -155,6 +157,14 @@ class ToolRegistry:
         return result
 
     async def execute(self, name: str, args: dict) -> dict:
+        """执行工具并返回**可 JSON 序列化**的 dict。
+
+        归一化在**出口统一收口**（而不是要求 70 个工具各自保证）：工具可以返回
+        任意 Python 对象，例如系统操控类工具直接返回 ``ControlResult`` 这个
+        ``@dataclass``。历史上这会让下游 ``json.dumps(result)`` 抛 ``TypeError``，
+        且异常发生在"append tool 消息"之前 → 留下孤儿 ``tool_calls`` → 本轮所有
+        供应商连环拒收。契约详见 ``core/tool_result.py``。
+        """
         if name not in self._tools:
             return {"error": f"unknown tool: {name}"}
         func = self._tools[name]["func"]
@@ -162,7 +172,7 @@ class ToolRegistry:
             result = func(**(args or {}))
             if asyncio.iscoroutine(result):
                 result = await result
-            return result
+            return normalize_tool_result(result)
         except TypeError as e:
             # Surface signature mismatch to the caller (was previously
             # silently swallowed by the tuple-based impl).

@@ -209,7 +209,8 @@ async def test_chat_carries_tool_history_across_providers_and_executes_once():
     tool_msgs = [m for m in p2_seen["messages"] if m["role"] == "tool"]
     assert assistant_tools and assistant_tools[-1]["tool_calls"][0]["id"] == "c1"
     assert tool_msgs and tool_msgs[-1]["tool_call_id"] == "c1"
-    assert json.loads(tool_msgs[-1]["content"]) is None
+    # 契约：execute 出口统一归一化为 dict（None 包在 result 键下），保证可序列化。
+    assert json.loads(tool_msgs[-1]["content"]) == {"result": None}
 
 
 @pytest.mark.asyncio
@@ -320,8 +321,9 @@ async def test_chat_none_and_scalar_tool_results_count_as_success():
 
     assert result.text == "好了。"
     assert [r["success"] for r in result.tool_results] == [True, True]
-    assert result.tool_results[0]["result"] is None
-    assert result.tool_results[1]["result"] == 42
+    # 非 dict 结果照样算成功，且原值保留（只是按契约包在 result 键下）。
+    assert result.tool_results[0]["result"] == {"result": None}
+    assert result.tool_results[1]["result"] == {"result": 42}
 
 
 @pytest.mark.asyncio

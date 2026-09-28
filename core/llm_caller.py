@@ -18,10 +18,12 @@ import httpx
 
 from core.key_rotator import KeyRotator
 from core.model_output import normalize_model_text
+from core.tool_result import safe_json_dumps, tool_result_success
 from core.provider_health import ProviderHealthManager
 from core.token_tracker import get_token_tracker
 from core.model_gate import model_calls_disabled
 from core.entitlements import EntitlementStore
+from core.image_size import IMAGE_SIZE_SQUARE, size_for_prompt_key
 from core.relay_headers import is_relay_base_url, relay_headers
 
 logger = logging.getLogger(__name__)
@@ -332,11 +334,13 @@ class LLMCaller:
                 "supports_tools": True,
             })
 
-        # 用户自定义 OpenAI 兼容厂商（data/ai_services.json）：保存即热加载，
+        # 用户自定义 OpenAI 兼容厂商（ai_providers 表）：保存即热加载，
         # 可被任意功能点绑定，也进入主对话容灾链。
         try:
-            from core.ai_services import get_store
-            for cp in get_store().list_custom_providers(include_key=True):
+            from core.ai_services import KIND_LOCAL_CLI, get_store
+            for cp in get_store().list_providers(include_key=True, enabled_only=True):
+                if cp.get("kind") in ("builtin", KIND_LOCAL_CLI):
+                    continue
                 cp_key = (cp.get("api_key") or "").strip()
                 if not cp_key:
                     continue
@@ -716,64 +720,70 @@ class LLMCaller:
                             tc_args = {}
 
                         t_tool = time.monotonic()
+                        # 预置为失败态：无论下面哪一步抛异常，finally 都保证有一条
+                        # 合法回执可配对（pairing 不变量 > 结果精确性）。
+                        result: Any = {"error": "tool_execution_aborted"}
+                        success = False
+                        tool_dur = 0
                         try:
-                            result = await tool_registry.execute(tc_name, tc_args)
-                            # 工具可返回任意类型：只有 dict 且显式带 "error" 键才算失败；
-                            # None / int / list 等标量或容器一律视为工具的正常返回。
-                            success = not (isinstance(result, dict) and "error" in result)
-                        except Exception as e:
-                            result = {"error": str(e)}
-                            success = False
-                        # 1.2b：越界写入 → 请求桌面端授权 → 放行则加工作区根并只重试该次调用。
-                        from core import write_approval
-
-                        result, success = await write_approval.maybe_retry_after_block(
-                            tool_registry, tc_name, tc_args, result, success
-                        )
-                        tool_dur = int((time.monotonic() - t_tool) * 1000)
-                        # result 不一定是 dict，取错误文案前先收敛类型。
-                        err_text = (
-                            result.get("error", "unknown")
-                            if isinstance(result, dict)
-                            else "unknown"
-                        )
-
-                        tool_result_entry = {
-                            "name": tc_name,
-                            "arguments": tc_args,
-                            "result": result,
-                            "success": success,
-                            "duration_ms": tool_dur,
-                        }
-                        # 聚合所有 provider 的工具结果（不再只留最后一个 provider 的）。
-                        all_tool_results.append(tool_result_entry)
-
-                        # Append tool result message
-                        tool_msg = {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "content": json.dumps(result, ensure_ascii=False),
-                        }
-                        working_msgs.append(tool_msg)
-
-                        logger.info(
-                            "ReAct tool: %s → %s (%.2fms)%s",
-                            tc_name, "ok" if success else "fail", tool_dur,
-                            "" if success else f" error={str(err_text)[:80]}",
-                        )
-
-                        # 任务进度上报（best-effort，失败不影响主流程）
-                        if on_tool_event is not None:
                             try:
-                                await on_tool_event(
-                                    tc_name,
-                                    success=success,
-                                    error="" if success else str(err_text),
-                                    arguments=tc_args,
-                                    duration_ms=tool_dur,
-                                )
-                            except Exception:
-                                logger.debug("tool progress callback failed", exc_info=True)
+                                result = await tool_registry.execute(tc_name, tc_args)
+                                success = tool_result_success(result)
+                            except Exception as e:
+                                result = {"error": str(e)}
+                                success = False
+                            # 1.2b：越界写入 → 请求桌面端授权 → 放行则加工作区根并只重试该次调用。
+                            from core import write_approval
+
+                            result, success = await write_approval.maybe_retry_after_block(
+                                tool_registry, tc_name, tc_args, result, success
+                            )
+                            tool_dur = int((time.monotonic() - t_tool) * 1000)
+                            # result 不一定是 dict，取错误文案前先收敛类型。
+                            err_text = (
+                                result.get("error", "unknown")
+                                if isinstance(result, dict)
+                                else "unknown"
+                            )
+
+                            tool_result_entry = {
+                                "name": tc_name,
+                                "arguments": tc_args,
+                                "result": result,
+                                "success": success,
+                                "duration_ms": tool_dur,
+                            }
+                            # 聚合所有 provider 的工具结果（不再只留最后一个 provider 的）。
+                            all_tool_results.append(tool_result_entry)
+
+                            logger.info(
+                                "ReAct tool: %s → %s (%.2fms)%s",
+                                tc_name, "ok" if success else "fail", tool_dur,
+                                "" if success else f" error={str(err_text)[:80]}",
+                            )
+
+                            # 任务进度上报（best-effort，失败不影响主流程）
+                            if on_tool_event is not None:
+                                try:
+                                    await on_tool_event(
+                                        tc_name,
+                                        success=success,
+                                        error="" if success else str(err_text),
+                                        arguments=tc_args,
+                                        duration_ms=tool_dur,
+                                    )
+                                except Exception:
+                                    logger.debug("tool progress callback failed", exc_info=True)
+                        finally:
+                            # 配对不变量：只要上面 append 了带 tool_calls 的 assistant
+                            # 消息，就必须为**每个** tc_id append 一条 tool 消息。
+                            # 否则历史里出现孤儿 tool_call，而 working_msgs 是跨供应商
+                            # 复用的 —— 本轮所有剩余供应商都会以 400 拒收。
+                            working_msgs.append({
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                "content": safe_json_dumps(result),
+                            })
 
             except Exception as e:
                 last_error = str(e)
@@ -2094,6 +2104,27 @@ def _brain_bge_embed(self, texts: list, **kwargs) -> dict:
     }
 
 
+def _resolve_image_size(explicit: object, metadata: dict | None) -> str:
+    """决定本次生图的画幅（px）。
+
+    优先级：显式入参 → 调用方 metadata.size → 按 metadata.prompt_key 场景决断
+    → 环境变量 → 1:1 兜底。
+
+    第三档是关键的"兜底"：发布方漏填 size（实测：主动配图 weather_push）时，
+    整条链路会直接掉进 env / 1:1，让"按场景决断的横竖构图"永远出不来。
+    收口在这里而不是只修上游，是因为候选来自多个发布方（pipeline / companion /
+    API 直调），在 provider 调用前统一决断才不会漏。
+    """
+    for value in (explicit, (metadata or {}).get("size")):
+        text = str(value or "").strip()
+        if text:
+            return text
+    prompt_key = str((metadata or {}).get("prompt_key") or "").strip()
+    if prompt_key:
+        return size_for_prompt_key(prompt_key)
+    return _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or IMAGE_SIZE_SQUARE
+
+
 def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
     """Generate an image via the ``image_sdxl`` provider.
 
@@ -2118,11 +2149,8 @@ def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
             or "https://api.openai.com/v1"
         )
         model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL", "IMAGE_GEN_MODEL") or "gpt-image-1"
-        # 尺寸优先由调用方动态传入（伊塔按场景决断横 16:9 / 竖 9:16），
-        # 其次读 env，最后才回落 1:1 默认值。
-        size = str(kwargs.get("size") or (metadata or {}).get("size") or "").strip()
-        if not size:
-            size = _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+        # 画幅：显式入参 → metadata.size → 按 prompt_key 场景决断 → env → 1:1。
+        size = _resolve_image_size(kwargs.get("size"), metadata)
         idempotency_key = str(metadata.get("idempotency_key") or "").strip()
         if not (8 <= len(idempotency_key) <= 128):
             idempotency_key = f"aerie-{uuid.uuid4().hex}"
@@ -2166,7 +2194,7 @@ def _brain_generate_image(self, prompt: str, **kwargs) -> dict:
                 "image_bytes_b64": base64.b64encode(image_bytes).decode("ascii"),
                 "mime_type": mime_type,
                 "output_path": None,
-                "external_id": str(first.get("revised_prompt") or ""),
+                "external_id": str(first.get("generation_id") or first.get("revised_prompt") or ""),
             }
         except httpx.HTTPStatusError as exc:
             status_code = int(exc.response.status_code)
@@ -2244,10 +2272,8 @@ def _brain_generate_image_edit(
         or "https://api.openai.com/v1"
     )
     model = _first_env("AERIE_IMAGE_MODEL", "OPENAI_IMAGE_MODEL", "IMAGE_GEN_MODEL") or "gpt-image-1"
-    # 画幅优先级与文生图一致：显式入参 → 调用方 metadata → env → 1:1 兜底。
-    size = str(size or (metadata or {}).get("size") or "").strip()
-    if not size:
-        size = _first_env("AERIE_IMAGE_SIZE", "OPENAI_IMAGE_SIZE") or "1024x1024"
+    # 画幅优先级与文生图一致（见 _resolve_image_size）。
+    size = _resolve_image_size(size, metadata)
     idempotency_key = str((metadata or {}).get("idempotency_key") or "").strip()
     if not (8 <= len(idempotency_key) <= 128):
         idempotency_key = f"aerie-{uuid.uuid4().hex}"
@@ -2296,7 +2322,7 @@ def _brain_generate_image_edit(
             "image_bytes_b64": base64.b64encode(decoded).decode("ascii"),
             "mime_type": response_mime,
             "output_path": None,
-            "external_id": str(first.get("revised_prompt") or ""),
+            "external_id": str(first.get("generation_id") or first.get("revised_prompt") or ""),
         }
     except httpx.HTTPStatusError as exc:
         status_code = int(exc.response.status_code)

@@ -24,7 +24,6 @@ def _make_reporter(chat_mode: bool, style: ProgressStyle = ProgressStyle.STAGE):
     reporter = TaskProgressReporter(
         ProgressConfig(style=style, max_messages=4),
         emit=emit,
-        task_hint="现在是几点了",
         chat_mode=chat_mode,
     )
     return reporter, sent
@@ -58,7 +57,7 @@ async def test_chat_mode_failure_still_reported_without_tool_name():
 
     assert len(sent) == 1
     assert "web_fetch" not in sent[0]
-    assert "没成" in sent[0]
+    assert "卡住" in sent[0]
 
 
 @pytest.mark.asyncio
@@ -87,12 +86,52 @@ async def test_chat_mode_verbose_style_also_silent_on_success():
 
 
 @pytest.mark.asyncio
+async def test_task_mode_start_text_never_truncates_or_echoes_user():
+    """开工语不含用户原话：旧实现 `f"...「{task_hint[:24]}」..."` 把
+    "…文件类型是TXT"切成"…时间。文"，还把用户刚说的话原封回灌（§十四 #61）。"""
+    reporter, sent = _make_reporter(chat_mode=False)
+
+    await reporter.report_tool("directory_create", success=True)
+
+    assert sent[0] == "好，我先去办，有进展就告诉你。"
+    assert "「" not in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_unregistered_tool_never_leaks_english_name():
+    """未登记工具不得把英文工具名播给用户（§十四 #62）。"""
+    reporter, sent = _make_reporter(chat_mode=False)
+
+    await reporter.report_tool("some_new_tool", success=True)
+
+    assert sent[1] == "正在办这件事…"
+    assert "some_new_tool" not in "".join(sent)
+
+
+def test_chat_failure_text_differs_by_reason():
+    """不同失败给不同交代，用户才能分清"一个问题重试两次"与"两个问题"（§十四 #64）。"""
+    from core.progress_reporter import chat_failure_text
+
+    not_installed = chat_failure_text("local_txt2img not installed: No module named 'local_txt2img'")
+    credential = chat_failure_text("credential_missing: env 'SEEDREAM_KEY' not set")
+    timeout = chat_failure_text("ReadTimeout: read timeout")
+
+    assert len({not_installed, credential, timeout}) == 3
+    # 通用兜底仍留给"说不清原因"的失败
+    assert chat_failure_text("") == "哎呀，这一下没成，我再想想办法。"
+    # 一律不得回显英文错误原文
+    for text in (not_installed, credential, timeout):
+        assert "local_txt2img" not in text
+        assert "SEEDREAM_KEY" not in text
+
+
+@pytest.mark.asyncio
 async def test_task_mode_keeps_start_and_stage_report():
     reporter, sent = _make_reporter(chat_mode=False)
 
     await reporter.report_tool("directory_create", success=True)
 
-    assert sent == ["好，我先去办「现在是几点了」，有进展就告诉你。", "正在建目录…"]
+    assert sent == ["好，我先去办，有进展就告诉你。", "正在建目录…"]
 
 
 @pytest.mark.asyncio

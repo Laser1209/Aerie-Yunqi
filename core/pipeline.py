@@ -1250,7 +1250,6 @@ class Pipeline:
             reporter = TaskProgressReporter(
                 config,
                 emit=lambda text: self._emit_task_progress(msg, request_state, text),
-                task_hint=msg.content,
                 # 命中任务判定才是「干活」，走开工+阶段播报；
                 # 日常对话里顺手查时间/查网页只搭一句自然的话，不演工单流程。
                 chat_mode=task_verdict is None,

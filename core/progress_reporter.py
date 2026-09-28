@@ -62,12 +62,19 @@ _TOOL_STAGE_LABELS: dict[str, str] = {
     "key_press": "界面操作",
     "web_fetch": "抓取网页",
     "code_search": "查找代码",
+    "send_file_to_user": "发送文件",
 }
+
+# 未登记工具的中性说法。**绝不能回落到 f"执行 {tool_name}"** —— 那会把
+# `send_file_to_user` 这类英文工具名直接播给用户（2026-09-29 真机实录：
+# 微信里出现"正在执行 send_file_to_user..."，§十四 #62）。
+# 用词要在三种模板里都读得通：「正在{label}…」「{label}：完成。」「「{label}」这一步没成」。
+_UNKNOWN_TOOL_LABEL = "办这件事"
 
 
 def stage_label(tool_name: str) -> str:
-    """工具名 → 面向用户的阶段描述。"""
-    return _TOOL_STAGE_LABELS.get(tool_name) or f"执行 {tool_name}"
+    """工具名 → 面向用户的阶段描述。未登记的工具给中性说法，不外泄英文名。"""
+    return _TOOL_STAGE_LABELS.get(tool_name) or _UNKNOWN_TOOL_LABEL
 
 
 # 聊天场景里的轻量查询工具：不值得演「开工」，第一次调用前最多搭一句话。
@@ -86,7 +93,36 @@ _CHAT_FILLER_LOOKUP: dict[str, str] = {
 }
 _CHAT_FILLER_DEFAULT = "等我一下。"
 # 聊天模式下工具失败时的说法（不提工具名、不演戏）。
+# 按失败类型给不同的一句话：用户才能分清"同一个问题重试两次"与"两个问题"。
+# 旧实现是一句固定文案，两次不同失败长得一模一样（2026-09-29 真机实录，§十四 #64）。
 _CHAT_FAILURE_TEXT = "哎呀，这一下没成，我再想想办法。"
+_CHAT_FAILURE_BY_REASON: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("not installed", "no module named", "modulenotfound"),
+        "这个能力在我这边还没装好，我换个办法。",
+    ),
+    (
+        ("credential_missing", "not set", "api key", "not configured"),
+        "这条路我这边还缺配置，暂时走不通，我换个办法。",
+    ),
+    (
+        ("outside_workspace_roots", "permission", "denied", "拒绝"),
+        "那个位置我还没拿到授权，我先换个地方。",
+    ),
+    (
+        ("timeout", "timed out", "connection", "network", "unreachable"),
+        "刚才那一步卡住了，我再试一次。",
+    ),
+)
+
+
+def chat_failure_text(error: str = "") -> str:
+    """聊天模式下的失败文案：按失败原因分档，避免所有失败都长一样。"""
+    lowered = str(error or "").lower()
+    for keywords, text in _CHAT_FAILURE_BY_REASON:
+        if any(keyword in lowered for keyword in keywords):
+            return text
+    return _CHAT_FAILURE_TEXT
 
 
 def chat_filler_for(tool_name: str) -> str:
@@ -139,12 +175,10 @@ class TaskProgressReporter:
         config: ProgressConfig,
         emit: Callable[[str], Awaitable[None]],
         *,
-        task_hint: str = "",
         chat_mode: bool = False,
     ) -> None:
         self._config = config
         self._emit = emit
-        self._task_hint = (task_hint or "").strip()
         # 聊天模式：这不是在「干活」，只是对话里顺手查个东西。
         # 全程不发「我先去办」「正在执行 xxx」，第一次调用前最多一句自然搭话，
         # 只有失败才再开口。
@@ -173,9 +207,12 @@ class TaskProgressReporter:
         self._sent += 1
 
     def _start_text(self) -> str:
-        if self._task_hint:
-            hint = self._task_hint[:24].replace("\n", " ")
-            return f"好，我先去办「{hint}」，有进展就告诉你。"
+        """开工语。
+
+        不再回引用户原话：旧实现是 ``f"好，我先去办「{task_hint[:24]}」…"``，
+        24 字硬截把"文件类型是TXT"切成"…时间。文"，还顺带把用户刚说的话
+        原封回灌一遍（本身没有信息量）。2026-09-29 真机实录，§十四 #61。
+        """
         return "好，我先去办，有进展就告诉你。"
 
     async def report_tool(
@@ -200,7 +237,7 @@ class TaskProgressReporter:
         # 失败仍要如实说一声（不提工具名）。
         if self._chat_mode:
             if not success:
-                await self._send(_CHAT_FAILURE_TEXT)
+                await self._send(chat_failure_text(error))
                 return
             if self._sent == 0:
                 await self._send(chat_filler_for(tool_name))

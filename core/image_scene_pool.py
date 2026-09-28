@@ -5,6 +5,10 @@
   找不到指定地域时回退 ``default_region``；未来加地域 = 只加 yaml 分组，零代码改动。
 - 采样用 softmax(weight / temperature) 归一：话题亲和度只把命中关键词的场景权重
   乘一个亲和系数，**任何场景概率都不为 0**，不存在「命中则用关联场景，否则随机」的硬分支。
+- **世界地点约束（§十）**：``select_scene(..., outdoor=...)`` 为 True/False 时
+  **只在对应分组内采样**（硬过滤，不是加权）—— 因为"人在室外却配成室内"是
+  事实错误，不该用概率去赌。``outdoor=None`` 或总开关
+  ``respect_world_location: false`` 时退回全摊平（= 旧行为）。
 - 热加载：每次取用按文件 mtime 判断是否重新解析；解析失败不抛错，退回内置默认。
 - RNG 依赖注入：``select_scene(..., rng=...)`` 接收 ``Callable[[], float]``（返回 [0,1)），
   便于固定 seed 测试；缺省用 ``random.random``。
@@ -28,6 +32,19 @@ _CONFIG_PATH = _PROJECT_ROOT / "config" / "image_scenes.yaml"
 # 配置文件缺失/解析失败时的内置兜底（仅保证有可用场景，不复刻全量清单）。
 _DEFAULT_REGION = "chongqing"
 _DEFAULT_SAMPLING: dict[str, float] = {"temperature": 1.0, "affinity_boost": 2.5}
+_DEFAULT_RESPECT_WORLD_LOCATION = True
+
+# 「地点类词」→ 组级亲和：话题里出现这些词时，把整个室外组的权重乘亲和系数。
+# 目的（§十 步骤4）：话题说"广场/步行街"却一个具体场景关键词都没命中时，
+# 不再是"零亲和 → 纯随机"（实测当时有 55% 概率被配成室内）。
+# 用整词而非单字，避免"商量/路上人多"这类子串误报。
+_OUTDOOR_HINT_WORDS: tuple[str, ...] = (
+    "步行街", "商业街", "风情街", "街头", "街边", "街上", "逛街", "压马路",
+    "马路", "路边", "路上", "广场", "公园", "商圈", "商场", "超市",
+    "菜市场", "码头", "江边", "河边", "湖边", "海边", "沙滩", "山上",
+    "户外", "外面", "出门",
+)
+
 _BUILTIN_REGIONS: dict[str, dict[str, list[dict[str, Any]]]] = {
     _DEFAULT_REGION: {
         "indoor": [
@@ -57,6 +74,7 @@ def _builtin_config() -> dict[str, Any]:
     return {
         "default_region": _DEFAULT_REGION,
         "sampling": dict(_DEFAULT_SAMPLING),
+        "respect_world_location": _DEFAULT_RESPECT_WORLD_LOCATION,
         "regions": regions,
     }
 
@@ -104,12 +122,39 @@ def _normalize_sampling(raw: Any) -> dict[str, float]:
     }
 
 
+def _normalize_bool(raw: Any, default: bool) -> bool:
+    """把 yaml 里的布尔写法（true/false/1/0/yes/no/on/off）归一为 bool。"""
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        value = raw.strip().lower()
+        if value in ("true", "1", "yes", "on"):
+            return True
+        if value in ("false", "0", "no", "off"):
+            return False
+    return default
+
+
+def _normalize_outdoor(outdoor: Any) -> bool | None:
+    """把世界地点的 outdoor 入参归一为 True/False/None（None = 不约束）。"""
+    if isinstance(outdoor, bool):
+        return outdoor
+    if isinstance(outdoor, str):
+        value = outdoor.strip().lower()
+        if value in ("true", "1", "yes", "on"):
+            return True
+        if value in ("false", "0", "no", "off"):
+            return False
+    return None
+
+
 def _normalize_config(raw: Any) -> dict[str, Any] | None:
     """把 yaml 原文归一为内部结构；无有效场景时返回 None。"""
     if not isinstance(raw, dict):
         return None
     default_region = str(raw.get("default_region") or "").strip() or _DEFAULT_REGION
     sampling = _normalize_sampling(raw.get("sampling") if isinstance(raw.get("sampling"), dict) else raw)
+    respect = _normalize_bool(raw.get("respect_world_location"), _DEFAULT_RESPECT_WORLD_LOCATION)
     regions_raw = raw.get("regions")
     if not isinstance(regions_raw, dict):
         return None
@@ -133,7 +178,12 @@ def _normalize_config(raw: Any) -> dict[str, Any] | None:
             regions[str(region_name)] = normalized_groups
     if not regions:
         return None
-    return {"default_region": default_region, "sampling": sampling, "regions": regions}
+    return {
+        "default_region": default_region,
+        "sampling": sampling,
+        "respect_world_location": respect,
+        "regions": regions,
+    }
 
 
 def _load_config() -> dict[str, Any]:
@@ -165,6 +215,14 @@ def get_sampling_config() -> dict[str, float]:
     return dict(_load_config().get("sampling") or _DEFAULT_SAMPLING)
 
 
+def respect_world_location() -> bool:
+    """是否用世界地点（室内/室外）硬约束场景分组（§十 步骤2 总开关）。
+
+    设为 ``false`` 即退回"全摊平"采样（= 改动前行为），留作回退与创意场景的余地。
+    """
+    return bool(_load_config().get("respect_world_location", _DEFAULT_RESPECT_WORLD_LOCATION))
+
+
 def _resolve_region(config: dict[str, Any], region: str) -> str:
     """解析目标地域：显式指定优先，找不到回退 default_region。"""
     regions = config.get("regions") or {}
@@ -191,21 +249,53 @@ def load_regions(region: str = "") -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def list_scenes(region: str = "") -> list[dict[str, Any]]:
-    """把某地域的室内+室外场景摊平成单一列表。"""
+def _scenes_of(region: str, group: str | None) -> list[dict[str, Any]]:
+    """取某地域的场景；``group`` 为 indoor/outdoor 时只取该组，否则两组摊平。"""
+    if group in ("indoor", "outdoor"):
+        return list(load_regions(region).get(group) or [])
+    return list_scenes_unfiltered(region)
+
+
+def list_scenes_unfiltered(region: str = "") -> list[dict[str, Any]]:
+    """把某地域的室内+室外场景摊平成单一列表（不施加任何世界地点约束）。"""
     groups = load_regions(region)
     return [*groups["indoor"], *groups["outdoor"]]
 
 
-def scene_weights(topic_text: str = "", region: str = "") -> dict[str, float]:
-    """计算场景权重：命中话题关键词的场景权重乘亲和系数（只改权重，不清零）。"""
+def list_scenes(region: str = "", outdoor: bool | None = None) -> list[dict[str, Any]]:
+    """列出候选场景；``outdoor`` 为 True/False 时**只列对应分组**（世界地点硬约束）。
+
+    约束分组为空（配置里没有那一组）时**退回不分组**，保证任何配置下都选得出场景，
+    不会因为约束而空手。
+    """
+    want = _normalize_outdoor(outdoor)
+    if want is None or not respect_world_location():
+        return list_scenes_unfiltered(region)
+    scenes = _scenes_of(region, "outdoor" if want else "indoor")
+    return scenes or list_scenes_unfiltered(region)
+
+
+def scene_weights(
+    topic_text: str = "",
+    region: str = "",
+    outdoor: bool | None = None,
+) -> dict[str, float]:
+    """计算场景权重：命中话题关键词的场景权重乘亲和系数（只改权重，不清零）。
+
+    组级亲和（§十 步骤4）：话题里出现"步行街/广场/街上"等地点类词，却一个具体
+    场景关键词都没命中时，把**整个室外组**乘上亲和系数 —— 避免"词不达意 →
+    零亲和 → 纯随机"（这正是"在步行街却配成家里"的直接成因）。
+    """
     affinity = float(get_sampling_config().get("affinity_boost") or _DEFAULT_SAMPLING["affinity_boost"])
     text = str(topic_text or "")
+    outdoor_hint = bool(text) and any(word in text for word in _OUTDOOR_HINT_WORDS)
     weights: dict[str, float] = {}
-    for scene in list_scenes(region):
+    for scene in list_scenes(region, outdoor):
         weight = float(scene.get("weight", 1.0))
         keywords = scene.get("keywords") or []
         if text and any(kw and kw in text for kw in keywords):
+            weight *= affinity
+        elif outdoor_hint and scene.get("group") == "outdoor":
             weight *= affinity
         weights[str(scene["id"])] = weight
     return weights
@@ -226,12 +316,35 @@ def softmax_probabilities(weights: list[float], temperature: float) -> list[floa
     return [e / total for e in exps]
 
 
-def scene_probabilities(topic_text: str = "", region: str = "") -> dict[str, float]:
+def _draw_scene(
+    scenes: list[dict[str, Any]],
+    weights: dict[str, float],
+    draw: float,
+) -> dict[str, Any]:
+    """按 softmax 概率做一次累计分布抽样；``scenes`` 非空时必定返回一项。"""
+    ordered = [float(weights.get(str(scene["id"]), scene.get("weight", 1.0))) for scene in scenes]
+    temperature = float(get_sampling_config().get("temperature") or _DEFAULT_SAMPLING["temperature"])
+    probs = softmax_probabilities(ordered, temperature)
+    cumulative = 0.0
+    chosen = scenes[-1]
+    for scene, prob in zip(scenes, probs):
+        cumulative += prob
+        if draw < cumulative:
+            chosen = scene
+            break
+    return dict(chosen)
+
+
+def scene_probabilities(
+    topic_text: str = "",
+    region: str = "",
+    outdoor: bool | None = None,
+) -> dict[str, float]:
     """返回各场景的采样概率（softmax 后），用于前端展示与测试断言。"""
-    scenes = list_scenes(region)
+    scenes = list_scenes(region, outdoor)
     if not scenes:
         return {}
-    weights = scene_weights(topic_text, region)
+    weights = scene_weights(topic_text, region, outdoor)
     ordered = [float(weights.get(str(scene["id"]), scene.get("weight", 1.0))) for scene in scenes]
     temperature = float(get_sampling_config().get("temperature") or _DEFAULT_SAMPLING["temperature"])
     probs = softmax_probabilities(ordered, temperature)
@@ -241,25 +354,39 @@ def scene_probabilities(topic_text: str = "", region: str = "") -> dict[str, flo
 def select_scene(
     topic_text: str = "",
     region: str = "",
+    outdoor: bool | None = None,
     rng: Callable[[], float] | None = None,
 ) -> dict[str, Any]:
-    """softmax 采样选一个场景，返回含 id/name/prompt 的 dict；无场景时返回空 dict。
+    """softmax 采样选一个场景，返回含 id/name/prompt/group 的 dict；无场景时返回空 dict。
 
+    ``outdoor`` 是世界地点**硬约束**（§十 步骤2）：True/False 时只在对应分组内采样，
+    None（world 关闭 / 无快照 / 开关关闭）时不约束，行为与改动前一致。
     ``rng`` 为依赖注入的随机源（返回 [0,1) 的可调用对象），缺省 ``random.random``。
+
+    返回值额外带两个诊断键（供 ``[WorldPrompt]`` 日志量化疗效）：
+    - ``constrained_by_world``：本次是否被世界地点限制在单一分组内；
+    - ``corrected_by_world``：若不受限，**同一次抽样**会落到不同分组 —— 即这一次
+      确实是被世界数据纠正过来的。
     """
-    scenes = list_scenes(region)
+    want = _normalize_outdoor(outdoor)
+    scenes = list_scenes(region, want)
     if not scenes:
         return {}
-    weights = scene_weights(topic_text, region)
-    ordered = [float(weights.get(str(scene["id"]), scene.get("weight", 1.0))) for scene in scenes]
-    temperature = float(get_sampling_config().get("temperature") or _DEFAULT_SAMPLING["temperature"])
-    probs = softmax_probabilities(ordered, temperature)
     draw = float((rng or random.random)())
-    cumulative = 0.0
-    chosen = scenes[-1]
-    for scene, prob in zip(scenes, probs):
-        cumulative += prob
-        if draw < cumulative:
-            chosen = scene
-            break
-    return dict(chosen)
+    chosen = _draw_scene(scenes, scene_weights(topic_text, region, want), draw)
+
+    constrained = False
+    if want is not None and respect_world_location():
+        groups = {str(scene.get("group") or "") for scene in scenes}
+        constrained = len(groups) == 1 and next(iter(groups)) == ("outdoor" if want else "indoor")
+    corrected = False
+    if constrained:
+        # 同一次抽样在不受限池里的落点：用于"若没有世界约束，这次会配成什么"。
+        alt = _draw_scene(
+            list_scenes_unfiltered(region), scene_weights(topic_text, region), draw,
+        )
+        corrected = str(alt.get("group") or "") != str(chosen.get("group") or "")
+
+    chosen["constrained_by_world"] = constrained
+    chosen["corrected_by_world"] = corrected
+    return chosen

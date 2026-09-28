@@ -3,6 +3,11 @@
 # 采样参数可从本文件热加载（前端后续可调），代码里只保留兜底默认。
 default_region: chongqing
 
+# 世界地点是否硬约束场景分组（§十）：world 快照说"她此刻在室外"时，
+# 只在 outdoor 组里选场景，不再跨组（人在室外却配成室内 = 事实错误，不能用概率赌）。
+# 设为 false 即退回"全摊平"采样 = 改动前行为（回退开关）。
+respect_world_location: true
+
 # 采样默认值：temperature 越小分布越集中于高权重场景；affinity_boost 是
 # 话题关键词命中时对场景权重的乘数（只改权重，任何场景概率都不为 0）。
 temperature: 1.0
@@ -117,7 +122,7 @@ regions:
       - id: hongyadong_street
         name: 风情街
         weight: 1.0
-        keywords: [风情街, 洪崖洞, 坡坎]
+        keywords: [风情街, 洪崖洞, 坡坎, 步行街, 商业街, 广场, 商圈]
         prompt: 她走在洪崖洞式的坡坎风情街上，层层叠叠的吊脚楼亮着暖黄的灯，石阶上爬着青苔
       - id: jialing_river_view
         name: 江景
@@ -147,7 +152,7 @@ regions:
       - id: street_stroll
         name: 街头散步
         weight: 1.0
-        keywords: [散步, 逛街, 街头]
+        keywords: [散步, 逛街, 街头, 压马路, 街边]
         prompt: 她在重庆街头散步，山城的坡道旁轻轨从头顶掠过，路边是烟火气的招牌
       - id: cafe
         name: 咖啡馆

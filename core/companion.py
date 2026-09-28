@@ -984,11 +984,13 @@ _WEATHER_MOOD_CN: dict[str, str] = {
 
 # 生图场景 → 世界数据相关性（确定性兜底，与轻量 LLM 接力同语义）：
 # 天气/光线只在真正影响画面的场景注入，室内自拍不塞天气。
+# location（§十 步骤6）：室外必须点明"她此刻在{地点}"，否则轻量 LLM 不可用时
+# 画面只剩 base 里的场景描述，容易出现"文字在街上、图在家里"的矛盾。
 _IMAGE_WORLD_FALLBACK_RULES: dict[str, set[str]] = {
-    "environment_object": {"weather", "light"},
-    "role_in_scene": {"light", "weather", "room"},
-    "role_selfie": {"light", "room"},
-    "couple_photo": {"light", "room"},
+    "environment_object": {"weather", "light", "location"},
+    "role_in_scene": {"light", "weather", "room", "location"},
+    "role_selfie": {"light", "room", "location"},
+    "couple_photo": {"light", "room", "location"},
 }
 
 
@@ -4275,10 +4277,20 @@ class Companion:
         prompt = await self._image_prompt_for_impl(prompt_key, candidate)
         try:
             self._last_image_prompt = str(prompt or "")
+            # §十 步骤7：把场景决策的"证据"打进日志，便于量化"世界地点纠正了多少次"
+            # （corrected_by_world = 若不受世界约束，同一次抽样会落到另一分组）。
+            scene_meta = (candidate or {}).get("scene_meta") or {}
             logger.info(
-                "[WorldPrompt] key=%s candidate=%s chars=%d prompt=%r",
+                "[WorldPrompt] key=%s candidate=%s scene_id=%s group=%s outdoor=%s place=%s "
+                "constrained_by_world=%s corrected_by_world=%s chars=%d prompt=%r",
                 str(prompt_key or "default"),
                 str((candidate or {}).get("candidate_id") or ""),
+                str(scene_meta.get("scene_id") or ""),
+                str(scene_meta.get("group") or ""),
+                scene_meta.get("outdoor"),
+                str(scene_meta.get("place") or ""),
+                str(scene_meta.get("constrained_by_world") or ""),
+                str(scene_meta.get("corrected_by_world") or ""),
                 len(self._last_image_prompt),
                 self._last_image_prompt,
             )
@@ -4331,20 +4343,48 @@ class Companion:
         # 在 base 构造前回填，让身份锚定模块与下游 workflow 拿到同一份参考资产。
         if isinstance(candidate, dict) and self._is_persona_image(prompt_key):
             candidate["reference_assets"] = _reference_assets_for_spec(spec)
+        # ── 世界上下文先取（§十 步骤1）──
+        # 它是纯读取（world 快照 + 时间兜底），没有副作用。必须排在场景池之前：
+        # 场景池若不知道"她此刻在哪"，就只是一个与世隔绝的随机数生成器 ——
+        # 文字说"在步行街"、图却配成"家里窗边"，就是这么来的（实测 55% 概率）。
+        world_context: dict[str, Any] = {}
+        try:
+            world_context = self._image_world_context(candidate) or {}
+        except Exception:
+            logger.warning(
+                "world image context failed; scene pool runs without location constraint (key=%s)",
+                prompt_key, exc_info=True,
+            )
+            world_context = {}
         # ── 阶段2 · 生活记录场景池钩子（开关门控；异常完全不影响原流程）──
         # 只对人物类图生效：在 base 构造前用 softmax 选一个场景写入 spec["scene"]，
         # 并把场景画面描述暂存到 candidate，供 _compose_base_image_prompt 拼接使用。
+        # 世界地点（indoor/outdoor + city）作为**硬约束**传入，让"人在室外"不再
+        # 被配成室内场景。
         scene_prompt = ""
         if self._life_recording_enabled() and self._is_persona_image(prompt_key):
             try:
                 from core.image_scene_pool import select_scene
 
                 topic_text = str((candidate or {}).get("user_raw") or "")
-                scene = select_scene(topic_text)
+                scene = select_scene(
+                    topic_text,
+                    region=str(world_context.get("city") or ""),
+                    outdoor=world_context.get("outdoor"),
+                )
                 if scene.get("id"):
                     spec = dict(spec or {})
                     spec["scene"] = str(scene.get("name") or "")
                     scene_prompt = str(scene.get("prompt") or "")
+                    if isinstance(candidate, dict):
+                        candidate["scene_meta"] = {
+                            "scene_id": str(scene.get("id") or ""),
+                            "group": str(scene.get("group") or ""),
+                            "outdoor": world_context.get("outdoor"),
+                            "place": str(world_context.get("outdoor_place") or ""),
+                            "constrained_by_world": bool(scene.get("constrained_by_world")),
+                            "corrected_by_world": bool(scene.get("corrected_by_world")),
+                        }
             except Exception:
                 logger.debug("life recording scene pool failed; keep baseline prompt", exc_info=True)
         if scene_prompt and isinstance(candidate, dict):
@@ -4353,13 +4393,12 @@ class Companion:
         prompt = base
         light = ""
         try:
-            context = self._image_world_context(candidate)
-            if context:
+            if world_context:
                 # 世界快照的光线优先（它带 world 自己的时间）；取不到再由本地时刻兜底，
                 # 让"world 关掉 / 无快照"时画面依然有明确光照，而不是一片无光的摆拍。
-                light = str(context.get("time_of_day_light") or "").strip()
-                refined = await self._light_relay_refine_prompt(base, context, candidate)
-                prompt = refined or self._inject_world_context_fallback(base, context, candidate)
+                light = str(world_context.get("time_of_day_light") or "").strip()
+                refined = await self._light_relay_refine_prompt(base, world_context, candidate)
+                prompt = refined or self._inject_world_context_fallback(base, world_context, candidate)
         except Exception:
             # 世界数据接力失败不影响生图：退回基础提示词（base 恒非空）。
             # warning 而非 debug：历史空提示词问题曾因 debug 级吞错无法事后复盘，
@@ -4552,7 +4591,8 @@ class Companion:
         候选事件时间或本地当前时间；天气/地点/物件只在 world 有真实数据时才进入。
         """
         snapshot = self._world_snapshot_for_context()
-        if isinstance(snapshot, dict) and snapshot:
+        has_world = isinstance(snapshot, dict) and bool(snapshot)
+        if has_world:
             phase = str(snapshot.get("phase") or "")
             iso_time = str(snapshot.get("iso_time") or snapshot.get("created_at") or "")
             weather_mood = str(snapshot.get("weather_mood") or snapshot.get("weather") or "").strip()
@@ -4643,8 +4683,12 @@ class Companion:
             "floor": floor,
             "zone": zone,
             "position_desc": position_desc,
-            "outdoor": bool(snapshot.get("outdoor")) if isinstance(snapshot, dict) else False,
-            "outdoor_place": str(snapshot.get("outdoor_place") or "") if isinstance(snapshot, dict) else "",
+            "has_world": has_world,
+            # 无 world 快照时为 None（而不是 False）：场景池据此**不施加**室内/室外
+            # 约束。若这里给 False，会被当成"她此刻在家"，把"world 关掉"误伤成
+            # "硬过滤到室内"—— 那正是 §十 要修的那种矛盾。
+            "outdoor": bool(snapshot.get("outdoor")) if has_world else None,
+            "outdoor_place": str(snapshot.get("outdoor_place") or "") if has_world else "",
             "holiday": holiday_name(clock_dt.date()),
             "activity": activity,
             "nearby_objects": nearby_objects[:6],
@@ -4738,7 +4782,11 @@ class Companion:
             "你的任务：\n"
             "1. 判断哪些背景数据对这张照片的画面有实际影响，只把真正能呈现在画面里的写进提示词；\n"
             "2. 无关的数据不要写（例如室内自拍通常不需要天气、白天照片不要深夜光线），不要堆叠所有数据；\n"
-            "3. 保留基础提示词里的人物外貌、身材、风格与构图信息，只做上下文增强；\n"
+            "3. 保留基础提示词里的人物外貌、身材、风格与画幅方向（横构图/竖构图），只做上下文增强；\n"
+            "   但**地点优先级高于场景描述**：若世界背景数据表明她此刻在室外（或给出了具体地点），\n"
+            "   而基础提示词写的是室内场景，必须按世界数据把场景改写成对应的户外/街头画面，\n"
+            "   不得保留矛盾的室内元素（沙发、床、厨房、房间等）；\n"
+            "   改写只允许替换场景与地点，**严禁改动人物的外貌、身材与服装**；\n"
             "4. 只用中文输出一条完整、自然、连贯的生图提示词本身，不要解释，不要JSON，不要加引号；\n"
             "5. 不要写任何人的名字或称呼（如'伊塔/Ita'），画面人物一律用'这个女性''她'等中性表述描述。\n"
             "硬性前提：这张照片由画中的女性本人手持手机拍摄（前置自拍/后置对镜/支架定时），"
@@ -4781,17 +4829,23 @@ class Companion:
     def _inject_world_context_fallback(self, base_prompt: str, context: dict[str, Any], candidate: dict[str, Any] | None = None) -> str:
         """确定性兜底：按场景规则只注入该画面相关的世界数据。
 
-        光线（时间/相/月相）恒注入；房间物件（room）条件注入——仅当存在 nearby_objects
-        时，把物件翻译成自然描述拼进画面，空则跳过（缺值即停防护，绝不断生图）。
+        光线（时间/相/月相）恒注入；地点（location）在室外时点明"她此刻在{地点}"；
+        房间物件（room）条件注入——仅当存在 nearby_objects 时，把物件翻译成自然描述
+        拼进画面，空则跳过（缺值即停防护，绝不断生图）。
         """
         key = str((candidate or {}).get("prompt_key") or context.get("prompt_key") or "default")
-        need = _IMAGE_WORLD_FALLBACK_RULES.get(key, {"light", "weather"})
+        need = _IMAGE_WORLD_FALLBACK_RULES.get(key, {"light", "weather", "location"})
         time_light = str(context.get("time_of_day_light") or "").strip()
         weather_desc = str(context.get("weather_desc") or "").strip()
         room_objs = [str(x) for x in (context.get("nearby_objects") or []) if str(x)]
         parts = []
         if "light" in need and time_light:
             parts.append(time_light)
+        if "location" in need and context.get("outdoor"):
+            # §十 步骤6：室外必须点明地点。室内场景已由 base 的房间描述覆盖，
+            # 这里不重复，只在"人在外面"时补一句，防图文矛盾。
+            place = str(context.get("outdoor_place") or "").strip()
+            parts.append(f"她此刻在{place}" if place else "她此刻在室外")
         if "room" in need and room_objs:
             cn = "、".join(_HER_HOME_OBJECTS_ZH.get(o, o) for o in room_objs)
             if cn:

@@ -1213,13 +1213,19 @@ def test_room_fallback_empty_returns_base():
 
 # ── P3：consumer 派发时把候选语义字段注入 delivery plan（发图自我认知） ──
 class _PlanCaptureSender:
-    """记录 sender 收到的 plan，用于断言注入的语义字段。"""
+    """记录 sender 收到的 plan，用于断言注入的语义字段。
+
+    ``plans`` 保留**每一次**调用的副本：一张图投多个端口时 sender 会被多次调用，
+    只看最后一次会把原生端（qq/ilink）的 plan 覆盖掉。
+    """
 
     def __init__(self) -> None:
         self.plan: dict | None = None
+        self.plans: list[dict] = []
 
     async def __call__(self, plan: dict, workflow_result: dict) -> bool:
         self.plan = dict(plan)
+        self.plans.append(dict(plan))
         return True
 
 
@@ -1287,7 +1293,9 @@ async def test_deliver_without_candidate_keeps_plan_unchanged(tmp_path):
     plan = {"channel": "qq", "target": "123", "delivery_plan_id": "d0"}
     ok = await consumer._deliver({"delivery_plan": plan})
     assert ok is True
-    assert sender.plan == plan
+    # 原始 plan 对象不得被改写；原生端拿到的就是它原样的一份
+    assert plan == {"channel": "qq", "target": "123", "delivery_plan_id": "d0"}
+    assert sender.plans[0] == plan
 
 
 @pytest.mark.asyncio
@@ -1314,14 +1322,16 @@ async def test_deliver_accepts_ilink_channel_and_rejects_unknown(tmp_path):
         {"delivery_plan": {"channel": "ilink", "target": "wx-owner"}}
     )
     assert ok is True
-    assert sender.plan is not None and sender.plan["channel"] == "ilink"
+    assert sender.plans[0]["channel"] == "ilink"
 
     sender.plan = None
+    sender.plans.clear()
     ok = await consumer._deliver(
         {"delivery_plan": {"channel": "telegram", "target": "x"}}
     )
     assert ok is False
     assert sender.plan is None
+    assert sender.plans == []
 
 
 @pytest.mark.asyncio

@@ -423,6 +423,15 @@ def _image_candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
         ],
         "expires_at": _safe_text(payload.get("expires_at") or ""),
         "created_at": _safe_text(payload.get("created_at") or ""),
+        # 多端口投递意图与角色归属必须随事件一起透传：主动消息的文本可能同时发往
+        # QQ / 微信 / 桌面，配图要跟到同样的端口集合；persona_id 决定图片历史行的
+        # 角色归属。消费端按显式白名单重建 —— 这里漏一个字段就是静默丢弃。
+        "delivery_channels": [
+            _safe_text(item).lower()
+            for item in (payload.get("delivery_channels") or [])
+            if isinstance(item, str) and item.strip()
+        ],
+        "persona_id": _safe_text(payload.get("persona_id") or ""),
     }
     if sensitive:
         public["sensitive_keys"] = sorted(str(key) for key in sensitive.keys())

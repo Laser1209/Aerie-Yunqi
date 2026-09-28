@@ -73,8 +73,9 @@ async def test_fans_out_to_all_declared_channels():
 
 
 @pytest.mark.asyncio
-async def test_single_channel_fallback_unchanged():
-    """未声明 delivery_channels（聊天要图路径）：沿用 plan 里的单一渠道。"""
+async def test_single_channel_also_records_on_desktop():
+    """未声明 delivery_channels（聊天要图路径）：按 plan 的单一渠道投递，
+    并额外补一条桌面端历史记录 —— 桌面端是这张图的唯一聊天历史。"""
     seen: list[str] = []
 
     async def sender(plan, workflow_result):  # noqa: ARG001
@@ -87,7 +88,7 @@ async def test_single_channel_fallback_unchanged():
     )
 
     assert delivered is True
-    assert seen == ["ilink"]
+    assert seen == ["ilink", "local_chat"]
 
 
 @pytest.mark.asyncio
@@ -126,7 +127,7 @@ async def test_invalid_channels_are_filtered():
     )
 
     assert delivered is True
-    assert seen == ["qq"]
+    assert seen == ["qq", "local_chat"]
 
 
 @pytest.mark.asyncio
@@ -219,3 +220,69 @@ def test_candidate_reconstruction_defaults_to_empty_channels():
     assert candidate is not None
     # 空列表 → _deliver 回落到 plan 的单一渠道，行为与改动前一致
     assert candidate["delivery_channels"] == []
+
+
+# ── 发布侧脱敏白名单同样不能吃掉 delivery_channels / persona_id ──────────
+#
+# 2026-09-28 真机事故：候选在发布时被两层脱敏（in-process WorldPort 与 sidecar
+# sqlite_store）剥掉了 delivery_channels，消费端只收到单一 channel → 图片只到 QQ、
+# 桌面端只剩一条没有附件的裂图。重建白名单对了，发布白名单漏了，一样丢字段。
+
+
+def _published_candidate() -> dict:
+    return {
+        "candidate_id": "c9",
+        "idempotency_key": "k9",
+        "scene": "local_send",
+        "channel": "qq",
+        "delivery_channels": ["QQ", "ilink", "local_chat"],
+        "target": "3489352115",
+        "prompt_key": "role_in_scene",
+        "persona_id": "yita_default",
+    }
+
+
+def test_inprocess_redaction_preserves_delivery_channels_and_persona():
+    from core.world_port import redact_image_candidate
+
+    public = redact_image_candidate(_published_candidate())
+
+    assert public["delivery_channels"] == ["qq", "ilink", "local_chat"]
+    assert public["persona_id"] == "yita_default"
+
+
+def test_sidecar_redaction_preserves_delivery_channels_and_persona():
+    from world_service.storage.sqlite_store import _image_candidate_payload
+
+    public = _image_candidate_payload(_published_candidate())
+
+    assert public["delivery_channels"] == ["qq", "ilink", "local_chat"]
+    assert public["persona_id"] == "yita_default"
+
+
+def test_redaction_drops_non_string_channels():
+    from core.world_port import redact_image_candidate
+
+    public = redact_image_candidate({
+        "candidate_id": "c10",
+        "channel": "qq",
+        "delivery_channels": ["qq", None, 7, ""],
+    })
+
+    assert public["delivery_channels"] == ["qq"]
+
+
+@pytest.mark.asyncio
+async def test_desktop_record_failure_does_not_flip_delivered():
+    """桌面端历史落库失败不得把"已投递"翻成失败：用户确实收到了原生消息。"""
+    async def sender(plan, workflow_result):  # noqa: ARG001
+        if str(plan.get("channel")) == "local_chat":
+            raise RuntimeError("db down")
+        return True
+
+    consumer = _consumer(sender)
+    delivered = await consumer._deliver(
+        _workflow_result(), {"candidate_id": "c11", "delivery_channels": ["qq"]},
+    )
+
+    assert delivered is True

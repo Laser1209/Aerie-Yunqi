@@ -1087,6 +1087,23 @@ class WorldImageCandidateConsumer:
                 logger.warning(
                     "world image delivery failed channel=%s", channel, exc_info=True,
                 )
+
+        # 桌面端是这张图的**唯一聊天历史记录**：QQ / 微信只做原生发送，不写历史。
+        # 桌面端的历史是跨端口合并的，所以只要图投出去过就必须落一条带附件的记录
+        # —— 否则用户翻记录时只看到一条没有附件的"原生行"，渲染层降级成裂图
+        # （实测 2026-09-28）。投递列表里已经有 local_chat 时不重复。
+        # 这一步不参与 ``delivered`` 判定：用户是否真的收到，取决于原生端。
+        if "local_chat" not in channels:
+            per_channel = dict(plan)
+            per_channel["channel"] = "local_chat"
+            try:
+                result = self.sender(per_channel, workflow_result)
+                if hasattr(result, "__await__"):
+                    await result
+            except Exception:
+                logger.warning(
+                    "world image desktop history record failed", exc_info=True,
+                )
         return delivered
 
     def _record_push(self, scene: str) -> None:

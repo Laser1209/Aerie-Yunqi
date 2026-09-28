@@ -81,6 +81,9 @@ extraResources:
       - "scheduler/**"
       - "skills/**"
       - "NapCat/NapCat.Shell/**"
+      # 官方 OneKey 引导器（约 2.2MB）：受控 QQ 运行时的兜底安装入口，
+      # 由 core/napcat_installer.py 在受控目录内拉起（无静默参数，需人工点安装）。
+      - "NapCat/OneKey/**"
       - "ffmpeg/bin/**"
       - ".env.example"
       - "!**/__pycache__/**"

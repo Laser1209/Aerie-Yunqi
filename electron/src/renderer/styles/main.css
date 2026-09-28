@@ -668,6 +668,21 @@ body {
 .phase-text { font-size: 14px; font-weight: 500; }
 .napcat-actions { display: flex; gap: 8px; }
 
+/* QQ 运行时来源卡片：让"当前吃的是哪份 QQ"可见（Beta QQ 风控的可观测面）。 */
+.napcat-runtime {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+.napcat-runtime-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px;
+}
+.napcat-runtime-label { font-size: 13px; font-weight: 500; color: var(--text-500); }
+.napcat-runtime-value { font-size: 13px; font-weight: 600; text-align: right; }
+
 .napcat-qr-zone {
   margin-top: 16px;
   padding: 16px;

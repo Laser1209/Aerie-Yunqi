@@ -17,6 +17,10 @@ class NapcatPanel {
       qrRefresh: document.getElementById("napcat-qr-refresh"),
       quickLogin: document.getElementById("napcat-quick-login"),
       qqBadge: document.getElementById("status-qq-badge"),
+      qqSource: document.getElementById("napcat-qq-source"),
+      runtimeInstallBtn: document.getElementById("napcat-runtime-install-btn"),
+      runtimeInstallerBtn: document.getElementById("napcat-runtime-installer-btn"),
+      runtimeHint: document.getElementById("napcat-runtime-hint"),
     };
     this._interval = null;
     this._qrLoading = false;
@@ -43,6 +47,87 @@ class NapcatPanel {
     if (this._el.qrRefresh) {
       this._el.qrRefresh.addEventListener("click", () => this._refreshQR(true, { forceRenew: true }));
     }
+    if (this._el.runtimeInstallBtn) {
+      this._el.runtimeInstallBtn.addEventListener("click", () => this._installRuntime());
+    }
+    if (this._el.runtimeInstallerBtn) {
+      this._el.runtimeInstallerBtn.addEventListener("click", () => this._launchBundledInstaller());
+    }
+  }
+
+  /* QQ 运行时来源 → 展示文案。system_registry 意味着吃的是系统那份 QQ，
+     若它是 Beta 通道就有风控风险（用户实测：连一段时间被要求重新登录）。 */
+  _qqSourceLabel(source) {
+    return {
+      controlled: "受控目录（推荐）",
+      config: "配置指定",
+      system_registry: "系统安装的 QQ（Beta 通道可能触发风控）",
+    }[source] || "未检测到";
+  }
+
+  _runtimeApi() {
+    return (window.aerie && window.aerie.api && window.aerie.api.request) || null;
+  }
+
+  async _pollRuntime() {
+    const api = this._runtimeApi();
+    if (!api || !this._el.qqSource) return;
+    try {
+      const r = await api({ method: "GET", path: "/api/napcat/runtime/status" });
+      const data = (r && r.data) || {};
+      this._updateRuntimeUI(data);
+    } catch (_) {}
+  }
+
+  _updateRuntimeUI(data) {
+    const source = String((data && data.qqSource) || "");
+    const installed = Boolean(data && data.installed);
+    if (this._el.qqSource) {
+      this._el.qqSource.textContent = this._qqSourceLabel(installed ? "controlled" : source);
+    }
+    if (!this._el.runtimeHint) return;
+    const running = data && ["downloading", "installing", "extracting"].includes(data.state);
+    let hint = "";
+    if (running) {
+      hint = data.message || "正在安装…";
+    } else if (data && data.state === "error") {
+      hint = data.error || data.message || "安装失败";
+    } else if (!installed) {
+      hint = "尚未安装受控 QQ：将下载腾讯官方固定版本 QQ 到程序数据目录，避免系统 Beta QQ 触发风控。";
+    }
+    this._el.runtimeHint.textContent = hint;
+    this._el.runtimeHint.classList.toggle("hidden", !hint);
+    if (this._el.runtimeInstallBtn) {
+      this._el.runtimeInstallBtn.disabled = Boolean(running);
+    }
+  }
+
+  async _installRuntime() {
+    const api = this._runtimeApi();
+    if (!api) return;
+    try {
+      this._addLog("[系统] 正在请求安装受控 QQ 运行时…");
+      const r = await api({ method: "POST", path: "/api/napcat/runtime/install" });
+      const data = (r && r.data) || {};
+      if (!data.ok) throw new Error(data.message || "安装启动失败");
+      this._addLog("[系统] 受控 QQ 运行时安装已启动（可在上方查看进度）");
+      this._pollRuntime();
+    } catch (e) {
+      this._addLog("[错误] 受控 QQ 安装启动失败：" + (e.message || String(e)));
+    }
+  }
+
+  async _launchBundledInstaller() {
+    const api = this._runtimeApi();
+    if (!api) return;
+    try {
+      const r = await api({ method: "POST", path: "/api/napcat/runtime/installer" });
+      const data = (r && r.data) || {};
+      if (!data.ok) throw new Error(data.message || "引导器启动失败");
+      this._addLog("[系统] 已在受控目录中拉起内置引导器，请在窗口内完成安装");
+    } catch (e) {
+      this._addLog("[错误] 内置引导器启动失败：" + (e.message || String(e)));
+    }
   }
 
   _startPoll() {
@@ -55,6 +140,7 @@ class NapcatPanel {
       const resp = await window.aerie.napcat.getStatus();
       this._updateUI(resp);
     } catch (_) {}
+    this._pollRuntime();
     try {
       const logsResp = await window.aerie.api.request({
         method: "GET",
@@ -89,6 +175,7 @@ class NapcatPanel {
     const errors = {
       backend_unreachable: "后端不可用",
       launcher_not_found: "未找到 NapCat 启动器",
+      qq_not_found: "未安装受控 QQ 运行时",
       napcat_start_timeout: "启动超时",
       napcat_start_failed: "启动失败",
       napcat_residual_port: "停止未完成",

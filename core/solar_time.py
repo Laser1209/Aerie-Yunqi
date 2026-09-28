@@ -229,16 +229,19 @@ def fine_time_descriptor(
         room = _ROOM_KEY.get(prompt_key, "living_room")
         room_cfg = APARTMENT_LAYOUT.get(room, APARTMENT_LAYOUT["living_room"])
         outside = str(room_cfg.get("window_view") or "")
+        # window_view 自身已经是完整视景句（"窗外正对长江江面…""窗下是小区绿植…"），
+        # 再套一层"窗外是{outside}"会拼出"窗外是窗外正对…""窗外是窗下是…"的病句，
+        # 因此这里只把光源/室内灯写在前面，视景句原样衔接。
         if alt < 0.0:
-            light_cn = f"屋内暖灯亮着，窗外是{outside}的夜色"
+            light_cn = f"屋内暖灯亮着，{outside}"
         elif alt < 20.0 and not rising:
-            light_cn = f"暖橘色的夕阳余晖洒进{room_cfg['window']}的落地窗，窗外是{outside}的江上日落"
+            light_cn = f"暖橘色的夕阳余晖洒进{room_cfg['window']}的落地窗，{outside}"
         elif 150.0 <= az <= 290.0 and alt >= 20.0:
-            light_cn = f"午后的阳光直直洒进{room_cfg['window']}的落地窗，窗外是{outside}"
+            light_cn = f"午后的阳光直直洒进{room_cfg['window']}的落地窗，{outside}"
         elif 60.0 <= az < 150.0 and alt >= 5.0:
-            light_cn = f"柔和的晨光斜斜照进{room_cfg['window']}的窗外，窗外是{outside}"
+            light_cn = f"柔和的晨光斜斜照进{room_cfg['window']}的窗外，{outside}"
         else:
-            light_cn = f"明亮的自然光从{room_cfg['window']}的窗外照进来，窗外是{outside}"
+            light_cn = f"明亮的自然光从{room_cfg['window']}的窗外照进来，{outside}"
 
     return {
         "time_cn": time_cn,

@@ -10,6 +10,9 @@ Routes:
   POST /api/napcat/stop     — stop NapCat
   GET  /api/napcat/logs     — NapCat recent logs
   GET  /api/napcat/qrcode   — QR code PNG
+  GET  /api/napcat/runtime/status  — controlled QQ runtime status
+  POST /api/napcat/runtime/install — install pinned official QQ into data/
+  POST /api/napcat/runtime/installer — launch bundled official OneKey installer
   GET  /api/emotion/state   — emotion engine state
   GET  /api/tools/list      — registered tools
   GET  /api/stats/tokens    — token usage stats
@@ -1952,6 +1955,45 @@ async def napcat_update_check() -> dict:
     from core.napcat_downloader import get_downloader
 
     return await asyncio.to_thread(get_downloader().check_update)
+
+
+# ── NapCat 受控 QQ 运行时（解决 Beta QQ 风控 / 不弹 QQ 登录窗口）──────
+# 主路径：程序化下载腾讯官方固定版本 QQ 到受控目录；兜底：内置官方引导器。
+
+def _service_settings() -> dict:
+    """服务级配置读取（失败回落空 dict，绝不因配置读不出来中断端点）。"""
+    try:
+        return load_settings() or {}
+    except Exception:
+        logger.debug("load_settings failed for napcat endpoint", exc_info=True)
+        return {}
+
+
+@app.get("/api/napcat/runtime/status")
+async def napcat_runtime_status() -> dict:
+    from core.napcat_installer import get_installer
+
+    return get_installer(_service_settings()).status()
+
+
+@app.post("/api/napcat/runtime/install")
+async def napcat_runtime_install() -> dict:
+    """触发受控 QQ 运行时安装（后台线程执行，前端轮询 runtime/status）。"""
+    from core.napcat_installer import get_installer
+
+    installer = get_installer(_service_settings())
+    if installer.is_running():
+        return {"ok": False, "message": "安装已在进行中", "error_code": "already_running"}
+    asyncio.create_task(asyncio.to_thread(installer.install_qq_runtime))
+    return {"ok": True, "message": "安装任务已启动"}
+
+
+@app.post("/api/napcat/runtime/installer")
+async def napcat_runtime_launch_installer() -> dict:
+    """兜底路径：在受控目录里拉起内置官方引导器（需要人工点完安装）。"""
+    from core.napcat_installer import get_installer
+
+    return get_installer(_service_settings()).launch_bundled_installer()
 
 
 def _ilink_pairing_enabled() -> bool:

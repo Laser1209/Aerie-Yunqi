@@ -66,8 +66,12 @@ def _read_download_marker() -> Path | None:
         return None
 
 
-def _find_system_qq_exe() -> Path | None:
-    """Resolve the installed QQ.exe path from the uninstall registry entry."""
+def _find_registry_qq_exe() -> Path | None:
+    """Resolve the installed QQ.exe path from the uninstall registry entry.
+
+    **最后兜底**：注册表那份 QQ 可能是 Beta 通道且自动升级，NapCat 注入后容易
+    触发账号风控（用户实测：连一段时间就被要求重新登录）。优先用受控目录里的 QQ。
+    """
     if sys.platform != "win32":
         return None
     try:
@@ -84,7 +88,35 @@ def _find_system_qq_exe() -> Path | None:
         return None
 
 
-def _build_launch_command(napcat_dir: Path) -> list[str] | None:
+def resolve_qq_exe(settings: dict | None = None) -> tuple[Path | None, str]:
+    """QQ.exe 来源解析（顺序即优先级），返回 ``(path, source)``。
+
+    优先级：显式配置 → **受控运行时目录** → 系统注册表（兜底）。
+    ``source`` ∈ ``{"config", "controlled", "system_registry", ""}``，透传到状态里，
+    让"当前吃的是哪份 QQ"对用户可见 —— 这正是 Beta QQ 风控问题的可观测面。
+    """
+    env_exe = os.environ.get("AERIE_QQ_EXE")
+    cfg_exe = (settings or {}).get("napcat", {}).get("qq_exe")
+    for raw, label in ((env_exe, "config"), (cfg_exe, "config")):
+        if raw:
+            candidate = Path(str(raw)).expanduser()
+            if candidate.exists():
+                return candidate, label
+    try:
+        from core.napcat_installer import resolve_qq_exe as _controlled_qq
+
+        controlled = _controlled_qq(settings)
+    except Exception:
+        controlled = None
+    if controlled is not None:
+        return controlled, "controlled"
+    registry = _find_registry_qq_exe()
+    if registry is not None:
+        return registry, "system_registry"
+    return None, ""
+
+
+def _build_launch_command(napcat_dir: Path, qq_exe: Path | None) -> list[str] | None:
     """Build the napimain.exe argv for NapCat Framework v4.18+.
 
     Layout: ``napimain.exe <QQ.exe> <napiloader.dll> <nativeLoader.cjs>``.
@@ -95,7 +127,6 @@ def _build_launch_command(napcat_dir: Path) -> list[str] | None:
     boot_main = napcat_dir / "napimain.exe"
     inject_dll = napcat_dir / "napiloader.dll"
     loader_cjs = napcat_dir / "nativeLoader.cjs"
-    qq_exe = _find_system_qq_exe()
     if not all(p.exists() for p in (boot_main, inject_dll, loader_cjs)) or qq_exe is None:
         return None
     # NapCat's own loader scripts pass the CJS entry with forward slashes and
@@ -206,7 +237,9 @@ class NapcatLauncher:
         napcat_cfg = self.settings.get("napcat", {})
         self.ws_port = int(napcat_cfg.get("ws_port", 3001))
         self.napcat_dir = _resolve_napcat_dir(self.settings)
-        self._launch_cmd = _build_launch_command(self.napcat_dir)
+        self._qq_exe: Path | None = None
+        self._qq_source = ""
+        self._launch_cmd = self._resolve_launch_command()
         self.qrcode_path = self.napcat_dir / "cache" / "qrcode.png"
         self._proc: subprocess.Popen | None = None
         self._owns_process = False
@@ -239,12 +272,30 @@ class NapcatLauncher:
     def _refresh_paths(self) -> None:
         """Re-resolve NapCat paths（下载解压后配置可能已更新，启动前刷新）。"""
         self.napcat_dir = _resolve_napcat_dir(self.settings)
-        self._launch_cmd = _build_launch_command(self.napcat_dir)
+        self._launch_cmd = self._resolve_launch_command()
         self.qrcode_path = self.napcat_dir / "cache" / "qrcode.png"
         self._webui = None
         self._login = None
         self._ob11_ensured = False
         self._owned_qq_pids = set()
+
+    def _resolve_launch_command(self) -> list[str] | None:
+        """解析启动命令，同时记录本次实际使用的 QQ 来源（供状态面板展示）。"""
+        qq_exe, source = resolve_qq_exe(self.settings)
+        self._qq_exe = qq_exe
+        self._qq_source = source
+        return _build_launch_command(self.napcat_dir, qq_exe)
+
+    def _setup_error_code(self) -> str:
+        """启动命令不可用时区分"缺 NapCat 本体"与"缺 QQ 宿主"，便于面板给对提示。"""
+        components = (
+            self.napcat_dir / "napimain.exe",
+            self.napcat_dir / "napiloader.dll",
+            self.napcat_dir / "nativeLoader.cjs",
+        )
+        if not all(p.exists() for p in components):
+            return "launcher_not_found"
+        return "qq_not_found" if self._qq_exe is None else "launcher_not_found"
 
     def _service_alive(self) -> bool:
         """True while any sign of our NapCat stack is alive.
@@ -303,6 +354,10 @@ class NapcatLauncher:
             "login_error": str(login.get("login_error") or ""),
             "owned": bool(running and self._owns_process),
             "error_code": self._error_code if phase == "error" else "",
+            # QQ 宿主来源（可观测性）：system_registry 表示吃的是系统那份 QQ，
+            # 若它是 Beta 通道就有风控风险 —— 面板据此提示切换到受控运行时。
+            "qq_source": self._qq_source,
+            "qq_ready": self._qq_exe is not None,
         }
 
     def get_logs(self, limit: int = 50) -> list[str]:
@@ -336,10 +391,14 @@ class NapcatLauncher:
 
         if self._launch_cmd is None:
             self._phase = "error"
-            self._error_code = "launcher_not_found"
+            self._error_code = self._setup_error_code()
             return {
                 "ok": False,
-                "message": "NapCat launcher is unavailable",
+                "message": (
+                    "受控 QQ 运行时尚未安装"
+                    if self._error_code == "qq_not_found"
+                    else "NapCat launcher is unavailable"
+                ),
                 "error_code": self._error_code,
             }
 

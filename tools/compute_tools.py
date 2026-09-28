@@ -16,6 +16,28 @@ from core.computer_control import ComputerController
 
 def register_computer_tools(registry: Any, controller: ComputerController) -> None:
     """Register all computer control tools."""
+    from core.desktop_ai import DesktopAITask
+    task = DesktopAITask(controller)
+    for suffix, handler, required, description in (
+        ("launch", task.launch, ["app"], "启动注册应用并有界等待唯一窗口"),
+        ("send", task.send, ["app", "text"], "定位输入框、可靠粘贴中文并发送一次"),
+        ("read", task.read_output, ["app"], "回读窗口 UIA 文本或截图视觉内容并保存产物"),
+        ("run", task.run, ["app", "text"], "顺序启动、投递、等待输出变化和静默、回读；静默不代表语义完成"),
+    ):
+        properties = {"app": {"type": "string", "description": "desktop_apps.yaml 注册应用标识"}}
+        if suffix in {"send", "run"}:
+            properties["text"] = {"type": "string", "description": "要发送的任务文本"}
+        if suffix in {"read", "run"}:
+            properties["mode"] = {"type": "string", "enum": ["uia", "screenshot"], "default": "uia"}
+        if suffix == "run":
+            properties["timeout"] = {"type": "number", "minimum": 1, "maximum": 120}
+            properties["quiet_period"] = {"type": "number", "minimum": 0.1, "maximum": 119}
+        name = f"desktop_app_{suffix}"
+        registry.register(name, handler, {
+            "name": name,
+            "description": description + "。使用统一权限审批；失败立即停止。screenshot/list_windows/focus_window 保留为基础观察与定位工具。",
+            "parameters": {"type": "object", "properties": properties, "required": required},
+        }, category="system_control")
 
     registry.register("screenshot", controller.take_screenshot, {
         "name": "screenshot",
@@ -170,7 +192,7 @@ def register_computer_tools(registry: Any, controller: ComputerController) -> No
 
     registry.register("type_text", controller.type_text, {
         "name": "type_text",
-        "description": """在当前焦点窗口输入文本（模拟键盘逐字输入）。
+        "description": """在当前焦点窗口通过 Unicode 剪贴板和 Ctrl+V 输入文本。
 
 使用场景：
 - 在文本框、编辑器中输入内容

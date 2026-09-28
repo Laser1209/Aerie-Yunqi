@@ -1,0 +1,13 @@
+# voice-rvc pack — RVC 变声（Applio 最小移植，约 1GB）
+#
+# torch 只在该包安装且 voice_conversion.enabled=true 时惰性 import。
+# Windows 取 CPU wheel：
+#   pip download -r plugins/voice-rvc/requirements.txt ^
+#       --extra-index-url https://download.pytorch.org/whl/cpu ^
+#       -d <wheelhouse>
+# 权重资产（lenai_v2.pth / rmvpe.pt / ContentVec）随包进 models/，
+# 不属于 pip 依赖。
+#
+# 发布版本在 pack 构建时冻结为精确 == 版本并写入 pack.json shared_requires。
+torch>=2.5,<3
+scipy>=1.14,<2

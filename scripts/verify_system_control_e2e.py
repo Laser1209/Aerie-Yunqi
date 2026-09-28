@@ -2,7 +2,7 @@
 端到端验证：Agent 系统操控能力完整集成验证
 
 验证内容：
-1. 工具注册完整性（compute_tools + screen_tools + office_tools）
+1. 工具注册完整性（compute_tools + office_tools）
 2. 工具分类正确性
 3. ContextBuilder L5 系统操作方法论
 4. Office Mode 增强
@@ -23,7 +23,6 @@ def test_tool_registration_integrity():
 
     from core.tool_registry import ToolRegistry
     from core.computer_control import ComputerController
-    from core.screen_tools import register_screen_tools
     from tools.compute_tools import register_computer_tools
     from core.office_tools import register_office_tools
 
@@ -31,7 +30,6 @@ def test_tool_registration_integrity():
     controller = ComputerController()
 
     # 注册所有工具
-    register_screen_tools(registry)
     register_computer_tools(registry, controller)
     register_office_tools(registry)
 
@@ -55,9 +53,8 @@ def test_tool_registration_integrity():
             "screenshot", "mouse_click", "type_text", "shell_execute",
             "list_windows", "uia_action", "focus_window",
         ],
-        "旧版系统控制工具（LEGACY）": [
-            "screen_screenshot", "screen_mouse_click", "screen_key_type",
-            "screen_shell", "screen_window_list", "screen_uia_action",
+        "桌面应用工作流": [
+            "desktop_app_launch", "desktop_app_send", "desktop_app_read", "desktop_app_run",
         ],
         "办公工具": [
             "document_create", "document_read", "file_search",

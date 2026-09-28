@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "note": "Aerie 功能包目录（一期一方包，无第三方市场）。urls 为空表示尚未发布；sha256/size 在阶段 D 发布流水线生成后回填。",
+  "packs": [
+    {
+      "id": "browser",
+      "available": false,
+      "sizeMb": 170,
+      "api_level": 1,
+      "min_core": "0.3.2",
+      "restart_required": true,
+      "name": {
+        "zh": "浏览器内核",
+        "en": "Browser Engine"
+      },
+      "summary": {
+        "zh": "自建 Playwright 内核，支持网页打开、点击、填表与抓取；不依赖外部 WebBridge。",
+        "en": "Self-hosted Playwright engine for browsing, clicking, forms and scraping."
+      },
+      "urls": [],
+      "sha256": ""
+    },
+    {
+      "id": "voice-asr",
+      "available": false,
+      "sizeMb": 250,
+      "api_level": 1,
+      "min_core": "0.3.2",
+      "restart_required": true,
+      "name": {
+        "zh": "本地语音识别",
+        "en": "Local Speech Recognition"
+      },
+      "summary": {
+        "zh": "sherpa-onnx + SenseVoice 离线转写、语音活动检测与唤醒词，无 torch、断网可用。",
+        "en": "Offline sherpa-onnx + SenseVoice ASR, VAD and wake-word; no torch, works offline."
+      },
+      "urls": [],
+      "sha256": ""
+    },
+    {
+      "id": "voice-rvc",
+      "available": false,
+      "sizeMb": 1000,
+      "api_level": 1,
+      "min_core": "0.3.2",
+      "restart_required": true,
+      "name": {
+        "zh": "语音变声引擎",
+        "en": "Voice Conversion Engine"
+      },
+      "summary": {
+        "zh": "RVC 音色转换（CPU torch + 专属权重），用于出站语音条与实时通话变声。",
+        "en": "RVC voice conversion (CPU torch + persona weights) for voice notes and calls."
+      },
+      "urls": [],
+      "sha256": ""
+    },
+    {
+      "id": "knowledge",
+      "available": false,
+      "sizeMb": 270,
+      "api_level": 1,
+      "min_core": "0.3.2",
+      "restart_required": true,
+      "name": {
+        "zh": "本地向量知识库",
+        "en": "Local Vector Knowledge"
+      },
+      "summary": {
+        "zh": "chromadb 本地向量检索；缺失时自动退回确定性哈希索引，核心功能不受影响。",
+        "en": "Local chromadb vector retrieval; falls back to deterministic hashing when absent."
+      },
+      "urls": [],
+      "sha256": ""
+    }
+  ]
+}

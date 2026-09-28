@@ -1,0 +1,8 @@
+# browser pack — 自建 Playwright 浏览器自动化
+#
+# wheel 进 .aeriepack 的 vendor/；Chromium 内核进 bin/ms-playwright
+# （阶段 D 由 scripts/build_plugin_pack.py 用 `playwright install chromium`
+#  装配，运行时 PLAYWRIGHT_BROWSERS_PATH 指向包内 bin）。
+#
+# 发布版本在 pack 构建时冻结为精确 == 版本并写入 pack.json shared_requires。
+playwright>=1.49,<2

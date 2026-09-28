@@ -1187,7 +1187,15 @@ def tool_app_open(app_name: str) -> dict:
         打开结果
     """
     try:
-        import subprocess
+        from core.desktop_ai import load_apps
+
+        controller = _get_controller()
+        if controller is None:
+            return {"success": False, "error": "统一电脑操控器不可用"}
+        apps = load_apps()
+        registered = apps.get((app_name or "").strip().lower())
+        if registered is not None:
+            return controller.app_launch(registered.get("exe", ""), registered.get("args", [])).to_dict()
 
         # 不含 cmd/powershell：旧实现等于给模型开了一条绕过 shell 危险命令
         # 矩阵与审批闸门的通道
@@ -1213,7 +1221,7 @@ def tool_app_open(app_name: str) -> dict:
             exe = app_map[key]
         else:
             # 拒绝夹带参数 / UNC / 脚本解释器；绝对路径只接受 exe 与快捷方式
-            if any(ch.isspace() for ch in raw):
+            if not os.path.isabs(raw) and any(ch.isspace() for ch in raw):
                 return {"success": False, "error": "不支持带参数启动，仅可指定程序名"}
             lowered = raw.lower()
             if lowered.startswith("\\\\"):
@@ -1221,7 +1229,7 @@ def tool_app_open(app_name: str) -> dict:
             # 危险命令首词（wscript/mshta/regsvr32/schtasks 等）与脚本后缀
             from core.computer_control import RestrictedShell
 
-            if RestrictedShell().is_dangerous(raw):
+            if RestrictedShell().is_dangerous(raw)[0]:
                 return {
                     "success": False,
                     "error": f"该程序不允许通过 app_open 启动: {raw}，如需执行命令请走命令行工具",
@@ -1241,15 +1249,7 @@ def tool_app_open(app_name: str) -> dict:
                     }
                 exe = raw
 
-        # 直接启动程序本身，不再经 `cmd /c start` 中介，避免元字符注入
-        subprocess.Popen([exe], shell=False)
-
-        return {
-            "success": True,
-            "app": app_name,
-            "exe": exe,
-            "message": f"正在打开 {app_name}",
-        }
+        return controller.app_launch(exe).to_dict()
     except Exception as e:
         logger.exception("app_open error")
         return {"success": False, "error": str(e)}

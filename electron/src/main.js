@@ -20,6 +20,7 @@ const { createCapabilityBroker } = require("./capability-broker");
 const { createPluginSupervisor } = require("./plugin-supervisor");
 const { createEnvFeatureFlags, createWorldDashboardHost } = require("./world-dashboard-host");
 const { ensurePythonRuntime, buildManualTutorial } = require("./runtime-bootstrap");
+const pluginManager = require("./plugin-manager");
 
 // Windows toast 归属：不设置 AppUserModelID 时，系统通知的来源名会显示
 // "Electron" 而非 "Aerie · 云栖"。需与 package.json build.appId 保持一致
@@ -482,6 +483,13 @@ function _spawnNewPython() {
       ...(app.isPackaged ? { PYTHONNOUSERSITE: "1" } : {}),
       AERIE_DATA_DIR: BACKEND_DATA_DIR,
       AERIE_DB_PATH: BACKEND_DB_PATH,
+      // 功能包根目录：必须与后端 core.paths.plugins_dir() 默认推断一致，
+      // 显式注入可保证开发/打包两种形态都指向 Electron 管理的同一目录。
+      AERIE_PLUGINS_DIR: pluginManager.getPluginsDir({
+        isPackaged: app.isPackaged,
+        userData: app.getPath("userData"),
+        projectRoot: PROJECT_ROOT,
+      }),
       AERIE_BACKEND_PORT: String(PY_PORT),
       AERIE_BACKEND_INSTANCE_ID: EXPECTED_BACKEND_INSTANCE_ID,
       AERIE_MAIN_PROCESS_TOKEN: MAIN_PROCESS_TOKEN,
@@ -1624,6 +1632,144 @@ ipcMain.handle("api:request", async (_event, opts) => {
   } catch (err) {
     return { status: 0, data: { error: err.message } };
   }
+});
+
+// ── 功能包（.aeriepack）模块中心 ─────────────────────
+// catalog / 文件状态在主进程合并；加载态（loaded/broken/incompatible）
+// 以后端 GET /api/plugins 为唯一事实来源。
+const _pluginInstallTokens = new Map();
+
+function _pluginLocations() {
+  return {
+    isPackaged: app.isPackaged,
+    userData: app.getPath("userData"),
+    projectRoot: PROJECT_ROOT,
+  };
+}
+
+function _broadcastPluginProgress(payload) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    try { win.webContents.send("plugins:progress", payload); } catch (_) {}
+  }
+}
+
+async function _backendPluginStates() {
+  try {
+    const r = await apiRequest({ method: "GET", path: "/api/plugins" });
+    const list = (r && r.data && Array.isArray(r.data.plugins)) ? r.data.plugins : [];
+    return { online: true, map: new Map(list.map((p) => [p.id, p])) };
+  } catch (_) {
+    return { online: false, map: new Map() };
+  }
+}
+
+ipcMain.handle("plugins:catalog", async () => {
+  const loc = _pluginLocations();
+  let catalog = [];
+  try {
+    catalog = pluginManager.loadCatalog();
+  } catch (err) {
+    return { ok: false, error: `catalog 读取失败: ${err.message}` };
+  }
+  const installed = pluginManager.listInstalled(loc);
+  const installedMap = new Map(installed.map((p) => [p.id, p]));
+  const backendState = await _backendPluginStates();
+  const backendMap = backendState.map;
+
+  const packs = catalog.map((entry) => {
+    const fsEntry = installedMap.get(entry.id);
+    const backend = backendMap.get(entry.id);
+    let state = "not_installed";
+    if (backend) {
+      state = backend.state; // loaded | broken | incompatible
+    } else if (fsEntry) {
+      state = fsEntry.admitted ? "awaiting_restart" : "broken";
+    }
+    return {
+      ...entry,
+      state,
+      installedVersion: fsEntry ? fsEntry.version : null,
+      tools: backend ? backend.tools : [],
+      error: backend ? backend.error : "",
+      downloading: _pluginInstallTokens.has(entry.id),
+    };
+  });
+
+  return {
+    ok: true,
+    pluginsDir: pluginManager.getPluginsDir(loc),
+    packs,
+    backendOnline: backendState.online,
+  };
+});
+
+ipcMain.handle("plugins:install", async (_event, payload) => {
+  const id = payload && payload.id;
+  const loc = _pluginLocations();
+  const entry = pluginManager.loadCatalog().find((p) => p.id === id);
+  if (!entry) return { ok: false, error: `未知模块: ${id}` };
+  if (!entry.available || !entry.urls || entry.urls.length === 0) {
+    return { ok: false, error: "该模块尚未发布 / pack not published yet" };
+  }
+  if (_pluginInstallTokens.has(id)) {
+    return { ok: false, error: "已在下载中" };
+  }
+
+  const token = { cancelled: false };
+  _pluginInstallTokens.set(id, token);
+  _broadcastPluginProgress({ id, phase: "queued", percent: 0 });
+  try {
+    const result = await pluginManager.installFromCatalog(
+      loc, entry, token,
+      (p) => _broadcastPluginProgress({ id, ...p }),
+    );
+    return { ok: true, ...result, restartRequired: !!entry.restart_required };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    _pluginInstallTokens.delete(id);
+    _broadcastPluginProgress({ id, phase: "idle", percent: 0 });
+  }
+});
+
+ipcMain.handle("plugins:cancel", async (_event, payload) => {
+  const id = payload && payload.id;
+  const token = _pluginInstallTokens.get(id);
+  if (token) token.cancelled = true;
+  return { ok: true };
+});
+
+ipcMain.handle("plugins:remove", async (_event, payload) => {
+  const id = payload && payload.id;
+  const removed = pluginManager.removePack(_pluginLocations(), id);
+  return { ok: removed, restartRequired: true };
+});
+
+ipcMain.handle("plugins:install-local", async () => {
+  const loc = _pluginLocations();
+  const choice = await dialog.showOpenDialog(mainWindow, {
+    title: "选择功能包安装文件 / Select .aeriepack",
+    filters: [{ name: "Aerie Pack", extensions: ["aeriepack", "zip"] }],
+    properties: ["openFile"],
+  });
+  if (choice.canceled || !choice.filePaths || !choice.filePaths.length) {
+    return { ok: false, canceled: true };
+  }
+  try {
+    const result = await pluginManager.installLocalZip(loc, choice.filePaths[0]);
+    return { ok: true, ...result, restartRequired: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("plugins:open-dir", async () => {
+  const dir = pluginManager.getPluginsDir(_pluginLocations());
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (_) {}
+  shell.openPath(dir);
+  return { ok: true, dir };
 });
 
 ipcMain.handle("world-dashboard:get-status", async () => {

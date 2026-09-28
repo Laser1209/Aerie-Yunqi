@@ -190,17 +190,17 @@ def test_app_open_rejects_script_extension_absolute(office_dir):
 
 
 def test_app_open_whitelisted_starts_directly(office_dir, monkeypatch):
-    captured: list[list[str]] = []
+    from core.computer_control import ComputerController, ControlMode, ControlResult
+    from unittest.mock import Mock
 
-    def _fake_popen(cmd, shell=False):
-        captured.append(cmd)
-        assert shell is False
-        assert cmd == ["notepad.exe"]
-
-    monkeypatch.setattr("subprocess.Popen", _fake_popen)
+    controller = ComputerController(mode=ControlMode.AUTO, persist=False, audit_log_dir=str(office_dir / "audit"))
+    launch = Mock(return_value=ControlResult(True, "app_launch"))
+    monkeypatch.setattr(controller, "_launch_app", launch)
+    monkeypatch.setattr(office_tools, "_get_controller", lambda: controller)
     result = office_tools.tool_app_open("notepad")
     assert result["success"] is True
-    assert captured and captured[0] == ["notepad.exe"]
+    launch.assert_called_once_with(exe="notepad.exe", args=[])
+    assert controller.get_audit_logs()[-1]["action"] == "app_launch"
 
 
 # ────────────────────────────────────────────── M4：web_fetch

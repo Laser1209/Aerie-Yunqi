@@ -96,23 +96,19 @@ def test_after_fix():
 
 
 def test_full_registration_flow():
-    """测试完整的注册流程（screen_tools + compute_tools + office_tools）"""
+    """测试统一电脑操控工具注册流程。"""
     print("\n" + "=" * 70)
     print("【测试3】完整工具注册流程")
     print("=" * 70)
 
     from core.tool_registry import ToolRegistry
     from core.computer_control import ComputerController
-    from core.screen_tools import register_screen_tools
     from tools.compute_tools import register_computer_tools
 
     registry = ToolRegistry()
     controller = ComputerController()
 
-    # 注册 screen_tools（旧版）
-    register_screen_tools(registry)
-    screen_count = len(registry.get_openai_schema())
-    print(f"\n旧版 screen_tools：{screen_count} 个工具")
+    screen_count = 0
 
     # 注册 compute_tools（新版）
     register_computer_tools(registry, controller)

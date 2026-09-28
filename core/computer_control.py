@@ -76,6 +76,7 @@ class PolicyEntry:
 
 class ControlAction(str, Enum):
     """操作类型"""
+    APP_LAUNCH = "app_launch"
     SCREENSHOT = "screenshot"
     MOUSE_MOVE = "mouse_move"
     MOUSE_CLICK = "mouse_click"
@@ -198,6 +199,7 @@ DANGEROUS_COMMAND_PATTERNS: tuple[str, ...] = (
 
 # 操作 → 风险等级映射
 ACTION_RISK_MAP = {
+    ControlAction.APP_LAUNCH: RiskLevel.LOW,
     ControlAction.SCREENSHOT: RiskLevel.SAFE,
     ControlAction.WINDOW_INFO: RiskLevel.SAFE,
     ControlAction.MOUSE_MOVE: RiskLevel.LOW,
@@ -247,6 +249,8 @@ def _audit_safe_params(action: "ControlAction", params: dict) -> dict:
             "command": str(params.get("command", ""))[:200],
             "cwd": params.get("cwd"),
         }
+    if action == ControlAction.APP_LAUNCH:
+        return {"exe": params.get("exe", ""), "argument_count": len(params.get("args", []))}
     if action == ControlAction.KEY_TYPE:
         return {"text_length": len(str(params.get("text", "")))}
     if action == ControlAction.UIA_ACTION:
@@ -849,6 +853,7 @@ class KeyboardController:
     def _get_vk_code(self, key: str) -> int:
         """获取虚拟键码"""
         key_map = {
+            "ctrl": 0x11, "alt": 0x12, "shift": 0x10, "win": 0x5B,
             "enter": 0x0D,
             "space": 0x20,
             "backspace": 0x08,
@@ -875,6 +880,22 @@ class KeyboardController:
             return ord(key.upper())
 
         raise ValueError(f"不支持的按键: {key}")
+
+    def type_text_reliable(self, text: str) -> ControlResult:
+        """使用 Unicode 剪贴板粘贴文本；任何注入失败均返回失败。"""
+        try:
+            import win32clipboard
+            win32clipboard.OpenClipboard()
+            try:
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+            finally:
+                win32clipboard.CloseClipboard()
+            result = self.hotkey("ctrl", "v")
+            return ControlResult(result.success, ControlAction.KEY_TYPE.value,
+                                 data={"length": len(text)}, error=result.error)
+        except Exception as exc:
+            return ControlResult(False, ControlAction.KEY_TYPE.value, error=str(exc))
 
     def type_text(self, text: str, interval: float = 0.01) -> ControlResult:
         """输入文本"""
@@ -1303,6 +1324,8 @@ class WindowManager:
             user32 = ctypes.windll.user32
             user32.ShowWindow(hwnd, 9)  # SW_RESTORE
             user32.SetForegroundWindow(hwnd)
+            if user32.GetForegroundWindow() != hwnd:
+                raise RuntimeError("目标窗口未获得前台焦点")
 
             return ControlResult(
                 success=True,
@@ -1315,6 +1338,25 @@ class WindowManager:
                 action=ControlAction.WINDOW_FOCUS.value,
                 error=str(e),
             )
+
+    def wait_for_window(self, title_contains: str, timeout_ms: int = 10000) -> ControlResult:
+        """在有界时间内等待唯一匹配窗口，歧义时拒绝选取。"""
+        if not title_contains.strip() or not 0 <= timeout_ms <= 120000:
+            return ControlResult(False, ControlAction.WINDOW_INFO.value, error="窗口标题或等待时间无效")
+        deadline = time.monotonic() + timeout_ms / 1000
+        while True:
+            result = self.find_window(title_contains)
+            if not result.success:
+                return result
+            if result.data.get("count", 0) > 1:
+                return ControlResult(False, ControlAction.WINDOW_INFO.value, error="匹配到多个窗口，请细化窗口标题")
+            if result.data.get("count") == 1:
+                return result
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return ControlResult(False, ControlAction.WINDOW_INFO.value,
+                                     error="等待窗口超时", data={"timeout_ms": timeout_ms})
+            time.sleep(min(0.1, remaining))
 
     def find_window(self, title_contains: str) -> ControlResult:
         """按标题查找窗口"""
@@ -1430,6 +1472,37 @@ class UIAController:
                 action=ControlAction.UIA_ACTION.value,
                 error=f"列举控件失败: {e}",
             )
+
+    def read_text(self, handle: int) -> ControlResult:
+        """读取指定窗口可见文本，不将控件枚举成功误当作答案。"""
+        connected = self.connect(handle=handle)
+        if not connected.success:
+            return connected
+        try:
+            texts = [child.window_text().strip() for child in self._app.window(handle=handle).descendants(control_type="Text")
+                     if child.is_visible()]
+            text = "\n".join(dict.fromkeys(value for value in texts if value))
+            return ControlResult(bool(text), ControlAction.UIA_ACTION.value,
+                                 data={"text": text}, error="" if text else "窗口没有可读取文本")
+        except Exception as exc:
+            return ControlResult(False, ControlAction.UIA_ACTION.value, error=str(exc))
+
+    def focus_input(self, handle: int, input_hint: str) -> ControlResult:
+        """按注册表中的控件名称定位唯一输入框。"""
+        connected = self.connect(handle=handle)
+        if not connected.success:
+            return connected
+        try:
+            inputs = [child for child in self._app.window(handle=handle).descendants()
+                      if child.element_info.control_type in {"Edit", "Document"}
+                      and child.is_visible() and child.is_enabled()
+                      and (not input_hint or child.element_info.name == input_hint)]
+            if len(inputs) != 1:
+                raise ValueError("无法定位唯一输入框，请配置准确的 input_hint")
+            inputs[0].set_focus()
+            return ControlResult(True, ControlAction.UIA_ACTION.value)
+        except Exception as exc:
+            return ControlResult(False, ControlAction.UIA_ACTION.value, error=str(exc))
 
     def click_control(self, control_name: str) -> ControlResult:
         """点击指定名称的控件"""
@@ -1560,6 +1633,42 @@ class ComputerController:
         )
         self.audit.log(entry)
 
+    def _launch_app(self, exe: str, args: list[str]) -> ControlResult:
+        try:
+            import shutil
+            expanded = os.path.expandvars(exe)
+            target = str(Path(expanded).resolve()) if Path(expanded).is_absolute() else shutil.which(expanded)
+            if not target or not Path(target).is_file():
+                raise ValueError("应用未配置或未安装")
+            head = Path(target).stem.lower()
+            dangerous, _ = self.shell.is_dangerous(subprocess.list2cmdline([target, *args]))
+            if dangerous or head in {"cmd", "powershell", "pwsh", "python", "pythonw", "node", "msiexec", "rundll32"}:
+                raise ValueError("脚本或命令解释器必须使用 shell_execute")
+            if Path(target).suffix.lower() != ".exe" or target.startswith("\\\\"):
+                raise ValueError("仅允许本地 exe 应用")
+            process = subprocess.Popen([target, *args], shell=False)
+            return ControlResult(True, ControlAction.APP_LAUNCH.value,
+                                 data={"exe": target, "pid": process.pid})
+        except Exception as exc:
+            return ControlResult(False, ControlAction.APP_LAUNCH.value, error=str(exc))
+
+    def app_launch(self, exe: str, args: Optional[list[str]] = None) -> ControlResult:
+        """通过统一权限与审计启动本地应用，不经 shell。"""
+        details = {"exe": exe, "args": list(args or [])}
+        gate = self._gate(ControlAction.APP_LAUNCH, details)
+        result = gate if gate is not None else self._launch_app(**details)
+        self._audit(ControlAction.APP_LAUNCH, {"exe": exe, "argument_count": len(details["args"])},
+                    "success" if result.success else result.error)
+        return result
+
+    def wait_for_window(self, title_contains: str, timeout_ms: int = 10000) -> ControlResult:
+        """经过窗口读取权限检查后等待窗口。"""
+        details = {"title_contains": title_contains, "timeout_ms": timeout_ms}
+        gate = self._gate(ControlAction.WINDOW_INFO, details)
+        result = gate if gate is not None else self.windows.wait_for_window(**details)
+        self._audit(ControlAction.WINDOW_INFO, details, "success" if result.success else result.error)
+        return result
+
     # ---- 截图 ----
 
     def take_screenshot(self, region: Optional[tuple[int, int, int, int]] = None
@@ -1642,13 +1751,13 @@ class ComputerController:
     def type_text(self, text: str) -> ControlResult:
         """输入文本"""
         action = ControlAction.KEY_TYPE
-        gate = self._gate(action, {"text_length": len(text)})
+        gate = self._gate(action, {"text": text})
         if gate is not None:
             self._audit(action, {"text_length": len(text)},
                         "blocked" if gate.data.get("blocked") else "pending_approval")
             return gate
 
-        result = self.keyboard.type_text(text)
+        result = self.keyboard.type_text_reliable(text)
         self._audit(action, {"text_length": len(text)},
                     "success" if result.success else f"failed: {result.error}")
         return result
@@ -1766,7 +1875,11 @@ class ComputerController:
             return gate
 
         try:
-            if action_type == "list_controls":
+            if action_type == "read_text":
+                result = self.uia.read_text(params["handle"])
+            elif action_type == "focus_input":
+                result = self.uia.focus_input(params["handle"], params.get("input_hint", ""))
+            elif action_type == "list_controls":
                 result = self.uia.list_controls(title=params.get("window_title") or params.get("title"))
             elif action_type == "click":
                 result = self.uia.click_control(params.get("control_name", ""))
@@ -2099,6 +2212,10 @@ class ComputerController:
             user_approved: True 表示来自用户审批放行，直接调用底层组件，
                 绕过权限闸门（避免审批通过后二次弹窗死循环）。
         """
+        if action == ControlAction.APP_LAUNCH:
+            if user_approved:
+                return self._launch_app(params.get("exe", ""), params.get("args", []))
+            return self.app_launch(params.get("exe", ""), params.get("args", []))
         if action == ControlAction.SCREENSHOT:
             region = params.get("region")
             if user_approved:
@@ -2141,19 +2258,23 @@ class ComputerController:
             return self.key_press(params.get("key", ""))
         elif action == ControlAction.KEY_TYPE:
             if user_approved:
-                return self.keyboard.type_text(params.get("text", ""))
+                return self.keyboard.type_text_reliable(params.get("text", ""))
             return self.type_text(params.get("text", ""))
         elif action == ControlAction.SHELL_CMD:
             if user_approved:
                 return self.shell.execute(params.get("command", ""), params.get("cwd"))
             return self.shell_execute(params.get("command", ""), params.get("cwd"))
         elif action == ControlAction.WINDOW_INFO:
+            if "title_contains" in params:
+                if user_approved:
+                    return self.windows.wait_for_window(params["title_contains"], params.get("timeout_ms", 10000))
+                return self.wait_for_window(params["title_contains"], params.get("timeout_ms", 10000))
             if user_approved:
                 return self.windows.list_windows()
             return self.list_windows()
         elif action == ControlAction.WINDOW_FOCUS:
             title = params.get("title", "")
-            hwnd = self._find_window_by_title(title) if title else 0
+            hwnd = self._find_window_by_title(title) if title else params.get("hwnd", 0)
             if user_approved:
                 return self.windows.focus_window(hwnd)
             return self.focus_window(hwnd)
@@ -2173,10 +2294,19 @@ class ComputerController:
                 bool(params.get("overwrite", True)),
             )
         elif action == ControlAction.UIA_ACTION:
-            return self.uia_action(
-                params.get("action_type", ""),
-                params.get("params", {}),
-            )
+            action_type = params.get("action_type", "")
+            values = params.get("params", {})
+            if user_approved:
+                if action_type == "read_text":
+                    return self.uia.read_text(values["handle"])
+                if action_type == "focus_input":
+                    return self.uia.focus_input(values["handle"], values.get("input_hint", ""))
+                if action_type == "list_controls":
+                    return self.uia.list_controls(title=values.get("window_title") or values.get("title"))
+                if action_type == "click":
+                    return self.uia.click_control(values.get("control_name", ""))
+                return ControlResult(False, action.value, error="不支持的 UIA 操作")
+            return self.uia_action(action_type, values)
         else:
             return ControlResult(
                 success=False,

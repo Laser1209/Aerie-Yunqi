@@ -6,34 +6,27 @@ sys.path.insert(0, "e:\\Agent_reply")
 from core.computer_control import ControlMode
 
 
-def test_permission_singleton():
-    """验证 screen_tools 和 companion 共享同一个 ComputerController 实例。"""
-    print("=" * 60)
-    print("测试 1: 权限共享单例验证")
-    print("=" * 60)
+def test_permission_singleton(monkeypatch, tmp_path):
+    """验证办公工具和 companion 共享同一个 ComputerController 实例。"""
+    import core.companion as companion
+    import core.office_tools as office_tools
+    from core.computer_control import ComputerController
 
-    from core.companion import Companion
-    comp = Companion()
+    # 构造 Companion 会发布全局实例；测试结束后恢复两个入口并禁止策略落盘。
+    monkeypatch.setattr(companion, "_COMPANION", None)
+    monkeypatch.setattr(
+        companion,
+        "ComputerController",
+        lambda: ComputerController(persist=False, audit_log_dir=str(tmp_path / "audit")),
+    )
+    comp = companion.Companion()
 
-    from core.screen_tools import get_controller
-    ctrl_tools = get_controller()
-
-    print(f"  companion.computer_controller id: {id(comp.computer_controller)}")
-    print(f"  screen_tools.get_controller() id: {id(ctrl_tools)}")
-
-    assert comp.computer_controller is ctrl_tools, "两个实例不相同！"
-    print("  ✅ screen_tools 和 companion 共享同一实例")
-
-    # 测试模式设置是否双向同步
+    ctrl_tools = office_tools._get_controller()
+    assert comp.computer_controller is ctrl_tools
     comp.computer_controller.set_mode(ControlMode.FULL)
     assert ctrl_tools.mode == ControlMode.FULL
-    print("  ✅ companion 设置 FULL → screen_tools 同步生效")
-
     ctrl_tools.set_mode(ControlMode.MANUAL)
     assert comp.computer_controller.mode == ControlMode.MANUAL
-    print("  ✅ screen_tools 设置 MANUAL → companion 同步生效")
-
-    print()
 
 
 def test_basic_mode_context():
@@ -75,17 +68,6 @@ def test_basic_mode_context():
 
 
 if __name__ == "__main__":
-    try:
-        test_permission_singleton()
-        test_basic_mode_context()
-        print("=" * 60)
-        print("🎉 所有测试通过！")
-        print("=" * 60)
-    except AssertionError as e:
-        print(f"❌ 测试失败: {e}")
-        sys.exit(1)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"❌ 测试异常: {e}")
-        sys.exit(1)
+    import pytest
+
+    sys.exit(pytest.main([__file__]))

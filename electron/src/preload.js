@@ -217,6 +217,22 @@ contextBridge.exposeInMainWorld("aerie", {
     set: (data) => ipcRenderer.invoke("settings:set", data),
     reset: () => ipcRenderer.invoke("settings:reset"),
   },
+  // 功能包模块中心：目录/安装/取消/移除/本地手动安装；下载进度走事件订阅。
+  plugins: {
+    catalog: () => ipcRenderer.invoke("plugins:catalog"),
+    install: (id) => ipcRenderer.invoke("plugins:install", { id }),
+    cancel: (id) => ipcRenderer.invoke("plugins:cancel", { id }),
+    remove: (id) => ipcRenderer.invoke("plugins:remove", { id }),
+    installLocal: () => ipcRenderer.invoke("plugins:install-local"),
+    openDir: () => ipcRenderer.invoke("plugins:open-dir"),
+    onProgress: (cb) => {
+      const handler = (_event, data) => {
+        try { cb(data || {}); } catch (_) {}
+      };
+      ipcRenderer.on("plugins:progress", handler);
+      return () => ipcRenderer.removeListener("plugins:progress", handler);
+    },
+  },
   attachments: {
     open: (attachmentId) => ipcRenderer.invoke("attachments:open", attachmentId),
     download: (attachmentId) => ipcRenderer.invoke("attachments:download", attachmentId),

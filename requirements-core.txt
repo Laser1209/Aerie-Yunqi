@@ -1,0 +1,69 @@
+# Aerie · 云栖 — 核心运行时依赖（瘦身后）
+#
+# 这是 scripts/build_python_runtime.py 清洁构建的唯一输入。
+# 只允许"所有用户都需要"的能力进入核心；重型/可选能力以功能包形式
+# 按需下载，依赖清单见 plugins/<pack>/requirements.txt：
+#   plugins/browser/requirements.txt      Playwright 浏览器内核
+#   plugins/voice-asr/requirements.txt    本地 ASR / 唤醒（sherpa-onnx）
+#   plugins/voice-rvc/requirements.txt    RVC 变声（torch + scipy）
+#   plugins/knowledge/requirements.txt    chromadb 向量库
+#
+# 共享库（numpy / onnxruntime）被核心与多个功能包共同依赖，
+# 必须在核心锁定一份，功能包不得自带或抬高版本（见 ADR-1 R1）。
+#
+# Python: >=3.10 (tested on CPython 3.14)
+
+# ── HTTP API server ──────────────────────────────────────────────────
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+
+# ── 共享原生库（核心 + 语音/知识库包共用，锁版本唯一来源） ──────────
+numpy==2.5.1
+onnxruntime==1.28.0          # magika 文件检测（markitdown）也在使用
+
+# ── 异步与网络 ───────────────────────────────────────────────────────
+aiohttp==3.14.1
+websockets==16.1.1
+httpx==0.28.1
+requests==2.34.2
+cryptography==50.0.0
+qrcode[pil]==8.2
+
+# ── 进程 / 系统监控 ──────────────────────────────────────────────────
+psutil==7.2.2
+
+# ── 日志与配置 ───────────────────────────────────────────────────────
+loguru==0.7.3
+pyyaml==6.0.3
+python-dotenv==1.2.2
+argon2-cffi==25.1.0
+
+# ── 调度器 ───────────────────────────────────────────────────────────
+apscheduler==3.11.3
+
+# ── LLM 客户端 ───────────────────────────────────────────────────────
+openai==2.45.0
+
+# ── 附件摄入（office/pdf/html/csv -> Markdown） ─────────────────────
+# 刻意不带 audio-transcription extras（av/SpeechRecognition 归 voice-asr 包）；
+# 刻意不带 az-* 云服务 extras（本地不用）。
+markitdown[docx,outlook,pdf,pptx,xls,xlsx,youtube-transcription]==0.1.6
+
+# ── 文档生成 ─────────────────────────────────────────────────────────
+python-docx==1.2.0
+Markdown==3.10.2
+weasyprint==69.0               # requires GTK runtime on Windows
+
+# ── 多模态输出 / OCR ─────────────────────────────────────────────────
+edge-tts==7.2.8
+Pillow==12.2.0
+pytesseract==0.3.13
+
+# ── 信息抓取（trafilatura 正文提取 + 热榜聚合） ─────────────────────
+feedparser==6.0.12
+trafilatura==2.2.0
+
+# ── Windows 集成（UAC / 任务计划 / UI 自动化 / 截屏） ───────────────
+pywin32==312 ; sys_platform == "win32"
+pywinauto==0.6.9 ; sys_platform == "win32"
+pyautogui==0.9.54 ; sys_platform == "win32"

@@ -1,0 +1,65 @@
+# exe 必须填写本机核实过的安装路径；空值不会尝试猜测或启动。
+# input_hint 为 UIA 输入控件名称；空值仅允许窗口内唯一可见输入控件。
+claude:
+  exe: ''
+  args: []
+  window_title: Claude
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+kimi:
+  exe: ''
+  args: []
+  window_title: Kimi
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+trae_cn:
+  exe: ''
+  args: []
+  window_title: TRAE
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+marvis:
+  exe: ''
+  args: []
+  window_title: Marvis
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+workbuddy:
+  exe: ''
+  args: []
+  window_title: WorkBuddy
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+reasonix:
+  exe: ''
+  args: []
+  window_title: Reasonix
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+opencode:
+  exe: ''
+  args: []
+  window_title: OpenCode
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+trae_work_cn:
+  exe: ''
+  args: []
+  window_title: TRAE Work
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15
+stitch:
+  exe: ''
+  args: []
+  window_title: Stitch
+  input_hint: ''
+  send_keys: [enter]
+  ready_timeout: 15

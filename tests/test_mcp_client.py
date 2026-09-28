@@ -518,7 +518,8 @@ async def test_m4_read_loop_death_marks_disconnected_and_fails_fast(tmp_path):
     stub = _write_stub(tmp_path)
     cfg = MCPServerConfig.from_dict("stub", {
         "enabled": True,
-        "command": sys.executable,
+        # Windows venv 启动器会保留 stdout 写端，阻止半关闭桩产生 EOF。
+        "command": sys._base_executable,
         "args": [str(stub)],
         "env": {"STUB_MODE": "halfclose"},
         "timeout_seconds": 5,
@@ -527,12 +528,10 @@ async def test_m4_read_loop_death_marks_disconnected_and_fails_fast(tmp_path):
     client = MCPServerClient(cfg)
     try:
         await client.connect()
-        # 等读循环收到 EOF 自行退出（轮询，避免平台调度差异导致的偶发）
-        for _ in range(40):
-            if client._stdout_task is not None and client._stdout_task.done():
-                break
-            await asyncio.sleep(0.05)
-        assert client._stdout_task is not None and client._stdout_task.done()
+        # shield 防止超时取消读任务，掩盖它未正常收到 EOF 的问题。
+        assert client._stdout_task is not None
+        await asyncio.wait_for(asyncio.shield(client._stdout_task), timeout=5)
+        assert client._stdout_task.done()
         assert client._proc is not None and client._proc.returncode is None  # 进程还活着
         assert client.connected is False  # 旧实现只看 returncode 会误报 True
 

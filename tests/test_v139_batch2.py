@@ -225,7 +225,7 @@ def test_data_tools(tmp_path, monkeypatch):
     print("  🎉 数据分析工具测试全部通过!\n")
 
 
-def test_file_management_tools():
+def test_file_management_tools(tmp_path, monkeypatch):
     """测试文件管理工具"""
     print("=" * 60)
     print("测试 7: 文件管理工具")
@@ -237,6 +237,18 @@ def test_file_management_tools():
         tool_directory_list, tool_directory_create,
         tool_file_copy, tool_file_rename
     )
+
+    import core.office_tools as office_tools
+    import core.workspace as workspace
+    from core.computer_control import ComputerController, ControlMode
+
+    # 隔离工作区持久化和权限策略，避免依赖先前测试初始化的 Companion。
+    monkeypatch.setattr(workspace, "_ROOTS_STATE_FILE", tmp_path / "workspace_roots.json")
+    monkeypatch.setattr(workspace, "_workspace_manager", workspace.WorkspaceManager())
+    controller = ComputerController(
+        mode=ControlMode.FULL, persist=False, audit_log_dir=str(tmp_path / "audit")
+    )
+    monkeypatch.setattr(office_tools, "_get_controller", lambda: controller)
 
     # 创建临时目录
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -280,29 +292,6 @@ def test_file_management_tools():
 
 
 if __name__ == "__main__":
-    print("\n🔥 v13.9 第二批升级综合测试开始\n")
-    all_passed = True
+    import pytest
 
-    tests = [
-        ("权限管理器", test_permission_manager),
-        ("办公工具矩阵", test_office_tools_registration),
-        ("异步任务管理器", test_async_task_manager),
-        ("数据分析工具", test_data_tools),
-        ("文件管理工具", test_file_management_tools),
-    ]
-
-    for name, test_func in tests:
-        try:
-            test_func()
-        except Exception as e:
-            print(f"  ❌ {name} 测试失败: {e}")
-            import traceback
-            traceback.print_exc()
-            all_passed = False
-
-    print("=" * 60)
-    if all_passed:
-        print("🎉🎉🎉 全部测试通过！v13.9 第二批升级验证成功 🎉🎉🎉")
-    else:
-        print("⚠️  部分测试未通过")
-    print("=" * 60)
+    sys.exit(pytest.main([__file__]))

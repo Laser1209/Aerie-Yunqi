@@ -1,0 +1,7 @@
+# knowledge pack — 本地向量知识库（chromadb 闭包，约 270MB）
+#
+# 业务侧已具备防腐层：
+#   core/knowledge_indexer.py 远程 embedding -> chromadb ONNX -> 哈希兜底
+#   memory/layers/long_permanent.py 函数内惰性 import
+# 缺包时核心功能不受影响，只是退回到确定性哈希索引。
+chromadb>=1.5.9

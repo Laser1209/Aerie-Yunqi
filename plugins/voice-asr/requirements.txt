@@ -1,0 +1,10 @@
+# voice-asr pack — 本地语音识别 / 语音活动检测 / 唤醒（无 torch，约 250MB）
+#
+# numpy / onnxruntime 由核心锁定共享，不在此重复声明。
+# silero VAD 不走 PyPI silero 包，直接使用裸 silero_vad.onnx 模型文件。
+#
+# 发布版本在 pack 构建时冻结为精确 == 版本并写入 pack.json shared_requires。
+sherpa-onnx>=1.11,<2
+sounddevice==0.5.5
+SpeechRecognition==3.17.0   # markitdown audio-transcription 同源闭包
+av==18.0.0

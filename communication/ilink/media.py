@@ -243,7 +243,7 @@ class ILinkMediaTransfer:
                 raise ILinkMediaError("CDN upload response is missing x-encrypted-param")
             return UploadedMedia(
                 encrypt_query_param=encrypted_param,
-                aes_key=base64.b64encode(key).decode("ascii"),
+                aes_key=_outbound_aes_key(key),
                 length=result.length,
                 md5=result.md5,
                 ciphertext_length=ciphertext_length,
@@ -268,6 +268,29 @@ class ILinkMediaTransfer:
                 if not chunk:
                     return
                 yield chunk
+
+
+def _outbound_aes_key(key: bytes) -> str:
+    """出站 ``CDNMedia.aes_key`` 的规范编码：**base64(16字节密钥的 hex 字符串)**。
+
+    这是最容易写错、且错了不会报错的一处。两份可工作的参考实现都取这个编码，
+    第三方那份还把结论写在注释里（"aes_key in sendmessage = base64(hex字符串)，
+    与官方实现一致"）：
+
+    * 腾讯官方插件 ``@tencent-weixin/openclaw-weixin`` ``src/messaging/send.ts``
+      → ``Buffer.from(uploaded.aeskey).toString("base64")``（``aeskey`` 是 hex 串）
+    * 第三方 ``im-claude`` ``src/adapters/wechat.adapter.ts``
+      → ``Buffer.from(uploaded.aeskeyHex).toString("base64")``
+
+    **传 base64(原始16字节) 时不会得到任何错误**：报文形状全对、``sendmessage``
+    返回 ``message_id``、日志一片正常，但微信客户端拿不到可用的密钥，图片渲染成
+    "图片已过期或被清理"（实测 2026-09-29）。所以这里不是风格问题，是唯一判据 ——
+    只能对齐参考实现，不能按"看起来更合理"来选。
+
+    注：**入站**解析另有一套宽容规则（见 ``_parse_aes_key``），两种编码都接受，
+    因此这里改编码不影响收图。
+    """
+    return base64.b64encode(key.hex().encode("ascii")).decode("ascii")
 
 
 def _validate_cdn_url(value: str) -> None:

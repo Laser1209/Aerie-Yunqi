@@ -159,7 +159,11 @@ async def test_upload_uses_official_post_contract_and_returns_encrypted_header(t
 
     assert [request.method for request in requests] == ["POST", "POST"]
     assert result.encrypt_query_param == "download-reference"
-    assert result.aes_key == base64.b64encode(b"0123456789abcdef").decode("ascii")
+    # 出站 aes_key = base64(**hex 字符串**)，不是 base64(原始16字节)。
+    # 两份可工作的参考实现（官方插件 / im-claude）都取前者；取后者没有任何报错，
+    # 但微信客户端渲染不出图（实测 2026-09-29）。
+    assert result.aes_key == base64.b64encode(b"0123456789abcdef".hex().encode("ascii")).decode("ascii")
+    assert base64.b64decode(result.aes_key).decode("ascii") == "30313233343536373839616263646566"
     assert list((tmp_path / "media").iterdir()) == []
 
 

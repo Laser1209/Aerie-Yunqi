@@ -231,21 +231,26 @@ def test_qq_request_delivers_back_to_qq():
     assert comp.queue.sent[0].channel == "qq"
 
 
-def test_desktop_request_delivers_back_to_desktop():
-    """桌面端要文件 → 桌面端收到（旧实现会投到上次的 QQ/微信，或静默丢件）。"""
+def test_desktop_request_fails_loudly_because_desktop_has_no_file_channel():
+    """桌面端要文件：来源端口判对了，但桌面端**没有文件发送器**。
+
+    旧实现照样入队 → SendQueue 取 ``channel_senders["local_chat"]`` 直接 KeyError，
+    文件静默消失（还可能把 worker 打死）。现在改为**不入队 + 如实报"发不出去"**，
+    不再假装投递成功。桌面端发文件本身仍是缺口（§十四 #72）。
+    """
     comp = _bare_companion()
     _deliver_with_origin(comp, "local_chat")
-    assert comp.queue.sent[0].channel == "local_chat"
+    assert comp.queue.sent == []
 
 
 def test_interleaved_requests_go_to_their_own_ports():
-    """先微信、后桌面各要一次 → 两次分别回到各自端口（证明不是全局状态）。"""
+    """先微信、后桌面各要一次 → 微信那次回微信；桌面那次不入队（无文件通道）。"""
     comp = _bare_companion()
     _deliver_with_origin(comp, "ilink", account="acc-1", path="a.docx")
     _deliver_with_origin(comp, "local_chat", path="b.docx")
 
-    assert [r.channel for r in comp.queue.sent] == ["ilink", "local_chat"]
-    assert [r.file_paths[0] for r in comp.queue.sent] == ["a.docx", "b.docx"]
+    assert [r.channel for r in comp.queue.sent] == ["ilink"]
+    assert [r.file_paths[0] for r in comp.queue.sent] == ["a.docx"]
 
 
 def test_no_origin_records_pending_receipt():

@@ -1001,6 +1001,10 @@ def _ensure_selfie_pov(prompt: str, prompt_key: str) -> str:
 _IMAGE_LIGHT_PROVIDER = "siliconflow-light"
 _IMAGE_LIGHT_RELAY_TIMEOUT = 8.0
 
+# 能真正发出**文件**的端口。SendQueue 只注册了 qq / ilink 两个发送器；桌面端
+# （local_chat）目前只有文本与图片通道，入队取发送器时必然 KeyError。
+_FILE_CAPABLE_CHANNELS: frozenset[str] = frozenset({"qq", "ilink"})
+
 
 def _image_light_preference() -> tuple[str, str | None]:
     """生图语义接力使用的轻量功能点（light_assist 绑定）。
@@ -3031,8 +3035,12 @@ class Companion:
         except Exception:
             logger.exception("推送审批通知失败 call_id=%s", payload.get("call_id"))
 
-    def _notify_file_delivery(self, payload: dict) -> None:
+    def _notify_file_delivery(self, payload: dict) -> str:
         """把「这份文件发给用户」推到**发起这次请求的那个端口**（同步回调 → 队列投递）。
+
+        返回投递回执 id：调用方（`send_file_to_user`）拿它等**真正的**送达结果
+        （§十四 #67）。返回空串 = 这次**根本发不出去**——没有来源端口，或来源端口
+        不支持发文件——调用方应当立刻如实报失败，而不是先报"已入队"。
 
         §九-b：来源端口是**请求级**的，不再读全局"最后一次入站通道" —— 那会让
         "在桌面端要文件"投到上一次的 QQ/微信，或干脆静默丢件。
@@ -3040,7 +3048,7 @@ class Companion:
         """
         path = str((payload or {}).get("path") or "").strip()
         if not path:
-            return
+            return ""
         note = str((payload or {}).get("note") or "")
         origin = delivery_routing.current()
         if origin is None:
@@ -3048,7 +3056,14 @@ class Companion:
             # 让模型下一轮知道"这次没发出去"（与 P0-2 的诚实底线合流）。
             logger.warning("文件 %s 没有请求来源端口，未投递", path)
             _ledger().record_pending(user_id=0, channel="", path=path, note=note)
-            return
+            return ""
+        if origin.channel not in _FILE_CAPABLE_CHANNELS:
+            # 桌面端只有文本/图片通道（SendQueue 的 channel_senders 没有 local_chat），
+            # 入队只会让 worker 取通道时 KeyError → 文件静默消失。
+            logger.warning(
+                "文件 %s 的来源端口 %s 不支持发文件，未投递", path, origin.channel,
+            )
+            return ""
         # 入队前先登记回执：发送结果在队列 worker 里产生，靠 delivery_id 对账回来。
         delivery_id = _ledger().record_pending(
             user_id=origin.user_id,
@@ -3070,6 +3085,8 @@ class Companion:
             _ledger().record_outcome(
                 delivery_id, ok=False, detail=describe_delivery_failure(exc),
             )
+            return ""
+        return delivery_id
 
     @staticmethod
     def _render_approval_notice(payload: dict) -> str:

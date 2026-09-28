@@ -2009,15 +2009,23 @@ def tool_doc_write(doc_type: str,
         return {"success": False, "error": str(e)}
 
 
-def tool_send_file_to_user(filepath: str, note: str = "") -> dict:
-    """把一份本地文件通过当前会话通道发给用户（QQ 与微信都有出站实现）。
+# 等投递结果的上限。QQ 媒体段上传预算 60s（见 communication/qq_client.py），
+# 留出余量；与 write_approval 等审批（默认 60s）同量级，不额外拉长一轮对话。
+_FILE_DELIVERY_WAIT_SEC = 70.0
+
+
+async def tool_send_file_to_user(filepath: str, note: str = "") -> dict:
+    """把一份本地文件通过当前会话通道发给用户，并**等到真正的投递结果**再返回。
 
     只允许发送授权根（已注册工作区 / AerieOffice）内的文件，避免把系统文件外发。
 
-    **返回语义（不要误读）**：投递是**异步入队**，成功返回的是 ``status="queued"``
-    —— 只代表"已提交投递队列"，**不代表对方已收到**。历史上这里返回
-    ``success: True``，模型于是理解成"已经发出去了"，并在投递失败时照旧宣称
-    已送达（"假成功"）。改用 ``status`` 是为了不给模型这个错误暗示。
+    **返回语义**：§十四 #67 —— 历史上这里入队即返回（实测 6ms），模型于是把
+    "已入队"当"已送达"，投递失败时照旧宣称"已经发给你了"。现在改为**同步等结果**，
+    三种结局都如实写进返回值，模型没有误读的余地：
+
+    * ``delivered=True``：通道确认接收（可以说"发出去了"）；
+    * ``success=False, status="failed"``：通道确认失败，附原因；
+    * ``success=False, status="unknown"``：时限内没有回执，只能说"还在发、不确定"。
 
     越界时按 ``guard_write_paths`` 的同一口径带 ``reason``，好让
     ``core/write_approval.py`` 的"弹审批 → 加根 → 重试"桥生效。
@@ -2047,13 +2055,48 @@ def tool_send_file_to_user(filepath: str, note: str = "") -> dict:
         companion = get_companion()
         if companion is None:
             return {"success": False, "error": "当前无可用会话通道，文件未发送"}
-        companion._notify_file_delivery({"path": str(target), "note": str(note or "")})
+        delivery_id = companion._notify_file_delivery(
+            {"path": str(target), "note": str(note or "")}
+        )
+        if not delivery_id:
+            return {
+                "success": False,
+                "delivered": False,
+                "status": "failed",
+                "error": (
+                    "这次没有可用的投递端口（当前会话通道不支持发文件），"
+                    "文件没有发出，请如实告知用户"
+                ),
+            }
+
+        from core.delivery_ledger import get_ledger
+
+        receipt = await get_ledger().wait_outcome(
+            delivery_id, timeout=_FILE_DELIVERY_WAIT_SEC
+        )
+        if receipt is None or receipt.ok is None:
+            return {
+                "success": False,
+                "delivered": False,
+                "status": "unknown",
+                "error": (
+                    "投递结果未知：通道在时限内没有回执。"
+                    "请如实告诉用户「还在发送，我不确定是否已送达」，不要断言已经收到"
+                ),
+            }
+        if not receipt.ok:
+            return {
+                "success": False,
+                "delivered": False,
+                "status": "failed",
+                "error": f"发送失败：{receipt.detail or '原因未知'}",
+            }
         return {
-            "status": "queued",
-            "delivered": False,
-            "note": "已提交投递队列，送达结果稍后回报；此刻并不代表对方已收到",
+            "status": "delivered",
+            "delivered": True,
             "name": target.name,
             "path": str(target),
+            "note": "通道已确认接收该文件",
         }
     except Exception as e:
         logger.exception("send_file_to_user error")
@@ -2929,10 +2972,12 @@ _OFFICE_TOOL_SCHEMAS = {
 - 用户说"发过来/发给我"时**直接调用本工具投递**；不要用文字回答自己发不了
 
 【投递语义 — 必须遵守】
-- 本工具是**异步入队**：返回 status="queued" 只表示"已提交投递队列"，
-  **不代表对方已经收到**。
-- 因此调用后请说"我发过去了/正在发送"，**不要**断言"你应该已经收到了"。
-  投递结果若有失败，会在后续轮次回报给你。
+- 本工具**会等到通道给出结果**才返回（可能等几秒），所以返回值就是结局本身。
+- 返回 delivered=true：通道已确认接收，可以说"我发过去了"；但仍不要断言
+  "你应该已经收到了"——送达与否取决于对方客户端。
+- 返回 success=false 且 status="failed"：**没发出去**，请把 error 里的原因
+  如实告诉用户，不要说已经发了，也不要假装成功。
+- 返回 success=false 且 status="unknown"：结果未知，只能说"还在发送、我不确定"。
 - 若返回 success=false，请看 error 与 reason：reason="outside_workspace_roots"
   表示路径越界（会触发授权流程，无需你自己换路径重试）。
 

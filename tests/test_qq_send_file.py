@@ -231,13 +231,38 @@ class TestNotifyFileDelivery:
 # ══════════════════════════════════════════════════════
 
 class TestSendFileToUserTool:
+    @pytest.fixture(autouse=True)
+    def clean_ledger(self):
+        """隔离进程内投递台账，避免用例之间互相看到回执。"""
+        from core.delivery_ledger import get_ledger
+
+        get_ledger().clear()
+        yield
+        get_ledger().clear()
+
+    @staticmethod
+    def _fake_companion(ledger, *, outcome: tuple[bool, str] | None):
+        """假 companion：登记回执并按 outcome 立即落定（None = 永不落定）。"""
+        calls: list[dict] = []
+
+        def _notify(payload):
+            calls.append(payload)
+            did = ledger.record_pending(
+                user_id=1, channel="ilink", path=payload.get("path", ""),
+            )
+            if outcome is not None:
+                ledger.record_outcome(did, ok=outcome[0], detail=outcome[1])
+            return did
+
+        return SimpleNamespace(_notify_file_delivery=_notify), calls
+
     def test_rejects_path_outside_allowed_roots(self, tmp_path):
         from core import office_tools
 
         outside = tmp_path / "outside.txt"
         outside.write_text("secret", encoding="utf-8")
         with patch.object(office_tools, "_resolve_write_target", return_value=None):
-            result = office_tools.tool_send_file_to_user(str(outside))
+            result = asyncio.run(office_tools.tool_send_file_to_user(str(outside)))
         assert result["success"] is False
         assert "不在允许发送的目录内" in result["error"]
         # 越界必须带 reason，否则 write_approval 的"弹审批→加根→重试"桥不会介入。
@@ -248,7 +273,7 @@ class TestSendFileToUserTool:
 
         with patch.object(office_tools, "_resolve_write_target",
                           return_value=Path(r"C:\nope\missing.txt")):
-            result = office_tools.tool_send_file_to_user("missing.txt")
+            result = asyncio.run(office_tools.tool_send_file_to_user("missing.txt"))
         assert result["success"] is False
         # 在授权根内但不存在：这是"文件不存在"，不是越界 —— 不该触发授权流程。
         assert "reason" not in result
@@ -256,31 +281,84 @@ class TestSendFileToUserTool:
     def test_blank_path_rejected(self):
         from core import office_tools
 
-        result = office_tools.tool_send_file_to_user("   ")
+        result = asyncio.run(office_tools.tool_send_file_to_user("   "))
         assert result["success"] is False
 
-    def test_success_reports_queued_not_delivered(self, tmp_path):
-        """契约：成功只代表"已入队"，返回 status=queued，**不再有 success: True**。
+    def test_reports_delivered_after_channel_confirms(self, tmp_path):
+        """通道回执 ok → 工具说 delivered，模型才有资格说"发出去了"。
 
-        历史 bug：回 success: True 让模型以为"已经发出去了"，投递失败时
-        照旧宣称已送达（假成功）。
+        历史 bug：入队即返回（6ms），模型把"已入队"当"已送达"，
+        投递失败时照旧宣称已送达（§十四 #67 的假成功）。
         """
+        from core import office_tools
+        from core.delivery_ledger import get_ledger
+
+        target = tmp_path / "report.docx"
+        target.write_text("body", encoding="utf-8")
+        fake, calls = self._fake_companion(get_ledger(), outcome=(True, ""))
+
+        with patch.object(office_tools, "_resolve_write_target", return_value=target), \
+                patch("core.companion.get_companion", return_value=fake):
+            result = asyncio.run(
+                office_tools.tool_send_file_to_user(str(target), note="给你的")
+            )
+
+        assert result["status"] == "delivered"
+        assert result["delivered"] is True
+        assert result["name"] == "report.docx"
+        assert calls == [{"path": str(target), "note": "给你的"}]
+
+    def test_reports_failure_when_channel_refuses(self, tmp_path):
+        """通道确认失败 → 工具必须报失败并带上原因，不得报成功。"""
+        from core import office_tools
+        from core.delivery_ledger import get_ledger
+
+        target = tmp_path / "report.docx"
+        target.write_text("body", encoding="utf-8")
+        fake, _calls = self._fake_companion(get_ledger(), outcome=(False, "上传超时"))
+
+        with patch.object(office_tools, "_resolve_write_target", return_value=target), \
+                patch("core.companion.get_companion", return_value=fake):
+            result = asyncio.run(office_tools.tool_send_file_to_user(str(target)))
+
+        assert result["success"] is False
+        assert result["delivered"] is False
+        assert result["status"] == "failed"
+        assert "上传超时" in result["error"]
+
+    def test_reports_unknown_when_no_receipt(self, tmp_path):
+        """时限内没有回执 → 报"结果未知"，而不是替它断言已送达。"""
+        from core import office_tools
+        from core.delivery_ledger import get_ledger
+
+        target = tmp_path / "report.docx"
+        target.write_text("body", encoding="utf-8")
+        fake, _calls = self._fake_companion(get_ledger(), outcome=None)
+
+        with patch.object(office_tools, "_resolve_write_target", return_value=target), \
+                patch.object(office_tools, "_FILE_DELIVERY_WAIT_SEC", 0.0), \
+                patch("core.companion.get_companion", return_value=fake):
+            result = asyncio.run(office_tools.tool_send_file_to_user(str(target)))
+
+        assert result["success"] is False
+        assert result["delivered"] is False
+        assert result["status"] == "unknown"
+
+    def test_no_delivery_port_reports_failure(self, tmp_path):
+        """来源端口发不了文件（无端口/桌面端）→ 立刻报失败，不进"未知"排队。"""
         from core import office_tools
 
         target = tmp_path / "report.docx"
         target.write_text("body", encoding="utf-8")
-        fake = SimpleNamespace(_notify_file_delivery=lambda payload: fake.calls.append(payload))
-        fake.calls = []
+        fake = SimpleNamespace(_notify_file_delivery=lambda payload: "")
 
         with patch.object(office_tools, "_resolve_write_target", return_value=target), \
                 patch("core.companion.get_companion", return_value=fake):
-            result = office_tools.tool_send_file_to_user(str(target), note="给你的")
+            result = asyncio.run(office_tools.tool_send_file_to_user(str(target)))
 
-        assert result["status"] == "queued"
-        assert result["delivered"] is False
-        assert "success" not in result
-        assert result["name"] == "report.docx"
-        assert fake.calls == [{"path": str(target), "note": "给你的"}]
+        assert result["success"] is False
+        assert result["status"] == "failed"
+        assert "没有可用的投递端口" in result["error"]
 
     def test_no_companion_reports_failure(self, tmp_path):
         from core import office_tools
@@ -289,7 +367,7 @@ class TestSendFileToUserTool:
         target.write_text("body", encoding="utf-8")
         with patch.object(office_tools, "_resolve_write_target", return_value=target), \
                 patch("core.companion.get_companion", return_value=None):
-            result = office_tools.tool_send_file_to_user(str(target))
+            result = asyncio.run(office_tools.tool_send_file_to_user(str(target)))
         assert result["success"] is False
 
     def test_tool_is_registered(self):

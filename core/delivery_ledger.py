@@ -26,6 +26,7 @@ except Exception:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
@@ -133,6 +134,37 @@ class DeliveryLedger:
             receipt.ok = bool(ok)
             receipt.detail = str(detail or "")
             receipt.resolved_at = time.time()
+
+    def get(self, delivery_id: str) -> DeliveryReceipt | None:
+        """按 id 取回执；不存在返回 None（测试与诊断用）。"""
+        with self._lock:
+            return self._index.get(str(delivery_id or ""))
+
+    async def wait_outcome(
+        self,
+        delivery_id: str,
+        *,
+        timeout: float,
+        poll_interval: float = 0.2,
+    ) -> DeliveryReceipt | None:
+        """等到该投递有结论（成功 / 失败）为止。
+
+        §十四 #67：`send_file_to_user` 需要"真等送达"才能如实回话，而发送发生在
+        同一个事件循环的发送队列 worker 里 —— 所以只能异步轮询，不能阻塞等待。
+
+        返回：已落定的回执；**超时则返回当前（仍未决）的回执**（``ok is None``），
+        由调用方区分"结果未知"与"失败"。台账里没有该 id 时返回 None。
+        """
+        if not delivery_id:
+            return None
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while True:
+            receipt = self.get(delivery_id)
+            if receipt is None or receipt.ok is not None:
+                return receipt
+            if time.monotonic() >= deadline:
+                return receipt
+            await asyncio.sleep(poll_interval)
 
     def drain_unreported(self, user_id: int) -> list[DeliveryReceipt]:
         """取出该用户尚未上报的回执（失败 + 长时间未决），并标记为已上报。

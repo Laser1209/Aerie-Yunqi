@@ -473,6 +473,17 @@ class NapcatLauncher:
         if external:
             self._phase = "connected"
             self._error_code = ""
+            # attach 到外部 NapCat（典型场景：后端重启后，QQ 进程与 WebUI 都还在）。
+            # 此时**不能**只回一句"已在运行"就结束 —— 3010 端口外的 OneBot11 需要
+            # 有人补配置（实测缺陷：QQ 显示已登录，但 3001 永远不开，因为
+            # websocketServers 为空且没人去写）。起 watchdog 后由它只补配置、
+            # 不接管进程生死。
+            self._user_stopped = False
+            self._start_watchdog()
+            try:
+                await self._sync_ob11_after_login()
+            except Exception:
+                logger.debug("OB11 sync on attach failed", exc_info=True)
             return {
                 "ok": True,
                 "message": "NapCat was already running outside Aerie",
@@ -643,6 +654,13 @@ class NapcatLauncher:
                 if self._watchdog_stopped:
                     break
                 if not self._owns_process:
+                    # attach 到外部 NapCat（后端重启后常见）：**不接管进程生死**，
+                    # 但必须继续补 OneBot11 配置 —— 否则 QQ 已登录、3001 却永远
+                    # 不开，后端收不到任何 QQ 消息（实测缺陷）。
+                    try:
+                        await self._sync_ob11_after_login()
+                    except Exception:
+                        logger.debug("attach-mode OB11 sync failed", exc_info=True)
                     continue
 
                 launcher_alive = self._proc is not None and self._proc.poll() is None
@@ -798,6 +816,21 @@ class NapcatLauncher:
         except NapCatWebUIError as exc:
             logger.debug("NapCat WebUI status poll failed: %s", exc)
             return None
+
+    async def _sync_ob11_after_login(self) -> None:
+        """QQ 已登录但 OneBot11 端口未开时补配置（attach 到外部实例也适用）。
+
+        非 owned 路径**只补配置**：不重启、不杀进程 —— 那个 NapCat 是别人拉起的。
+        """
+        if _port_is_open(port=self.ws_port):
+            return
+        login = await self._poll_login_status()
+        is_login = bool(login and login.get("is_login"))
+        if is_login:
+            await self._ensure_ob11_ws()
+        else:
+            # 未登录时 NapCat 不会读 OneBot11 配置，重置标记以便登录后再补一次。
+            self._ob11_ensured = False
 
     async def _ensure_ob11_ws(self) -> None:
         """After QQ login, add the 127.0.0.1:<ws_port> OneBot11 WS server.

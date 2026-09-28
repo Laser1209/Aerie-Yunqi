@@ -319,6 +319,117 @@ def test_status_exposes_qq_source(monkeypatch, tmp_path):
     assert status["qq_ready"] is False
 
 
+# ── OneBot11 配置补齐（attach 到外部 NapCat 也必须生效）────────
+# 实测缺陷：后端重启后 attach 到既有的 NapCat，QQ 显示已登录，但
+# onebot11_*.json 的 websocketServers 为空、3001 永远不开，后端收不到消息。
+# 原因是 watchdog 在非 owned 时直接 continue，没人去补配置。
+
+@pytest.mark.asyncio
+async def test_attach_path_starts_watchdog_and_syncs_ob11(monkeypatch, tmp_path):
+    """attach 到外部 NapCat：不能只回"已在运行"，必须起 watchdog + 补 OB11。"""
+    monkeypatch.setattr(launcher_module, "_resolve_napcat_dir", lambda _s: tmp_path)
+    monkeypatch.setattr(launcher_module, "_port_is_open", lambda **_k: True)  # WebUI 在跑
+    launcher = NapcatLauncher()
+    started: list[bool] = []
+    synced: list[bool] = []
+    monkeypatch.setattr(launcher, "_start_watchdog", lambda: started.append(True))
+
+    async def _sync() -> None:
+        synced.append(True)
+
+    monkeypatch.setattr(launcher, "_sync_ob11_after_login", _sync)
+
+    result = await launcher.start()
+
+    assert result["already_running"] is True
+    assert started == [True]
+    assert synced == [True]
+
+
+@pytest.mark.asyncio
+async def test_sync_ob11_skips_when_ws_port_already_open(monkeypatch, tmp_path):
+    monkeypatch.setattr(launcher_module, "_resolve_napcat_dir", lambda _s: tmp_path)
+    launcher = NapcatLauncher()
+    monkeypatch.setattr(launcher_module, "_port_is_open", lambda **_k: True)
+    called: list[bool] = []
+
+    async def _ensure() -> None:
+        called.append(True)
+
+    monkeypatch.setattr(launcher, "_ensure_ob11_ws", _ensure)
+
+    await launcher._sync_ob11_after_login()
+
+    assert called == []
+
+
+@pytest.mark.asyncio
+async def test_sync_ob11_configures_when_logged_in(monkeypatch, tmp_path):
+    monkeypatch.setattr(launcher_module, "_resolve_napcat_dir", lambda _s: tmp_path)
+    launcher = NapcatLauncher()
+    monkeypatch.setattr(launcher_module, "_port_is_open", lambda **_k: False)
+    called: list[bool] = []
+
+    async def _poll():
+        return {"is_login": True}
+
+    async def _ensure() -> None:
+        called.append(True)
+
+    monkeypatch.setattr(launcher, "_poll_login_status", _poll)
+    monkeypatch.setattr(launcher, "_ensure_ob11_ws", _ensure)
+
+    await launcher._sync_ob11_after_login()
+
+    assert called == [True]
+
+
+@pytest.mark.asyncio
+async def test_sync_ob11_resets_flag_when_not_logged_in(monkeypatch, tmp_path):
+    """未登录时 NapCat 不读 OB11 配置 → 重置标记，登录后再补一次。"""
+    monkeypatch.setattr(launcher_module, "_resolve_napcat_dir", lambda _s: tmp_path)
+    launcher = NapcatLauncher()
+    launcher._ob11_ensured = True
+    monkeypatch.setattr(launcher_module, "_port_is_open", lambda **_k: False)
+
+    async def _poll():
+        return {"is_login": False}
+
+    called: list[bool] = []
+
+    async def _ensure() -> None:
+        called.append(True)
+
+    monkeypatch.setattr(launcher, "_poll_login_status", _poll)
+    monkeypatch.setattr(launcher, "_ensure_ob11_ws", _ensure)
+
+    await launcher._sync_ob11_after_login()
+
+    assert called == []
+    assert launcher._ob11_ensured is False
+
+
+@pytest.mark.asyncio
+async def test_watchdog_attach_mode_still_syncs_ob11(monkeypatch, tmp_path):
+    """watchdog 在非 owned（attach）时也要补 OB11，而不是空转 continue。"""
+    monkeypatch.setattr(launcher_module, "_resolve_napcat_dir", lambda _s: tmp_path)
+    monkeypatch.setattr(launcher_module, "_WATCHDOG_POLL_SECONDS", 0.01)
+    launcher = NapcatLauncher()
+    launcher._owns_process = False
+    calls: list[bool] = []
+
+    async def _sync() -> None:
+        calls.append(True)
+        launcher._watchdog_stopped = True  # 跑一轮即停
+
+    monkeypatch.setattr(launcher, "_sync_ob11_after_login", _sync)
+    launcher._watchdog_stopped = False
+
+    await launcher._watchdog_loop()
+
+    assert calls == [True]
+
+
 # ── 回归：tasklist stdout 为 None 不得打断启动 ────────────────
 def test_list_qq_pids_tolerates_none_stdout(monkeypatch):
     """Electron 以 stdio=["ignore","pipe","pipe"] 启动后端时，tasklist 的

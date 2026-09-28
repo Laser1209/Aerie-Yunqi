@@ -4667,17 +4667,43 @@ class Companion:
             base += "身体数据：" + "，".join(body_data_parts) + "。"
         base += "五官清冷精致，气质温柔的大姐姐。画面是生活化的写实照片，暖色调。"
         if key == "environment_object":
-            # 环境/物件照：第一人称"她拍下的视角"，不强制带人物形象。
-            # topic 可能来自世界模拟的公寓物件 ID 或重庆 POI（reason_code: world_visual:<topic>）。
+            # ── 物件/环境照 ──
+            # 画面内容有两个来源，**用户说的优先**：
+            #   ① candidate["subject"]：用户提出要看的东西（"衣柜上那个挂件"）。
+            #      这是聊天要图的唯一内容来源 —— 那条路的 reason_code 是
+            #      user_requested、不带世界话题，所以旧实现只能退回空镜
+            #      （"随手拍下眼前的一角"），用户要衣柜却收到人物照（实测 2026-09-29）。
+            #   ② reason_code 的 world_visual:<topic>：主动发图 / 世界模拟话题。
+            subject = str((candidate or {}).get("subject") or "").strip()
+            form = str((candidate or {}).get("subject_form") or "").strip()
+            # §十：在室外拍环境照时，"公寓里/窗前"是矛盾的 —— 换成她所在的地点。
+            outdoor = bool(isinstance(candidate, dict) and candidate.get("world_outdoor") is True)
+            place = str((candidate or {}).get("world_place") or "").strip() if outdoor else ""
+            where = f"户外的{place}" if place else ("户外" if outdoor else "重庆的家")
+            if subject:
+                if form == "pov":
+                    # 她的视角：可以有手或局部身影入镜，重点是"她此刻看到的景象"。
+                    return (
+                        f"一张写实照片，{orientation}，第一人称视角，"
+                        f"她在{where}随手拍下眼前的{subject}，画面像她这一刻顺手拍给恋人看的。"
+                        "画面自然、生活化、暖色调，微微的随手感。"
+                        f"画面中不出现{_IMAGE_DEVICE_EXCLUSION}"
+                    )
+                # 默认特写：画面主角**就是那个东西**，她本人不入镜。
+                # 之所以要显式写"不出现在画面中"：模型见到人设与"照片"字样时
+                # 极容易默认把人画进去，这一句是唯一能挡住它的约束。
+                return (
+                    f"一张写实真实感照片，{orientation}，近距离取景，"
+                    f"画面主角是{subject}，细节清晰可辨，就是这个物件本身的样子。"
+                    "这是她拍下来给恋人确认的一角，画面自然、生活化、暖色调。"
+                    "画面中不出现人物，也不出现"
+                    f"{_IMAGE_DEVICE_EXCLUSION}"
+                )
             topic = str((candidate or {}).get("reason_code") or "")
             if topic.startswith("world_visual:"):
                 topic = topic.split("world_visual:", 1)[1].replace("object_", "").strip()
             else:
                 topic = ""
-            # §十：在室外拍环境照时，"公寓里/窗前"是矛盾的 —— 换成她所在的地点。
-            outdoor = bool(isinstance(candidate, dict) and candidate.get("world_outdoor") is True)
-            place = str((candidate or {}).get("world_place") or "").strip() if outdoor else ""
-            where = f"户外的{place}" if place else ("户外" if outdoor else "重庆的家/窗边")
             if topic:
                 # P2：统一走 _visual_topic_zh 翻译（活动时刻话题 + 物件话题全覆盖），
                 # 杜绝英文 token（如 reading_time）直接进生图提示词。

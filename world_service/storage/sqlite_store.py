@@ -432,6 +432,9 @@ def _image_candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
             if isinstance(item, str) and item.strip()
         ],
         "persona_id": _safe_text(payload.get("persona_id") or ""),
+        # 要拍的**主体**与形态（closeup/pov）：物件照"画面里该有什么"的唯一来源。
+        "subject": _safe_text(payload.get("subject") or "", 120),
+        "subject_form": _safe_text(payload.get("subject_form") or "", 16),
     }
     if sensitive:
         public["sensitive_keys"] = sorted(str(key) for key in sensitive.keys())

@@ -140,6 +140,53 @@ _IMAGE_EDIT_FLAG = "image_edit_v1"
 # 允许的投递端口。主动消息可同时投多个（QQ + 桌面），配图跟随同样的端口集合。
 _DELIVERY_CHANNELS = frozenset({"qq", "ilink", "local_chat"})
 
+# 提示词干跑（审计用）：置 1 时链路跑到"提示词已组好"就停 —— 不判重、不调生图、
+# 不投递，只把最终提示词原文写到日志目录，供人工核对"这段话到底会被画成什么"。
+# 为什么需要它：提示词是"组合器 + 人设 + 世界上下文 + 接力重写"多段拼接的产物，
+# 光读代码推不出最终那句话；而真跑一次要花钱、要等、还会把图发出去。
+_DRYRUN_ENV = "AERIE_PHOTO_PROMPT_DRYRUN"
+_DRYRUN_LOG_NAME = "photo_prompt_dryrun.log"
+
+
+def prompt_dryrun_enabled() -> bool:
+    # 环境变量大小写不统一（TRUE / True / YES 都见过），统一转小写再比。
+    return str(os.environ.get(_DRYRUN_ENV) or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _dump_dryrun_prompt(candidate: dict[str, Any], prompt: str) -> Path:
+    """把候选关键字段与最终提示词追加到 dry-run 日志；返回文件路径。
+
+    同时写文件与 INFO 日志：日志便于实时探看，文件便于完整取回
+    （长中文在控制台会被折行，逐字核对时要原文）。
+    """
+    try:
+        from core.paths import project_root
+
+        target = project_root() / "logs" / _DRYRUN_LOG_NAME
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("a", encoding="utf-8") as handle:
+            handle.write(
+                f"\n===== {datetime.now().isoformat(timespec='seconds')} =====\n"
+                f"prompt_key   : {candidate.get('prompt_key')}\n"
+                f"subject      : {candidate.get('subject')!r}\n"
+                f"subject_form : {candidate.get('subject_form')!r}\n"
+                f"channel      : {candidate.get('channel')}\n"
+                f"scene        : {candidate.get('scene')}\n"
+                f"reason_code  : {candidate.get('reason_code')}\n"
+                f"user_raw     : {candidate.get('user_raw')!r}\n"
+                f"size         : {candidate.get('size')}\n"
+                "--- prompt ---\n"
+                f"{prompt}\n"
+            )
+        logger.info(
+            "[PhotoPromptDryRun] %s -> %s\n%s",
+            candidate.get("prompt_key"), target, prompt,
+        )
+        return target
+    except Exception:
+        logger.warning("[PhotoPromptDryRun] dump failed", exc_info=True)
+        return Path("")
+
 # 视觉场景判重的参考窗口：最近该时段内成功生成的图才作为"参考图"。用于跨路径
 # （主动发图 / 聊天要图）同画面判重——两条路径都汇聚到消费者，统一按"画面意思"
 # 去重，避免 text 判重因 reason_code 不同而互相看不见。
@@ -575,6 +622,19 @@ class WorldImageCandidateConsumer:
                 record=record,
                 workflow_result=workflow_result,
             )
+        if workflow_status == "dry_run":
+            # 提示词干跑（审计）：不判重、不调 provider、不投递，只把提示词留档。
+            # ack 掉事件，避免轮询反复重放同一条候选。
+            acked = await self._ack(_event_sequence(event))
+            return self._result(
+                status="dry_run",
+                event=event,
+                candidate=candidate,
+                reason="prompt_dryrun",
+                acked=acked,
+                side_effects=_public_side_effects(workflow_result),
+                workflow_result=workflow_result,
+            )
         completed = workflow_status == "completed" and bool(workflow_result.get("delivery_plan"))
         status = "completed" if completed else "failed"
         record = self._record(
@@ -752,6 +812,11 @@ class WorldImageCandidateConsumer:
             # 角色级隔离：图片产出归属创建时的激活角色（伊塔/塞纳…）。
             # 没有归属的空串意味着投递端回退到投递时刻的激活角色。
             "persona_id": _safe_value(payload.get("persona_id") or ""),
+            # 要拍的**主体**与形态（closeup/pov）。聊天要图的 reason_code 是
+            # user_requested、不带世界话题，所以"画面里该有什么"只能从这里来。
+            # 与上面各字段同理：这是显式白名单，漏掉就被静默丢弃。
+            "subject": _safe_value(payload.get("subject") or "", 120),
+            "subject_form": _safe_value(payload.get("subject_form") or "", 16),
         }
 
     def _is_expired(self, candidate: dict[str, Any]) -> bool:
@@ -857,6 +922,17 @@ class WorldImageCandidateConsumer:
                 "status": "failed",
                 "side_effects": dict(_NO_SIDE_EFFECTS),
                 "delivery_plan": None,
+            }
+        # 提示词干跑（审计）：到这里提示词已经组好，把它留档后立刻收工 ——
+        # 不判重、不调 provider、不落资产、不投递。用于肉眼核对"这段话会被画成
+        # 什么"，而不用真花钱跑一次、也不会往聊天里发图。
+        if prompt_dryrun_enabled():
+            _dump_dryrun_prompt(candidate, prompt)
+            return {
+                "status": "dry_run",
+                "side_effects": dict(_NO_SIDE_EFFECTS),
+                "delivery_plan": None,
+                "prompt": prompt,
             }
         # 视觉场景判重（跨路径同画面去重）：主动发图与聊天要图都汇聚于此，
         # 在花钱生成前，用最近一张已生成图 + 新提示词让视觉模型判是否同场景。

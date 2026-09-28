@@ -796,6 +796,11 @@ def redact_image_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
             if isinstance(item, str) and item.strip()
         ],
         "persona_id": str(payload.get("persona_id") or ""),
+        # 要拍的**主体**与形态（closeup/pov）。物件照的"画面里该有什么"只有一个
+        # 来源就是它：environment_object 这条路的 reason_code 是 user_requested、
+        # 不带世界话题，漏掉这个字段整张图就退化成空镜与人物照二选一。
+        "subject": str(payload.get("subject") or "")[:120],
+        "subject_form": str(payload.get("subject_form") or "")[:16],
     }
     if sensitive:
         public["sensitive_keys"] = sorted(str(key) for key in sensitive.keys())

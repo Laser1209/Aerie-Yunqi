@@ -111,13 +111,34 @@ class VisualIntentRouter:
     Does not call real models; uses deterministic keyword matching.
     """
 
+    # 带**主体**的关键词：命中它才知道"要拍的是谁/什么"，可以直接定意图。
+    #
+    # 2026-09-29 修正：原先 role_selfie 里混着"照片给我""拍照""发照片"这类
+    # **通用出图短语**（它们只说明"想要一张照片"，说不出要拍什么）。后果是
+    # "我送你的小挂件还在衣柜上吗？发张照片给我看看" 被"照片给我"钉死成自拍，
+    # 而出的是人物照、不是衣柜照。通用短语已抽到 _GENERIC_PHOTO_PHRASES，
+    # 不再参与主体判定 —— 命中它们只代表"这是出图请求"，主体交由语义层判。
     _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-        ("role_selfie", ("自拍", "发张你的", "发张你的照片", "你的照片", "照片给我", "要照片", "发照片", "拍照", "拍个照", "拍张照", "拍张照片", "给我拍", "selfie")),
-        ("role_in_scene", ("你拍", "你窗边", "拍一张", "拍一张你", "拍你现在", "你现在的样子", "在家拍", "现在拍一张")),
+        ("role_selfie", ("自拍", "发张你的", "发张你的照片", "你的照片", "selfie")),
+        ("role_in_scene", ("你拍", "你窗边", "拍一张你", "拍你现在", "你现在的样子", "在家拍", "现在拍一张")),
         ("couple_photo", ("合照", "我们的照片", "合影", "couple")),
-        ("environment_object", ("拍一下", "桌上的", "西瓜", "小狗", "窗户", "environment")),
+        # 物件/环境：这里列的是"主体本身就是物"的确定线索。物件是开放集合，
+        # 靠词表穷举不现实（衣柜、挂件、书架…列不完），所以词表只兜常见几个，
+        # 真正的判定交给语义层（它能读懂"衣柜上那个挂件"）。
+        ("environment_object", ("桌上的", "西瓜", "小狗", "窗户", "environment")),
         ("document_snapshot", ("截图", "文档", "document")),
         ("meme_sticker", ("表情包", "贴纸", "meme", "sticker")),
+    )
+
+    # 通用出图短语：表达"想要一张照片"，但**不含主体信息**。
+    # 命中它们不足以决定拍谁/拍什么，必须让语义层去看上下文里的主体。
+    _GENERIC_PHOTO_PHRASES: tuple[str, ...] = (
+        "照片给我", "要照片", "发照片", "拍照", "拍个照", "拍张照", "拍张照片",
+        "拍一下", "拍一张", "给我拍", "拍拍照", "照片发给我","拍个"
+        "拍照片", "拍给我", "拍一张给我", "拍张图", "拍个图","拍拍"
+        "发张照片", "发张图", "来张照片", "来张图", "来一张", "给我来一张","给我来张",
+        "搞张照片", "搞个图", "弄张照片", "弄个图", "给我个图", "给我发图",
+        "看看照片", "看看图","看看","看"
     )
 
     _ROLE_INTENTS = frozenset({"role_selfie", "role_in_scene"})
@@ -145,11 +166,17 @@ class VisualIntentRouter:
                 scores[intent] = min(score, 1.0)
 
         if not scores:
+            # 没有**带主体**的线索，但出现了"想要一张照片"这类通用短语时，
+            # 不能自己拿主意挑一个主体（历史事故：一律挑中自拍）。
+            # 返回 needs_clarification 让上层走语义层，由它读出真正的主体。
+            generic = [p for p in self._GENERIC_PHOTO_PHRASES if p in prompt_text]
             return {
                 "status": "needs_clarification",
                 "visual_intent": "unknown",
                 "confidence": 0.0,
-                "reason": "no_intent_keywords_matched",
+                "reason": (
+                    "generic_photo_request" if generic else "no_intent_keywords_matched"
+                ),
                 "reference_assets": [],
             }
 

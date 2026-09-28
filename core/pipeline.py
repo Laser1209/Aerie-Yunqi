@@ -54,6 +54,50 @@ logger = logging.getLogger(__name__)
 # 用户消息带视觉兴趣（看/拍/图/样子/发你…）就交给 LLM 语义判断真实意图，
 # 纯寒暄（在吗/晚安）直接跳过，避免每条消息都多一次 LLM 调用拖慢回复。
 _PHOTO_INTENTS = frozenset({"role_selfie", "role_in_scene", "couple_photo", "environment_object"})
+
+# 物件照的两种形态（用户 2026-09-29 拍板：两种都要，按问法自决）：
+#   closeup —— 画面主角就是那个东西本身，她本人不入镜（"帮我看看那个挂件还在吗"）
+#   pov     —— 她的第一人称视角，可有手/局部入镜（"拍一下窗外的雨"）
+# 判据交给语义层：**要确认某个东西** → closeup；**要那个地方/氛围** → pov。
+_SUBJECT_FORMS = frozenset({"closeup", "pov"})
+_DEFAULT_SUBJECT_FORM = "closeup"
+
+
+@dataclass(frozen=True)
+class PhotoRequest:
+    """本轮聊天要图的完整诉求：意图 + **主体** + 形态。
+
+    为什么单独有这个类型：旧实现只传一个 intent 字符串，而 intent 只能表达
+    "照片里有谁"（她/她+用户/环境），**说不出"要拍的是什么"**。于是"衣柜上那个
+    挂件"这类请求连一个能装主体的字段都没有，只能退化成人物照（实测 2026-09-29）。
+    ``subject`` 就是那个缺失的槽位 —— 用户提到的、要拍的那个东西。
+
+    ``__bool__`` 让调用方仍可写 ``if photo_request:`` 判断"这轮要不要出图"。
+    """
+
+    intent: str = ""
+    subject: str = ""
+    subject_form: str = ""
+
+    def __bool__(self) -> bool:
+        return bool(self.intent)
+
+
+def _workflow_status_of(photo_result: Any) -> str:
+    """取生图链路真正的终态，用于把"干跑"与"真失败"分开。
+
+    ``publish_image_candidate`` 的顶层 ``status`` 只区分 completed/failed，
+    消费者给的具体终态在 ``consumed`` 明细里（dry_run / dedup_skipped / …）。
+    """
+    if not isinstance(photo_result, dict):
+        return ""
+    consumed = photo_result.get("consumed")
+    if isinstance(consumed, list):
+        for item in consumed:
+            if isinstance(item, dict) and str(item.get("status") or "") == "dry_run":
+                return "dry_run"
+    return str(photo_result.get("status") or "")
+
 _FUZZY_IMAGE_HINTS = (
     # 拍照/照片/图族
     "拍", "照", "图", "相片", "自拍", "照片", "美照", "靓照",
@@ -1015,12 +1059,12 @@ class Pipeline:
         # "我摄像头好像坏了"这类人设式托词），让等待出图的空档有人情味；
         # 剩余段落等图片真正落到页面后再发。生图失败/超时不阻塞文本放行。
         # ══════════════════════════════════════════════
-        photo_intent = ""
+        photo_req = PhotoRequest()
         try:
-            photo_intent = await self._resolve_chat_photo_intent(msg, reply_text, route_mode)
+            photo_req = await self._resolve_chat_photo_intent(msg, reply_text, route_mode)
         except Exception:
             logger.debug("chat photo intent resolve failed", exc_info=True)
-        lead_in_count = 1 if (photo_intent and len(segments) > 1) else 0
+        lead_in_count = 1 if (photo_req.intent and len(segments) > 1) else 0
 
         async def _emit_segments(start: int, end: int) -> bool:
             """emit segments[start:end]（含首段情绪/爆发标记与段间节奏）。"""
@@ -1078,7 +1122,7 @@ class Pipeline:
         # 失败则占位转 failed，由前端提供手动重发。
         photo_pending_id = ""
         # getattr 兜底：部分单测用 SimpleNamespace 构造消息，未必带 source
-        if photo_intent and getattr(msg, "source", None) == "local":
+        if photo_req.intent and getattr(msg, "source", None) == "local":
             photo_pending_id = "imgpending:" + (
                 str(getattr(request_context, "turn_id", "") or "")
                 or hashlib.sha256(str(msg.content or "").encode("utf-8")).hexdigest()[:16]
@@ -1091,7 +1135,8 @@ class Pipeline:
                     id=photo_pending_id,
                     user_id=msg.user_id,
                     status="generating",
-                    hint=photo_intent,
+                    # 提示语用主体（"衣柜上挂着的小挂件"）比用 intent 名更贴用户那句话。
+                    hint=photo_req.subject or photo_req.intent,
                     source=msg.source,
                     **self._event_contract(
                         request_state,
@@ -1101,11 +1146,12 @@ class Pipeline:
                 )
             except Exception:
                 logger.debug("assistant_image_status generating emit failed", exc_info=True)
-        if photo_intent:
+        if photo_req.intent:
             photo_result: dict = {}
             try:
                 photo_result = await self._deliver_chat_photo(
-                    msg, request_context, photo_intent, trace,
+                    msg, request_context, photo_req.intent, trace,
+                    subject=photo_req.subject, subject_form=photo_req.subject_form,
                 )
             except Exception:
                 logger.debug("chat photo deliver failed", exc_info=True)
@@ -1329,19 +1375,19 @@ class Pipeline:
         msg: IncomingMessage,
         reply_text: str,
         route_mode: str,
-    ) -> str:
-        """解析本轮对话的出图意图（三层）。
+    ) -> PhotoRequest:
+        """解析本轮对话的出图诉求（三层）。
 
         1. ``VisualIntentRouter`` 关键词快速路径（用户消息）；
-        2. 关键词未命中 → 用户消息语义判断（不设关键词闸门）；
+        2. 关键词未命中**或只命中通用出图短语（说不出主体）** → 用户消息语义判断；
         3. 用户消息无信号但 AI 回复在叙述"发图/发你/点了发送" → 回复语义判断。
 
-        Returns one of role_selfie/role_in_scene/couple_photo/environment_object，无则返回 ""。
+        返回 :class:`PhotoRequest`（意图 + 主体 + 形态）；无出图诉求时返回空对象。
         """
         if route_mode not in ("FULL", "AUTO"):
-            return ""
+            return PhotoRequest()
         if not FeatureFlags().is_enabled("world_image_candidates_v1"):
-            return ""
+            return PhotoRequest()
         from core.image_service import VisualIntentRouter
 
         prompt_text = str(msg.content or "")
@@ -1351,26 +1397,32 @@ class Pipeline:
             # 关键词没命中 → 语义兜底：消息带视觉兴趣信号（看/拍/图/样子/发你…）
             # 才值得花一次 LLM 判断真实意图；纯寒暄直接跳过，避免拖慢每条回复。
             # 语义判断本身不依赖关键词，信号只是成本闸门。
-            intent = ""
+            #
+            # 2026-09-29 修正：通用出图短语（"发张照片给我看看"）会走这里。
+            # 它们说不出主体，所以必须由语义层读上下文里的真正主体
+            # （否则历史事故：一律判成自拍，用户要衣柜却收到人物照）。
+            request = PhotoRequest()
             if self._has_fuzzy_image_signal(prompt_text):
                 try:
-                    intent = await asyncio.wait_for(
-                        self._judge_photo_intent(prompt_text), timeout=8
+                    request = await asyncio.wait_for(
+                        self._judge_photo_request(prompt_text), timeout=8
                     )
                 except Exception:
                     logger.debug("chat photo intent judge timeout/failed", exc_info=True)
-                    intent = ""
+                    request = PhotoRequest()
             # 用户消息无信号，但 AI 回复在叙述"发图/发你/点了发送"。
             reply = str(reply_text or "")
-            if intent not in _PHOTO_INTENTS and self._has_reply_photo_signal(reply):
+            if not request and self._has_reply_photo_signal(reply):
                 try:
-                    intent = await asyncio.wait_for(
-                        self._judge_reply_photo_intent(reply), timeout=8
+                    request = await asyncio.wait_for(
+                        self._judge_reply_photo_request(reply), timeout=8
                     )
                 except Exception:
                     logger.debug("chat photo reply judge timeout/failed", exc_info=True)
-                    intent = ""
-        return intent if intent in _PHOTO_INTENTS else ""
+                    request = PhotoRequest()
+            return request if request.intent in _PHOTO_INTENTS else PhotoRequest()
+        # 关键词层已带主体（如"自拍""合照""桌上的西瓜"）：直接用，无需 LLM。
+        return PhotoRequest(intent=intent)
 
     async def _deliver_chat_photo(
         self,
@@ -1378,6 +1430,9 @@ class Pipeline:
         request_context: RequestContext | None,
         intent: str,
         trace: dict | None = None,
+        *,
+        subject: str = "",
+        subject_form: str = "",
     ) -> dict:
         """触发一次真实生图并等待送达（文本等图：图先落地，再放行后续文本）。
 
@@ -1385,6 +1440,9 @@ class Pipeline:
         安全检查 / 资产落盘 / 派发到 local_chat 或 QQ）。生图是耗时的同步 HTTP
         调用，已在线程池执行，不阻塞事件循环。用户主动要求（scene=local_send）
         不占用主动发图每日额度。失败/超时不会抛异常，由调用方决定放行文本。
+
+        ``subject`` 是用户提到的**要拍的那个东西**（"衣柜上的挂件"）。对
+        ``environment_object`` 而言它决定画面内容；为空时组合器只能退回世界话题。
         """
         from core.companion import get_companion
         from core.image_size import size_for_prompt_key
@@ -1430,6 +1488,11 @@ class Pipeline:
             # 让模块化解析器能从真实意图中提取主体/姿态/机位/场景，而不是只用死板的
             # intent 关键字。缺省给空串，避免下游因 None 中断（缺值即停防护）。
             "user_raw": str(msg.content or "").strip(),
+            # 要拍的**主体**（"衣柜上的挂件"）与形态（closeup / pov）。
+            # 这是 environment_object 唯一能拿到"画面里该有什么"的来源：
+            # 它没有世界话题可依（reason_code=user_requested），也不该出现人物。
+            "subject": str(subject or "").strip(),
+            "subject_form": str(subject_form or "").strip(),
             # 角色级隔离：图片归属当前激活角色，投递端按此写 chat_log persona_id
             "persona_id": active_persona_id(),
         }
@@ -1478,6 +1541,12 @@ class Pipeline:
     ) -> None:
         """图片投递结束后推送占位气泡的终态（ready 撤掉 / failed 给重发）。"""
         delivered = self._photo_result_delivered(photo_result)
+        # 提示词干跑（审计）时没有图，但**这不是失败**：是刻意停在了提示词那一步。
+        # 若按失败发终态，桌面会弹"图片这次没发出来"并给重发按钮 —— 与事实不符。
+        dry_run = bool(
+            isinstance(photo_result, dict)
+            and _workflow_status_of(photo_result) == "dry_run"
+        )
         try:
             emit(
                 "assistant_image_status",
@@ -1485,9 +1554,9 @@ class Pipeline:
                 role="assistant",
                 id=pending_id,
                 user_id=msg.user_id,
-                status="ready" if delivered else "failed",
+                status="ready" if (delivered or dry_run) else "failed",
                 # 失败时前端重发按钮复用原用户指令再走一轮生图
-                retry_text="" if delivered else str(msg.content or ""),
+                retry_text="" if (delivered or dry_run) else str(msg.content or ""),
                 source=msg.source,
                 **self._event_contract(
                     request_state,
@@ -1581,93 +1650,140 @@ class Pipeline:
         t = str(text or "").lower()
         return any(h in t for h in _REPLY_PHOTO_HINTS)
 
-    async def _judge_photo_intent(self, text: str) -> str:
-        """关键词未命中时的语义兜底：让 LLM 判断消息是否要求生成/发送图片。
+    async def _judge_photo_request(self, text: str) -> PhotoRequest:
+        """关键词未命中（或只命中通用出图短语）时的语义兜底。
 
-        Returns one of: role_selfie / role_in_scene / couple_photo /
-        environment_object / ""（不是图片请求）。
+        除了意图，还必须回答**主体**（要拍的是什么）与**形态**（特写/她的视角）——
+        因为"发张照片给我看看"这类话本身说不出主体，主体只存在于上下文里
+        （"衣柜上那个挂件还在吗"）。旧实现只判意图，于是这类请求只能退化成
+        人物照（实测 2026-09-29）。
         """
         brain = getattr(self, "brain", None)
         if brain is None:
-            return ""
+            return PhotoRequest()
         try:
             prompt = (
                 "你是视觉意图判断器。判断用户这句话是否隐含「想看到你（AI 恋人）世界里的某个具体视觉载体」"
                 "的意图——即希望用一张图片来满足这份分享欲。不要只盯“拍照/照片”字眼，"
                 "关键看有没有一个具体的“想看”对象（你本人/你的穿着/你的家/某个物体）。"
                 "只输出一个 JSON 对象，不要输出任何其他内容：\n"
-                '{"visual_intent": "role_selfie" | "role_in_scene" | "couple_photo" | "environment_object" | "none"}\n'
+                '{"visual_intent": "role_selfie" | "role_in_scene" | "couple_photo" | "environment_object" | "none",'
+                ' "subject": "要拍的那个东西（短语）", "subject_form": "closeup" | "pov"}\n'
                 "含义：\n"
-                "role_selfie=想看你的样子/自拍/穿着形象，如“看看你”“你长什么样”“你衣服是什么样子”“拍拍照我看看”；\n"
+                "role_selfie=想看你的样子/自拍/穿着形象，如“看看你”“你长什么样”“你衣服是什么样子”；\n"
                 "role_in_scene=想看你在某个场景/地点里，如“看看你在家的样子”“你窗边什么样子”；\n"
                 "couple_photo=想看你和用户的合照/合影；\n"
                 "environment_object=想看你的生活空间或某个具体物体/环境，如“让我看看你家里什么样子”"
-                "“我看看你的床什么样子”“看看你厨房”；\n"
+                "“我看看你的床什么样子”“看看你厨房”“我送你的挂件还在衣柜上吗”；\n"
                 "none=只是问候/抽象询问/没有具体视觉载体，如“看看你最近怎么样”“照顾好自己”“看一下这个文件”；"
                 "用户想看他自己家的东西（我家/我的床）也判 none，因为你没有他世界的画面。\n"
+                "【主体 subject】写清这轮**要拍的那个东西**，用用户自己的说法，一个短语即可；"
+                "主体是你本人（自拍/合照/场景里的你）时留空字符串。\n"
+                "重要：像“发张照片给我看看”“拍张照我瞅瞅”这类**通用说法本身不含主体**，"
+                "必须从整句话里找真正的对象——例如“衣柜上我送你的挂件还在吗？发张照片给我看看”"
+                "的主体是“衣柜上挂着的小挂件”，不是“你”。找不到具体对象才留空。\n"
+                "【形态 subject_form】仅 environment_object 有意义，二选一：\n"
+                "closeup=用户想**确认/看清某个东西**（还在吗／什么样／给我看看那个X）→ 画面主角是那个东西，你本人不入镜；\n"
+                "pov=用户想要**那个地方或氛围**（窗外的雨／你那边什么样／家里什么样子）→ 你的第一人称视角，可有手或局部入镜；\n"
+                "拿不准或非 environment_object 时给 closeup。\n"
                 "判定要点：有「想看/看看/让我看/给我看 + 具体载体（你的/家里/床/房间/衣服/现在/某物）」"
                 "就有出图意图；只有“看”但没有具体想看的对象，或纯抽象关心，判 none。"
             )
-            resp = await brain.chat(
-                [
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": str(text or "")},
-                ],
-                temperature=0.1,
+            return await self._run_photo_judge(
+                brain, prompt, text, label="semantic judge",
             )
-            raw = str(getattr(resp, "text", "") or "")
-            raw = self._strip_think(raw)
-            m = re.search(r'"visual_intent"\s*:\s*"([^"]+)"', raw)
-            if not m:
-                logger.debug("[ChatPhoto] semantic judge unparseable: %r", raw[:120])
-                return ""
-            intent = m.group(1).strip()
-            logger.info("[ChatPhoto] semantic judge intent=%s msg=%r", intent, str(text or "")[:40])
-            return intent
         except Exception:
             logger.debug("[ChatPhoto] semantic judge failed", exc_info=True)
-            return ""
+            return PhotoRequest()
 
-    async def _judge_reply_photo_intent(self, text: str) -> str:
+    async def _judge_reply_photo_request(self, text: str) -> PhotoRequest:
         """回复语义兜底：判断 AI 回复是否在"叙述并执行发送一张图片"。
 
-        Returns one of: role_selfie / role_in_scene / couple_photo /
-        environment_object / ""（不是发图）。
+        同样要读出**主体**：她的回复里常常已经说清了要拍什么
+        （"我对着衣柜拍一张 你找找看"）——这正是补回主体的第二个入口。
         """
         brain = getattr(self, "brain", None)
         if brain is None:
-            return ""
+            return PhotoRequest()
         try:
             prompt = (
                 "你是视觉意图判断器。判断这段 AI 回复是否在「描述并执行发送一张图片」——"
                 "即她正在把一张自拍/场景照/合照/环境照发给用户"
                 "（如“随手对着镜子拍的”“点了发送”“发给你”“这张照片给你看”“我刚拍了张发你”）。\n"
                 "只输出一个 JSON 对象，不要输出任何其他内容：\n"
-                '{"visual_intent": "role_selfie" | "role_in_scene" | "couple_photo" | "environment_object" | "none"}\n'
+                '{"visual_intent": "role_selfie" | "role_in_scene" | "couple_photo" | "environment_object" | "none",'
+                ' "subject": "要拍的那个东西（短语）", "subject_form": "closeup" | "pov"}\n'
                 "含义：role_selfie=在发自己的自拍/照片；role_in_scene=在发某个场景里的自己；"
                 "couple_photo=在发合照；environment_object=在发某个环境/物体。\n"
+                "【主体 subject】回复若说明了拍的是什么（如“我对着衣柜拍一张”），"
+                "把它写成短语（“衣柜”/“衣柜上的挂件”）；拍的是她自己时留空字符串。\n"
+                "【形态 subject_form】仅 environment_object 有意义："
+                "closeup=画面主角是那个东西、她本人不入镜；pov=她的第一人称视角。拿不准给 closeup。\n"
                 "判定要点：只有回复明确在叙述“正在/即将把一张图发出去”才返回对应意图；"
                 "回忆过去、描述别人的照片、或只是口头说说（如“你上次拍的照片真好看”）判 none。"
             )
-            resp = await brain.chat(
-                [
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": str(text or "")},
-                ],
-                temperature=0.1,
+            return await self._run_photo_judge(
+                brain, prompt, text, label="reply judge",
             )
-            raw = str(getattr(resp, "text", "") or "")
-            raw = self._strip_think(raw)
-            m = re.search(r'"visual_intent"\s*:\s*"([^"]+)"', raw)
-            if not m:
-                logger.debug("[ChatPhoto] reply judge unparseable: %r", raw[:120])
-                return ""
-            intent = m.group(1).strip()
-            logger.info("[ChatPhoto] reply judge intent=%s reply=%r", intent, str(text or "")[:40])
-            return intent
         except Exception:
             logger.debug("[ChatPhoto] reply judge failed", exc_info=True)
-            return ""
+            return PhotoRequest()
+
+    async def _run_photo_judge(
+        self, brain: Any, prompt: str, text: str, *, label: str,
+    ) -> PhotoRequest:
+        """跑一次视觉判断并解析成 :class:`PhotoRequest`（两个 judge 的唯一解析点）。
+
+        容错策略与项目其它 LLM 解析一致：**字段缺失不致命**。老格式（只有
+        ``visual_intent``）仍能解析成"有意图、无主体"，只是主体为空 —— 不能因为
+        模型少给一个字段就把整次出图判成"没有诉求"。
+        """
+        resp = await brain.chat(
+            [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": str(text or "")},
+            ],
+            temperature=0.1,
+        )
+        raw = self._strip_think(str(getattr(resp, "text", "") or ""))
+        payload: dict[str, Any] = {}
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                payload = parsed
+        except (ValueError, TypeError):
+            # 模型偶尔在 JSON 外面裹一层说明文字 → 退到正则逐字段取。
+            m = re.search(r'"visual_intent"\s*:\s*"([^"]+)"', raw)
+            if m:
+                payload = {"visual_intent": m.group(1)}
+            else:
+                logger.debug("[ChatPhoto] %s unparseable: %r", label, raw[:120])
+                return PhotoRequest()
+        subject_m = re.search(r'"subject"\s*:\s*"([^"]*)"', raw)
+        form_m = re.search(r'"subject_form"\s*:\s*"([^"]+)"', raw)
+        request = PhotoRequest(
+            intent=str(payload.get("visual_intent") or "").strip(),
+            subject=(
+                str(payload.get("subject") or "").strip()
+                or (subject_m.group(1).strip() if subject_m else "")
+            ),
+            subject_form=(
+                str(payload.get("subject_form") or "").strip()
+                or (form_m.group(1).strip() if form_m else "")
+            ),
+        )
+        if request.subject_form not in _SUBJECT_FORMS:
+            request = PhotoRequest(
+                intent=request.intent,
+                subject=request.subject,
+                subject_form=_DEFAULT_SUBJECT_FORM,
+            )
+        logger.info(
+            "[ChatPhoto] %s intent=%s subject=%r form=%s src=%r",
+            label, request.intent, request.subject, request.subject_form,
+            str(text or "")[:40],
+        )
+        return request
 
     # ── Helpers ────────────────────────────────────────
     def _call_optional_context_provider(self, name: str, *args) -> Any:

@@ -32,10 +32,12 @@ from core.companion import (
     _PHOTO_ORIENTATION_SIZE,
     _PHOTO_POSE_TABLE,
     _PHOTO_SHOT_TABLE,
-    _IMAGE_SIZE_LANDSCAPE,
-    _IMAGE_SIZE_PORTRAIT,
     _prompt_key_for_visual_topic,
     _visual_topic_zh,
+)
+from core.image_size import (
+    IMAGE_SIZE_LANDSCAPE as _IMAGE_SIZE_LANDSCAPE,
+    IMAGE_SIZE_PORTRAIT as _IMAGE_SIZE_PORTRAIT,
 )
 
 

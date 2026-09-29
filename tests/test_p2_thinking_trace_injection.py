@@ -22,7 +22,7 @@ def _make_db():
             stage_route TEXT, stage_emotion TEXT, stage_threshold TEXT,
             stage_context TEXT, stage_brain TEXT, stage_tools TEXT,
             stage_split TEXT, stage_postprocess TEXT, stage_output TEXT,
-            decision_trace TEXT, react_trace TEXT,
+            decision_trace TEXT, react_trace TEXT, persona_id TEXT,
             is_command INTEGER DEFAULT 0, duration_ms INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
         )"""

@@ -14,3 +14,7 @@
 # ── 测试框架（仅开发期；构建时不进 runtime） ─────────────────────────
 pytest==9.1.1
 pytest-asyncio==1.4.0
+# 并行跑测试：`pytest tests/ -n auto` 把全量从 ~234s 降到 ~80s（20 核实测 79.8s）。
+# 之所以不写进 addopts：没装 xdist 的环境会因 `unrecognized arguments: -n` 直接跑不起来，
+# 宁可让"想快的人显式加参数"，也不要让所有人的 pytest 直接报错。
+pytest-xdist==3.8.0

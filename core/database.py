@@ -437,6 +437,7 @@ class Database:
                     migration.apply(conn)
             # Compatibility migrations remain available when the framework flag is off.
             self._migrate_chat_log(conn)
+            self._migrate_cognition_log(conn)
             self._migrate_long_term_memory(conn)
             self._migrate_emotion_state_snapshot(conn)
             self._migrate_todo(conn)
@@ -444,6 +445,22 @@ class Database:
             # Phase 4 + Phase 9: indexes (centralized for idempotency)
             for stmt in INDEX_SQL:
                 conn.execute(stmt)
+
+    def _migrate_cognition_log(self, conn: sqlite3.Connection) -> None:
+        """Add persona_id to cognition_log when the table predates 016.
+
+        与 _migrate_chat_log 同理：迁移框架关闭时（旧安装）也必须把列补上，
+        否则 CognitionEngine.commit 会因为「表缺列」而整条 trace 写不进去 ——
+        而且是静默失败（异常被吞、返回 0），表现成"认知中枢一直是空的"。
+        """
+        existing = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(cognition_log)").fetchall()
+        }
+        if not existing:
+            return  # 表还没建，交给 _create_tables
+        if "persona_id" not in existing:
+            conn.execute("ALTER TABLE cognition_log ADD COLUMN persona_id TEXT DEFAULT NULL")
 
     def _migrate_chat_log(self, conn: sqlite3.Connection) -> None:
         """Add Phase 4 columns to chat_log if they don't exist yet."""

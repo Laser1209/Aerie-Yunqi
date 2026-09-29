@@ -51,6 +51,36 @@ def _safe_float(value: Any, default: float = 0.5) -> float:
         return default
 
 
+# 指令型 skill 的索引（进程内单例）：SKILL.md 是磁盘内容，不随消息变化，
+# 只需要扫一次；失败一律降级为"没有指令可注入"，绝不因此拦住对话。
+_SKILL_INSTRUCTIONS: Any = None
+
+
+def _skill_instructions_for(text: str) -> str:
+    """取当前消息命中的技能指令片段；无命中或索引不可用时返回空串。"""
+    global _SKILL_INSTRUCTIONS
+    try:
+        if _SKILL_INSTRUCTIONS is None:
+            from core.skill_instructions import SkillInstructionIndex
+
+            index = SkillInstructionIndex()
+            index.discover()
+            logger.info(
+                "[SkillInstructions] 已加载 %d 份指令型 skill：%s",
+                len(index.names), ", ".join(index.names) or "（无）",
+            )
+            _SKILL_INSTRUCTIONS = index
+        block = _SKILL_INSTRUCTIONS.build_block(text)
+    except Exception:  # noqa: BLE001
+        logger.warning("[SkillInstructions] 指令索引不可用，本轮不注入", exc_info=True)
+        return ""
+    if block:
+        logger.info(
+            "[SkillInstructions] 命中技能指令，注入 %d 字", len(block),
+        )
+    return block
+
+
 class ContextBuilder:
     def __init__(self, memory: Any = None, knowledge: Any = None) -> None:
         self.memory = memory
@@ -682,6 +712,14 @@ class ContextBuilder:
                 logger.info("[ExpressionHierarchy] world_image_candidates_v1 关闭，跳过注入（避免认知与链路脱节）")
         else:
             logger.debug("[ImageCapability] mode=%s 不注入（仅 FULL/AUTO 注入）", route_mode)
+
+        # L7 · 技能指令（FULL/AUTO，命中才注入）
+        # 指令型 skill 是提示词/工作流文档，不是工具；命中相关请求时把方法论
+        # 注入 system prompt，让模型照着做（见 core/skill_instructions.py）。
+        if route_mode in ("FULL", "AUTO") and current_msg:
+            skill_block = _skill_instructions_for(current_msg)
+            if skill_block:
+                parts.append(skill_block)
 
         return "\n\n".join(parts)
 

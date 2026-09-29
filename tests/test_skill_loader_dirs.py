@@ -203,7 +203,7 @@ def test_unavailable_skill_does_not_shadow_an_available_one(tmp_path, monkeypatc
 
 
 def test_cloud_skills_register_into_tool_registry():
-    """注册的是**可用**子集；未注册的那些必须都标了 available=False。"""
+    """注册的是**可用且为工具型**的子集；其余必须各有明确原因。"""
     registry = ToolRegistry()
     loader = _loader(registry)
     discovered = loader.discover()
@@ -212,12 +212,16 @@ def test_cloud_skills_register_into_tool_registry():
     assert discovered >= 77
     assert registered < discovered  # 本体有大量不可用 skill（见下条）
     assert registered == sum(
-        1 for meta in loader.discovered.values() if meta["available"]
+        1
+        for meta in loader.discovered.values()
+        if meta["available"] and meta.get("form") != "instruction"
     )
     for name, meta in loader.discovered.items():
-        if meta["available"]:
+        is_tool = meta["available"] and meta.get("form") != "instruction"
+        if is_tool:
             assert registry.get(name) is not None
         else:
+            # 要么前提不满足，要么是指令型（走上下文注入，不注册为工具）
             assert registry.get(name) is None
 
 

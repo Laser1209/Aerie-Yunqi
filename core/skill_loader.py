@@ -25,6 +25,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -55,7 +56,8 @@ def _unavailability_reason(meta: dict[str, Any]) -> str:
 
     * ``implemented: false``：该 skill 还是占位桩，调用必然返回 stub；
     * ``requires_module``：底层 Python 模块必须可导入（本地模型 / 后端）；
-    * ``requires_env``：环境变量必须非空（云端服务凭证）。
+    * ``requires_env``：环境变量必须非空（云端服务凭证）；
+    * ``requires_cli``：外部命令行程序必须在 PATH 上（如 ``defuddle``、``gh``）。
 
     为什么要有这道闸：2026-09-29 真机里，模型在"要看图"时反复调
     ``txt2img``（``local_txt2img`` 未安装）、``byted-seedream``（``SEEDREAM_KEY``
@@ -76,6 +78,9 @@ def _unavailability_reason(meta: dict[str, Any]) -> str:
     env_name = str(meta.get("requires_env") or "").strip()
     if env_name and not str(os.environ.get(env_name) or "").strip():
         return f"missing env: {env_name}"
+    cli_name = str(meta.get("requires_cli") or "").strip()
+    if cli_name and shutil.which(cli_name) is None:
+        return f"missing cli: {cli_name}"
     return ""
 
 
@@ -145,9 +150,14 @@ class SkillLoader:
                         continue
                     name = str(meta["name"]).strip()
                     reason = _unavailability_reason(meta)
+                    # 形态：指令型（kind: instruction）走**上下文注入**，不注册为工具；
+                    # 其余是工具型。两者互斥，避免模型两头都试（见 core/skill_instructions.py）。
+                    declared_kind = str(meta.get("kind") or "").strip().lower()
+                    form = "instruction" if declared_kind == "instruction" else "tool"
                     record = {
                         "path": entry,
                         "kind": kind,
+                        "form": form,
                         "hint": str(meta.get("provider_hint", "text") or "text"),
                         "read_only": bool(meta.get("read_only", kind == "data")),
                         "desc": str(meta.get("description", "") or ""),
@@ -182,10 +192,15 @@ class SkillLoader:
         Idempotent: re-running on the same SkillLoader is a no-op for
         already-registered skills. ``available=False`` 的 skill 只发现、不注册
         —— 模型看不到跑不了的工具（§十四 #63 / #74）。
+        ``form == "instruction"`` 的同样不注册：它是提示词/工作流文档，
+        走 `core.skill_instructions` 的上下文注入，而不是"被调用的函数"。
         """
         n = 0
         for name, meta in self.discovered.items():
             if name in self._registered:
+                continue
+            if meta.get("form") == "instruction":
+                logger.debug("skill %s 是指令型，跳过工具注册（走上下文注入）", name)
                 continue
             if meta.get("available") is False:
                 logger.info(

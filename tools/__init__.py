@@ -167,6 +167,14 @@ def register_all_tools(registry) -> None:
         import logging
         logging.getLogger(__name__).warning("knowledge tools registration failed: %s", e)
 
+    # 系统自省工具：让模型能查「有什么能力 / 缺什么 / 去哪儿配」与运行状况（Part C3）
+    try:
+        from tools.system_tools import register_system_tools
+        register_system_tools(registry)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("system tools registration failed: %s", e)
+
     # 打印工具注册统计，便于排查
     try:
         import logging

@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -121,9 +122,56 @@ _CHAT_FAILURE_BY_REASON: tuple[tuple[tuple[str, ...], str], ...] = (
     ),
 )
 
+# 从错误串里挖「缺失标识」——它们才是能翻成"去哪配"的抓手。
+_MISSING_IDENT_PATTERNS = (
+    re.compile(r"missing cli:\s*([A-Za-z0-9_.\-]+)", re.IGNORECASE),
+    re.compile(r"no module named\s+['\"]([A-Za-z_][A-Za-z0-9_.]*)['\"]", re.IGNORECASE),
+    re.compile(r"missing env:\s*([A-Za-z_][A-Za-z0-9_]*)", re.IGNORECASE),
+    # 真实文案长这样：`credential_missing: env 'SEEDREAM_KEY' not set`
+    # —— 中间夹着 `env '`，所以不能直接贴着抓，得往后找那个全大写标识。
+    re.compile(r"credential_missing[^\n]{0,80}?\b([A-Z][A-Z0-9_]{3,})\b"),
+)
+
+
+def capability_guidance(error: str) -> str:
+    """把「缺环境变量 / 缺模块 / 缺 CLI」翻成可执行指引；反查不到返回空串。
+
+    **反查不到就返回空串**（由调用方回落到原兜底文案）—— 瞎指路比说"我换个办法"更糟。
+    """
+    text = str(error or "")
+    if not text:
+        return ""
+    try:
+        from core import capability_catalog
+    except Exception:
+        return ""
+
+    seen: set[str] = set()
+    for pattern in _MISSING_IDENT_PATTERNS:
+        for ident in pattern.findall(text):
+            key = str(ident).strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            entry = capability_catalog.owner_of(key)
+            if entry is None or not entry.where:
+                continue
+            if entry.fix_kind == "env":
+                return f"这个能力还缺 {key} 没配好，去「{entry.where}」填上就能用。"
+            if entry.fix_kind in ("cli", "module"):
+                return f"这个能力需要先在本机装好 {key}：{entry.where}"
+    return ""
+
 
 def chat_failure_text(error: str = "") -> str:
-    """聊天模式下的失败文案：按失败原因分档，避免所有失败都长一样。"""
+    """聊天模式下的失败文案：按失败原因分档，避免所有失败都长一样。
+
+    先试「能力目录反查」——能翻成"缺什么、去哪配"就用那一句；
+    反查不到再回落到按关键字分档的兜底文案（**不瞎指路**）。
+    """
+    guidance = capability_guidance(error)
+    if guidance:
+        return guidance
     lowered = str(error or "").lower()
     for keywords, text in _CHAT_FAILURE_BY_REASON:
         if any(keyword in lowered for keyword in keywords):

@@ -1732,6 +1732,11 @@ class Companion:
             n_disc = self.skill_loader.discover()
             n_reg = self.skill_loader.register_all()
             logger.info("skills: %d discovered, %d registered", n_disc, n_reg)
+            # 能力目录登记：失败文案 / system_status 工具 / 按需注入都靠它，
+            # 不必各自想办法拿 loader（见 core/capability_catalog.set_loader）。
+            from core import capability_catalog
+
+            capability_catalog.set_loader(self.skill_loader)
         except Exception:
             logger.exception("skill loader init failed; continuing without skills")
             self.skill_loader = None

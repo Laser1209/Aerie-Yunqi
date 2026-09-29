@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
 
 from ._hist_utils import hist_label as _hist_label
@@ -79,6 +80,36 @@ def _skill_instructions_for(text: str) -> str:
             "[SkillInstructions] 命中技能指令，注入 %d 字", len(block),
         )
     return block
+
+
+# ── 能力可见性（L8）的匹配辅助 ─────────────────────────────
+# 匹配前统一去空白/连字符/下划线并小写：用户说"我要用 seedream"，
+# 能力名是 `byted-seedream` —— 掐掉分隔符才能对上。
+_MATCH_SEPARATORS = re.compile(r"[\s\-_./]+")
+
+
+def _normalize_for_match(text: str) -> str:
+    return _MATCH_SEPARATORS.sub("", str(text or "")).lower()
+
+
+def _capability_probe_terms(entry: Any) -> tuple[str, ...]:
+    """一条能力的"探测词"：能力名里的长片段 + 它缺的标识。
+
+    `byted-seedream` → `byted` / `seedream`；`missing env: SEEDREAM_KEY` → `seedreamkey`。
+    """
+    terms: list[str] = []
+    for token in re.split(r"[\s\-_./]+", str(getattr(entry, "name", "") or "")):
+        if len(token) >= 4 and token.lower() not in terms:
+            terms.append(token.lower())
+    for ident in getattr(entry, "missing", ()) or ():
+        token = _normalize_for_match(ident)
+        if len(token) >= 4 and token not in terms:
+            terms.append(token)
+    return tuple(terms)
+
+
+def _entry_mentioned(entry: Any, normalized_blob: str) -> bool:
+    return any(term in normalized_blob for term in _capability_probe_terms(entry))
 
 
 class ContextBuilder:
@@ -721,7 +752,81 @@ class ContextBuilder:
             if skill_block:
                 parts.append(skill_block)
 
+        # L8 · 能力可见性（FULL/AUTO，**命中才注入**）
+        # 不可用能力默认不进模型可见清单；只有"用户这条消息正要点名它"或
+        # "上下文里出现过缺能力标识"时才补一小段，避免把上百条目录常驻挤掉对话预算。
+        if route_mode in ("FULL", "AUTO"):
+            capability_block = self._build_capability_awareness(
+                current_msg or "", history_msgs or []
+            )
+            if capability_block:
+                parts.append(capability_block)
+
         return "\n\n".join(parts)
+
+    # 参与"点名匹配"的历史消息条数（只看尾部：上一轮失败/刚提到的能力）
+    _CAPABILITY_HISTORY_TAIL = 4
+    # 一次最多提示几条，避免拼成一张目录表
+    _CAPABILITY_MAX_ENTRIES = 4
+
+    def _build_capability_awareness(
+        self,
+        current_msg: str,
+        history_msgs: list[dict],
+    ) -> str:
+        """L8 · 只在命中未就绪能力时注入「缺什么、去哪配」。
+
+        命中口径（两条，任一成立即注入）：
+          1. 用户这条消息里出现了某个未就绪能力的**探测词**（能力名分词 / 缺失标识）；
+          2. 最近几轮历史里出现过"缺能力标识"（如上一轮失败文案里带了 SEEDREAM_KEY）。
+
+        普通闲聊一律不注入 —— 目录有体量，常驻会挤掉对话上下文。
+        """
+        try:
+            from core import capability_catalog
+        except Exception:
+            return ""
+        try:
+            catalog = capability_catalog.build_catalog()
+        except Exception:
+            logger.debug("能力目录构建失败，跳过 L8 注入", exc_info=True)
+            return ""
+        unavailable = [e for e in catalog if not e.ready]
+        if not unavailable:
+            return ""
+
+        texts = [str(current_msg or "")]
+        tail = history_msgs[-self._CAPABILITY_HISTORY_TAIL:]
+        texts += [str(m.get("content") or "") for m in tail if isinstance(m, dict)]
+        blob = _normalize_for_match("\n".join(texts))
+        if not blob.strip():
+            return ""
+
+        hits: list = []
+        for entry in unavailable:
+            if _entry_mentioned(entry, blob):
+                hits.append(entry)
+            if len(hits) >= self._CAPABILITY_MAX_ENTRIES:
+                break
+        if not hits:
+            return ""
+
+        lines = [
+            "【能力可见性 · Capability Awareness】",
+            "下面这些能力现在**不可用**，而用户这条消息看起来正要它们。"
+            "请如实说明并给出去哪里配置，**不要假装能做到**：",
+        ]
+        for entry in hits:
+            reason = entry.unavailable_reason or "不可用"
+            if entry.where:
+                lines.append(f"- {entry.name}：{reason} → {entry.where}")
+            else:
+                lines.append(f"- {entry.name}：{reason}")
+        lines.append(
+            "若配置后仍需重启才生效，也要一并讲清楚；不要用「我做不到」一句带过，"
+            "更不要编造替代结果。"
+        )
+        return "\n".join(lines)
 
     def _detect_image_intent(
         self,

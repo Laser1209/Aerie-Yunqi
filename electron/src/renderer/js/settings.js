@@ -132,7 +132,10 @@ class SettingsPanel {
       if (input) input.type = input.type === "password" ? "text" : "password";
     });
     const featureReloadBtn = document.getElementById("feature-api-reload-btn");
-    if (featureReloadBtn) featureReloadBtn.addEventListener("click", () => this.loadFeatureApis());
+    if (featureReloadBtn) featureReloadBtn.addEventListener("click", () => {
+      this.loadFeatureApis();
+      this.loadMcpServers();
+    });
 
     // 模块中心（功能包 .aeriepack）
     this._pluginProgress = new Map();
@@ -336,6 +339,7 @@ class SettingsPanel {
       this.loadBaiduMap();
     } else if (mode === "feature") {
       this.loadFeatureApis();
+      this.loadMcpServers();
     } else if (mode === "plugins") {
       this.loadPlugins();
     }
@@ -1491,6 +1495,106 @@ class SettingsPanel {
           : "已保存并热加载";
         st.style.color = "var(--success, #2ecc71)";
       }
+    } catch (e) {
+      if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+    } finally {
+      if (btn) btn.disabled = false;
+      setTimeout(() => { if (st) st.textContent = ""; }, 6000);
+    }
+  }
+
+  // ── MCP 服务器：开关与凭据（改动需重启后端） ───────────────
+  //
+  // 为什么这里必须写明"需重启"：MCP 会拉起子进程或建立外连，运行中无法卸载，
+  // 所以开关的效果与界面提示必须一致，否则用户会以为点了就生效。
+  async loadMcpServers() {
+    const list = document.getElementById("mcp-server-list");
+    if (!list) return;
+    const st = document.getElementById("mcp-server-status");
+    try {
+      if (st) { st.textContent = "加载中…"; st.style.color = "var(--text-muted, #999)"; }
+      const r = await window.aerie.api.request({ method: "GET", path: "/api/env/mcp-servers" });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      this._renderMcpServers((r && r.data) || {});
+      if (st) { st.textContent = ""; }
+    } catch (e) {
+      if (st) { st.textContent = "加载失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
+    }
+  }
+
+  _renderMcpServers(data) {
+    const list = document.getElementById("mcp-server-list");
+    if (!list) return;
+    list.innerHTML = "";
+    const servers = data.servers || [];
+    if (!servers.length) {
+      list.innerHTML = '<div class="plugins-empty">没有可用的 MCP 预设</div>';
+      return;
+    }
+    servers.forEach((s) => {
+      const card = document.createElement("div");
+      card.className = "apikey-provider-card" + (s.enabled ? " configured" : "");
+      const dot = s.enabled ? "var(--success, #2ecc71)" : "var(--text-muted, #999)";
+      const fieldsHtml = (s.fields || []).map((f) => `
+        <label class="apikey-field">
+          <span>${this._escapeHtml(f.label)}</span>
+          <input type="${f.secret ? 'password' : 'text'}" class="apikey-input"
+                 data-mcp="${this._escapeAttr(s.key)}" data-env="${this._escapeAttr(f.env_key)}"
+                 value="${this._escapeAttr(f.masked || '')}"
+                 placeholder="${f.secret ? '请输入密钥' : ''}">
+        </label>
+      `).join("");
+      const meta = `${s.transport} · ${s.endpoint || ""}`
+        + (s.configured === false ? " · 尚未填凭据" : "");
+      card.innerHTML = `
+        <div class="apikey-provider-header">
+          <div class="apikey-provider-name">
+            <span class="apikey-provider-dot" style="background:${dot}"></span>
+            ${this._escapeHtml(s.name)}
+          </div>
+          <label class="apikey-field apikey-field--row" style="margin:0;">
+            <input type="checkbox" data-mcp-toggle="${this._escapeAttr(s.key)}" ${s.enabled ? "checked" : ""}>
+            <span style="font-size:12px;">启用</span>
+          </label>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted,#999);margin:0 0 8px;">${this._escapeHtml(s.desc || "")}</div>
+        <div style="font-size:11px;color:var(--text-muted,#999);margin-bottom:8px;">${this._escapeHtml(meta)}</div>
+        <div class="apikey-provider-fields">${fieldsHtml}</div>
+        <div class="apikey-provider-actions">
+          <button type="button" class="btn btn-primary btn-sm mcp-save-btn" data-mcp="${this._escapeAttr(s.key)}">保存（需重启后端）</button>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+    list.querySelectorAll(".mcp-save-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this.saveMcpServer(btn.dataset.mcp));
+    });
+    list.querySelectorAll("[data-mcp-toggle]").forEach((cb) => {
+      cb.addEventListener("change", () => this.saveMcpServer(cb.dataset.mcpToggle));
+    });
+  }
+
+  async saveMcpServer(serverKey) {
+    const list = document.getElementById("mcp-server-list");
+    const st = document.getElementById("mcp-server-status");
+    if (!list) return;
+    const fields = {};
+    list.querySelectorAll(`input[data-mcp="${serverKey}"][data-env]`).forEach((input) => {
+      fields[input.dataset.env] = input.value.trim();
+    });
+    const toggle = list.querySelector(`[data-mcp-toggle="${serverKey}"]`);
+    const btn = list.querySelector(`.mcp-save-btn[data-mcp="${serverKey}"]`);
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "保存中…"; st.style.color = "var(--text-muted, #999)"; }
+    try {
+      const r = await window.aerie.api.request({
+        method: "POST",
+        path: "/api/env/mcp-servers",
+        body: { server_key: serverKey, enabled: !!(toggle && toggle.checked), fields },
+      });
+      if (r && r.data && r.data.error) throw new Error(r.data.error);
+      await this.loadMcpServers();
+      if (st) { st.textContent = "已保存，重启后端生效"; st.style.color = "var(--success, #2ecc71)"; }
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     } finally {

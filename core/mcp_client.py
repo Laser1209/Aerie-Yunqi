@@ -134,6 +134,27 @@ def _expand_env(value: str) -> str:
 _HTTP_TRANSPORTS = frozenset({"http", "https", "streamable-http", "streamable_http", "sse"})
 
 
+def _env_suffix(name: str) -> str:
+    """把 server 名转成可做环境变量后缀的形式（非字母数字一律换成下划线）。"""
+    return _SAFE_NAME_RE.sub("_", str(name)).upper()
+
+
+def _env_flag(*names: str) -> bool | None:
+    """按顺序找第一个**被显式设置**的环境变量，返回其布尔值；都没设返回 None。
+
+    为什么要这条路：设置页的开关如果直接改 ``config/mcp_servers.yaml``，就得整篇
+    重写 YAML —— 那个文件里全是解释"为什么"的注释，一次 safe_dump 就全没了。
+    改为「YAML 声明默认值（带注释、可提交）+ .env 存运行期开关（用户数据、不进
+    版本库）」，与项目里 feature_flags 的 ``AERIE_FEATURE_*`` 是同一套范式。
+    """
+    for n in names:
+        raw = os.environ.get(n)
+        if raw is None or not str(raw).strip():
+            continue
+        return _as_bool(raw)
+    return None
+
+
 @dataclass
 class MCPServerConfig:
     """单个 MCP server 的连接配置（stdio 子进程 或 远程 Streamable HTTP）。"""
@@ -176,6 +197,10 @@ class MCPServerConfig:
             "call_timeout_seconds": float(data.get("call_timeout_seconds", 120.0) or 120.0),
             "enabled": _as_bool(data.get("enabled", False)),
         }
+        # .env 里的开关优先于 YAML 默认值（见 _env_flag 的说明）
+        override = _env_flag(f"AERIE_MCP_SERVER_{_env_suffix(name)}")
+        if override is not None:
+            common["enabled"] = override
 
         if transport in _HTTP_TRANSPORTS:
             url = str(data.get("url") or "").strip()
@@ -241,6 +266,9 @@ def load_servers_config(
         logger.warning("MCP 配置格式非法（顶层应为映射）: %s", path)
         return False, {}
     enabled = _as_bool(data.get("enabled", False))
+    override = _env_flag("AERIE_MCP_ENABLED")
+    if override is not None:
+        enabled = override
     raw = data.get("servers") or {}
     if not isinstance(raw, dict):
         logger.warning("MCP 配置 servers 段应为映射: %s", path)

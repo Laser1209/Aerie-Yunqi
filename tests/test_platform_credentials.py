@@ -12,27 +12,13 @@ import json
 import os
 
 import pytest
-from starlette.requests import Request
 
 from core import api_server, env_file
 from core import skill_loader as skill_loader_module
 from core.skill_loader import SkillLoader
 from core.skill_router import SkillRouter
 from core.tool_registry import ToolRegistry
-
-
-def _request(body: dict) -> Request:
-    """构造一个只够 `await request.json()` 用的最小 Starlette Request。"""
-    payload = json.dumps(body).encode("utf-8")
-
-    async def receive():
-        return {"type": "http.request", "body": payload, "more_body": False}
-
-    return Request(
-        {"type": "http", "method": "POST", "path": "/api/env/feature-apis",
-         "headers": [], "query_string": b""},
-        receive,
-    )
+from tests._http_helpers import make_request as _request
 
 
 @pytest.fixture(autouse=True)

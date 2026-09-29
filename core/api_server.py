@@ -28,6 +28,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import time
 from dataclasses import asdict
@@ -6677,6 +6678,189 @@ async def env_feature_apis_save(request: Request) -> dict:
             "status": "ok",
             "hot_reloaded": list(changed.keys()),
             "activated_skills": _resync_skills(),
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── MCP 服务器管理 ─────────────────────────────────────
+#
+# 预设的**声明**在 config/mcp_servers.yaml（带注释，可提交）；用户按下的**开关**存
+# 在 .env 的 AERIE_MCP_ENABLED / AERIE_MCP_SERVER_<名> 里（用户数据，不进版本库）。
+# 为什么不用界面直接改 YAML：那个文件整篇都是解释"为什么这么配"的注释，一次
+# yaml.safe_dump 重写就把它们全冲掉了。
+_MCP_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+# 展示用元数据（UI 关注点留在 API 层，与 _FEATURE_APIS 的处理方式一致）。
+# 未列出的 server 会用自身 key 兜底，不会因为漏配而消失。
+_MCP_SERVER_META: dict[str, dict[str, str]] = {
+    "notion": {
+        "name": "Notion",
+        "desc": "让模型读写你的 Notion 工作区（搜索、建页、改内容）。"
+                "凭据与「平台凭证 → Notion」共用同一份令牌。",
+    },
+    "tianyancha": {
+        "name": "天眼查",
+        "desc": "企业主体信息 / 股东 / 司法风险等结构化商查数据。"
+                "凭据与「平台凭证 → 天眼查」共用同一份 Token。",
+    },
+    "justoneapi": {
+        "name": "JustOneAPI",
+        "desc": "多平台聚合数据（抖音搜索等）的 MCP 通道。",
+    },
+}
+
+
+def _mcp_config_path() -> Any:
+    from core.mcp_client import DEFAULT_CONFIG_PATH
+
+    return DEFAULT_CONFIG_PATH
+
+
+def _mcp_env_flag_name(server_key: str) -> str:
+    """与 core/mcp_client.py::_env_suffix 保持一致：非字母数字换下划线再大写。"""
+    suffix = re.sub(r"[^A-Za-z0-9_-]", "_", str(server_key)).upper()
+    return f"AERIE_MCP_SERVER_{suffix}"
+
+
+def _mcp_credential_field(env_key: str) -> dict:
+    """凭据字段的展示信息优先取「平台凭证」里的声明，取不到才用密钥名兜底。
+
+    这样同一个环境变量（如 NOTION_TOKEN）在两处的标签不会各写一套而漂移。
+    """
+    for entry in _PLATFORM_CREDENTIALS:
+        for f in entry.get("fields", []):
+            if f["env_key"] == env_key:
+                return {"env_key": env_key, "label": f["label"], "secret": f.get("secret", True)}
+    return {"env_key": env_key, "label": env_key, "secret": True}
+
+
+def _mcp_servers_payload() -> dict:
+    """读 YAML 预设 + 当前开关状态，渲染成设置页要的结构。"""
+    import yaml
+
+    from core.env_file import read_env_file as _read_env
+
+    path = _mcp_config_path()
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception as e:
+        logger.warning("[mcp] 配置读取失败 %s: %s", path, e)
+        return {"enabled": False, "servers": [], "error": f"配置读取失败: {e}"}
+
+    env = _read_env()
+    master = str(env.get("AERIE_MCP_ENABLED", "")).strip()
+    master_enabled = (
+        master.lower() in {"1", "true", "yes", "on"} if master
+        else bool(raw.get("enabled", False))
+    )
+
+    servers: list[dict] = []
+    for key, conf in (raw.get("servers") or {}).items():
+        if not isinstance(conf, dict):
+            continue
+        flag = str(env.get(_mcp_env_flag_name(key), "")).strip()
+        enabled = (
+            flag.lower() in {"1", "true", "yes", "on"} if flag
+            else bool(conf.get("enabled", False))
+        )
+        # 需要的凭据 = 配置里所有 ${VAR} 引用去重（env 与 headers 两处都算）
+        refs: list[str] = []
+        for blob in (conf.get("env") or {}, conf.get("headers") or {}):
+            for value in blob.values():
+                for var in _MCP_VAR_RE.findall(str(value)):
+                    if var not in refs:
+                        refs.append(var)
+        fields = []
+        for var in refs:
+            meta = _mcp_credential_field(var)
+            current = str(env.get(var, "") or "")
+            fields.append({
+                **meta,
+                "masked": _mask_secret(current) if meta["secret"] else current,
+            })
+
+        display = _MCP_SERVER_META.get(str(key), {})
+        servers.append({
+            "key": str(key),
+            "name": display.get("name") or str(key),
+            "desc": display.get("desc") or "",
+            "transport": str(conf.get("transport") or "stdio"),
+            "endpoint": str(conf.get("url") or conf.get("command") or ""),
+            "enabled": enabled,
+            "configured": bool(fields) and all(
+                str(env.get(f["env_key"], "") or "").strip() for f in fields
+            ) if fields else True,
+            # MCP 会拉起子进程 / 建立外连，改动只能重启后生效
+            "restart_required": True,
+            "fields": fields,
+        })
+    return {"enabled": master_enabled, "servers": servers}
+
+
+@app.get("/api/env/mcp-servers")
+async def env_mcp_servers_get() -> dict:
+    """返回 MCP 服务器预设、开关状态与凭据填写状态（密钥脱敏）。"""
+    return _mcp_servers_payload()
+
+
+@app.post("/api/env/mcp-servers")
+async def env_mcp_servers_save(request: Request) -> dict:
+    """保存 MCP 总开关 / 单个 server 开关 / 凭据。改动需重启后端生效。
+
+    Body: ``{"master_enabled"?: bool, "server_key"?: str, "enabled"?: bool,
+             "fields"?: {"ENV_KEY": "value"}}``
+    """
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "invalid_body"}, status_code=400)
+
+        known = {
+            str(s["key"]) for s in _mcp_servers_payload().get("servers", [])
+        }
+        server_key = str(body.get("server_key") or "").strip()
+        if server_key and server_key not in known:
+            return JSONResponse({"error": "unknown_mcp_server"}, status_code=400)
+
+        env = _read_env_file()
+        changed: dict[str, str] = {}
+
+        if "master_enabled" in body:
+            name = "AERIE_MCP_ENABLED"
+            env[name] = "1" if body.get("master_enabled") else "0"
+            changed[name] = env[name]
+
+        if server_key:
+            if "enabled" in body:
+                name = _mcp_env_flag_name(server_key)
+                env[name] = "1" if body.get("enabled") else "0"
+                changed[name] = env[name]
+            fields = body.get("fields")
+            if isinstance(fields, dict):
+                allowed = {
+                    f["env_key"]
+                    for s in _mcp_servers_payload()["servers"]
+                    if s["key"] == server_key
+                    for f in s["fields"]
+                }
+                for env_key, value in fields.items():
+                    if env_key not in allowed:
+                        continue
+                    val = str(value or "").strip()
+                    # 前端回显的是脱敏串；用户没改这一格时不能把它当新密钥写回
+                    if _looks_like_masked(val):
+                        continue
+                    env[env_key] = val
+                    changed[env_key] = val
+
+        if changed:
+            _write_env_file(env)
+            os.environ.update(changed)
+        return {
+            "status": "ok",
+            "hot_reloaded": list(changed.keys()),
+            "restart_required": True,
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

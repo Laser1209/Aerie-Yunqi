@@ -2119,6 +2119,16 @@
             </div>
             <div id="platform-credential-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
 
+            <div class="settings-apikey-intro" style="margin: 24px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(52,211,153,0.12), rgba(96,165,250,0.12)); border: 1px solid rgba(52,211,153,0.3); font-size: 13px; line-height: 1.6;">
+              <strong style="color: var(--accent, #ff5b9c);">MCP 服务器 · MCP Servers</strong><br>
+              外部能力通道（Notion / 天眼查等）。开启后，对应的工具会以
+              <code>mcp__&lt;服务器&gt;__&lt;工具&gt;</code> 的形式进入模型的可用清单。<strong>改动需重启后端生效</strong>——MCP 会拉起子进程或建立外连，无法在运行中卸载。
+            </div>
+            <div id="mcp-server-list" class="apikey-provider-list">
+              <!-- JS 动态渲染 -->
+            </div>
+            <div id="mcp-server-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
+
             <div class="settings-actions" style="margin-top:16px;">
               <button id="feature-api-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
             </div>

@@ -50,6 +50,8 @@ class ChatManager {
     // 同时保留在 DOM 里的消息气泡上限。历史很多时靠向上翻页按批加载,
     // 超出即裁剪最旧气泡, 避免开机渲染/滚动时 DOM 过大导致卡顿。
     this._maxDomMessages = 200;
+    // 「输入框有内容」心跳的节流时间戳（本地通道专用，见 _notifyTyping）。
+    this._typingThrottleAt = 0;
     // 单一数据源: 判重/排序/请求状态/稳定元素 id 映射全由 store 接管,
     // DOM 层只认 store 产出的渲染意图(Intent)。
     this._store = window.createChatStore({ maxMessages: this._maxDomMessages });
@@ -313,6 +315,21 @@ class ChatManager {
       : (!attachmentsReady ? "请等待附件解析完成" : "");
   }
 
+  /**
+   * 本地通道「输入框有内容」心跳：仅在框里有内容时按 5s 节流上报。
+   * 后端把它当「用户活跃」用——主动推送让位（别在人家打字时插嘴），
+   * 并推后该会话的首条聚合窗静默截止（连发消息并成一轮）。
+   * 不上报内容、不落库，失败静默（纯信号，不该干扰聊天）。
+   */
+  _notifyTyping() {
+    const value = this._el.input ? this._el.input.value : "";
+    if (!String(value || "").trim()) return;
+    const now = Date.now();
+    if (now - this._typingThrottleAt < 5000) return;
+    this._typingThrottleAt = now;
+    this._request({ method: "POST", path: "/api/chat/typing", body: {} }).catch(() => {});
+  }
+
   _bindEvents() {
     if (this._el.sendBtn) {
       this._el.sendBtn.addEventListener("click", () => this.send());
@@ -326,6 +343,7 @@ class ChatManager {
           this._cancelQuote();
         }
       });
+      this._el.input.addEventListener("input", () => this._notifyTyping());
     }
     const briefBtn = document.getElementById("chat-brief-btn");
     if (briefBtn) {

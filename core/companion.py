@@ -3501,6 +3501,30 @@ class Companion:
 
         await self._submit_incoming_message(msg)
 
+    async def notify_user_typing(self, conversation_id: str | None = None) -> None:
+        """桌面端「输入框有内容」信号：视为用户活跃，并推后聚合窗静默截止。
+
+        两个作用：
+          1. 人在打字 = 人就守在屏幕前 → 刷新活跃时间，主动推送让位（别插嘴）；
+          2. 该会话正处于首条聚合窗内时 → 推后静默截止，把连发消息并成一轮。
+
+        不产生任何消息、不落库、不影响回复链路，纯信号。
+        """
+        if self.desire:
+            try:
+                self.desire.mark_user_active()
+            except Exception:
+                logger.debug("desire.mark_user_active failed")
+        try:
+            self.push_event_engine.record_user_activity()
+        except Exception:
+            logger.debug("push event activity record failed", exc_info=True)
+        if conversation_id and self.message_batcher is not None:
+            try:
+                self.message_batcher.notify_typing(conversation_id)
+            except Exception:
+                logger.debug("message batcher notify_typing failed", exc_info=True)
+
     async def process_local_message_sync(self, msg: IncomingMessage) -> dict | None:
         if self.desire:
             try:

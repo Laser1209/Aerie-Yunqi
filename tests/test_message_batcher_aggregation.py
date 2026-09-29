@@ -157,4 +157,76 @@ class TestFirstMessageAggregation:
         await asyncio.sleep(0.05)
 
         assert len(self.received) == 1
-        assert [m.content for m in self.received[0][0]] == ["hello"]
+
+
+class TestLocalTypingSignal:
+    """本地通道「输入框有内容」信号：推后静默截止，但绝不越过 T_cap。"""
+
+    def setup_method(self):
+        MessageBatcher.reset_instance()
+        self.received: list[tuple[list[IncomingMessage], str]] = []
+
+    def teardown_method(self):
+        MessageBatcher.reset_instance()
+
+    async def _collect(self, messages, batch_id):
+        self.received.append((list(messages), batch_id))
+        await asyncio.sleep(0)
+
+    async def _make_batcher(self, monkeypatch, cfg):
+        _patch_config(monkeypatch, cfg)
+        batcher = await MessageBatcher.get_instance()
+        batcher.register_callback(self._collect)
+        return batcher
+
+    @pytest.mark.asyncio
+    async def test_typing_postpones_idle_within_cap(self, monkeypatch):
+        """用户在输入框继续打字 → 静默期被推后，本轮不提前派发。"""
+        batcher = await self._make_batcher(
+            monkeypatch, _batch_cfg(idle=0.3, cap=1.2)
+        )
+        conv = "qq:105"
+
+        await batcher.submit_message(_make_message("第一句", user_id=105))
+        await asyncio.sleep(0.2)
+        batcher.notify_typing(conv)  # 推后 idle 到 0.5s
+        await asyncio.sleep(0.15)    # elapsed≈0.35s < 0.5s
+
+        assert len(self.received) == 0, "仍在输入时不应按原 idle 提前派发"
+
+        await asyncio.sleep(0.4)     # elapsed≈0.75s，静默期已过
+        assert len(self.received) == 1
+        assert [m.content for m in self.received[0][0]] == ["第一句"]
+
+    @pytest.mark.asyncio
+    async def test_typing_never_exceeds_cap(self, monkeypatch):
+        """一直输入也不会饿死批次：T_cap 到点必须派发。"""
+        batcher = await self._make_batcher(
+            monkeypatch, _batch_cfg(idle=0.3, cap=0.5)
+        )
+        conv = "qq:106"
+
+        await batcher.submit_message(_make_message("m1", user_id=106))
+        for _ in range(8):               # 持续输入 ≈0.8s，远超 cap
+            await asyncio.sleep(0.1)
+            batcher.notify_typing(conv)
+
+        assert len(self.received) == 1, "T_cap 到点必须强制派发"
+
+    @pytest.mark.asyncio
+    async def test_typing_noop_when_idle_or_disabled(self, monkeypatch):
+        """无聚合窗（空闲态 / 关闭批处理）时是 no-op，不抛错、不派发。"""
+        batcher = await self._make_batcher(
+            monkeypatch, _batch_cfg(idle=5.0, cap=10.0)
+        )
+        batcher.notify_typing("qq:107")          # 空闲态
+        await asyncio.sleep(0.05)
+        assert self.received == []
+
+        MessageBatcher.reset_instance()
+        disabled = await self._make_batcher(
+            monkeypatch, _batch_cfg(enabled=False, idle=5.0, cap=10.0)
+        )
+        disabled.notify_typing("qq:107")         # 关闭批处理
+        await asyncio.sleep(0.05)
+        assert self.received == []

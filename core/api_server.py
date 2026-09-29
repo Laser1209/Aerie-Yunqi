@@ -1652,6 +1652,30 @@ async def chat_send(request: Request):
     return response
 
 
+@app.post("/api/chat/typing")
+async def chat_typing():
+    """桌面端「输入框有内容」信号（纯心跳，不产生消息、不落库）。
+
+    前端仅在输入框**有内容**时按节流上报；空框 / 失焦不上报。后端把它当作
+    「用户活跃」：刷新活跃时间（主动推送让位），并推后该会话的首条聚合窗
+    静默截止（连发消息并成一轮，仍受 T_cap 上界约束）。
+    """
+    comp = get_companion()
+    if not comp:
+        return JSONResponse({"error": "backend not ready"}, status_code=503)
+    notify = getattr(comp, "notify_user_typing", None)
+    if not callable(notify):
+        return JSONResponse({"error": "unsupported"}, status_code=503)
+    # 会话 id 与批处理层同源推导（desktop 通道 = "desktop:local"），避免两处硬编码漂移。
+    from core.message_batcher import MessageBatcher
+
+    conversation_id = MessageBatcher.get_conversation_id(
+        IncomingMessage.from_local("", 0)
+    )
+    await notify(conversation_id)
+    return {"status": "ok"}
+
+
 def _request_endpoint_service():
     comp = get_companion()
     if not comp:

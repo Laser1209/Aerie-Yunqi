@@ -267,6 +267,22 @@ class MessageBatcher:
         if state.agg_wake is not None:
             state.agg_wake.set()
 
+    def notify_typing(self, conversation_id: str) -> None:
+        """本地通道「输入框有内容」信号: 聚合窗内用户仍在输入 → 推后静默截止。
+
+        语义:
+          - 只在聚合窗进行中生效 (空闲态无窗口可推、运行中由 flush 流程接管);
+          - 只推后 idle 截止时刻, cap 总上限固定于窗口开启时刻 → 用户一直输入
+            也必然在 T_cap 派发, 不会把批次饿死;
+          - `enabled=false` 时无窗口概念, 直接 no-op。
+        """
+        if not self._config.get("enabled"):
+            return
+        state = self._states.get(conversation_id)
+        if state is None or not state.aggregating:
+            return
+        self._reset_idle_deadline(state)
+
     async def _aggregation_timer(self, state: _ConversationState) -> None:
         """首条聚合窗计时: 静默至 T_idle 或到达 T_cap 总上限即派发。
 

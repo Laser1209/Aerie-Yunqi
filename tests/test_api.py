@@ -49,6 +49,8 @@ mock_companion.pipeline.handle = AsyncMock(return_value={
 # MagicMock 会自动创建任何属性为 callable, 需显式禁用 process_local_message_sync,
 # 否则 _process_local_message 会 await 一个普通 MagicMock 而报错 (而非走 pipeline).
 mock_companion.process_local_message_sync = None
+# 「输入框有内容」心跳端点会 await 该协程；MagicMock 不可 await，显式给 AsyncMock。
+mock_companion.notify_user_typing = AsyncMock()
 mock_companion.tool_registry = MagicMock()
 mock_companion.tool_registry.get_openai_schema = MagicMock(return_value=[
     {"type": "function", "function": {"name": "get_time", "description": "获取当前时间"}},
@@ -156,6 +158,18 @@ def test_self_evolve_stats_route_is_not_captured_by_detail(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == expected
+
+
+def test_chat_typing_signal_notifies_companion():
+    """「输入框有内容」心跳：200 + 用与批处理层同源的会话 id 调用后端。"""
+    mock_companion.notify_user_typing.reset_mock()
+
+    response = client.post("/api/chat/typing")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert mock_companion.notify_user_typing.await_count == 1
+    assert mock_companion.notify_user_typing.call_args[0][0] == "desktop:local"
 
 
 def test_brief_greeting_receives_date(monkeypatch):

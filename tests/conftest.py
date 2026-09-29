@@ -70,6 +70,27 @@ def isolate_host_dotenv(monkeypatch):
 _HOST_DOTENV_KEYS: list[str] | None = None
 
 
+@pytest.fixture(autouse=True)
+def restore_os_environ():
+    """用例对 `os.environ` 的写入必须在用例结束后消失。
+
+    为什么不能只靠 monkeypatch：`monkeypatch.delenv(name, raising=False)` 对
+    **当时并不存在**的变量不记录任何回滚信息（pytest 的 delitem 在 key 不存在时
+    直接返回）。于是"端点把新键写进 os.environ"这类副作用会泄漏到后续用例 ——
+    2026-09-30 实测：MCP 设置接口把 `AERIE_MCP_ENABLED=1` 写进进程环境后，
+    `test_mcp_wiring.py` 里两个"默认关闭"的用例变成"已开启"，并真的去拉起了
+    notion 子进程。
+
+    本项目已被环境串味坑过一次（宿主 .env 灌进 os.environ 导致 17 个生图用例
+    集体失败），所以这里直接整表快照，无论写入来自哪条路径都拦得住。
+    """
+    snapshot = dict(os.environ)
+    yield
+    if os.environ != snapshot:
+        os.environ.clear()
+        os.environ.update(snapshot)
+
+
 def _host_dotenv_keys() -> list[str]:
     """读取宿主 .env 的键名（只读文件，不写环境）；进程内缓存一次。"""
     global _HOST_DOTENV_KEYS

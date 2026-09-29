@@ -6084,10 +6084,16 @@ _PLATFORM_CREDENTIALS = [
     {
         "key": "volcengine_tos",
         "name": "火山引擎对象存储 TOS",
-        "desc": "对象上传 / 下载 / 签名 URL",
-        "tutorial": "https://console.volcengine.com/tos",
-        "how_to": "创建存储桶后到「访问密钥」取 Access Key（SK / Endpoint / Bucket 在接入 SDK 时补齐）",
-        "fields": [{"env_key": "TOS_AK", "label": "Access Key", "secret": True}],
+        "desc": "对象上传 / 下载 / 签名 URL / 列举。需先 pip install tos",
+        "tutorial": "https://console.volcengine.com/iam/keymanage/",
+        "how_to": "控制台「访问密钥」取 AK/SK；Endpoint 与 Region 对应桶所在地域（如 tos-cn-beijing.volces.com / cn-beijing）",
+        "fields": [
+            {"env_key": "TOS_ACCESS_KEY", "label": "Access Key ID", "secret": True},
+            {"env_key": "TOS_SECRET_KEY", "label": "Secret Access Key", "secret": True},
+            {"env_key": "TOS_REGION", "label": "Region", "secret": False},
+            {"env_key": "TOS_ENDPOINT", "label": "Endpoint", "secret": False},
+            {"env_key": "TOS_BUCKET", "label": "默认 Bucket", "secret": False},
+        ],
     },
     {
         "key": "byteplus_pages",

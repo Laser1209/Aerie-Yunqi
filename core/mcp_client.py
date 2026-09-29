@@ -117,30 +117,83 @@ def _as_bool(value: Any) -> bool:
     return bool(value)
 
 
+def _expand_env(value: str) -> str:
+    """展开 ``${VAR}`` / ``$VAR`` 形态的环境变量引用。
+
+    配置文件里用 ``Authorization: "Bearer ${NOTION_TOKEN}"`` 这种写法，可以让
+    设置页写入的凭据（.env + os.environ）直接生效，不必把密钥抄进 YAML ——
+    YAML 是会被提交进版本库的。
+    """
+    if not isinstance(value, str) or "$" not in value:
+        return value
+    return os.path.expandvars(value)
+
+
+# transport 别名 → 内部标识。stdio 是子进程；其余都归到同一个 HTTP 实现
+# （MCP 现行规范只有 stdio 与 Streamable HTTP 两种，SSE 是它的响应形态之一）。
+_HTTP_TRANSPORTS = frozenset({"http", "https", "streamable-http", "streamable_http", "sse"})
+
+
 @dataclass
 class MCPServerConfig:
-    """单个 MCP server 的连接配置（stdio）。"""
+    """单个 MCP server 的连接配置（stdio 子进程 或 远程 Streamable HTTP）。"""
 
     name: str
-    command: str
+    transport: str = "stdio"
+    # stdio
+    command: str = ""
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     cwd: str | None = None
+    # http
+    url: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+
     timeout_seconds: float = 30.0
     call_timeout_seconds: float = 120.0
     enabled: bool = False
+
+    @property
+    def is_http(self) -> bool:
+        return self.transport in _HTTP_TRANSPORTS
 
     @classmethod
     def from_dict(cls, name: str, data: dict) -> "MCPServerConfig":
         if not isinstance(data, dict):
             raise MCPError("config", f"server '{name}' 配置必须是映射", server=name)
         transport = str(data.get("transport", "stdio") or "stdio").lower()
-        if transport != "stdio":
+        if transport != "stdio" and transport not in _HTTP_TRANSPORTS:
             raise MCPError(
                 "config",
-                f"server '{name}' 使用不支持的 transport: {transport}（当前仅支持 stdio）",
+                f"server '{name}' 使用不支持的 transport: {transport}"
+                f"（支持 stdio / http）",
                 server=name,
             )
+        common = {
+            "name": name,
+            "transport": transport,
+            "timeout_seconds": float(data.get("timeout_seconds", 30.0) or 30.0),
+            "call_timeout_seconds": float(data.get("call_timeout_seconds", 120.0) or 120.0),
+            "enabled": _as_bool(data.get("enabled", False)),
+        }
+
+        if transport in _HTTP_TRANSPORTS:
+            url = str(data.get("url") or "").strip()
+            if not url:
+                raise MCPError("config", f"server '{name}' 缺少 url", server=name)
+            if not url.lower().startswith(("http://", "https://")):
+                raise MCPError(
+                    "config", f"server '{name}' 的 url 必须是 http(s) 地址", server=name
+                )
+            raw_headers = data.get("headers") or {}
+            if not isinstance(raw_headers, dict):
+                raise MCPError("config", f"server '{name}' 的 headers 必须是映射", server=name)
+            return cls(
+                url=url,
+                headers={str(k): _expand_env(str(v)) for k, v in raw_headers.items()},
+                **common,
+            )
+
         command = str(data.get("command") or "").strip()
         if not command:
             raise MCPError("config", f"server '{name}' 缺少 command", server=name)
@@ -152,14 +205,11 @@ class MCPServerConfig:
             raise MCPError("config", f"server '{name}' 的 env 必须是映射", server=name)
         cwd = data.get("cwd")
         return cls(
-            name=name,
             command=command,
             args=[str(a) for a in args],
-            env={str(k): str(v) for k, v in env.items()},
+            env={str(k): _expand_env(str(v)) for k, v in env.items()},
             cwd=str(cwd) if cwd else None,
-            timeout_seconds=float(data.get("timeout_seconds", 30.0) or 30.0),
-            call_timeout_seconds=float(data.get("call_timeout_seconds", 120.0) or 120.0),
-            enabled=_as_bool(data.get("enabled", False)),
+            **common,
         )
 
 
@@ -209,13 +259,66 @@ def local_tool_name(server: str, remote_tool: str) -> str:
     return f"{raw[: _MAX_TOOL_NAME_LEN - 9]}_{digest}"
 
 
+# ── HTTP 响应解析 ─────────────────────────────────────
+
+_HTTP_BODY_SNIPPET = 400
+
+
+def _short_body(text: str, limit: int = _HTTP_BODY_SNIPPET) -> str:
+    """截断响应体，避免把整段 HTML/JSON 灌进日志与错误详情。"""
+    text = str(text or "").strip()
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
+def _iter_sse_events(text: str) -> list[str]:
+    """把 SSE 文本拆成各事件的 ``data`` 负载。
+
+    只关心 ``data`` 字段：MCP 的流式响应把每条 JSON-RPC 消息放在一个 event 的
+    data 里，前面可能还有 progress / message 之类的通知。``:`` 开头的是心跳
+    注释，直接忽略。
+    """
+    events: list[str] = []
+    data_lines: list[str] = []
+    for raw in str(text or "").splitlines():
+        line = raw.rstrip("\r")
+        if not line:
+            if data_lines:
+                events.append("\n".join(data_lines))
+                data_lines = []
+            continue
+        if line.startswith(":"):
+            continue
+        field, _, value = line.partition(":")
+        if field == "data":
+            data_lines.append(value[1:] if value.startswith(" ") else value)
+    if data_lines:
+        events.append("\n".join(data_lines))
+    return events
+
+
+def _response_from_sse(text: str, req_id: int) -> Any | None:
+    """从 SSE 流里挑出 id 匹配的那条 JSON-RPC 响应。
+
+    流里可能有若干通知（无 id 或 id 不匹配），真正属于本次请求的那条才是结果。
+    """
+    for payload in _iter_sse_events(text):
+        try:
+            msg = json.loads(payload)
+        except Exception:
+            continue
+        if isinstance(msg, dict) and msg.get("id") == req_id:
+            return msg
+    return None
+
+
 # ── 单个连接 ──────────────────────────────────────────
 
 class MCPServerClient:
-    """一个 MCP server 的 stdio 连接。
+    """一个 MCP server 的连接（stdio 子进程 或 远程 Streamable HTTP）。
 
     生命周期：``connect()`` → ``list_tools()`` / ``call_tool()`` → ``close()``。
-    连接对象不做自动重连；断了就报 ``process_exit``，由上层决定是否重建。
+    连接对象不做自动重连；断了就报 ``process_exit`` / ``http_error``，
+    由上层决定是否重建。
     """
 
     def __init__(self, config: MCPServerConfig) -> None:
@@ -234,11 +337,16 @@ class MCPServerClient:
         self._next_id = 0
         self._lock = asyncio.Lock()
         self._closed = False
+        # HTTP transport 的会话标识：服务端在 initialize 响应头上给出时，
+        # 之后每个请求都要带回去（2025-06-18 规范；2026-07-28 起取消了会话）。
+        self._http_session_id: str = ""
 
     # ── 观测 ─────────────────────────────────────────
 
     @property
     def connected(self) -> bool:
+        if self.config.is_http:
+            return not self._closed and bool(self.server_info)
         proc = self._proc
         if proc is None or proc.returncode is not None:
             return False
@@ -253,10 +361,15 @@ class MCPServerClient:
     # ── 生命周期 ─────────────────────────────────────
 
     async def connect(self) -> dict:
-        """拉起子进程并完成 initialize 握手。返回 serverInfo。"""
+        """建立连接并完成 initialize 握手。返回 serverInfo。
+
+        stdio：拉起子进程；http：直接对远端端点做握手（无子进程）。
+        """
         if self.connected:
             return self.server_info
         self._closed = False
+        if self.config.is_http:
+            return await self._connect_http()
         env = dict(os.environ)
         env.update(self.config.env)
         try:
@@ -331,7 +444,50 @@ class MCPServerClient:
         await self._notify("notifications/initialized", {})
         logger.info(
             "MCP %s 已连接: %s",
-            self.server_name, self.server_info.get("name") or self.config.command,
+            self.server_name, self.server_info.get("name") or self._endpoint_label(),
+        )
+        return self.server_info
+
+    def _endpoint_label(self) -> str:
+        """日志里怎么称呼这个 server：stdio 用命令，http 用地址。"""
+        return self.config.url if self.config.is_http else self.config.command
+
+    async def _connect_http(self) -> dict:
+        """HTTP transport 的建连：没有子进程，只有一个 initialize 握手。"""
+        try:
+            result = await self._request(
+                "initialize",
+                {
+                    "protocolVersion": PROTOCOL_VERSION,
+                    "capabilities": {},
+                    "clientInfo": {"name": CLIENT_NAME, "version": CLIENT_VERSION},
+                },
+                timeout=self.config.timeout_seconds,
+            )
+        except MCPError as e:
+            self._closed = True
+            raise MCPError(
+                "handshake",
+                f"initialize 失败（{e.kind}）: {e.message}",
+                server=self.server_name,
+                detail={**e.detail, "url": self.config.url, "cause": e.kind},
+            ) from e
+
+        if not isinstance(result, dict):
+            self._closed = True
+            raise MCPError("protocol", "initialize 返回非对象", server=self.server_name)
+
+        self.protocol_version = str(result.get("protocolVersion") or "")
+        self.server_info = result.get("serverInfo") or {}
+        if self.protocol_version and self.protocol_version != PROTOCOL_VERSION:
+            logger.warning(
+                "MCP %s: 协商到协议版本 %s（本客户端为 %s）",
+                self.server_name, self.protocol_version, PROTOCOL_VERSION,
+            )
+        await self._notify("notifications/initialized", {})
+        logger.info(
+            "MCP %s 已连接（http）: %s",
+            self.server_name, self.server_info.get("name") or self.config.url,
         )
         return self.server_info
 
@@ -528,6 +684,8 @@ class MCPServerClient:
     # ── 内部：传输 ───────────────────────────────────
 
     async def _request(self, method: str, params: dict, *, timeout: float) -> Any:
+        if self.config.is_http:
+            return await self._request_http(method, params, timeout=timeout)
         async with self._lock:
             proc = self._proc
             if proc is None:
@@ -584,7 +742,147 @@ class MCPServerClient:
                 self._pending.pop(req_id, None)
 
     async def _notify(self, method: str, params: dict) -> None:
+        if self.config.is_http:
+            await self._notify_http(method, params)
+            return
         await self._write({"jsonrpc": "2.0", "method": method, "params": params})
+
+    # ── 内部：HTTP transport ──────────────────────────
+
+    def _post_jsonrpc(self, payload: dict, *, timeout: float) -> tuple[int, dict, str]:
+        """同步发一条 JSON-RPC 消息，返回 ``(status, headers, body_text)``。
+
+        用 requests 而不是引入 aiohttp：项目已依赖 requests，且这里每次都是
+        "发一条、等一条"的短交互，丢到线程里 await 就够，不值得为此加一个
+        HTTP 客户端依赖。
+        """
+        import requests
+
+        headers = {
+            "Content-Type": "application/json",
+            # 规范强制要求同时声明两种可接受的响应类型：服务端可能回一个单 JSON，
+            # 也可能回 SSE 流（流里先带通知，最后才是本次响应）。
+            "Accept": "application/json, text/event-stream",
+            "MCP-Protocol-Version": self.protocol_version or PROTOCOL_VERSION,
+        }
+        headers.update(self.config.headers)
+        if self._http_session_id:
+            headers["Mcp-Session-Id"] = self._http_session_id
+
+        resp = requests.post(
+            self.config.url, json=payload, headers=headers, timeout=timeout
+        )
+        # 服务端可能在 initialize 的响应头上分配会话 id，之后每个请求都要带回去。
+        session_id = resp.headers.get("Mcp-Session-Id") or resp.headers.get("mcp-session-id")
+        if session_id:
+            self._http_session_id = session_id
+        return resp.status_code, dict(resp.headers), resp.text
+
+    def _parse_http_body(self, body: str, content_type: str, req_id: int) -> Any | None:
+        """从响应体里取出**属于本次请求**的那条 JSON-RPC 消息（单 JSON 与 SSE 都支持）。
+
+        id 必须对得上：`id` 不符说明拿到的是别的请求的结果（或一条通知），
+        把它当成本次结果返回就是静默的数据串台。
+        """
+        if "text/event-stream" in str(content_type or "").lower():
+            return _response_from_sse(body, req_id)
+        try:
+            data = json.loads(body)
+        except Exception:
+            return None
+        # 批量响应（数组）在本客户端用不到，但收到时按 id 挑出我们那条更稳妥。
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and item.get("id") == req_id:
+                    return item
+            return None
+        if not isinstance(data, dict):
+            return None
+        if data.get("id") == req_id:
+            return data
+        # 少数实现会省略 id；只要它确实是"一条响应"（带 result / error）就接受，
+        # 否则判定为不属于本次请求。
+        if "id" not in data and ("result" in data or "error" in data):
+            return data
+        return None
+
+    async def _request_http(self, method: str, params: dict, *, timeout: float) -> Any:
+        if self._closed:
+            raise MCPError(
+                "closed", f"连接不可用（method={method}）", server=self.server_name
+            )
+        async with self._lock:
+            req_id = self._next_id
+            self._next_id += 1
+            payload = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
+            try:
+                status, headers, body = await asyncio.wait_for(
+                    asyncio.to_thread(self._post_jsonrpc, payload, timeout=timeout),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError as e:
+                raise MCPError(
+                    "timeout",
+                    f"{method} 超时（{timeout}s）",
+                    server=self.server_name,
+                    detail={"timeout_seconds": timeout, "url": self.config.url},
+                ) from e
+            except MCPError:
+                raise
+            except Exception as e:
+                raise MCPError(
+                    "http_error",
+                    f"{method} 请求失败: {type(e).__name__}: {e}",
+                    server=self.server_name,
+                    detail={"url": self.config.url},
+                ) from e
+
+            if status in (401, 403):
+                raise MCPError(
+                    "auth",
+                    f"{method} 鉴权失败（HTTP {status}）：请到设置页检查该平台的凭据",
+                    server=self.server_name,
+                    detail={"status": status, "body": _short_body(body)},
+                )
+            if status >= 400:
+                raise MCPError(
+                    "http_error",
+                    f"{method} 返回 HTTP {status}: {_short_body(body)}",
+                    server=self.server_name,
+                    detail={"status": status, "url": self.config.url},
+                )
+
+            msg = self._parse_http_body(body, headers.get("Content-Type", ""), req_id)
+            if msg is None:
+                # 拿到了 2xx 却没有我们这条 id 的结果 —— 如实报，不要返回空当成功
+                raise MCPError(
+                    "protocol",
+                    f"{method} 响应里缺少 id={req_id} 的结果",
+                    server=self.server_name,
+                    detail={
+                        "status": status,
+                        "content_type": headers.get("Content-Type", ""),
+                        "body": _short_body(body),
+                    },
+                )
+            if msg.get("error") is not None:
+                raise self._remote_error(method, msg.get("error"))
+            return msg.get("result")
+
+    async def _notify_http(self, method: str, params: dict) -> None:
+        """HTTP 通知：发出去即可，服务端通常回 202 且无响应体。"""
+        if self._closed:
+            return
+        payload = {"jsonrpc": "2.0", "method": method, "params": params}
+        try:
+            await asyncio.to_thread(
+                self._post_jsonrpc, payload, timeout=self.config.timeout_seconds
+            )
+        except Exception:
+            # 通知失败不该让整个握手/调用失败：规范里它本就没有响应可等。
+            logger.debug(
+                "MCP %s: 通知 %s 发送失败", self.server_name, method, exc_info=True
+            )
 
     async def _write(self, payload: dict) -> None:
         proc = self._proc

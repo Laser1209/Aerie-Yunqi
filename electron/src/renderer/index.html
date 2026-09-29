@@ -894,59 +894,6 @@
             <div id="world-dashboard-panels" class="world-dashboard-pill-row">暂无数据</div>
             <div id="world-dashboard-errors" class="world-dashboard-errors"></div>
           </div>
-
-          <div class="world-dashboard-section">
-            <h3>世界快照</h3>
-            <div class="world-dashboard-snapshot-grid">
-              <div>
-                <span class="world-dashboard-label">World summary</span>
-                <div id="world-dashboard-summary" class="world-dashboard-result">暂无数据</div>
-              </div>
-              <div>
-                <span class="world-dashboard-label">Relationship</span>
-                <div id="world-dashboard-relationship" class="world-dashboard-result">暂无数据</div>
-              </div>
-              <div>
-                <span class="world-dashboard-label">Action timeline</span>
-                <div id="world-dashboard-timeline" class="world-dashboard-result">暂无数据</div>
-              </div>
-              <div>
-                <span class="world-dashboard-label">Image candidates</span>
-                <div id="world-dashboard-candidates" class="world-dashboard-result">暂无数据</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="world-dashboard-columns">
-            <div class="world-dashboard-section">
-              <h3>图片候选审批</h3>
-              <div class="world-dashboard-form">
-                <label>Candidate ID<input id="world-candidate-id" type="text" placeholder="cand-..." autocomplete="off"></label>
-                <label>Action
-                  <select id="world-candidate-action">
-                    <option value="approve">approve</option>
-                    <option value="reject">reject</option>
-                    <option value="postpone">postpone</option>
-                  </select>
-                </label>
-                <label>Reason code<input id="world-candidate-reason" type="text" placeholder="manual_ok" autocomplete="off"></label>
-                <label>Idempotency key<input id="world-candidate-idempotency" type="text" placeholder="optional" autocomplete="off"></label>
-                <button id="world-candidate-approve" class="btn btn-primary">提交审批</button>
-                <div id="world-candidate-result" class="world-dashboard-result">等待操作</div>
-              </div>
-            </div>
-
-            <div class="world-dashboard-section">
-              <h3>Creative Workshop 预览</h3>
-              <div class="world-dashboard-form">
-                <label>Kind<input id="world-creative-kind" type="text" value="world_note" autocomplete="off"></label>
-                <label>Title<input id="world-creative-title" type="text" placeholder="draft title" autocomplete="off"></label>
-                <label>Payload JSON<textarea id="world-creative-payload" rows="5" placeholder='{"scene":"morning"}'></textarea></label>
-                <button id="world-creative-preview" class="btn btn-secondary">生成预览元数据</button>
-                <div id="world-creative-result" class="world-dashboard-result">等待预览</div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -2884,6 +2831,16 @@
 <!-- 首次使用新手教程（onboarding）根容器，由 js/onboarding.js 填充 -->
 <div id="onboarding-root" class="onb-root"></div>
 
+<!-- 图片放大查看（光箱）。点聊天里的图打开，点遮罩/关闭键/Esc 退出。
+     由 js/image-lightbox.js 驱动（事件委托，不随消息重渲染失效）。 -->
+<div id="image-lightbox" class="image-lightbox" hidden>
+  <div class="image-lightbox__backdrop" data-lightbox-close></div>
+  <img class="image-lightbox__img" alt="">
+  <button type="button" class="image-lightbox__close" data-lightbox-close aria-label="关闭">
+    <svg class="icon icon--16" aria-hidden="true"><use href="#icon-ui-close"/></svg>
+  </button>
+</div>
+
 <!-- R7.4: Markdown rendering stack for chat (marked + DOMPurify + highlight.js) -->
 <link rel="stylesheet" href="vendor/github.min.css">
 <script src="vendor/marked.min.js"></script>
@@ -2891,6 +2848,7 @@
 <script src="vendor/highlight.min.js"></script>
 <script src="js/chat-store.js"></script>
 <script src="js/chat.js"></script>
+<script src="js/image-lightbox.js"></script>
 <script src="js/chat-voice.js"></script>
 <script src="js/companion-studio-bridge.js"></script>
 <script src="js/chat-uploader.js"></script>

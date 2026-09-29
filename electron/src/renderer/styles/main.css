@@ -2113,12 +2113,14 @@ body {
   border: none;
   display: inline-flex;
   flex-direction: column;
-  align-items: stretch;
+  /* 不 stretch：卡片宽度可能被下面的文件名撑得比图片宽，若这里让子项拉伸，
+     image-wrap 会被拉到卡片宽度，图片右侧就空出一块带底色的区域
+     （看上去"图片只占一半，另一半是空的"）。让 wrap 自己决定宽度才能贴合图片。 */
+  align-items: flex-start;
   max-width: min(100%, 420px);
   width: auto;
 }
 .chat-attach-card__image-wrap {
-  width: auto;
   max-width: 100%;
   border-radius: 12px;
   overflow: hidden;
@@ -2126,7 +2128,7 @@ body {
   line-height: 0;
   border: 1px solid var(--color-border);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  display: inline-block;
+  display: block;
 }
 .chat-attach-card__image-wrap img {
   max-width: 100%;
@@ -2135,7 +2137,7 @@ body {
   max-height: 360px;
   object-fit: contain;
   display: block;
-  cursor: pointer;
+  cursor: zoom-in;
   transition: transform 0.15s ease;
 }
 .chat-attach-card__image-wrap img:hover {
@@ -2147,7 +2149,12 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 4px 0;
-  align-self: stretch;
+  /* 关键：文件名不参与卡片宽度计算。
+     否则一个长文件名就会把卡片撑得比图片宽，气泡不再"按图片比例"包裹。
+     width:0 让宽度需求归零；min-width:100% 让它在渲染时仍占满卡片宽度。 */
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 .chat-attach-card__image-name {
   font-size: 11px;
@@ -2183,6 +2190,72 @@ body {
 }
 .chat-attach-card--image.is-broken img {
   display: none;
+}
+
+/* ── 图片放大查看（光箱） ──────────────────────────────
+   z-index 取 9500：项目里既有 9000/9001/9100（抽屉、灵动岛），
+   而 9999+ 留给了新手引导等"必须盖住一切"的浮层，光箱应在其下。 */
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+.image-lightbox.is-open {
+  opacity: 1;
+}
+.image-lightbox__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--color-overlay);
+}
+.image-lightbox__img {
+  position: relative;
+  max-width: 92vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--color-shadow-lg);
+  /* 打开时从 0.98 缓入：避免"啪"地弹出 */
+  transform: scale(0.98);
+  transition: transform 0.16s ease;
+}
+.image-lightbox.is-open .image-lightbox__img {
+  transform: scale(1);
+}
+.image-lightbox__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.image-lightbox__close:hover {
+  background: var(--bg-200);
+}
+/* 光箱打开时锁住底层滚动，避免滚轮带动聊天区 */
+body.image-lightbox-open {
+  overflow: hidden;
+}
+/* 动效敏感用户：直接显示，不做缩放过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .image-lightbox,
+  .image-lightbox__img {
+    transition: none;
+    transform: none;
+  }
 }
 
 /* ── 图片独立发送状态气泡（出图中 / 失败重发） ── */

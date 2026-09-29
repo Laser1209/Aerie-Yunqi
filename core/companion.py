@@ -1287,7 +1287,10 @@ class Companion:
         # ⚠️ 重要：必须在 register_all_tools 之前设置 _COMPANION，
         # 否则 compute_tools 等通过 get_companion() 获取依赖的工具会注册失败
         _COMPANION = self
-        # 功能包先注册、核心工具后注册：同名工具核心赢（ToolRegistry.register 拒绝覆盖）
+        # 注册顺序：功能包先、核心工具后。ToolRegistry.register 是**直接赋值覆盖**
+        # （不做冲突拒绝），所以核心后注册的同名工具会赢。
+        # 涉及重名能力（如 browser_*）时，核心侧必须按配置主动让位，
+        # 见 tools/__init__.py::_browser_backend()。
         from core import plugin_host
         plugin_host.discover_and_register(self.tool_registry)
         register_all_tools(self.tool_registry)

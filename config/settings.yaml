@@ -13,6 +13,14 @@ brief_subscriptions:
     github_trending:
       enabled: true
       min_stars: 1000
+browser:
+  # 浏览器工具的来源：
+  #   auto      （默认）= 装了 browser 功能包就让位给包；没装则用内置 webbridge
+  #   playwright        = 只用功能包（没装包就没有 browser_* 工具）
+  #   webbridge         = 只用内置通道（调外部 Kimi WebBridge 进程）
+  # 注意 ToolRegistry.register 是覆盖语义、且核心在功能包之后注册，
+  # 核心若无条件注册会顶掉功能包的同名工具；auto 就是为这件事设的。
+  backend: auto
 computer_control:
   blacklist: []
   custom_rules: {}
@@ -62,7 +70,7 @@ office:
   write_approval_timeout_sec: 60
 proactive:
   auto_recent_window_min: 30
-  companion_image_probability: 1
+  companion_image_probability: 0.8
   enabled: true
   image_max_per_day: 0
   max_per_day: 0
@@ -71,10 +79,7 @@ proactive:
   outdoor_probability: 0.5
   outdoor_weather_event: true
   photo_min_interval_sec: 0
-  # 主动消息（无来源端口）投到哪一端：auto = 最近活跃端口（含桌面），窗口内无记录
-  # 则落桌面端；也可固定 qq / ilink / desktop。electron 的「外部连接」面板写的就是
-  # 这个键（此前 Python 侧没读，设置看得见但不生效，现已接回）。
-  primary_channel: auto
+  primary_channel: desktop
   system_notifications: true
 promise_beats:
   max_delay_min: 180
@@ -87,8 +92,8 @@ qq:
   push_pause_when_offline: true
   startup_wait_timeout: 1.0
 startup:
-  auto_start: true
-  start_minimized: true
+  auto_start: false
+  start_minimized: false
 theme:
   current: yita-pink
 thinking_loop:

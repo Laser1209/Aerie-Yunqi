@@ -8187,6 +8187,10 @@ async def skills_list() -> dict:
     for name, meta in comp.skill_loader.discovered.items():
         out.append({
             "name": name,
+            # 形态：instruction = 命中触发词时把正文注入上下文，**不注册为工具**；
+            # tool = 注册进工具清单供模型调用。两者互斥（见 core/skill_instructions.py）。
+            # 不透出这个字段的话，面板会把指令型也当成工具，与"模型看不到它"矛盾。
+            "form": meta.get("form", "tool"),
             "provider_hint": meta.get("hint", "text"),
             "read_only": meta.get("read_only", False),
             "description": meta.get("desc", ""),

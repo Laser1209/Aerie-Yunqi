@@ -5,14 +5,14 @@ provider_hint: text
 read_only: true
 kind: instruction
 triggers:
-- 做个文档页
-- 排个 A4
-- 做成可打印的
+- 简历
+- 表单
+- 备忘录
+- 排班
+- A4
+- 可打印
 - 导成 PDF
-- 做个简历页
-- 排个班表
-- 做个表单页
-- 做个备忘录页面
+- 文档页
 ---
 
 # 可打印文档页（doc-page）

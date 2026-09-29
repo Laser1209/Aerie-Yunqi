@@ -516,3 +516,55 @@ def test_entry_adapter_works_through_registry(tmp_path, monkeypatch):
     }
     assert asyncio.run(registry.execute("echo-flat", {"k": 2})) == {"got": {"k": 2}}
     assert asyncio.run(registry.execute("echo-flat", {})) == {"got": {}}
+
+
+# ── /api/skills/list 要如实透出形态 ─────────────────────────────────────
+
+
+def test_skills_list_exposes_form(monkeypatch):
+    """面板必须能区分指令型与工具型。
+
+    指令型**不注册为工具**（模型看不到），工具型会进工具清单。不透出 form 的话，
+    面板会把 44 个指令型也画成"可调用的工具"，与"模型其实看不见它"自相矛盾 ——
+    这正是上一轮把闸门放在 discover() 里踩过的同一类坑（让面板失明）。
+    """
+    from core import api_server
+
+    loader = _loader()
+    loader.discover()
+
+    class _Comp:
+        skill_loader = loader
+
+    monkeypatch.setattr(api_server, "get_companion", lambda: _Comp())
+    data = asyncio.run(api_server.skills_list())
+
+    forms = {s["name"]: s["form"] for s in data["skills"]}
+    assert forms.get("writing-plans") == "instruction"
+    assert forms.get("defuddle") == "tool"
+    # 每个条目都要有该字段，不能靠消费方用 default 猜
+    assert all("form" in s for s in data["skills"])
+    assert {s["form"] for s in data["skills"]} <= {"instruction", "tool"}
+
+
+def test_skills_list_form_matches_registration(monkeypatch):
+    """form 与"有没有被注册为工具"必须一致 —— 否则面板与模型看到的不是同一件事。"""
+    from core import api_server
+
+    registry = ToolRegistry()
+    loader = _loader(registry)
+    loader.discover()
+    registered = set()
+    for name, meta in loader.discovered.items():
+        if meta.get("form") != "instruction" and meta.get("available"):
+            registered.add(name)
+
+    class _Comp:
+        skill_loader = loader
+
+    monkeypatch.setattr(api_server, "get_companion", lambda: _Comp())
+    data = asyncio.run(api_server.skills_list())
+
+    for s in data["skills"]:
+        if s["form"] == "instruction":
+            assert s["name"] not in registered, f"{s['name']} 是指令型却被注册为工具"

@@ -9,7 +9,6 @@ triggers:
 - 用 shadcn
 - 加个组件
 - 装个组件
-- 用 shadcn/ui
 - 加个弹窗组件
 - 表单组件
 - 组件库

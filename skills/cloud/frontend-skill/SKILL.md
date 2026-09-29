@@ -5,14 +5,13 @@ provider_hint: text
 read_only: true
 kind: instruction
 triggers:
-- 做个落地页
-- 帮我写个网页
-- 做个官网
+- 落地页
+- 官网
+- 做个网页
 - 做个页面
-- 着陆页设计
-- 做个产品官网
 - 写个静态页面
 - 做个产品原型
+- 着陆页
 ---
 
 # 前端着陆页设计（frontend-skill）

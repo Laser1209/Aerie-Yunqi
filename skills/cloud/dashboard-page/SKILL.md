@@ -5,14 +5,10 @@ provider_hint: text
 read_only: true
 kind: instruction
 triggers:
-- 做个看板
-- 做个仪表盘
-- 搭个数据看板
-- 做个数据大屏
-- 做个 KPI 看板
-- 看板页面
-- 做个监控面板
-- 离线看板
+- 看板
+- 仪表盘
+- 数据大屏
+- 监控面板
 ---
 
 # 本地离线仪表盘（dashboard-page）

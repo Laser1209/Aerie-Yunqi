@@ -303,3 +303,74 @@ def test_index_loads_every_instruction_skill():
     loaded = index.discover()
     expected = len(_all_instruction_skills())
     assert loaded == expected, f"索引装了 {loaded} 个，仓库里有 {expected} 个"
+
+
+# ── 触发词覆盖：真实说法必须命中（2026-09-30 验收暴露的问题） ────────────
+#
+# 触发词是这套机制的**唯一切入口**：命不中 = 这个技能等于不存在。
+# 而 SKILL.md 里的词很容易写成"动词 + 名词"的固定搭配，用户的动词却是随机的：
+#   * frontend-skill 写"做个落地页"，用户说"设计个落地页" → 落空
+#   * dashboard-page 写"搭个数据看板"，用户说"做个数据看板" → 落空
+#   * writing-plans 只有"实施方案"，用户说"实施计划" → 落空
+# 匹配是子串包含，所以这些用例只断言**日常说法能命中**，不断言具体命中哪一个
+# 之外的细节 —— 过度精确的断言会把正常调整变成红灯。
+
+# (用户这句话, 至少应命中的一个技能)
+REAL_PHRASE_CASES = [
+    ("帮我设计个落地页，要有质感", "frontend-skill"),
+    ("公司官网帮我搭一个", "frontend-skill"),
+    ("这个页面配色和排版帮我看看", "frontend-design"),
+    ("帮我做个数据看板", "dashboard-page"),
+    ("搭一个监控面板", "dashboard-page"),
+    ("写个实施计划，分几个阶段", "writing-plans"),
+    ("这个需求帮我出个方案", "writing-plans"),
+    ("帮我做个简历", "doc-page"),
+    ("把这个排成 A4 打印版", "doc-page"),
+    ("这段代码先写测试再实现", "test-driven-development"),
+]
+
+
+@pytest.mark.parametrize("phrase,expected", REAL_PHRASE_CASES)
+def test_real_user_phrasing_actually_triggers(phrase, expected):
+    index = SkillInstructionIndex()
+    index.discover()
+    hits = [inst.name for inst in index.match(phrase, limit=5)]
+    assert expected in hits, f"{phrase!r} 没能触发 {expected}（实际命中：{hits or '无'}）"
+
+
+# 普通对话不该被注入方法论：注入有成本（挤占上下文预算），乱命中比不命中更糟
+@pytest.mark.parametrize("phrase", [
+    "今天天气怎么样",
+    "帮我看看这个报错日志",
+    "晚饭吃什么好",
+    "",
+])
+def test_ordinary_chatter_does_not_trigger_anything(phrase):
+    index = SkillInstructionIndex()
+    index.discover()
+    assert index.match(phrase, limit=5) == []
+
+
+def test_no_instruction_skill_relies_only_on_a_verb_phrase():
+    """触发词不能只有"动词+名词"这一类 —— 换个动词就落空。
+
+    每个技能至少要有一个**不以动词开头**的核心词，这样"做个/搭个/设计个…"
+    任意动词搭配都能被子串匹配命中。已知例外：确无更短核心词的（如
+    "排个 A4" 这类本身就有名词的）。
+    """
+    leading_verbs = (
+        "做个", "搭个", "写个", "出个", "搞个", "弄个", "设计个", "生成个",
+        "帮我做", "帮我写", "帮我出", "帮我设计", "把内容做成", "把大纲做成",
+    )
+    offenders: list[str] = []
+    for name, info in _all_instruction_skills().items():
+        triggers = info["triggers"]
+        if not triggers:
+            continue
+        has_core = any(not t.startswith(leading_verbs) for t in triggers)
+        if not has_core:
+            offenders.append(f"{name}: {triggers}")
+    assert not offenders, (
+        "这些技能的触发词全是「动词+名词」，换个动词就落空，需要补一个核心名词：\n"
+        + "\n".join(offenders)
+    )

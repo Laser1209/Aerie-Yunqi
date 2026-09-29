@@ -1332,8 +1332,14 @@ class ChatManager {
     const error = rawError ? this._escapeHtml(this._redactSensitive(rawError)) : "";
     const ext = String(att.extension || att.name || "").split(".").pop().toUpperCase();
     const visual = this._attachmentVisual(category, att.extension, att.name);
-    const open = state === "ready" && id
-      ? `<button type="button" data-attachment-open="${this._escapeHtml(id)}">打开</button>`
+    // 直链回退：本机生成/外发的文件走 /uploads/<rel>（与生成图同一条路），
+    // 没有附件中心的 id，但有 url —— 此时「打开」直接交给系统浏览器/默认程序。
+    // 用户上传走附件中心的 id + /api/attachments/{id}/download。
+    const directUrl = att.url || att.downloadUrl || att.download_url || "";
+    const canOpen = state === "ready" && (Boolean(id) || Boolean(directUrl));
+    const open = canOpen
+      ? `<button type="button" data-attachment-open="${this._escapeHtml(id)}"`
+        + ` data-attachment-url="${this._escapeHtml(directUrl)}">打开</button>`
       : "";
     const retry = state === "failed" && id
       ? `<button type="button" data-attachment-retry="${this._escapeHtml(id)}">重试</button>`
@@ -1415,15 +1421,29 @@ class ChatManager {
     </div>`;
   }
 
-  async _openAttachment(attachmentId) {
+  async _openAttachment(attachmentId, directUrl = "") {
     if (
-      window.aerie && window.aerie.attachments
+      attachmentId
+      && window.aerie && window.aerie.attachments
       && typeof window.aerie.attachments.open === "function"
     ) {
       await window.aerie.attachments.open(attachmentId);
       return;
     }
-    if (typeof window.open === "function") {
+    // 直链文件（/uploads/...）：交给系统默认程序打开。
+    if (directUrl) {
+      const abs = /^https?:|^data:/i.test(directUrl)
+        ? directUrl
+        : (typeof API_BASE === "string" ? API_BASE : "") + directUrl;
+      if (window.aerie && window.aerie.shell
+          && typeof window.aerie.shell.openExternal === "function") {
+        await window.aerie.shell.openExternal(abs);
+        return;
+      }
+      if (typeof window.open === "function") window.open(abs, "_blank");
+      return;
+    }
+    if (attachmentId && typeof window.open === "function") {
       window.open(
         API_BASE + "/api/attachments/"
           + encodeURIComponent(attachmentId) + "/download",
@@ -2264,7 +2284,10 @@ class ChatManager {
 
     for (const button of el.querySelectorAll("[data-attachment-open]")) {
       button.addEventListener("click", () => {
-        this._openAttachment(button.getAttribute("data-attachment-open"));
+        this._openAttachment(
+          button.getAttribute("data-attachment-open"),
+          button.getAttribute("data-attachment-url") || "",
+        );
       });
     }
     for (const button of el.querySelectorAll("[data-attachment-retry]")) {

@@ -3068,9 +3068,12 @@ class Companion:
             logger.warning("文件 %s 没有请求来源端口，未投递", path)
             _ledger().record_pending(user_id=0, channel="", path=path, note=note)
             return ""
+        if origin.channel == "local_chat":
+            # 桌面端不走发送队列（它没有队列发送器），走"发布 + 落库 + SSE"那条路。
+            return self._deliver_local_chat_file(path, note=note, origin=origin)
         if origin.channel not in _FILE_CAPABLE_CHANNELS:
-            # 桌面端只有文本/图片通道（SendQueue 的 channel_senders 没有 local_chat），
-            # 入队只会让 worker 取通道时 KeyError → 文件静默消失。
+            # 队列里没有该通道的发送器：入队只会让 worker 取通道时 KeyError
+            # → 文件静默消失，甚至打死发送 worker。如实报"发不出去"。
             logger.warning(
                 "文件 %s 的来源端口 %s 不支持发文件，未投递", path, origin.channel,
             )
@@ -3097,6 +3100,106 @@ class Companion:
                 delivery_id, ok=False, detail=describe_delivery_failure(exc),
             )
             return ""
+        return delivery_id
+
+    def _deliver_local_chat_file(self, path: str, *, note: str = "", origin: Any) -> str:
+        """把一份文件投到**桌面端**：发布到 uploads + 落聊天记录 + 推 SSE。
+
+        桌面端没有原生"收文件"通道（`SendQueue` 只注册了 qq / ilink），但它有
+        成熟的图片展示链路：`/uploads/<rel>` + 结构化附件卡片。这里复用同一条路，
+        把文件也变成一张**可打开**的卡片（§十四 #72 / 开放例外 E6）。
+
+        与 `_deliver_local_chat_image` 同构：落 chat_log（历史接口会解出
+        attachments，刷新后仍在）+ 同步进 normalized messages 层 + emit SSE。
+
+        返回投递回执 id：成功与失败都返回（失败时回执里带原因），
+        让 `send_file_to_user` 能等到**真实结局**再回话，而不是替我们猜。
+        """
+        from core import outbound_files
+
+        source = Path(path)
+        delivery_id = _ledger().record_pending(
+            user_id=int(getattr(origin, "user_id", 0) or 0),
+            channel="local_chat",
+            path=str(source),
+            note=note,
+        )
+
+        rel = outbound_files.publish_to_uploads(source)
+        if not rel:
+            _ledger().record_outcome(
+                delivery_id, ok=False, detail="未能写入可下载目录（uploads）",
+            )
+            return delivery_id
+        attachment = outbound_files.build_file_attachment(
+            rel, display_name=source.name, size_bytes=source.stat().st_size,
+        )
+        if not attachment:
+            _ledger().record_outcome(delivery_id, ok=False, detail="附件描述构造失败")
+            return delivery_id
+
+        content = note.strip() or f"[文件] {source.name}"
+        attachments_json = json.dumps([attachment], ensure_ascii=False)
+        message_id: int | str = generate_id("message")
+        owner_id = int(getattr(origin, "user_id", 0) or 0)
+        try:
+            db = getattr(self, "db", None)
+            if db is not None and hasattr(db, "insert"):
+                persona_id = self._active_persona_id()
+                message_id = db.insert(
+                    "chat_log",
+                    {
+                        "user_id": owner_id,
+                        "role": "assistant",
+                        "content": content,
+                        "attachments": attachments_json,
+                        "msg_type": "local_file",
+                        "route_mode": "FULL",
+                        "scene": "local_file",
+                        "persona_id": persona_id,
+                    },
+                ) or message_id
+                actor_id, channel, account = self._proactive_channel_identity("desktop")
+                self.conversation_repository.persist_proactive_message(
+                    user_id=owner_id,
+                    actor_id=actor_id,
+                    channel=channel,
+                    channel_account_id=account,
+                    content=content,
+                    legacy_chat_log_id=int(message_id),
+                    persona_id=persona_id,
+                    attachments=[attachment],
+                )
+        except Exception as exc:
+            logger.warning("桌面端文件落库失败（仍尝试推送）", exc_info=True)
+            _ledger().record_outcome(
+                delivery_id, ok=False, detail=describe_delivery_failure(exc),
+            )
+            return delivery_id
+
+        try:
+            from core import chat_events
+
+            chat_events.emit(
+                "assistant",
+                role="assistant",
+                id=message_id,
+                user_id=getattr(origin, "user_id", 0),
+                content=content,
+                attachments=[attachment],
+                source="local_chat",
+                scene="local_file",
+                channel="desktop",
+            )
+        except Exception as exc:
+            logger.warning("桌面端文件推送失败", exc_info=True)
+            _ledger().record_outcome(
+                delivery_id, ok=False, detail=describe_delivery_failure(exc),
+            )
+            return delivery_id
+
+        logger.info("[LocalFile] delivered file to local chat: %s", rel)
+        _ledger().record_outcome(delivery_id, ok=True)
         return delivery_id
 
     @staticmethod

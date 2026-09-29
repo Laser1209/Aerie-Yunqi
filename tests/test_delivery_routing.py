@@ -212,7 +212,7 @@ def test_proactive_image_channels_falls_back_to_desktop_alone():
 def _deliver_with_origin(comp, channel, *, user_id=7, account="", path="x.docx"):
     token = dr.bind(DeliveryContext(channel=channel, user_id=user_id, channel_account_id=account))
     try:
-        comp._notify_file_delivery({"path": path, "note": "给你"})
+        return comp._notify_file_delivery({"path": path, "note": "给你"})
     finally:
         dr.unbind(token)
 
@@ -231,26 +231,97 @@ def test_qq_request_delivers_back_to_qq():
     assert comp.queue.sent[0].channel == "qq"
 
 
-def test_desktop_request_fails_loudly_because_desktop_has_no_file_channel():
-    """桌面端要文件：来源端口判对了，但桌面端**没有文件发送器**。
+def test_desktop_request_delivers_file_into_local_chat(tmp_path, monkeypatch):
+    """桌面端要文件 → 真的变成一张可打开的卡片（§十四 #72 / 开放例外 E6）。
 
-    旧实现照样入队 → SendQueue 取 ``channel_senders["local_chat"]`` 直接 KeyError，
-    文件静默消失（还可能把 worker 打死）。现在改为**不入队 + 如实报"发不出去"**，
-    不再假装投递成功。桌面端发文件本身仍是缺口（§十四 #72）。
+    桌面端没有原生收文件通道（`SendQueue` 只有 qq / ilink），但复用了生成图那条
+    成熟链路：文件发布到 uploads + 落一条带 attachments 的 assistant 聊天记录。
+    旧实现在这里是**静默丢件**（入队后取 `channel_senders["local_chat"]` 直接
+    KeyError），所以这条用例锁定"不再丢件"。
     """
+    from core import chat_events, outbound_files
+    from core.delivery_ledger import get_ledger
+
+    ledger = get_ledger()
+    ledger.clear()
+    monkeypatch.setattr(outbound_files, "_uploads_dir", lambda: tmp_path / "uploads")
+    doc = tmp_path / "报告.txt"
+    doc.write_text("hello", encoding="utf-8")
+
+    emitted: list[dict] = []
+    monkeypatch.setattr(chat_events, "emit", lambda *a, **k: emitted.append(k))
+
     comp = _bare_companion()
-    _deliver_with_origin(comp, "local_chat")
-    assert comp.queue.sent == []
+    delivery_id = _deliver_with_origin(comp, "local_chat", path=str(doc))
+
+    assert delivery_id, "桌面端投递必须返回回执 id，调用方才等得到真实结局"
+    assert comp.queue.sent == [], "桌面端不走发送队列（队列里没有它的发送器）"
+
+    receipt = ledger.get(delivery_id)
+    assert receipt is not None and receipt.ok is True
+
+    assert emitted, "必须推一条 SSE，前端才会渲染卡片"
+    attachments = emitted[0].get("attachments") or []
+    assert len(attachments) == 1
+    attachment = attachments[0]
+    assert attachment["category"] == "file"
+    assert attachment["state"] == "ready"          # 前端据此渲染「打开」
+    assert attachment["name"] == "报告.txt"          # 用户看到原名，不是 uuid
+    assert attachment["url"].startswith("/uploads/")
+
+    # 文件必须真的躺在 uploads 里（否则卡片上的「打开」是死链）
+    stored = tmp_path / "uploads" / attachment["url"].removeprefix("/uploads/")
+    assert stored.is_file()
+    assert stored.read_text(encoding="utf-8") == "hello"
+
+    ledger.clear()
 
 
-def test_interleaved_requests_go_to_their_own_ports():
-    """先微信、后桌面各要一次 → 微信那次回微信；桌面那次不入队（无文件通道）。"""
+def test_desktop_delivery_reports_failure_when_publish_fails(monkeypatch):
+    """发布到 uploads 失败 → 回执必须是失败，不能谎报送达。"""
+    from core import outbound_files
+    from core.delivery_ledger import get_ledger
+
+    ledger = get_ledger()
+    ledger.clear()
+    monkeypatch.setattr(outbound_files, "publish_to_uploads", lambda _p: None)
+
+    comp = _bare_companion()
+    delivery_id = _deliver_with_origin(comp, "local_chat", path=__file__)
+
+    receipt = ledger.get(delivery_id)
+    assert receipt is not None
+    assert receipt.ok is False
+    assert "uploads" in receipt.detail
+
+    ledger.clear()
+
+
+def test_interleaved_requests_go_to_their_own_ports(tmp_path, monkeypatch):
+    """先微信、后桌面各要一次 → 两次分别回到各自端口（证明不是全局状态）。"""
+    from core import chat_events, outbound_files
+    from core.delivery_ledger import get_ledger
+
+    ledger = get_ledger()
+    ledger.clear()
+    monkeypatch.setattr(chat_events, "emit", lambda *a, **k: None)
+    monkeypatch.setattr(outbound_files, "_uploads_dir", lambda: tmp_path / "uploads")
+    doc = tmp_path / "b.docx"
+    doc.write_text("x", encoding="utf-8")
+
     comp = _bare_companion()
     _deliver_with_origin(comp, "ilink", account="acc-1", path="a.docx")
-    _deliver_with_origin(comp, "local_chat", path="b.docx")
+    desktop_id = _deliver_with_origin(comp, "local_chat", path=str(doc))
 
+    # 微信那次走队列；桌面那次走 uploads 链路，两边互不干扰。
     assert [r.channel for r in comp.queue.sent] == ["ilink"]
     assert [r.file_paths[0] for r in comp.queue.sent] == ["a.docx"]
+
+    # 桌面端的回执当场落定（微信那条仍在队列里等 worker，测试环境没有 worker）。
+    desktop_receipt = ledger.get(desktop_id)
+    assert desktop_receipt is not None and desktop_receipt.ok is True
+
+    ledger.clear()
 
 
 def test_no_origin_records_pending_receipt():

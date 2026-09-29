@@ -358,3 +358,34 @@ test("data-viewer reuses chat _buildAttachmentCard for history rendering", () =>
   }));
   assert.equal(card1.html, card2.html, "same attachment should render identically in chat and history");
 });
+
+test("file card without attachment id but with url still offers an open button", () => {
+  // 桌面端收文件走 /uploads 直链（§十四 #72 / E6）：没有附件中心的 id，
+  // 只有 url —— 卡片必须照样给出「打开」，否则文件收到了却打不开。
+  const { chat } = loadChatManager();
+  const card = parseCard(chat._buildAttachmentCard({
+    category: "file",
+    name: "季度报告.docx",
+    size: 2048,
+    state: "ready",
+    url: "/uploads/a1b2c3.docx",
+  }));
+  assert.ok(card.hasCategory("file"));
+  assert.ok(card.hasText("季度报告.docx"), "must show the original file name");
+  assert.ok(card.hasOpenButton(), "direct-url file must be openable");
+  assert.ok(
+    card.hasText('data-attachment-url="/uploads/a1b2c3.docx"'),
+    "the open button must carry the direct uploads url",
+  );
+});
+
+test("file card is not openable while not ready", () => {
+  const { chat } = loadChatManager();
+  const card = parseCard(chat._buildAttachmentCard({
+    category: "file",
+    name: "half.txt",
+    state: "failed",
+    url: "/uploads/half.txt",
+  }));
+  assert.ok(!card.hasOpenButton(), "not-ready file must not offer open");
+});

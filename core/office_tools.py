@@ -2960,7 +2960,7 @@ _OFFICE_TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "send_file_to_user",
-            "description": """把一份已经存在的本地文件发给用户（自动走当前会话通道，QQ 与微信都已支持发文件）。
+            "description": """把一份已经存在的本地文件发给用户（自动走当前会话通道；QQ / 微信 / 桌面端三种都支持）。
 
 使用场景：
 - 你刚生成的报告/表格/文档，用户要你"发过来"

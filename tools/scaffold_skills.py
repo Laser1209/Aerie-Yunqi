@@ -30,30 +30,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_ROOT = _PROJECT_ROOT / "skills"
 
 
-# ── Skill catalog: 12 local ───────────────────────────────────
+# ── Skill catalog: local ─────────────────────────────────────
+#
+# 语音口径（A3，2026-09-30 定）：**本地语音能力由功能包提供，不再由 local skill 提供**。
+# 原先的 `asr` / `tts` 两个 local 桩（`requires_module: local_asr` / `local_tts`，
+# 这两个 Python 模块本仓从来没实现过）已删除 —— 留着就是"面板上永远不可用、
+# 对应能力其实由 voice-asr / voice-rvc 功能包提供"的两套实现，正是计划要避免的。
+# 语音相关能力请走 `plugins/voice-asr`（ASR + KWS）与 `plugins/voice-rvc`（TTS + 变声）。
 LOCAL_SKILLS: list[dict] = [
-    {
-        "name": "tts",
-        "description": "文字转语音 / Text to speech",
-        "provider_hint": "tts-openvino",
-        "read_only": False,
-        "import_module": "local_tts",
-        "import_call": "synthesize",
-        "args_key": "text",
-        "return_key": "wav_path",
-        "body_doc": "调本地 OpenVINO Qwen3-TTS 把文字转成 wav，输出 wav_path。",
-    },
-    {
-        "name": "asr",
-        "description": "语音识别 / Speech recognition",
-        "provider_hint": "asr-whisper",
-        "read_only": True,
-        "import_module": "local_asr",
-        "import_call": "transcribe",
-        "args_key": "audio_path",
-        "return_key": "text",
-        "body_doc": "调本地 Whisper 转录音，输出 text。",
-    },
     {
         "name": "ocr",
         "description": "图像文字识别 / OCR",

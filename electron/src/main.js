@@ -1433,7 +1433,7 @@ function openWorldDashboardWindow() {
     worldDashboardWindow.focus();
     return worldDashboardWindow;
   }
-  worldDashboardWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 520,
     height: 720,
     minWidth: 400,
@@ -1442,19 +1442,27 @@ function openWorldDashboardWindow() {
     backgroundColor: "#ffffff",
     frame: false,
     icon: ICON_PATH,
+    // 先不显示，等首帧渲染完再 show：否则会先闪一块白底再出内容。
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "world-dashboard-preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  worldDashboardWindow.loadFile(path.join(__dirname, "renderer", "world-dashboard-window.html"));
-  worldDashboardWindow.on("closed", () => {
+  worldDashboardWindow = win;
+  win.once("ready-to-show", () => {
+    if (!win.isDestroyed()) win.show();
+  });
+  win.loadFile(path.join(__dirname, "renderer", "world-dashboard-window.html"));
+  win.on("closed", () => {
     // 关窗（含 X 按钮）同步宿主 hide 语义，保持状态一致。
-    worldDashboardWindow = null;
+    // 仅当引用仍指向本窗口时才清空：close() 是异步的，若期间又开了新窗口，
+    // 旧窗口迟到的 closed 会把新窗口的引用抹掉（表现为"面板显示已隐藏，窗口却还在"）。
+    if (worldDashboardWindow === win) worldDashboardWindow = null;
     try { worldDashboardHost.hide(); } catch (_) {}
   });
-  return worldDashboardWindow;
+  return win;
 }
 
 // ── P4b 管理平台独立窗口（懒创建：首次入口点击才实例化） ──
@@ -1776,10 +1784,6 @@ ipcMain.handle("world-dashboard:get-status", async () => {
   return await worldDashboardHost.getStatus();
 });
 
-ipcMain.handle("world-dashboard:get-snapshot", async () => {
-  return await worldDashboardHost.getSnapshot();
-});
-
 // 独立仪表盘窗口专用：直接拉取后端快照 + 情绪状态（供 world.getState() 使用）。
 // 不经过 host 的 isEnabled 门控：世界以 inprocess/sidecar 任一模式运行时，
 // 后端快照即返回真实数据，仪表盘应如实展示。
@@ -1851,9 +1855,12 @@ ipcMain.handle("world-dashboard:show", async () => {
 });
 
 ipcMain.handle("world-dashboard:hide", async () => {
-  if (worldDashboardWindow && !worldDashboardWindow.isDestroyed()) {
-    worldDashboardWindow.close();
-  }
+  // 先断开引用再 close()：close() 是异步的，期间 isDestroyed() 仍为 false。
+  // 若用户在这段时间里又点「显示插件」，openWorldDashboardWindow() 会 show() 一个
+  // **正在关闭**的窗口，于是它随即又消失 —— 表现就是"开了过一两秒自己关上"。
+  const win = worldDashboardWindow;
+  worldDashboardWindow = null;
+  if (win && !win.isDestroyed()) win.close();
   return await worldDashboardHost.hide();
 });
 
@@ -1908,14 +1915,6 @@ ipcMain.handle("world-dashboard:control", async (_event, input) => {
   );
   await bindWorldConnectionToBackend(true);
   return result;
-});
-
-ipcMain.handle("world-dashboard:approve-candidate", async (_event, payload) => {
-  return await worldDashboardHost.approveCandidate(payload || {});
-});
-
-ipcMain.handle("world-dashboard:preview-creative", async (_event, payload) => {
-  return await worldDashboardHost.previewCreative(payload || {});
 });
 
 ipcMain.handle("world-dashboard:set-location", async (_event, payload) => {

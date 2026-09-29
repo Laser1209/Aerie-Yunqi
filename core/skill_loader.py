@@ -166,6 +166,10 @@ class SkillLoader:
                         "desc": str(meta.get("description", "") or ""),
                         "available": not reason,
                         "unavailable_reason": reason,
+                        # 可选：这个 skill 跑起来需要的**本机准备步骤**（装 CLI / 配凭据）。
+                        # 由 SKILL.md 自己声明，供能力目录生成「去哪儿配」的指引 ——
+                        # 不在代码里另写一张 skill→安装命令 的映射表（写两处必然漂移）。
+                        "setup_hint": str(meta.get("setup_hint", "") or ""),
                     }
                     existing = self.discovered.get(name)
                     if existing is not None:

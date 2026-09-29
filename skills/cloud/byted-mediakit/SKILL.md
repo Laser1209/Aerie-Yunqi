@@ -4,6 +4,7 @@ description: 字节 AI MediaKit 音视频处理 / ByteDance mediakit（官方 CL
 provider_hint: shell-safe
 read_only: false
 requires_cli: mediakit-cli
+setup_hint: '本机执行：npm install -g @volcengine/mediakit-cli，然后 mediakit-cli init --api-key <MediaKit API Key>；本地裁剪模式还需 FFmpeg 在 PATH 上'
 ---
 
 # byted-mediakit / 字节 AI MediaKit

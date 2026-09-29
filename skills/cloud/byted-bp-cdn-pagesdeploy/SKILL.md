@@ -4,6 +4,7 @@ description: 字节边缘 Pages 部署 / BytePlus Edge Pages（官方 CLI）
 provider_hint: shell-safe
 read_only: false
 requires_cli: nest
+setup_hint: '本机执行：npm install -g @byteplus/nest，然后 nest config set -g cloud.access_key <AccessKey ID> 与 nest config set -g cloud.secret_key <SecretAccessKey>'
 ---
 
 # byted-bp-cdn-pagesdeploy / BytePlus Edge Pages 部署

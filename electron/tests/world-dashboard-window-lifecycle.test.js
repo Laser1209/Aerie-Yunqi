@@ -78,3 +78,20 @@ test("open 复用的前提是窗口存在且未销毁", () => {
     "复用一个已销毁的窗口会抛错",
   );
 });
+
+test("协调器不能把 world_desired=running 的 sidecar 关掉", () => {
+  const body = functionBody("reconcileWorldRuntime");
+  assert.match(
+    body,
+    /if \(effective\.sidecarEnabled !== true && desired !== "running"\)/,
+    "用户点「启动」只写 world_desired=running，并不会把 world_sidecar_v1 也置真；"
+      + "协调器若仍按 sidecar 开关一刀切，这个每 2 秒跑一次的东西就会把刚拉起来的"
+      + " sidecar 关掉（表现为「启动了又自己停」，并留下 desired=running 而"
+      + " actual=stopped 的矛盾状态）",
+  );
+  const desiredAt = body.indexOf('runtimeConfigValue(snapshot, "world_desired"');
+  const guardAt = body.indexOf('desired !== "running"');
+  assert.notStrictEqual(desiredAt, -1, "协调器需要先取出 world_desired");
+  assert.ok(desiredAt < guardAt, "desired 必须先取值、再用于判断");
+});
+

@@ -2398,6 +2398,7 @@ async function reconcileWorldRuntime() {
   }
   const effective = worldDashboardHost.applyRuntimeSnapshot(snapshot);
   let plugin = worldPluginSupervisor.status("aerie.world");
+  const desired = String(runtimeConfigValue(snapshot, "world_desired", "stopped"));
   if (!effective.enabled) {
     if (plugin.enabled) {
       await worldPluginSupervisor.disable("aerie.world", {
@@ -2410,7 +2411,12 @@ async function reconcileWorldRuntime() {
   // The in-process world is the safe default. Only supervise a child sidecar
   // when that specific adapter is enabled; the dashboard remains available
   // for the in-process world without spawning a second service.
-  if (effective.sidecarEnabled !== true) {
+  //
+  // 例外：world_desired=running 时不能让位。用户点「启动」走的是 start 分支，
+  // 它只写 world_desired=running，并不会把 world_sidecar_v1 也置真；若这里仍按
+  // sidecar 开关一刀切，这个每 2 秒跑一次的协调器就会把刚拉起来的 sidecar 关掉
+  // （表现为"启动了又自己停"），并留下 desired=running 而 actual=stopped 的矛盾状态。
+  if (effective.sidecarEnabled !== true && desired !== "running") {
     if (plugin.enabled) {
       await worldPluginSupervisor.disable("aerie.world", {
         expectedRevision: plugin.revision,
@@ -2425,7 +2431,6 @@ async function reconcileWorldRuntime() {
     });
     plugin = worldPluginSupervisor.status("aerie.world");
   }
-  const desired = String(runtimeConfigValue(snapshot, "world_desired", "stopped"));
   if (desired === "running" && plugin.actual !== "running") {
     const command = plugin.actual === "paused" ? "resume" : "start";
     await worldPluginSupervisor.control("aerie.world", command, {

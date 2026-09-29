@@ -22,18 +22,39 @@ def _loader(registry: ToolRegistry | None = None) -> SkillLoader:
     return SkillLoader(registry or ToolRegistry(), SkillRouter({}))
 
 
+def _disk_skill_names() -> set[str]:
+    """磁盘上三个 skill 根下所有 SKILL.md 声明的 name（按 name 去重）。
+
+    discover() 的契约是「把磁盘上存在的 SKILL.md 全部发现到」，所以断言要跟着
+    磁盘走。这里原先写死 `>= 77`，删掉三个与内置工具重复的桩之后整片变红，
+    红的却是断言本身而不是被测行为。
+    """
+    names: set[str] = set()
+    for base, _kind in skill_loader_module._SKILL_ROOTS:
+        if not base.is_dir():
+            continue
+        for entry in sorted(base.iterdir()):
+            skill_md = entry / "SKILL.md"
+            if not (entry.is_dir() and skill_md.is_file()):
+                continue
+            meta = SkillLoader._parse_frontmatter(skill_md) or {}
+            if meta.get("name"):
+                names.add(str(meta["name"]).strip())
+    return names
+
+
 def test_cloud_skills_are_discovered():
     loader = _loader()
     count = loader.discover()
-    # 发现层不过滤可用性（panel 要能看到 SKILL.md），所以仍是全量 77。
-    assert count >= 77
+    # 发现层不过滤可用性（panel 要能看到 SKILL.md），所以必须等于磁盘上的全量。
+    assert set(loader.discovered) == _disk_skill_names()
+    assert count == len(loader.discovered)
 
     cloud = {
         name: meta
         for name, meta in loader.discovered.items()
         if meta["kind"] == "cloud"
     }
-    assert len(cloud) >= 59
     assert "mcp-builder" in cloud
     assert "defuddle" in cloud
     # api_server 的 /api/skills/{name} 依赖 path/SKILL.md 存在
@@ -223,7 +244,7 @@ def test_cloud_skills_register_into_tool_registry():
     discovered = loader.discover()
     registered = loader.register_all()
 
-    assert discovered >= 77
+    assert discovered == len(_disk_skill_names())
     assert registered < discovered  # 本体有大量不可用 skill（见下条）
     assert registered == sum(
         1
@@ -436,7 +457,7 @@ def test_s3_discover_is_idempotent():
     loader = _loader()
     first = loader.discover()
     second = loader.discover()
-    assert first == second >= 77
+    assert first == second == len(_disk_skill_names())
     assert len(loader.discovered) == first
 
 

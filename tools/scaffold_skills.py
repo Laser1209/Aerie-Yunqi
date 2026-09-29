@@ -351,16 +351,10 @@ CLOUD_SKILLS: list[dict] = [
         "return_key": "elements",
         "body_doc": "agent-browser 走 Chrome DevTools Protocol 自动化 Electron 桌面应用。",
     },
-    {
-        "name": "screenshot",
-        "description": "系统截图 / Screenshot",
-        "provider_hint": "text",
-        "read_only": True,
-        "env_var": "",
-        "args_key": "region",
-        "return_key": "image_path",
-        "body_doc": "全屏/指定应用/像素区域 OS 级截图。",
-    },
+    # screenshot 桩已移除，不再生成。截图能力由内置工具承担：
+    # core/computer_control.py 的 ScreenshotCapturer（Pillow ImageGrab + GDI 回退），
+    # 经 tools/compute_tools.py 注册为工具 `screenshot`。再放一个同名桩只会造成
+    # "面板上不可用、模型那里其实可用"的错位（skill_loader 也会因撞名拒绝注册）。
     # ── Notion 套件 (5) ──
     {
         "name": "notion-cli",
@@ -630,16 +624,8 @@ CLOUD_SKILLS: list[dict] = [
         "return_key": "image_path",
         "body_doc": "26 种图表选最优并渲染。",
     },
-    {
-        "name": "data-analysis",
-        "description": "Excel/CSV 数据分析 / Data analysis",
-        "provider_hint": "text",
-        "read_only": True,
-        "env_var": "",
-        "args_key": "xlsx_path",
-        "return_key": "summary",
-        "body_doc": "xlsx/csv 透视表、SQL 查询、结构化总结。",
-    },
+    # data-analysis 桩已移除。表格/CSV 分析由内置工具
+    # core/office_tools.py 的 spreadsheet_analyze 承担，模型侧已可见。
     {
         "name": "consulting-analysis",
         "description": "咨询级报告 / Consulting",
@@ -854,17 +840,10 @@ CLOUD_SKILLS: list[dict] = [
         "return_key": "report_md",
         "body_doc": "分镜 + 钩子 + BGM + 场景分析报告。",
     },
-    # ── Agent / Browser (2) ──
-    {
-        "name": "agent-browser",
-        "description": "Agent 浏览器 / Agent browser",
-        "provider_hint": "text",
-        "read_only": True,
-        "env_var": "",
-        "args_key": "url",
-        "return_key": "screenshot",
-        "body_doc": "CLI 浏览器自动化（点击/填表/截图/抓数据）。",
-    },
+    # ── 与 local/data 重名的占位（不生成） ──
+    # agent-browser 桩已移除。浏览器自动化由内置工具承担：
+    # tools/browser_tools.py 的 browser_navigate / browser_snapshot / browser_click
+    # 等（Kimi WebBridge，HTTP 127.0.0.1:10086）。
     {
         "name": "spec-to-impl",
         "description": "Spec→任务拆解 / Spec to impl",

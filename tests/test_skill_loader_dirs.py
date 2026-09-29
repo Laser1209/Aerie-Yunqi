@@ -162,10 +162,24 @@ def test_observed_unavailable_tools_do_not_reach_the_model(monkeypatch):
     loader.discover()
     loader.register_all()
 
-    for name in ("txt2img", "byted-seedream", "canvas-design"):
-        # 仍被发现（面板能读 SKILL.md），但模型看不到
+    for name in ("txt2img", "byted-seedream"):
+        # 仍被发现（面板能读 SKILL.md），但前提不满足 → 模型看不到
         assert name in loader.discovered
         assert loader.discovered[name]["available"] is False
+        assert registry.get(name) is None
+
+
+def test_instruction_skills_are_available_but_not_tools():
+    """指令型 skill：可用（正文有效）但**不作为工具注册**（走上下文注入）。"""
+    registry = ToolRegistry()
+    loader = _loader(registry)
+    loader.discover()
+    loader.register_all()
+
+    for name in ("canvas-design", "frontend-design", "security-review"):
+        meta = loader.discovered[name]
+        assert meta["available"] is True
+        assert meta["form"] == "instruction"
         assert registry.get(name) is None
 
 

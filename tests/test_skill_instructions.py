@@ -195,7 +195,6 @@ def test_instruction_skill_has_real_content_not_scaffold(name):
 
 # ── 与 context_builder 的接线（注入真的会发生） ─────────────────────────
 
-
 def test_context_builder_injects_instructions_for_matching_message(monkeypatch):
     """端到端口径：命中触发词的消息，必须真的拿到注入片段。"""
     import core.context_builder as cb
@@ -232,3 +231,75 @@ def test_context_builder_degrades_gracefully_when_index_fails(monkeypatch):
     )
 
     assert cb._skill_instructions_for("我们按 TDD 来吧") == ""
+
+
+# ── 全量体检：仓库里所有指令型 skill 的格式与触发词卫生 ─────────────────
+
+
+def _all_instruction_skills() -> dict[str, dict]:
+    """扫描仓库，取出所有 kind: instruction 的 skill 元信息。"""
+    import yaml
+    from core.skill_loader import _SKILL_ROOTS
+
+    found: dict[str, dict] = {}
+    for base, _kind in _SKILL_ROOTS:
+        if not base.is_dir():
+            continue
+        for entry in sorted(base.iterdir()):
+            md = entry / "SKILL.md"
+            if not md.is_file():
+                continue
+            text = md.read_text(encoding="utf-8")
+            parts = text.split("---", 2)
+            if len(parts) < 3:
+                continue
+            meta = yaml.safe_load(parts[1]) or {}
+            if str(meta.get("kind") or "").lower() != "instruction":
+                continue
+            found[str(meta.get("name") or entry.name)] = {
+                "dir": entry,
+                "triggers": [str(t) for t in (meta.get("triggers") or [])],
+                "body": parts[2].strip(),
+                "text": text,
+            }
+    return found
+
+
+def test_every_instruction_skill_is_well_formed():
+    """每份指令型 skill：有触发词、正文够长、不是 scaffold、不留 run.py。"""
+    skills = _all_instruction_skills()
+    assert len(skills) >= 30, f"指令型 skill 数量异常：{len(skills)}"
+
+    problems: list[str] = []
+    for name, info in skills.items():
+        if not info["triggers"]:
+            problems.append(f"{name}: 无 triggers（永不触发）")
+        if len(info["body"]) <= 300:
+            problems.append(f"{name}: 正文只有 {len(info['body'])} 字，像占位")
+        if "cloud_call_not_implemented" in info["text"]:
+            problems.append(f"{name}: 仍是 scaffold 占位")
+        if (info["dir"] / "run.py").exists():
+            problems.append(f"{name}: 指令型不该保留 run.py")
+    assert not problems, "指令型 skill 体检未通过：\n" + "\n".join(problems)
+
+
+def test_no_trigger_is_shared_across_instruction_skills():
+    """同一触发词不得被两个技能共用 —— 否则一句话同时注入两份指令、互相干扰。
+
+    这是实打实踩过的坑：`装个组件` 曾同时属于 shadcn 与 hyperframes-registry。
+    """
+    seen: dict[str, list[str]] = {}
+    for name, info in _all_instruction_skills().items():
+        for trigger in info["triggers"]:
+            seen.setdefault(trigger, []).append(name)
+
+    collisions = {t: names for t, names in seen.items() if len(names) > 1}
+    assert not collisions, f"触发词冲突：{collisions}"
+
+
+def test_index_loads_every_instruction_skill():
+    """索引必须把仓库里所有指令型 skill 都装进来（不能静默漏掉）。"""
+    index = SkillInstructionIndex()
+    loaded = index.discover()
+    expected = len(_all_instruction_skills())
+    assert loaded == expected, f"索引装了 {loaded} 个，仓库里有 {expected} 个"

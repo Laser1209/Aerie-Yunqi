@@ -1097,9 +1097,16 @@ def _run_py(meta: dict) -> str:
     return body
 
 
-def scaffold(dry_run: bool = False) -> int:
-    """Generate all 50 skills. Returns the count actually written."""
+def scaffold(dry_run: bool = False, *, force: bool = False) -> int:
+    """Generate the skill skeletons. Returns the count actually written.
+
+    **默认不覆盖已存在的文件**：SKILL.md 与 run.py 一旦被人手写成真实内容
+    （指令型正文 / 真接 SDK），再跑一次生成器把它冲掉就是灾难 —— 与
+    「根目录 main.js 双写互毁」是同一类陷阱。需要重新对齐 frontmatter 时
+    显式传 ``force=True``（或先删掉目标文件）。
+    """
     written = 0
+    skipped = 0
     plans: list[tuple[Path, Path, dict]] = []
     seen: set[str] = set()  # 去重（一些 skill 在 local + cloud 都出现）
 
@@ -1130,11 +1137,17 @@ def scaffold(dry_run: bool = False) -> int:
             print(f"[dry-run] would create: {base}")
             written += 1
             continue
+        if not force:
+            # 已被人手写成真实内容的 skill 一律跳过，绝不覆盖。
+            marker = skill_md if skill_md.exists() else run_py
+            if marker.exists():
+                skipped += 1
+                continue
         base.mkdir(parents=True, exist_ok=True)
         skill_md.write_text(_skill_md(meta, kind), encoding="utf-8")
         run_py.write_text(_run_py(meta), encoding="utf-8")
         written += 1
-    return written, len(plans)
+    return written, len(plans), skipped
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1144,9 +1157,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print what would be created without touching the filesystem",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="覆盖已存在的 SKILL.md / run.py（默认跳过，保护手写内容）",
+    )
     ns = parser.parse_args(argv)
-    written, planned = scaffold(dry_run=ns.dry_run)
-    print(f"--- {written}/{planned} skill(s) processed ---")
+    written, planned, skipped = scaffold(dry_run=ns.dry_run, force=ns.force)
+    print(
+        f"--- {written}/{planned} skill(s) processed"
+        + (f"，跳过已存在 {skipped}（要覆盖请加 --force）" if skipped else "")
+        + " ---"
+    )
     return 0
 
 

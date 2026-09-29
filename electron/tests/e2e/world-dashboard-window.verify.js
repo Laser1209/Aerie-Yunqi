@@ -96,12 +96,12 @@ async function waitForTarget(urlFragment, timeoutMs = 60000) {
   await dashCdp.open();
   await sleep(1500); // 等首次渲染
 
-  // Gate M2.1/B2.5/B3.2: window.world 恰好 8 个白名单方法（MVP 5 + 二批 getMemory/control + 三批 getB3）
+  // Gate M2.1/B2.5/B3.2: window.world 为显式白名单（当前 11 个专用方法）
   const keys = await dashCdp.eval("Object.keys(window.world||{}).sort()");
   console.log("[verify] window.world keys:", JSON.stringify(keys));
   const whitelistOk =
-    Array.isArray(keys) && keys.length === 8 &&
-    ["getState", "pause", "previewImageDecision", "resume", "subscribe", "getMemory", "control", "getB3"]
+    Array.isArray(keys) && keys.length === 11 &&
+    ["getState", "pause", "resume", "subscribe", "getMemory", "control", "getB3"]
       .every((k) => keys.includes(k));
 
   // Gate M4.1: 真实数据

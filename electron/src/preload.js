@@ -239,7 +239,6 @@ contextBridge.exposeInMainWorld("aerie", {
   },
   worldDashboard: {
     getStatus: () => ipcRenderer.invoke("world-dashboard:get-status"),
-    getSnapshot: () => ipcRenderer.invoke("world-dashboard:get-snapshot"),
     show: () => ipcRenderer.invoke("world-dashboard:show"),
     hide: () => ipcRenderer.invoke("world-dashboard:hide"),
     control: (action, payload) => ipcRenderer.invoke(
@@ -253,8 +252,6 @@ contextBridge.exposeInMainWorld("aerie", {
     pause: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "pause", payload: payload || {} }),
     resume: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "resume", payload: payload || {} }),
     restart: (payload) => ipcRenderer.invoke("world-dashboard:control", { action: "restart", payload: payload || {} }),
-    approveCandidate: (payload) => ipcRenderer.invoke("world-dashboard:approve-candidate", payload || {}),
-    previewCreative: (payload) => ipcRenderer.invoke("world-dashboard:preview-creative", payload || {}),
   },
   admin: {
     // P4b 管理平台（懒加载窗口，入口连点解锁后打开）

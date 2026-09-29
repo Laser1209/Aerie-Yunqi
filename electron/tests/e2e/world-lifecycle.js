@@ -432,10 +432,8 @@ async function clickLifecycle(page, action, expected) {
 async function verifyNoConnectionSecretExposure(page, label) {
   const exposure = await page.evaluate(async () => {
     const status = await window.aerie.worldDashboard.getStatus();
-    const snapshot = await window.aerie.worldDashboard.getSnapshot();
     const text = [
       JSON.stringify(status),
-      JSON.stringify(snapshot),
       document.getElementById("panel-world-dashboard").innerText,
     ].join("\n");
     return {

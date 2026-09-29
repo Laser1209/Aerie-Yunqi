@@ -95,7 +95,7 @@ const DEDICATED_RULES = [
     reason: "Provider connectivity is outside the zero-model-call generic UI audit.",
   },
   {
-    pattern: /world-dashboard-(?:enable|disable|start|stop|pause|resume|restart)|world-candidate-approve/i,
+    pattern: /world-dashboard-(?:enable|disable|start|stop|pause|resume|restart)/i,
     category: "world-lifecycle",
     reason: "World lifecycle mutations are verified by the isolated supervisor lifecycle suite.",
   },

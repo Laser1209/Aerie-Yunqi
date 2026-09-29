@@ -9,7 +9,6 @@ const ALLOWED_METHODS = [
   "getState",
   "pause",
   "resume",
-  "previewImageDecision",
   "subscribe",
   "getMemory",
   "control",
@@ -25,10 +24,6 @@ const world = {
   getState: () => ipcRenderer.invoke("world-dashboard:get-state"),
   pause: () => ipcRenderer.invoke("world-dashboard:control", { action: "pause", payload: {} }),
   resume: () => ipcRenderer.invoke("world-dashboard:control", { action: "resume", payload: {} }),
-  previewImageDecision: (candidateId) => ipcRenderer.invoke(
-    "world-dashboard:preview-creative",
-    { candidateId: String(candidateId || "") },
-  ),
   // 只读记忆档案（P6）：按层分组元数据，绝不写/删。
   getMemory: () => ipcRenderer.invoke("world-dashboard:get-memory"),
   // 第三批只读聚合（B3.2）：内在状态/趋势/决策观察/插件设置。仅读。

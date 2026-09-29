@@ -82,24 +82,9 @@ function createDocument() {
     "world-dashboard-panels",
     "world-dashboard-errors",
     "world-dashboard-updated",
-    "world-dashboard-summary",
-    "world-dashboard-relationship",
-    "world-dashboard-timeline",
-    "world-dashboard-candidates",
     "world-dashboard-refresh",
     "world-dashboard-show",
     "world-dashboard-hide",
-    "world-candidate-id",
-    "world-candidate-action",
-    "world-candidate-reason",
-    "world-candidate-idempotency",
-    "world-candidate-result",
-    "world-candidate-approve",
-    "world-creative-kind",
-    "world-creative-title",
-    "world-creative-payload",
-    "world-creative-result",
-    "world-creative-preview",
   ];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
@@ -154,10 +139,6 @@ test("index wires a real world dashboard tab panel and renderer script", () => {
 
   assert.match(index, /class="sidebar-tab"[^>]+data-tab="world-dashboard"/);
   assert.match(index, /id="panel-world-dashboard"[^>]+class="tab-panel"/);
-  assert.match(index, /id="world-dashboard-summary"/);
-  assert.match(index, /id="world-dashboard-relationship"/);
-  assert.match(index, /id="world-dashboard-timeline"/);
-  assert.match(index, /id="world-dashboard-candidates"/);
   assert.match(index, /src="js\/world-dashboard\.js"/);
   assert.match(index, /href="styles\/world-dashboard\.css"/);
 
@@ -196,66 +177,9 @@ test("world dashboard renderer uses narrow preload API and redacted display", as
       calls.push(["show"]);
       return this.getStatus();
     },
-    async getSnapshot() {
-      calls.push(["getSnapshot"]);
-      return {
-        status: "ready",
-        worldSummary: {
-          status: "running",
-          phase: "evening",
-          location: "studio",
-          activity: "drawing",
-          rawPrompt: "redacted-token-should-not-render",
-        },
-        relationshipState: {
-          persona_id: "default",
-          warmth: 0.73,
-          summary: "stable",
-          secret: "redacted-token-should-not-render",
-        },
-        selfModel: {
-          mood: "focused",
-          energy: 0.62,
-          rawThought: "redacted-token-should-not-render",
-        },
-        actionTimeline: [
-          {
-            eventId: "evt-1",
-            topic: "observations",
-            eventType: "world.observation.recorded",
-            sequence: 1,
-            payload: { secret: "redacted-token-should-not-render" },
-          },
-        ],
-        imageCandidates: [
-          {
-            candidateId: "cand-1",
-            promptKey: "evening_home",
-            scene: "idle_care",
-            rawPrompt: "redacted-token-should-not-render",
-          },
-        ],
-      };
-    },
     async hide() {
       calls.push(["hide"]);
       return { status: "hidden", visible: false, plugin: {}, backend: {}, panels: [] };
-    },
-    async approveCandidate(payload) {
-      calls.push(["approveCandidate", payload]);
-      return { status: "submitted", candidateId: payload.candidateId, ack: true };
-    },
-    async previewCreative(payload) {
-      calls.push(["previewCreative", payload]);
-      return {
-        status: "preview",
-        draft: {
-          kind: payload.kind,
-          title: payload.title,
-          payloadKeys: Object.keys(payload.payload || {}).sort(),
-          payloadSha256: "digest-only",
-        },
-      };
     },
   });
 
@@ -265,46 +189,7 @@ test("world dashboard renderer uses narrow preload API and redacted display", as
   assert.equal(document.getElementById("world-dashboard-status").textContent, "ready");
   assert.equal(document.getElementById("world-dashboard-plugin").textContent, "aerie.world · running · crashes 0");
   assert.equal(document.getElementById("world-dashboard-chat-publish").textContent, "available");
-  assert.equal(document.getElementById("world-dashboard-summary").textContent, "running · evening · studio · drawing");
-  assert.equal(document.getElementById("world-dashboard-relationship").textContent, "default · warmth 0.73 · stable");
-  assert.equal(document.getElementById("world-dashboard-timeline").textContent, "1 · observations · world.observation.recorded");
-  assert.equal(document.getElementById("world-dashboard-candidates").textContent, "cand-1 · evening_home · idle_care");
-
-  document.getElementById("world-candidate-id").value = "cand-1";
-  document.getElementById("world-candidate-action").value = "approve";
-  document.getElementById("world-candidate-reason").value = "manual_ok";
-  document.getElementById("world-candidate-idempotency").value = "idem-1";
-  await document.getElementById("world-candidate-approve").click();
-
-  assert.equal(
-    JSON.stringify(calls.find((call) => call[0] === "approveCandidate")[1]),
-    JSON.stringify({
-      candidateId: "cand-1",
-      action: "approve",
-      reasonCode: "manual_ok",
-      idempotencyKey: "idem-1",
-    }),
-  );
-  assert.equal(document.getElementById("world-candidate-result").textContent, "submitted · cand-1 · ack");
-
-  document.getElementById("world-creative-kind").value = "world_note";
-  document.getElementById("world-creative-title").value = "晨间世界摘要";
-  document.getElementById("world-creative-payload").value = '{"scene":"morning","secret":"redacted-token-should-not-render"}';
-  await document.getElementById("world-creative-preview").click();
-
-  const previewPayload = calls.find((call) => call[0] === "previewCreative")[1];
-  assert.equal(
-    JSON.stringify(previewPayload),
-    JSON.stringify({
-      kind: "world_note",
-      title: "晨间世界摘要",
-      payload: { scene: "morning", secret: "redacted-token-should-not-render" },
-    }),
-  );
-  assert.equal(
-    document.getElementById("world-creative-result").textContent,
-    "preview · world_note · 晨间世界摘要 · digest-only · keys: scene, secret",
-  );
+  assert.deepEqual(calls.map((call) => call[0]), ["getStatus"]);
 
   const rendered = Array.from(document.elements.values())
     .map((element) => `${element.textContent}\n${element.innerHTML}`)

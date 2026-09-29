@@ -959,43 +959,44 @@ class ConversationRepository:
                 channel_account_id=channel_account_id,
                 user_id=user_id,
             )
-            if anchor is None and direction == "older":
-                related_ids = self._find_user_conversation_ids(
-                    conn,
-                    actor_id=actor_id,
-                    channel=channel,
-                    channel_account_id=channel_account_id,
-                    user_id=user_id,
-                    persona_id=persona_id,
-                )
-                if len(related_ids) <= 1:
-                    # 角色隔离：related_ids 已按 persona 过滤（可能只有 persona 专属会话，
-                    # 无 NULL 共享会话），此时必须跟随该会话 ID，而不是无 persona 维度的
-                    # resolved_conversation_id，否则纯 persona 会话读链返回空。
-                    # 但调用方显式传入 conversation_id 时保持原语义（存量桌面/连续性路径
-                    # 依赖显式会话 ID，不能被子查询 fallback 的 primary 覆盖）。
-                    if conversation_id is not None:
-                        page_conversation_id = conversation_id
-                    else:
-                        page_conversation_id = (
-                            related_ids[0] if related_ids else resolved_conversation_id
-                        )
-                    return self._normalized_history_page(
-                        conn,
-                        conversation_id=page_conversation_id,
-                        anchor=anchor,
-                        direction=direction,
-                        limit=limit,
-                    )
+            # 会话集合的选择必须与"这是第几页"无关：首屏与后续页要走同一条读链。
+            # 历史故障（2026-09-30 真机）：这段判断原先套在 ``anchor is None`` 里，
+            # 于是首屏走 _merged_history_page（跨 persona 专属 + NULL 共享多条会话），
+            # 翻页却落到 _normalized_history_page（只查 resolved_conversation_id 一条），
+            # 拿合并结果的 cursor 去查另一条会话必然查出空 → hasOlder=False
+            # → 前端"往上滑再也加载不出更早的历史"。
+            related_ids = self._find_user_conversation_ids(
+                conn,
+                actor_id=actor_id,
+                channel=channel,
+                channel_account_id=channel_account_id,
+                user_id=user_id,
+                persona_id=persona_id,
+            )
+            if len(related_ids) > 1:
+                # 角色隔离下同一用户常有多条会话（各 persona 专属 + 无 persona 的共享）；
+                # 只读其中一条会丢掉另一条的历史，必须跨会话合并。
                 return self._merged_history_page(
                     conn,
                     conversation_ids=related_ids,
-                    primary_conversation_id=resolved_conversation_id,
+                    anchor=anchor,
+                    direction=direction,
                     limit=limit,
                 )
+            # 单会话（或没有相关会话）：跟随该会话 ID 读取。
+            # 角色隔离：related_ids 已按 persona 过滤（可能只有 persona 专属会话，
+            # 无 NULL 共享会话），此时必须跟随该会话 ID，而不是无 persona 维度的
+            # resolved_conversation_id，否则纯 persona 会话读链返回空。
+            # 但调用方显式传入 conversation_id 时保持原语义（存量桌面/连续性路径
+            # 依赖显式会话 ID，不能被子查询 fallback 的 primary 覆盖）。
+            page_conversation_id = (
+                conversation_id
+                if conversation_id is not None
+                else (related_ids[0] if related_ids else resolved_conversation_id)
+            )
             return self._normalized_history_page(
                 conn,
-                conversation_id=resolved_conversation_id,
+                conversation_id=page_conversation_id,
                 anchor=anchor,
                 direction=direction,
                 limit=limit,
@@ -1060,9 +1061,21 @@ class ConversationRepository:
         conn: sqlite3.Connection,
         *,
         conversation_ids: list[str],
-        primary_conversation_id: str,
+        anchor: int | None = None,
+        direction: str = "older",
         limit: int,
     ) -> dict[str, Any]:
+        """跨会话合并分页（角色隔离下同一用户可能对应多条会话）。
+
+        为什么必须支持 ``anchor`` / ``direction``：首屏与翻页要走同一条读链。
+        首屏用合并结果给出 cursor、翻页却只查单条会话时，用户一往上滑就再也
+        加载不出历史（2026-09-30 真机故障：首屏有历史、上滑无反应）。
+
+        输出契约与 ``_build_page`` 完全一致 —— 两条路径共用同一套字段，
+        前端不必判断自己这次拿到的是哪一种页。
+        """
+        comparator = "<" if direction == "older" else ">"
+        order = "DESC" if direction == "older" else "ASC"
         placeholders = ",".join("?" * len(conversation_ids))
         deleted_filter = " AND deleted_at IS NULL" if self._has_soft_delete(conn) else ""
         reply_to_cols = (
@@ -1070,6 +1083,12 @@ class ConversationRepository:
             if self._has_reply_to_columns(conn, "messages")
             else ""
         )
+        params: list[Any] = list(conversation_ids)
+        anchor_sql = ""
+        if anchor is not None:
+            anchor_sql = f" AND rowid {comparator} ?"
+            params.append(anchor)
+        params.append(limit + 1)
         rows = conn.execute(
             f"""SELECT rowid AS history_rowid, message_id, conversation_id,
                        turn_id, role, content, attachments,
@@ -1077,46 +1096,24 @@ class ConversationRepository:
                        channel_account_id, actor_id, created_at,
                        legacy_chat_log_id{reply_to_cols}
                 FROM messages
-                WHERE conversation_id IN ({placeholders}){deleted_filter}
-                ORDER BY rowid DESC
+                WHERE conversation_id IN ({placeholders}){anchor_sql}{deleted_filter}
+                ORDER BY rowid {order}
                 LIMIT ?""",
-            tuple(conversation_ids) + (limit + 1,),
+            tuple(params),
         ).fetchall()
         selected = list(rows[:limit])
-        selected.reverse()
-        if not selected:
-            return self._empty_page()
-        oldest_rowid = int(selected[0]["history_rowid"])
-        newest_rowid = int(selected[-1]["history_rowid"])
-        has_older = conn.execute(
-            f"SELECT 1 FROM messages WHERE conversation_id IN ({placeholders}) "
-            f"AND rowid < ?{deleted_filter} LIMIT 1",
-            tuple(conversation_ids) + (oldest_rowid,),
-        ).fetchone() is not None
-        items: list[dict[str, Any]] = []
-        for row in selected:
-            item = dict(row)
-            row_id = int(item.pop("history_rowid"))
-            item["cursor"] = _encode_history_cursor(row_id)
-            item["id"] = item["message_id"]
-            item["ts"] = item.get("created_at")
-            item["attachments"] = self._decode_attachments(
-                item.get("attachments")
-            )
-            item["reply_to_attachments"] = self._decode_attachments(
-                item.get("reply_to_attachments")
-            )
-            items.append(item)
-        older_cursor = _encode_history_cursor(oldest_rowid) if has_older else None
-        return {
-            "items": items,
-            "nextCursor": older_cursor,
-            "hasMore": has_older,
-            "olderCursor": older_cursor,
-            "newerCursor": None,
-            "hasOlder": has_older,
-            "hasNewer": False,
-        }
+        if direction == "older":
+            selected.reverse()
+        # 复用 _build_page：has_older / has_newer 的口径与单会话路径保持一致；
+        # partition_sql 带上 deleted_filter，避免把已删消息算成"还有更早的"。
+        return self._build_page(
+            conn,
+            selected,
+            table="messages",
+            partition_sql=f"conversation_id IN ({placeholders}){deleted_filter}",
+            partition_params=tuple(conversation_ids),
+            direction=direction,
+        )
 
     def _legacy_history_page(
         self,

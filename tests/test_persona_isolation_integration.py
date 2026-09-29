@@ -266,6 +266,77 @@ def test_read_chain_persona_only_no_shared(iso_db, tmp_path):
     assert contents_b == {"B的问题", "B的回答"}, f"persona_b 读链异常: {contents_b}"
 
 
+def test_history_pagination_survives_multi_conversation_merge(iso_db, tmp_path):
+    """回归：多会话合并（角色隔离下同一用户常有多条会话）时，翻页必须仍能取到更早的消息。
+
+    2026-09-30 真机故障：首屏走 ``_merged_history_page``（跨 persona_a + NULL 共享会话），
+    翻页却走 ``_normalized_history_page``（只查 resolved_conversation_id **单条**会话）。
+    于是拿首屏合并结果的 cursor 去查另一条会话 → 查出空 → ``hasOlder=False``
+    → 前端"往上滑再也加载不出历史"。
+
+    根因是「会话集合的选择」被写在了 ``anchor is None`` 分支里，翻页走不到，
+    导致首屏与翻页读的不是同一个集合。
+    """
+    _create_personas()
+    repo = ConversationRepository(iso_db, enabled=True)
+
+    # persona_a 三轮 + 共享三轮 → 同一用户至少两条会话 → 首屏必然走合并路径
+    for i in range(3):
+        _persist(repo, persona_id="persona_a", request_id=f"a{i}", content=f"A-{i}", reply=f"ra{i}")
+    for i in range(3):
+        _persist(repo, persona_id=None, request_id=f"s{i}", content=f"S-{i}", reply=f"rs{i}")
+
+    first = repo.history_page(persona_id="persona_a", limit=4, **_CHANNEL)
+    assert first["items"], "首屏就该有消息"
+    assert first["hasOlder"] is True, "首屏应报告还有更早的消息"
+    assert first["olderCursor"], "有更早消息时 olderCursor 不能为空"
+
+    older = repo.history_page(
+        persona_id="persona_a",
+        cursor=first["olderCursor"],
+        direction="older",
+        limit=4,
+        **_CHANNEL,
+    )
+    assert older["items"], (
+        "翻页取不到更早的消息 —— 首屏与翻页读的不是同一个会话集合"
+    )
+    # 两页不得重叠，否则会出现重复消息
+    first_ids = {item["id"] for item in first["items"]}
+    older_ids = {item["id"] for item in older["items"]}
+    assert not (first_ids & older_ids), f"分页重叠: {first_ids & older_ids}"
+
+
+def test_history_pagination_reaches_the_very_first_message(iso_db, tmp_path):
+    """一路往上翻到底：最终必须取出最早那条，然后 hasOlder 才变 False。"""
+    _create_personas()
+    repo = ConversationRepository(iso_db, enabled=True)
+
+    for i in range(3):
+        _persist(repo, persona_id="persona_a", request_id=f"a{i}", content=f"A-{i}", reply=f"ra{i}")
+    for i in range(3):
+        _persist(repo, persona_id=None, request_id=f"s{i}", content=f"S-{i}", reply=f"rs{i}")
+
+    seen: list[str] = []
+    cursor = None
+    for _ in range(10):  # 上限保护，避免实现有问题时死循环
+        page = repo.history_page(
+            persona_id="persona_a",
+            cursor=cursor,
+            direction="older",
+            limit=2,
+            **_CHANNEL,
+        )
+        seen.extend(item["id"] for item in page["items"])
+        if not page["hasOlder"]:
+            break
+        cursor = page["olderCursor"]
+        assert cursor, "hasOlder=True 时必须给出 cursor"
+
+    assert len(seen) == len(set(seen)), "分页过程中出现了重复消息"
+    assert len(seen) == 12, f"共 6 轮 = 12 条消息，实际翻出 {len(seen)} 条"
+
+
 def test_switch_persona_follows_active_role(iso_db, tmp_path):
     """切换语义：switch_persona 后 history_page 不带 persona_id 自动跟随激活角色。"""
     _create_personas()

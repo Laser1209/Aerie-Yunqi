@@ -4,6 +4,9 @@ import pytest
 
 from core.context_builder import ContextBuilder
 
+# L1 身份层的稳定结构标记（跨人设不变；具体人设文案不应被断言钉死）
+L1_MARKER = "一个本地优先、尊重边界的 AI 助手"
+
 
 class TestContextBuilderModes:
     """Test system prompt assembly per route mode."""
@@ -15,22 +18,22 @@ class TestContextBuilderModes:
     def test_build_full_mode_includes_all_layers(self, builder):
         msgs = builder.build(3998874040, "你好", "FULL")
         system = msgs[0]["content"]
-        assert "Aerie Companion" in system
+        assert L1_MARKER in system
         assert "关系定位" in system  # L2
         assert "语言风格铁律" in system  # L4
 
     def test_build_auto_mode_excludes_l2(self, builder):
         msgs = builder.build(3489352115, "你好", "AUTO")
         system = msgs[0]["content"]
-        assert "Aerie Companion" in system  # L1
-        assert "四爱主导位" not in system  # L2 excluded
+        assert L1_MARKER in system  # L1
+        assert "关系定位" not in system  # L2 excluded
         assert "语言风格铁律" in system  # L4
 
     def test_build_basic_mode_l1_only(self, builder):
         msgs = builder.build(99999, "你好", "BASIC")
         system = msgs[0]["content"]
-        assert "Aerie Companion" in system  # L1
-        assert "四爱主导位" not in system  # L2 excluded
+        assert L1_MARKER in system  # L1
+        assert "关系定位" not in system  # L2 excluded
         assert "语言风格铁律" not in system  # L4 excluded
 
     def test_build_returns_list_of_role_content_dicts(self, builder):
@@ -159,34 +162,37 @@ class TestContextBuilderHistory:
 
 
 class TestContextBuilderPersonaBaseline:
-    """商业默认 persona 的中性表达基线。"""
+    """人设分层的稳定结构契约（不锁具体人设文案）。
+
+    历史上这里钉的是「商业默认中性人设」的固定文案（`Aerie Companion` / `3/10`），
+    但仓库现在的 `config/persona.yaml` 是用户自己的伊塔人设 —— 断言应验证
+    「哪一层注入了什么结构标记」，而不是某个具体人设的措辞。
+    """
 
     @pytest.fixture
     def builder(self):
         return ContextBuilder()
 
-    def test_persona_l1_marks_neutral_baseline(self, builder):
-        """L1 必须显式标注中性热情度基线。"""
+    def test_persona_l1_marks_passion_baseline(self, builder):
+        """L1 必须显式标注热情度基线。"""
         msgs = builder.build(3998874040, "你好", "FULL")
         system = msgs[0]["content"]
-        assert "3/10" in system, "L1 must include neutral baseline marker"
-        assert "Aerie Companion" in system
+        assert "性格基线（热情度" in system, "L1 must include the passion baseline marker"
+        assert L1_MARKER in system
 
     def test_persona_l2_has_boundary_expression(self, builder):
-        """L2 必须表达中性关系和边界，不得注入亲密设定。"""
+        """L2 必须表达关系定位与边界。"""
         msgs = builder.build(3998874040, "你好", "FULL")
         system = msgs[0]["content"]
         assert "关系定位" in system
         assert "尊重" in system
-        assert "四爱主导位" not in system
 
-    def test_persona_l4_has_screen_aware_neutral_baseline(self, builder):
-        """L4 必须含输出铁律（禁动作/心理描写）+ 中性基线。"""
+    def test_persona_l4_has_screen_aware_baseline(self, builder):
+        """L4 必须含输出铁律（禁动作/心理描写）+ 热情度基线。"""
         msgs = builder.build(3998874040, "你好", "FULL")
         system = msgs[0]["content"]
         assert "输出铁律" in system, "L4 must include the output iron rule"
-        assert ("3/10" in system) or ("3 分" in system), \
-            "L4 must include neutral baseline marker"
+        assert "语言风格铁律（热情度" in system
 
     def test_output_iron_rule_injected_exactly_once(self, builder):
         """D6 回归：输出铁律只注入一次（FULL/AUTO 下曾 L1+L4 各注入一份）。"""
@@ -197,10 +203,10 @@ class TestContextBuilderPersonaBaseline:
             )
 
     def test_full_mode_includes_all_neutral_layers(self, builder):
-        """FULL 模式下应包含 L1/L2/L4 的中性信号。"""
+        """FULL 模式下 L1/L2/L4 三层各自带一份热情度基线。"""
         msgs = builder.build(3998874040, "你好", "FULL")
         system = msgs[0]["content"]
-        assert system.count("3/10") >= 3
+        assert system.count("热情度") >= 3
 
 
 class TestContextBuilderTimePerception:
@@ -281,7 +287,7 @@ class TestContextBuilderImageCapability:
         """兼容性：L6 注入不破坏 L1/L2/L4/L5 既有内容。"""
         msgs = builder.build(3998874040, "你好", "FULL")
         system = msgs[0]["content"]
-        assert "Aerie Companion" in system  # L1
+        assert L1_MARKER in system  # L1
         assert "语言风格铁律" in system  # L4
         # L6 作为独立段追加在 L5 之后
         assert system.index("表达层次认知") > system.index("语言风格铁律")

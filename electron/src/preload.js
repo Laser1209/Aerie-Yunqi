@@ -168,9 +168,10 @@ contextBridge.exposeInMainWorld("aerie", {
     onOpenTab: (cb) => {
       ipcRenderer.on("ui:open-tab", (_event, tab) => cb(tab));
     },
-    // R6.6 / v2.2: one-click backend restart bridge. The handler
-    // lives in main.js (ipcMain.handle("system:restart-backend"))
-    // and ultimately calls /api/system/restart on the Python side.
+    // R6.6 / v2.2: one-click backend restart bridge. The handler lives in
+    // main.js (ipcMain.handle("system:restart-backend")) and restarts via the
+    // Electron parent process (restartBackend()), NOT a Python-side
+    // /api/system/restart call.
     system: {
       restartBackend: () => ipcRenderer.invoke("system:restart-backend"),
       restartApp: () => ipcRenderer.invoke("system:restart-app"),

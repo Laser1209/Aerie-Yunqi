@@ -21,6 +21,25 @@ browser:
   # 注意 ToolRegistry.register 是覆盖语义、且核心在功能包之后注册，
   # 核心若无条件注册会顶掉功能包的同名工具；auto 就是为这件事设的。
   backend: auto
+# 功能包行为参数：各包通过 ctx.get_config() 读这里（plugins.<pack_id>），
+# 字段与各包 pack.json 的 settings_schema 一一对应，改了两个读一次即生效。
+# 注意凭据**不在这里** —— 需要密钥的走「设置页 → 平台凭证」（落 .env）。
+# 包本体（py/vendor/models）不进安装包，装法见 plugins/README.md。
+plugins:
+  browser:
+    headless: true            # 无头运行；关掉会弹出可见窗口
+    cdp_url: ''               # 填了就连你已开着的 Chrome/Edge（需 --remote-debugging-port=9222）
+    wait_until: domcontentloaded
+  knowledge:
+    collection: aerie_knowledge
+    persist_subdir: chroma_plugins/knowledge
+  voice-asr:
+    num_threads: 2
+    use_itn: true             # 逆文本归一化（数字/标点更自然）
+    language: ''              # 空 = 自动
+  voice-rvc:
+    default_voice: ''
+    device: cpu
 computer_control:
   blacklist: []
   custom_rules: {}

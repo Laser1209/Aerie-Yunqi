@@ -1,0 +1,36 @@
+{
+  "id": "knowledge",
+  "version": "1.0.0",
+  "api_level": 1,
+  "min_core": "0.3.2",
+  "entry": "knowledge_pack:register",
+  "lifecycle": {
+    "start": "knowledge_pack:start",
+    "stop": "knowledge_pack:stop"
+  },
+  "tools": [
+    "knowledge_vector_search",
+    "knowledge_vector_upsert"
+  ],
+  "skills": [],
+  "shared_requires": [],
+  "vendored": [
+    "chromadb",
+    "onnxruntime"
+  ],
+  "assets": [],
+  "settings_schema": {
+    "collection": {
+      "type": "string",
+      "default": "aerie_knowledge"
+    },
+    "persist_subdir": {
+      "type": "string",
+      "default": "chroma_plugins/knowledge"
+    }
+  },
+  "feature_flags": [
+    "knowledge_pack_v1"
+  ],
+  "restart_required": true
+}

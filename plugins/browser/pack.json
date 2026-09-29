@@ -1,0 +1,52 @@
+{
+  "id": "browser",
+  "version": "1.0.0",
+  "api_level": 1,
+  "min_core": "0.3.2",
+  "entry": "browser_pack:register",
+  "lifecycle": {
+    "start": "browser_pack:start",
+    "stop": "browser_pack:stop"
+  },
+  "tools": [
+    "browser_status",
+    "browser_navigate",
+    "browser_snapshot",
+    "browser_click",
+    "browser_fill",
+    "browser_evaluate",
+    "browser_screenshot",
+    "browser_key_type",
+    "browser_send_keys",
+    "browser_list_tabs",
+    "browser_find_tab",
+    "browser_close_tab",
+    "browser_save_as_pdf"
+  ],
+  "skills": [],
+  "shared_requires": [],
+  "vendored": [
+    "playwright"
+  ],
+  "assets": [
+    "bin/ms-playwright"
+  ],
+  "settings_schema": {
+    "headless": {
+      "type": "boolean",
+      "default": true
+    },
+    "cdp_url": {
+      "type": "string",
+      "default": ""
+    },
+    "wait_until": {
+      "type": "string",
+      "default": "domcontentloaded"
+    }
+  },
+  "feature_flags": [
+    "browser_pack_v1"
+  ],
+  "restart_required": true
+}

@@ -1,0 +1,40 @@
+{
+  "id": "voice-rvc",
+  "version": "1.0.0",
+  "api_level": 1,
+  "min_core": "0.3.2",
+  "entry": "voice_rvc_pack:register",
+  "lifecycle": {
+    "start": "voice_rvc_pack:start",
+    "stop": "voice_rvc_pack:stop"
+  },
+  "tools": [
+    "voice_rvc_convert"
+  ],
+  "skills": [],
+  "shared_requires": [],
+  "vendored": [
+    "torch",
+    "numpy",
+    "soundfile"
+  ],
+  "assets": [
+    "models/rvc/<voice>.pth",
+    "models/rvc/<voice>.index",
+    "py/rvc_converter.py"
+  ],
+  "settings_schema": {
+    "default_voice": {
+      "type": "string",
+      "default": ""
+    },
+    "device": {
+      "type": "string",
+      "default": "cpu"
+    }
+  },
+  "feature_flags": [
+    "voice_rvc_pack_v1"
+  ],
+  "restart_required": true
+}

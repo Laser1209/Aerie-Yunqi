@@ -1,0 +1,42 @@
+{
+  "id": "voice-asr",
+  "version": "1.0.0",
+  "api_level": 1,
+  "min_core": "0.3.2",
+  "entry": "voice_asr_pack:register",
+  "lifecycle": {
+    "start": "voice_asr_pack:start",
+    "stop": "voice_asr_pack:stop"
+  },
+  "tools": [
+    "voice_asr_transcribe"
+  ],
+  "skills": [],
+  "shared_requires": [],
+  "vendored": [
+    "sherpa_onnx",
+    "numpy"
+  ],
+  "assets": [
+    "models/sensevoice/model.int8.onnx",
+    "models/sensevoice/tokens.txt"
+  ],
+  "settings_schema": {
+    "num_threads": {
+      "type": "integer",
+      "default": 2
+    },
+    "use_itn": {
+      "type": "boolean",
+      "default": true
+    },
+    "language": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "feature_flags": [
+    "voice_asr_pack_v1"
+  ],
+  "restart_required": true
+}

@@ -66,6 +66,46 @@ def test_presets_load_through_the_client_config_parser():
             assert cfg.command
 
 
+def test_tianyancha_has_exactly_one_provider():
+    """天眼查只能有一个通道：MCP 预设 或 同名 skill，不能两个都在。
+
+    两个都在 = 僵尸重复：面板上多一个"不可用"的条目，而模型侧其实能用
+    （已删的 screenshot / data-analysis / agent-browser 就是这一类）。
+    """
+    root = CONFIG.parent.parent
+    has_mcp = "tianyancha" in (_cfg()["servers"] or {})
+    has_skill = (root / "skills" / "cloud" / "tianyan" / "SKILL.md").exists()
+    assert has_mcp != has_skill, (
+        f"天眼查通道必须二选一（mcp={has_mcp}, skill={has_skill}）"
+    )
+
+
+def test_notion_workflow_skills_are_instruction_type():
+    """四个 notion-* 是工作流方法论，必须是指令型（不是工具桩）。"""
+    import yaml
+
+    root = CONFIG.parent.parent
+    for name in (
+        "notion-knowledge-capture",
+        "notion-meeting-intelligence",
+        "notion-research",
+        "notion-spec-to-impl",
+    ):
+        skill_md = root / "skills" / "cloud" / name / "SKILL.md"
+        assert skill_md.is_file(), f"{name} 的 SKILL.md 不见了"
+        meta = yaml.safe_load(skill_md.read_text(encoding="utf-8").split("---")[1])
+        assert str(meta.get("kind") or "").lower() == "instruction", f"{name} 不是指令型"
+        assert meta.get("triggers"), f"{name} 没有触发词"
+        assert not (skill_md.parent / "run.py").exists(), f"{name} 不该还有 run.py"
+
+
+def test_notion_cli_zombie_entry_is_gone():
+    """notion-cli 声明 requires_module: notion_cli，而该模块根本不存在。"""
+    root = CONFIG.parent.parent
+    assert not (root / "skills" / "data" / "notion-cli").exists()
+    assert not (root / "skills" / "cloud" / "notion-cli").exists()
+
+
 def test_preset_token_names_match_platform_credentials():
     """MCP 预设引用的密钥名，必须与设置页「平台凭证」写进 .env 的名字一致。
 

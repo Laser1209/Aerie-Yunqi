@@ -167,17 +167,10 @@ LOCAL_SKILLS: list[dict] = [
 
 # ── Skill catalog: 5 data read-only ──────────────────────────
 DATA_SKILLS: list[dict] = [
-    {
-        "name": "notion-cli",
-        "description": "Notion CLI 调用 / Notion CLI",
-        "provider_hint": "text",
-        "read_only": True,
-        "import_module": "notion_cli",
-        "import_call": "run",
-        "args_key": "subcommand",
-        "return_key": "stdout",
-        "body_doc": "子进程调 notion-cli，返 stdout/stderr。",
-    },
+    # notion-cli 桩已移除。Notion 的读写能力改由 MCP 通道提供
+    # （config/mcp_servers.yaml 的 notion 预设，stdio + 个人访问令牌）。
+    # 原桩声明 requires_module: notion_cli，而该 Python 模块根本不存在 ——
+    # 一个永远不可能可用的僵尸条目。
     {
         "name": "figma",
         "description": "Figma MCP 调用 / Figma MCP",
@@ -229,16 +222,9 @@ DATA_SKILLS: list[dict] = [
 # 安全：所有 cloud skill 标记 read_only=True（默认不写），标记 env 变量名供 skill_loader 提示
 CLOUD_SKILLS: list[dict] = [
     # ── 商业/支付/合规 (4) ──
-    {
-        "name": "tianyan",
-        "description": "天眼查企业信息 / Tianyancha",
-        "provider_hint": "text",
-        "read_only": True,
-        "env_var": "TIANYAN_TOKEN",
-        "args_key": "company_name",
-        "return_key": "info",
-        "body_doc": "调用天眼查 API 获取企业主体信息、股东、司法风险等结构化数据。",
-    },
+    # tianyan 桩已移除。天眼查能力改由 MCP 通道提供
+    # （config/mcp_servers.yaml 的 tianyancha 预设，远程 HTTP）。
+    # 凭据 TIANYAN_TOKEN 仍保留在设置页「平台凭证」里 —— MCP 预设引用它。
     {
         "name": "alipay-payment",
         "description": "支付宝开放平台 / Alipay",
@@ -355,58 +341,12 @@ CLOUD_SKILLS: list[dict] = [
     # core/computer_control.py 的 ScreenshotCapturer（Pillow ImageGrab + GDI 回退），
     # 经 tools/compute_tools.py 注册为工具 `screenshot`。再放一个同名桩只会造成
     # "面板上不可用、模型那里其实可用"的错位（skill_loader 也会因撞名拒绝注册）。
-    # ── Notion 套件 (5) ──
-    {
-        "name": "notion-cli",
-        "description": "Notion CLI / Notion",
-        "provider_hint": "text",
-        "read_only": True,
-        "env_var": "NOTION_TOKEN",
-        "args_key": "subcommand",
-        "return_key": "stdout",
-        "body_doc": "Notion API 包装（CLI 形式）。",
-        "_is_dup": True,   # 已在 DATA_SKILLS 出现，避免重复写
-    },
-    {
-        "name": "notion-knowledge-capture",
-        "description": "Notion 知识捕获 / Knowledge capture",
-        "provider_hint": "text",
-        "read_only": False,
-        "env_var": "NOTION_TOKEN",
-        "args_key": "transcript",
-        "return_key": "page_url",
-        "body_doc": "将对话/讨论结构化为 Notion 页面。",
-    },
-    {
-        "name": "notion-meeting-intelligence",
-        "description": "Notion 会议情报 / Meeting intelligence",
-        "provider_hint": "text",
-        "read_only": False,
-        "env_var": "NOTION_TOKEN",
-        "args_key": "topic",
-        "return_key": "doc_urls",
-        "body_doc": "生成 pre-read + agenda 双向文档。",
-    },
-    {
-        "name": "notion-research",
-        "description": "Notion 研究文档 / Research doc",
-        "provider_hint": "text",
-        "read_only": True,
-        "env_var": "NOTION_TOKEN",
-        "args_key": "query",
-        "return_key": "page_url",
-        "body_doc": "跨工作区搜索 + 综合为研究报告。",
-    },
-    {
-        "name": "notion-spec-to-impl",
-        "description": "Notion Spec→任务 / Spec to impl",
-        "provider_hint": "text",
-        "read_only": False,
-        "env_var": "NOTION_TOKEN",
-        "args_key": "spec_url",
-        "return_key": "task_urls",
-        "body_doc": "把 spec 页面拆为可执行任务。",
-    },
+    # ── Notion 套件（桩已移除） ──
+    # 四个 notion-* 工作流（知识捕获 / 会议情报 / 跨库研究 / spec 拆任务）已转为
+    # **指令型** skill（frontmatter 声明 kind: instruction），由 core/skill_instructions.py
+    # 按触发词注入上下文，不再生成 run.py；Notion 的读写能力由 MCP 通道提供。
+    # notion-cli 桩同样删除（它声明的 notion_cli 模块并不存在）。
+    # 这里保留空段以标记位置，避免后人以为漏了。
     # ── Obsidian 套件 (3) ──
     {
         "name": "obsidian-markdown",

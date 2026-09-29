@@ -279,6 +279,21 @@ class SkillLoader:
                 logger.warning("skill %s register failed: %s", name, e)
         return n
 
+    def resync(self) -> list[str]:
+        """重新发现并注册，返回本次**新注册**的 skill 名。
+
+        凭证型 skill 的可用性取决于环境变量，而环境变量可以在运行期由设置页
+        写入（``/api/env/*`` 保存后会 ``os.environ.update``）。但模型可见的工具
+        清单是启动时定下的 —— 不重扫的话，用户填完密钥界面提示「已保存」，模型
+        侧依然看不到这个能力，属于最难排查的一类假成功。
+
+        幂等：``discover()`` 自己先清空重扫，``register_all()`` 跳过已注册的。
+        """
+        before = set(self._registered)
+        self.discover()
+        self.register_all()
+        return sorted(self._registered - before)
+
     def call(self, name: str, args: dict | None = None) -> dict:
         """Call a skill by name. Always re-imports run.py so dev
         iteration works without backend restart.

@@ -1383,22 +1383,25 @@ class SettingsPanel {
   // ── 功能 API 配置：搜索 / 天气 / 位置等外部服务 ──────────
   async loadFeatureApis() {
     const list = document.getElementById("feature-api-list");
-    if (!list) return;
+    const credList = document.getElementById("platform-credential-list");
+    if (!list && !credList) return;
     const st = document.getElementById("feature-api-status");
     try {
       if (st) { st.textContent = "加载中…"; st.style.color = "var(--text-muted, #999)"; }
       const r = await window.aerie.api.request({ method: "GET", path: "/api/env/feature-apis" });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
-      const features = (r && r.data && r.data.features) || [];
-      this._renderFeatureApis(features);
+      const data = (r && r.data) || {};
+      this._renderFeatureApis(data.features || [], "feature-api-list");
+      // 平台凭证与功能 API 共用同一份元数据与保存端点，只是渲染进各自的容器。
+      this._renderFeatureApis(data.platform_credentials || [], "platform-credential-list");
       if (st) { st.textContent = ""; }
     } catch (e) {
       if (st) { st.textContent = "加载失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     }
   }
 
-  _renderFeatureApis(features) {
-    const list = document.getElementById("feature-api-list");
+  _renderFeatureApis(features, listId = "feature-api-list") {
+    const list = document.getElementById(listId);
     if (!list) return;
     list.innerHTML = "";
     features.forEach((f) => {
@@ -1453,26 +1456,46 @@ class SettingsPanel {
   }
 
   async saveFeatureApi(featureKey) {
-    const st = document.getElementById("feature-api-status");
-    const list = document.getElementById("feature-api-list");
-    if (!list) return;
+    // 同一个 key 只会出现在一个列表里；先定位它，状态提示也跟着它走。
+    const containers = [
+      ["feature-api-list", "feature-api-status"],
+      ["platform-credential-list", "platform-credential-status"],
+    ];
+    let scope = null;
+    let st = null;
+    for (const [listId, statusId] of containers) {
+      const el = document.getElementById(listId);
+      if (el && el.querySelector(`[data-feature="${featureKey}"]`)) {
+        scope = el;
+        st = document.getElementById(statusId);
+        break;
+      }
+    }
+    if (!scope) return;
     const fields = {};
-    list.querySelectorAll(`input[data-feature="${featureKey}"]`).forEach((input) => {
+    scope.querySelectorAll(`input[data-feature="${featureKey}"]`).forEach((input) => {
       fields[input.dataset.env] = input.value.trim();
     });
-    const btn = list.querySelector(`.feature-save-btn[data-feature="${featureKey}"]`);
+    const btn = scope.querySelector(`.feature-save-btn[data-feature="${featureKey}"]`);
     if (btn) btn.disabled = true;
     if (st) { st.textContent = "保存并热加载中…"; st.style.color = "var(--text-muted, #999)"; }
     try {
       const r = await window.aerie.api.request({ method: "POST", path: "/api/env/feature-apis", body: { feature_key: featureKey, fields } });
       if (r && r.data && r.data.error) throw new Error(r.data.error);
       await this.loadFeatureApis();
-      if (st) { st.textContent = "已保存并热加载"; st.style.color = "var(--success, #2ecc71)"; }
+      const activated = (r && r.data && r.data.activated_skills) || [];
+      if (st) {
+        // 后端保存后会重扫 skill：明确告诉用户这一填有没有真的点亮某个能力。
+        st.textContent = activated.length
+          ? `已保存并热加载 · 新启用技能：${activated.join("、")}`
+          : "已保存并热加载";
+        st.style.color = "var(--success, #2ecc71)";
+      }
     } catch (e) {
       if (st) { st.textContent = "保存失败: " + e.message; st.style.color = "var(--danger, #e74c3c)"; }
     } finally {
       if (btn) btn.disabled = false;
-      setTimeout(() => { if (st) st.textContent = ""; }, 5000);
+      setTimeout(() => { if (st) st.textContent = ""; }, 6000);
     }
   }
 

@@ -2109,6 +2109,16 @@
               <!-- JS 动态渲染 -->
             </div>
             <div id="feature-api-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
+
+            <div class="settings-apikey-intro" style="margin: 24px 0 16px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, rgba(96,165,250,0.12), rgba(155,89,182,0.12)); border: 1px solid rgba(96,165,250,0.3); font-size: 13px; line-height: 1.6;">
+              <strong style="color: var(--accent, #ff5b9c);">平台凭证 · Platform Credentials</strong><br>
+              需要你自己到各平台申请账号的第三方能力（Notion / 天眼查 / 火山系 / 支付 / 部署）。<strong>保存即生效，无需重启</strong>：填好对应技能会当场进入可用工具；留空的平台，其技能对模型隐藏，不会出现「调了才发现跑不了」。
+            </div>
+            <div id="platform-credential-list" class="apikey-provider-list">
+              <!-- JS 动态渲染 -->
+            </div>
+            <div id="platform-credential-status" class="settings-status" style="margin-top:12px;font-size:12px;"></div>
+
             <div class="settings-actions" style="margin-top:16px;">
               <button id="feature-api-reload-btn" class="btn btn-secondary" type="button">刷新 · Reload</button>
             </div>

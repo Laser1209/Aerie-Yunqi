@@ -6032,6 +6032,158 @@ _FEATURE_APIS = [
     },
 ]
 
+# 平台凭证：需要用户自备账号的第三方平台（Notion / 天眼查 / 火山系 / 支付 / 部署）。
+# 与上面「功能 API」只在语义分组上不同 —— 两者共用同一套 /api/env/feature-apis
+# 读写与热加载，避免为 UI 分组再复制一条链路。
+#
+# 字段名一律取自对应 skills/cloud/<skill>/run.py 里已声明的环境变量，不在这里
+# 另造名字；完整接入还需要的字段（如 TOS 的 SK / Endpoint / Bucket、抖音支付的
+# 私钥与证书序列号）在该 skill 落地真实 SDK 调用时一并补齐。
+_PLATFORM_CREDENTIALS = [
+    {
+        "key": "notion",
+        "name": "Notion",
+        "desc": "notion-research / notion-knowledge-capture / notion-meeting-intelligence / notion-spec-to-impl 共用同一份凭据",
+        "tutorial": "https://www.notion.so/my-integrations",
+        "how_to": "创建内部集成 → 复制 Internal Integration Secret（ntn_ 开头）→ 到目标页面「连接」里把该集成授权进去",
+        "fields": [{"env_key": "NOTION_TOKEN", "label": "Internal Integration Secret", "secret": True}],
+    },
+    {
+        "key": "tianyancha",
+        "name": "天眼查",
+        "desc": "企业主体信息 / 股东 / 司法风险等结构化商查数据",
+        "tutorial": "https://open.tianyancha.com/",
+        "how_to": "注册开放平台 → 申请接口权限 → 在「我的接口」里取 Token",
+        "fields": [{"env_key": "TIANYAN_TOKEN", "label": "API Token", "secret": True}],
+    },
+    {
+        "key": "seedream",
+        "name": "火山 Seedream 文生图",
+        "desc": "高质量文生图（多风格、多尺寸）",
+        "tutorial": "https://console.volcengine.com/ark",
+        "how_to": "火山方舟控制台 → 开通 Seedream 模型 → 创建 API Key",
+        "fields": [{"env_key": "SEEDREAM_KEY", "label": "Ark API Key", "secret": True}],
+    },
+    {
+        "key": "seedance",
+        "name": "火山 Seedance 文生视频",
+        "desc": "文生视频 / 图生视频与参考视频",
+        "tutorial": "https://console.volcengine.com/ark",
+        "how_to": "火山方舟控制台 → 开通 Seedance 模型 → 创建 API Key",
+        "fields": [{"env_key": "SEEDANCE_KEY", "label": "Ark API Key", "secret": True}],
+    },
+    {
+        "key": "mediakit",
+        "name": "字节 mediakit 多媒体处理",
+        "desc": "音视频剪辑 / 转码 / 抽帧",
+        "tutorial": "https://console.volcengine.com/",
+        "how_to": "火山引擎控制台开通 mediakit 服务后填 Access Key（SK 在接入 SDK 时补齐）",
+        "fields": [{"env_key": "MEDIAKIT_AK", "label": "Access Key", "secret": True}],
+    },
+    {
+        "key": "volcengine_tos",
+        "name": "火山引擎对象存储 TOS",
+        "desc": "对象上传 / 下载 / 签名 URL",
+        "tutorial": "https://console.volcengine.com/tos",
+        "how_to": "创建存储桶后到「访问密钥」取 Access Key（SK / Endpoint / Bucket 在接入 SDK 时补齐）",
+        "fields": [{"env_key": "TOS_AK", "label": "Access Key", "secret": True}],
+    },
+    {
+        "key": "byteplus_pages",
+        "name": "BytePlus Edge Pages",
+        "desc": "静态站一键部署 + CDN 加速",
+        "tutorial": "https://console.byteplus.com/",
+        "how_to": "BytePlus 控制台开通 Edge Pages → 生成 API Token",
+        "fields": [{"env_key": "BYTEPAGES_TOKEN", "label": "API Token", "secret": True}],
+    },
+    {
+        "key": "iga_pages",
+        "name": "IGA Pages",
+        "desc": "前端与全栈项目部署（含预览部署）",
+        "tutorial": "",
+        "how_to": "在 IGA Pages 控制台生成部署 Token",
+        "fields": [{"env_key": "IGAPAGES_TOKEN", "label": "部署 Token", "secret": True}],
+    },
+    {
+        "key": "alipay",
+        "name": "支付宝开放平台",
+        "desc": "当面付 / JSAPI / App 支付下单与查单。涉及真实资金，建议先在沙箱验证",
+        "tutorial": "https://open.alipay.com/",
+        "how_to": "创建网页/移动应用 → 取 APPID（商户私钥、支付宝公钥在接入 SDK 时补齐）",
+        "fields": [{"env_key": "ALIPAY_APP_ID", "label": "APPID", "secret": False}],
+    },
+    {
+        "key": "douyinpay",
+        "name": "抖音支付",
+        "desc": "APP / JSAPI / H5 / Native 支付下单与查单",
+        "tutorial": "https://pay.douyin.com/",
+        "how_to": "抖音支付商家平台开通后取商户号（AppID、私钥、证书序列号在接入 SDK 时补齐）",
+        "fields": [{"env_key": "DOUYINPAY_MCH_ID", "label": "商户号 MchId", "secret": False}],
+    },
+    {
+        "key": "douyin_interactive",
+        "name": "抖音互动空间发布",
+        "desc": "上传 zip + icon 创建 / 更新互动空间应用",
+        "tutorial": "https://developer.open-douyin.com/",
+        "how_to": "开放平台创建应用后取 OpenID（ClientKey / ClientSecret 在接入 API 时补齐）",
+        "fields": [{"env_key": "DOUYIN_OPEN_ID", "label": "OpenID", "secret": False}],
+    },
+]
+
+
+def _credential_entry(meta: dict[str, Any], env: dict[str, str]) -> dict:
+    """把一条凭证元数据 + 当前 .env 值渲染成设置页要的结构（secret 字段脱敏）。"""
+    item: dict[str, Any] = {
+        "key": meta["key"],
+        "name": meta["name"],
+        "desc": meta["desc"],
+        "tutorial": meta.get("tutorial", ""),
+        "how_to": meta["how_to"],
+    }
+    if meta.get("builtin"):
+        item.update({"builtin": True, "configured": True, "status": "builtin", "fields": []})
+        return item
+    fields: list[dict] = []
+    values: list[str] = []
+    for f in meta["fields"]:
+        raw = env.get(f["env_key"], "")
+        values.append(raw.strip())
+        fields.append({
+            "env_key": f["env_key"],
+            "label": f["label"],
+            "secret": f.get("secret", False),
+            "masked": _mask_secret(raw) if f.get("secret") else raw,
+        })
+    configured = any(values)
+    item.update({
+        "builtin": False,
+        "configured": configured,
+        "status": "configured" if configured else "unconfigured",
+        "fields": fields,
+    })
+    return item
+
+
+def _resync_skills() -> list[str]:
+    """凭证变更后重扫 skill，返回本轮**刚变可用**的 skill 名。
+
+    模型可见的工具清单是启动时定下的（core/companion.py 里跑一次
+    discover + register_all）。不重扫的话，用户填完密钥界面提示「已保存」，
+    模型侧却依然看不到这个能力 —— 最难排查的一类假成功。
+    """
+    try:
+        comp = get_companion()
+        loader = getattr(comp, "skill_loader", None) if comp else None
+        if loader is None:
+            return []
+        newly = loader.resync()
+        if newly:
+            logger.info("[skills] 凭证变更后新激活：%s", ", ".join(newly))
+        return newly
+    except Exception:
+        logger.warning("[skills] 凭证变更后重扫失败", exc_info=True)
+        return []
+
 
 # provider key 到健康状态名的别名映射（provider_health.json 使用运行时的 provider name）
 _HEALTH_ALIAS = {"siliconflow": "siliconflow-light"}
@@ -6471,49 +6623,34 @@ async def env_provider_check(request: Request) -> dict:
 
 @app.get("/api/env/feature-apis")
 async def env_feature_apis_get() -> dict:
-    """返回功能 API（搜索/天气/位置等）配置项、教程与当前状态。"""
+    """返回功能 API 与平台凭证两类配置项、教程与当前状态。
+
+    两类共用同一套渲染逻辑（``_credential_entry``）与保存端点，前端按各自的
+    容器分开展示。``platform_credentials`` 需要用户自备第三方账号（Notion /
+    天眼查 / 火山系 / 支付 / 部署），未填时对应 skill 不会出现在模型可见的
+    工具清单里（见 core/skill_loader.py 的可用性闸门）。
+    """
     env = _read_env_file()
-    features = []
-    for meta in _FEATURE_APIS:
-        item = {
-            "key": meta["key"],
-            "name": meta["name"],
-            "desc": meta["desc"],
-            "tutorial": meta["tutorial"],
-            "how_to": meta["how_to"],
-        }
-        if meta.get("builtin"):
-            item["builtin"] = True
-            item["configured"] = True
-            item["status"] = "builtin"
-            item["fields"] = []
-        else:
-            fields = []
-            values = []
-            for f in meta["fields"]:
-                raw = env.get(f["env_key"], "")
-                values.append(raw.strip())
-                fields.append({
-                    "env_key": f["env_key"],
-                    "label": f["label"],
-                    "secret": f.get("secret", False),
-                    "masked": _mask_secret(raw) if f.get("secret") else raw,
-                })
-            item["builtin"] = False
-            item["configured"] = any(values)
-            item["status"] = "configured" if item["configured"] else "unconfigured"
-            item["fields"] = fields
-        features.append(item)
-    return {"features": features}
+    return {
+        "features": [_credential_entry(m, env) for m in _FEATURE_APIS],
+        "platform_credentials": [_credential_entry(m, env) for m in _PLATFORM_CREDENTIALS],
+    }
 
 
 @app.post("/api/env/feature-apis")
 async def env_feature_apis_save(request: Request) -> dict:
-    """保存功能 API 密钥到 .env（热加载）。Body: {"feature_key": "...", "fields": {"ENV_KEY": "value"}}"""
+    """保存功能 API / 平台凭证明细到 .env（热加载）。
+
+    Body: ``{"feature_key": "...", "fields": {"ENV_KEY": "value"}}``
+    返回体内的 ``activated_skills`` 是本轮因新凭证而刚变可用的 skill 名。
+    """
     try:
         body = await request.json()
         feature_key = body.get("feature_key") if isinstance(body, dict) else None
-        meta = next((m for m in _FEATURE_APIS if m["key"] == feature_key), None)
+        meta = next(
+            (m for m in (*_FEATURE_APIS, *_PLATFORM_CREDENTIALS) if m["key"] == feature_key),
+            None,
+        )
         if not meta or meta.get("builtin"):
             return JSONResponse({"error": "unknown_feature"}, status_code=400)
         fields = body.get("fields") if isinstance(body, dict) else None
@@ -6523,14 +6660,24 @@ async def env_feature_apis_save(request: Request) -> dict:
         changed: dict[str, str] = {}
         for f in meta["fields"]:
             env_key = f["env_key"]
-            if env_key in fields:
-                val = str(fields[env_key] or "").strip()
-                env[env_key] = val
-                changed[env_key] = val
+            if env_key not in fields:
+                continue
+            val = str(fields[env_key] or "").strip()
+            # 前端回显的是脱敏占位（••••••••abcd）。用户没改这一格时不能把它当
+            # 新密钥写进 .env —— 那会把真实密钥覆盖成一串圆点，且界面还显示
+            # 「已保存」，属于静默毁数据。
+            if f.get("secret") and _looks_like_masked(val):
+                continue
+            env[env_key] = val
+            changed[env_key] = val
         _write_env_file(env)
         if changed:
             os.environ.update(changed)
-        return {"status": "ok", "hot_reloaded": list(changed.keys())}
+        return {
+            "status": "ok",
+            "hot_reloaded": list(changed.keys()),
+            "activated_skills": _resync_skills(),
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

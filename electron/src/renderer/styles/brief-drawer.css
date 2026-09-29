@@ -19,7 +19,10 @@
   --brief-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   /* 展开态抽屉宽度。backdrop 模糊层与抽屉主体共用此值，避免两者不同步
      （此前 backdrop 仍是 880px，导致展开时模糊区被多挤开 320px）。 */
-  --brief-expanded-width: 560px;
+  /* 展开态宽度：原来 560px 只够纵向扩容；现在要并排放左侧「家里的平面图」
+     容器（300px），所以一并放宽。 */
+  --brief-expanded-width: 900px;
+  --brief-side-width: 300px;
 }
 
 /* ── backdrop (scrim) ───────────────────────────── */
@@ -94,6 +97,75 @@
 .brief-drawer.brief-drawer--expanded .brief-drawer__body {
   padding: 18px 26px 28px;
 }
+
+/* ── expanded 双栏：左侧竖长容器（家里的平面图）+ 右侧日报本体 ──
+   为什么把 side 放在 body 外层：body 的内容会被 _renderData 反复整块重写
+   （innerHTML =），平面图若放在里面会被一起冲掉。 */
+.brief-drawer__main {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+.brief-drawer__side {
+  display: none; /* 收起时不占位，也不参与布局计算 */
+  flex: 0 0 var(--brief-side-width, 300px);
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 14px 20px;
+  border-right: 1px solid var(--color-border);
+  background: var(--glass-bg-3);
+  overflow: hidden;
+}
+.brief-drawer--expanded .brief-drawer__side {
+  display: flex;
+}
+.brief-drawer__side-head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.brief-drawer__side-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.brief-drawer__side-sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+/* 竖排两张平面图，各占一半高度（竖长容器就是把它们堆起来） */
+.brief-drawer__side-plans {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.brief-drawer__plan {
+  flex: 1 1 0;
+  margin: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brief-drawer__plan img {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  border-radius: var(--brief-row-radius);
+  border: 1px solid var(--color-border);
+  background: var(--bg-100);
+}
+.brief-drawer__plan figcaption {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
 .brief-drawer.brief-drawer--expanded .brief-drawer__row {
   padding: 14px 18px 12px;
   margin-bottom: 14px;

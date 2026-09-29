@@ -143,13 +143,31 @@ class BriefDrawer {
         <div class="brief-drawer__locpop-error" id="brief-drawer-locpop-error"></div>
         <div class="brief-drawer__locpop-hint">手动选择后会锁定城市，不会被自动定位回弹；清空则恢复 IP 自动定位。</div>
       </div>
-      <div class="brief-drawer__body" id="brief-drawer-body">
-        <div class="brief-drawer__skeleton" id="brief-drawer-skeleton">
-          <div class="brief-drawer__skeleton-card brief-drawer__skeleton-card--greet"></div>
-          <div class="brief-drawer__skeleton-card brief-drawer__skeleton-card--todos"></div>
-          <div class="brief-drawer__skeleton-card"></div>
-          <div class="brief-drawer__skeleton-card"></div>
-          <div class="brief-drawer__skeleton-dots"><span></span><span></span><span></span></div>
+      <div class="brief-drawer__main">
+        <aside class="brief-drawer__side" id="brief-drawer-side" aria-hidden="true">
+          <div class="brief-drawer__side-head">
+            <span class="brief-drawer__side-title">家里的样子</span>
+            <span class="brief-drawer__side-sub">Home · 平面图</span>
+          </div>
+          <div class="brief-drawer__side-plans">
+            <figure class="brief-drawer__plan">
+              <img src="assets/floor_plan_level1.svg" alt="一楼平面图" loading="lazy">
+              <figcaption>一楼</figcaption>
+            </figure>
+            <figure class="brief-drawer__plan">
+              <img src="assets/floor_plan_level2.svg" alt="二楼平面图" loading="lazy">
+              <figcaption>二楼</figcaption>
+            </figure>
+          </div>
+        </aside>
+        <div class="brief-drawer__body" id="brief-drawer-body">
+          <div class="brief-drawer__skeleton" id="brief-drawer-skeleton">
+            <div class="brief-drawer__skeleton-card brief-drawer__skeleton-card--greet"></div>
+            <div class="brief-drawer__skeleton-card brief-drawer__skeleton-card--todos"></div>
+            <div class="brief-drawer__skeleton-card"></div>
+            <div class="brief-drawer__skeleton-card"></div>
+            <div class="brief-drawer__skeleton-dots"><span></span><span></span><span></span></div>
+          </div>
         </div>
       </div>
       <div class="brief-drawer__footer">
@@ -1187,6 +1205,10 @@ class BriefDrawer {
     this._drawer.classList.toggle("brief-drawer--expanded", this._expanded);
     this._backdrop.classList.toggle("is-expanded", this._expanded);
     this._expandBtn.classList.toggle("is-expanded", this._expanded);
+    // 左侧平面图容器只在展开态可见（可见性由 CSS 的 --expanded 类控制），
+    // 同步 aria-hidden，免得读屏软件在收起状态下也念到它。
+    const side = this._drawer.querySelector("#brief-drawer-side");
+    if (side) side.setAttribute("aria-hidden", this._expanded ? "false" : "true");
     this._expandLabel.textContent = this._expanded ? "收起" : "展开完整";
     const svg = this._expandBtn.querySelector("svg");
     if (svg) {

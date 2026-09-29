@@ -1192,7 +1192,7 @@
 }
 .cog-cc-list-tag--action { background: rgba(124, 58, 237, 0.15); color: var(--color-pad-dominance, #3acfd5); }
 .cog-cc-list-tag--command { background: rgba(255, 105, 180, 0.15); color: var(--color-pad-pleasure, #ff5b9c); }
-.cog-cc-list-tag--pattern { background: rgba(255, 193, 7, 0.18); color: #f0b400; }
+.cog-cc-list-tag--pattern { background: rgba(255, 193, 7, 0.18); color: var(--color-cog-pattern-fg); }
 .cog-cc-list-value {
   flex: 1 1 auto;
   min-width: 0;
@@ -1750,7 +1750,7 @@
   height: 320px;
   border: 1px solid var(--cog-glass-border, rgba(255, 105, 180, 0.2));
   border-radius: 10px;
-  background: #fff;
+  background: var(--color-iframe-bg);
 }
 .cog-dw-exported {
   display: flex;

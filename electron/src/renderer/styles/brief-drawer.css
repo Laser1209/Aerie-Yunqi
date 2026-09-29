@@ -1680,10 +1680,10 @@
   font-size: 11px; padding: 1px 6px; border-radius: 999px; margin-left: 4px;
   vertical-align: middle;
 }
-.brief-drawer__trend-momentum--new     { background: #ffe9a8; color: #7a5b00; }
-.brief-drawer__trend-momentum--rising  { background: #ffd1dc; color: #a13252; }
-.brief-drawer__trend-momentum--steady  { background: #d7ecff; color: #245a8f; }
-.brief-drawer__trend-momentum--cooling { background: #e7e7e7; color: #666; }
+.brief-drawer__trend-momentum--new     { background: var(--color-trend-new-bg); color: var(--color-trend-new-fg); }
+.brief-drawer__trend-momentum--rising  { background: var(--color-trend-rising-bg); color: var(--color-trend-rising-fg); }
+.brief-drawer__trend-momentum--steady  { background: var(--color-trend-steady-bg); color: var(--color-trend-steady-fg); }
+.brief-drawer__trend-momentum--cooling { background: var(--color-trend-cooling-bg); color: var(--color-trend-cooling-fg); }
 .brief-drawer__trend-accum { font-size: 11px; color: var(--color-text-muted, #888); margin-left: 4px; }
 
 /* ── GitHub high-star projects (订阅源) ───────────── */
@@ -1695,7 +1695,7 @@
 }
 .brief-drawer__github-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .brief-drawer__github-name { font-size: 13px; font-weight: 600; color: var(--color-text, #333); }
-.brief-drawer__github-stars { font-size: 11px; color: #a13252; white-space: nowrap; }
+.brief-drawer__github-stars { font-size: 11px; color: var(--color-github-star); white-space: nowrap; }
 .brief-drawer__github-lang {
   align-self: flex-start; font-size: 10px; padding: 0 6px; border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary, #ffd1dc) 30%, transparent);

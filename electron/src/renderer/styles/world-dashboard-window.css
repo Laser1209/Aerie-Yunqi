@@ -1,5 +1,5 @@
 /* aerie.world 独立仪表盘窗口样式
-   配色与主程序主题一致（Aerie · 云栖：brand #007aff，浅色/深色随系统）。 */
+   配色与主程序主题一致（Aerie · 云栖品牌主色，浅色/深色随系统）。 */
 :root {
   --wdw-bg: #ffffff;
   --wdw-card: #f7f7fa;
@@ -18,6 +18,28 @@
   --wdw-status-recovering: #5ac8fa;
   --wdw-status-denied: #ff3b30;
   --wdw-status-diff: #ff9500;
+  /* 场景渐变 / 平面图 / 覆盖层（不随主题变化） */
+  --wdw-scene-day-from: #243b55;
+  --wdw-scene-day-to: #1a2536;
+  --wdw-scene-night-from: #0d1220;
+  --wdw-scene-night-to: #161c2c;
+  --wdw-scene-morning-from: #3a4a63;
+  --wdw-scene-morning-to: #222b3b;
+  --wdw-scene-evening-from: #4a3355;
+  --wdw-scene-evening-to: #241b2c;
+  --wdw-scene-rain-from: #232b3a;
+  --wdw-scene-rain-to: #141a26;
+  --wdw-scene-snow-from: #3a465e;
+  --wdw-scene-snow-to: #1c2434;
+  --wdw-scene-cloudy-from: #2e3a4d;
+  --wdw-scene-cloudy-to: #1a2231;
+  --wdw-scene-text: #ffffff;
+  --wdw-map-bg: #ffffff;
+  --wdw-map-dot-stroke: #ffffff;
+  --wdw-path-line: #ff7eb6;
+  --wdw-path-dot: #ff5b9c;
+  --wdw-on-accent: #ffffff;
+  --wdw-tl-bar-track: #242a36;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -147,18 +169,18 @@
   border: 1px solid var(--wdw-card-border);
 }
 /* 昼夜色温：只改环境层，文字对比度保持可读 */
-.wdw-scene[data-phase="day"] { background: linear-gradient(160deg, #243b55, #1a2536); }
-.wdw-scene[data-phase="night"] { background: linear-gradient(160deg, #0d1220, #161c2c); }
-.wdw-scene[data-phase="morning"] { background: linear-gradient(160deg, #3a4a63, #222b3b); }
-.wdw-scene[data-phase="evening"] { background: linear-gradient(160deg, #4a3355, #241b2c); }
-.wdw-scene[data-weather="rain"] { background-image: linear-gradient(rgba(255,255,255,0.03), rgba(255,255,255,0.03)), linear-gradient(160deg, #232b3a, #141a26); }
-.wdw-scene[data-weather="snow"] { background-image: linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05)), linear-gradient(160deg, #3a465e, #1c2434); }
-.wdw-scene[data-weather="cloudy"] { background-image: linear-gradient(rgba(200,200,200,0.05), rgba(200,200,200,0.05)), linear-gradient(160deg, #2e3a4d, #1a2231); }
+.wdw-scene[data-phase="day"] { background: linear-gradient(160deg, var(--wdw-scene-day-from), var(--wdw-scene-day-to)); }
+.wdw-scene[data-phase="night"] { background: linear-gradient(160deg, var(--wdw-scene-night-from), var(--wdw-scene-night-to)); }
+.wdw-scene[data-phase="morning"] { background: linear-gradient(160deg, var(--wdw-scene-morning-from), var(--wdw-scene-morning-to)); }
+.wdw-scene[data-phase="evening"] { background: linear-gradient(160deg, var(--wdw-scene-evening-from), var(--wdw-scene-evening-to)); }
+.wdw-scene[data-weather="rain"] { background-image: linear-gradient(rgba(255,255,255,0.03), rgba(255,255,255,0.03)), linear-gradient(160deg, var(--wdw-scene-rain-from), var(--wdw-scene-rain-to)); }
+.wdw-scene[data-weather="snow"] { background-image: linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05)), linear-gradient(160deg, var(--wdw-scene-snow-from), var(--wdw-scene-snow-to)); }
+.wdw-scene[data-weather="cloudy"] { background-image: linear-gradient(rgba(200,200,200,0.05), rgba(200,200,200,0.05)), linear-gradient(160deg, var(--wdw-scene-cloudy-from), var(--wdw-scene-cloudy-to)); }
 .wdw-scene[data-weather="neutral"] { }
 /* 场景区背景恒为深色渐变，其内部文字必须用白色系保证可读；
    不能沿用 --wdw-text（浅色主题下是深色，深底深字看不清） */
 .wdw-scene .wdw-kv dt { color: rgba(255, 255, 255, 0.68); }
-.wdw-scene .wdw-kv dd { color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
+.wdw-scene .wdw-kv dd { color: var(--wdw-scene-text); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
 .wdw-scene .wdw-scene-hint { color: rgba(255, 255, 255, 0.55); }
 
 .wdw-kv {
@@ -177,7 +199,7 @@
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #ffffff;
+  background: var(--wdw-map-bg);
 }
 .wdw-map[hidden] { display: none; }
 .wdw-map-frame {
@@ -205,14 +227,14 @@
 .wdw-map-path[hidden] { display: none; }
 .wdw-map-path-line {
   fill: none;
-  stroke: #ff7eb6;
+  stroke: var(--wdw-path-line);
   stroke-width: 2.5;
   stroke-dasharray: 6 5;
   opacity: 0.85;
 }
 .wdw-map-path-dot {
-  fill: #ff5b9c;
-  stroke: #fff;
+  fill: var(--wdw-path-dot);
+  stroke: var(--wdw-map-dot-stroke);
   stroke-width: 1.5;
 }
 /* 光球：光圈呼吸 + 中心点 + 区域名，绝对定位在平面图上对应 zone */
@@ -252,7 +274,7 @@
   padding: 1px 7px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.62);
-  color: #ffffff;
+  color: var(--wdw-scene-text);
   font-size: 11px;
   line-height: 1.5;
   white-space: nowrap;
@@ -313,7 +335,7 @@
   padding: 2px 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  color: var(--wdw-scene-text);
   font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
@@ -346,7 +368,7 @@
   border-color: var(--wdw-accent);
   background: rgba(0, 122, 255, 0.35);
   box-shadow: 0 0 8px rgba(0, 122, 255, 0.55);
-  color: #ffffff;
+  color: var(--wdw-scene-text);
 }
 .wdw-loc-floor-cell.is-active .wdw-loc-floor-zone { opacity: 1; }
 
@@ -535,7 +557,7 @@
 .wdw-loc-save {
   padding: 4px 10px;
   font-size: 12px;
-  color: #ffffff;
+  color: var(--wdw-on-accent);
   background: var(--wdw-accent);
   border: none;
   border-radius: 6px;
@@ -558,7 +580,7 @@
 }
 .wdw-tl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--wdw-accent); flex: 0 0 auto; }
 .wdw-tl-label { flex: 0 0 auto; color: var(--wdw-muted); }
-.wdw-tl-bar { flex: 1 1 auto; height: 6px; border-radius: 999px; background: #242a36; overflow: hidden; }
+.wdw-tl-bar { flex: 1 1 auto; height: 6px; border-radius: 999px; background: var(--wdw-tl-bar-track); overflow: hidden; }
 .wdw-tl-fill { height: 100%; background: var(--wdw-accent); border-radius: 999px; }
 .wdw-tl-time { color: var(--wdw-muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 

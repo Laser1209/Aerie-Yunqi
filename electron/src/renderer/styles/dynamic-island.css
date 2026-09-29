@@ -4,6 +4,20 @@
    展开后胶囊拉宽至与面板同宽，无缝成为面板头部
    ══════════════════════════════════════════════════════ */
 
+/* 常量色（不随主题变化） */
+:root {
+  --di-badge-grad-1: #ff8a80;
+  --di-badge-grad-2: #ff6b9d;
+  --di-on-accent: #ffffff;
+  --di-live-dot: #4cd678;
+  --di-sys-bar-1-from: #4a90d9;
+  --di-sys-bar-1-to: #7db5ee;
+  --di-sys-bar-2-from: #7ed9c4;
+  --di-sys-bar-2-to: #8fe1ce;
+  --di-sys-bar-3-from: #ff8a80;
+  --di-sys-bar-3-to: #ffb3ab;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
 
 html, body {
@@ -175,14 +189,14 @@ button {
 }
 .capsule .badge {
   flex-shrink: 0; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
-  background: linear-gradient(135deg, #ff8a80, #ff6b9d);
-  color: #fff; font-size: 9.5px; font-weight: 500;
+  background: linear-gradient(135deg, var(--di-badge-grad-1), var(--di-badge-grad-2));
+  color: var(--di-on-accent); font-size: 9.5px; font-weight: 500;
   display: flex; align-items: center; justify-content: center;
   position: relative; z-index: 1;
 }
 .capsule .dot {
-  width: 6px; height: 6px; border-radius: 50%; background: #4cd678;
-  margin-left: 7px; flex-shrink: 0; box-shadow: 0 0 6px #4cd678;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--di-live-dot);
+  margin-left: 7px; flex-shrink: 0; box-shadow: 0 0 6px var(--di-live-dot);
   position: relative; z-index: 1;
 }
 .capsule.open .cap-txt, .capsule.open .badge, .capsule.open .dot { display: none; }
@@ -197,7 +211,7 @@ button {
 .cap-bar .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .cap-bar .name { font-size: 12px; font-weight: 500; color: var(--di-text); letter-spacing: .02em; white-space: nowrap; }
 .cap-bar .live { display: flex; align-items: center; gap: 5px; font-size: 9.5px; color: var(--di-text-low); letter-spacing: .05em; white-space: nowrap; }
-.cap-bar .live i { width: 5px; height: 5px; border-radius: 50%; background: #4cd678; box-shadow: 0 0 5px #4cd678; }
+.cap-bar .live i { width: 5px; height: 5px; border-radius: 50%; background: var(--di-live-dot); box-shadow: 0 0 5px var(--di-live-dot); }
 .cap-bar .close {
   width: 22px; height: 22px; border-radius: 50%;
   color: var(--di-text-low); display: flex; align-items: center; justify-content: center;
@@ -299,8 +313,8 @@ button {
   display: flex; align-items: center; justify-content: center; transition: all .2s ease;
 }
 .media .ctl button:hover { background: var(--di-accent-soft); color: var(--di-accent); }
-.media .ctl button.play { background: var(--di-accent); color: #fff; }
-.media .ctl button.play:hover { color: #fff; filter: brightness(1.06); }
+.media .ctl button.play { background: var(--di-accent); color: var(--di-on-accent); }
+.media .ctl button.play:hover { color: var(--di-on-accent); filter: brightness(1.06); }
 
 /* 系统卡片 */
 .sys { display: grid; grid-template-columns: repeat(3, 1fr); padding: 9px 9px 10px; gap: 4px; }
@@ -311,9 +325,9 @@ button {
 .sys .v small { font-size: 8.5px; color: var(--di-text-low); margin-left: 1px; }
 .sys .g { width: 40px; height: 3px; border-radius: 2px; background: rgba(127, 133, 145, .22); overflow: hidden; margin-top: 2px; }
 .sys .g i { display: block; height: 100%; border-radius: 2px; }
-.sys .cell:nth-child(1) .g i { width: 18%; background: linear-gradient(90deg, #4a90d9, #7db5ee); }
-.sys .cell:nth-child(2) .g i { width: 43%; background: linear-gradient(90deg, #7ed9c4, #8fe1ce); }
-.sys .cell:nth-child(3) .g i { width: 62%; background: linear-gradient(90deg, #ff8a80, #ffb3ab); }
+.sys .cell:nth-child(1) .g i { width: 18%; background: linear-gradient(90deg, var(--di-sys-bar-1-from), var(--di-sys-bar-1-to)); }
+.sys .cell:nth-child(2) .g i { width: 43%; background: linear-gradient(90deg, var(--di-sys-bar-2-from), var(--di-sys-bar-2-to)); }
+.sys .cell:nth-child(3) .g i { width: 62%; background: linear-gradient(90deg, var(--di-sys-bar-3-from), var(--di-sys-bar-3-to)); }
 
 /* 她的世界卡片：4 个状态格 2×2 排布，文字用正文字体、允许换行 */
 .card--world .sys { grid-template-columns: repeat(2, 1fr); }

@@ -94,6 +94,45 @@
   --color-cog-error:           #ff6b6b;
   --color-cog-muted:           #d6c5e0;
 
+  /* R6.5: one-off hex literals collapsed into semantic tokens so that
+     check:tokens passes. Named by purpose (not by colour) and NOT
+     overridden by any theme, so the visual result is identical under
+     every colour scheme. */
+  --color-risk-safe:           #2ecc71;   /* 风险 safe / 状态 ok */
+  --color-status-ok:           #2ecc71;   /* cc-card 状态 ok */
+  --color-risk-medium:         #f0a500;   /* 风险 medium */
+  --color-risk-critical:       #e53935;   /* 风险 critical */
+  --color-on-accent:           #ffffff;   /* 强调色填充上的前景（白字/白图标）*/
+  --color-on-media:            #ffffff;   /* 媒体/深色遮罩上的前景 */
+  --color-switch-knob:         #ffffff;   /* 开关旋钮底色 */
+  --color-accent-blue:         #6e8efb;   /* 蓝紫强调（聊天气泡角标 / 渐变末端）*/
+  --color-accent-purple:       #8a6cff;   /* 标题渐变中段 */
+  --color-accent-pink-soft:    #ff7aaf;   /* 选中胶囊渐变起点 */
+  --color-accent-purple-soft:  #c49aff;   /* 选中胶囊渐变中段 */
+  --color-accent-blue-soft:    #8fa8ff;   /* 选中胶囊渐变末端 */
+  --color-marker-image-bg:     #fff0f3;   /* 聊天气泡「图片」角标底色 */
+  --color-marker-sticker-bg:   #eef3ff;   /* 聊天气泡「表情包」角标底色 */
+  --color-danger-grad-1:       #ef4444;   /* 危险按钮渐变起点 */
+  --color-danger-grad-2:       #dc2626;   /* 危险按钮渐变末端 */
+  --color-warning-grad-1:      #f59e0b;   /* 警告按钮渐变起点 */
+  --color-warning-grad-2:      #d97706;   /* 警告按钮渐变末端 */
+  --color-status-queued:       #e8a84a;   /* 请求状态：排队 */
+  --color-status-completed:    #5bbd7a;   /* 请求状态：完成 */
+  --color-status-cancelled:    #a8a8b3;   /* 请求状态：取消 */
+  --color-status-failed:       #e8707a;   /* 请求状态：失败 */
+  --color-trend-new-bg:        #ffe9a8;   /* 简报趋势标签：新增/上升/持平/降温 */
+  --color-trend-new-fg:        #7a5b00;
+  --color-trend-rising-bg:     #ffd1dc;
+  --color-trend-rising-fg:     #a13252;
+  --color-trend-steady-bg:     #d7ecff;
+  --color-trend-steady-fg:     #245a8f;
+  --color-trend-cooling-bg:    #e7e7e7;
+  --color-trend-cooling-fg:    #666666;
+  --color-github-star:         #a13252;   /* 简报订阅源星标计数 */
+  --color-cog-pattern-fg:      #f0b400;   /* 认知面板：pattern 标签前景 */
+  --color-iframe-bg:           #ffffff;   /* 内嵌 iframe 预览底色 */
+  --color-kbd-bg:              #ffffff;   /* 快捷键 kbd 键帽底色 */
+
   /* semantic */
   --color-bg: var(--bg-50);
   --color-surface: var(--bg-100);
@@ -410,12 +449,12 @@ body {
   white-space: nowrap;
 }
 .chat-marker--image {
-  background: #fff0f3;
-  color: #ff5b9c;
+  background: var(--color-marker-image-bg);
+  color: var(--color-pad-pleasure);
 }
 .chat-marker--sticker {
-  background: #eef3ff;
-  color: #6e8efb;
+  background: var(--color-marker-sticker-bg);
+  color: var(--color-accent-blue);
 }
 .chat-marker:focus {
   outline: 2px solid rgba(110, 142, 251, 0.4);
@@ -525,7 +564,7 @@ body {
   padding: 0 5px;
   border-radius: 9px;
   background: var(--color-accent, #ff6b9d);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: 10px;
   font-weight: 600;
   display: flex;
@@ -1106,8 +1145,8 @@ body {
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-danger-grad-1), var(--color-danger-grad-2));
+  color: var(--color-on-accent);
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
@@ -1117,8 +1156,8 @@ body {
 }
 
 .btn-warning {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-warning-grad-1), var(--color-warning-grad-2));
+  color: var(--color-on-accent);
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
 }
 
@@ -1381,7 +1420,7 @@ body {
 .settings-hero__title {
   margin: 0 0 4px;
   font-size: 20px; font-weight: 700; letter-spacing: 0.2px;
-  background: linear-gradient(135deg, #ff5b9c 0%, #8a6cff 55%, #6e8efb 100%);
+  background: linear-gradient(135deg, var(--color-pad-pleasure) 0%, var(--color-accent-purple) 55%, var(--color-accent-blue) 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-fill-color: transparent;
 }
@@ -1396,8 +1435,8 @@ body {
   height: 30px; padding: 0 12px;
   border-radius: 999px;
   font-size: 12.5px; font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #ff5b9c 0%, #8a6cff 55%, #6e8efb 100%);
+  color: var(--color-on-accent);
+  background: linear-gradient(135deg, var(--color-pad-pleasure) 0%, var(--color-accent-purple) 55%, var(--color-accent-blue) 100%);
   box-shadow:
     0 6px 18px rgba(255,91,156,0.25),
     0 1px 0 rgba(255,255,255,0.35) inset;
@@ -1421,7 +1460,7 @@ body {
   position: absolute; z-index: 0; top: 4px; left: 4px;
   height: calc(100% - 8px);
   border-radius: 15px;
-  background: linear-gradient(135deg, #ff7aaf 0%, #c49aff 55%, #8fa8ff 100%);
+  background: linear-gradient(135deg, var(--color-accent-pink-soft) 0%, var(--color-accent-purple-soft) 55%, var(--color-accent-blue-soft) 100%);
   box-shadow:
     0 4px 12px rgba(255,91,156,0.3),
     0 0 0 1px rgba(255,255,255,0.4) inset,
@@ -1459,7 +1498,7 @@ body {
 /* 选中态（旧类 active + 新类 is-active 都认，保证 settings.js 原有切换生效） */
 .is-mode-tab.is-active,
 .settings-mode-tab.active.is-mode-tab {
-  color: #fff;
+  color: var(--color-on-accent);
 }
 .is-mode-tab.is-active .is-mode-tab__dot,
 .settings-mode-tab.active.is-mode-tab .is-mode-tab__dot {
@@ -1706,7 +1745,7 @@ body {
   opacity: 0.7;
 }
 .chat-request-status[data-status="queued"] .chat-request-status__label {
-  color: #e8a84a;
+  color: var(--color-status-queued);
 }
 .chat-request-status[data-status="running"] .chat-request-status__label {
   color: rgba(255,91,156,0.85);
@@ -1719,13 +1758,13 @@ body {
   50%      { opacity: 1;   transform: scale(1.15); }
 }
 .chat-request-status[data-status="completed"] .chat-request-status__label {
-  color: #5bbd7a;
+  color: var(--color-status-completed);
 }
 .chat-request-status[data-status="cancelled"] .chat-request-status__label {
-  color: #a8a8b3;
+  color: var(--color-status-cancelled);
 }
 .chat-request-status[data-status="failed"] .chat-request-status__label {
-  color: #e8707a;
+  color: var(--color-status-failed);
 }
 .chat-request-status__btn {
   appearance: none;
@@ -1855,11 +1894,11 @@ body {
   border-radius: 999px;
   white-space: nowrap;
 }
-.cc-card__risk--safe { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
-.cc-card__risk--low { background: rgba(52, 199, 89, 0.15); color: #34c759; }
-.cc-card__risk--medium { background: rgba(255, 149, 0, 0.16); color: #f0a500; }
-.cc-card__risk--high { background: rgba(255, 59, 48, 0.15); color: #ff3b30; }
-.cc-card__risk--critical { background: rgba(229, 57, 53, 0.18); color: #e53935; }
+.cc-card__risk--safe { background: rgba(46, 204, 113, 0.15); color: var(--color-risk-safe); }
+.cc-card__risk--low { background: rgba(52, 199, 89, 0.15); color: var(--success); }
+.cc-card__risk--medium { background: rgba(255, 149, 0, 0.16); color: var(--color-risk-medium); }
+.cc-card__risk--high { background: rgba(255, 59, 48, 0.15); color: var(--error); }
+.cc-card__risk--critical { background: rgba(229, 57, 53, 0.18); color: var(--color-risk-critical); }
 .cc-card__rows {
   display: flex;
   flex-direction: column;
@@ -1930,7 +1969,7 @@ body {
   color: var(--color-text-muted, #8e8e93);
   line-height: 1.4;
 }
-.cc-card__status--ok { color: #2ecc71; }
+.cc-card__status--ok { color: var(--color-status-ok); }
 .cc-card__status--reject { color: var(--color-danger, #e91e63); }
 .cc-card__status--error { color: var(--color-warning, #ff9500); }
 
@@ -2326,7 +2365,7 @@ body.image-lightbox-open {
   box-sizing: border-box;
 }
 .chat-audio-bar__icon {
-  color: #ff5b9c;
+  color: var(--color-pad-pleasure);
   display: inline-flex;
   align-items: center;
 }
@@ -2782,13 +2821,13 @@ body.image-lightbox-open {
   width: 20px;
   left: 3px;
   bottom: 3px;
-  background-color: #ffffff;
+  background-color: var(--color-switch-knob);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 50%;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 .di-switch input:checked + .di-switch-slider {
-  background: linear-gradient(135deg, #ff5b9c, #6e8efb);
+  background: linear-gradient(135deg, var(--color-pad-pleasure), var(--color-accent-blue));
   box-shadow: 0 0 0 3px rgba(255, 91, 156, 0.14);
 }
 .di-switch input:checked + .di-switch-slider::before {
@@ -3960,7 +3999,7 @@ body.image-lightbox-open {
   left: 0; right: 0; bottom: 0;
   padding: 3px 6px;
   font-size: 11px;
-  color: #fff;
+  color: var(--color-on-media);
   background: linear-gradient(transparent, rgba(0,0,0,.55));
   overflow: hidden;
   text-overflow: ellipsis;

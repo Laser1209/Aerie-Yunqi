@@ -10,6 +10,7 @@
   --adw-accent: #007aff;
   --adw-danger: #ff3b30;
   --adw-ok: #34c759;
+  --adw-on-accent: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -135,7 +136,7 @@
   cursor: pointer;
 }
 .adw-nav-btn:hover { background: var(--adw-list); color: var(--adw-text); }
-.adw-nav-btn.is-active { background: var(--adw-accent); color: #ffffff; }
+.adw-nav-btn.is-active { background: var(--adw-accent); color: var(--adw-on-accent); }
 
 /* ── 主区域 ── */
 .adw-main {
@@ -182,8 +183,8 @@
 }
 .adw-btn:hover { filter: brightness(1.05); }
 .adw-btn:disabled { opacity: 0.5; cursor: default; }
-.adw-btn--primary { background: var(--adw-accent); border-color: var(--adw-accent); color: #ffffff; }
-.adw-btn--danger { background: var(--adw-danger); border-color: var(--adw-danger); color: #ffffff; }
+.adw-btn--primary { background: var(--adw-accent); border-color: var(--adw-accent); color: var(--adw-on-accent); }
+.adw-btn--danger { background: var(--adw-danger); border-color: var(--adw-danger); color: var(--adw-on-accent); }
 .adw-btn--small { padding: 3px 10px; font-size: 11px; border-radius: 6px; }
 .adw-select {
   background: var(--adw-list);

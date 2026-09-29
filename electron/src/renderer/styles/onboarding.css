@@ -206,14 +206,14 @@
   border: 1px solid var(--color-border, #f0d5e0);
   border-bottom-width: 2px;
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--color-kbd-bg);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
   color: var(--color-text, #333333);
   margin-right: 4px;
 }
 .onb-kbd--alt {
-  color: #ffffff;
+  color: var(--color-on-accent);
   background: var(--color-primary-hover, #ff5b9c);
   border-color: var(--color-primary-hover, #ff5b9c);
 }
@@ -293,7 +293,7 @@
   flex: 1;
   width: 100%;
   border: 0;
-  background: #ffffff;
+  background: var(--color-iframe-bg);
 }
 
 @keyframes onb-fade {

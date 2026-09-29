@@ -348,13 +348,13 @@ def t10_archive_apply_rollback() -> tuple[bool, str]:
 
 
 def t11_l4_full_auto() -> tuple[bool, str]:
-    """T11 L4SelfEvolution 完整流程（白名单自动应用）"""
+    """T11 L4SelfEvolution 完整流程（D1：一律人工确认 → 批准后落盘）"""
     root = _make_temp_project()
     l4 = L4SelfEvolution(project_root=str(root), auto_apply=True)
 
     proposal = l4.create_proposal(
-        title="自动添加技能",
-        description="测试白名单自动应用",
+        title="添加技能",
+        description="测试白名单提案的审批落盘",
         file_changes=[
             {"path": "skills/auto_skill.py", "action": "create",
              "new_content": 'def auto():\n    return "auto applied"\n'},
@@ -365,11 +365,16 @@ def t11_l4_full_auto() -> tuple[bool, str]:
     result = asyncio.run(l4.process_proposal(proposal))
 
     checks = []
-    checks.append(result["action"] == "auto_applied")
+    # D1（2026-09-30）：白名单 + 低风险也不再自动落盘，一律进人工审批。
+    checks.append(result["action"] == "pending_review")
     checks.append(result["risk_level"] == "safe")
+    checks.append(proposal.status == EvolutionStatus.PENDING_REVIEW)
+
+    ok, _msg = l4.approve_and_apply(proposal.proposal_id)
+    checks.append(ok)
     checks.append(proposal.status == EvolutionStatus.APPLIED)
 
-    # 验证文件已创建
+    # 验证文件已创建（批准之后）
     checks.append((root / "skills" / "auto_skill.py").exists())
 
     return all(checks), f"action={result['action']}, status={proposal.status.value}"

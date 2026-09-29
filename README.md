@@ -307,9 +307,9 @@ npm run dev
 | `multi_channel_identity_v1`   | 多端存在时间线（跨端回忆 / 视图 B）                                                                                                                                         | 开   |
 | `thinking_trace_injection_v1` | 决策自省段注入（thinking_trace）                                                                                                                                            | 开   |
 | `memory_write_validation_v1`  | 记忆写入一致性校验门（ConsistencyGate）                                                                                                                                     | 开   |
-| `self_evolve_l4_enabled`      | L4 代码自进化（内测）：能力缺口 → LLM 生成 file_changes → 四道安全闸门 → 自动应用/审批/24h 回滚。设置页开启需两次风险确认（危险警告 + 免责声明），开启后即时生效无需重启 | 关   |
+| `self_evolve_l4_enabled`      | L4 代码自进化（内测）：能力缺口 → LLM 生成 file_changes → 四道安全闸门 → **一律人工确认后落盘**（2026-09-30 起白名单内也需确认）/24h 回滚。设置页开启需两次风险确认（危险警告 + 免责声明），开启后即时生效无需重启 | 关   |
 
-> **自进化 / Self Evolution 说明**：L0（能力缺口检测）每次回复后静默运行，命中"模型自述无法 + 工具失败"双信号才提议。L4（代码自修改）默认关闭，开启后由代码模型（`AERIE_WS_CODE_MODEL`）将缺口转成具体 `file_changes`，经白名单/黑名单 + 风险分级 + Gate1 安全审查 / Gate2 语法检查 / Gate3 测试验证（`test_command` 白名单净化）/ Gate4 回滚备份四道闸门：白名单低风险自动应用，核心模块（`core/`）等待人工审批，24 小时内可经 `/api/self_evolve/l4/*` 一键回滚。幻觉防护：AI 提案注册的占位工具一律显式失败（`success=False`），主模型无法把 stub 当作真实能力。变更审计台账存于 `data/evolution_backups/` 与 journal。
+> **自进化 / Self Evolution 说明**：L0（能力缺口检测）每次回复后静默运行，命中"模型自述无法 + 工具失败"双信号才提议。L4（代码自修改）默认关闭，开启后由代码模型（`AERIE_WS_CODE_MODEL`）将缺口转成具体 `file_changes`，经白名单/黑名单 + 风险分级 + Gate1 安全审查 / Gate2 语法检查 / Gate3 测试验证（`test_command` 白名单净化）/ Gate4 回滚备份四道闸门后，**一律进入人工审批**（`auto_apply` 只表示"批准后自动落盘"，不再表示跳过审批；白名单里含 `skills/`、`plugins/`，等于 AI 能改自己的能力，必须人看），24 小时内可经 `/api/self_evolve/l4/*` 一键回滚。模型也可用工具 `propose_self_improvement` **主动提建议**，但该工具只登记待审记录、不写任何文件。幻觉防护：AI 提案注册的占位工具一律显式失败（`success=False`），主模型无法把 stub 当作真实能力。变更审计台账存于 `data/evolution_backups/` 与 journal。
 
 > **注意**：向量附件索引（`data/chroma_attachments`）依赖 `chromadb`，生产环境需手动安装并配置 embedding API Key；否则附件分块仅作分段存储与上下文注入，不进行语义检索。
 

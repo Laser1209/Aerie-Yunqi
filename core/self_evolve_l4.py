@@ -940,9 +940,9 @@ class L4SelfEvolution:
 
     工作流程：
     1. 创建提案
-    2. 运行 4 道门
-    3. 白名单 + 低风险 → 自动应用
-    4. 核心模块 → 人工审批
+    2. 运行 4 道门（安全审查 / 语法 / 必跑 pytest / 备份）
+    3. **一律进入人工审批**（白名单 + 低风险也一样，D1 2026-09-30 收紧）
+    4. 人工批准后落盘（`auto_apply=false` 时只记录审批结论）
     5. 24h 内可回滚
     """
 
@@ -1021,20 +1021,62 @@ class L4SelfEvolution:
             result["reason"] = gate_summary.get("failed_at", "unknown")
             return result
 
-        # 通过 4 道门
-        if proposal.can_auto_apply and self.auto_apply:
-            # 白名单 + 低风险 → 自动应用
-            applied, msg = self.archive.apply_proposal(proposal)
-            result["action"] = "auto_applied" if applied else "apply_failed"
-            result["apply_message"] = msg
-        else:
-            # 核心模块或高风险 → 人工审批
-            proposal.status = EvolutionStatus.PENDING_REVIEW
-            result["action"] = "pending_review"
-            result["reason"] = "核心模块或高风险修改，需人工审批"
-            self.archive._journal_append("pending_review", proposal)
-
+        # 通过 4 道门（gate1 已保证 file_changes 非空）
+        #
+        # D1（2026-09-30 收紧）：**凡会改文件的提案一律先拿人工确认**。
+        # 旧语义是「白名单 + 低风险 → 静默自动落盘」，但白名单里含 skills/ 与
+        # plugins/ —— 等于 AI 能在不告知的情况下改自己的能力；而提案者与被审者
+        # 是同一个模型，四道门挡的是"跑不跑得起来"，挡不住"该不该改"。
+        # auto_apply 的语义因此收窄为「审批通过后是否自动落盘」（见 approve_and_apply）。
+        proposal.status = EvolutionStatus.PENDING_REVIEW
+        result["action"] = "pending_review"
+        result["reason"] = "所有文件改动均需人工确认（白名单内也不例外）"
+        self.archive._journal_append("pending_review", proposal)
+        self._notify_proposed(proposal)
         return result
+
+    def submit_model_proposal(
+        self,
+        title: str,
+        description: str = "",
+        target_hint: str = "",
+    ) -> EvolutionProposal:
+        """模型主动提案（D2）：只登记一条待审记录，**不产出任何文件改动**。
+
+        与 ``process_proposal`` 的分工：模型只提"该改哪儿"，不写改动内容，
+        所以没有东西可跑四道门；但仍进 ``PENDING_REVIEW`` 并推送待审计数，
+        让人能在面板上看到它。
+        """
+        proposal = self.create_proposal(
+            title=title,
+            file_changes=[],
+            description=description,
+            author="ai_requested",
+        )
+        proposal.metadata["target_hint"] = str(target_hint or "").strip()[:200]
+        proposal.metadata["requested_by_model"] = True
+        proposal.status = EvolutionStatus.PENDING_REVIEW
+        self.archive._journal_append("pending_review", proposal)
+        self._notify_proposed(proposal)
+        return proposal
+
+    def _notify_proposed(self, proposal: EvolutionProposal) -> None:
+        """把「有新提案待审」推给界面（SSE / Electron stderr 桥）。
+
+        失败只记日志：通知不到不该影响提案本身是否登记成功。
+        """
+        try:
+            from core import chat_events
+
+            chat_events.emit(
+                "self_evolve_proposed",
+                proposal_id=proposal.proposal_id,
+                title=proposal.title,
+                risk_level=proposal.risk_level.value,
+                pending_count=self.archive.stats().get("pending_review", 0),
+            )
+        except Exception:
+            logger.debug("self_evolve_proposed 事件推送失败", exc_info=True)
 
     def approve_and_apply(self, proposal_id: str) -> tuple[bool, str]:
         """人工审批并应用"""
@@ -1047,6 +1089,15 @@ class L4SelfEvolution:
 
         proposal.status = EvolutionStatus.APPROVED
         self.archive._journal_append("proposal_approved", proposal)
+
+        # 空提案（如模型主动提的改进建议，只登记不改文件）到此为止：没有东西可落盘。
+        if not proposal.file_changes:
+            return True, "已审批通过（提案不含文件改动）"
+
+        # auto_apply 的收窄语义：审批通过后是否**自动落盘**。
+        # False 时只记录审批结论，落盘交给外部流程（人工执行 / 后续批次）。
+        if not self.auto_apply:
+            return True, "已审批通过（auto_apply=false，未自动落盘）"
 
         # 人工审批视同通过所有 gate，先做回滚准备
         ok4, _ = self.gate.gate4_rollback_prep(proposal)

@@ -503,7 +503,11 @@ def test_runtime_data_paths_need_manual_review(path: str) -> None:
 
 
 def test_code_whitelist_still_auto_appliable(tmp_path: Path) -> None:
-    """移除 data/ 后，真正的代码目录白名单语义与自动应用能力不受影响。"""
+    """移除 data/ 后，真正的代码目录白名单语义不变；但落盘仍需人工确认。
+
+    D1（2026-09-30）：`can_auto_apply`（白名单 + 低风险）不再是"跳过审批"的通行证，
+    只是给审批人看的风险信号；`process_proposal` 一律进 PENDING_REVIEW。
+    """
     for path in (
         "skills/a.py",
         "scripts/b.py",
@@ -518,17 +522,23 @@ def test_code_whitelist_still_auto_appliable(tmp_path: Path) -> None:
 
     assert _is_in_whitelist("data/x.py") is False
 
-    # 白名单内的 SAFE 提案依然可以自动应用
+    # 白名单内的 SAFE 提案：风险信号仍为"低风险白名单"，但**不再自动落盘**。
     root = _make_project(tmp_path / "proj")
     l4 = L4SelfEvolution(project_root=str(root), auto_apply=True)
     proposal = l4.create_proposal(
-        title="白名单自动应用",
+        title="白名单提案",
         file_changes=[{"path": "skills/auto_ok.py", "action": "create", "new_content": "pass"}],
     )
+    assert proposal.can_auto_apply is True
     result = asyncio.run(
         l4.process_proposal(proposal, test_command="python -m pytest --version")
     )
-    assert result["action"] == "auto_applied", result
+    assert result["action"] == "pending_review", result
+
+    # 审批通过后才落盘（auto_apply=True 的收窄语义）。
+    ok, _msg = l4.approve_and_apply(proposal.proposal_id)
+    assert ok is True
+    assert (root / "skills" / "auto_ok.py").is_file()
 
 
 def test_proposal_overwriting_journal_is_not_auto_applied(tmp_path: Path) -> None:
@@ -855,7 +865,7 @@ def test_process_proposal_does_not_block_event_loop(tmp_path: Path) -> None:
 
     result, ticks = asyncio.run(scenario())
 
-    assert result["action"] == "auto_applied", result
+    assert result["action"] == "pending_review", result
     assert ticks > 0, "Gate3 执行期间事件循环被阻塞（心跳 0 次）"
 
 

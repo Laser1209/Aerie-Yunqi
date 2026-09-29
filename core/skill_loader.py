@@ -55,6 +55,8 @@ def _unavailability_reason(meta: dict[str, Any]) -> str:
     三个可选声明（都未声明 = 照常暴露，保持既有行为）：
 
     * ``implemented: false``：该 skill 还是占位桩，调用必然返回 stub；
+      可另附 ``not_implemented_note`` 说明**为什么故意没做**（涉及真实资金 /
+      等官方接口查证 / 等本地模块…），面板据此区分「故意未做」与「坏了」；
     * ``requires_module``：底层 Python 模块必须可导入（本地模型 / 后端）；
     * ``requires_env``：环境变量必须非空（云端服务凭证）；
     * ``requires_cli``：外部命令行程序必须在 PATH 上（如 ``defuddle``、``gh``）。
@@ -66,7 +68,8 @@ def _unavailability_reason(meta: dict[str, Any]) -> str:
     **不可用的能力不该出现在模型可见的工具清单里**。
     """
     if meta.get("implemented") is False:
-        return "not implemented (scaffold stub)"
+        note = str(meta.get("not_implemented_note") or "").strip()
+        return f"not implemented (scaffold stub): {note}" if note else "not implemented (scaffold stub)"
     module = str(meta.get("requires_module") or "").strip()
     if module:
         try:

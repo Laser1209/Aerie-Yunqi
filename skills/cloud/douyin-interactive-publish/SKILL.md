@@ -4,6 +4,7 @@ description: 抖音互动空间发布 / Interact publish
 provider_hint: text
 read_only: false
 implemented: false
+not_implemented_note: '本轮不做，涉及真实账号对外发布（用户已拍板）。条目保留是为了让面板能看出"是故意没做，不是坏了"'
 ---
 
 # douyin-interactive-publish / 抖音互动空间发布

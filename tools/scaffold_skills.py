@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 import argparse
+import json
 import sys
 from pathlib import Path
 from textwrap import dedent
@@ -231,6 +232,8 @@ CLOUD_SKILLS: list[dict] = [
         "provider_hint": "text",
         "read_only": False,
         "env_var": "ALIPAY_APP_ID",
+        "stub_note": "本轮不做，涉及真实资金（用户已拍板）。条目保留是为了让面板能看出"
+                     "是故意没做，不是坏了",
         "args_key": "out_trade_no",
         "return_key": "trade_status",
         "body_doc": "支付宝当面付/JSAPI/App 支付下单与查单。",
@@ -241,6 +244,8 @@ CLOUD_SKILLS: list[dict] = [
         "provider_hint": "text",
         "read_only": False,
         "env_var": "DOUYINPAY_MCH_ID",
+        "stub_note": "本轮不做，涉及真实资金（用户已拍板）。条目保留是为了让面板能看出"
+                     "是故意没做，不是坏了",
         "args_key": "out_order_no",
         "return_key": "pay_status",
         "body_doc": "抖音支付 APP/JSAPI/H5/Native 支付下单与查单。",
@@ -258,20 +263,24 @@ CLOUD_SKILLS: list[dict] = [
     # ── 字节跳动 / 火山引擎 (5) ──
     {
         "name": "byted-bp-cdn-pagesdeploy",
-        "description": "字节边缘 Pages 部署 / BytePlus Pages",
-        "provider_hint": "text",
+        "description": "字节边缘 Pages 部署 / BytePlus Pages（官方 CLI）",
+        "provider_hint": "shell-safe",
         "read_only": False,
-        "env_var": "BYTEPAGES_TOKEN",
+        "env_var": "",
+        "cli": "nest",          # 凭据由 `nest config set` 写进 CLI 自己的配置
+        "stub": False,
         "args_key": "project_dir",
         "return_key": "url",
         "body_doc": "一键部署静态站到 BytePlus Edge Pages；含域名绑定与 CDN。",
     },
     {
         "name": "byted-mediakit",
-        "description": "字节 mediakit 多媒体处理 / ByteDance mediakit",
-        "provider_hint": "text",
+        "description": "字节 AI MediaKit 音视频处理 / ByteDance mediakit（官方 CLI）",
+        "provider_hint": "shell-safe",
         "read_only": False,
-        "env_var": "MEDIAKIT_AK",
+        "env_var": "",
+        "cli": "mediakit-cli",  # 凭据由 `mediakit-cli init --api-key` 写进 CLI 自己的配置
+        "stub": False,
         "args_key": "input_path",
         "return_key": "output_path",
         "body_doc": "音视频剪辑、格式转换、抽帧等。",
@@ -309,10 +318,13 @@ CLOUD_SKILLS: list[dict] = [
     # ── 平台部署 / 文档 (4) ──
     {
         "name": "iga-pages",
-        "description": "IGA Pages 部署 / IGA Pages",
+        "description": "IGA Pages 部署 / IGA Pages（未接入）",
         "provider_hint": "text",
         "read_only": False,
         "env_var": "IGAPAGES_TOKEN",
+        "stub_note": "未接入：IGA Pages 官方只提供控制台部署（模板 / ZIP 上传 / GitHub 导入），"
+                     "没有公开的 REST 或 CLI 契约；IGA 的 OpenAPI 只管边缘加速域名（CreateDomain），"
+                     "不能创建 Pages 项目",
         "args_key": "project_dir",
         "return_key": "url",
         "body_doc": "IGA Pages 部署前端与全栈项目；带预览部署。",
@@ -755,6 +767,8 @@ CLOUD_SKILLS: list[dict] = [
         "provider_hint": "text",
         "read_only": False,
         "env_var": "DOUYIN_OPEN_ID",
+        "stub_note": "本轮不做，涉及真实账号对外发布（用户已拍板）。条目保留是为了让面板能看出"
+                     "是故意没做，不是坏了",
         "args_key": "zip_path",
         "return_key": "app_id",
         "body_doc": "上传 zip+icon 创建/更新互动空间。",
@@ -865,14 +879,26 @@ def _skill_md(meta: dict, kind: str) -> str:
     ).strip() + "\n"
     # 可用性声明：让"跑不了的 skill"不进模型可见的工具清单（§十四 #63 / #74）。
     # 直接由 catalog 已有字段派生，避免同一事实写两处 —— 重新生成不会丢。
-    # cloud 一律是 scaffold 桩（run.py 恒返 cloud_call_not_implemented），
-    # 因此声明 implemented: false：真实 SDK 调用接上后删掉这一行即可。
+    #
+    # 占位口径（A1，2026-09-30 收敛）：
+    #   - cloud 默认仍是占位桩（run.py 恒返 cloud_call_not_implemented）→
+    #     声明 implemented: false；若给了 stub_note，一并写出去，面板就能显示
+    #     「是故意没做 + 原因」而不是一个沉默的 false。
+    #   - 已经换成真实现的（官方 CLI / SDK）在 catalog 里标 stub: False，
+    #     用 cli: <二进制名> 声明 requires_cli（凭据由 CLI 自己持有，不写 requires_env）。
+    is_stub = kind == "cloud" and meta.get("stub", True)
     requires = ""
-    if kind == "cloud":
+    if is_stub:
         requires += "implemented: false\n"
+        note = str(meta.get("stub_note") or "").strip()
+        if note:
+            requires += f"not_implemented_note: {json.dumps(note, ensure_ascii=False)}\n"
     if meta.get("import_module"):
         requires += f"requires_module: {meta['import_module']}\n"
-    if str(meta.get("env_var") or "").strip():
+    cli_name = str(meta.get("cli") or "").strip()
+    if cli_name:
+        requires += f"requires_cli: {cli_name}\n"
+    elif str(meta.get("env_var") or "").strip():
         requires += f"requires_env: {meta['env_var']}\n"
     front = (
         "---\n"

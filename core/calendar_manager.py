@@ -441,15 +441,46 @@ class CalendarManager:
         end = date_str + "T23:59:59"
         return self.list_events(start_date=start, end_date=end)
 
+    def _has_persona_column(self) -> bool:
+        """chat_log 是否已有 persona_id（由 013 迁移引入）；旧库可能还没升到。"""
+        try:
+            cols = {row["name"] for row in self._db.query("PRAGMA table_info(chat_log)")}
+            return "persona_id" in cols
+        except Exception:
+            return False
+
+    def _persona_scope(self) -> tuple[str, tuple]:
+        """当前人设的统计口径 SQL 片段与参数。
+
+        为什么是「本角色 或 NULL」而不是「等于本角色」：存量聊天记录的 persona_id
+        是 NULL（角色隔离是后加的），只认等于会把历史全丢掉 —— 表现为"相识 1 天"
+        或直接查不到。这与对话读链的共享兼容模式是同一套口径。
+        """
+        try:
+            from core.conversation_repository import active_persona_id
+
+            persona_id = active_persona_id()
+        except Exception:
+            persona_id = None
+        if persona_id and self._has_persona_column():
+            return " AND (persona_id = ? OR persona_id IS NULL)", (persona_id,)
+        return "", ()
+
     def get_companion_stats(self, first_start_ts: int = None) -> dict:
-        """获取陪伴统计：相识天数、消息数等"""
+        """获取陪伴统计：相识天数、消息数等。
+
+        角色隔离：天数与消息数都按**当前激活人设**统计（起算日 = 该人设视角下的
+        第一条消息），换人设即换一套数字，与认知中枢 / 后台数据保持同一口径。
+        """
         try:
             now = datetime.now()
+            scope_sql, scope_params = self._persona_scope()
             if first_start_ts:
                 first_date = datetime.fromtimestamp(first_start_ts)
             else:
                 row = self._db.query_one(
-                    "SELECT MIN(created_at) AS first FROM chat_log"
+                    "SELECT MIN(created_at) AS first FROM chat_log WHERE 1=1" + scope_sql,
+                    scope_params,
                 )
                 if row and row["first"]:
                     try:
@@ -461,10 +492,12 @@ class CalendarManager:
             days_together = max(1, (now - first_date).days + 1)
 
             user_msg_row = self._db.query_one(
-                "SELECT COUNT(*) AS n FROM chat_log WHERE role = 'user'"
+                "SELECT COUNT(*) AS n FROM chat_log WHERE role = 'user'" + scope_sql,
+                scope_params,
             )
             companion_msg_row = self._db.query_one(
-                "SELECT COUNT(*) AS n FROM chat_log WHERE role = 'assistant'"
+                "SELECT COUNT(*) AS n FROM chat_log WHERE role = 'assistant'" + scope_sql,
+                scope_params,
             )
             user_msgs = user_msg_row["n"] if user_msg_row else 0
             companion_msgs = companion_msg_row["n"] if companion_msg_row else 0

@@ -337,6 +337,53 @@ def test_history_pagination_reaches_the_very_first_message(iso_db, tmp_path):
     assert len(seen) == 12, f"共 6 轮 = 12 条消息，实际翻出 {len(seen)} 条"
 
 
+def test_cognition_log_has_persona_column(iso_db):
+    """016 迁移后 cognition_log 必须有 persona_id 列（trace 隔离的落点）。"""
+    cols = {row["name"] for row in iso_db.query("PRAGMA table_info(cognition_log)")}
+    assert "persona_id" in cols
+
+
+def test_cognition_trace_is_persona_scoped(iso_db, monkeypatch):
+    """认知中枢的 trace 按人设隔离：启用哪个角色，就只看到哪个角色的 trace。
+
+    用户 2026-09-30 要求「认知中枢这里的 trace 也是同理，启用哪个人设，
+    就展示哪个人设最近的 trace」。NULL 行按既有约定视为共享（存量数据兼容）。
+    """
+    from core.cognition import CognitionEngine
+
+    eng = CognitionEngine(iso_db)
+
+    def _commit(persona, message):
+        monkeypatch.setattr(
+            "core.conversation_repository.active_persona_id", lambda: persona
+        )
+        return eng.commit(
+            {
+                "ts": 1, "source": "desktop", "user_id": 7, "user_message": message,
+                "is_command": 0, "duration_ms": 5,
+                "stages": {}, "decision_trace": None, "react_trace": None,
+            },
+            "FULL",
+        )
+
+    assert _commit("persona_a", "A 的话") > 0
+    assert _commit("persona_b", "B 的话") > 0
+    assert _commit(None, "共享的话") > 0
+
+    seen_a = {row["user_message"] for row in eng.recent(persona_id="persona_a")}
+    seen_b = {row["user_message"] for row in eng.recent(persona_id="persona_b")}
+
+    assert "A 的话" in seen_a and "共享的话" in seen_a
+    assert "B 的话" not in seen_a, "persona_a 不该看到 persona_b 的 trace"
+    assert "B 的话" in seen_b
+    assert "A 的话" not in seen_b, "persona_b 不该看到 persona_a 的 trace"
+
+    stats_a = eng.stats(persona_id="persona_a")
+    stats_b = eng.stats(persona_id="persona_b")
+    assert stats_a["total"] == 2, f"persona_a 应看到自己的 1 条 + 共享 1 条: {stats_a}"
+    assert stats_b["total"] == 2, f"persona_b 同理: {stats_b}"
+
+
 def test_switch_persona_follows_active_role(iso_db, tmp_path):
     """切换语义：switch_persona 后 history_page 不带 persona_id 自动跟随激活角色。"""
     _create_personas()

@@ -18,6 +18,7 @@ from core.paths import data_dir
 from core.migrations import (
     admin_management_migrations,
     chat_log_trash_state_migrations,
+    cognition_persona_migrations,
     desktop_chat_continuity_migrations,
     MigrationRunner,
     mobile_gateway_migrations,
@@ -198,6 +199,7 @@ SCHEMA_SQL: list[str] = [
         ts INTEGER NOT NULL,
         source TEXT NOT NULL,
         user_id INTEGER,
+        persona_id TEXT DEFAULT NULL,
         user_message TEXT,
         route_mode TEXT,
         stage_route TEXT,
@@ -426,6 +428,7 @@ class Database:
                 runner.run(persona_scoped_dialogue_memory_migrations())
                 runner.run(persona_timeline_persona_migrations())
                 runner.run(quote_unification_migrations())
+                runner.run(cognition_persona_migrations())
             else:
                 # Desktop attachments stay available on legacy installations.
                 # This creates only additive desktop-owned tables and leaves the

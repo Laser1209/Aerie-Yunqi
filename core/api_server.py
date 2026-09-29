@@ -1786,11 +1786,20 @@ async def chat_history(
             else " WHERE deleted_at IS NULL"
         )
         params = (user_id,) if user_id is not None else ()
-        # 角色隔离：active persona 非 None 时只看 persona + NULL 共享行
+        # 角色隔离：只看当前人设的记录（含存量 NULL 共享行）。
+        # 关键：这段过滤**不能**依附于「有没有传 user_id」—— 面板（data-viewer）不传
+        # user_id，若因此跳过，就会把所有人设的聊天记录混在一起（2026-09-30 用户要求
+        # 后台数据只展示当前人设与用户的对话记录）。
         from core.conversation_repository import active_persona_id
 
         persona = active_persona_id()
-        if user_id is not None and persona:
+        try:
+            chat_log_cols = {
+                row["name"] for row in _db.query("PRAGMA table_info(chat_log)")
+            }
+        except Exception:
+            chat_log_cols = set()
+        if persona and "persona_id" in chat_log_cols:
             where += " AND (persona_id = ? OR persona_id IS NULL)"
             params += (persona,)
         count = _db.query_one(f"SELECT COUNT(*) AS cnt FROM chat_log{where}", params)
@@ -1811,12 +1820,25 @@ async def chat_history(
             if not row.get("ts"):
                 row["ts"] = row.get("created_at")
         _hydrate_desktop_attachment_records(rows)
+        # 面板要显示"当前人设的名字"，而不是写死的字符串 —— 换了人设却还显示旧名字，
+        # 是「人设没分离干净」最直观的表现。
+        persona_name = ""
+        try:
+            from core.persona_hub import get_persona_manager
+
+            active = get_persona_manager().get_active() or {}
+            persona_name = str(
+                active.get("name") or (active.get("basic") or {}).get("name") or ""
+            )
+        except Exception:
+            persona_name = ""
         return {
             "history": rows,
             "total": int(count["cnt"] if count else 0),
             "page": page,
             "limit": limit,
             "user_id": user_id,
+            "persona_name": persona_name,
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -2965,10 +2987,23 @@ async def cognition_recent(
     user_id: int | None = None,
     source: str | None = None,
     limit: int = Query(default=20, ge=1, le=200),
+    persona_id: str | None = None,
 ) -> dict:
-    """Recent cognition traces (lightweight summary list)."""
+    """Recent cognition traces (lightweight summary list).
+
+    ``persona_id`` 缺省取当前激活人设：面板要展示的是"当前人设的 trace"，
+    不区分角色就会把别的角色的记录混进来（2026-09-30 用户要求彻底人设分离）。
+    """
+    if persona_id is None:
+        from core.conversation_repository import active_persona_id
+
+        persona_id = active_persona_id()
     eng = CognitionEngine(_db)
-    data: dict = {"traces": eng.recent(user_id=user_id, source=source, limit=limit)}
+    data: dict = {
+        "traces": eng.recent(
+            user_id=user_id, source=source, limit=limit, persona_id=persona_id
+        )
+    }
     # P4: 候选决策证据日志（伪主观性"她选了哪个候选"）附加返回最新 30 条。
     try:
         from core.decision_log import DecisionLogger
@@ -3435,10 +3470,14 @@ async def admin_page_js() -> Response:
 
 
 @app.get("/api/cognition/stats")
-async def cognition_stats() -> dict:
-    """Cognition log aggregate stats."""
+async def cognition_stats(persona_id: str | None = None) -> dict:
+    """Cognition log aggregate stats（按当前激活人设口径，与 trace 列表一致）。"""
+    if persona_id is None:
+        from core.conversation_repository import active_persona_id
+
+        persona_id = active_persona_id()
     eng = CognitionEngine(_db)
-    return eng.stats()
+    return eng.stats(persona_id=persona_id)
 
 
 @app.get("/api/cognition/{row_id}")

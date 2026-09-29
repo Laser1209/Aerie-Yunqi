@@ -834,6 +834,35 @@ role-scoped cross-channel timeline (NULL=shared compatible)
     ]
 
 
+def _apply_cognition_persona(conn: sqlite3.Connection) -> None:
+    """Add role-scoped (persona_id) column to cognition_log.
+
+    用户 2026-09-30 要求「认知中枢的 trace 也要按人设分离」：启用哪个人设，
+    就只展示那个人设的 trace。列幂等（PRAGMA 检测），NULL = 归属未定
+    （与对话/记忆读链的共享兼容口径一致）。
+    """
+    _add_column_if_missing(conn, "cognition_log", "persona_id", "TEXT DEFAULT NULL")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cognition_persona "
+        "ON cognition_log(persona_id, id DESC)"
+    )
+
+
+def cognition_persona_migrations() -> list[Migration]:
+    contract = """016_cognition_log_persona
+cognition_log(persona_id)
+index(persona_id+id)
+role-scoped cognition traces (NULL=shared compatible)
+"""
+    return [
+        Migration(
+            version="016_cognition_log_persona",
+            checksum=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+            apply=_apply_cognition_persona,
+        )
+    ]
+
+
 def quote_unification_migrations() -> list[Migration]:
     contract = """015_quote_unification_v2
 messages(reply_to_id,reply_to_content,reply_to_role)

@@ -136,6 +136,8 @@ class CognitionEngine:
 
     def commit(self, trace: dict, route_mode: str) -> int:
         """Persist the trace into cognition_log. Returns row id, or 0 on failure."""
+        from core.conversation_repository import active_persona_id
+
         try:
             row_id = self._db.insert(
                 "cognition_log",
@@ -143,6 +145,9 @@ class CognitionEngine:
                     "ts": trace["ts"],
                     "source": trace["source"],
                     "user_id": trace["user_id"],
+                    # 角色隔离：trace 归属当前激活人设，与对话/记忆同一套口径
+                    # （NULL = 归属未定，读链按「本角色 或 NULL」兼容旧数据）。
+                    "persona_id": active_persona_id(),
                     "user_message": trace["user_message"],
                     "route_mode": route_mode,
                     "stage_route": json.dumps(
@@ -397,8 +402,8 @@ class CognitionEngine:
 
     # ── Read helpers (used by API) ─────────────────────
     def recent(self, user_id: Optional[int] = None, source: Optional[str] = None,
-               limit: int = 20) -> list[dict]:
-        sql = "SELECT id, ts, source, user_id, user_message, route_mode, " \
+               limit: int = 20, persona_id: Optional[str] = None) -> list[dict]:
+        sql = "SELECT id, ts, source, user_id, persona_id, user_message, route_mode, " \
               "is_command, duration_ms, created_at FROM cognition_log"
         clauses: list[str] = []
         params: list[Any] = []
@@ -408,6 +413,11 @@ class CognitionEngine:
         if source:
             clauses.append("source = ?")
             params.append(source)
+        # 角色隔离：只回本角色的 trace，并兼容写这条之前留下的 NULL 行
+        # （与对话/记忆读链同一口径，见 conversation_repository 的共享兼容模式）。
+        if persona_id:
+            clauses.append("(persona_id = ? OR persona_id IS NULL)")
+            params.append(persona_id)
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY id DESC LIMIT ?"
@@ -419,16 +429,22 @@ class CognitionEngine:
             "SELECT * FROM cognition_log WHERE id = ?", (row_id,)
         )
 
-    def stats(self) -> dict:
+    def stats(self, persona_id: Optional[str] = None) -> dict:
+        # 角色隔离：统计口径与 recent 保持一致（本角色 + 存量 NULL）
+        scope = " WHERE (persona_id = ? OR persona_id IS NULL)" if persona_id else ""
+        params: tuple[Any, ...] = (persona_id,) if persona_id else ()
         total = self._db.query_one(
-            "SELECT COUNT(*) AS n FROM cognition_log"
+            "SELECT COUNT(*) AS n FROM cognition_log" + scope, params
         ) or {"n": 0}
         today = self._db.query_one(
             "SELECT COUNT(*) AS n FROM cognition_log "
             "WHERE date(created_at, 'localtime') = date('now', 'localtime')"
+            + (" AND (persona_id = ? OR persona_id IS NULL)" if persona_id else ""),
+            params,
         ) or {"n": 0}
         avg = self._db.query_one(
-            "SELECT COALESCE(AVG(duration_ms), 0) AS a FROM cognition_log"
+            "SELECT COALESCE(AVG(duration_ms), 0) AS a FROM cognition_log" + scope,
+            params,
         ) or {"a": 0}
         return {
             "total": total["n"],

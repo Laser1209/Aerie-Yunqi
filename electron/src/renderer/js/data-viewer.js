@@ -118,6 +118,9 @@ class DataViewer {
       }
       const actualPage = Number(data.page) || page;
       this.pages.chat = Math.max(1, Math.min(actualPage, pages));
+      // 角色名取后端返回的当前人设名。写死会让人设切换后仍显示旧名字 ——
+      // 那是「人设没分离干净」最直观的表现（2026-09-30 用户要求）。
+      const companionName = String(data.persona_name || "").trim() || "TA";
       const history = Array.isArray(data.history) ? data.history : [];
       if (!history.length) el.innerHTML = `<p class="data-empty">${this.meta.chat.total ? "当前页暂无记录" : "暂无聊天记录"}</p>`;
       else el.innerHTML = history.map((m) => {
@@ -125,7 +128,7 @@ class DataViewer {
         const attachmentHtml = attachments.length && window._chat
           ? `<div class="chat-attachments">${attachments.map((item) => window._chat._buildAttachmentCard(item)).join("")}</div>`
           : "";
-        return `<div class="chat-log-item"><span class="log-role">${this.esc(m.role === "user" ? "你" : "Aerie Companion")}</span><span class="log-content">${this.esc(m.content || "").slice(0, 160)}${attachmentHtml}</span><span class="log-time">${this.esc(m.created_at ? m.created_at.slice(0, 19) : "")}</span></div>`;
+        return `<div class="chat-log-item"><span class="log-role">${this.esc(m.role === "user" ? "你" : companionName)}</span><span class="log-content">${this.esc(m.content || "").slice(0, 160)}${attachmentHtml}</span><span class="log-time">${this.esc(m.created_at ? m.created_at.slice(0, 19) : "")}</span></div>`;
       }).join("");
       this.updatePagination("chat");
     } catch (e) { el.innerHTML = `<p class="data-error">加载失败：${this.esc(e.message || "请求错误")}</p>`; }

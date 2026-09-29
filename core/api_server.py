@@ -6043,10 +6043,10 @@ _PLATFORM_CREDENTIALS = [
     {
         "key": "notion",
         "name": "Notion",
-        "desc": "notion-research / notion-knowledge-capture / notion-meeting-intelligence / notion-spec-to-impl 共用同一份凭据",
-        "tutorial": "https://www.notion.so/my-integrations",
-        "how_to": "创建内部集成 → 复制 Internal Integration Secret（ntn_ 开头）→ 到目标页面「连接」里把该集成授权进去",
-        "fields": [{"env_key": "NOTION_TOKEN", "label": "Internal Integration Secret", "secret": True}],
+        "desc": "notion-research / notion-knowledge-capture / notion-meeting-intelligence / notion-spec-to-impl 共用同一份凭据；填写后到「MCP 服务器」里开启 Notion 即可让模型真正读写你的工作区",
+        "tutorial": "https://app.notion.com/developers/tokens",
+        "how_to": "开发者门户创建个人访问令牌（ntn_ 开头）→ 填入下方。旧版「内部集成」令牌（secret_ 开头）也可用，但需要在目标页面的「连接」里逐个授权",
+        "fields": [{"env_key": "NOTION_TOKEN", "label": "Personal Access Token", "secret": True}],
     },
     {
         "key": "tianyancha",

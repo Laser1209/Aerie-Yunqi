@@ -4,6 +4,9 @@
 # （config/settings.yaml）统一控制，避免双开关。
 dormant_after_hours: 24          # active → dormant：沉寂超过该小时数
 dead_after_days: 30              # dormant → dead：沉寂超过该天数（且满足保守策略）
-similarity_threshold: 0.75       # 话题激活的语义相似阈值（简化判定：二元组包含度 + 子串命中）
+# 话题激活的相似度阈值。判定 = max(子串/二元组包含度, embedding cosine)：
+# 字面命中走词法，换个说法走向量（chromadb 本地 ONNX MiniLM，或哈希兜底）。
+# 0.70 为实测标定值：无关短句 cosine 约 0.28~0.58，相关改写 0.70~0.82。
+similarity_threshold: 0.70
 demote_after_silent_turns: 3     # 保守策略：连续无响应轮次达该值兴趣评分归零
 demote_after_inactive_days: 14   # 保守策略：沉寂超过该天数才允许降级

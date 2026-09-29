@@ -17,18 +17,26 @@
 - **激活**：再次被提及 / 相似话题命中（``similarity_threshold``）→ 迁回 active
   并返回历史摘要，供阶段 5 调制（本模块只返回，不注入、不推送）。
 
-语义相似判定：本仓库虽有 ChromaDB（``core/knowledge_indexer.py``），但话题维度
-没有现成可复用的相似度入口，且引入向量集合+embedding 依赖会显著增加阶段 4 的
-复杂度与运行成本。故按计划允许的简化方案实现——**CJK 二元组包含度 + 子串命中**
-（阈值仍取自配置 ``similarity_threshold``），不新增任何第三方依赖。
+语义相似判定：复用仓库既有的 embedding 入口
+（``core/knowledge_indexer.resolve_embedding_fn`` → 远程 > chromadb 本地 ONNX >
+确定性哈希兜底），取「词法命中」与「向量 cosine」的较大者：
+
+- 词法负责**字面命中**（子串 / CJK 二元组包含度），便宜且确定；
+- 向量负责**换个说法仍是同一件事**（MiniLM 语义空间 cosine）；
+- embedding 不可用时自动退化为纯词法，绝不抛错、绝不在判定路径上阻塞。
+
+判定阈值 ``similarity_threshold`` 随判定口径一起重标定（见
+``config/topic_lifecycle.yaml`` 注释）。
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
@@ -37,6 +45,13 @@ import yaml
 from core.topic_tracker import CLOSURE_WORDS, Topic, TopicTracker
 
 logger = logging.getLogger(__name__)
+
+# 文本 → 归一化向量的进程内缓存条数（话题指纹稳定、入站文本每轮一条）。
+_EMBED_CACHE_SIZE = 512
+
+# 进程内单例 embedding 函数；None 表示尚未解析。
+_EMBEDDING_FN: Optional[Callable[[str], Any]] = None
+_EMBEDDING_RESOLVED = False
 
 # 配置文件默认路径：config/topic_lifecycle.yaml
 _DEFAULT_CONFIG_PATH = (
@@ -47,7 +62,7 @@ _DEFAULT_CONFIG_PATH = (
 _DEFAULT_CONFIG: dict[str, Any] = {
     "dormant_after_hours": 24.0,
     "dead_after_days": 30.0,
-    "similarity_threshold": 0.75,
+    "similarity_threshold": 0.70,
     "demote_after_silent_turns": 3,
     "demote_after_inactive_days": 14.0,
 }
@@ -68,15 +83,26 @@ def _cjk_bigrams(text: str) -> set[str]:
 
 
 def similarity(text: str, reference: str) -> float:
-    """简化语义相似度（0..1）：子串命中记 1.0，否则按二元组包含度。
+    """语义相似度（0..1）：词法命中与向量 cosine 取较大者。
 
-    包含度 = 交集 / min(两侧二元组数)，即「较短一侧被覆盖的比例」，
-    契合「关键词 / 子串命中」的触发语义。
+    - 完全包含 → 1.0（字面命中的上界，直接短路，省掉一次 embedding）；
+    - 否则取 max(二元组包含度, embedding cosine)，互补「字面」与「换个说法」。
     """
     query = str(text or "").strip()
     ref = str(reference or "")
     if not query or not ref:
         return 0.0
+    lexical = _lexical_similarity(query, ref)
+    if lexical >= 1.0:
+        return 1.0
+    vector = _vector_similarity(query, ref)
+    if vector is None:
+        return lexical
+    return max(lexical, vector)
+
+
+def _lexical_similarity(query: str, ref: str) -> float:
+    """字面相似度：子串命中记 1.0，否则按二元组包含度。"""
     if query in ref or ref in query:
         return 1.0
     bigrams_a, bigrams_b = _cjk_bigrams(query), _cjk_bigrams(ref)
@@ -86,6 +112,54 @@ def similarity(text: str, reference: str) -> float:
     if not overlap:
         return 0.0
     return overlap / min(len(bigrams_a), len(bigrams_b))
+
+
+def _embedding_fn() -> Optional[Callable[[str], Any]]:
+    """惰性解析进程内 embedding 函数（只解析一次）。
+
+    ``resolve_embedding_fn()`` 自带兜底链（远程 → chromadb 本地 ONNX → 确定性
+    哈希），因此正常不会返回 None；导入失败才返回 None（调用方退回纯词法）。
+    """
+    global _EMBEDDING_FN, _EMBEDDING_RESOLVED
+    if not _EMBEDDING_RESOLVED:
+        _EMBEDDING_RESOLVED = True
+        try:
+            from core.knowledge_indexer import resolve_embedding_fn
+
+            _EMBEDDING_FN = resolve_embedding_fn()
+        except Exception:
+            logger.warning("话题相似度：embedding 不可用，退化为纯词法", exc_info=True)
+            _EMBEDDING_FN = None
+    return _EMBEDDING_FN
+
+
+@lru_cache(maxsize=_EMBED_CACHE_SIZE)
+def _embed_normalized(text: str) -> Optional[tuple[float, ...]]:
+    """文本 → L2 归一化向量；不可用时返回 None。"""
+    fn = _embedding_fn()
+    if fn is None:
+        return None
+    try:
+        vec = [float(x) for x in fn(text)]
+    except Exception:
+        logger.debug("话题相似度：embedding 调用失败", exc_info=True)
+        return None
+    norm = math.sqrt(sum(v * v for v in vec))
+    if norm <= 0.0:
+        return None
+    return tuple(v / norm for v in vec)
+
+
+def _vector_similarity(query: str, reference: str) -> Optional[float]:
+    """归一化向量的 cosine（∈[0,1]）；任一侧取不到向量则返回 None。"""
+    a = _embed_normalized(query)
+    b = _embed_normalized(reference)
+    if a is None or b is None or len(a) != len(b):
+        return None
+    dot = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+    return max(0.0, min(1.0, dot))
 
 
 class _LifecycleConfigLoader:

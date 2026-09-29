@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+import pytest
+
 from core.topic_lifecycle import TopicLifecycle
 from core.topic_tracker import TopicTracker
 
@@ -50,12 +52,12 @@ def _make(
 
 
 def test_default_thresholds_when_config_missing(tmp_path):
-    """无配置文件的兜底默认：24 / 30 / 0.75 / 3 / 14。"""
+    """无配置文件的兜底默认：24 / 30 / 0.70 / 3 / 14。"""
     lifecycle = _make(tmp_path)
     config = lifecycle.config()
     assert config["dormant_after_hours"] == 24.0
     assert config["dead_after_days"] == 30.0
-    assert config["similarity_threshold"] == 0.75
+    assert config["similarity_threshold"] == 0.70
     assert config["demote_after_silent_turns"] == 3
     assert config["demote_after_inactive_days"] == 14.0
 
@@ -183,3 +185,50 @@ def test_lifecycle_fields_survive_roundtrip(tmp_path):
     assert reloaded.topics
     assert reloaded.topics[0].lifecycle == "dormant"
     assert reloaded.topics[0].last_context == "你最近看的那本书怎么样"
+
+
+# ── 语义相似度：词法 + 向量 ─────────────────────────────
+
+def _inject_embedding(monkeypatch, table: dict[str, list[float]]):
+    """注入确定性 embedding，避免测试依赖真实 ONNX 模型与网络。"""
+    from core import topic_lifecycle as tl
+
+    monkeypatch.setattr(tl, "_embedding_fn", lambda: (lambda t: table[t]))
+    tl._embed_normalized.cache_clear()
+
+
+def test_similarity_substring_short_circuits_before_embedding(monkeypatch):
+    """字面命中直接 1.0，省掉 embedding 调用。"""
+    from core import topic_lifecycle as tl
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        tl, "_embedding_fn", lambda: (lambda t: calls.append(t) or [1.0, 0.0])
+    )
+    tl._embed_normalized.cache_clear()
+
+    assert tl.similarity("重庆小面", "昨天吃了重庆小面") == 1.0
+    assert calls == [], "子串命中不应触发 embedding"
+
+
+def test_similarity_uses_vector_cosine_when_lexical_misses(monkeypatch):
+    """词法不命中时走向量 cosine：取 max(词法, 向量)。"""
+    from core import topic_lifecycle as tl
+
+    _inject_embedding(monkeypatch, {"甲": [1.0, 0.0], "乙": [0.6, 0.8]})
+
+    # 单字无二元组 → 词法 0；两向量 cosine = 0.6。
+    assert tl.similarity("甲", "乙") == pytest.approx(0.6)
+
+
+def test_similarity_falls_back_to_lexical_without_embedding(monkeypatch):
+    """embedding 不可用时退化为纯词法，不抛错。"""
+    from core import topic_lifecycle as tl
+
+    monkeypatch.setattr(tl, "_embedding_fn", lambda: None)
+    tl._embed_normalized.cache_clear()
+
+    # 「小面 / 好吃」两个二元组命中（3 个中的 2 个）。
+    score = tl.similarity("小面好吃", "重庆小面真的很好吃")
+    assert score == pytest.approx(2 / 3)
+

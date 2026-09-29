@@ -24,9 +24,100 @@ const path = require("path");
 const { extractZip } = require("./runtime-bootstrap");
 
 const CATALOG_FILE = "plugin-catalog.json";
+// 远程 catalog 的本地缓存（由 refreshCatalog 写入）。读路径**永远同步**，
+// 这样 loadCatalog 的老调用点一行都不用改。
+const CATALOG_CACHE_FILE = "plugin-catalog.cache.json";
 const INSTALL_MARKER = ".aerie-installed";
 const PACK_MANIFEST = "pack.json";
 const MAX_REDIRECTS = 5;
+
+// 进程内登记的安装位置（configure() 设置）。没设置时只认内置 catalog。
+let _locations = null;
+
+function configure(loc) {
+  _locations = loc && typeof loc === "object" ? loc : null;
+}
+
+function _builtinCatalog() {
+  const file = path.join(__dirname, CATALOG_FILE);
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  return Array.isArray(raw.packs) ? raw.packs : [];
+}
+
+function _catalogCacheFile() {
+  if (!_locations || !_locations.userData) return "";
+  return path.join(_locations.userData, CATALOG_CACHE_FILE);
+}
+
+/**
+ * 远程条目与内置条目**按 id 合并**，内置里远程没有的仍然保留。
+ *
+ * 为什么必须合并而不是替换：远程拉挂 / 拉到一个残缺 catalog 时，模块中心
+ * 会整个变空 —— 用户看到的不是"更新失败"，而是"我这软件根本没这些功能"。
+ * 远程只允许**增量或覆盖同名项**。
+ */
+function _mergeCatalog(remote) {
+  const builtin = _builtinCatalog();
+  const byId = new Map(builtin.map((p) => [p.id, p]));
+  for (const pack of remote) {
+    if (pack && typeof pack === "object" && pack.id) byId.set(pack.id, pack);
+  }
+  return Array.from(byId.values());
+}
+
+function loadCatalog() {
+  const cacheFile = _catalogCacheFile();
+  if (cacheFile) {
+    const cached = _readJsonSafe(cacheFile);
+    const packs = cached && Array.isArray(cached.packs) ? cached.packs : null;
+    if (packs && packs.length) {
+      try {
+        return _mergeCatalog(packs);
+      } catch (_) {
+        // 缓存坏了就当没有：绝不让它挡住内置清单。
+      }
+    }
+  }
+  return _builtinCatalog();
+}
+
+/**
+ * 拉远程 catalog 并写缓存；**任何失败都保持现状**（内置清单 + 旧缓存）。
+ * @returns {Promise<{ok: boolean, count?: number, error?: string}>}
+ */
+async function refreshCatalog(url, { timeoutMs = 8000 } = {}) {
+  const target = String(url || "").trim();
+  if (!target) return { ok: false, error: "empty_url" };
+
+  const cacheFile = _catalogCacheFile();
+  if (!cacheFile) return { ok: false, error: "not_configured" };
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let payload;
+    try {
+      const res = await fetch(target, { signal: controller.signal });
+      if (!res.ok) return { ok: false, error: `http_${res.status}` };
+      payload = await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const packs = payload && Array.isArray(payload.packs) ? payload.packs : null;
+    if (!packs || !packs.length) return { ok: false, error: "empty_catalog" };
+    if (!packs.every((p) => p && typeof p === "object" && p.id)) {
+      return { ok: false, error: "invalid_catalog" };
+    }
+
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+    fs.writeFileSync(cacheFile, JSON.stringify({ packs }, null, 2), "utf8");
+    return { ok: true, count: _mergeCatalog(packs).length };
+  } catch (err) {
+    // 断网 / 超时 / JSON 坏 / 目录不可写，一律静默回退。
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
 
 /**
  * @param {object} loc - { isPackaged, userData, projectRoot }
@@ -46,12 +137,6 @@ function getStagingDir(loc) {
 
 function getTrashDir(loc) {
   return path.join(getPluginsDir(loc), ".trash");
-}
-
-function loadCatalog() {
-  const file = path.join(__dirname, CATALOG_FILE);
-  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-  return Array.isArray(raw.packs) ? raw.packs : [];
 }
 
 function _readJsonSafe(file) {
@@ -325,9 +410,12 @@ function removePack(loc, id) {
 
 module.exports = {
   CATALOG_FILE,
+  CATALOG_CACHE_FILE,
+  configure,
   getPluginsDir,
   getStagingDir,
   loadCatalog,
+  refreshCatalog,
   listInstalled,
   installFromCatalog,
   installFromZip,

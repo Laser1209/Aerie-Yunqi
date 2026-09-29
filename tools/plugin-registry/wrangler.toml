@@ -1,0 +1,19 @@
+# 功能包分发桶（R2）
+#
+# 与 tools/telemetry-receiver/wrangler.toml 同款用法：
+#   npx wrangler r2 object put aerie-plugins/catalog.json --file dist/catalog.json
+#
+# 注意：本目录**不是** Worker，只是一个 R2 桶的声明 + 上传脚本。
+# 需要鉴权 / 灰度时再在前面挂 Worker（沿用 tools/relay-gateway 的做法）。
+
+name = "aerie-plugin-registry"
+compatibility_date = "2026-09-30"
+
+[[r2_buckets]]
+binding = "PLUGINS"
+bucket_name = "aerie-plugins"
+
+[vars]
+# 客户端 `AERIE_PLUGIN_CATALOG_URL` 应指向 ${PUBLIC_BASE}/catalog.json
+# 请把这里改成你自己绑定的域名（控制台给桶绑自定义域名，或用 r2.dev 开发域名）。
+PUBLIC_BASE = "https://plugins.example.com"

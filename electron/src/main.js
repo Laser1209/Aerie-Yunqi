@@ -1655,6 +1655,10 @@ function _pluginLocations() {
   };
 }
 
+// 让 catalog 的读路径（loadCatalog / refreshCatalog）知道 userData 在哪，
+// 否则读不到远程 catalog 的缓存，只能退回内置清单。
+pluginManager.configure(_pluginLocations());
+
 function _broadcastPluginProgress(payload) {
   for (const win of BrowserWindow.getAllWindows()) {
     try { win.webContents.send("plugins:progress", payload); } catch (_) {}
@@ -1671,8 +1675,29 @@ async function _backendPluginStates() {
   }
 }
 
+// 远程 catalog（B6）：只在配置了 AERIE_PLUGIN_CATALOG_URL 时拉一次。
+// 不 await：模块中心不该为了拉清单卡住；拉到就写缓存，下次打开即生效。
+// refreshCatalog 内部把所有失败都收敛成返回值（不抛），所以这里不会留下未处理拒绝。
+let _catalogRefreshKicked = false;
+function _kickCatalogRefresh() {
+  if (_catalogRefreshKicked) return;
+  _catalogRefreshKicked = true;
+  const url = String(process.env.AERIE_PLUGIN_CATALOG_URL || "").trim();
+  if (!url) return;
+  pluginManager.refreshCatalog(url).then((result) => {
+    if (result.ok) {
+      console.log(`[plugins] 远程 catalog 已更新，共 ${result.count} 个包`);
+    } else {
+      console.warn(`[plugins] 远程 catalog 拉取失败，继续用内置清单: ${result.error}`);
+    }
+  });
+}
+
 ipcMain.handle("plugins:catalog", async () => {
   const loc = _pluginLocations();
+  // 先登记安装位置，catalog 才读得到 userData 下的远程缓存。
+  pluginManager.configure(loc);
+  _kickCatalogRefresh();
   let catalog = [];
   try {
     catalog = pluginManager.loadCatalog();

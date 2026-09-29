@@ -29,9 +29,12 @@ import random
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from core.behavior_sampler import clamp01, emit_probability, sample_once
+from core.companion_state import _atomic_write_json, _load_json
+from core.paths import data_dir
 from core.topic_lifecycle import similarity
 
 logger = logging.getLogger(__name__)
@@ -109,14 +112,21 @@ class TopicResurface:
         lifecycle_provider: Optional[Callable[[], Any]] = None,
         rng: Callable[[], float] = random.random,
         clock: Optional[Callable[[], float]] = None,
+        state_path: Optional[str | Path] = None,
     ) -> None:
         self._lifecycle_provider = lifecycle_provider
         self.rng = rng
         self._clock = clock or time.time
-        # 低 m 子额度 / 主额度按日滚动（进程内，跨重启重置）。
+        # 低 m 子额度 / 主额度按日滚动，落盘持久化（重启不再清零，见 _load_state）。
+        self._state_path = (
+            Path(state_path)
+            if state_path is not None
+            else data_dir() / "topic_resurface_state.json"
+        )
         self._day: Optional[Any] = None
         self._main_used = 0
         self._low_used = 0
+        self._load_state()
 
     # ── 配置 ───────────────────────────────────────────
 
@@ -207,6 +217,7 @@ class TopicResurface:
             self._low_used += 1
         else:
             self._main_used += 1
+        self._save_state()
 
     # ── 复现命中后的状态复位 ───────────────────────────
 
@@ -240,6 +251,39 @@ class TopicResurface:
             self._day = today
             self._main_used = 0
             self._low_used = 0
+            self._save_state()
+
+    # ── 额度持久化 ─────────────────────────────────────
+
+    def _load_state(self) -> None:
+        """恢复当日的额度记账；文件缺失/损坏一律按空额度起步。"""
+        data = _load_json(self._state_path)
+        if not data:
+            return
+        try:
+            raw_day = str(data.get("day") or "").strip()
+            self._day = datetime.fromisoformat(raw_day).date() if raw_day else None
+        except ValueError:
+            self._day = None
+        try:
+            self._main_used = max(0, int(data.get("main_used", 0) or 0))
+            self._low_used = max(0, int(data.get("low_used", 0) or 0))
+        except (TypeError, ValueError):
+            self._main_used = 0
+            self._low_used = 0
+
+    def _save_state(self) -> None:
+        try:
+            _atomic_write_json(
+                self._state_path,
+                {
+                    "day": self._day.isoformat() if self._day else "",
+                    "main_used": self._main_used,
+                    "low_used": self._low_used,
+                },
+            )
+        except Exception:
+            logger.debug("topic resurface state save failed", exc_info=True)
 
     @staticmethod
     def _modulation(

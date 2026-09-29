@@ -25,6 +25,12 @@ DAY = 86400.0
 T0 = 1_000_000.0
 
 
+@pytest.fixture(autouse=True)
+def _isolate_resurface_state(tmp_path, monkeypatch):
+    """额度记账落盘隔离：额度状态绝不写进仓库的 data/。"""
+    monkeypatch.setenv("AERIE_DATA_DIR", str(tmp_path / "data"))
+
+
 def _lifecycle(tmp_path, *, enabled: bool = True) -> TopicLifecycle:
     tracker = TopicTracker(state_path=tmp_path / "topic_state.json", clock=lambda: T0)
     return TopicLifecycle(
@@ -195,6 +201,37 @@ def test_main_budget_exhausted_low_m_still_available(tmp_path):
     # 子额度也吃满后不再放行（不超日额度）。
     resurface.consume(True, params)
     assert resurface.budget_allows(True, params) is False
+
+
+def test_budget_survives_restart(tmp_path):
+    """额度按日落盘：重启后当日已用额度不清零。"""
+    lifecycle = _lifecycle(tmp_path)
+    params = resolve_params({"main_budget": 4, "low_m_budget": 1})
+    first = _resurface(lifecycle)
+    for _ in range(4):
+        first.consume(False, params)
+    assert first.budget_allows(False, params) is False
+
+    # 模拟进程重启：新实例从同一个落盘文件恢复。
+    second = _resurface(lifecycle)
+    assert second.budget_allows(False, params) is False
+    assert second.budget_allows(True, params) is True
+
+
+def test_budget_resets_on_next_day(tmp_path):
+    """跨日后额度清零（重启 + 跨日组合场景）。"""
+    lifecycle = _lifecycle(tmp_path)
+    params = resolve_params({"main_budget": 4})
+    first = _resurface(lifecycle)
+    for _ in range(4):
+        first.consume(False, params)
+    assert first.budget_allows(False, params) is False
+
+    tomorrow = T0 + DAY
+    second = TopicResurface(
+        lifecycle_provider=lambda: lifecycle, clock=lambda: tomorrow
+    )
+    assert second.budget_allows(False, params) is True
 
 
 # ── 分派分支注册 + 记账 + 状态复位 ──────────────────────

@@ -491,6 +491,26 @@
             </div>
           </div>
 
+          <!-- 小伊 · 系统管家侧栏（Part E2）：独立于主人格，只答系统类问题 -->
+          <aside id="xiaoyi-sidebar" class="xiaoyi-sidebar" aria-label="小伊 · 系统管家">
+            <div class="xiaoyi-sidebar__header">
+              <span class="xiaoyi-sidebar__title">小伊 · 系统管家</span>
+              <button id="xiaoyi-collapse" class="xiaoyi-sidebar__collapse" type="button" title="收起小伊" aria-label="收起小伊">×</button>
+            </div>
+            <div class="xiaoyi-sidebar__avatar">
+              <img id="xiaoyi-avatar" class="xiaoyi-sidebar__avatar-img" alt="小伊" />
+            </div>
+            <div class="xiaoyi-sidebar__body">
+              <ul class="xiaoyi-board" id="xiaoyi-board"></ul>
+              <div class="xiaoyi-chat" id="xiaoyi-chat"></div>
+              <div class="xiaoyi-composer">
+                <input id="xiaoyi-input" class="xiaoyi-composer__input" type="text" placeholder="问小伊：某个功能怎么装？" />
+                <button id="xiaoyi-send" class="xiaoyi-composer__send" type="button">发送</button>
+              </div>
+            </div>
+          </aside>
+          <button id="xiaoyi-toggle" class="xiaoyi-toggle" type="button" title="叫小伊出来" hidden>小伊</button>
+
           <!-- v0.4.1: 工作区侧边栏(可折叠,默认收起) -->
           <aside id="workspace-sidebar" class="workspace-sidebar" hidden>
             <div class="workspace-sidebar__header">
@@ -2870,8 +2890,10 @@
 <link rel="stylesheet" href="styles/emotion-history.css">
 <!-- R7.1: brief drawer (replaces legacy iframe + popup + detail window) -->
 <link rel="stylesheet" href="styles/brief-drawer.css">
+<link rel="stylesheet" href="styles/xiaoyi-sidebar.css">
 <script src="js/brief-drawer.js" defer></script>
 <script src="js/onboarding.js"></script>
+<script src="js/xiaoyi.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

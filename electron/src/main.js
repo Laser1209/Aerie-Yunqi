@@ -988,10 +988,12 @@ function createMainWindow() {
   mainWindowReady = false;
 
   mainWindow = new BrowserWindow({
-    width: Math.min(1280, width),
-    height: Math.min(800, height),
-    minWidth: 900,
-    minHeight: 600,
+    // 小伊侧栏（320px）与既有 72px 图标导航栏并存，所以默认宽度与最小宽度
+    // 都比加侧栏之前放宽，避免侧栏展开时把对话区挤成一条缝。
+    width: Math.min(1440, width),
+    height: Math.min(860, height),
+    minWidth: 1120,
+    minHeight: 620,
     frame: false,
     transparent: false,
     backgroundColor: "#ffffff",

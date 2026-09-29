@@ -86,6 +86,11 @@ desire:
     care:    50                   # > 50 触发 idle_care
     voice:   80                   # > 80 + 时段合适 触发 voice_miss
     cooldown_hours: 12            # 累计 3 次 > 80 被拒 → 12h cooldown
+    # 阶段 5：阈值阶梯 → 调制概率 + 单次采样（p 拐点在 care）。
+    # tau 越大曲线越平缓（低分也能偶发、高分也会沉默）；floor/ceiling 限幅。
+    tau:      8.0                 # 采样温度（热加载，改完下一拍生效）
+    p_floor:  0.02                # 概率下限
+    p_ceiling: 0.95               # 概率上限
   persistence: "data/desire_state.json"
 
 # ══════════════════════════════════════════════════

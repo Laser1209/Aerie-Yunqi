@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from core.behavior_sampler import emit_probability, sample_once
-from core.paths import data_dir
+from core.paths import data_dir, project_root
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,14 @@ COOLDOWN_HOURS_DEFAULT = 12
 
 # tick 间隔下限保护 (即使 cfg 配了 1s, 也不允许 < 30s)
 TICK_MIN_SECONDS = 30
+
+# mtime 抖动容差 (API 保存配置会写文件, 秒级 mtime 相同则视为未变)
+_MTIME_EPS = 1e-6
+
+
+def _behavior_config_path() -> Path:
+    """persona_behavior.yaml 路径；与 topic_lifecycle/image_tiering 同源热加载。"""
+    return project_root() / "config" / "persona_behavior.yaml"
 
 
 def _atomic_write_json(path: Path, payload: dict) -> None:
@@ -121,6 +129,9 @@ class DesireEngine:
         self.companion = companion
         cfg = (behavior_cfg or {}).get("desire", {}) or {}
         self.cfg = cfg
+        # 热加载探测点：记住配置源 mtime，之后每次触发判定前比对（见 reload_config_if_changed）
+        self._cfg_path = _behavior_config_path()
+        self._cfg_mtime = self._read_cfg_mtime()
         self.tick_seconds = max(
             int(cfg.get("tick_seconds", 300)),
             TICK_MIN_SECONDS,
@@ -148,6 +159,53 @@ class DesireEngine:
         self._last_voice_ts: float = 0.0
         # 阶段 5: 采样放行标记 (scene, ts)，供 ProactiveJudge 复用决定、避免二次采样。
         self._emit_grant: tuple[str, float] | None = None
+
+    # ── Config hot-reload ────────────────────────────
+    def _read_cfg_mtime(self) -> float | None:
+        try:
+            return self._cfg_path.stat().st_mtime
+        except OSError:
+            return None
+
+    def reload_config_if_changed(self) -> bool:
+        """配置源 mtime 变了就重读 desire 段；未变则零开销返回。
+
+        只覆盖「可在线调参」的字段（阈值 / 采样温度 / 概率上下限 / tick /
+        冷却小时），不动运行态状态（score / cooldown_until / history）。
+        YAML 不可用或解析失败时保持现状，绝不抛错打断欲望循环。
+        """
+        mtime = self._read_cfg_mtime()
+        if mtime is None or mtime <= (self._cfg_mtime or 0.0) + _MTIME_EPS:
+            return False
+        self._cfg_mtime = mtime
+        try:
+            import yaml
+
+            raw = yaml.safe_load(self._cfg_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            logger.warning("desire 配置热加载失败，沿用当前参数", exc_info=True)
+            return False
+        cfg = (raw.get("desire", {}) if isinstance(raw, dict) else {}) or {}
+        if not cfg:
+            return False
+        self.cfg = cfg
+        self.triggers = cfg.get("triggers", self.triggers) or self.triggers
+        self.cooldown_hours = int(
+            self.triggers.get("cooldown_hours", COOLDOWN_HOURS_DEFAULT)
+        )
+        self.sampling_tau = float(self.triggers.get("tau", 8.0))
+        self.p_floor = float(self.triggers.get("p_floor", 0.02))
+        self.p_ceiling = float(self.triggers.get("p_ceiling", 0.95))
+        self.tick_seconds = max(int(cfg.get("tick_seconds", self.tick_seconds)), TICK_MIN_SECONDS)
+        self.variables_cfg = cfg.get("variables", {}) or self.variables_cfg
+        logger.info(
+            "desire 配置已热加载: tau=%.2f floor=%.2f ceil=%.2f tick=%ds",
+            self.sampling_tau,
+            self.p_floor,
+            self.p_ceiling,
+            self.tick_seconds,
+        )
+        return True
 
     # ── Lifecycle ─────────────────────────────────────
     async def start(self) -> None:
@@ -201,6 +259,8 @@ class DesireEngine:
                 logger.exception("desire loop error; continuing")
 
     async def _tick(self) -> None:
+        # 每拍先探测配置源 mtime，用户改 persona_behavior.yaml → desire 后即时生效。
+        self.reload_config_if_changed()
         var_values = self._read_variables()
         score = self._score_from_variables(var_values)
         self.state["score"] = round(score, 2)

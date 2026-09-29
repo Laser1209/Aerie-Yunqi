@@ -37,9 +37,12 @@ def test_platform_credentials_are_exposed_alongside_feature_apis():
     }
 
     creds = data["platform_credentials"]
+    # mediakit / byteplus_pages / iga_pages 已移出：它们的凭据由各自的官方 CLI
+    # 自己持有（mediakit-cli init / nest config set），或能力未接入（IGA Pages），
+    # 在设置页留一个填不进任何东西的密钥框 = 瞎指路。
     assert {c["key"] for c in creds} == {
-        "notion", "tianyancha", "seedream", "seedance", "mediakit",
-        "volcengine_tos", "byteplus_pages", "iga_pages",
+        "notion", "tianyancha", "seedream", "seedance",
+        "volcengine_tos",
         "alipay", "douyinpay", "douyin_interactive",
     }
     for c in creds:

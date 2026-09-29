@@ -6137,14 +6137,6 @@ _PLATFORM_CREDENTIALS = [
         "fields": [{"env_key": "SEEDANCE_KEY", "label": "Ark API Key", "secret": True}],
     },
     {
-        "key": "mediakit",
-        "name": "字节 mediakit 多媒体处理",
-        "desc": "音视频剪辑 / 转码 / 抽帧",
-        "tutorial": "https://console.volcengine.com/",
-        "how_to": "火山引擎控制台开通 mediakit 服务后填 Access Key（SK 在接入 SDK 时补齐）",
-        "fields": [{"env_key": "MEDIAKIT_AK", "label": "Access Key", "secret": True}],
-    },
-    {
         "key": "volcengine_tos",
         "name": "火山引擎对象存储 TOS",
         "desc": "对象上传 / 下载 / 签名 URL / 列举。需先 pip install tos",
@@ -6157,22 +6149,6 @@ _PLATFORM_CREDENTIALS = [
             {"env_key": "TOS_ENDPOINT", "label": "Endpoint", "secret": False},
             {"env_key": "TOS_BUCKET", "label": "默认 Bucket", "secret": False},
         ],
-    },
-    {
-        "key": "byteplus_pages",
-        "name": "BytePlus Edge Pages",
-        "desc": "静态站一键部署 + CDN 加速",
-        "tutorial": "https://console.byteplus.com/",
-        "how_to": "BytePlus 控制台开通 Edge Pages → 生成 API Token",
-        "fields": [{"env_key": "BYTEPAGES_TOKEN", "label": "API Token", "secret": True}],
-    },
-    {
-        "key": "iga_pages",
-        "name": "IGA Pages",
-        "desc": "前端与全栈项目部署（含预览部署）",
-        "tutorial": "",
-        "how_to": "在 IGA Pages 控制台生成部署 Token",
-        "fields": [{"env_key": "IGAPAGES_TOKEN", "label": "部署 Token", "secret": True}],
     },
     {
         "key": "alipay",

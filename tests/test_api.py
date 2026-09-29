@@ -172,6 +172,16 @@ def test_chat_typing_signal_notifies_companion():
     assert mock_companion.notify_user_typing.call_args[0][0] == "desktop:local"
 
 
+def test_xiaoyi_snapshot_endpoint_is_public():
+    """小伊侧栏轮询的快照接口：不需要 companion 就能返回结构（未就绪也不报错）。"""
+    response = client.get("/api/xiaoyi/snapshot")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "capabilities" in data and "health" in data
+
+
 def test_brief_greeting_receives_date(monkeypatch):
     from core import brief_fetcher
     from core import llm_caller as brain_module

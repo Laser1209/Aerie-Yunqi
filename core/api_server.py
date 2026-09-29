@@ -7896,6 +7896,32 @@ async def brief_greeting_fresh() -> dict:
     return {"date": today, "greeting": greeting}
 
 
+@app.get("/api/xiaoyi/snapshot")
+async def xiaoyi_snapshot() -> dict:
+    """小伊侧栏的数据看板：聚合现成数据源（不新建采集层），**绝不带密钥**。"""
+    from core import xiaoyi_assistant
+
+    return xiaoyi_assistant.snapshot()
+
+
+@app.post("/api/xiaoyi/chat")
+async def xiaoyi_chat(request: Request) -> dict:
+    """小伊对话入口（独立于主人格：不写 _active.json，不参与人设注入）。"""
+    from core import xiaoyi_assistant
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    return await xiaoyi_assistant.answer(
+        message=body.get("message") or body.get("text") or "",
+        history=body.get("history"),
+    )
+
+
 @app.post("/api/brief/feedback")
 async def brief_feedback(request: Request) -> dict:
     """Save user feedback for today's brief."""

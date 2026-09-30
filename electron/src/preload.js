@@ -160,6 +160,10 @@ contextBridge.exposeInMainWorld("aerie", {
       toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
       isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
       close: () => ipcRenderer.invoke("window:close"),
+      // 日报抽屉展开/收起时，让 Electron 外壳的宽度跟着走（展开撑开、收起收回），
+      // 而不是常驻加宽窗口去容纳抽屉。
+      setDrawerExpanded: (expanded) =>
+        ipcRenderer.invoke("window:drawer-shell", { expanded: !!expanded }),
       onMaximize: (cb) => {
         ipcRenderer.on("window:maximized", (_event, isMax) => cb(isMax));
       },

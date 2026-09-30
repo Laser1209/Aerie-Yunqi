@@ -82,9 +82,12 @@ test("看板给每项配了小白话，而不是直接显示原始字段", () =>
   }
 });
 
-test("主窗口为侧栏留出了宽度", () => {
-  assert.match(MAIN, /minWidth:\s*1120/);
-  assert.match(MAIN, /Math\.min\(1440,\s*width\)/);
+test("主窗口为侧栏留出了宽度，但不为日报抽屉常驻加宽", () => {
+  assert.match(MAIN, /const MAIN_WINDOW_MIN_WIDTH = 900;/);
+  assert.match(MAIN, /minWidth:\s*MAIN_WINDOW_MIN_WIDTH/);
+  // 抽屉展开所需的额外宽度由 window:drawer-shell 当场撑开，不常驻占屏
+  assert.match(MAIN, /Math\.min\(1280,\s*width\)/);
+  assert.doesNotMatch(MAIN, /Math\.min\(1440,\s*width\)/);
 });
 
 test("立绘缺失时用应用图标占位，不引用不存在的素材", () => {

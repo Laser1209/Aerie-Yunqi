@@ -274,10 +274,42 @@ class BriefDrawer {
   close() {
     if (!this._open) return;
     this._open = false;
+    // 展开态必须先复位：否则下次打开会带着 900px 宽度、留着的 is-expanded
+    // backdrop 和加宽过的外壳一起回来。_setExpanded 内部会安排"抽屉收一半
+    // 再收外壳"，所以这里不重复通知主进程。
+    if (this._expanded) this._setExpanded(false, false);
     this._drawer.classList.remove("is-open");
     this._backdrop.classList.remove("is-open");
     this._drawer.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
+  }
+
+  /* 对外：确保处于展开态（托盘「每日简报（展开）」走这条路，见 app.js）。 */
+  expand() {
+    if (!this._expanded) this._toggleExpanded();
+  }
+
+  /* 通知主进程把 Electron 外壳的宽度跟着抽屉走（展开时撑开、收起时收回）。 */
+  _notifyShell(expanded) {
+    clearTimeout(this._shellTimer);
+    this._shellTimer = null;
+    try {
+      const api = window.aerie && window.aerie.window;
+      if (api && typeof api.setDrawerExpanded === "function") api.setDrawerExpanded(!!expanded);
+    } catch (_) {}
+  }
+
+  /* 两段收回：抽屉自身的 width 过渡是 0.5s，等它收到一半（250ms）再让外壳跟着收，
+     视觉上就是"先把抽屉收进去，收到一半外面壳子才开始收"。 */
+  _scheduleShellCollapse() {
+    clearTimeout(this._shellTimer);
+    this._shellTimer = setTimeout(() => {
+      this._shellTimer = null;
+      try {
+        const api = window.aerie && window.aerie.window;
+        if (api && typeof api.setDrawerExpanded === "function") api.setDrawerExpanded(false);
+      } catch (_) {}
+    }, 250);
   }
 
   async refresh() {
@@ -1201,7 +1233,14 @@ class BriefDrawer {
   }
 
   _setExpanded(on, redraw) {
-    this._expanded = !!on;
+    const next = !!on;
+    const changed = next !== this._expanded;
+    this._expanded = next;
+    // 外壳跟着抽屉的展开态走：展开当场撑开，收起走半程延时（两段收回）。
+    if (changed) {
+      if (next) this._notifyShell(true);
+      else this._scheduleShellCollapse();
+    }
     this._drawer.classList.toggle("brief-drawer--expanded", this._expanded);
     this._backdrop.classList.toggle("is-expanded", this._expanded);
     this._expandBtn.classList.toggle("is-expanded", this._expanded);

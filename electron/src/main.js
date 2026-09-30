@@ -124,6 +124,14 @@ let isQuitting = false;
 let mainWindowReady = false;
 let _splashDone = false;
 let _splashMode = "video"; // "video" | "loading" | "none"
+
+// 主窗口最小宽度：小伊侧栏（320）+ 图标导航（72）之后还要留得下对话区。
+const MAIN_WINDOW_MIN_WIDTH = 900;
+// 日报抽屉展开时外壳向左撑开的宽度（展开 900 − 收起 420，再留一点余量）。
+const DRAWER_GROW_PX = 520;
+// 外壳收/放的动画时长。抽屉自身的宽度过渡是 0.5s，外壳走一半时长，
+// 视觉上就是"先把抽屉收进去，收到一半再把壳子跟着收"。
+const DRAWER_SHELL_ANIM_MS = 260;
 let pendingMainNavigation = null;
 // R7.1: legacy brief popup/detail windows removed. The brief now
 // lives inside the main window as a right-side drawer (see
@@ -988,12 +996,13 @@ function createMainWindow() {
   mainWindowReady = false;
 
   mainWindow = new BrowserWindow({
-    // 小伊侧栏（320px）与既有 72px 图标导航栏并存，所以默认宽度与最小宽度
-    // 都比加侧栏之前放宽，避免侧栏展开时把对话区挤成一条缝。
-    width: Math.min(1440, width),
-    height: Math.min(860, height),
-    minWidth: 1120,
-    minHeight: 620,
+    // 窗口尺寸回到"够用就好"：日报抽屉展开 900px 时不再靠常驻加宽去容纳，
+    // 而是当场把外壳撑开（见 window:drawer-shell）。常驻加宽会让平时白占屏幕，
+    // 也会把对话区挤成一条缝。
+    width: Math.min(1280, width),
+    height: Math.min(800, height),
+    minWidth: MAIN_WINDOW_MIN_WIDTH,
+    minHeight: 600,
     frame: false,
     transparent: false,
     backgroundColor: "#ffffff",
@@ -3142,6 +3151,84 @@ ipcMain.handle("window:close", (event) => {
   // normal quit based on whether a recovery surface is actually available.
   if (win) win.close();
   return true;
+});
+
+// ── 日报抽屉：外壳宽度跟随 ─────────────────────────
+// 抽屉展开时把它需要的宽度让给外壳（当场撑开），收起时收回，
+// 而不是常驻加宽去容纳。展开前的 bounds 记在 _drawerBaseBounds，
+// 收起时原样还原，所以反复开合不会越撑越宽。
+let _drawerBaseBounds = null;
+let _drawerAnimTimer = null;
+
+function _animateMainWindowWidth(win, targetWidth, targetX, durationMs) {
+  if (_drawerAnimTimer) {
+    clearInterval(_drawerAnimTimer);
+    _drawerAnimTimer = null;
+  }
+  if (win.isDestroyed()) return;
+  const from = win.getBounds();
+  const fromW = from.width;
+  const fromX = from.x;
+  const deltaW = targetWidth - fromW;
+  const deltaX = targetX - fromX;
+  if (Math.abs(deltaW) < 2 && Math.abs(deltaX) < 2) {
+    win.setBounds({ x: targetX, width: targetWidth });
+    return;
+  }
+  const start = Date.now();
+  _drawerAnimTimer = setInterval(() => {
+    if (win.isDestroyed()) {
+      clearInterval(_drawerAnimTimer);
+      _drawerAnimTimer = null;
+      return;
+    }
+    const t = Math.min(1, (Date.now() - start) / Math.max(1, durationMs));
+    // easeOutCubic：起步快、收尾柔，和抽屉自身的 CSS 过渡手感一致
+    const eased = 1 - Math.pow(1 - t, 3);
+    win.setBounds({
+      x: Math.round(fromX + deltaX * eased),
+      width: Math.round(fromW + deltaW * eased),
+    });
+    if (t >= 1) {
+      clearInterval(_drawerAnimTimer);
+      _drawerAnimTimer = null;
+    }
+  }, 16);
+}
+
+ipcMain.handle("window:drawer-shell", (event, payload = {}) => {
+  const win = getSenderWindow(event);
+  if (!win) return { ok: false, error: "no-window" };
+  const expanded = !!payload.expanded;
+  if (win.isMaximized() || win.isFullScreen()) {
+    // 最大化/全屏时窗口尺寸由系统托管，不能跟着抽屉乱动；但收起仍要把 base 清掉，
+    // 否则还原窗口后会拿着一个过期的宽度往回缩。
+    if (!expanded) _drawerBaseBounds = null;
+    return { ok: false, error: "maximized" };
+  }
+  const bounds = win.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+
+  if (expanded) {
+    if (!_drawerBaseBounds) _drawerBaseBounds = bounds;
+    const base = _drawerBaseBounds;
+    const targetWidth = Math.min(workArea.width, base.width + DRAWER_GROW_PX);
+    // 右边缘锚定：窗口向左撑开，抽屉（贴右）看起来是"原地展开"
+    const right = base.x + base.width;
+    const targetX = Math.max(workArea.x, right - targetWidth);
+    _animateMainWindowWidth(win, targetWidth, targetX, DRAWER_SHELL_ANIM_MS);
+    return { ok: true, width: targetWidth, x: targetX };
+  }
+
+  const base = _drawerBaseBounds;
+  _drawerBaseBounds = null;
+  if (!base) return { ok: true, skipped: true };
+  const targetWidth = Math.max(MAIN_WINDOW_MIN_WIDTH, base.width);
+  const right = bounds.x + bounds.width;
+  const targetX = Math.max(workArea.x, right - targetWidth);
+  _animateMainWindowWidth(win, targetWidth, targetX, DRAWER_SHELL_ANIM_MS);
+  return { ok: true, width: targetWidth, x: targetX };
 });
 
 // 办公模式：选择文件夹对话框

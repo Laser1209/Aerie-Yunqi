@@ -1,6 +1,14 @@
 /* Aerie · 云栖 v9.0 — Design Tokens & Layout */
 /* Pinguo color system — Apple HIG aligned */
 
+/* ===== Base reset ===== */
+/* [hidden] 是 UA 样式表里的 display:none，优先级最低 —— 任何作者 CSS 的
+   .foo { display: flex } 都能把它顶掉，于是 hidden 元素照样显示、照样吃掉点击
+   （image-lightbox 就因此变成了一层永久全屏遮罩）。这里把 hidden 钉死为不渲染。 */
+[hidden] {
+  display: none !important;
+}
+
 /* ===== Design Tokens ===== */
 :root {
   /* brand */

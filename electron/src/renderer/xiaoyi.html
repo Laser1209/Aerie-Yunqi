@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>小伊 · 系统管家</title>
+  <link rel="stylesheet" href="styles/xiaoyi-window.css" />
+</head>
+<body class="xy-body">
+  <!-- 无外壳窗口：整条顶栏可拖拽 + 收起按钮 -->
+  <header class="xy-topbar">
+    <div class="xy-topbar__brand">
+      <img class="xy-topbar__logo" src="assets/logo.png" alt=""
+           onerror="this.onerror=null;this.style.visibility='hidden'">
+      <span class="xy-topbar__title">小伊 · 系统管家</span>
+    </div>
+    <div class="xy-topbar__actions">
+      <button id="xiaoyi-refresh" class="xy-topbar__btn" type="button" title="刷新" aria-label="刷新">刷新</button>
+      <button id="xiaoyi-close" class="xy-topbar__btn xy-topbar__btn--close" type="button" title="收起小伊" aria-label="收起小伊">
+        <svg class="xy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="xy-main">
+    <div class="xy-avatar">
+      <img id="xiaoyi-avatar" class="xy-avatar__img" alt="小伊" />
+    </div>
+    <div class="xy-scroll">
+      <ul class="xiaoyi-board" id="xiaoyi-board" aria-live="polite"></ul>
+      <div class="xiaoyi-chat" id="xiaoyi-chat" aria-live="polite"></div>
+    </div>
+    <form class="xiaoyi-composer" id="xiaoyi-form">
+      <input id="xiaoyi-input" class="xiaoyi-composer__input" type="text"
+             placeholder="问小伊：某个功能怎么装？" autocomplete="off" maxlength="500" />
+      <button id="xiaoyi-send" class="xiaoyi-composer__send" type="submit">发送</button>
+    </form>
+  </main>
+
+  <script src="js/xiaoyi.js"></script>
+</body>
+</html>

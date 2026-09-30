@@ -168,6 +168,17 @@ contextBridge.exposeInMainWorld("aerie", {
         ipcRenderer.on("window:maximized", (_event, isMax) => cb(isMax));
       },
     },
+    // 小伊 · 系统管家：她是**独立窗口**（贴在主窗口左边），主窗口这侧只负责
+    // 开/关/查状态，内容全在她自己的窗口里（renderer/xiaoyi.html）。
+    xiaoyi: {
+      open: () => ipcRenderer.invoke("xiaoyi:open"),
+      close: () => ipcRenderer.invoke("xiaoyi:close"),
+      toggle: () => ipcRenderer.invoke("xiaoyi:toggle"),
+      isOpen: () => ipcRenderer.invoke("xiaoyi:is-open"),
+      onStateChange: (cb) => {
+        ipcRenderer.on("xiaoyi:state", (_event, data) => cb(data || {}));
+      },
+    },
     // Block-2 T1 bridge: tray "设置" click → settings tab
     onOpenTab: (cb) => {
       ipcRenderer.on("ui:open-tab", (_event, tab) => cb(tab));

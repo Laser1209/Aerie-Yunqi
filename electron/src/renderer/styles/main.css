@@ -288,6 +288,19 @@ body {
   color: var(--color-static-fff, #fff);
 }
 
+/* 带文字的头部按钮（小伊 · 系统管家）：宽度自适应，按下时用粉色标出"她在外面"。 */
+.header-btn--labeled {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.header-btn--labeled[aria-pressed="true"] {
+  color: var(--color-accent-pink-soft);
+  background: var(--glass-bg-3, rgba(255, 255, 255, 0.5));
+}
+
 /* Status indicators */
 .status-text { font-size: 12px; color: var(--color-text-muted); }
 .status-dot {

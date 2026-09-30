@@ -39,10 +39,13 @@ test("main process owns the drawer shell handler with guards and edge anchoring"
 
 test("the shell animates its width instead of snapping", () => {
   assert.match(main, /function _animateMainWindowWidth\(win, targetWidth, targetX, durationMs\)/);
-  // easeOutCubic
+  assert.match(main, /_animateWindowBounds\(win, \{ x: targetX, width: targetWidth \}, durationMs\)/);
+  // 共用的步进动画：16ms 一帧 + easeOutCubic，每个窗口一个定时器
+  assert.match(main, /function _animateWindowBounds\(win, target, durationMs\)/);
   assert.match(main, /const eased = 1 - Math\.pow\(1 - t, 3\);/);
-  assert.match(main, /win\.setBounds\(\{/);
-  assert.match(main, /_drawerAnimTimer = setInterval\([\s\S]*?\}, 16\);/);
+  assert.match(main, /win\.setBounds\(patch\)/);
+  assert.match(main, /const timer = setInterval\([\s\S]*?\}, 16\);/);
+  assert.match(main, /_boundsAnimTimers\.set\(win, timer\)/);
 });
 
 test("the main window keeps an honest default size instead of a permanently widened one", () => {

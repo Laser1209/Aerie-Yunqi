@@ -333,6 +333,25 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+  // 小伊 · 系统管家：她是独立窗口（贴在主窗口左边），这里只管开/关。
+  // 按钮状态必须跟着主进程回推走 —— 她自己窗口上的 × 也能收起她，
+  // 只信本地点按的话按钮会跟实际状态对不上。
+  const xiaoyiBtn = document.getElementById("xiaoyi-open-btn");
+  const xiaoyiBridge = window.aerie && window.aerie.electron && window.aerie.electron.xiaoyi;
+  if (xiaoyiBtn && xiaoyiBridge) {
+    const syncXiaoyiBtn = (open) => {
+      xiaoyiBtn.setAttribute("aria-pressed", open ? "true" : "false");
+    };
+    xiaoyiBtn.addEventListener("click", async () => {
+      try {
+        const r = await xiaoyiBridge.toggle();
+        syncXiaoyiBtn(Boolean(r && r.open));
+      } catch (_) {}
+    });
+    xiaoyiBridge.onStateChange((state) => syncXiaoyiBtn(Boolean(state && state.open)));
+    xiaoyiBridge.isOpen().then(syncXiaoyiBtn).catch(() => {});
+  }
+
   if (window.aerie && window.aerie.electron && window.aerie.electron.onOpenTab) {
     window.aerie.electron.onOpenTab((tab) => {
       const btn = document.querySelector('.sidebar-tab[data-tab="' + tab + '"]');

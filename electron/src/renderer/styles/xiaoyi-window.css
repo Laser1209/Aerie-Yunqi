@@ -1,0 +1,259 @@
+/* 小伊 · 系统管家 —— 独立窗口样式。
+ *
+ * 她是**独立 BrowserWindow**（贴在主窗口左边），不是主窗口里的一块面板，
+ * 所以这份样式自带一套 token，不依赖 main.css —— 与
+ * world-dashboard-window.css 同一套做法，窗口之间互不牵连。
+ *
+ * 约束：本文件不允许出现 :root 之外的字面色值（tools/check_tokens.py 会拦）。
+ */
+
+:root {
+  --xy-bg: #fff6f9;
+  --xy-surface: #ffffff;
+  --xy-surface-soft: #ffeef5;
+  --xy-border: #f6d8e4;
+  --xy-text: #4a3540;
+  --xy-text-muted: #9c7d8a;
+  --xy-accent: #ff7aaf;
+  --xy-accent-strong: #ff5b9c;
+  --xy-on-accent: #ffffff;
+  --xy-radius: 12px;
+  --xy-radius-sm: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+.xy-body {
+  display: flex;
+  flex-direction: column;
+  background: var(--xy-bg);
+  color: var(--xy-text);
+  font: 13px/1.5 "DM Sans", "PingFang SC", "Microsoft YaHei", ui-sans-serif, sans-serif;
+  overflow: hidden;
+  /* 她是停靠窗，位置由主进程跟着主窗口算，不给拖拽 —— 拖了也会被贴回去，
+     不如一开始就别让人以为能拖。 */
+  -webkit-app-region: no-drag;
+}
+
+/* ── 顶栏 ─────────────────────────────────────── */
+.xy-topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 8px 12px;
+  background: var(--xy-surface);
+  border-bottom: 1px solid var(--xy-border);
+}
+
+.xy-topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.xy-topbar__logo {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.xy-topbar__title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xy-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.xy-topbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--xy-radius-sm);
+  background: transparent;
+  color: var(--xy-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.xy-topbar__btn:hover {
+  background: var(--xy-surface-soft);
+  color: var(--xy-accent-strong);
+}
+
+.xy-icon {
+  display: block;
+}
+
+/* ── 主体 ─────────────────────────────────────── */
+.xy-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.xy-avatar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0 4px;
+}
+
+.xy-avatar__img {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--xy-border);
+  background: var(--xy-surface);
+}
+
+.xy-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 12px 12px;
+}
+
+/* ── 状态看板 ─────────────────────────────────── */
+.xiaoyi-board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.xiaoyi-board__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--xy-radius);
+  background: var(--xy-surface);
+  border: 1px solid var(--xy-border);
+}
+
+.xiaoyi-board__label {
+  font-size: 11px;
+  color: var(--xy-text-muted);
+}
+
+.xiaoyi-board__value {
+  color: var(--xy-text);
+  word-break: break-word;
+}
+
+.xiaoyi-board__todo {
+  margin: 4px 0 0;
+  padding-left: 14px;
+  color: var(--xy-text-muted);
+  line-height: 1.6;
+}
+
+/* ── 对话 ─────────────────────────────────────── */
+.xiaoyi-chat {
+  flex: 1 1 auto;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.xiaoyi-msg {
+  max-width: 92%;
+  padding: 8px 10px;
+  border-radius: var(--xy-radius);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.xiaoyi-msg--user {
+  align-self: flex-end;
+  background: var(--xy-accent);
+  color: var(--xy-on-accent);
+}
+
+.xiaoyi-msg--xiaoyi {
+  align-self: flex-start;
+  background: var(--xy-surface);
+  border: 1px solid var(--xy-border);
+  color: var(--xy-text);
+}
+
+/* ── 输入区 ───────────────────────────────────── */
+.xiaoyi-composer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--xy-border);
+  background: var(--xy-surface);
+}
+
+.xiaoyi-composer__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: var(--xy-radius-sm);
+  border: 1px solid var(--xy-border);
+  background: var(--xy-bg);
+  color: var(--xy-text);
+  font: inherit;
+  outline: none;
+}
+
+.xiaoyi-composer__input:focus {
+  border-color: var(--xy-accent);
+}
+
+.xiaoyi-composer__send {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--xy-radius-sm);
+  cursor: pointer;
+  background: var(--xy-accent);
+  color: var(--xy-on-accent);
+  font: inherit;
+}
+
+.xiaoyi-composer__send:hover {
+  background: var(--xy-accent-strong);
+}
+
+.xiaoyi-composer__send:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

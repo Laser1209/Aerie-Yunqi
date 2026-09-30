@@ -132,6 +132,11 @@ const DRAWER_GROW_PX = 520;
 // 外壳收/放的动画时长。抽屉自身的宽度过渡是 0.5s，外壳走一半时长，
 // 视觉上就是"先把抽屉收进去，收到一半再把壳子跟着收"。
 const DRAWER_SHELL_ANIM_MS = 260;
+// 小伊独立窗口：固定宽度 + 与主窗口之间的缝隙。停靠时主窗口按 宽度+缝隙
+// 整体向右让位，所以这两个值决定了"小伊占掉多宽"。
+const XIAOYI_WINDOW_WIDTH = 340;
+const XIAOYI_WINDOW_GAP = 12;
+const XIAOYI_SHELL_ANIM_MS = 260;
 let pendingMainNavigation = null;
 // R7.1: legacy brief popup/detail windows removed. The brief now
 // lives inside the main window as a right-side drawer (see
@@ -1126,6 +1131,15 @@ function createMainWindow() {
     broadcastMaximizeState(false);
     ensureDynamicIslandOnTop();
   });
+
+  // 小伊是伴生窗：主窗口动了她就跟着贴回左边缘，主窗口收起来（托盘/最小化）
+  // 她也一起收，回来时再一起回来 —— 不能让她孤零零留在桌面上。
+  mainWindow.on("move", _syncXiaoyiPosition);
+  mainWindow.on("resize", _syncXiaoyiPosition);
+  mainWindow.on("hide", _hideXiaoyiWindowWithMain);
+  mainWindow.on("minimize", _hideXiaoyiWindowWithMain);
+  mainWindow.on("show", _showXiaoyiWindowWithMain);
+  mainWindow.on("restore", _showXiaoyiWindowWithMain);
 }
 
 function showMainWindow(tab, payload) {
@@ -1475,6 +1489,169 @@ function openWorldDashboardWindow() {
   });
   return win;
 }
+
+// ── 小伊 · 系统管家独立窗口 ────────────────────────
+// 她是**独立窗口**、贴在主窗口左边，而不是主窗口里的一块面板：既不跟主人格
+// 混会话，也不该占走聊天区的地方。主窗口平时保持自己的尺寸，只在小伊出来的
+// 时候整体向右让位（见 computeXiaoyiDock）—— 让位而不是变窄，聊天区宽度不变。
+let xiaoyiWindow = null;
+let _xiaoyiDockBaseBounds = null; // 让位前的主窗口 bounds，收起时按它还原
+let _xiaoyiDockShift = 0;         // 让位时主窗口右移了多少
+let _xiaoyiDocking = false;       // 停靠动画进行中：跟随逻辑先让位给动画
+
+// "开着"以**意图**为准（让位基准还在），不以 isVisible 为准：首次打开时窗口
+// 还在加载，视觉上还没出来，但按下的按钮必须立刻反映"已经叫出来了"。
+function isXiaoyiOpen() {
+  return Boolean(_xiaoyiDockBaseBounds && xiaoyiWindow && !xiaoyiWindow.isDestroyed());
+}
+
+function _notifyXiaoyiState() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send("xiaoyi:state", { open: isXiaoyiOpen() }); } catch (_) {}
+  }
+}
+
+// 主窗口被拖动/改尺寸时把小伊重新贴回左边缘。动画进行中不插手，免得两套
+// 逻辑互相打架。同时刷新让位基准，否则收起时主窗口会弹回用户已经拖走的位置。
+function _syncXiaoyiPosition() {
+  if (_xiaoyiDocking) return;
+  if (!isXiaoyiOpen()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const main = mainWindow.getBounds();
+  xiaoyiWindow.setBounds({
+    x: main.x - (XIAOYI_WINDOW_WIDTH + XIAOYI_WINDOW_GAP),
+    y: main.y,
+    height: main.height,
+  });
+  if (_xiaoyiDockBaseBounds) {
+    _xiaoyiDockBaseBounds = { ...main, x: main.x - _xiaoyiDockShift };
+  }
+}
+
+// 主窗口收进托盘/最小化时，伴生窗不能孤零零留在桌面上。
+function _hideXiaoyiWindowWithMain() {
+  if (xiaoyiWindow && !xiaoyiWindow.isDestroyed() && xiaoyiWindow.isVisible()) xiaoyiWindow.hide();
+}
+
+// 主窗口回来时把小伊一起带回来（收起来过的就别自作主张弹出来）。
+function _showXiaoyiWindowWithMain() {
+  if (!isXiaoyiOpen()) return;
+  _syncXiaoyiPosition();
+  if (xiaoyiWindow && !xiaoyiWindow.isDestroyed() && !xiaoyiWindow.isVisible()) {
+    xiaoyiWindow.showInactive();
+  }
+}
+
+function _createXiaoyiWindow() {
+  if (xiaoyiWindow && !xiaoyiWindow.isDestroyed()) return xiaoyiWindow;
+  const win = new BrowserWindow({
+    width: XIAOYI_WINDOW_WIDTH,
+    height: 720,
+    minWidth: 300,
+    minHeight: 420,
+    title: "小伊 · 系统管家",
+    frame: false,
+    // 她是停靠窗：宽度固定、高度跟主窗口齐平，位置由主进程算。
+    // 允许拖动/缩放只会让她从主窗口边上跑开，然后把两边的观感都搞坏。
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    backgroundColor: "#ffffff",
+    icon: ICON_PATH,
+    // 先不显示，等首帧渲染完再 show：否则会先闪一块白底再出内容。
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "xiaoyi-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  xiaoyiWindow = win;
+  win.once("ready-to-show", () => {
+    // 期间被收起（基准被清掉）就别再冒出来。
+    if (!win.isDestroyed() && isXiaoyiOpen()) {
+      win.show();
+      _notifyXiaoyiState();
+    }
+  });
+  win.loadFile(path.join(__dirname, "renderer", "xiaoyi.html"));
+  win.on("closed", () => {
+    if (xiaoyiWindow === win) xiaoyiWindow = null;
+  });
+  return win;
+}
+
+function openXiaoyiWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  if (isXiaoyiOpen()) {
+    xiaoyiWindow.focus();
+    return xiaoyiWindow;
+  }
+  // 最大化/全屏时没有"旁边"可言，先还原再停靠。
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
+
+  const win = _createXiaoyiWindow();
+  const main = mainWindow.getBounds();
+  const workArea = screen.getDisplayMatching(main).workArea;
+  if (!_xiaoyiDockBaseBounds) _xiaoyiDockBaseBounds = main;
+  const layout = computeXiaoyiDock(_xiaoyiDockBaseBounds, workArea);
+  _xiaoyiDockShift = layout.main.x - _xiaoyiDockBaseBounds.x;
+
+  win.setBounds(layout.xiaoyi);
+  // 首次打开时还在加载：交给 ready-to-show，免得先闪一块白底再出内容。
+  if (!win.webContents.isLoading()) win.show();
+  _xiaoyiDocking = true;
+  _animateWindowBounds(mainWindow, layout.main, XIAOYI_SHELL_ANIM_MS);
+  setTimeout(() => {
+    _xiaoyiDocking = false;
+    _syncXiaoyiPosition();
+    _notifyXiaoyiState();
+  }, XIAOYI_SHELL_ANIM_MS + 40);
+
+  _notifyXiaoyiState();
+  return win;
+}
+
+function closeXiaoyiWindow() {
+  if (xiaoyiWindow && !xiaoyiWindow.isDestroyed()) xiaoyiWindow.hide();
+
+  const base = _xiaoyiDockBaseBounds;
+  _xiaoyiDockBaseBounds = null;
+  _xiaoyiDockShift = 0;
+
+  if (base && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMaximized()) {
+    _xiaoyiDocking = true;
+    _animateWindowBounds(mainWindow, { x: base.x, width: base.width }, XIAOYI_SHELL_ANIM_MS);
+    setTimeout(() => { _xiaoyiDocking = false; }, XIAOYI_SHELL_ANIM_MS + 40);
+  } else {
+    _xiaoyiDocking = false;
+  }
+
+  _notifyXiaoyiState();
+}
+
+function toggleXiaoyiWindow() {
+  if (isXiaoyiOpen()) closeXiaoyiWindow();
+  else openXiaoyiWindow();
+}
+
+ipcMain.handle("xiaoyi:open", () => {
+  openXiaoyiWindow();
+  return { ok: true, open: isXiaoyiOpen() };
+});
+
+ipcMain.handle("xiaoyi:close", () => {
+  closeXiaoyiWindow();
+  return { ok: true, open: false };
+});
+
+ipcMain.handle("xiaoyi:toggle", () => {
+  toggleXiaoyiWindow();
+  return { ok: true, open: isXiaoyiOpen() };
+});
+
+ipcMain.handle("xiaoyi:is-open", () => isXiaoyiOpen());
 
 // ── P4b 管理平台独立窗口（懒创建：首次入口点击才实例化） ──
 let adminWindow = null;
@@ -3153,47 +3330,94 @@ ipcMain.handle("window:close", (event) => {
   return true;
 });
 
+// ── 窗口尺寸动画 ─────────────────────────────────
+// 抽屉外壳与小伊停靠都要"推着窗口走"，共用一套 16ms 步进 + easeOutCubic
+// 的插值。每个窗口一个定时器：重复调用同一窗口会打断上一次动画，从当前位置
+// 继续走，所以连续开合不会跳变。
+const _boundsAnimTimers = new Map();
+
+function _animateWindowBounds(win, target, durationMs) {
+  if (!win || win.isDestroyed()) return;
+  const previous = _boundsAnimTimers.get(win);
+  if (previous) {
+    clearInterval(previous);
+    _boundsAnimTimers.delete(win);
+  }
+  const from = win.getBounds();
+  const keys = ["x", "y", "width", "height"].filter((key) => typeof target[key] === "number");
+  const delta = {};
+  let settled = true;
+  for (const key of keys) {
+    delta[key] = target[key] - from[key];
+    if (Math.abs(delta[key]) >= 2) settled = false;
+  }
+  if (settled) {
+    const patch = {};
+    for (const key of keys) patch[key] = target[key];
+    win.setBounds(patch);
+    return;
+  }
+  const start = Date.now();
+  const timer = setInterval(() => {
+    if (win.isDestroyed()) {
+      clearInterval(timer);
+      _boundsAnimTimers.delete(win);
+      return;
+    }
+    const t = Math.min(1, (Date.now() - start) / Math.max(1, durationMs));
+    const eased = 1 - Math.pow(1 - t, 3);
+    const patch = {};
+    for (const key of keys) patch[key] = Math.round(from[key] + delta[key] * eased);
+    win.setBounds(patch);
+    if (t >= 1) {
+      clearInterval(timer);
+      _boundsAnimTimers.delete(win);
+    }
+  }, 16);
+  _boundsAnimTimers.set(win, timer);
+}
+
 // ── 日报抽屉：外壳宽度跟随 ─────────────────────────
 // 抽屉展开时把它需要的宽度让给外壳（当场撑开），收起时收回，
 // 而不是常驻加宽去容纳。展开前的 bounds 记在 _drawerBaseBounds，
 // 收起时原样还原，所以反复开合不会越撑越宽。
 let _drawerBaseBounds = null;
-let _drawerAnimTimer = null;
 
 function _animateMainWindowWidth(win, targetWidth, targetX, durationMs) {
-  if (_drawerAnimTimer) {
-    clearInterval(_drawerAnimTimer);
-    _drawerAnimTimer = null;
+  _animateWindowBounds(win, { x: targetX, width: targetWidth }, durationMs);
+}
+
+// ── 小伊独立窗口：停靠布局 ─────────────────────────
+// 小伊是**独立窗口**，贴在主窗口左边。主窗口平时保持自己的尺寸，只在小伊
+// 出来时整体向右让位 —— 让位而不是变窄，是为了聊天区宽度一点不变（被挤成
+// 一条缝是上一轮的教训）。左边桌面空间不够时才把主窗口整体右移补足。
+// 纯函数（不碰 Electron API），便于单测。
+function computeXiaoyiDock(mainBounds, workArea, opts = {}) {
+  const width = opts.width || XIAOYI_WINDOW_WIDTH;
+  const gap = typeof opts.gap === "number" ? opts.gap : XIAOYI_WINDOW_GAP;
+  const minMainWidth = opts.minMainWidth || MAIN_WINDOW_MIN_WIDTH;
+  const need = width + gap;
+
+  let mainX = mainBounds.x;
+  let xiaoyiX = mainX - need;
+  if (xiaoyiX < workArea.x) {
+    // 左边桌面放不下：把主窗口整体右移，小伊贴住工作区左边缘
+    mainX += workArea.x - xiaoyiX;
+    xiaoyiX = workArea.x;
   }
-  if (win.isDestroyed()) return;
-  const from = win.getBounds();
-  const fromW = from.width;
-  const fromX = from.x;
-  const deltaW = targetWidth - fromW;
-  const deltaX = targetX - fromX;
-  if (Math.abs(deltaW) < 2 && Math.abs(deltaX) < 2) {
-    win.setBounds({ x: targetX, width: targetWidth });
-    return;
+
+  // 右移之后可能顶出工作区右边：优先压主窗口宽度，下限是 minWidth
+  let mainWidth = mainBounds.width;
+  const rightLimit = workArea.x + workArea.width;
+  if (mainX + mainWidth > rightLimit) {
+    mainWidth = Math.max(minMainWidth, rightLimit - mainX);
   }
-  const start = Date.now();
-  _drawerAnimTimer = setInterval(() => {
-    if (win.isDestroyed()) {
-      clearInterval(_drawerAnimTimer);
-      _drawerAnimTimer = null;
-      return;
-    }
-    const t = Math.min(1, (Date.now() - start) / Math.max(1, durationMs));
-    // easeOutCubic：起步快、收尾柔，和抽屉自身的 CSS 过渡手感一致
-    const eased = 1 - Math.pow(1 - t, 3);
-    win.setBounds({
-      x: Math.round(fromX + deltaX * eased),
-      width: Math.round(fromW + deltaW * eased),
-    });
-    if (t >= 1) {
-      clearInterval(_drawerAnimTimer);
-      _drawerAnimTimer = null;
-    }
-  }, 16);
+
+  return {
+    main: { x: mainX, width: mainWidth },
+    xiaoyi: { x: xiaoyiX, y: mainBounds.y, width, height: mainBounds.height },
+    shifted: mainX - mainBounds.x,
+  };
 }
 
 ipcMain.handle("window:drawer-shell", (event, payload = {}) => {
@@ -3668,6 +3892,10 @@ app.on("before-quit", (event) => {
   if (worldDashboardWindow && !worldDashboardWindow.isDestroyed()) {
     worldDashboardWindow.destroy();
     worldDashboardWindow = null;
+  }
+  if (xiaoyiWindow && !xiaoyiWindow.isDestroyed()) {
+    xiaoyiWindow.destroy();
+    xiaoyiWindow = null;
   }
   if (tray) tray.destroy();
 });
